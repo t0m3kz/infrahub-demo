@@ -1563,26 +1563,6 @@
                         }
                       }
                     }
-                  },
-                  "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "RoutingPolicy",
-                          "kind": {
-                            "value": "pbr"
-                          },
-                          "origin": {
-                            "value": "generated"
-                          },
-                          "customer_deployment": {
-                            "node": {
-                              "id": "fixture-footprint"
-                            }
-                          }
-                        }
-                      }
-                    ]
                   }
                 }
               },
@@ -1631,26 +1611,6 @@
                         }
                       }
                     }
-                  },
-                  "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "RoutingPolicy",
-                          "kind": {
-                            "value": "pbr"
-                          },
-                          "origin": {
-                            "value": "generated"
-                          },
-                          "customer_deployment": {
-                            "node": {
-                              "id": "fixture-footprint"
-                            }
-                          }
-                        }
-                      }
-                    ]
                   }
                 }
               }
@@ -1676,6 +1636,14 @@
                 "edges": [
                   {
                     "node": {
+                      "__typename": "DcimPhysicalDevice",
+                      "id": "member-dc1-fw-01",
+                      "name": {
+                        "value": "dc1-fw-01"
+                      },
+                      "role": {
+                        "value": "internal-firewall"
+                      },
                       "shared_capabilities": {
                         "edges": [
                           {
@@ -1691,130 +1659,182 @@
                               "tenant": {
                                 "node": null
                               },
-                              "served_deployments": {
+                              "fw_served": {
                                 "edges": []
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "interfaces": {
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "id": "dc1-fw-01:ethernet1/1",
+                              "name": {
+                                "value": "ethernet1/1"
                               },
-                              "capabilities": {
-                                "edges": [
-                                  {
+                              "role": {
+                                "value": "uplink"
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "DcimVirtualInterface",
+                              "id": "ethernet1/1.3000-0",
+                              "vrf": {
+                                "node": {
+                                  "__typename": "ManagedVRF",
+                                  "id": "fixture-vrf-DC-1-PROD",
+                                  "deployment": {
                                     "node": {
+                                      "id": "DC-1",
                                       "name": {
-                                        "value": "ethernet1/1.3000"
-                                      },
-                                      "device": {
-                                        "node": {
-                                          "name": {
-                                            "value": "dc1-fw-01"
-                                          },
-                                          "role": {
-                                            "value": "internal-firewall"
-                                          }
-                                        }
-                                      },
-                                      "ip_address": {
-                                        "node": {
-                                          "address": {
-                                            "value": "100.66.0.5/29"
-                                          },
-                                          "ip_namespace": {
-                                            "node": {
-                                              "name": {
-                                                "value": "default"
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      "vrf": {
-                                        "node": {
-                                          "__typename": "ManagedVRF",
-                                          "id": "fixture-vrf-DC-1-PROD",
-                                          "deployment": {
-                                            "node": {
-                                              "id": "DC-1",
-                                              "name": {
-                                                "value": "DC-1"
-                                              }
-                                            }
-                                          },
-                                          "security_zone": {
-                                            "node": {
-                                              "name": {
-                                                "value": "PROD"
-                                              },
-                                              "vrf_type": {
-                                                "value": "prod"
-                                              },
-                                              "l3_vni": {
-                                                "value": 60000
-                                              },
-                                              "id": "fixture-zone-PROD"
-                                            }
-                                          }
-                                        }
+                                        "value": "DC-1"
                                       }
                                     }
                                   },
-                                  {
+                                  "security_zone": {
                                     "node": {
                                       "name": {
-                                        "value": "ethernet1/1.3000"
+                                        "value": "PROD"
                                       },
-                                      "device": {
-                                        "node": {
-                                          "name": {
-                                            "value": "dc1-fw-02"
-                                          },
-                                          "role": {
-                                            "value": "internal-firewall"
-                                          }
-                                        }
+                                      "vrf_type": {
+                                        "value": "prod"
                                       },
-                                      "ip_address": {
-                                        "node": {
-                                          "address": {
-                                            "value": "100.66.0.6/29"
-                                          },
-                                          "ip_namespace": {
-                                            "node": {
-                                              "name": {
-                                                "value": "default"
-                                              }
-                                            }
-                                          }
-                                        }
+                                      "l3_vni": {
+                                        "value": 60000
                                       },
-                                      "vrf": {
-                                        "node": {
-                                          "__typename": "ManagedVRF",
-                                          "id": "fixture-vrf-DC-1-PROD",
-                                          "deployment": {
-                                            "node": {
-                                              "id": "DC-1",
-                                              "name": {
-                                                "value": "DC-1"
-                                              }
-                                            }
-                                          },
-                                          "security_zone": {
-                                            "node": {
-                                              "name": {
-                                                "value": "PROD"
-                                              },
-                                              "vrf_type": {
-                                                "value": "prod"
-                                              },
-                                              "l3_vni": {
-                                                "value": 60000
-                                              },
-                                              "id": "fixture-zone-PROD"
-                                            }
-                                          }
-                                        }
+                                      "id": "fixture-zone-PROD"
+                                    }
+                                  }
+                                }
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "100.66.0.5/29"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
                                       }
                                     }
                                   }
-                                ]
+                                }
+                              },
+                              "name": {
+                                "value": "ethernet1/1.3000"
+                              },
+                              "role": {
+                                "value": "service"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "node": {
+                      "__typename": "DcimPhysicalDevice",
+                      "id": "member-dc1-fw-02",
+                      "name": {
+                        "value": "dc1-fw-02"
+                      },
+                      "role": {
+                        "value": "internal-firewall"
+                      },
+                      "shared_capabilities": {
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "ManagedFirewallContext",
+                              "id": "ctx-shared",
+                              "name": {
+                                "value": "dc1-fw-shared"
+                              },
+                              "vlan_id": {
+                                "value": 3000
+                              },
+                              "tenant": {
+                                "node": null
+                              },
+                              "fw_served": {
+                                "edges": []
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "interfaces": {
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "id": "dc1-fw-02:ethernet1/1",
+                              "name": {
+                                "value": "ethernet1/1"
+                              },
+                              "role": {
+                                "value": "uplink"
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "DcimVirtualInterface",
+                              "id": "ethernet1/1.3000-0",
+                              "vrf": {
+                                "node": {
+                                  "__typename": "ManagedVRF",
+                                  "id": "fixture-vrf-DC-1-PROD",
+                                  "deployment": {
+                                    "node": {
+                                      "id": "DC-1",
+                                      "name": {
+                                        "value": "DC-1"
+                                      }
+                                    }
+                                  },
+                                  "security_zone": {
+                                    "node": {
+                                      "name": {
+                                        "value": "PROD"
+                                      },
+                                      "vrf_type": {
+                                        "value": "prod"
+                                      },
+                                      "l3_vni": {
+                                        "value": 60000
+                                      },
+                                      "id": "fixture-zone-PROD"
+                                    }
+                                  }
+                                }
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "100.66.0.6/29"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "name": {
+                                "value": "ethernet1/1.3000"
+                              },
+                              "role": {
+                                "value": "service"
                               }
                             }
                           }
@@ -1851,6 +1871,202 @@
                       },
                       "l3_vni": {
                         "value": 60000
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "DeviceServices": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-dc1-leaf-01",
+          "name": {
+            "value": "dc1-leaf-01"
+          },
+          "role": {
+            "value": "leaf"
+          },
+          "member_of_groups": {
+            "edges": []
+          },
+          "deployment": {
+            "node": {
+              "__typename": "TopologyPod",
+              "id": "fixture-pod",
+              "name": {
+                "value": "fixture-pod"
+              },
+              "parent": {
+                "node": {
+                  "__typename": "TopologyDataCenter",
+                  "id": "fixture-dc",
+                  "name": {
+                    "value": "fixture-dc"
+                  }
+                }
+              }
+            }
+          },
+          "service_ports": {
+            "edges": []
+          },
+          "vlans": {
+            "edges": [
+              {
+                "node": {
+                  "id": "fixture-row-110",
+                  "vlan_id": {
+                    "value": 110
+                  },
+                  "segment_deployment": {
+                    "node": {
+                      "segment": {
+                        "node": {
+                          "__typename": "ManagedVxlanSegment",
+                          "id": "seg-seg-web",
+                          "name": {
+                            "value": "seg-web"
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.0.0.1/24"
+                              },
+                              "ip_prefix": {
+                                "node": {
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "terminated_on": null,
+                          "customer_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "fixture-footprint",
+                                  "name": {
+                                    "value": "fixture-footprint"
+                                  },
+                                  "parent": {
+                                    "node": {
+                                      "id": "fixture-dc"
+                                    }
+                                  },
+                                  "serving_firewall_context": {
+                                    "node": {
+                                      "id": "ctx-1"
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_zone": {
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "fixture-row-120",
+                  "vlan_id": {
+                    "value": 120
+                  },
+                  "segment_deployment": {
+                    "node": {
+                      "segment": {
+                        "node": {
+                          "__typename": "ManagedVxlanSegment",
+                          "id": "seg-seg-app",
+                          "name": {
+                            "value": "seg-app"
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.0.0.1/24"
+                              },
+                              "ip_prefix": {
+                                "node": {
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "terminated_on": null,
+                          "customer_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "fixture-footprint",
+                                  "name": {
+                                    "value": "fixture-footprint"
+                                  },
+                                  "parent": {
+                                    "node": {
+                                      "id": "fixture-dc"
+                                    }
+                                  },
+                                  "serving_firewall_context": {
+                                    "node": {
+                                      "id": "ctx-1"
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_zone": {
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }

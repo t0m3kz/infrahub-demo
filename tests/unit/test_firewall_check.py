@@ -79,13 +79,20 @@ def _payload(*capabilities: dict[str, Any]) -> dict[str, Any]:
     interfaces = [
         {
             "name": _v(f"eth0.{i}"),
-            # A carried segment is on the interface's segments; a context stays on its capabilities.
+            # A carried segment is on the interface's segments; a context is a shared capability of the device.
             "segments": _edges([] if capability["__typename"] == "ManagedFirewallContext" else [capability]),
-            "capabilities": _edges([capability] if capability["__typename"] == "ManagedFirewallContext" else []),
+            "capabilities": _edges([]),
         }
         for i, capability in enumerate(capabilities)
     ]
-    return {"DcimDevice": _edges([{"name": _v("fw-1"), "interfaces": _edges(interfaces)}])}
+    contexts = [capability for capability in capabilities if capability["__typename"] == "ManagedFirewallContext"]
+    device = {
+        "name": _v("fw-1"),
+        "role": _v("internal-firewall"),
+        "shared_capabilities": _edges(contexts),
+        "interfaces": _edges(interfaces),
+    }
+    return {"DcimDevice": _edges([device])}
 
 
 def _validate(*capabilities: dict[str, Any]) -> Any:
@@ -197,6 +204,7 @@ class TestFirewallCheck:
             "__typename": "ManagedFirewallContext",
             "id": "ctx-1",
             "name": _v("ctx-1"),
+            "shared_devices": _edges([{"name": _v("fw-1")}]),
             "served_deployments": _edges([{"id": "dep-1", "network_segments": _edges([])}]),
         }
         check = _validate(context)
@@ -212,6 +220,7 @@ class TestFirewallCheck:
             "__typename": "ManagedFirewallContext",
             "id": "ctx-1",
             "name": _v("ctx-1"),
+            "shared_devices": _edges([{"name": _v("fw-1")}]),
             "served_deployments": _edges([{"id": "dep-1", "network_segments": _edges([served])}]),
         }
         check = _validate(context)
@@ -232,7 +241,7 @@ def _leg_interface(name: str, address: str, namespace: str, ns_type: str, exchan
         ),
         "name": _v(name),
         "ip_address": _node({"address": _v(address), "ip_namespace": {"node": {"name": {"value": "default"}}}}),
-        "capabilities": _edges([context, exchange]),
+        "capabilities": _edges([exchange]),
     }
 
 
@@ -242,6 +251,7 @@ def _exchange_payload(internet_vlan: str, snat: str | None = "192.0.2.5/32") -> 
         "id": "ctx-1",
         "name": _v("ctx-1"),
         "vlan_id": _v(3005),
+        "shared_devices": _edges([{"name": _v("fw-1")}]),
         "snat_address": _node({"address": _v(snat)}) if snat else {"node": None},
     }
     exchange = {
@@ -254,11 +264,19 @@ def _exchange_payload(internet_vlan: str, snat: str | None = "192.0.2.5/32") -> 
         "security_zone_z": {"node": None},
         "gateway": _node({"id": "ctx-1"}),
     }
+    uplink = {"__typename": "DcimPhysicalInterface", "name": _v("eth1"), "role": _v("uplink")}
     interfaces = [
+        uplink,
         _leg_interface("eth1.3005", "100.66.0.5/29", "PROD", "prod", exchange, context),
         _leg_interface(f"eth1.{internet_vlan}", "100.66.32.5/29", "INTERNET", "internet", exchange, context),
     ]
-    return {"DcimDevice": _edges([{"name": _v("fw-1"), "interfaces": _edges(interfaces)}])}
+    device = {
+        "name": _v("fw-1"),
+        "role": _v("internal-firewall"),
+        "shared_capabilities": _edges([context]),
+        "interfaces": _edges(interfaces),
+    }
+    return {"DcimDevice": _edges([device])}
 
 
 class TestFirewallExchangeLegs:

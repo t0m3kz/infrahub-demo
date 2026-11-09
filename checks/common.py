@@ -7,18 +7,19 @@ from transforms.helpers.firewall import get_exchange_transits
 from transforms.helpers.firewall_contexts import member_firewall_contexts
 from transforms.helpers.ha import get_ha
 from transforms.helpers.segments import routed_activations
-from utils.data_cleaning import get_data
+from utils.data_cleaning import clean_data, get_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
+    FIREWALL_CONTEXT_KIND,
     INTERNET_TYPE,
     TRANSIT_SLOT,
     is_public_address,
-    service_context_caps,
     transit_addresses,
     transit_vlan,
 )
 from utils.limits import OFFSET_MEMBER_A, OFFSET_MEMBER_B, TRANSIT_PREFIXLEN
 from utils.routing_domain import interface_security_zone
+from utils.service_contexts import attach_device_services, border_contexts, device_services, leg_contexts
 
 from .base import WarningCheck
 
@@ -49,6 +50,7 @@ class BaseDeviceCheck(WarningCheck):
 
     def validate(self, data: Any) -> None:
         device_data = get_data(data)
+        attach_device_services(device_data, clean_data(data))
         errors = [error for validator in self.validators for error in validator(device_data)]
         for error in errors:
             self.log_error(message=error)
@@ -100,7 +102,6 @@ def validate_transit_vlans(device: dict[str, Any], transform_cls: type[BaseDevic
     transit leg is reported with the transform's own message.
     """
     transform = transform_cls.__new__(transform_cls)
-    interfaces = device.get("interfaces") or []
     activations = transform._device_activations(device)
     if transform.device_role in BaseDeviceTransform._LEAF_ROLES:
         try:
@@ -108,7 +109,7 @@ def validate_transit_vlans(device: dict[str, Any], transform_cls: type[BaseDevic
         except ValueError as exc:
             return [str(exc)]
     else:
-        transits = get_exchange_transits(service_context_caps(interfaces))
+        transits = get_exchange_transits(border_contexts(device_services(device)))
     if not transits:
         return []
 
@@ -214,9 +215,10 @@ def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
     exchanges: dict[str, dict[str, Any]] = {}
     legs: dict[str, list[tuple[dict[str, Any], dict[str, Any] | None]]] = {}
 
+    leg_context = leg_contexts(data)
     for interface in data.get("interfaces") or []:
         caps = interface.get("capabilities") or []
-        context = next((c for c in caps if c.get("typename") == "ManagedFirewallContext"), None)
+        context = leg_context.get(str(interface.get("name")))
         for cap in caps:
             exchange_id = cap.get("id")
             if cap.get("typename") != "TopologyRoutedExchange" or not exchange_id:
@@ -309,14 +311,14 @@ def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
         context.get("id") or context.get("name", "unknown"): context
         for context in member_firewall_contexts(data.get("shared_capabilities"))
     }
+    leg_context = leg_contexts(data)
     for interface in data.get("interfaces") or []:
         namespace = interface_security_zone(interface)
-        if namespace.get("vrf_type") != INTERNET_TYPE:
+        cap = leg_context.get(str(interface.get("name")))
+        if namespace.get("vrf_type") != INTERNET_TYPE or cap is None or cap.get("typename") != FIREWALL_CONTEXT_KIND:
             continue
-        for cap in interface.get("capabilities") or []:
-            if cap.get("typename") == "ManagedFirewallContext":
-                context_id = cap.get("id") or cap.get("name", "unknown")
-                contexts.setdefault(context_id, member_contexts.get(context_id, cap))
+        context_id = cap.get("id") or cap.get("name", "unknown")
+        contexts.setdefault(context_id, member_contexts.get(context_id, cap))
 
     for context in contexts.values():
         label = f"FirewallContext '{context.get('name', 'unknown')}' on '{device_name}'"

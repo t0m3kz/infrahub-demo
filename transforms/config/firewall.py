@@ -6,7 +6,6 @@ from transforms.helpers.firewall import get_firewall_static_routes, get_firewall
 from transforms.helpers.firewall_contexts import (
     firewall_context_zone_data,
     get_firewall_contexts,
-    member_firewall_contexts,
     place_policies_in_contexts,
 )
 from transforms.helpers.firewall_terminated import terminated_interfaces
@@ -14,13 +13,13 @@ from transforms.helpers.ha import get_ha
 from transforms.helpers.segments import interface_segments, segment_vlan_ids
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
-    FIREWALL_CONTEXT_KIND,
     INTERNET_TYPE,
     MANAGEMENT_TYPE,
     ZONE_BY_NS_TYPE,
 )
 from utils.routing_domain import interface_security_zone
 from utils.segment_addressing import segment_prefix
+from utils.service_contexts import leg_contexts
 
 DEFAULT_ROUTE = "0.0.0.0/0"
 
@@ -33,8 +32,11 @@ def _default_vr_interfaces(fw_interfaces: list[dict[str, Any]]) -> list[str]:
 def _build_fw_interfaces(
     interfaces: list[dict[str, Any]],
     activations: list[dict[str, Any]],
+    leg_contexts: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Build firewall interfaces with explicit interface or segment routing ownership.
+
+    ``leg_contexts`` maps a leg sub-interface name to the context it is a leg of (utils/service_contexts.py).
 
     Only interfaces that have an ip_address are included — transit/management
     interfaces without an IP are skipped for zone rendering purposes.
@@ -63,15 +65,8 @@ def _build_fw_interfaces(
                 vlan_id = seg_vlan[seg["name"]]
         if vlan_id is None and parent:
             vlan_id = int(str(iface["name"]).rsplit(".", 1)[1])
-        context_caps = {
-            cap.get("id"): cap
-            for cap in iface.get("capabilities") or []
-            if cap.get("typename") == FIREWALL_CONTEXT_KIND
-        }
-        if len(context_caps) > 1:
-            raise ValueError(f"firewall interface {iface.get('name')!r} belongs to multiple contexts")
-        context = next(iter(context_caps.values()), None)
-        if context and (not context.get("id") or not context.get("name")):
+        context = leg_contexts.get(str(iface.get("name")))
+        if context and not context.get("name"):
             raise ValueError(f"firewall interface {iface.get('name')!r} has an incomplete context owner")
 
         fw_ifaces.append(
@@ -255,7 +250,7 @@ class Firewall(BaseDeviceTransform):
         interfaces = device.get("interfaces") or []
         activations = self._collect_activations_from_interfaces(interfaces)
         ha = get_ha(device.get("capabilities"), interfaces, device.get("name"))
-        contexts = get_firewall_contexts(interfaces, ha, member_firewall_contexts(device.get("shared_capabilities")))
+        contexts = get_firewall_contexts(device, ha)
         root, by_context = place_policies_in_contexts(contexts, [act.get("segment") or {} for act in activations])
         return activations, contexts, root, by_context
 
@@ -270,7 +265,9 @@ class Firewall(BaseDeviceTransform):
         # A transit leg renders inside its context, not as a root interface.
         leg_interfaces = {leg["interface"] for context in contexts for leg in context["legs"]}
         fw_interfaces = _build_fw_interfaces(
-            [i for i in device.get("interfaces") or [] if i.get("name") not in leg_interfaces], activations
+            [i for i in device.get("interfaces") or [] if i.get("name") not in leg_interfaces],
+            activations,
+            leg_contexts(device),
         )
         for context in contexts:
             for interface in terminated_interfaces(

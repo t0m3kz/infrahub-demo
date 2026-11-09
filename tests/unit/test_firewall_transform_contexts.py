@@ -228,13 +228,13 @@ class TestParentInterfaceOnlyForSubInterfaces:
 
     def test_a_nic_with_an_address_and_a_host_port_parent_has_no_parent(self) -> None:
         """A NIC named eth0 riding on the host port Ethernet5 keeps parent_interface None."""
-        (nic,) = _build_fw_interfaces(self._interfaces("eth0", "Ethernet5"), [])
+        (nic,) = _build_fw_interfaces(self._interfaces("eth0", "Ethernet5"), [], {})
 
         assert nic["parent_interface"] is None
 
     def test_a_vlan_sub_interface_keeps_its_parent(self) -> None:
         """ethernet1/1.210 on ethernet1/1 is the sub-interface the templates tag with its VLAN."""
-        (sub,) = _build_fw_interfaces(self._interfaces("ethernet1/1.210", "ethernet1/1"), [])
+        (sub,) = _build_fw_interfaces(self._interfaces("ethernet1/1.210", "ethernet1/1"), [], {})
 
         assert sub["parent_interface"] == {"name": "ethernet1/1"}
         assert sub["vlan_id"] == 210
@@ -246,7 +246,7 @@ class TestParentInterfaceOnlyForSubInterfaces:
         interfaces[0]["vrf"] = {"id": "vrf-dc10-prod", "security_zone": zone}
         interfaces[0]["ip_address"]["ip_namespace"] = {"name": "default"}
 
-        (interface,) = _build_fw_interfaces(interfaces, [])
+        (interface,) = _build_fw_interfaces(interfaces, [], {})
 
         assert interface["security_zone"] == zone
         assert interface["vlan_id"] == 210
@@ -256,7 +256,7 @@ class TestParentInterfaceOnlyForSubInterfaces:
         interfaces = self._interfaces("eth0", "Ethernet5")
         interfaces[0]["ip_address"]["ip_namespace"] = {"name": "PROD", "vrf_type": "prod"}
 
-        (interface,) = _build_fw_interfaces(interfaces, [])
+        (interface,) = _build_fw_interfaces(interfaces, [], {})
 
         assert interface["security_zone"] is None
         assert interface["vlan_id"] is None
@@ -274,26 +274,13 @@ class TestParentInterfaceOnlyForSubInterfaces:
         ]
 
         with pytest.raises(RoutingDomainError, match="conflicting security zones"):
-            _build_fw_interfaces(interfaces, [])
+            _build_fw_interfaces(interfaces, [], {})
 
-    def test_authored_interface_keeps_its_native_context_owner(self) -> None:
-        """An authored routed interface belongs to its context without a generated transit VLAN."""
-        interfaces = self._interfaces("ethernet1/1.210", "ethernet1/1")
-        interfaces[0]["capabilities"] = [
-            {"id": "ctx-prod", "name": "prod-policy", "typename": "ManagedFirewallContext"}
-        ]
+    def test_a_leg_keeps_the_context_it_is_a_leg_of(self) -> None:
+        """The context of a leg sub-interface (utils/service_contexts.py ``leg_contexts``) names it in the config."""
+        interfaces = self._interfaces("ethernet1/1.3000", "ethernet1/1")
+        context = {"id": "ctx-prod", "name": "prod-policy", "typename": "ManagedFirewallContext"}
 
-        (interface,) = _build_fw_interfaces(interfaces, [])
+        (interface,) = _build_fw_interfaces(interfaces, [], {"ethernet1/1.3000": context})
 
         assert interface["context_name"] == "prod-policy"
-
-    def test_authored_interface_cannot_belong_to_two_contexts(self) -> None:
-        """A routed interface cannot silently choose one of two context routing tables."""
-        interfaces = self._interfaces("ethernet1/1.210", "ethernet1/1")
-        interfaces[0]["capabilities"] = [
-            {"id": "ctx-a", "name": "policy-a", "typename": "ManagedFirewallContext"},
-            {"id": "ctx-b", "name": "policy-b", "typename": "ManagedFirewallContext"},
-        ]
-
-        with pytest.raises(ValueError, match="belongs to multiple contexts"):
-            _build_fw_interfaces(interfaces, [])

@@ -1,3 +1,6 @@
+# The firewall contexts that serve a footprint, the firewalls that hold their legs and the border or edge devices that
+# carry them (the contexts behind their service ports): all derived from the devices, nothing is stored on an interface
+# (utils/service_contexts.py).
 query pbr_firewall_reachability {
   ManagedFirewallContext {
     edges {
@@ -20,98 +23,28 @@ query pbr_firewall_reachability {
             }
           }
         }
-        capabilities {
-          edges {
-            node {
-              device {
-                node {
-                  ... on DcimDeviceManaged {
-                    role {
-                      value
-                    }
-                  }
-                }
-              }
-              ...InterfaceRoutingZoneFields
-              ... on DcimVirtualInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
-                ip_address {
-                  node {
-                    ip_namespace {
-                      node {
-                        name {
-                          value
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
       }
     }
   }
-  FirewallPhysicalPorts: DcimPhysicalInterface(role__value: "firewall") {
+  FirewallMembers: DcimDeviceManaged(role__value: "internal-firewall") {
     edges {
       node {
-        id
-        device {
-          node {
-            name {
-              value
-            }
-            ... on DcimDeviceManaged {
-              role {
-                value
-              }
-            }
-          }
-        }
-        capabilities {
-          edges {
-            node {
-              __typename
-              ... on ManagedFirewallContext {
-                id
-              }
-            }
-          }
-        }
+        ...ServiceMemberFields
       }
     }
   }
-  FirewallVirtualPorts: DcimVirtualInterface(role__value: "firewall") {
+  CarrierDevices: DcimDeviceManaged(role__values: ["border-leaf", "border-spine", "edge"]) {
     edges {
       node {
+        __typename
         id
-        device {
-          node {
-            name {
-              value
-            }
-            ... on DcimDeviceManaged {
-              role {
-                value
-              }
-            }
-          }
+        name {
+          value
         }
-        capabilities {
-          edges {
-            node {
-              __typename
-              ... on ManagedFirewallContext {
-                id
-              }
-            }
-          }
+        role {
+          value
         }
+        ...ServiceBorderPortsFields
       }
     }
   }

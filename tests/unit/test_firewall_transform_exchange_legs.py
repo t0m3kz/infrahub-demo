@@ -117,11 +117,10 @@ class TestFirewallExchangeLegs:
         its vsys and the rules of the segments it serves still render."""
         data = _make_context_smoke_data("paloalto_panos", serves_segment=True)
         device = data["DcimPhysicalDevice"]["edges"][0]["node"]
-        context = device["interfaces"]["edges"].pop()["node"]["capabilities"]["edges"][0]["node"]
+        device["interfaces"]["edges"].pop()  # the leg: a context with no member leg is the colocation case
         device["capabilities"] = {
             "edges": [{"node": {"__typename": "ManagedFirewallHA", "name": {"value": "fr-fw-ha"}}}]
         }
-        device["shared_capabilities"] = {"edges": [{"node": {**context, "__typename": "ManagedFirewallContext"}}]}
         out = await _make_fw().transform(data)
         assert "set vsys c005-dedicated rulebase security rules smoke-permit-rule" in out
         assert "virtual-router vr-" not in out

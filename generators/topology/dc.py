@@ -6,10 +6,11 @@ from typing import Any, Literal, cast
 from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
 from utils.limits import SITE_VNI_END, SITE_VNI_START
 
 from ..common import CommonGenerator
-from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
+from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..fabric_sizing import (
     dc_loopback_bits,

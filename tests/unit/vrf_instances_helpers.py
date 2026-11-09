@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import FIREWALL_CONTEXT_KIND, transit_vlan
 from utils.segment_addressing import HOSTING_KINDS
 from utils.vrf_demand import VRF_KIND, DeviceVrfFacts, device_vrf_facts, instance_name
 
@@ -178,27 +179,92 @@ def raw_svi(
     return node
 
 
-def raw_context(kind: str, vlan_id: int, *legs: tuple[str, str, str]) -> dict[str, Any]:
-    """A service context capability; each leg is ``(member role, namespace, namespace type)``."""
-    members = []
-    for role, ns, ns_type in legs:
-        ip_address, vrf = zone_vrf(address("10.1.0.1/29", ns, ns_type))
-        member: dict[str, Any] = {"device": {"node": {"role": {"value": role}}}, "ip_address": ip_address}
-        if vrf:
-            member["vrf"] = vrf
-        members.append(member)
-    return {
+def raw_service_port(
+    name: str,
+    role: str,
+    kind: str,
+    vlan_id: int,
+    *legs: tuple[str, str, str],
+    context_id: str | None = None,
+    tenant: str | None = None,
+    served: tuple[tuple[str, str], ...] = (),
+    member_role: str | None = None,
+    raw_legs: tuple[dict[str, Any], ...] = (),
+) -> dict[str, Any]:
+    """A border service port whose cable ends on the first uplink of a member of one service context.
+
+    ``raw_legs`` are ready-made leg sub-interfaces (``ip_address``, ``vrf`` and the ``ns_type`` of their VRF named
+    ``_ns_type``) for a caller that holds the real addresses; ``member_role`` is the role of the member.
+
+    Each leg is ``(member role, namespace, namespace type)``: a sub-interface ``<uplink>.<transit VLAN>`` of the member
+    (the member takes the role of the first leg), addressed in that namespace. ``served`` are the footprints the context
+    serves ``(id, environment)`` and ``tenant`` its dedicated one."""
+    ctx_id = context_id or f"ctx-{kind}-{vlan_id}"
+    served_key = "fw_served" if kind == FIREWALL_CONTEXT_KIND else "lb_served"
+    context = {
         "__typename": kind,
-        "id": f"ctx-{kind}-{vlan_id}",
+        "id": ctx_id,
+        "name": {"value": ctx_id},
         "vlan_id": {"value": vlan_id},
-        "capabilities": edges(*members),
+        "tenant": {"node": {"id": tenant, "environment": {"value": "p"}}} if tenant else {"node": None},
+        served_key: edges(*({"id": fp, "environment": {"value": env}} for fp, env in served)),
     }
+    uplink = {
+        "__typename": "DcimPhysicalInterface",
+        "id": f"{ctx_id}:up",
+        "name": {"value": "ethernet1/1"},
+        "role": {"value": "uplink"},
+    }
+    subs = []
+    for _role, namespace, ns_type in legs if isinstance(vlan_id, int) else ():
+        ip_address, vrf = zone_vrf(address("10.1.0.1/29", namespace, ns_type))
+        sub: dict[str, Any] = {
+            "__typename": "DcimVirtualInterface",
+            "id": f"{ctx_id}:{namespace}",
+            "name": {"value": f"ethernet1/1.{transit_vlan(vlan_id, ns_type)}"},
+            "role": {"value": "service"},
+            "ip_address": ip_address,
+        }
+        if vrf:
+            sub["vrf"] = vrf
+        subs.append(sub)
+    for raw in raw_legs if isinstance(vlan_id, int) else ():
+        subs.append(
+            {
+                "__typename": "DcimVirtualInterface",
+                "id": f"{ctx_id}:{len(subs)}",
+                "name": {"value": f"ethernet1/1.{transit_vlan(vlan_id, raw['_ns_type'])}"},
+                "role": {"value": "service"},
+                **{key: value for key, value in raw.items() if key != "_ns_type"},
+            }
+        )
+    far = {
+        **uplink,
+        "device": {
+            "node": {
+                "__typename": "DcimPhysicalDevice",
+                "id": f"{ctx_id}:dev",
+                "name": {"value": f"{ctx_id}-member"},
+                "role": {"value": member_role or (legs[0][0] if legs else "internal-firewall")},
+                "shared_capabilities": edges(context),
+                "interfaces": edges(uplink, *subs),
+            }
+        },
+        "sub_interfaces": edges(),
+    }
+    own = {
+        "__typename": "DcimPhysicalInterface",
+        "id": f"port-{name}",
+        "name": {"value": name},
+        "role": {"value": role},
+    }
+    return {**own, "cable": {"node": {"id": f"cable-{name}", "endpoints": edges(own, far)}}}
 
 
 def raw_deployment(
     kind: str = "TopologyPod", hosting_id: str | None = HOSTING_ID, hosting_name: str = HOSTING_NAME
 ) -> dict[str, Any]:
-    """A device's ``deployment`` (VrfDemandHostingFields). A hosting kind is the hosting deployment itself; a pod, zone
+    """A device's ``deployment`` (ServiceHostingFields). A hosting kind is the hosting deployment itself; a pod, zone
     or virtual colocation names it as ``parent``; any other kind (or ``hosting_id`` None) has no hosting deployment."""
     if kind in HOSTING_KINDS:
         return {"node": {"__typename": kind, "id": hosting_id or "dep-1", "name": {"value": hosting_name}}}
@@ -216,6 +282,7 @@ def raw_device(
     rows: list[dict[str, Any]] | None = None,
     capabilities: list[dict[str, Any]] | None = None,
     interfaces: list[dict[str, Any]] | None = None,
+    service_ports: list[dict[str, Any]] | None = None,
     groups: tuple[str, ...] = (),
     deployment_kind: str = "TopologyPod",
     vrfs: list[dict[str, Any]] | None = None,
@@ -239,6 +306,7 @@ def raw_device(
         "deployment": raw_deployment(deployment_kind, hosting_id),
         "vlans": edges(*(rows or [])),
         "interfaces": edges(*(interfaces or [])),
+        "service_ports": edges(*(service_ports or [])),
     }
     if status:
         node["status"] = {"value": status}

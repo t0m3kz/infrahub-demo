@@ -156,6 +156,7 @@ query evpn_fabric {
             }
           }
         }
+        ...ServiceBorderPortsFields
         ... on DcimDevice {
           interfaces {
             edges {
@@ -171,38 +172,6 @@ query evpn_fabric {
                       security_zone {
                         node {
                           ...RoutingZoneFields
-                        }
-                      }
-                    }
-                  }
-                }
-                capabilities {
-                  edges {
-                    node {
-                      __typename
-                      id
-                      ... on ManagedFirewallContext {
-                        vlan_id {
-                          value
-                        }
-                        capabilities {
-                          edges {
-                            node {
-                              ...EvpnFabricLegFields
-                            }
-                          }
-                        }
-                      }
-                      ... on ManagedLoadbalancerContext {
-                        vlan_id {
-                          value
-                        }
-                        capabilities {
-                          edges {
-                            node {
-                              ...EvpnFabricLegFields
-                            }
-                          }
                         }
                       }
                     }

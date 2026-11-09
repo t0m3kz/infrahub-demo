@@ -31,17 +31,10 @@ def _vip(**overrides: Any) -> dict[str, Any]:
 
 def _context(**overrides: Any) -> dict[str, Any]:
     base: dict[str, Any] = {
+        "id": "ctx-1",
         "name": "dc1-lb-PROD",
         "vlan_id": 3100,
         "vip_prefix": {"prefix": "100.66.96.0/26"},
-        "capabilities": [
-            {
-                "typename": "DcimVirtualInterface",
-                "device": {"name": "lb-1"},
-                "ip_address": {"address": "100.66.64.5/29"},
-            },
-            {"typename": "DcimPhysicalInterface", "device": {"name": "bl-1"}},
-        ],
         "vips": [_vip()],
     }
     base.update(overrides)
@@ -53,7 +46,17 @@ def _device(contexts: list[dict[str, Any]] | None = None, **overrides: Any) -> d
         "name": "lb-1",
         "status": "active",
         "platform": {"name": "f5_tmos"},
-        "interfaces": [{"role": "uplink", "status": "active", "capabilities": []}],
+        "role": "load-balancer",
+        "interfaces": [
+            {"typename": "DcimPhysicalInterface", "name": "eth1", "role": "uplink", "status": "active"},
+            # the leg `<uplink>.<transit VLAN>` of the PROD slot of the context VLAN 3100
+            {
+                "typename": "DcimVirtualInterface",
+                "name": "eth1.3100",
+                "role": "service",
+                "ip_address": {"address": "100.66.64.5/29"},
+            },
+        ],
         "capabilities": [
             {
                 "typename": "ManagedLoadbalancerHA",
@@ -81,7 +84,11 @@ class TestLoadBalancerCheck:
         device["shared_capabilities"] = [{"typename": "ManagedLoadbalancerContext", **_context(vlan_id=None)}]
         check = _check()
         check.validate({"DcimPhysicalDevice": [], "DcimVirtualDevice": [device]})
-        assert check._captured_errors == ["Context 'dc1-lb-PROD' on 'lb-1' has no leg VLAN"]
+        # no VLAN, so no `<uplink>.<VLAN>` leg either
+        assert check._captured_errors == [
+            "Context 'dc1-lb-PROD' on 'lb-1' has no leg VLAN",
+            "Context 'dc1-lb-PROD' on 'lb-1' has no leg sub-interface with an address on this device",
+        ]
 
     def test_missing_platform_status_uplink_and_ha_emit_errors(self) -> None:
         bad = _device(
@@ -122,22 +129,21 @@ class TestContextValidation:
         assert validate_loadbalancer_contexts(_device([_context(vips=[])])) == []
 
     def test_missing_vlan_vip_range_and_leg_are_reported(self) -> None:
-        errors = validate_loadbalancer_contexts(
-            _device([_context(vlan_id=None, vip_prefix=None, capabilities=[], vips=[])])
-        )
+        errors = validate_loadbalancer_contexts(_device([_context(vlan_id=None, vip_prefix=None, vips=[])]))
         assert any("no leg VLAN" in error for error in errors)
         assert any("no VIP range" in error for error in errors)
         assert any("no leg sub-interface" in error for error in errors)
 
-    def test_leg_of_another_member_does_not_count(self) -> None:
-        other = [
-            {
-                "typename": "DcimVirtualInterface",
-                "device": {"name": "lb-2"},
-                "ip_address": {"address": "100.66.64.6/29"},
-            }
-        ]
-        errors = validate_loadbalancer_contexts(_device([_context(capabilities=other)]))
+    def test_leg_without_address_does_not_count(self) -> None:
+        device = _device()
+        device["interfaces"][1]["ip_address"] = None
+        errors = validate_loadbalancer_contexts(device)
+        assert any("no leg sub-interface" in error for error in errors)
+
+    def test_sub_interface_that_is_not_the_transit_vlan_of_the_context_does_not_count(self) -> None:
+        device = _device()
+        device["interfaces"][1]["name"] = "eth1.3101"
+        errors = validate_loadbalancer_contexts(device)
         assert any("no leg sub-interface" in error for error in errors)
 
     def test_vip_outside_range_without_address_or_members_is_reported(self) -> None:

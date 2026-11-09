@@ -6,6 +6,7 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
+from utils.service_contexts import leg_interfaces
 
 from .common import validate_appliance
 
@@ -28,11 +29,9 @@ def validate_loadbalancer_contexts(device: dict[str, Any]) -> list[str]:
         if not vip_prefix:
             errors.append(f"{label} has no VIP range")
         legs = [
-            cap
-            for cap in (context.get("capabilities") or [])
-            if cap.get("typename") == "DcimVirtualInterface"
-            and (cap.get("device") or {}).get("name") == device_name
-            and (cap.get("ip_address") or {}).get("address")
+            leg
+            for leg in leg_interfaces(device).get(context.get("id"), [])
+            if leg.get("typename") == "DcimVirtualInterface" and (leg.get("ip_address") or {}).get("address")
         ]
         if not legs:
             errors.append(f"{label} has no leg sub-interface with an address on this device")

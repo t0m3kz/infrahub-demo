@@ -426,9 +426,10 @@ def run_transform(transform_cls: type, data: dict) -> str:
 def _write_data_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple[int, int]:
     """Write `data` as input.json and its rendered config as output.txt.
 
-    The one hook every writer goes through: a device that carries VRFs gets the ManagedVRF memberships (`shared_capabilities`) and SVI
-    objects its config demands appended to the input first (tests/smoke/fixture_builders/vrf.py), the way the
-    VRF generator leaves them in the model.
+    The one hook every writer goes through: the nested service data (`DeviceServices`) is derived from what the builder
+    declares (tests/smoke/fixture_builders/derived_services.py), then a device that carries VRFs gets the ManagedVRF
+    memberships (`shared_capabilities`) and SVI objects its config demands appended to the input
+    (tests/smoke/fixture_builders/vrf.py), the way the VRF generator leaves them in the model.
     """
     test_dir = SMOKE_DIR / dir_name
     test_dir.mkdir(parents=True, exist_ok=True)

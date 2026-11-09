@@ -101,159 +101,6 @@
                       }
                     }
                   },
-                  "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "DcimVirtualInterface",
-                          "name": {
-                            "value": "eth1.3100"
-                          },
-                          "device": {
-                            "node": {
-                              "name": {
-                                "value": "DC3-LB-01"
-                              },
-                              "role": {
-                                "value": "load-balancer"
-                              }
-                            }
-                          },
-                          "parent_interface": {
-                            "node": {
-                              "name": {
-                                "value": "eth1"
-                              }
-                            }
-                          },
-                          "ip_address": {
-                            "node": {
-                              "address": {
-                                "value": "100.66.64.5/29"
-                              },
-                              "ip_namespace": {
-                                "node": {
-                                  "name": {
-                                    "value": "default"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          "vrf": {
-                            "node": {
-                              "__typename": "ManagedVRF",
-                              "id": "fixture-vrf-fixture-deployment-PROD",
-                              "deployment": {
-                                "node": {
-                                  "id": "fixture-deployment",
-                                  "name": {
-                                    "value": "fixture-deployment"
-                                  }
-                                }
-                              },
-                              "security_zone": {
-                                "node": {
-                                  "name": {
-                                    "value": "PROD"
-                                  },
-                                  "vrf_type": {
-                                    "value": "prod"
-                                  },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  },
-                                  "id": "fixture-zone-PROD"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "node": {
-                          "__typename": "DcimVirtualInterface",
-                          "name": {
-                            "value": "eth1.3100"
-                          },
-                          "device": {
-                            "node": {
-                              "name": {
-                                "value": "DC3-LB-02"
-                              },
-                              "role": {
-                                "value": "load-balancer"
-                              }
-                            }
-                          },
-                          "parent_interface": {
-                            "node": {
-                              "name": {
-                                "value": "eth1"
-                              }
-                            }
-                          },
-                          "ip_address": {
-                            "node": {
-                              "address": {
-                                "value": "100.66.64.6/29"
-                              },
-                              "ip_namespace": {
-                                "node": {
-                                  "name": {
-                                    "value": "default"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          "vrf": {
-                            "node": {
-                              "__typename": "ManagedVRF",
-                              "id": "fixture-vrf-fixture-deployment-PROD",
-                              "deployment": {
-                                "node": {
-                                  "id": "fixture-deployment",
-                                  "name": {
-                                    "value": "fixture-deployment"
-                                  }
-                                }
-                              },
-                              "security_zone": {
-                                "node": {
-                                  "name": {
-                                    "value": "PROD"
-                                  },
-                                  "vrf_type": {
-                                    "value": "prod"
-                                  },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  },
-                                  "id": "fixture-zone-PROD"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "node": {
-                          "__typename": "DcimPhysicalInterface",
-                          "name": {
-                            "value": "Ethernet1/10"
-                          },
-                          "device": {
-                            "node": {
-                              "name": {
-                                "value": "dc3-border-leaf-01"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ]
-                  },
                   "vips": {
                     "edges": [
                       {
@@ -368,159 +215,6 @@
                         "value": "100.66.112.0/26"
                       }
                     }
-                  },
-                  "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "DcimVirtualInterface",
-                          "name": {
-                            "value": "eth1.3301"
-                          },
-                          "device": {
-                            "node": {
-                              "name": {
-                                "value": "DC3-LB-01"
-                              },
-                              "role": {
-                                "value": "load-balancer"
-                              }
-                            }
-                          },
-                          "parent_interface": {
-                            "node": {
-                              "name": {
-                                "value": "eth1"
-                              }
-                            }
-                          },
-                          "ip_address": {
-                            "node": {
-                              "address": {
-                                "value": "100.66.80.5/29"
-                              },
-                              "ip_namespace": {
-                                "node": {
-                                  "name": {
-                                    "value": "default"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          "vrf": {
-                            "node": {
-                              "__typename": "ManagedVRF",
-                              "id": "fixture-vrf-fixture-deployment-NONPROD",
-                              "deployment": {
-                                "node": {
-                                  "id": "fixture-deployment",
-                                  "name": {
-                                    "value": "fixture-deployment"
-                                  }
-                                }
-                              },
-                              "security_zone": {
-                                "node": {
-                                  "name": {
-                                    "value": "NONPROD"
-                                  },
-                                  "vrf_type": {
-                                    "value": "non_prod"
-                                  },
-                                  "l3_vni": {
-                                    "value": 60001
-                                  },
-                                  "id": "fixture-zone-NONPROD"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "node": {
-                          "__typename": "DcimVirtualInterface",
-                          "name": {
-                            "value": "eth1.3301"
-                          },
-                          "device": {
-                            "node": {
-                              "name": {
-                                "value": "DC3-LB-02"
-                              },
-                              "role": {
-                                "value": "load-balancer"
-                              }
-                            }
-                          },
-                          "parent_interface": {
-                            "node": {
-                              "name": {
-                                "value": "eth1"
-                              }
-                            }
-                          },
-                          "ip_address": {
-                            "node": {
-                              "address": {
-                                "value": "100.66.80.6/29"
-                              },
-                              "ip_namespace": {
-                                "node": {
-                                  "name": {
-                                    "value": "default"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          "vrf": {
-                            "node": {
-                              "__typename": "ManagedVRF",
-                              "id": "fixture-vrf-fixture-deployment-NONPROD",
-                              "deployment": {
-                                "node": {
-                                  "id": "fixture-deployment",
-                                  "name": {
-                                    "value": "fixture-deployment"
-                                  }
-                                }
-                              },
-                              "security_zone": {
-                                "node": {
-                                  "name": {
-                                    "value": "NONPROD"
-                                  },
-                                  "vrf_type": {
-                                    "value": "non_prod"
-                                  },
-                                  "l3_vni": {
-                                    "value": 60001
-                                  },
-                                  "id": "fixture-zone-NONPROD"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "node": {
-                          "__typename": "DcimPhysicalInterface",
-                          "name": {
-                            "value": "Ethernet1/10"
-                          },
-                          "device": {
-                            "node": {
-                              "name": {
-                                "value": "dc3-border-leaf-01"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ]
                   },
                   "vips": {
                     "edges": [
@@ -701,13 +395,35 @@
                     }
                   },
                   "capabilities": {
-                    "edges": [
-                      {
+                    "edges": []
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-PROD",
+                      "deployment": {
                         "node": {
-                          "__typename": "ManagedLoadbalancerContext"
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "vrf_type": {
+                            "value": "prod"
+                          },
+                          "l3_vni": {
+                            "value": 60000
+                          },
+                          "id": "fixture-zone-PROD"
                         }
                       }
-                    ]
+                    }
                   }
                 }
               },
@@ -741,13 +457,35 @@
                     }
                   },
                   "capabilities": {
-                    "edges": [
-                      {
+                    "edges": []
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-NONPROD",
+                      "deployment": {
                         "node": {
-                          "__typename": "ManagedLoadbalancerContext"
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "NONPROD"
+                          },
+                          "vrf_type": {
+                            "value": "non_prod"
+                          },
+                          "l3_vni": {
+                            "value": 60001
+                          },
+                          "id": "fixture-zone-NONPROD"
                         }
                       }
-                    ]
+                    }
                   }
                 }
               }
@@ -759,5 +497,48 @@
   },
   "DcimVirtualDevice": {
     "edges": []
+  },
+  "DeviceServices": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "fixture-device",
+          "name": {
+            "value": "DC3-LB-01"
+          },
+          "role": {
+            "value": "load-balancer"
+          },
+          "member_of_groups": {
+            "edges": []
+          },
+          "deployment": {
+            "node": {
+              "__typename": "TopologyPod",
+              "id": "fixture-pod",
+              "name": {
+                "value": "fixture-pod"
+              },
+              "parent": {
+                "node": {
+                  "__typename": "TopologyDataCenter",
+                  "id": "fixture-dc",
+                  "name": {
+                    "value": "fixture-dc"
+                  }
+                }
+              }
+            }
+          },
+          "service_ports": {
+            "edges": []
+          },
+          "vlans": {
+            "edges": []
+          }
+        }
+      }
+    ]
   }
 }

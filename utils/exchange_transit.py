@@ -82,10 +82,22 @@ SERVICE_CONTEXT_ROLES: dict[str, str] = {
 }
 """The role of the PORT (an interface role) that faces the members of each kind of service context."""
 
-SERVICE_MEMBER_ROLES = frozenset({INTERNAL_FIREWALL_ROLE, EXTERNAL_FIREWALL_ROLE, "load-balancer"})
+BORDER_ROLE_FOR_SERVICES: dict[str, str] = {
+    INTERNAL_FIREWALL_ROLE: "firewall",
+    EXTERNAL_FIREWALL_ROLE: "firewall",
+    "load-balancer": "load-balancer",
+}
+"""Device role of an HA member -> the interface role of the border service port facing it.
+
+Every bootstrap border tier (N9K-C9336C-FX2_BORDER_LEAF's Ethernet1/[25-28]/[29-32], border-spine's equivalent blocks,
+N9K-C9316D-GX_EDGE's Ethernet1/[15-16]) names its firewall-facing and load-balancer-facing port blocks after the
+service role itself, so the border-facing role and the service role are the same string. Shared by the generators that
+cable the border tiers (dc.py, pod.py, colocation_fabric.py), the context generator and the readers that derive the
+ports of a context (utils/service_contexts.py): a caller whose border tier uses a different port-naming convention
+builds and passes its own dict instead of reusing this one."""
+
+SERVICE_MEMBER_ROLES = frozenset(BORDER_ROLE_FOR_SERVICES)
 """The DEVICE roles of the HA members a service context's legs sit on (any firewall pair, or a load-balancer pair)."""
-"""Context kind -> the role of the border service port it is tagged on, which is also the role of the HA
-members holding its legs (generators/connections.py BORDER_ROLE_FOR_SERVICES)."""
 
 ROUTED_SEGMENT_KINDS = frozenset({"ManagedVxlanSegment"})
 """Segment kinds the fabric routes with an anycast SVI (a Cloud segment never is)."""
@@ -196,26 +208,6 @@ def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
     namespace_type = routed_segment_namespace(segment).get("vrf_type")
     zone = (segment.get("security_zone") or {}).get("name")
     return namespace_type in TENANT_NAMESPACE_TYPES and not is_exchange_zone(zone)
-
-
-def service_context_caps(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """The service-context capabilities on a device's service ports (SERVICE_CONTEXT_ROLES).
-
-    On a border leaf these are the ports facing the HA members: a firewall-role
-    port is tagged with the firewall contexts, a load-balancer-role port with the
-    load-balancer contexts whose legs the leaf has to carry. De-duplicated by id.
-    ``interfaces`` is cleaned query data (config queries, queries/validation/vrf_instances.gql).
-    """
-    found: dict[str, dict[str, Any]] = {}
-    for iface in interfaces or []:
-        for cap in iface.get("capabilities") or []:
-            role = SERVICE_CONTEXT_ROLES.get(cap.get("typename") or "")
-            if role is None or role != iface.get("role"):
-                continue
-            key = cap.get("id") or cap.get("name")
-            if key:
-                found.setdefault(key, cap)
-    return list(found.values())
 
 
 def transit_leg_namespace(context_vlan: int | None, leg: dict[str, Any]) -> dict[str, Any] | None:

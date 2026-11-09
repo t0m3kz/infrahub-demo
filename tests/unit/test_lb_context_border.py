@@ -30,7 +30,6 @@ from transforms.helpers.firewall import get_exchange_transits
 from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from transforms.helpers.group_policy import UNCLASSIFIED, get_vrf_contracts
 from transforms.helpers.vxlan import get_interfaces
-from utils.exchange_transit import service_context_caps
 from utils.graphql_queries import load_query
 
 _PROD = {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000}
@@ -46,10 +45,8 @@ def _lb_context(
     vip_prefix: str | None = "100.68.0.0/26",
     extra_legs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """A cleaned ManagedLoadbalancerContext as LoadbalancerContextInterfaceCapabilityFields returns it.
-
-    Its capabilities are the two members' leg sub-interfaces (.5/.6) and the border port tagged with it.
-    """
+    """A cleaned ManagedLoadbalancerContext with the two members' leg sub-interfaces (.5/.6) as its ``legs``
+    (utils/service_contexts.py ``contexts_with_legs``)."""
     net = ipaddress.ip_network(leg)
     members = [
         {
@@ -63,41 +60,14 @@ def _lb_context(
         }
         for member, host in (("dc10-lb-01a", 5), ("dc10-lb-01b", 6))
     ]
-    border_port = {"name": "Ethernet21", "device": {"name": "dc10-bl-01", "role": "border-leaf"}}
     return {
         "typename": "ManagedLoadbalancerContext",
         "id": f"id-{name}",
         "name": name,
         "vlan_id": vlan,
         "vip_prefix": {"prefix": vip_prefix} if vip_prefix else None,
-        "capabilities": [*members, *(extra_legs or []), border_port],
+        "legs": [*members, *(extra_legs or [])],
     }
-
-
-def _port(role: str | None, *contexts: dict[str, Any], name: str = "Ethernet21") -> dict[str, Any]:
-    """A border service port of ``role`` tagged with ``contexts``."""
-    return {"name": name, "role": role, "capabilities": list(contexts)}
-
-
-class TestServiceContextCaps:
-    """The one selector of the contexts a border device carries: kind and port role must agree."""
-
-    def test_load_balancer_context_on_a_load_balancer_port_is_carried(self) -> None:
-        ctx = _lb_context()
-        assert service_context_caps([_port("load-balancer", ctx)]) == [ctx]
-
-    @pytest.mark.parametrize("role", ["firewall", "server", None])
-    def test_load_balancer_context_on_any_other_port_is_not(self, role: str | None) -> None:
-        assert service_context_caps([_port(role, _lb_context())]) == []
-
-    def test_firewall_context_on_a_load_balancer_port_is_not(self) -> None:
-        firewall = {"typename": "ManagedFirewallContext", "id": "fw-1", "name": "dc10-fw", "vlan_id": 3000}
-        assert service_context_caps([_port("load-balancer", firewall)]) == []
-
-    def test_a_context_on_both_member_ports_is_carried_once(self) -> None:
-        ctx = _lb_context()
-        ports = [_port("load-balancer", ctx, name="Ethernet21"), _port("load-balancer", ctx, name="Ethernet22")]
-        assert service_context_caps(ports) == [ctx]
 
 
 class TestLoadBalancerLeg:
@@ -105,7 +75,7 @@ class TestLoadBalancerLeg:
 
     @staticmethod
     def _transits(*contexts: dict[str, Any]) -> list[dict[str, Any]]:
-        return get_exchange_transits(service_context_caps([_port("load-balancer", *contexts)]))
+        return get_exchange_transits(list(contexts))
 
     def test_prod_leg_is_the_context_vlan_and_its_transit_vni(self) -> None:
         (transit,) = self._transits(_lb_context())
@@ -153,16 +123,12 @@ class TestLoadBalancerLeg:
         (transit,) = get_exchange_transits([fw])
         assert transit["segment"]["customer_name"] == "XCHG-dc1-fw-01-dc1-fw-02-ha-NONPROD-PROD"
 
-    def test_the_border_port_tagged_with_the_context_is_no_leg(self) -> None:
-        """Only the members' (role load-balancer) addressed sub-interfaces are legs."""
-        assert len(self._transits(_lb_context())) == 1
-
     def test_the_leg_port_is_a_trunk_of_the_leg_vlans(self) -> None:
         prod = _lb_context()
         nonprod = _lb_context(name="dc10-lb-01-NONPROD", vlan=3101, namespace=_NONPROD, leg="100.67.16.0/29")
-        port = _port("load-balancer", prod, nonprod)
-        transits = get_exchange_transits(service_context_caps([port]))
-        (iface,) = get_interfaces([port], activations=transits)
+        port = {"name": "Ethernet21", "role": "load-balancer"}
+        transits = get_exchange_transits([prod, nonprod])
+        (iface,) = get_interfaces([port], activations=transits, interface_contexts={"Ethernet21": [prod, nonprod]})
         assert (iface["mode"], iface["vlans"], iface["dot1q_vlan"]) == ("trunk", [3100, 3301], None)
 
     def test_the_leg_is_no_policy_input(self) -> None:
@@ -294,22 +260,23 @@ class TestQueries:
             if isinstance(item, FragmentDefinitionNode) and item.name.value == name
         )
 
-    def test_interface_edge_carries_the_load_balancer_context(self, root_dir: Path) -> None:
-        path = "queries/fragments/interface_capability_fields.gql"
-        spread = self._fragment(root_dir, path, "InterfaceCapabilitiesWithSegmentFields")
-        assert "...LoadbalancerContextInterfaceCapabilityFields" in spread
-        fragment = self._fragment(root_dir, path, "LoadbalancerContextInterfaceCapabilityFields")
-        assert fragment.startswith(
-            "fragment LoadbalancerContextInterfaceCapabilityFields on ManagedLoadbalancerContext"
+    def test_service_ports_carry_the_members_behind_them(self, root_dir: Path) -> None:
+        """The contexts of a border device are derived from its service ports' cables, not read off an interface edge."""
+        path = "queries/fragments/device_services.gql"
+        ports = self._fragment(root_dir, path, "ServiceBorderPortsFields")
+        assert 'service_ports: interfaces(role__values: ["firewall", "load-balancer"])' in ports
+        assert "...ServiceBorderPortFields" in ports
+        cable = self._fragment(root_dir, path, "ServiceBorderPortFields")
+        for selection in ("endpoints {", "...ServiceFarEndFields", "...ServiceHostedNicFields"):
+            assert selection in cable
+        member = self._fragment(root_dir, path, "ServiceMemberFields")
+        for selection in ("shared_capabilities {", "...ServiceContextFields", "interfaces {", "role {"):
+            assert selection in member
+        assert "vlan_id {" in self._fragment(root_dir, path, "ServiceContextFields")
+        edge = self._fragment(
+            root_dir, "queries/fragments/interface_capability_fields.gql", "InterfaceCapabilitiesWithSegmentFields"
         )
-        for selection in (
-            "vlan_id {",
-            "vip_prefix {\n    node {\n      prefix {",
-            "role {",
-            "... on DcimVirtualInterface",
-            "...InterfaceRoutingZoneFields",
-        ):
-            assert selection in fragment
+        assert "ContextInterfaceCapabilityFields" not in edge
 
     def test_group_policy_segments_read_inbound_rules_with_their_policy_segment(self, root_dir: Path) -> None:
         fragment = self._fragment(root_dir, "queries/fragments/group_policy.gql", "SegmentGroupPolicyFields")

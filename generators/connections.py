@@ -31,21 +31,6 @@ from .protocols import (
 )
 from .types import CablingOptions, ChainHop
 
-# Default border_role_for for _cable_border_services: every bootstrap border
-# tier (N9K-C9336C-FX2_BORDER_LEAF's Ethernet1/[25-28]/[29-32], border-spine's
-# equivalent blocks, N9K-C9316D-GX_EDGE's Ethernet1/[15-16]) names its
-# firewall-facing and load-balancer-facing port blocks after the service role
-# itself, so the border-facing role and the service role are the same string.
-# Shared by dc.py (DC-wide border-leaf), pod.py (per-pod border-spine), and
-# colocation_fabric.py (zone edge) instead of each inlining its own copy — a caller
-# whose border tier uses a different port-naming convention should build and
-# pass its own dict instead of reusing this one.
-BORDER_ROLE_FOR_SERVICES: dict[str, str] = {
-    "internal-firewall": "firewall",
-    "external-firewall": "firewall",
-    "load-balancer": "load-balancer",
-}
-
 
 def tracked_save_kwargs(track: bool) -> dict[str, Any]:
     """save() kwargs for a write the run does (track) or does not (not track) own.

@@ -11,6 +11,7 @@ from checks.common import validate_exchange_gateways, validate_routing_password,
 from checks.common import validate_transit_vlans as _validate_transit_vlans
 from checks.edge import CheckEdge
 from tests.unit.routing_helpers import make_vrf
+from tests.unit.service_contexts_helpers import make_far, make_iface, make_member, make_switch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.border_spine import BorderSpine
 from transforms.config.edge import Edge
@@ -160,7 +161,7 @@ def _fw_leg(
         "name": name,
         "ip_address": ip_address,
         "vrf": make_vrf({"name": namespace, "vrf_type": ns_type or _NS_TYPE.get(namespace)}) if namespace else None,
-        "capabilities": [_context(), _exchange()] if caps is None else caps,
+        "capabilities": [_exchange()] if caps is None else caps,
     }
 
 
@@ -172,8 +173,19 @@ def _good_legs() -> list[dict]:
     ]
 
 
-def _validate(legs: list[dict]) -> list[str]:
-    return validate_exchange_gateways({"name": "dc1-fw-01", "interfaces": legs})
+def _firewall(legs: list[dict], contexts: list[dict] | None = None) -> dict:
+    """The firewall: member of the contexts, its uplink ``eth1`` and the leg sub-interfaces."""
+    uplink = {"typename": "DcimPhysicalInterface", "name": "eth1", "role": "uplink"}
+    return {
+        "name": "dc1-fw-01",
+        "role": "internal-firewall",
+        "shared_capabilities": [_context()] if contexts is None else contexts,
+        "interfaces": [uplink, *({"typename": "DcimVirtualInterface", "role": "service", **leg} for leg in legs)],
+    }
+
+
+def _validate(legs: list[dict], contexts: list[dict] | None = None) -> list[str]:
+    return validate_exchange_gateways(_firewall(legs, contexts))
 
 
 class TestValidateExchangeGateways:
@@ -193,7 +205,7 @@ class TestValidateExchangeGateways:
         assert "legs in 1 namespace(s) ['PROD'] — exactly 2" in errors[0]
 
     def test_two_legs_in_one_namespace_reports_error(self):
-        legs = [*_good_legs(), _fw_leg("eth2.3005", "100.66.0.6/29", "PROD")]
+        legs = [*_good_legs(), _fw_leg("eth1.3005", "100.66.0.6/29", "PROD")]  # the same sub-interface name twice
         errors = _validate(legs)
         assert len(errors) == 1
         assert "has 2 legs in namespace 'PROD'" in errors[0]
@@ -231,34 +243,33 @@ class TestValidateExchangeGateways:
         assert len(errors) == 1
         assert "expected 3405" in errors[0]
 
-    def test_non_numeric_vlan_suffix_reports_error(self):
+    def test_non_numeric_vlan_suffix_is_no_leg_of_the_context(self):
+        """A sub-interface that is not `<uplink>.<transit VLAN>` is no leg of any context."""
         legs = _good_legs()
-        legs[0] = _fw_leg("eth1", "100.66.0.5/29", "PROD")
-        assert any("expected 3005" in e for e in _validate(legs))
+        legs[0] = _fw_leg("eth1.web", "100.66.0.5/29", "PROD")
+        assert any("not tagged with the exchange's gateway context" in e for e in _validate(legs))
 
-    def test_leg_without_gateway_context_reports_error(self):
+    def test_leg_of_no_context_reports_error(self):
         legs = _good_legs()
-        legs[0] = _fw_leg("eth1.3005", "100.66.0.5/29", "PROD", caps=[_exchange()])
+        legs[0] = _fw_leg("eth1.3999", "100.66.0.5/29", "PROD")
         errors = _validate(legs)
         assert len(errors) == 1
         assert "not tagged with the exchange's gateway context" in errors[0]
 
-    def test_leg_tagged_with_other_context_reports_error(self):
-        legs = _good_legs()
-        legs[0] = _fw_leg("eth1.3005", "100.66.0.5/29", "PROD", caps=[_context("ctx-other"), _exchange()])
-        assert any("gateway context" in e for e in _validate(legs))
+    def test_leg_of_another_context_than_the_gateway_reports_error(self):
+        errors = _validate(_good_legs(), contexts=[_context("ctx-other")])
+        assert any("gateway context" in e for e in errors)
 
-    def test_context_without_vlan_reports_error(self):
-        legs = _good_legs()
-        legs[0] = _fw_leg("eth1.3005", "100.66.0.5/29", "PROD", caps=[_context(vlan=None), _exchange()])
-        assert any("cannot derive its transit VLAN" in e for e in _validate(legs))
+    def test_context_without_vlan_has_no_legs(self):
+        """No VLAN, no `<uplink>.<VLAN>` leg: the exchange's legs are tagged with no context."""
+        assert any("gateway context" in e for e in _validate(_good_legs(), contexts=[_context(vlan=None)]))
 
     def test_two_exchanges_validated_independently(self):
         other = _exchange("xchg-2")
         other["name"] = "ctx-1-NONPROD-INTERNET"
         legs = [
             *_good_legs(),
-            _fw_leg("eth1.3205", "100.66.16.5/29", "NONPROD", caps=[_context(), other]),
+            _fw_leg("eth1.3205", "100.66.16.5/29", "NONPROD", caps=[other]),
         ]
         errors = _validate(legs)
         assert len(errors) == 1
@@ -288,21 +299,14 @@ def _segment_port(vlan: int, seg_id: str = "seg-1", name: str = "web") -> dict:
     }
 
 
-def _service_port() -> dict:
-    context = {
-        **_context(),
-        "capabilities": [
-            {
-                "vrf": make_vrf({"name": "PROD", "vrf_type": "prod", "l3_vni": 50001}),
-                "device": {"role": "internal-firewall"},
-                "ip_address": {
-                    "address": "100.66.0.5/29",
-                    "ip_namespace": {"node": {"name": {"value": "default"}}},
-                },
-            }
-        ],
-    }
-    return {"name": "Ethernet49", "role": "firewall", "capabilities": [context]}
+def _service_ports() -> list[dict]:
+    """The border service port cabled to the uplink of a firewall member of the context, whose PROD leg is addressed."""
+    member = make_member("fw-1", [{**_context(), "name": "ctx-1"}], subs=("ethernet1/1.3005",))
+    leg = member["interfaces"][-1]
+    leg["ip_address"] = {"address": "100.66.0.5/29", "ip_namespace": {"name": "default"}}
+    leg["vrf"] = make_vrf({"name": "PROD", "vrf_type": "prod", "l3_vni": 50001})
+    uplink = make_iface("fw-1:ethernet1/1", "ethernet1/1", "uplink")
+    return make_switch({"Ethernet49": ("firewall", [make_far(member, uplink)])})["service_ports"]
 
 
 @pytest.fixture(params=[BorderLeaf, BorderSpine, Edge], ids=["border-leaf", "border-spine", "edge"])
@@ -316,11 +320,11 @@ class TestValidateTransitVlans:
         assert validate_transit_vlans({"id": "bl-1", "name": "bl-1", "interfaces": [_segment_port(3005)]}) == []
 
     def test_distinct_vlans_pass(self, validate_transit_vlans):
-        device = {"id": "bl-1", "name": "bl-1", "interfaces": [_segment_port(100), _service_port()]}
+        device = {"id": "bl-1", "name": "bl-1", "interfaces": [_segment_port(100)], "service_ports": _service_ports()}
         assert validate_transit_vlans(device) == []
 
     def test_collision_with_segment_vlan_reports_error(self, validate_transit_vlans):
-        device = {"id": "bl-1", "name": "bl-1", "interfaces": [_segment_port(3005), _service_port()]}
+        device = {"id": "bl-1", "name": "bl-1", "interfaces": [_segment_port(3005)], "service_ports": _service_ports()}
         errors = validate_transit_vlans(device)
         assert len(errors) == 1
         assert "VLAN 3005" in errors[0]
@@ -337,8 +341,8 @@ class TestValidateTransitVlans:
 
 def _snat_leg(snat: str | None, ns_type: str = "internet") -> dict:
     context = {**_context(), "snat_address": {"address": snat} if snat else None}
-    leg = _fw_leg("eth1.3405", "100.66.32.5/29", "INTERNET", ns_type, caps=[context])
-    return {"name": "dc1-fw-01", "interfaces": [leg]}
+    leg = _fw_leg("eth1.3405", "100.66.32.5/29", "INTERNET", ns_type, caps=[])
+    return _firewall([leg], contexts=[context])
 
 
 class TestValidateSnatAddresses:
@@ -372,5 +376,5 @@ class TestValidateSnatAddresses:
 
     def test_context_seen_on_two_legs_is_reported_once(self):
         data = _snat_leg(None)
-        data["interfaces"].append(data["interfaces"][0])
+        data["interfaces"].append(data["interfaces"][-1])
         assert len(validate_snat_addresses(data)) == 1

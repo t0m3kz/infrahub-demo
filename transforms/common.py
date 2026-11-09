@@ -16,7 +16,11 @@ from transforms.helpers.firewall import (
     get_leaf_firewall_transits,
 )
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
-from transforms.helpers.firewall_pbr import get_customer_pbr_rules, get_overlay_pbr_rules, pbr_steered_vlans
+from transforms.helpers.firewall_pbr import (
+    get_customer_pbr_rules,
+    get_overlay_pbr_rules,
+    refuse_unresolvable_contexts,
+)
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
@@ -30,11 +34,18 @@ from transforms.helpers.vrf import VrfRealizationError, l3_vrf_names, svi_vrfs, 
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.circuit_underlay import NETWORK_APPLIANCE_KIND
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import service_context_caps
+from utils.device_services import overlay_pbr_bindings, pbr_bindings
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
 from utils.segment_addressing import segment_hosting_candidates
-from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE
+from utils.service_contexts import (
+    DEVICE_SERVICES_ROOT,
+    attach_device_services,
+    border_contexts,
+    device_services,
+    interface_contexts,
+)
+from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, svi_vlan_id
 
 _log = logging.getLogger(__name__)
 
@@ -204,9 +215,7 @@ class BaseDeviceTransform(InfrahubTransform):
             activations = self._device_activations(device_data)
             if activations:
                 device_data["segment_deployments"] = activations
-            device_data["exchange_transits"] = get_exchange_transits(
-                service_context_caps(device_data.get("interfaces"))
-            )
+            device_data["exchange_transits"] = get_exchange_transits(border_contexts(device_services(device_data)))
         return device_data, extra_roots, platform_name
 
     async def transform(self, data: Any) -> Any:
@@ -404,7 +413,8 @@ class BaseDeviceTransform(InfrahubTransform):
         first_key = next(iter(cleaned))
         first_value = cleaned[first_key]
         device = first_value[0] if isinstance(first_value, list) and first_value else (first_value or {})
-        extra_roots = {k: v for k, v in cleaned.items() if k != first_key}
+        extra_roots = {k: v for k, v in cleaned.items() if k not in (first_key, DEVICE_SERVICES_ROOT)}
+        attach_device_services(device, cleaned)
         return device, extra_roots, (device.get("platform") or {}).get("name")
 
     def _no_platform_config(self, device: dict) -> str:
@@ -463,6 +473,7 @@ class BaseDeviceTransform(InfrahubTransform):
             activations=activations,
             device_name=data.get("name", ""),
             native_vlans=host_vlans,
+            interface_contexts=interface_contexts(data, device_services(data)),
         )
 
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:
@@ -583,9 +594,10 @@ class BaseDeviceTransform(InfrahubTransform):
         next hop has none); every other role gets no leaf transits.
         """
         firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
-        rules = get_customer_pbr_rules(
-            routed, firewall_contexts, steered_vlans=pbr_steered_vlans(data.get("interfaces"))
-        )
+        bindings = pbr_bindings(device_services(data))
+        steered_vlans = {vlan for name in bindings if (vlan := svi_vlan_id(name)) is not None}
+        refuse_unresolvable_contexts(set(bindings.values()), firewall_contexts, device_name=data.get("name", ""))
+        rules = get_customer_pbr_rules(routed, firewall_contexts, steered_vlans=steered_vlans)
         if self.device_role not in self._LEAF_ROLES:
             return rules, []
         return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))
@@ -600,6 +612,7 @@ class BaseDeviceTransform(InfrahubTransform):
         if self.device_role not in BORDER_ROLES:
             return []
         rules = get_overlay_pbr_rules(
+            overlay_pbr_bindings(device_services(data)),
             data.get("interfaces"),
             _flatten_deployment_firewall_contexts(data.get("deployment")),
             data.get("deployment"),

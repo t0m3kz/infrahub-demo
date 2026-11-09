@@ -29,17 +29,15 @@ from functools import cached_property
 from typing import Any
 
 from utils.exchange_transit import (
-    FIREWALL_CONTEXT_KIND,
     INTERNET_TYPE,
-    TENANT_NAMESPACE_TYPES,
     l3vni_svi_vlan,
-    service_context_caps,
     transit_leg_namespace,
 )
 from utils.fabric_roles import BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE, GROUP_PROVIDER_STUBS
 from utils.routing_domain import interface_security_zone
 from utils.segment_addressing import hosting_deployment, routed_segment_namespace
+from utils.service_contexts import border_contexts, service_footprints
 
 VRF_KIND = "ManagedVRF"
 SVI_ROLE = "svi"
@@ -118,12 +116,14 @@ def address_namespaces(interfaces: Iterable[dict[str, Any]]) -> frozenset[str]:
     )
 
 
-def leg_namespaces(interfaces: list[dict[str, Any]]) -> frozenset[str]:
-    """The namespace names of the transit legs of the contexts tagged on a device's service ports."""
+def leg_namespaces(contexts: list[dict[str, Any]]) -> frozenset[str]:
+    """The namespace names of the transit legs of the contexts tagged on a device's service ports.
+
+    ``contexts`` are the device's ``utils.service_contexts.border_contexts`` (each with its ``legs``)."""
     return frozenset(
         namespace["name"]
-        for ctx in service_context_caps(interfaces)
-        for leg in ctx.get("capabilities") or []
+        for ctx in contexts
+        for leg in ctx.get("legs") or []
         if (namespace := transit_leg_namespace(ctx.get("vlan_id"), leg))
     )
 
@@ -410,26 +410,6 @@ def instance_facts(vrf: dict[str, Any]) -> InstanceFacts:
     )
 
 
-def _service_footprints(interfaces: list[dict[str, Any]]) -> tuple[tuple[str, str, frozenset[str]], ...]:
-    """(tenant namespace, its type, footprint ids) of each firewall context on a service port.
-
-    A context serves the footprints in ``served_deployments`` (a shared one) and its ``tenant`` (a dedicated one); the
-    tenant VRF is the namespace of its legs whose type is a tenant type (the exchange peers are not)."""
-    found: dict[str, tuple[str, frozenset[str]]] = {}
-    for ctx in service_context_caps(interfaces):
-        if ctx.get("typename") != FIREWALL_CONTEXT_KIND:
-            continue
-        footprints = {fp["id"] for fp in ctx.get("served_deployments") or [] if fp.get("id")}
-        if (ctx.get("tenant") or {}).get("id"):
-            footprints.add(ctx["tenant"]["id"])
-        for leg in ctx.get("capabilities") or []:
-            namespace = transit_leg_namespace(ctx.get("vlan_id"), leg)
-            if namespace and namespace.get("vrf_type") in TENANT_NAMESPACE_TYPES:
-                kind, merged = found.get(namespace["name"], (namespace["vrf_type"], frozenset()))
-                found[namespace["name"]] = (kind, merged | frozenset(footprints))
-    return tuple((name, kind, footprints) for name, (kind, footprints) in sorted(found.items()))
-
-
 def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
     """The facts of one cleaned ``DcimDevice`` node of queries/validation/vrf_instances.gql."""
     interfaces = device.get("interfaces") or []
@@ -448,7 +428,7 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
         row_namespaces=frozenset(row.namespace for row in routed),
         svi_namespaces=frozenset(svi.vrf_namespace for svi in svis if svi.vrf_namespace),
         address_namespaces=address_namespaces(interfaces),
-        leg_namespaces=leg_namespaces(interfaces),
+        leg_namespaces=leg_namespaces(border_contexts(device)),
     )
     return DeviceVrfFacts(
         id=device.get("id") or "",
@@ -459,7 +439,7 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
         unrouted_row_ids=frozenset(row["id"] for row, routed_row in row_facts if row.get("id") and routed_row is None),
         svis=svis,
         l3vni_svis=l3vni_svis,
-        service_footprints=_service_footprints(interfaces),
+        service_footprints=service_footprints(device),
         other_interfaces={
             iface["name"]: iface.get("role")
             for iface in interfaces

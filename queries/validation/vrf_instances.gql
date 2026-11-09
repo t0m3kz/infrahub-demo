@@ -68,13 +68,13 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
         ... on DcimPhysicalDevice {
           deployment {
             node {
-              ...VrfDemandHostingFields
+              ...ServiceHostingFields
             }
           }
           vlans {
             edges {
               node {
-                ...VrfDemandRowFields
+                ...ServiceRowFields
               }
             }
           }
@@ -82,7 +82,7 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
         ... on CloudNetworkAppliance {
           deployment {
             node {
-              ...VrfDemandHostingFields
+              ...ServiceHostingFields
             }
           }
         }
@@ -96,6 +96,7 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
             }
           }
         }
+        ...ServiceBorderPortsFields
         ... on DcimDevice {
           interfaces {
             edges {
@@ -207,42 +208,6 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                         customer_deployment {
                           node {
                             id
-                          }
-                        }
-                      }
-                      ... on ManagedFirewallContext {
-                        vlan_id {
-                          value
-                        }
-                        tenant {
-                          node {
-                            id
-                          }
-                        }
-                        served_deployments {
-                          edges {
-                            node {
-                              id
-                            }
-                          }
-                        }
-                        capabilities {
-                          edges {
-                            node {
-                              ...VrfDemandLegFields
-                            }
-                          }
-                        }
-                      }
-                      ... on ManagedLoadbalancerContext {
-                        vlan_id {
-                          value
-                        }
-                        capabilities {
-                          edges {
-                            node {
-                              ...VrfDemandLegFields
-                            }
                           }
                         }
                       }

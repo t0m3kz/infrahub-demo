@@ -149,15 +149,12 @@ async def test_a_device_with_no_steered_svi_and_no_policy_reads_nothing() -> Non
 
 async def test_a_border_leaf_attaches_every_served_footprint_to_its_l3_vni_svi() -> None:
     """The context on a service port serves two footprints: both policies are created and hold the L3 VNI SVI."""
-    from tests.unit.test_pbr_facts import _firewall_context
-    from tests.unit.vrf_instances_helpers import raw_interface
+    from tests.unit.test_pbr_facts import _firewall_port
 
-    port = raw_interface(
-        "p1", "Ethernet1/25", "firewall", None, [_firewall_context(None, ["fp-a", "fp-b"])], "DcimPhysicalInterface"
-    )
+    port = _firewall_port("Ethernet1/25", None, ["fp-a", "fp-b"])
     l3vni = raw_svi("l3-1", 3900, None, name="Vlan3900")
     l3vni["role"] = {"value": "l3vni"}
-    facts = facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port, l3vni]))
+    facts = facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[l3vni], service_ports=[port]))
     writer = _Writer([("l3-1", "Vlan3900")])
     await writer.sync_pbr(facts)
     assert sorted(d["customer_deployment"]["id"] for d in writer.created) == ["fp-a", "fp-b"]
@@ -181,14 +178,13 @@ async def test_a_policy_created_in_this_pass_is_attached_without_reading_it_back
 
 async def test_a_policy_created_by_a_border_leaf_is_named_after_its_footprint() -> None:
     """The border leaf has no row of the footprint: the name comes from the footprint, not from its id."""
-    from tests.unit.test_pbr_facts import _firewall_context
-    from tests.unit.vrf_instances_helpers import raw_interface
+    from tests.unit.test_pbr_facts import _firewall_port
 
-    port = raw_interface(
-        "p1", "Ethernet1/25", "firewall", None, [_firewall_context(None, ["fp-a"])], "DcimPhysicalInterface"
-    )
+    port = _firewall_port("Ethernet1/25", None, ["fp-a"])
     l3vni = raw_svi("l3-1", 3900, None, name="Vlan3900")
     l3vni["role"] = {"value": "l3vni"}
     writer = _Writer([("l3-1", "Vlan3900")])
-    await writer.sync_pbr(facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port, l3vni])))
+    await writer.sync_pbr(
+        facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[l3vni], service_ports=[port]))
+    )
     assert [d["name"] for d in writer.created] == ["pbr-c005-p-dc10"]

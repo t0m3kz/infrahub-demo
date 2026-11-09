@@ -159,7 +159,7 @@ def render_terminated_from_query(raw_device: dict[str, Any]) -> list[dict[str, A
     device = cast(dict[str, Any], clean_data(raw_device))
     interfaces = device.get("interfaces") or []
     ha = get_ha(device.get("capabilities"), interfaces, device.get("name"))
-    contexts = get_firewall_contexts(interfaces, ha)
+    contexts = get_firewall_contexts(device, ha)
     return terminated_interfaces(contexts, interfaces, ha, device.get("id"), device["name"])
 
 
@@ -226,7 +226,11 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
             }
         ),
     }
-    uplink = {"name": {"value": trunk[1]}, "role": {"value": "uplink"}}
+    uplink = {
+        "__typename": "DcimVirtualInterface" if site == "waw1" else "DcimPhysicalInterface",
+        "name": {"value": trunk[1]},
+        "role": {"value": "uplink"},
+    }
     if site == "waw1":
         uplink["parent_interface"] = _one(cabled)
     else:
@@ -234,6 +238,7 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
     return {
         "id": member,
         "name": {"value": member},
+        "role": {"value": "internal-firewall"},
         "capabilities": _many(
             [
                 {
@@ -259,7 +264,7 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
                             "ip_namespace": {"node": {"name": {"value": "default"}}},
                         }
                     ),
-                    "capabilities": _many([cap]),
+                    "capabilities": _many([]),
                 },
             ]
         ),
@@ -597,7 +602,7 @@ def test_new_gdn_pair_uses_free_template_ports_rack_units_and_shared_transit_pre
     assert {leg["vrf"][1] for leg in legs} == {"PROD"}
     raw = _raw_member("gdn1", "gdn1-fw-01")
     device = cast(dict[str, Any], clean_data(raw))
-    contexts = get_firewall_contexts(device["interfaces"], get_ha(device["capabilities"]))
+    contexts = get_firewall_contexts(device, get_ha(device["capabilities"]))
     (context,) = contexts
     (leg,) = context["legs"]
     assert leg["virtual_ip"] == "100.66.0.36/29" and leg["anycast"] == "100.66.0.33"

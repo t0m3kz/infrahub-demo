@@ -1,75 +1,34 @@
-fragment FirewallContextLegFields on ManagedFirewallContext {
-  id
-  name {
-    value
-  }
-  vlan_id {
-    value
-  }
-  tenant {
-    node {
-      id
-    }
-  }
-  served_deployments {
-    edges {
-      node {
-        id
-      }
-    }
-  }
-  capabilities {
-    edges {
-      node {
-        name {
-          value
-        }
-        device {
-          node {
-            ... on DcimDeviceManaged {
-              role {
-                value
-              }
-            }
-          }
-        }
-        ...InterfaceRoutingZoneFields
-        ... on DcimVirtualInterface {
-          vrf {
-            node {
-              ...RoutingVrfFields
-            }
-          }
-          ip_address {
-            node {
-              address {
-                value
-              }
-              ip_namespace {
-                node {
-                  name {
-                    value
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
+# The firewalls of a hosting deployment and what their contexts' legs derive from: the contexts they are a member of and
+# their interfaces (utils/service_contexts.py contexts_with_legs).
 fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
   devices(role__value: "internal-firewall") {
     edges {
       node {
+        __typename
+        id
+        name {
+          value
+        }
+        # The physical firewalls only, as this selection always was: a dedicated context hosted on virtual firewalls
+        # is not one a leaf redirects to (a virtual member answers with no role, so it holds no context here).
         ... on DcimPhysicalDevice {
+          role {
+            value
+          }
           shared_capabilities {
             edges {
               node {
                 __typename
-                ...FirewallContextLegFields
+                ...ServiceContextFields
+                ...FirewallServedFields
+                ...LoadbalancerServedFields
+              }
+            }
+          }
+          interfaces {
+            edges {
+              node {
+                ...ServiceMemberInterfaceFields
               }
             }
           }

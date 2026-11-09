@@ -13,9 +13,9 @@ from typing import Any
 
 import pytest
 
+from tests.unit.firewall_helpers_shared import fw_contexts
 from transforms.config.firewall import apply_context_routes
 from transforms.helpers.firewall import get_firewall_static_routes
-from transforms.helpers.firewall_contexts import get_firewall_contexts
 from transforms.helpers.firewall_terminated import terminated_interfaces
 
 DEVICE_ID = "fw-1"
@@ -176,14 +176,14 @@ class TestContextShape:
             "capabilities": [capability],
         }
 
-        (context,) = get_firewall_contexts([leg], HA)
+        (context,) = fw_contexts([leg], HA)
 
         assert context["terminated_segments"] == [segment]
         assert context["legs"][0]["parent_interface"] == {"name": "eth1"}
 
     def test_a_context_without_the_field_terminates_nothing(self) -> None:
         """A cluster context (colocation) read by a query that has no terminated_segments."""
-        (context,) = get_firewall_contexts([], HA, [{"id": "ctx-1", "name": "c"}])
+        (context,) = fw_contexts([], HA, [{"id": "ctx-1", "name": "c"}])
 
         assert context["terminated_segments"] == []
 

@@ -74,6 +74,57 @@
             "edges": [
               {
                 "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "ethernet1/1"
+                  },
+                  "description": {
+                    "value": "uplink trunk to the border leaf"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "uplink"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "capabilities": {
+                    "edges": []
+                  },
+                  "cable": {
+                    "node": {
+                      "endpoints": {
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "device": {
+                                "node": {
+                                  "id": "dev-dc1-fw-01"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "device": {
+                                "node": {
+                                  "id": "dev-dc1-border-leaf-01"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
                   "vrf": {
                     "node": {
                       "security_zone": {
@@ -140,17 +191,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-shared",
-                          "name": {
-                            "value": "dc1-fw-shared"
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -222,17 +263,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-shared",
-                          "name": {
-                            "value": "dc1-fw-shared"
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -304,17 +335,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-shared",
-                          "name": {
-                            "value": "dc1-fw-shared"
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -386,17 +407,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-shared",
-                          "name": {
-                            "value": "dc1-fw-shared"
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -468,17 +479,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-dedicated",
-                          "name": {
-                            "value": "dc1-fw-acme"
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -550,17 +551,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-dedicated",
-                          "name": {
-                            "value": "dc1-fw-acme"
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -632,17 +623,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-dedicated",
-                          "name": {
-                            "value": "dc1-fw-acme"
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -663,57 +644,6 @@
                   },
                   "ip_address": {
                     "node": null
-                  },
-                  "capabilities": {
-                    "edges": []
-                  }
-                }
-              },
-              {
-                "node": {
-                  "__typename": "DcimPhysicalInterface",
-                  "name": {
-                    "value": "ethernet1/1"
-                  },
-                  "description": {
-                    "value": "uplink trunk to the border leaf"
-                  },
-                  "status": {
-                    "value": "active"
-                  },
-                  "role": {
-                    "value": "uplink"
-                  },
-                  "ip_address": {
-                    "node": null
-                  },
-                  "cable": {
-                    "node": {
-                      "endpoints": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "DcimPhysicalInterface",
-                              "device": {
-                                "node": {
-                                  "id": "dev-dc1-fw-01"
-                                }
-                              }
-                            }
-                          },
-                          {
-                            "node": {
-                              "__typename": "DcimPhysicalInterface",
-                              "device": {
-                                "node": {
-                                  "id": "dev-dc1-border-leaf-01"
-                                }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    }
                   },
                   "capabilities": {
                     "edges": []
@@ -1181,6 +1111,49 @@
           },
           "l3_vni": {
             "value": 60003
+          }
+        }
+      }
+    ]
+  },
+  "DeviceServices": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-dc1-fw-01",
+          "name": {
+            "value": "dc1-fw-01"
+          },
+          "role": {
+            "value": "internal-firewall"
+          },
+          "member_of_groups": {
+            "edges": []
+          },
+          "deployment": {
+            "node": {
+              "__typename": "TopologyPod",
+              "id": "fixture-pod",
+              "name": {
+                "value": "fixture-pod"
+              },
+              "parent": {
+                "node": {
+                  "__typename": "TopologyDataCenter",
+                  "id": "fixture-dc",
+                  "name": {
+                    "value": "fixture-dc"
+                  }
+                }
+              }
+            }
+          },
+          "service_ports": {
+            "edges": []
+          },
+          "vlans": {
+            "edges": []
           }
         }
       }

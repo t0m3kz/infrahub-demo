@@ -23,6 +23,7 @@ from utils.exchange_transit import (
 )
 from utils.routing_domain import interface_security_zone
 from utils.segment_addressing import segment_hosting_candidates, segment_prefix
+from utils.service_contexts import contexts_with_legs, leg_interfaces
 
 
 def member_firewall_contexts(shared_capabilities: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -56,19 +57,12 @@ def _new_context(cap: dict[str, Any], legs: list[dict[str, Any]]) -> dict[str, A
     }
 
 
-def get_firewall_contexts(
-    interfaces: list[dict[str, Any]] | None,
-    ha: dict[str, Any] | None = None,
-    member_contexts: list[dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
-    """Build the per-vsys/context list from this firewall's own sub-interfaces.
+def get_firewall_contexts(device: dict[str, Any], ha: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Build the per-vsys/context list of a firewall: the firewall contexts it is a member of, with their legs.
 
-    A ManagedFirewallContext shows up as an capabilities entry on
-    the DcimVirtualInterface(s) generators/topology/customer_dc.py created for
-    it on the "uplink"-role trunk. A colocation context has no
-    legs at all, hence no interface on a member: it comes from
-    ``member_contexts`` (the contexts the device is a member of) and
-    lists with its policies and no legs.
+    The legs of a context are the device's sub-interfaces ``<uplink>.<transit VLAN>``
+    (utils/service_contexts.py ``context_legs``) that generators/topology/customer_dc.py created for it on the
+    "uplink"-role trunk. A colocation context has no legs at all: it lists with its policies and no legs.
 
     ``legs`` are the context's exchange transit legs on this device: the
     sub-interfaces whose address is in a VRF namespace of a known type
@@ -86,21 +80,15 @@ def get_firewall_contexts(
     """
     contexts: dict[str, dict[str, Any]] = {}
     legs_by_context: dict[str, list[dict[str, Any]]] = {}
-    for cap in member_contexts or []:
+    for cap in member_firewall_contexts(device.get("shared_capabilities")):
         if cap.get("id"):
             contexts[cap["id"]] = _new_context(cap, legs_by_context.setdefault(cap["id"], []))
-    for iface in interfaces or []:
-        ip_obj = iface.get("ip_address") or {}
-        parent_iface = sub_interface_parent(iface) or {}
-        for cap in iface.get("capabilities") or []:
-            if cap.get("typename") != FIREWALL_CONTEXT_KIND:
-                continue
-            context_id = cap.get("id")
-            if not context_id:
-                continue
-            context = contexts.get(context_id)
-            if context is None:
-                context = contexts[context_id] = _new_context(cap, legs_by_context.setdefault(context_id, []))
+    for context_id, ifaces in leg_interfaces(device).items():
+        context = contexts.get(context_id)
+        if context is None:
+            continue
+        for iface in ifaces:
+            ip_obj = iface.get("ip_address") or {}
             namespace = interface_security_zone(iface)
             ns_type = namespace.get("vrf_type")
             address = ip_obj.get("address")
@@ -114,7 +102,7 @@ def get_firewall_contexts(
             legs_by_context[context_id].append(
                 {
                     "interface": iface.get("name"),
-                    "parent_interface": parent_iface,
+                    "parent_interface": sub_interface_parent(iface) or {},
                     "vlan": transit_vlan(context["vlan_id"], ns_type),
                     "own_ip": address,
                     **leg_virtual_ip(ha, address),
@@ -277,7 +265,8 @@ def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> 
     shaped by queries/fragments/firewall_contexts.gql's
     SwitchDeploymentFields fragment: deployment.devices
     (pre-filtered to role="internal-firewall") -> each device's shared capabilities
-    of typename ManagedFirewallContext (the contexts it is a member of).
+    of typename ManagedFirewallContext (the contexts it is a member of), each with the ``legs`` its members hold
+    (utils/service_contexts.py contexts_with_legs).
     Pod-tier devices (leaf/tor/access-leaf) have their deployment set to the
     POD, not the DC — deployment_id=self.data["deployment"]["id"] in
     generators/topology/rack.py vs deployment_id=dc_id in
@@ -287,19 +276,9 @@ def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> 
     if not deployment:
         return []
 
-    def _contexts_from_device_hosting(hosting: dict[str, Any]) -> list[dict[str, Any]]:
-        found: list[dict[str, Any]] = []
+    members: dict[str, dict[str, Any]] = {}
+    for hosting in segment_hosting_candidates(deployment):
         for device in hosting.get("devices") or []:
-            found.extend(member_firewall_contexts(device.get("shared_capabilities")))
-        return found
-
-    contexts = [
-        ctx for hosting in segment_hosting_candidates(deployment) for ctx in _contexts_from_device_hosting(hosting)
-    ]
-
-    deduped: dict[str, dict[str, Any]] = {}
-    for ctx in contexts:
-        ctx_id = ctx.get("id")
-        if ctx_id and ctx_id not in deduped:
-            deduped[ctx_id] = ctx
-    return list(deduped.values())
+            if isinstance(device, dict):
+                members.setdefault(str(device.get("name")), device)
+    return [ctx for ctx in contexts_with_legs(list(members.values())) if ctx.get("typename") == FIREWALL_CONTEXT_KIND]

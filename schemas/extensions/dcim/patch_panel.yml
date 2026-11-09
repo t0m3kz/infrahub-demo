@@ -210,12 +210,15 @@ nodes:
         kind: Parent
         identifier: "panel__rear_ports"
         order_weight: 800
+      # The reverse of FrontPatchPanelPort.rear_port, with the same `common_parent`: the server enforces it only from a
+      # side that declares it, so without it a write from the rear port could attach a front port of another panel.
       - name: front_ports
         label: Front Ports
         peer: DcimFrontPatchPanelPort
         optional: true
         cardinality: many
         kind: Generic
+        common_parent: panel
         identifier: "rear__front_ports"
         order_weight: 2500
 

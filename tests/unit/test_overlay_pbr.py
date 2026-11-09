@@ -14,7 +14,8 @@ from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from transforms.config.border_leaf import BorderLeaf
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
 from transforms.helpers.firewall_pbr import get_overlay_pbr_rules
-from utils.data_cleaning import clean_data
+from utils.device_services import overlay_pbr_bindings
+from utils.service_contexts import device_services
 
 
 def _render(platform: str, data: dict[str, Any]) -> str:
@@ -26,10 +27,19 @@ def _render(platform: str, data: dict[str, Any]) -> str:
     return asyncio.run(transform.transform(with_vrf_objects(transform, copy.deepcopy(data))))
 
 
+def _device(platform: str = "cisco_nxos") -> dict[str, Any]:
+    """The cleaned border leaf of the overlay-PBR fixture with its nested service data (``device["services"]``)."""
+    transform = BorderLeaf.__new__(BorderLeaf)
+    data = with_vrf_objects(transform, build_overlay_pbr_bl_data(device_name="bl-1", platform=platform))
+    device, _, _ = transform._device_and_platform(data)
+    return device
+
+
 def _rules(platform: str = "cisco_nxos") -> list[dict[str, Any]]:
-    device = clean_data(build_overlay_pbr_bl_data(device_name="bl-1", platform=platform))["DcimDevice"][0]
+    device = _device(platform)
     contexts = _flatten_deployment_firewall_contexts(device["deployment"])
-    return get_overlay_pbr_rules(device["interfaces"], contexts, device["deployment"])
+    bindings = overlay_pbr_bindings(device_services(device))
+    return get_overlay_pbr_rules(bindings, device["interfaces"], contexts, device["deployment"])
 
 
 def test_each_footprint_is_steered_by_the_prefix_of_its_segment_to_the_vip_of_its_own_context() -> None:
@@ -42,30 +52,19 @@ def test_each_footprint_is_steered_by_the_prefix_of_its_segment_to_the_vip_of_it
     }
 
 
-def test_an_l3_vni_svi_without_a_policy_steers_nothing() -> None:
-    """No policy attached: the interface is routed normally."""
-    data = clean_data(build_overlay_pbr_bl_data(device_name="bl-1", platform="cisco_nxos"))["DcimDevice"][0]
-    for iface in data["interfaces"]:
-        if iface.get("role") == "l3vni":
-            iface["capabilities"] = []
-    assert (
-        get_overlay_pbr_rules(
-            data["interfaces"], _flatten_deployment_firewall_contexts(data["deployment"]), data["deployment"]
-        )
-        == []
-    )
+def test_an_l3_vni_svi_whose_vrf_serves_no_footprint_steers_nothing() -> None:
+    """No footprint bound to the SVI: the interface is routed normally."""
+    data = _device()
+    contexts = _flatten_deployment_firewall_contexts(data["deployment"])
+    assert get_overlay_pbr_rules({}, data["interfaces"], contexts, data["deployment"]) == []
 
 
 def test_a_footprint_with_no_routed_segment_in_the_vrf_steers_nothing() -> None:
-    """A policy for a footprint that has no segment in this VRF yields no rule, never an empty ACL."""
-    data = clean_data(build_overlay_pbr_bl_data(device_name="bl-1", platform="cisco_nxos"))["DcimDevice"][0]
-    for iface in data["interfaces"]:
-        if iface.get("role") == "l3vni":
-            iface["capabilities"] = [
-                c for c in iface["capabilities"] if c["customer_deployment"]["id"] == "dep-nowhere"
-            ] or [{"typename": "RoutingPolicy", "kind": "pbr", "customer_deployment": {"id": "dep-nowhere"}}]
+    """A binding for a footprint that has no segment in this VRF yields no rule, never an empty ACL."""
+    data = _device()
     contexts = _flatten_deployment_firewall_contexts(data["deployment"])
-    assert get_overlay_pbr_rules(data["interfaces"], contexts, data["deployment"]) == []
+    bindings = {"Vlan3900": frozenset({"dep-nowhere"})}
+    assert get_overlay_pbr_rules(bindings, data["interfaces"], contexts, data["deployment"]) == []
 
 
 def test_nx_os_renders_the_acl_the_route_map_and_the_attachment() -> None:

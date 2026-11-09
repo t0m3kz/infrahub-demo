@@ -140,7 +140,7 @@ def _transit_names(ctx: dict[str, Any], namespace: str) -> tuple[str, str]:
     shared context's name already ends in its namespace, so its leg is ``LB-<context>``; past
     VLAN_NAME_MAX the VLAN name is cut to fit with a 4-hex digest of the full name (deterministic, and
     two long names sharing a stem still differ), and the full name stays in the SVI description. A
-    leaf's contexts come from the firewall HA traversal (FirewallContextLegFields, no typename): they
+    leaf's contexts come from the firewall HA traversal (utils/service_contexts.py contexts_with_legs): they
     are firewall contexts.
     """
     if (ctx.get("typename") or FIREWALL_CONTEXT_KIND) == FIREWALL_CONTEXT_KIND:
@@ -159,12 +159,12 @@ def transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
     Each carries the namespace type/l3_vni, the transit /29, the transit VLAN and
     VNI, and the fixed addresses (anycast .1, VIP .4, members .5/.6), all by the
     utils.exchange_transit rules. A leg is a sub-interface of an HA member (a
-    firewall or a load balancer); the border ports tagged with the context and
-    legs in the default namespace are skipped.
+    firewall or a load balancer); ``ctx["legs"]``
+    (utils/service_contexts.py); legs in the default namespace are skipped.
     """
     legs: dict[str, dict[str, Any]] = {}
     context_vlan = ctx.get("vlan_id")
-    for leg in ctx.get("capabilities") or []:
+    for leg in ctx.get("legs") or []:
         namespace = transit_leg_namespace(context_vlan, leg)
         if (
             namespace is None or context_vlan is None
@@ -198,7 +198,7 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
     fixed offset (utils.exchange_transit); the members' own addresses are never the
     nexthop. None without a transit leg in ``namespace``.
     """
-    for leg in ctx.get("capabilities") or []:
+    for leg in ctx.get("legs") or []:
         if (leg.get("device") or {}).get("role") not in FIREWALL_ROLES:
             continue
         ip_obj = leg.get("ip_address") or {}

@@ -7,6 +7,9 @@ query firewall_config($device: String!) {
           value
         }
         ... on DcimDeviceManaged {
+          role {
+            value
+          }
           platform {
             node {
               name {

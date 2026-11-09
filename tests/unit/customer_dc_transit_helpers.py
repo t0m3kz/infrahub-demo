@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 from infrahub_sdk.query_groups import InfrahubGroupContextBase
 
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
-from tests.unit.vrf_instances_helpers import edges, raw_device, raw_instance, raw_interface
+from tests.unit.vrf_instances_helpers import edges, raw_device, raw_instance, raw_interface, raw_service_port
 from tests.unit.vrf_reconcile_helpers import VrfHost
 
 _UNTRACKED = {"allow_upsert": True, "update_group_context": False}
@@ -151,11 +151,11 @@ class _World:
                 for vrf in self.routing.store.vrfs.values()
                 if device_id in vrf.members
             ]
-            ports = []
+            service_ports: list[dict[str, Any]] = []
+            svis: list[dict[str, Any]] = []
             for port in self.bl_ports.values():
                 if port.device.id != device_id:
                     continue
-                contexts = []
                 for peer in port.capabilities.peers:
                     context = next((ctx for ctx in self.contexts.values() if ctx.id == peer.id), None)
                     if context is None:
@@ -165,34 +165,29 @@ class _World:
                         if context.id not in {cap.id for cap in sub.capabilities.peers}:
                             continue
                         ip = next(ip for ip in self.addresses.values() if ip.id == sub.ip_address.id)
+                        vrf = self._raw_vrf(sub.vrf.peer)
                         legs.append(
                             {
-                                "name": {"value": sub.name.value},
-                                "device": {
-                                    "node": {
-                                        "role": {
-                                            "value": "internal-firewall"
-                                            if "Firewall" in context.kind
-                                            else "load-balancer"
-                                        }
-                                    }
-                                },
+                                "_ns_type": vrf["security_zone"]["node"]["vrf_type"]["value"],
                                 "ip_address": {"node": {"address": {"value": ip.address.value}}},
-                                "vrf": {"node": self._raw_vrf(sub.vrf.peer)},
+                                "vrf": {"node": vrf},
                             }
                         )
-                    contexts.append(
-                        {
-                            "__typename": context.kind,
-                            "id": context.id,
-                            "vlan_id": {"value": context.vlan_id.value},
-                            "capabilities": edges(*legs),
-                        }
+                    # The border port is cabled to the uplink of a member of the context: the legs sit on that member.
+                    service_ports.append(
+                        raw_service_port(
+                            port.id,
+                            port.role.value,
+                            context.kind,
+                            context.vlan_id.value,
+                            context_id=context.id,
+                            member_role="internal-firewall" if "Firewall" in context.kind else "load-balancer",
+                            raw_legs=tuple(legs),
+                        )
                     )
-                ports.append(raw_interface(port.id, role=port.role.value, capabilities=contexts))
             for (owner, _), data in self.border_svis.items():
                 if owner == device_id:
-                    ports.append(
+                    svis.append(
                         {
                             **raw_interface(data["id"], data["name"], "l3vni", typename="DcimVirtualInterface"),
                             "vrf": {"node": self._raw_vrf(self.routing.store.vrfs[data["vrf"]["id"]])},
@@ -204,7 +199,8 @@ class _World:
                 role="border-leaf",
                 deployment_kind="TopologyDataCenter",
                 hosting_id="dc10-id",
-                interfaces=ports,
+                interfaces=svis,
+                service_ports=service_ports,
                 vrfs=memberships,
             )
             device["deployment"]["node"]["name"] = {"value": "DC10"}

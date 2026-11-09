@@ -7,26 +7,21 @@ from typing import Any, cast
 import pytest
 
 from checks.pbr_firewall_reachability import CheckPbrFirewallReachability
+from tests.unit.vrf_instances_helpers import raw_service_port
+from utils.exchange_transit import transit_vlan
 
 
 def _v(value: Any) -> dict[str, Any]:
     return {"value": value}
 
 
+def _edges(nodes: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"edges": [{"node": node} for node in nodes]}
+
+
 def _leg(namespace: str = "PROD", ns_type: str | None = "prod", role: str = "internal-firewall") -> dict[str, Any]:
-    """One leg (a firewall member's VLAN sub-interface) in the raw query shape."""
-    ip_address: dict[str, Any] = {"node": None}
-    if ns_type:
-        ip_address = {"node": {"ip_namespace": {"node": {"name": _v("default")}}}}
-    return {
-        "node": {
-            "device": {"node": {"role": _v(role)}},
-            "ip_address": ip_address,
-            "vrf": {"node": {"security_zone": {"node": {"name": _v(namespace), "vrf_type": _v(ns_type)}}}}
-            if ns_type
-            else {"node": None},
-        }
-    }
+    """One leg spec: a sub-interface of a member of ``role`` addressed in ``namespace`` (``ns_type`` None: no address)."""
+    return {"namespace": namespace, "ns_type": ns_type, "role": role}
 
 
 def _context(
@@ -35,46 +30,72 @@ def _context(
     served: list[str] | None = None,
     tenant: str | None = None,
 ) -> dict[str, Any]:
-    """One ManagedFirewallContext edge; ``legs`` defaults to a single PROD leg."""
+    """One ManagedFirewallContext with the legs its member holds (default: a single PROD leg)."""
     return {
-        "node": {
-            "id": ctx_id,
-            "name": _v(f"{ctx_id}-name"),
-            "tenant": {"node": {"id": tenant, "display_label": tenant} if tenant else None},
-            "served_deployments": {"edges": [{"node": {"id": d, "display_label": d}} for d in served or []]},
-            "capabilities": {"edges": legs if legs is not None else [_leg()]},
-        }
+        "id": ctx_id,
+        "name": _v(f"{ctx_id}-name"),
+        "tenant": {"node": {"id": tenant, "display_label": tenant} if tenant else None},
+        "served_deployments": _edges([{"id": d, "display_label": d} for d in served or []]),
+        "_legs": legs if legs is not None else [_leg()],
     }
 
 
-def _port(device_role: str, context_ids: list[str], extra_kind: bool = False) -> dict[str, Any]:
-    """One firewall-role port on a device of ``device_role`` tagged with the given contexts."""
-    caps = [{"node": {"__typename": "ManagedFirewallContext", "id": cid}} for cid in context_ids]
-    if extra_kind:
-        caps.append({"node": {"__typename": "RoutingOSPFInterface"}})
-    return {
-        "node": {
-            "id": "port",
-            "device": {"node": {"name": _v("dev"), "role": _v(device_role)}},
-            "capabilities": {"edges": caps},
+def _member(context: dict[str, Any]) -> dict[str, Any]:
+    """The firewall member of the context: it belongs to it and holds the sub-interfaces `eth1.<transit VLAN>`."""
+    interfaces: list[dict[str, Any]] = [
+        {"__typename": "DcimPhysicalInterface", "id": "up", "name": _v("eth1"), "role": _v("uplink")}
+    ]
+    for leg in context["_legs"]:
+        sub: dict[str, Any] = {
+            "__typename": "DcimVirtualInterface",
+            "id": f"sub-{leg['namespace']}",
+            "name": _v(f"eth1.{transit_vlan(3000, leg['ns_type'] or 'prod')}"),
+            "role": _v("service"),
+            "ip_address": {"node": {"ip_namespace": {"node": {"name": _v("default")}}}}
+            if leg["ns_type"]
+            else {"node": None},
+            "vrf": {"node": {"security_zone": {"node": {"name": _v(leg["namespace"]), "vrf_type": _v(leg["ns_type"])}}}}
+            if leg["ns_type"]
+            else {"node": None},
         }
+        interfaces.append(sub)
+    role = context["_legs"][0]["role"] if context["_legs"] else "internal-firewall"
+    return {
+        "id": f"member-{context['id']}",
+        "name": _v(f"fw-{context['id']}"),
+        "role": _v(role),
+        "shared_capabilities": _edges(
+            [{"__typename": "ManagedFirewallContext", "id": context["id"], "vlan_id": _v(3000)}]
+        ),
+        "interfaces": _edges(interfaces),
     }
 
 
-def _run(
-    contexts: list[dict[str, Any]],
-    physical: list[dict[str, Any]] | None = None,
-    virtual: list[dict[str, Any]] | None = None,
-) -> list[str]:
+def _port(device_role: str, context_ids: list[str]) -> dict[str, Any]:
+    """One border or edge device (of ``device_role``) with a firewall-role port facing a member of each context."""
+    return {
+        "id": f"dev-{device_role}",
+        "name": _v(f"dev-{device_role}"),
+        "role": _v(device_role),
+        "service_ports": _edges(
+            [
+                raw_service_port(f"Ethernet{n}", "firewall", "ManagedFirewallContext", 3000, context_id=cid)
+                for n, cid in enumerate(context_ids, start=1)
+            ]
+        ),
+    }
+
+
+def _run(contexts: list[dict[str, Any]], carriers: list[dict[str, Any]] | None = None) -> list[str]:
     """Run the check against canned data and return the captured errors."""
     check = cast(Any, CheckPbrFirewallReachability.__new__(CheckPbrFirewallReachability))
     errors: list[str] = []
     check.log_error = lambda message: errors.append(message)
     check.validate(
         {
-            "ManagedFirewallContext": {"edges": contexts},
-            "FirewallPhysicalPorts": {"edges": physical or []},
-            "FirewallVirtualPorts": {"edges": virtual or []},
+            "ManagedFirewallContext": _edges([{k: v for k, v in ctx.items() if k != "_legs"} for ctx in contexts]),
+            "FirewallMembers": _edges([_member(ctx) for ctx in contexts]),
+            "CarrierDevices": _edges(carriers or []),
         }
     )
     return errors
@@ -86,20 +107,17 @@ class TestCarried:
     @pytest.mark.parametrize("role", ["border-leaf", "border-spine", "edge"])
     def test_context_carried_by_border_or_edge_port_passes(self, role: str) -> None:
         """A firewall-role port on a border or edge tagged with the context carries it."""
-        assert _run([_context(served=["dep-a"])], physical=[_port(role, ["ctx-1"])]) == []
-
-    def test_context_carried_by_a_virtual_port_passes(self) -> None:
-        """A virtual (LAG) firewall-role port carries it as well."""
-        assert _run([_context(served=["dep-a"])], virtual=[_port("edge", ["ctx-1"])]) == []
+        assert _run([_context(served=["dep-a"])], carriers=[_port(role, ["ctx-1"])]) == []
 
     def test_dedicated_context_carried_passes(self) -> None:
         """A dedicated context (tenant, no served list) is served by its tenant."""
-        assert _run([_context(tenant="dep-a")], physical=[_port("border-leaf", ["ctx-1"])]) == []
+        assert _run([_context(tenant="dep-a")], carriers=[_port("border-leaf", ["ctx-1"])]) == []
 
-    def test_shared_context_carried_with_other_kinds_on_the_port_passes(self) -> None:
-        """Other capabilities on the port do not hide the context tag."""
-        ports = [_port("border-leaf", ["ctx-2", "ctx-1"], extra_kind=True)]
-        assert _run([_context(served=["dep-a", "dep-b"])], physical=ports) == []
+    def test_shared_context_carried_beside_another_context_on_the_device_passes(self) -> None:
+        """Another context faced by the device does not hide this one."""
+        carriers = [_port("border-leaf", ["ctx-2", "ctx-1"])]
+        contexts = [_context("ctx-1", served=["dep-a", "dep-b"]), _context("ctx-2", served=["dep-a"])]
+        assert _run(contexts, carriers=carriers) == []
 
 
 class TestNotCarried:
@@ -123,11 +141,13 @@ class TestNotCarried:
 
     def test_port_on_a_leaf_does_not_carry_the_context(self) -> None:
         """Only border and edge devices host the VIP."""
-        assert len(_run([_context(served=["dep-a"])], physical=[_port("leaf", ["ctx-1"])])) == 1
+        assert len(_run([_context(served=["dep-a"])], carriers=[_port("leaf", ["ctx-1"])])) == 1
 
     def test_port_tagged_with_another_context_does_not_carry_it(self) -> None:
         """A carried context does not cover its sibling."""
-        errors = _run([_context("ctx-1", served=["d"]), _context("ctx-2", served=["d"])], [_port("edge", ["ctx-2"])])
+        errors = _run(
+            [_context("ctx-1", served=["d"]), _context("ctx-2", served=["d"])], carriers=[_port("edge", ["ctx-2"])]
+        )
         assert len(errors) == 1
         assert "ctx-1-name" in errors[0]
 

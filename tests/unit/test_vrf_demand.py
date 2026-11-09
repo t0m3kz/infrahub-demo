@@ -7,12 +7,12 @@ import pytest
 from tests.unit.vrf_instances_helpers import (
     address,
     facts_of,
-    raw_context,
     raw_device,
     raw_instance,
     raw_interface,
     raw_mlag,
     raw_row,
+    raw_service_port,
     raw_svi,
 )
 from utils.routing_domain import RoutingDomainError
@@ -80,31 +80,33 @@ def test_svi_vrf_counts_as_demand() -> None:
 
 def test_leg_namespace_of_context_on_service_port_is_included() -> None:
     """A firewall context tagged on a role-firewall port brings its transit leg namespace."""
-    context = raw_context("ManagedFirewallContext", 3000, ("internal-firewall", "PROD", "prod"))
-    port = raw_interface("i1", "Ethernet5", "firewall", capabilities=[context])
-    assert facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port])).demand == frozenset({"PROD"})
+    port = raw_service_port(
+        "Ethernet5", "firewall", "ManagedFirewallContext", 3000, ("internal-firewall", "PROD", "prod")
+    )
+    assert facts_of(raw_device("d1", "bl-1", role="border-leaf", service_ports=[port])).demand == frozenset({"PROD"})
 
 
 def test_leg_namespace_from_port_of_another_role_is_ignored() -> None:
     """A context tagged on a port that is not its service port gives no demand."""
-    context = raw_context("ManagedFirewallContext", 3000, ("internal-firewall", "PROD", "prod"))
-    port = raw_interface("i1", "Ethernet5", "load-balancer", capabilities=[context])
-    assert facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port])).demand == frozenset()
+    port = raw_service_port(
+        "Ethernet5", "load-balancer", "ManagedFirewallContext", 3000, ("internal-firewall", "PROD", "prod")
+    )
+    assert facts_of(raw_device("d1", "bl-1", role="border-leaf", service_ports=[port])).demand == frozenset()
 
 
 def test_leg_of_a_non_member_role_is_ignored() -> None:
     """Only legs held by the HA members (firewall / load-balancer role) count."""
-    context = raw_context("ManagedFirewallContext", 3000, ("leaf", "PROD", "prod"))
-    port = raw_interface("i1", "Ethernet5", "firewall", capabilities=[context])
-    assert facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port])).demand == frozenset()
+    port = raw_service_port("Ethernet5", "firewall", "ManagedFirewallContext", 3000, ("leaf", "PROD", "prod"))
+    assert facts_of(raw_device("d1", "bl-1", role="border-leaf", service_ports=[port])).demand == frozenset()
 
 
 def test_an_addressed_leg_with_no_vrf_fails_closed() -> None:
     """A member leg with an address on a context with a VLAN but no VRF instance has no routing authority: refused."""
-    context = raw_context("ManagedFirewallContext", 3000, ("internal-firewall", "default", "prod"))
-    port = raw_interface("i1", "Ethernet5", "firewall", capabilities=[context])
+    port = raw_service_port(
+        "Ethernet5", "firewall", "ManagedFirewallContext", 3000, ("internal-firewall", "default", "prod")
+    )
     with pytest.raises(RoutingDomainError, match="missing VRF instance"):
-        facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port]))
+        facts_of(raw_device("d1", "bl-1", role="border-leaf", service_ports=[port]))
 
 
 def test_a_paired_device_reads_only_its_own_rows() -> None:

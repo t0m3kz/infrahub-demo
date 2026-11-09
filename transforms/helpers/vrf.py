@@ -21,6 +21,7 @@ from typing import Any
 
 from utils.limits import DEFAULT_NAMESPACE
 from utils.segment_addressing import routed_segment_namespace
+from utils.service_contexts import border_contexts, device_services
 from utils.vrf_demand import (
     SVI_ROLE,
     VrfDemandInputs,
@@ -89,7 +90,7 @@ def vrf_requirements(data: dict[str, Any]) -> VrfRequirements:
 
     ``data`` is the cleaned device with its ``segment_deployments`` (segment activations) set, as
     ``BaseDeviceTransform.prepared_device`` leaves it. The demand is ``utils.vrf_demand.vrf_demand`` over the same
-    inputs the generators read (``address_namespaces``, ``leg_namespaces`` of the contexts on its service ports); the
+    inputs the generators read (``address_namespaces``, ``leg_namespaces`` of the contexts behind its service ports); the
     rows are its routed segment activations, the config's view of the routed rows of the device.
     """
     deployment = data.get("deployment") if isinstance(data.get("deployment"), dict) else {}
@@ -107,7 +108,7 @@ def vrf_requirements(data: dict[str, Any]) -> VrfRequirements:
         row_namespaces=frozenset(routed.values()),
         svi_namespaces=frozenset(name for name in svi_vrfs(interfaces).values() if name),
         address_namespaces=address_namespaces(interfaces),
-        leg_namespaces=leg_namespaces(interfaces),
+        leg_namespaces=leg_namespaces(border_contexts(device_services(data))),
     )
     if not carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind):
         return VrfRequirements()

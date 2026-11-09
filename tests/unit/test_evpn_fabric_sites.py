@@ -12,7 +12,7 @@ from checks.evpn_fabric import (
     stretched_management_errors,
     vtep_router_id_errors,
 )
-from tests.unit.vrf_instances_helpers import edges
+from tests.unit.vrf_instances_helpers import edges, raw_service_port
 from utils.data_cleaning import clean_data
 from utils.limits import DEFAULT_NAMESPACE
 
@@ -67,42 +67,17 @@ def _overlay(router_id: str | None) -> dict[str, Any]:
     }
 
 
-def _iface(role: str, vrf_namespace: str | None = None, contexts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """A raw interface: an SVI in a VRF, a multisite-vip, or a service port tagged with contexts."""
+def _iface(role: str, vrf_namespace: str | None = None) -> dict[str, Any]:
+    """A raw interface: an SVI in a VRF or a multisite-vip."""
     node: dict[str, Any] = {
         "__typename": "DcimVirtualInterface" if vrf_namespace else "DcimPhysicalInterface",
         "id": f"if-{role}",
         "role": {"value": role},
-        "capabilities": edges(*(contexts or [])),
+        "capabilities": edges(),
     }
     if vrf_namespace:
         node["vrf"] = {"node": {"security_zone": {"node": {"name": {"value": vrf_namespace}}}}}
     return node
-
-
-def _leg_context(namespace: str, ns_type: str) -> dict[str, Any]:
-    """A raw firewall context with one transit leg on a firewall member."""
-    leg = {
-        "vrf": {
-            "node": {
-                "id": f"vrf-{namespace}",
-                "security_zone": {"node": {"name": {"value": namespace}, "vrf_type": {"value": ns_type}}},
-            }
-        },
-        "device": {"node": {"role": {"value": "internal-firewall"}}},
-        "ip_address": {
-            "node": {
-                "address": {"value": "10.1.0.1/29"},
-                "ip_namespace": {"node": {"name": {"value": "default"}}},
-            }
-        },
-    }
-    return {
-        "__typename": "ManagedFirewallContext",
-        "id": "ctx-1",
-        "vlan_id": {"value": 100},
-        "capabilities": edges(leg),
-    }
 
 
 def _device(
@@ -113,6 +88,7 @@ def _device(
     interfaces: tuple[dict[str, Any], ...] = (),
     site_asn: int | None = None,
     process: bool = True,
+    service_ports: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
     """A cleaned DcimDevice node of queries/validation/evpn_fabric.gql; ``process`` False has no overlay BGP process
     (``router_id`` None with a process is a process without a router_id)."""
@@ -126,6 +102,7 @@ def _device(
             "shared_capabilities": edges(*vrfs),
             "capabilities": edges(*capabilities),
             "interfaces": edges(*interfaces),
+            "service_ports": edges(*service_ports),
         }
     )
 
@@ -230,8 +207,10 @@ def test_site_rt_as_is_read_from_the_parent_of_a_pod() -> None:
 
 def test_transit_leg_on_a_service_port_realizes_the_instance() -> None:
     """A border leaf routes a firewall context leg: that is an anycast SVI in the leg's namespace."""
-    port = _iface("firewall", contexts=[_leg_context("PROD", "prod")])
-    border = _device("bl-1", "border-leaf", (_vrf("PROD"),), None, (port,))
+    port = raw_service_port(
+        "Ethernet1/25", "firewall", "ManagedFirewallContext", 100, ("internal-firewall", "PROD", "prod")
+    )
+    border = _device("bl-1", "border-leaf", (_vrf("PROD"),), None, service_ports=(port,))
     assert len(vtep_router_id_errors([border])) == 1
 
 

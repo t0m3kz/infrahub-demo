@@ -409,4 +409,11 @@ query border_leaf_config($device: String!) {
       }
     }
   }
+  DeviceServices: DcimDeviceManaged(name__value: $device) {
+    edges {
+      node {
+        ...DeviceServicesFields
+      }
+    }
+  }
 }

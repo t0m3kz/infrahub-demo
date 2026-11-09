@@ -47,6 +47,7 @@ from utils.fabric_roles import VTEP_ROLES
 from utils.limits import MAX_ENCODABLE_VNI
 from utils.routing_domain import RoutingDomainError
 from utils.segment_addressing import segment_namespace
+from utils.service_contexts import border_contexts
 from utils.vrf_demand import SVI_ROLE, internet_exits, leg_namespaces, realized_l3
 
 # A type-2 route-target (4-byte admin ASN + 2-byte assigned number) and a type-1
@@ -129,7 +130,7 @@ def _has_l3_instance(device: dict[str, Any]) -> bool:
         name
         for iface in interfaces
         if iface.get("role") == SVI_ROLE and (name := ((iface.get("vrf") or {}).get("security_zone") or {}).get("name"))
-    } | leg_namespaces(interfaces)
+    } | leg_namespaces(border_contexts(device))
     border_gateway = bool(_site_rt_asn(device)) and any(iface.get("role") == _MULTISITE_ROLE for iface in interfaces)
     exits = internet_exits(namespaces, border_gateway=border_gateway)
     return any(realized_l3(namespace, routed, exits) for namespace in namespaces)

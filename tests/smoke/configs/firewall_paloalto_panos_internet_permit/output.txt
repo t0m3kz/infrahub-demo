@@ -5,11 +5,11 @@ set deviceconfig system hostname dc1-fw-01
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.10 tag 10
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.10 ipv4 addr 10.0.1.1/30
 set network interface ethernet ethernet1/1.10 comment "Internal LAN link"
-set vsys shared-dc1-fw-01-policy zone PROD network layer3 ethernet1/1.10
+set zone PROD network layer3 ethernet1/1.10
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.30 tag 30
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.30 ipv4 addr 10.0.3.1/30
 set network interface ethernet ethernet1/1.30 comment "Internet link"
-set vsys shared-dc1-fw-01-policy zone INTERNET network layer3 ethernet1/1.30
+set zone INTERNET network layer3 ethernet1/1.30
 #
 #
 # --- Address Objects (one per zone member CIDR) ---
@@ -19,18 +19,19 @@ set address addr-10-0-1-0-24 description "Zone: PROD"
 # --- Address Groups (one per zone) ---
 set address-group ag-PROD static [ addr-10-0-1-0-24 ]
 #
+# --- Virtual router interfaces ---
+set network virtual-router default interface ethernet1/1.10
+set network virtual-router default interface ethernet1/1.30
+#
+# --- Static Routes (return path to leaf per zone) ---
+set network virtual-router default routing-table ip static-route PROD-1 destination 10.0.1.0/24
+set network virtual-router default routing-table ip static-route PROD-1 nexthop ip-address 10.0.1.2
+set network virtual-router default routing-table ip static-route PROD-1 interface ethernet1/1.10
+#
 #
 # --- Firewall Contexts (VDOM/vsys) — one per tenant, per ManagedFirewallContext ---
 #
 set vsys shared-dc1-fw-01-policy
-set vsys shared-dc1-fw-01-policy import network interface ethernet1/1.10
-set network virtual-router vr-shared-dc1-fw-01-policy interface ethernet1/1.10
-set vsys shared-dc1-fw-01-policy import network interface ethernet1/1.30
-set network virtual-router vr-shared-dc1-fw-01-policy interface ethernet1/1.30
-set vsys shared-dc1-fw-01-policy import network virtual-router vr-shared-dc1-fw-01-policy
-set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-1 destination 10.0.1.0/24
-set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-1 nexthop ip-address 10.0.1.2
-set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-1 interface ethernet1/1.10
 #
 # --- Security Policies in vsys shared-dc1-fw-01-policy ---
 set vsys shared-dc1-fw-01-policy rulebase security rules allow-internet-https from PROD

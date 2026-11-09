@@ -281,15 +281,10 @@ class TestGetInterfacesFirewallContextDot1q:
     sub-interface's VLAN comes from the FW-context VLAN pool, not any
     customer segment."""
 
-    def test_firewall_context_capability_sets_dot1q_vlan(self):
-        iface = {
-            "name": "Ethernet1/49.150",
-            "parent_interface": {"name": "Ethernet1/49"},
-            "capabilities": [
-                {"typename": "ManagedFirewallContext", "name": "dc10-shared", "vlan_id": 150},
-            ],
-        }
-        result = get_interfaces([iface])
+    def test_firewall_context_sets_dot1q_vlan(self):
+        iface = {"name": "Ethernet1/49.150", "parent_interface": {"name": "Ethernet1/49"}}
+        context = {"typename": "ManagedFirewallContext", "name": "dc10-shared", "vlan_id": 150}
+        result = get_interfaces([iface], interface_contexts={"Ethernet1/49.150": [context]})
         assert result[0]["dot1q_vlan"] == 150
         assert result[0]["parent_interface"] == {"name": "Ethernet1/49"}
 
@@ -300,14 +295,12 @@ class TestGetInterfacesFirewallContextDot1q:
             "typename": "DcimVirtualInterface",
             "name": "eth1.3301",
             "parent_interface": {"name": "eth1"},
-            "capabilities": [
-                {"typename": "ManagedLoadbalancerContext", "name": "dc1-lb-ha-NONPROD", "vlan_id": 3101},
-            ],
         }
-        result = get_interfaces([iface])
+        context = {"typename": "ManagedLoadbalancerContext", "name": "dc1-lb-ha-NONPROD", "vlan_id": 3101}
+        result = get_interfaces([iface], interface_contexts={"eth1.3301": [context]})
         assert result[0]["dot1q_vlan"] == 3301
 
-    def test_no_firewall_context_capability_leaves_dot1q_vlan_none(self):
+    def test_no_firewall_context_leaves_dot1q_vlan_none(self):
         iface = {"name": "Ethernet1", "capabilities": []}
         result = get_interfaces([iface])
         assert result[0]["dot1q_vlan"] is None

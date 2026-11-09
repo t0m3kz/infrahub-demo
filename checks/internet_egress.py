@@ -16,8 +16,8 @@ A DC footprint (``serving_firewall_context``), and each firewall context of a co
    INTERNET slot, utils/exchange_transit.py) with an address in the INTERNET namespace;
 3. a ``TopologyRoutedExchange`` of the context between the tenant VRF and INTERNET, with every INTERNET leg linked to
    it (generators/firewall_context.py names it ``{context}-{A}-{Z}`` and links the legs);
-4. the border service ports tagged with the context: one ``DcimPhysicalInterface`` of role ``firewall`` on a border or
-   edge device per member (the port the member's uplink is cabled to);
+4. the border service ports behind the context: one ``DcimPhysicalInterface`` of role ``firewall`` on a border or
+   edge device per member (the port the member's uplink is cabled to, utils/service_contexts.py);
 5. a ``snat_address``.
 
 A colocation footprint names no zone: it is served by the context of every zone of its metro that has a physical
@@ -50,6 +50,7 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, namespace_type_for_environment, transit_vlan
 from utils.fabric_roles import CARRIER_ROLES, EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
 from utils.routing_domain import interface_security_zone
+from utils.service_contexts import leg_interfaces, member_border_ports
 
 DC_KIND = "TopologyCustomerDC"
 COLOCATION_KIND = "TopologyCustomerColocation"
@@ -62,7 +63,6 @@ SERVICE_PORT_ROLE = "firewall"
 APPLIANCE_KIND = "CloudNetworkAppliance"
 PHYSICAL_DEVICE_KIND = "DcimPhysicalDevice"
 PHYSICAL_PORT_KIND = "DcimPhysicalInterface"
-VIRTUAL_PORT_KIND = "DcimVirtualInterface"
 EXCHANGE_KIND = "TopologyRoutedExchange"
 ACTIVE = "active"
 PAIR_SIZE = 2
@@ -106,15 +106,6 @@ def _ha_members(domain: dict[str, Any]) -> list[dict[str, Any]]:
     )
 
 
-def _legs(context: dict[str, Any]) -> list[dict[str, Any]]:
-    """The context's sub-interfaces (the legs of its members)."""
-    return [
-        interface
-        for interface in context.get("capabilities") or []
-        if isinstance(interface, dict) and interface.get("typename") == VIRTUAL_PORT_KIND
-    ]
-
-
 def _internet_exchange(context: dict[str, Any], exchanges: list[dict[str, Any]]) -> dict[str, Any] | None:
     """The context's exchange with the INTERNET namespace on one side, None when it has none."""
     for exchange in sorted(exchanges, key=_name):
@@ -131,8 +122,9 @@ def _leg_gaps(
 ) -> list[str]:
     """What the INTERNET leg of one member lacks: the leg itself, its address in INTERNET, its link to the exchange.
 
-    The leg is the member's sub-interface that carries the INTERNET transit VLAN or already has an address in
-    INTERNET; an address in another namespace is reported, not skipped.
+    ``legs`` are the member's legs of the context (utils/service_contexts.py ``leg_interfaces``). The leg is the one
+    that carries the INTERNET transit VLAN or already has an address in INTERNET; an address in another namespace is
+    reported, not skipped.
     """
     member_name = _name(member)
     suffix = f".{transit_vlan(vlan, INTERNET_TYPE)}" if vlan else None
@@ -140,11 +132,8 @@ def _leg_gaps(
         (
             leg
             for leg in legs
-            if _id(leg.get("device")) == member.get("id")
-            and (
-                (suffix is not None and str(leg.get("name")).endswith(suffix))
-                or interface_security_zone(leg).get("vrf_type") == INTERNET_TYPE
-            )
+            if (suffix is not None and str(leg.get("name")).endswith(suffix))
+            or interface_security_zone(leg).get("vrf_type") == INTERNET_TYPE
         ),
         key=_name,
     )
@@ -196,15 +185,14 @@ def context_gaps(
     exchange = _internet_exchange(context, exchanges)
     if exchange is None:
         gaps.append("no TopologyRoutedExchange between the tenant VRF and INTERNET")
-    legs = _legs(context)
     for member in firewalls:
-        gaps.extend(_leg_gaps(member, legs, vlan, exchange))
+        gaps.extend(_leg_gaps(member, leg_interfaces(member).get(str(context.get("id")), []), vlan, exchange))
 
     ports = {
         _id(interface)
-        for interface in context.get("capabilities") or []
-        if isinstance(interface, dict)
-        and interface.get("typename") == PHYSICAL_PORT_KIND
+        for member in members
+        for interface in member_border_ports(member)
+        if interface.get("typename") == PHYSICAL_PORT_KIND
         and interface.get("role") == SERVICE_PORT_ROLE
         and (interface.get("device") or {}).get("role") in CARRIER_ROLES
     }

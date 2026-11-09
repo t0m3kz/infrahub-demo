@@ -185,57 +185,6 @@ fragment LoadbalancerContextConfigFields on ManagedLoadbalancerContext {
       }
     }
   }
-  capabilities {
-    edges {
-      node {
-        __typename
-        name {
-          value
-        }
-        device {
-          node {
-            name {
-              value
-            }
-            ... on DcimDeviceManaged {
-              role {
-                value
-              }
-            }
-          }
-        }
-        ...InterfaceRoutingZoneFields
-        ... on DcimVirtualInterface {
-          vrf {
-            node {
-              ...RoutingVrfFields
-            }
-          }
-          parent_interface {
-            node {
-              name {
-                value
-              }
-            }
-          }
-          ip_address {
-            node {
-              address {
-                value
-              }
-              ip_namespace {
-                node {
-                  name {
-                    value
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
   vips {
     edges {
       node {

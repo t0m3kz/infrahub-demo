@@ -73,12 +73,15 @@ def _payload(
                     "node": {
                         "id": "vm",
                         "name": {"value": "vm-firewall"},
+                        "role": {"value": "internal-firewall"},
+                        "shared_capabilities": {"edges": [{"node": context}]},
                         "interfaces": {
                             "edges": [
                                 {
                                     "node": {
                                         "__typename": "DcimVirtualInterface",
                                         "name": {"value": "eth1"},
+                                        "role": {"value": "uplink"},
                                         "parent_interface": {
                                             "node": {
                                                 "name": {"value": "eth3"},
@@ -103,7 +106,7 @@ def _payload(
                                                 "ip_namespace": {"node": {"name": {"value": "default"}}},
                                             }
                                         },
-                                        "capabilities": {"edges": [{"node": context}]},
+                                        "capabilities": {"edges": []},
                                     }
                                 },
                             ]
@@ -119,7 +122,7 @@ def _render(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Run the production context selector and termination derivation on a raw query payload."""
     device = clean_data(payload)["DcimDevice"][0]
     ha = {"name": "pair"}
-    contexts = get_firewall_contexts(device["interfaces"], ha)
+    contexts = get_firewall_contexts(device, ha)
     return terminated_interfaces(contexts, device["interfaces"], ha, device["id"], device["name"])
 
 

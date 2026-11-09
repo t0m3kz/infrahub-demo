@@ -219,9 +219,7 @@ def _attach_standalone_policy_context(device: dict, segments: list[dict]) -> Non
             ]
         ),
     }
-    for interface in interfaces:
-        if interface.get("__typename") == "DcimVirtualInterface" and interface.get("ip_address", {}).get("node"):
-            interface["capabilities"]["edges"].append({"node": context})
+    device.setdefault("shared_capabilities", _edges([]))["edges"].append({"node": context})
 
 
 def build_firewall_data(*, device_name: str, platform: str) -> dict:

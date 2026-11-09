@@ -85,9 +85,15 @@ def test_ha_owned_snat_overrides_stale_interface_references(address: str | None,
     context = device["shared_capabilities"]["edges"][0]["node"]
     context["snat_address"] = {"node": {"address": {"value": address}}} if address else {"node": None}
     for edge in device["interfaces"]["edges"]:
-        for capability in edge["node"]["capabilities"]["edges"]:
-            if capability["node"]["__typename"] == "ManagedFirewallContext":
-                capability["node"]["snat_address"] = {"node": {"address": {"value": "192.0.2.99/32"}}}
+        # A stale reference on an interface: no longer part of the model, and ignored if a payload still carries it.
+        edge["node"].setdefault("capabilities", {"edges": []})["edges"].append(
+            {
+                "node": {
+                    "__typename": "ManagedFirewallContext",
+                    "snat_address": {"node": {"address": {"value": "192.0.2.99/32"}}},
+                }
+            }
+        )
     errors: list[str] = []
     check = cast(Any, CheckFirewall.__new__(CheckFirewall))
     check.log_error = lambda message: errors.append(message)

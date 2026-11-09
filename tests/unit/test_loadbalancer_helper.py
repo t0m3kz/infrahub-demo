@@ -63,22 +63,35 @@ def _context(
         "vlan_id": vlan_id,
         "tenant": tenant,
         "vip_prefix": {"prefix": "100.66.96.0/26"},
-        "capabilities": [
+        # the legs of the pair (`legs` is not a query field: _device() puts this member's on its interfaces)
+        "legs": [
             _leg(device, f"eth1.{leg_vlan}", f"{base}.{own}/29", namespace),
             _leg("LB-02", f"eth1.{leg_vlan}", f"{base}.6/29", namespace),
-            {"typename": "DcimPhysicalInterface", "name": "Ethernet1/10", "device": {"name": "border-01"}},
         ],
         "vips": [_vip()] if vips is None else vips,
     }
 
 
-def _caps(*contexts: dict[str, Any]) -> list[dict[str, Any]]:
-    """The device's shared capabilities: the contexts it is a member of."""
-    return [{"typename": "ManagedLoadbalancerContext", **context} for context in contexts]
+def _device(*contexts: dict[str, Any], member: str = "LB-01") -> dict[str, Any]:
+    """``member`` (LB-01): a member of the contexts, with its uplink and the legs of the contexts that are its own sub-interfaces."""
+    legs = [
+        {key: value for key, value in leg.items() if key != "device"}
+        for context in contexts
+        for leg in context["legs"]
+        if leg["device"]["name"] == member
+    ]
+    return {
+        "name": member,
+        "role": "load-balancer",
+        "shared_capabilities": [
+            {"typename": "ManagedLoadbalancerContext", **{k: v for k, v in c.items() if k != "legs"}} for c in contexts
+        ],
+        "interfaces": [{"typename": "DcimPhysicalInterface", "name": "eth1", "role": "uplink"}, *legs],
+    }
 
 
 def _contexts(*contexts: dict[str, Any], platform: str = "f5_tmos") -> list[dict[str, Any]]:
-    return get_loadbalancer_contexts(_caps(*contexts), "LB-01", _HA, platform)
+    return get_loadbalancer_contexts(_device(*contexts), _HA, platform)
 
 
 class TestLeg:
@@ -98,13 +111,12 @@ class TestLeg:
             "own_ip": "100.66.64.5",
         }
 
-    def test_a_leg_whose_device_is_no_load_balancer_is_not_built(self) -> None:
-        """The context's transit leg is the members' (role load-balancer, firewall.py transit_legs):
-        without one the device has no leg yet and the context is left out."""
-        context = _context()
-        for iface in context["capabilities"]:
-            iface.get("device", {}).pop("role", None)
-        assert _contexts(context) == []
+    def test_a_device_that_is_no_load_balancer_has_no_leg(self) -> None:
+        """The context's transit leg is the members' (role load-balancer, utils/service_contexts.py):
+        a device of another role holds none and the context is left out."""
+        device = _device(_context())
+        device["role"] = "leaf"
+        assert get_loadbalancer_contexts(device, _HA, "f5_tmos") == []
 
     def test_non_prod_leg_takes_the_non_prod_slot(self) -> None:
         """A NONPROD context's leg is its VLAN + 200, like the firewall legs."""
@@ -114,8 +126,8 @@ class TestLeg:
     def test_the_second_member_by_name_holds_dot_six(self) -> None:
         """The member address follows the pair's name order."""
         context = _context(device="LB-02", own="6")
-        context["capabilities"] = context["capabilities"][1:]
-        rendered = get_loadbalancer_contexts(_caps(context), "LB-02", _HA, "f5_tmos")
+        context["legs"] = context["legs"][1:]
+        rendered = get_loadbalancer_contexts(_device(context, member="LB-02"), _HA, "f5_tmos")
         assert rendered[0]["leg"]["own_address"] == "100.66.64.6/29"
 
     def test_a_member_address_off_its_name_order_raises(self) -> None:
@@ -126,14 +138,14 @@ class TestLeg:
     def test_a_leg_outside_a_tenant_vrf_raises(self) -> None:
         """An LB never leaves its tenant VRF: a leg in INTERNET is a modelling error."""
         context = _context()
-        context["capabilities"][0]["vrf"] = make_vrf(_NAMESPACES["INTERNET"])
+        context["legs"][0]["vrf"] = make_vrf(_NAMESPACES["INTERNET"])
         with pytest.raises(ValueError, match="not in a tenant VRF"):
             _contexts(context)
 
     def test_a_context_without_a_leg_on_this_device_is_not_rendered(self) -> None:
         """Until the generator builds the leg there is no namespace, route domain or path."""
         context = _context()
-        context["capabilities"] = context["capabilities"][1:]
+        context["legs"] = context["legs"][1:]
         assert _contexts(context) == []
 
     def test_a_context_without_a_vlan_is_not_rendered(self) -> None:
@@ -144,8 +156,8 @@ class TestLeg:
 class TestContexts:
     def test_no_cluster_context_renders_nothing(self) -> None:
         """A device whose cluster has no context yet gets no context section."""
-        assert get_loadbalancer_contexts(_caps(), "LB-01", _HA, "f5_tmos") == []
-        assert get_loadbalancer_contexts([], "LB-01", None, "netscaler") == []
+        assert get_loadbalancer_contexts(_device(), _HA, "f5_tmos") == []
+        assert get_loadbalancer_contexts(_device(), None, "netscaler") == []
 
     def test_shared_context_partition_route_domain_and_vrf(self) -> None:
         """Shared: SHARED-<NAMESPACE>; the route domain / VRF table is the namespace l3_vni."""
@@ -188,7 +200,7 @@ class TestContexts:
     def test_unknown_platform_raises(self) -> None:
         """A platform with no load-balancer template is refused, contexts or not."""
         with pytest.raises(ValueError, match="no load-balancer template"):
-            get_loadbalancer_contexts([], "LB-01", None, "cisco_nxos")
+            get_loadbalancer_contexts(_device(), None, "cisco_nxos")
 
 
 class TestVips:

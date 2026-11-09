@@ -20,17 +20,15 @@ set interface ethernet1/1.30 ipv4-address 10.0.3.1 mask-length 30
 set interface ethernet1/1.30 security-zone INTERNET
 set interface ethernet1/1.30 comments "External link"
 !
+! --- Static Routes (return path to leaf per zone) ---
+set static-route 10.0.2.0/24 nexthop gateway address 10.0.2.2 on
+set static-route 10.0.1.0/24 nexthop gateway address 10.0.1.2 on
+set static-route 10.0.10.0/24 nexthop gateway address 10.0.1.2 on
+!
 !
 ! --- Firewall Contexts (VSX Virtual Systems) — one per tenant, per ManagedFirewallContext ---
 !
 add virtual-system name shared-dc1-fw-01-policy
-set virtual-system shared-dc1-fw-01-policy interface ethernet1/1.10
-set virtual-system shared-dc1-fw-01-policy interface ethernet1/1.20
-set virtual-system shared-dc1-fw-01-policy interface ethernet1/1.30
-set virtual-system shared-dc1-fw-01-policy
-set static-route 10.0.2.0/24 nexthop gateway address 10.0.2.2 on
-set static-route 10.0.1.0/24 nexthop gateway address 10.0.1.2 on
-set static-route 10.0.10.0/24 nexthop gateway address 10.0.1.2 on
 !
 ! --- Security Policies in virtual system shared-dc1-fw-01-policy ---
 set virtual-system shared-dc1-fw-01-policy

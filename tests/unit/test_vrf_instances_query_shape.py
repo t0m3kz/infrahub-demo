@@ -12,7 +12,6 @@ from tests.unit.query_shape_helpers import _selection_tree
 from tests.unit.query_shape_helpers import unselected as _unselected
 from tests.unit.vrf_instances_helpers import (
     address,
-    raw_context,
     raw_device,
     raw_instance,
     raw_interface,
@@ -20,6 +19,7 @@ from tests.unit.vrf_instances_helpers import (
     raw_response,
     raw_root_instance,
     raw_row,
+    raw_service_port,
     raw_svi,
 )
 from utils.graphql_queries import load_query
@@ -38,10 +38,16 @@ def _query_tree() -> _Tree:
 def _everything() -> dict[str, Any]:
     """A response built with every builder, each with its optional parts."""
     row = raw_row("r1", 100, "PROD")
-    context = raw_context("ManagedFirewallContext", 100, ("internal-firewall", "PROD", "prod"))
+    port = raw_service_port(
+        "Ethernet2",
+        "firewall",
+        "ManagedFirewallContext",
+        3000,
+        ("internal-firewall", "PROD", "prod"),
+        served=(("fp", "p"),),
+    )
     interfaces = [
         raw_interface("i1", addr=address("10.0.0.1/31", "PROD")),
-        raw_interface("i2", name="Ethernet2", role="firewall", capabilities=[context]),
         raw_svi("s1", 100, "r1", "v1", "PROD"),
     ]
     device = raw_device(
@@ -52,6 +58,7 @@ def _everything() -> dict[str, Any]:
         vrfs=[raw_instance("v1", "leaf-1", "PROD")],
         shared_others=["ManagedSNMP"],
         interfaces=interfaces,
+        service_ports=[port],
         groups=("provider_stubs",),
     )
     border = raw_device("d2", "bl-1", role="border-leaf", deployment_kind="TopologyDataCenter")
@@ -65,10 +72,8 @@ def test_the_query_tree_resolves_the_in_file_fragments() -> None:
     """The fragments contribute their fields under the paths that spread them."""
     device = _query_tree()["DcimDevice"]["edges"]["node"]
     assert "segment_deployment" in device["vlans"]["edges"]["node"]
-    assert (
-        "ip_address"
-        in device["interfaces"]["edges"]["node"]["capabilities"]["edges"]["node"]["capabilities"]["edges"]["node"]
-    )
+    far_end = device["service_ports"]["edges"]["node"]["cable"]["node"]["endpoints"]["edges"]["node"]
+    assert "ip_address" in far_end["device"]["node"]["interfaces"]["edges"]["node"]
 
 
 def test_the_query_selects_memberships_hosting_and_the_vrf_root() -> None:

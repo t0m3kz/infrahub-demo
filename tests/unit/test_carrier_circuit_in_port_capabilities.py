@@ -30,7 +30,7 @@ def _with_circuit_on_every_port(data: dict[str, Any]) -> tuple[dict[str, Any], i
     injected = 0
     for device in data["DcimDevice"]["edges"]:
         for interface in device["node"]["interfaces"]["edges"]:
-            interface["node"]["capabilities"]["edges"].append(deepcopy(_CIRCUIT))
+            interface["node"].setdefault("capabilities", {"edges": []})["edges"].append(deepcopy(_CIRCUIT))
             injected += 1
     return data, injected
 

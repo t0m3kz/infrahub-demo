@@ -140,17 +140,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-edge",
-                          "name": {
-                            "value": "shared-dc1-xfw-prod"
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -222,17 +212,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-edge",
-                          "name": {
-                            "value": "shared-dc1-xfw-prod"
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -256,6 +236,23 @@
                   },
                   "capabilities": {
                     "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "ethernet1/1"
+                  },
+                  "role": {
+                    "value": "uplink"
+                  },
+                  "description": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
                   }
                 }
               }
@@ -1058,5 +1055,48 @@
   },
   "SecurityZone": {
     "edges": []
+  },
+  "DeviceServices": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-dc1-xfw-01",
+          "name": {
+            "value": "dc1-xfw-01"
+          },
+          "role": {
+            "value": "external-firewall"
+          },
+          "member_of_groups": {
+            "edges": []
+          },
+          "deployment": {
+            "node": {
+              "__typename": "TopologyPod",
+              "id": "fixture-pod",
+              "name": {
+                "value": "fixture-pod"
+              },
+              "parent": {
+                "node": {
+                  "__typename": "TopologyDataCenter",
+                  "id": "fixture-dc",
+                  "name": {
+                    "value": "fixture-dc"
+                  }
+                }
+              }
+            }
+          },
+          "service_ports": {
+            "edges": []
+          },
+          "vlans": {
+            "edges": []
+          }
+        }
+      }
+    ]
   }
 }

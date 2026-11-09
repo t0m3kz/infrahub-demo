@@ -19,12 +19,15 @@ import pytest
 
 from checks.common import validate_transit_vlans
 from tests.unit.routing_helpers import make_vrf
+from tests.unit.vrf_instances_helpers import raw_device, raw_footprint, raw_row
 from transforms.common import BaseDeviceTransform
 from transforms.config.leaf import Leaf
 from transforms.helpers.firewall import get_exchange_transits, get_leaf_firewall_transits
 from transforms.helpers.firewall_pbr import get_customer_pbr_rules
-from utils.exchange_transit import service_context_caps
+from utils.data_cleaning import clean_data
+from utils.exchange_transit import transit_vlan
 
+FW = "ManagedFirewallContext"
 _PROD_NS = {"name": "PROD", "vrf_type": "prod", "l3_vni": 50001}
 _NONPROD_NS = {"name": "NONPROD", "vrf_type": "non_prod", "l3_vni": 50002}
 
@@ -38,7 +41,7 @@ def _context(
     legs: tuple[tuple[str, dict], ...] = (("100.66.0.5/29", _PROD_NS),),
     served: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    """A ManagedFirewallContext as the leaf query returns it (legs on two HA members)."""
+    """A ManagedFirewallContext with the ``legs`` its two HA members hold (utils/service_contexts.py contexts_with_legs)."""
     iface_caps = []
     for address, namespace in legs:
         network = address.rsplit(".", 1)[0]
@@ -60,7 +63,7 @@ def _context(
         "vlan_id": vlan,
         "tenant": {"id": tenant} if tenant else None,
         "served_deployments": [{"id": dep} for dep in served],
-        "capabilities": iface_caps,
+        "legs": iface_caps,
     }
 
 
@@ -89,29 +92,64 @@ def _activation(vlan: int = 100, *, dep: str = "dep-a", namespace: dict | None =
     }
 
 
+def _member(index: int, contexts: list[dict]) -> dict[str, Any]:
+    """The firewall member ``fw-0<index>`` of the pair: its contexts, its uplink and the leg of each context's address."""
+    interfaces: list[dict[str, Any]] = [{"typename": "DcimPhysicalInterface", "name": "eth1", "role": "uplink"}]
+    for context in contexts:
+        for leg in context["legs"]:
+            address = leg["ip_address"]["address"]
+            if not address.endswith(f".{4 + index}/29") or not isinstance(context["vlan_id"], int):
+                continue
+            namespace = leg["vrf"]["security_zone"]
+            name = f"eth1.{transit_vlan(context['vlan_id'], namespace['vrf_type'])}"
+            interfaces.append({**leg, "typename": "DcimVirtualInterface", "name": name, "role": "service"})
+    shared = [{key: value for key, value in c.items() if key != "legs"} | {"typename": FW} for c in contexts]
+    return {
+        "name": f"fw-0{index}",
+        "role": "internal-firewall",
+        "shared_capabilities": shared,
+        "interfaces": interfaces,
+    }
+
+
 def _deployment(contexts: list[dict]) -> dict[str, Any]:
-    """A deployment whose one firewall is a member of `contexts` (its shared capabilities)."""
-    shared = [{"typename": "ManagedFirewallContext", **context} for context in contexts]
-    return {"devices": [{"shared_capabilities": shared}]}
+    """A deployment whose firewall pair are the members of `contexts` (each holds its leg of every context)."""
+    return {"devices": [_member(1, contexts), _member(2, contexts)]}
 
 
-def _device(contexts: list[dict], activations: list[dict], *, name: str = "leaf-01") -> dict[str, Any]:
+def _services(activations: list[dict], steered: set[int] | None) -> dict[str, Any]:
+    """The switch's nested service data: one routed row per activation, whose footprint has a serving context unless
+    the VLAN is left out of ``steered`` (None steers all)."""
+    rows = [
+        raw_row(
+            f"row-{act['vlan_id']}",
+            act["vlan_id"],
+            "PROD",
+            act["segment"]["name"],
+            footprints=[
+                raw_footprint(
+                    act["segment"]["customer_deployments"][0]["id"],
+                    context=steered is None or act["vlan_id"] in steered,
+                )
+            ],
+        )
+        for act in activations
+        if act.get("vlan_id")
+    ]
+    return clean_data(raw_device("d1", "leaf-01", "leaf", rows=rows))
+
+
+def _device(
+    contexts: list[dict], activations: list[dict], *, name: str = "leaf-01", steered: set[int] | None = None
+) -> dict[str, Any]:
     return {
         "name": name,
         "role": "leaf",
-        # the pbr policy the VRF pass attaches to every steered SVI: each activation's SVI carries one
-        "interfaces": [
-            {
-                "name": f"Vlan{act['vlan_id']}",
-                "role": "svi",
-                "capabilities": [{"typename": "RoutingPolicy", "kind": "pbr"}],
-            }
-            for act in activations
-            if act.get("vlan_id")
-        ],
+        "interfaces": [],
         "capabilities": [],
         "deployment": _deployment(contexts),
         "segment_deployments": activations,
+        "services": _services(activations, steered),
     }
 
 
@@ -148,11 +186,7 @@ class TestGetExchangeTransitsLegs:
     def test_border_and_leaf_derivation_are_equal(self) -> None:
         """AC2: the leaf's transit for a leg equals the border's for the same context."""
         ctx = _context()
-        border = get_exchange_transits(
-            service_context_caps(
-                [{"role": "firewall", "capabilities": [{**ctx, "typename": "ManagedFirewallContext"}]}]
-            )
-        )
+        border = get_exchange_transits([{**ctx, "typename": FW}])
         leaf = get_exchange_transits([ctx], legs={("PROD", "100.66.0.4")})
         assert leaf == border
 
@@ -265,9 +299,7 @@ class TestLeafExtraConfig:
 
     def test_an_svi_without_a_pbr_policy_is_not_steered_and_holds_no_transit_leg(self) -> None:
         """The policy is the switch: the segment has rules and a context, the SVI has none, so it routes normally."""
-        device = _device([_context()], [_activation()])
-        for iface in device["interfaces"]:
-            iface["capabilities"] = []
+        device = _device([_context()], [_activation()], steered=set())
         config = _transform()._extra_config(device, "cisco_nxos")
         assert config["leaf_pbr_rules"] == []
         assert "leaf_transit_prefixes" not in config or config["leaf_transit_prefixes"] == []
@@ -275,8 +307,7 @@ class TestLeafExtraConfig:
 
     def test_only_the_svi_with_the_policy_is_steered(self) -> None:
         """Two segments of the leaf, one policy: just that SVI gets a rule."""
-        device = _device([_context()], [_activation(), _activation(vlan=101)])
-        device["interfaces"][1]["capabilities"] = []
+        device = _device([_context()], [_activation(), _activation(vlan=101)], steered={100})
         config = _transform()._extra_config(device, "cisco_nxos")
         assert {r["vlan_id"] for r in config["leaf_pbr_rules"]} == {100}
 

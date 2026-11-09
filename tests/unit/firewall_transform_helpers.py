@@ -19,8 +19,8 @@ _LEG_NAMESPACES = {
 }
 
 
-def _leg_interface(ns_type: str, *, context_id: str = "ctx-shared") -> dict[str, Any]:
-    """A raw addressed transit leg referencing its HA-owned context."""
+def _leg_interface(ns_type: str) -> dict[str, Any]:
+    """A raw addressed transit leg: ``eth1.<transit VLAN>`` of the HA-owned context."""
     ns_name, address, vlan = _LEG_NAMESPACES[ns_type]
     return {
         "vrf": {"node": routing_vrf(ns_name)},
@@ -37,7 +37,20 @@ def _leg_interface(ns_type: str, *, context_id: str = "ctx-shared") -> dict[str,
             }
         },
         "ha_domain": {"node": None},
-        "capabilities": {"edges": [{"node": {"__typename": "ManagedFirewallContext", "id": context_id}}]},
+        "capabilities": {"edges": []},
+    }
+
+
+def _uplink_interface() -> dict[str, Any]:
+    """The physical trunk the context legs are sub-interfaces of (utils/service_contexts.py)."""
+    return {
+        "__typename": "DcimPhysicalInterface",
+        "name": {"value": "eth1"},
+        "role": {"value": "uplink"},
+        "description": {"value": None},
+        "status": {"value": "active"},
+        "ip_address": {"node": None},
+        "capabilities": {"edges": []},
     }
 
 
@@ -46,7 +59,7 @@ def _make_exchange_data(platform: str, *, ns_types: tuple[str, ...]) -> dict[str
     data = _make_smoke_data(platform)
     device = data["DcimPhysicalDevice"]["edges"][0]["node"]
     device["name"] = {"value": "dc11-fw-01"}
-    device["interfaces"]["edges"] = [{"node": _leg_interface(ns)} for ns in ns_types]
+    device["interfaces"]["edges"] = [{"node": _uplink_interface()}, *({"node": _leg_interface(ns)} for ns in ns_types)]
 
     def segment(name: str, segment_id: str, prefix: str) -> dict[str, Any]:
         return {
@@ -316,32 +329,28 @@ def _make_context_smoke_data(platform: str, *, serves_segment: bool) -> dict[str
             "node": {"address": {"value": "100.65.0.4/31"}, "ip_namespace": {"node": {"name": {"value": "default"}}}}
         },
         "ha_domain": {"node": None},
-        "capabilities": {
+        "capabilities": {"edges": []},
+    }
+    context = {
+        "__typename": "ManagedFirewallContext",
+        "id": "ctx-c005",
+        "name": {"value": "c005-dedicated"},
+        "vlan_id": {"value": 3005},
+        "context_id": {"value": None},
+        "tenant": {"node": {"id": "dep-c005", "name": {"value": "C005-P-DC12"}}},
+        "served_deployments": {
             "edges": [
                 {
                     "node": {
-                        "__typename": "ManagedFirewallContext",
-                        "id": "ctx-c005",
-                        "name": {"value": "c005-dedicated"},
-                        "vlan_id": {"value": 3005},
-                        "context_id": {"value": None},
-                        "tenant": {"node": {"id": "dep-c005", "name": {"value": "C005-P-DC12"}}},
-                        "served_deployments": {
-                            "edges": [
-                                {
-                                    "node": {
-                                        "id": "dep-c005",
-                                        "network_segments": {
-                                            "edges": [{"node": served_segment}] if serves_segment else []
-                                        },
-                                    }
-                                }
-                            ]
-                        },
+                        "id": "dep-c005",
+                        "network_segments": {"edges": [{"node": served_segment}] if serves_segment else []},
                     }
                 }
             ]
         },
     }
+    # The firewall is a member of the context and its leg is `<uplink>.<VLAN>` of the uplink trunk.
+    device.setdefault("shared_capabilities", {"edges": []})["edges"].append({"node": context})
+    device["interfaces"]["edges"].append({"node": _uplink_interface()})
     device["interfaces"]["edges"].append({"node": context_iface})
     return data

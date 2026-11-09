@@ -317,7 +317,7 @@ _LB_CONTEXTS: list[tuple[str, str, int, str, str, str]] = [
 def _lb_context_cap(
     ctx_id: str, name: str, vlan: int, namespace: str, leg: str, vip: str, *, border_port: dict
 ) -> dict:
-    """A ManagedLoadbalancerContext as LoadbalancerContextInterfaceCapabilityFields returns it on a border port.
+    """A ManagedLoadbalancerContext declared on a border port (the fixture hook derives the member behind it).
 
     Its capabilities are the members' leg sub-interfaces (role load-balancer devices, addressed .5/.6 in the
     tenant VRF) and ``border_port``, the border leaf's own load-balancer port tagged with the context.
@@ -451,14 +451,21 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
                         }
                     ),
                     "ha_domain": _node(None),
-                    "capabilities": _edges(
-                        [{"__typename": "ManagedFirewallContext", "id": ctx["id"], "name": _v(ctx["name"])}]
-                    ),
+                    "capabilities": _edges([]),
                 }
             )
-    # keep the HA sync port of the HA fixture, replace the zone legs by the context legs
+    # keep the HA sync port of the HA fixture, replace the zone legs by the context legs, on the trunk they ride on
     ha_port = [e for e in device["interfaces"]["edges"] if e["node"]["name"]["value"] == "ethernet1/7"]
-    device["interfaces"]["edges"] = [{"node": i} for i in interfaces] + ha_port
+    trunk = {
+        "__typename": "DcimPhysicalInterface",
+        "name": _v("ethernet1/1"),
+        "description": _v("Uplink trunk"),
+        "status": _v("active"),
+        "role": _v("uplink"),
+        "ip_address": _node(None),
+        "capabilities": _edges([]),
+    }
+    device["interfaces"]["edges"] = [{"node": trunk}] + [{"node": i} for i in interfaces] + ha_port
     device["shared_capabilities"] = _edges(contexts)
 
     def zone(name: str, segments: list[dict]) -> dict:
@@ -634,27 +641,19 @@ def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
     shared = next(edge["node"] for edge in device["shared_capabilities"]["edges"] if edge["node"]["id"] == shared_id)
     shared["terminated_segments"] = _edges([term])
     shared["served_deployments"]["edges"][0]["node"]["network_segments"]["edges"].append({"node": term_served})
-    device["interfaces"]["edges"].append(
+    # The uplink trunk the context legs ride on carries the cable whose far end is the facing border leaf.
+    trunk = next(
+        edge["node"] for edge in device["interfaces"]["edges"] if edge["node"]["name"]["value"] == "ethernet1/1"
+    )
+    trunk["description"] = _v("uplink trunk to the border leaf")
+    trunk["cable"] = _node(
         {
-            "node": {
-                "__typename": "DcimPhysicalInterface",
-                "name": _v("ethernet1/1"),
-                "description": _v("uplink trunk to the border leaf"),
-                "status": _v("active"),
-                "role": _v("uplink"),
-                "ip_address": _node(None),
-                "cable": _node(
-                    {
-                        "endpoints": _edges(
-                            [
-                                {"__typename": "DcimPhysicalInterface", "device": _node({"id": device["id"]})},
-                                {"__typename": "DcimPhysicalInterface", "device": _node({"id": _FACING_LEAF})},
-                            ]
-                        )
-                    }
-                ),
-                "capabilities": _edges([]),
-            }
+            "endpoints": _edges(
+                [
+                    {"__typename": "DcimPhysicalInterface", "device": _node({"id": device["id"]})},
+                    {"__typename": "DcimPhysicalInterface", "device": _node({"id": _FACING_LEAF})},
+                ]
+            )
         }
     )
     return data
@@ -683,20 +682,20 @@ def build_virtual_firewall_data() -> dict:
         return name.replace("ethernet1/1", "eth1").replace("ethernet1/7", "eth7")
 
     interfaces = []
+    # The legs `<trunk>.<transit VLAN>` of the other (shared) context stay on the physical pair.
+    shared_legs = {
+        f"ethernet1/1.{_XCHG_CONTEXTS['shared']['vlan'] + _XCHG_VLAN_OFFSET[ns_type]}"
+        for ns_type in _XCHG_CONTEXTS["shared"]["prefixes"]
+    }
     for edge in device["interfaces"]["edges"]:
         node = edge["node"]
-        caps = node["capabilities"]["edges"]
-        if caps and caps[0]["node"]["id"] != dedicated["id"]:
+        if node["name"]["value"] in shared_legs:
             continue
         node["name"] = _v(rename(node["name"]["value"]))
         if node["__typename"] == "DcimPhysicalInterface":  # a NIC of the virtual machine, not a port
             node["__typename"] = "DcimVirtualInterface"
             for physical_only in ("interface_type", "mtu", "cable", "lag"):
                 node.pop(physical_only, None)
-        if caps:
-            context = caps[0]["node"]
-            context["name"] = _v("fw-C007-p-dedicated-context")
-            context["tenant"] = _node({"name": _v("C007-p")})
         if node.get("parent_interface", {}).get("node"):
             node["parent_interface"] = _node({"name": _v(rename(node["parent_interface"]["node"]["name"]["value"]))})
         interfaces.append(edge)

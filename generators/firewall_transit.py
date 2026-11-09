@@ -17,13 +17,15 @@ from typing import TYPE_CHECKING, Any
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
 
 from utils.exchange_transit import (
+    BORDER_ROLE_FOR_SERVICES,
     INTERNET_TYPE,
     TRANSIT_OFFSETS,
     transit_vlan,
 )
 from utils.limits import FW_SNAT_POOL, OFFSET_MEMBER_A, OFFSET_MEMBER_B, TRANSIT_PREFIXLEN
+from utils.service_contexts import UPLINK_KINDS, UPLINK_ROLE
 
-from .connections import BORDER_ROLE_FOR_SERVICES, tracked_save_kwargs
+from .connections import tracked_save_kwargs
 from .far_end import far_end_interfaces
 from .firewall_context_spec import ContextSpec, _TransitMember, _TransitState
 from .protocols import (
@@ -40,7 +42,8 @@ if TYPE_CHECKING:
     from .connections import CablingMixin
 
 _MEMBER_OFFSETS = (OFFSET_MEMBER_A, OFFSET_MEMBER_B)
-_UPLINK_ROLE = "uplink"  # the member interface its context sub-interfaces sit on, cabled to a border service port
+_UPLINK_INTERFACES = {kind.__name__: kind for kind in (DcimPhysicalInterface, DcimVirtualInterface)}
+"""The SDK class of each uplink kind of utils/service_contexts.py ``UPLINK_KINDS``, which the readers derive the legs from."""
 
 
 def _dev_id(device: Any) -> str:
@@ -446,15 +449,15 @@ class TransitLegsMixin:
         by_device: dict[str, Any] = {}
         device_ids = [_dev_id(member) for member in members]
         try:
-            for kind in (DcimPhysicalInterface, DcimVirtualInterface):
+            for kind in (_UPLINK_INTERFACES[name] for name in UPLINK_KINDS):
                 wanted = [device_id for device_id in device_ids if device_id not in by_device]
                 if not wanted:
                     break
-                for interface in await self.client.filters(kind=kind, device__ids=wanted, role__value=_UPLINK_ROLE):
+                for interface in await self.client.filters(kind=kind, device__ids=wanted, role__value=UPLINK_ROLE):
                     by_device.setdefault(interface.device.id, interface)
         except Exception as exc:
             for member in members:
-                self.logger.error(f"Error resolving {_UPLINK_ROLE} interface on {_dev_name(member)}: {exc}")
+                self.logger.error(f"Error resolving {UPLINK_ROLE} interface on {_dev_name(member)}: {exc}")
             return None
         return by_device
 
@@ -485,7 +488,7 @@ class TransitLegsMixin:
         uplink = uplinks.get(device_id)
         if uplink is None:
             self.logger.error(
-                f"{device_name}: no role={_UPLINK_ROLE} interface found — cannot create a context sub-interface"
+                f"{device_name}: no role={UPLINK_ROLE} interface found — cannot create a context sub-interface"
             )
         return uplink
 

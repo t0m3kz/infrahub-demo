@@ -877,6 +877,20 @@ class MyCheck(InfrahubCheck):
   segment: a rule to it has `destination_zone: INTERNET` and nothing else (the firewall renders `to INTERNET`,
   destination any; the leaf ACL denies `NON_INTERNET_PREFIXES` before the permit to any). Only that zone is accepted,
   and `checks/segment_security.py` refuses a zone next to a segment or group tag (a zone qualifies a prefix or address selector).
+- **A device's functions are capabilities**: anything a device (or a cloud instance) does or is configured with beyond its
+  identity is a capability object on the device edge, never an attribute or a relationship of the device kind. The device
+  kind keeps identity and inventory only: name, role, status, platform, type, software image, owner, deployment, address,
+  interfaces. A function of one device, or a setting specific to it, is an individual capability (`ManagedGenericDevice`,
+  cascades with the device: a BGP or OSPF process, an MLAG domain, an HA pair, `ManagedPBR`); one object several devices
+  are members of is a shared capability (`ManagedGenericSharedDevice`, never cascades: a VRF instance, a service context,
+  an NTP, SNMP or AAA profile). An interface-side object (on `ManagedGenericInterfaces`) exists only when the interface
+  has a setting of its own (`RoutingOSPFInterface`: metric, mode, authentication); a binding that carries no setting is
+  derived when the device is rendered, never stored (the steered SVIs of PBR, the legs and border ports of a context:
+  `utils/device_services.py`). So a transform reads what a device does in ONE place, its `capabilities` and
+  `shared_capabilities` (a typename filter), nested under the device, and derives the rest from that and the device's own
+  data. A cloud instance holds none today; the first one that needs a function gets the device end of the capability
+  edges through a glue generic it shares with `DcimDeviceManaged` (relationships only, see **Generics carry shared
+  fields only**).
 - **Capability edges**: a capability reaches devices through ONE of two device-edge generics (a kind inherits exactly
   one, `tests/unit/test_capability_edge_names.py`) and interfaces via `ManagedGenericInterfaces` (inherit it only when
   something reads the interface edge). Both device edges sit on `DcimDeviceManaged`:

@@ -1,8 +1,9 @@
-"""Every config query that reads the SVIs of a device also reads the pbr policy on them.
+"""Every config query that renders the SVIs of a switch also reads what its PBR and its service contexts derive from.
 
-A leaf steers an SVI to the firewall only when the SVI carries a pbr policy (transforms/helpers/firewall_pbr.py
-pbr_steered_vlans). The fixtures are hand-built, so a query that forgets the policy renders every golden unchanged and
-silently drops PBR on a real device: this pins the query.
+A leaf steers an SVI to the firewall only when its segment has a footprint, in the device's DC, that a firewall context
+serves (utils/device_services.py ``pbr_bindings``), and a border device finds the contexts behind its service ports from
+their cables (utils/service_contexts.py). The fixtures are hand-built, so a query that forgets the ``DeviceServices`` root
+renders every golden unchanged and silently drops PBR and the transit legs on a real device: this pins the query.
 """
 
 from __future__ import annotations
@@ -13,10 +14,15 @@ import pytest
 from graphql import FragmentDefinitionNode, OperationDefinitionNode, parse
 
 from tests.unit.query_shape_helpers import Tree, _selection_tree
+from utils.service_contexts import DEVICE_SERVICES_ROOT
 
 _CONFIG = Path(__file__).parents[2] / "queries" / "config"
 _FRAGMENTS = Path(__file__).parents[2] / "queries" / "fragments"
-_SVI_READERS = sorted(path for path in _CONFIG.glob("*.gql") if "InterfaceCapabilitiesWithSegment" in path.read_text())
+_SVI_READERS = sorted(
+    path
+    for path in _CONFIG.glob("*.gql")
+    if "InterfaceCapabilitiesWithSegment" in path.read_text() and path.stem != "firewall"
+)
 
 
 def _tree(path: Path) -> Tree:
@@ -34,7 +40,32 @@ def test_the_queries_that_read_svis_are_found() -> None:
 
 
 @pytest.mark.parametrize("path", _SVI_READERS, ids=lambda path: path.name)
-def test_the_query_reads_the_pbr_policy_on_an_interface(path: Path) -> None:
-    """kind, origin and the footprint of the policy come back under the interface capabilities."""
-    node = _tree(path)["DcimDevice"]["edges"]["node"]["interfaces"]["edges"]["node"]["capabilities"]["edges"]["node"]
-    assert {"kind", "origin", "customer_deployment"} <= set(node)
+def test_the_query_has_the_services_root_after_the_device(path: Path) -> None:
+    """The device stays the first root (transforms/common.py ``_device_and_platform``); the services root follows."""
+    roots = list(_tree(path))
+    assert roots[0] == "DcimDevice"
+    assert DEVICE_SERVICES_ROOT in roots
+
+
+@pytest.mark.parametrize("path", _SVI_READERS, ids=lambda path: path.name)
+def test_the_services_root_reads_the_rows_the_hosting_and_the_service_ports(path: Path) -> None:
+    """The segment rows with the footprints and their serving contexts, the hosting DC, the ports with their members."""
+    node = _tree(path)[DEVICE_SERVICES_ROOT]["edges"]["node"]
+    row = node["vlans"]["edges"]["node"]["segment_deployment"]["node"]["segment"]["node"]
+    assert {"terminated_on", "customer_deployments", "gateway", "security_zone"} <= set(row)
+    footprint = row["customer_deployments"]["edges"]["node"]
+    assert {"parent", "serving_firewall_context", "serving_firewall_contexts"} <= set(footprint)
+    assert "parent" in node["deployment"]["node"]
+    far_end = node["service_ports"]["edges"]["node"]["cable"]["node"]["endpoints"]["edges"]["node"]
+    member = far_end["device"]["node"]
+    assert {"role", "shared_capabilities", "interfaces"} <= set(member)
+    assert {"fw_served", "lb_served", "vlan_id"} <= set(member["shared_capabilities"]["edges"]["node"])
+
+
+def test_the_firewall_query_reads_the_role_its_legs_are_derived_from() -> None:
+    """A device's contexts are those of its role's kind (utils/exchange_transit.py BORDER_ROLE_FOR_SERVICES): a firewall
+    query that leaves the role out derives no leg and renders every context empty, goldens included."""
+    node = _tree(_CONFIG / "firewall.gql")["DcimDevice"]["edges"]["node"]
+    assert {"role", "shared_capabilities", "interfaces"} <= set(node)
+    interface = node["interfaces"]["edges"]["node"]
+    assert {"role", "ip_address", "vrf", "parent_interface"} <= set(interface)

@@ -116,178 +116,12 @@ fragment ExchangeGatewayInterfaceCapabilityFields on TopologyExchangeGateway {
   }
 }
 
-fragment PbrPolicyInterfaceCapabilityFields on RoutingPolicy {
-  kind {
-    value
-  }
-  origin {
-    value
-  }
-  customer_deployment {
-    node {
-      id
-    }
-  }
-}
-
 fragment InterfaceCapabilitiesFields on DcimInterface {
   capabilities {
     edges {
       node {
         __typename
         ...OspfInterfaceCapabilityFields
-        ...PbrPolicyInterfaceCapabilityFields
-      }
-    }
-  }
-}
-
-fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
-  id
-  name {
-    value
-  }
-  vlan_id {
-    value
-  }
-  tenant {
-    node {
-      id
-    }
-  }
-  served_deployments {
-    edges {
-      node {
-        id
-      }
-    }
-  }
-  snat_address {
-    node {
-      address {
-        value
-      }
-    }
-  }
-  capabilities {
-    edges {
-      node {
-        name {
-          value
-        }
-        device {
-          node {
-            name {
-              value
-            }
-            ... on DcimDeviceManaged {
-              role {
-                value
-              }
-            }
-          }
-        }
-        ...InterfaceRoutingZoneFields
-        ... on DcimVirtualInterface {
-          vrf {
-            node {
-              ...RoutingVrfFields
-            }
-          }
-          ip_address {
-            node {
-              address {
-                value
-              }
-              ip_namespace {
-                node {
-                  name {
-                    value
-                  }
-                }
-              }
-            }
-          }
-          capabilities {
-            edges {
-              node {
-                ... on TopologyRoutedExchange {
-                  id
-                  gateway {
-                    node {
-                      id
-                      tenant {
-                        node {
-                          id
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-fragment LoadbalancerContextInterfaceCapabilityFields on ManagedLoadbalancerContext {
-  id
-  name {
-    value
-  }
-  vlan_id {
-    value
-  }
-  vip_prefix {
-    node {
-      prefix {
-        value
-      }
-    }
-  }
-  capabilities {
-    edges {
-      node {
-        name {
-          value
-        }
-        device {
-          node {
-            name {
-              value
-            }
-            ... on DcimDeviceManaged {
-              role {
-                value
-              }
-            }
-          }
-        }
-        ...InterfaceRoutingZoneFields
-        ... on DcimVirtualInterface {
-          vrf {
-            node {
-              ...RoutingVrfFields
-            }
-          }
-          ip_address {
-            node {
-              address {
-                value
-              }
-              ip_namespace {
-                node {
-                  name {
-                    value
-                  }
-                }
-              }
-            }
-          }
-        }
       }
     }
   }
@@ -323,9 +157,6 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
         __typename
         ...OspfInterfaceCapabilityFields
         ...ExchangeGatewayInterfaceCapabilityFields
-        ...FirewallContextInterfaceCapabilityFields
-        ...LoadbalancerContextInterfaceCapabilityFields
-        ...PbrPolicyInterfaceCapabilityFields
       }
     }
   }

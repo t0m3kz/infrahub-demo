@@ -33,7 +33,7 @@ from utils.vrf_demand import internet_exits
 _log = logging.getLogger(__name__)
 
 # Border-leaf port roles facing a firewall / load-balancer HA member — the
-# values of generators/connections.py's BORDER_ROLE_FOR_SERVICES. Such a port
+# values of utils/exchange_transit.py's BORDER_ROLE_FOR_SERVICES. Such a port
 # carrying segment VLANs is a tagged L2 trunk (never also the routed parent of
 # pbr-mode FirewallContext sub-interfaces; the segment generator refuses that).
 _SERVICE_TRUNK_ROLES = frozenset(SERVICE_CONTEXT_ROLES.values())
@@ -157,6 +157,7 @@ def get_interfaces(
     activations: list[dict[str, Any]] | None = None,
     device_name: str = "",
     native_vlans: dict[str, int] | None = None,
+    interface_contexts: dict[str, list[dict[str, Any]]] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Returns a list of interface dictionaries sorted by interface name.
@@ -167,6 +168,9 @@ def get_interfaces(
     (transforms/helpers/group_policy.py): such a port must be a trunk, so a port that would be an
     access port on exactly that VLAN becomes a trunk with it as ``native_vlan`` (the host sends untagged
     frames). A port already a trunk is left as it is.
+
+    ``interface_contexts`` (interface name -> the service contexts it carries, utils/service_contexts.py
+    ``interface_contexts``) tags a border service port with the contexts behind it and a context leg with its context.
     """
     if not data:
         return []
@@ -195,6 +199,7 @@ def get_interfaces(
         by_type: dict[str | None, list[dict[str, Any]]] = {}
         for cap in capabilities:
             by_type.setdefault(cap.get("typename"), []).append(cap)
+        contexts = (interface_contexts or {}).get(name, [])
 
         vlans = [segment_vlan[s["name"]] for s in interface_segments(iface) if s.get("name") in segment_vlan]
 
@@ -203,12 +208,12 @@ def get_interfaces(
         # needs its own dot1q tag rendered — the border-leaf/firewall leg of a
         # PBR p2p link isn't part of any customer segment's own VLAN, so it
         # can't come from `segment_vlan` above like a trunk's access/trunk
-        # VLANs do. The context capability carries its own vlan_id directly.
+        # VLANs do. The context carries its own vlan_id directly.
         # Only a firewall context's: a load-balancer context's vlan_id is a pool
         # value, never a tag (its one leg is a transit VLAN, port_transit_vlans).
-        contexts = [c for kind in SERVICE_CONTEXT_ROLES for c in by_type.get(kind, [])]
         context_vlan_id = next(
-            (c.get("vlan_id") for c in by_type.get(FIREWALL_CONTEXT_KIND, []) if c.get("vlan_id")), None
+            (c.get("vlan_id") for c in contexts if c.get("typename") == FIREWALL_CONTEXT_KIND and c.get("vlan_id")),
+            None,
         )
         # A plain routed sub-interface (e.g. the colocation edge's VRF handoff
         # to the SD-WAN gateway) has no context capability: its tag is the

@@ -435,8 +435,9 @@ class TestQueries:
         assert list(device)[0] == "DcimDevice"
         fleet = len(self.FLEET_ROOTS)
         assert list(device)[1 : 1 + fleet] == list(self.FLEET_ROOTS)
-        # What follows the fleet roots is the BGP route protection's: VIPs, segment/prefix registrations, VRFs.
-        assert set(list(device)[1 + fleet :]) <= set(self.BGP_ROOTS)
+        # What follows the fleet roots is the BGP route protection's: VIPs, segment/prefix registrations, VRFs, and the
+        # nested data the device's services derive from.
+        assert set(list(device)[1 + fleet :]) <= {*self.BGP_ROOTS, "DeviceServices"}
         assert "environment_zones" in device
         assert not any(key.startswith("environment_prefixes_") for key in device)
         assert {key: device[key] for key in self.FLEET_ROOTS} == {key: reference[key] for key in self.FLEET_ROOTS}

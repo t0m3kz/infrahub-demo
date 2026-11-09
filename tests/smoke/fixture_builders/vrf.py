@@ -116,20 +116,6 @@ def _svi_node(vlan_id: int, namespace: ZoneMetadata) -> dict[str, Any]:
         "role": _value(SVI_ROLE),
         "ip_address": {"node": None},
         "vrf": {"node": routing_vrf(namespace["name"])},
-        # The pbr policy the VRF pass of the device attaches to every steered SVI (generators/helpers/pbr_sync.py): the
-        # fixture steers all of them, the transform still applies its own conditions (policies, a context with a leg).
-        "capabilities": {
-            "edges": [
-                {
-                    "node": {
-                        "__typename": "RoutingPolicy",
-                        "kind": _value("pbr"),
-                        "origin": _value("generated"),
-                        "customer_deployment": {"node": {"id": "fixture-footprint"}},
-                    }
-                }
-            ]
-        },
     }
 
 
@@ -178,8 +164,13 @@ def add_requirements(
 
 
 def with_vrf_objects(transform: BaseDeviceTransform, data: dict[str, Any]) -> dict[str, Any]:
-    """A copy of the raw device query response ``data`` with the VRF memberships and SVIs its config demands added."""
-    result = copy.deepcopy(data)
+    """A copy of the raw device query response ``data`` with the VRF memberships and SVIs its config demands added.
+
+    The nested service data the config derives from (``DeviceServices``) is given first, from what the response
+    declares (tests/smoke/fixture_builders/derived_services.py): the demand depends on the contexts behind the ports."""
+    from tests.smoke.fixture_builders.derived_services import with_device_services  # noqa: PLC0415 - import cycle
+
+    result = copy.deepcopy(with_device_services(transform, data))
     device_data, _, platform_name = transform.prepared_device(result)
     if not platform_name:
         return result

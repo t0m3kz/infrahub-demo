@@ -136,6 +136,29 @@
               },
               {
                 "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "eth1"
+                  },
+                  "description": {
+                    "value": "Uplink trunk"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "uplink"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
                   "vrf": {
                     "node": {
                       "security_zone": {
@@ -202,24 +225,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-dedicated",
-                          "name": {
-                            "value": "fw-C007-p-dedicated-context"
-                          },
-                          "tenant": {
-                            "node": {
-                              "name": {
-                                "value": "C007-p"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -291,24 +297,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-dedicated",
-                          "name": {
-                            "value": "fw-C007-p-dedicated-context"
-                          },
-                          "tenant": {
-                            "node": {
-                              "name": {
-                                "value": "C007-p"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -380,24 +369,7 @@
                     "node": null
                   },
                   "capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedFirewallContext",
-                          "id": "ctx-dedicated",
-                          "name": {
-                            "value": "fw-C007-p-dedicated-context"
-                          },
-                          "tenant": {
-                            "node": {
-                              "name": {
-                                "value": "C007-p"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ]
+                    "edges": []
                   }
                 }
               },
@@ -600,6 +572,49 @@
           },
           "l3_vni": {
             "value": 60003
+          }
+        }
+      }
+    ]
+  },
+  "DeviceServices": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-fw-dc10101-C007-p-dedicated",
+          "name": {
+            "value": "fw-dc10101-C007-p-dedicated"
+          },
+          "role": {
+            "value": "internal-firewall"
+          },
+          "member_of_groups": {
+            "edges": []
+          },
+          "deployment": {
+            "node": {
+              "__typename": "TopologyPod",
+              "id": "fixture-pod",
+              "name": {
+                "value": "fixture-pod"
+              },
+              "parent": {
+                "node": {
+                  "__typename": "TopologyDataCenter",
+                  "id": "fixture-dc",
+                  "name": {
+                    "value": "fixture-dc"
+                  }
+                }
+              }
+            }
+          },
+          "service_ports": {
+            "edges": []
+          },
+          "vlans": {
+            "edges": []
           }
         }
       }

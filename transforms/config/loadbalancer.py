@@ -44,9 +44,7 @@ class LoadBalancer(BaseDeviceTransform):
         interfaces = device.get("interfaces") or []
         capabilities = device.get("capabilities") or []
         ha = get_ha(capabilities, interfaces, device.get("name"))
-        contexts = get_loadbalancer_contexts(
-            device.get("shared_capabilities"), device.get("name") or "", ha, platform_name
-        )
+        contexts = get_loadbalancer_contexts(device, ha, platform_name)
         # A context leg renders inside its context, not as a root interface.
         leg_interfaces = {context["leg"]["name"] for context in contexts}
         lb_interfaces = _build_lb_interfaces([i for i in interfaces if i.get("name") not in leg_interfaces])

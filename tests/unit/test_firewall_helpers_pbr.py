@@ -5,7 +5,7 @@ import pytest
 from tests.unit.firewall_helpers_shared import _make_pbr_activation
 from tests.unit.routing_helpers import make_vrf
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
-from transforms.helpers.firewall_pbr import get_customer_pbr_rules
+from transforms.helpers.firewall_pbr import get_customer_pbr_rules, refuse_unresolvable_contexts
 from utils.routing_domain import RoutingDomainError
 
 
@@ -23,10 +23,10 @@ def _make_context_leg(
     _flatten_deployment_firewall_contexts() — device-scoped (this device's
     own deployment's firewall-role devices), not the rendered device's own
     interfaces. The firewall's OWN leg is what provides the nexthop, found
-    by filtering capabilities legs to the one on a device with
+    by filtering the context's legs to the one on a device with
     role="firewall"."""
     ctx: dict = {
-        "capabilities": [
+        "legs": [
             {
                 "vrf": make_vrf({"name": "PROD"}),
                 "device": {"role": "internal-firewall"},
@@ -51,12 +51,17 @@ def _fw_context(context_id: str) -> dict:
     return {"typename": "ManagedFirewallContext", "id": context_id}
 
 
+def _flattened(context: dict) -> dict:
+    """The context as ``_flatten_deployment_firewall_contexts`` returns it: with its served footprints and (no) legs."""
+    return {**context, "served_deployments": [], "legs": []}
+
+
 def _make_fw_device(*, contexts: list[dict] | None = None, extra_capability: dict | None = None) -> dict:
     """A firewall whose shared capabilities hold the contexts it is a member of."""
     shared_capabilities = list(contexts or [])
     if extra_capability:
         shared_capabilities.append(extra_capability)
-    return {"shared_capabilities": shared_capabilities}
+    return {"name": "fw-1", "role": "internal-firewall", "shared_capabilities": shared_capabilities, "interfaces": []}
 
 
 class TestFlattenDeploymentFirewallContexts:
@@ -71,21 +76,21 @@ class TestFlattenDeploymentFirewallContexts:
         under deployment.devices — no parent hop needed."""
         ctx = _fw_context("ctx-1")
         deployment = {"devices": [_make_fw_device(contexts=[ctx])]}
-        assert _flatten_deployment_firewall_contexts(deployment) == [ctx]
+        assert _flatten_deployment_firewall_contexts(deployment) == [_flattened(ctx)]
 
     def test_pod_tier_device_contexts_extracted_via_parent(self) -> None:
         """Pod-tier devices (leaf/tor/access-leaf) have their deployment set to
         the POD, so contexts live under deployment.parent.devices instead."""
         ctx = _fw_context("ctx-1")
         deployment = {"devices": [], "parent": {"devices": [_make_fw_device(contexts=[ctx])]}}
-        assert _flatten_deployment_firewall_contexts(deployment) == [ctx]
+        assert _flatten_deployment_firewall_contexts(deployment) == [_flattened(ctx)]
 
     def test_non_firewall_ha_capability_ignored(self) -> None:
         deployment = {
             "devices": [_make_fw_device(contexts=[_fw_context("ctx-1")], extra_capability={"typename": "ManagedBGP"})]
         }
         result = _flatten_deployment_firewall_contexts(deployment)
-        assert result == [_fw_context("ctx-1")]
+        assert result == [_flattened(_fw_context("ctx-1"))]
 
     def test_dedup_across_dc_and_pod_tier_paths(self) -> None:
         """A context reachable both directly and via parent must not double-count."""
@@ -95,11 +100,16 @@ class TestFlattenDeploymentFirewallContexts:
             "parent": {"devices": [_make_fw_device(contexts=[ctx])]},
         }
         result = _flatten_deployment_firewall_contexts(deployment)
-        assert result == [ctx]
+        assert result == [_flattened(ctx)]
 
     def test_multiple_contexts_across_devices(self) -> None:
         ctx_a, ctx_b = _fw_context("ctx-a"), _fw_context("ctx-b")
-        deployment = {"devices": [_make_fw_device(contexts=[ctx_a]), _make_fw_device(contexts=[ctx_b])]}
+        deployment = {
+            "devices": [
+                _make_fw_device(contexts=[ctx_a]) | {"name": "fw-a"},
+                _make_fw_device(contexts=[ctx_b]) | {"name": "fw-b"},
+            ]
+        }
         result = _flatten_deployment_firewall_contexts(deployment)
         assert {c["id"] for c in result} == {"ctx-a", "ctx-b"}
 
@@ -207,7 +217,7 @@ class TestGetCustomerPbrRules:
         """inline connectivity_mode never allocates an IP on the firewall leg —
         a context with no addressed firewall-role leg contributes no nexthop."""
         activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
-        contexts = [{"capabilities": [{"device": {"role": "internal-firewall"}, "ip_address": {}}]}]
+        contexts = [{"legs": [{"device": {"role": "internal-firewall"}, "ip_address": {}}]}]
         assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_permit_rule_becomes_bypass_prefix(self) -> None:
@@ -532,3 +542,28 @@ class TestCustomerPbrInspectedFlows:
         result = get_customer_pbr_rules(segment, self._contexts())
         assert result[0]["fw_nexthop"] == "10.66.0.4"
         assert result[0]["bypass_prefixes"] == []
+
+
+class TestRefuseUnresolvableContexts:
+    """A steered footprint served by a context with no VLAN has no legs, so no redirect: refused, never skipped."""
+
+    def test_nothing_steered_refuses_nothing(self) -> None:
+        refuse_unresolvable_contexts(set(), [{"name": "ctx", "vlan_id": None}], device_name="leaf-1")
+
+    def test_a_shared_context_without_a_vlan_is_refused(self) -> None:
+        with pytest.raises(ValueError, match=r"leaf 'leaf-1' has no local transit leg for context 'ctx'"):
+            refuse_unresolvable_contexts({"fp-1"}, [{"name": "ctx", "vlan_id": None}], device_name="leaf-1")
+
+    def test_a_dedicated_context_of_another_footprint_is_not_refused(self) -> None:
+        refuse_unresolvable_contexts(
+            {"fp-1"}, [{"name": "ctx", "vlan_id": None, "tenant": {"id": "fp-2"}}], device_name="leaf-1"
+        )
+
+    def test_a_dedicated_context_of_a_steered_footprint_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="no vlan_id"):
+            refuse_unresolvable_contexts(
+                {"fp-1"}, [{"name": "ctx", "vlan_id": None, "tenant": {"id": "fp-1"}}], device_name="leaf-1"
+            )
+
+    def test_a_context_with_a_vlan_is_not_refused(self) -> None:
+        refuse_unresolvable_contexts({"fp-1"}, [{"name": "ctx", "vlan_id": 3000}], device_name="leaf-1")

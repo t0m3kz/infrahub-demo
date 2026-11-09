@@ -4,6 +4,7 @@ Split out of ``transforms.helpers.firewall`` (the context leg lookup ``_context_
 exchange transits); the context list is built in ``transforms.helpers.firewall_contexts``.
 """
 
+from collections.abc import Collection, Mapping
 from ipaddress import IPv4Network, collapse_addresses
 from typing import Any
 
@@ -12,7 +13,7 @@ from transforms.helpers.policy import rule_selector, segment_flows
 from utils.exchange_transit import MANAGEMENT_TYPE, exchange_peer_zones
 from utils.fabric_roles import INTERNAL_FIREWALL_ROLE
 from utils.segment_addressing import is_terminated, segment_namespace, segment_prefix
-from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, svi_vlan_id
+from utils.vrf_demand import L3VNI_ROLE, svi_name, svi_vlan_id
 
 
 def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
@@ -32,7 +33,7 @@ def _has_firewall_leg(ctx: dict[str, Any]) -> bool:
     """True when the context has an addressed leg on a firewall member (inline contexts have none)."""
     return any(
         (leg.get("device") or {}).get("role") == INTERNAL_FIREWALL_ROLE and (leg.get("ip_address") or {}).get("address")
-        for leg in ctx.get("capabilities") or []
+        for leg in ctx.get("legs") or []
     )
 
 
@@ -115,22 +116,24 @@ def _inspected_prefixes(namespace_prefixes: list[str], via_firewall: set[str]) -
     return [str(network) for network in collapse_addresses(networks)]
 
 
-def pbr_steered_vlans(interfaces: list[dict[str, Any]] | None) -> set[int]:
-    """The VLANs of the device's SVIs that carry a pbr policy: only these are steered to the firewall.
+def refuse_unresolvable_contexts(
+    footprints: Collection[str], firewall_contexts: list[dict[str, Any]] | None, *, device_name: str
+) -> None:
+    """Raise when a steered footprint is served by a context whose legs cannot be derived (it has no ``vlan_id``).
 
-    The policy is attached by the VRF pass of the device (generators/helpers/pbr_sync.py); an SVI without one is
-    routed normally even when its segment has policies."""
-    steered: set[int] = set()
-    for iface in interfaces or []:
-        vlan_id = svi_vlan_id(iface.get("name"))
-        if iface.get("role") != SVI_ROLE or vlan_id is None:
+    A leg is ``<uplink>.<transit VLAN>`` of the context VLAN (utils/service_contexts.py), so a context without one has no
+    legs, no next hop and no PBR rule: the steered segments would route past their firewall silently. A shared context
+    serves every footprint, a dedicated one its tenant."""
+    if not footprints:
+        return
+    for ctx in firewall_contexts or []:
+        tenant_id = (ctx.get("tenant") or {}).get("id")
+        if isinstance(ctx.get("vlan_id"), int) or (tenant_id and tenant_id not in footprints):
             continue
-        if any(
-            cap.get("typename") == "RoutingPolicy" and cap.get("kind") == "pbr"
-            for cap in iface.get("capabilities") or []
-        ):
-            steered.add(vlan_id)
-    return steered
+        raise ValueError(
+            f"leaf '{device_name}' has no local transit leg for context '{ctx.get('name')}': it has no vlan_id, so its "
+            "legs cannot be derived; refusing a config that would route the steered segments past their firewall"
+        )
 
 
 def get_customer_pbr_rules(
@@ -309,14 +312,15 @@ def get_customer_pbr_rules(
 
 
 def get_overlay_pbr_rules(
+    bindings: Mapping[str, frozenset[str]],
     interfaces: list[dict[str, Any]] | None,
     firewall_contexts: list[dict[str, Any]] | None,
     deployment: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     """PBR of the traffic that enters a VRF from the overlay: the rules of the L3 VNI SVIs of a border leaf.
 
-    Each L3 VNI SVI (role ``l3vni``) carries the pbr policies of the footprints whose firewall context is tagged on the
-    device (generators/helpers/pbr_sync.py). The traffic that arrives decapsulated on it and is bound for a segment of a
+    Each L3 VNI SVI (role ``l3vni``) steers the footprints whose firewall context is tagged on the device
+    (``bindings``: utils/device_services.py ``overlay_pbr_bindings``, ``Vlan<slot>`` -> footprint ids). The traffic that arrives decapsulated on it and is bound for a segment of a
     footprint is redirected to that footprint's firewall context, so the context sees the direction the segment's own
     PBR does not. The destinations are the prefixes of the footprint's routed segments in the VRF of the SVI (the VRF is
     shared by every footprint, so the interface is never steered as a whole), the next hop the VIP of the leg of the
@@ -334,15 +338,7 @@ def get_overlay_pbr_rules(
         vrf = ((iface.get("vrf") or {}).get("security_zone") or {}).get("name")
         if iface.get("role") != L3VNI_ROLE or vlan_id is None or not vrf:
             continue
-        footprints = sorted(
-            {
-                str(footprint)
-                for cap in iface.get("capabilities") or []
-                if cap.get("typename") == "RoutingPolicy"
-                and cap.get("kind") == "pbr"
-                and (footprint := (cap.get("customer_deployment") or {}).get("id"))
-            }
-        )
+        footprints = sorted(bindings.get(svi_name(vlan_id), frozenset()))
         serving = _serving_context_nexthops(firewall_contexts, vrf)
         steers = []
         for footprint in footprints:
