@@ -39,8 +39,10 @@ query virtual_circuit_data($name: String!) {
                 }
               }
               ... on DcimVirtualInterface {
+                vlan_id { value }
                 parent_interface {
                   node {
+                    id
                     ... on DcimPhysicalInterface {
                       cable {
                         node {

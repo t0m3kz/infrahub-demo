@@ -99,7 +99,11 @@ def _payload(
                                         "vrf": {"node": routing_vrf("PROD")},
                                         "__typename": "DcimVirtualInterface",
                                         "name": {"value": "eth1.3000"},
-                                        "parent_interface": {"node": {"name": {"value": "eth1"}}},
+                                        "vlan_id": {"value": 3000},
+                                        "device": {"node": {"id": "vm"}},
+                                        "parent_interface": {
+                                            "node": {"name": {"value": "eth1"}, "device": {"node": {"id": "vm"}}}
+                                        },
                                         "ip_address": {
                                             "node": {
                                                 "address": {"value": "10.250.0.5/29"},

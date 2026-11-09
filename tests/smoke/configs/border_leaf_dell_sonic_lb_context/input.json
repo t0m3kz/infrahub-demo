@@ -1378,6 +1378,21 @@
                                           },
                                           "role": {
                                             "value": "service"
+                                          },
+                                          "vlan_id": {
+                                            "value": 3100
+                                          },
+                                          "parent_interface": {
+                                            "node": {
+                                              "name": {
+                                                "value": "ethernet1/1"
+                                              },
+                                              "device": {
+                                                "node": {
+                                                  "id": "member-dc1-lb-01"
+                                                }
+                                              }
+                                            }
                                           }
                                         }
                                       },
@@ -1432,6 +1447,21 @@
                                           },
                                           "role": {
                                             "value": "service"
+                                          },
+                                          "vlan_id": {
+                                            "value": 3301
+                                          },
+                                          "parent_interface": {
+                                            "node": {
+                                              "name": {
+                                                "value": "ethernet1/1"
+                                              },
+                                              "device": {
+                                                "node": {
+                                                  "id": "member-dc1-lb-01"
+                                                }
+                                              }
+                                            }
                                           }
                                         }
                                       }

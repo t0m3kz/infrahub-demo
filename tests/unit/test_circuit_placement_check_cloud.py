@@ -92,6 +92,25 @@ class TestHandoffEnds:
         assert "ends carry different VLANs" in message
         assert "dx-c900-fra:vif-3101 = 3102" in message
 
+    def test_the_tag_is_the_field_whatever_the_name_says(self) -> None:
+        """A sub-interface named .9999 that is tagged 3101 joins the peering's 3101; the name is not read."""
+        renamed = _vport("eg-fr201", "Ethernet1/13.9999", parent=("Ethernet1/13", (XC,)), vlan_id=3101)
+        assert _run(handoffs=[_handoff("HO-DX", None, [renamed, _peering(3101)])]) == []
+        (message,) = _run(handoffs=[_handoff("HO-DX", None, [renamed, _peering(9999)])])
+        assert "ends carry different VLANs" in message
+        assert "eg-fr201:Ethernet1/13.9999 = 3101" in message
+
+    def test_an_untagged_sub_interface_carries_no_vlan_to_compare(self) -> None:
+        """No vlan_id is untagged: it is still a sub-interface, and the peering's tag is not contradicted."""
+        untagged = _vport("eg-fr201", "Ethernet1/13.100", parent=("Ethernet1/13", (XC,)), vlan_id=None)
+        assert _run(handoffs=[_handoff("HO-DX", None, [untagged, _peering(3101)])]) == []
+
+    def test_a_name_with_a_number_is_no_sub_interface_without_a_parent(self) -> None:
+        """<port>.<vlan> in a name alone makes no sub-interface: it needs a parent_interface."""
+        loose = _vport("eg-fr201", "Ethernet1/13.3101", (XC,), kind="DcimVirtualInterface")
+        (message,) = _run(handoffs=[_handoff("HO-DX", None, [loose, _peering()])])
+        assert "is neither a sub-interface" in message
+
     def test_the_near_end_still_needs_its_carrier(self) -> None:
         """The cloud far end is not required to be carried, but the near end on a physical device is."""
         bare = _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", ()))
@@ -129,9 +148,9 @@ class TestHandoffEnds:
         bare = _vport("EXT-AWS-DX-FR2", "et-0/0/0", (XC,), kind="DcimPhysicalInterface")
         (message,) = _run(handoffs=[_handoff("HO-BARE", None, [_routed("eg-fr201", "Ethernet1/13", (XC,)), bare])])
         assert message == (
-            "Handoff circuit 'HO-BARE' end 'EXT-AWS-DX-FR2:et-0/0/0' is neither a VLAN sub-interface (named "
-            "<port>.<vlan>) nor a routed physical port (an IP address, no VLAN) nor a cloud peering interface: a "
-            "physical port with no IP address and no VLAN cannot carry a handoff."
+            "Handoff circuit 'HO-BARE' end 'EXT-AWS-DX-FR2:et-0/0/0' is neither a sub-interface (a "
+            "virtual interface on a parent_interface) nor a routed physical port (an IP address, no VLAN) nor a "
+            "cloud peering interface: a physical port with no IP address and no VLAN cannot carry a handoff."
         )
 
     def test_a_routed_port_and_a_sub_interface_fail(self) -> None:

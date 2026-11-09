@@ -5,7 +5,7 @@ devices. Two facts about its interfaces carry no setting of their own, only memb
 edge on the interface: they are derived here.
 
 - ``context_legs``: the sub-interfaces of a member that are legs of one of its contexts,
-  ``<uplink>.<transit_vlan(context vlan, namespace slot)>``.
+  the sub-interfaces of the first uplink whose ``vlan_id`` is ``transit_vlan(context vlan, namespace slot)``.
 - ``port_contexts`` / ``context_border_ports``: the border-leaf / edge service ports whose cable ends on a member, and
   the contexts the member belongs to.
 
@@ -111,37 +111,47 @@ def first_uplink(interfaces: list[dict[str, Any]] | None) -> dict[str, Any] | No
 
 
 def context_legs(device: dict[str, Any]) -> list[ContextLeg]:
-    """The legs of the contexts a member device belongs to: ``<uplink>.<transit_vlan(context.vlan_id, zone type)>``.
+    """The legs of the contexts a member device belongs to: a sub-interface of the device's first uplink whose
+    ``vlan_id`` is ``transit_vlan(context.vlan_id, zone type)``. The tag is the field, never parsed from the name.
 
-    One candidate per context and namespace slot (``TRANSIT_SLOT``); only a sub-interface that exists on the device is a
-    leg. The context does not store the tenant type of an Internet-edge context (it serves no footprint), so every slot
-    is a candidate: the bands of the context VLAN ranges (utils/limits.py) never make two candidates meet. The zone of a
-    leg is the SecurityZone name of its slot (``ZONE_BY_NS_TYPE``).
+    One candidate per context and namespace slot (``TRANSIT_SLOT``). The context does not store the tenant type of an
+    Internet-edge context (it serves no footprint), so every slot is a candidate: the bands of the context VLAN ranges
+    (utils/limits.py) never make two candidates meet. The zone of a leg is the SecurityZone name of its slot
+    (``ZONE_BY_NS_TYPE``).
     """
     interfaces = device.get("interfaces") or []
     trunk = first_uplink(interfaces)
     if trunk is None:
         return []
-    existing = {i["name"] for i in interfaces if i.get("name")}
+    on_trunk = {
+        i["vlan_id"]: i["name"]
+        for i in interfaces
+        if i.get("name")
+        and isinstance(i.get("vlan_id"), int)
+        and (i.get("parent_interface") or {}).get("name") == trunk["name"]
+    }
     legs: list[ContextLeg] = []
     for ctx in _member_contexts(device):
         vlan = ctx.get("vlan_id")
         if not isinstance(vlan, int):
             continue
         for ns_type in TRANSIT_SLOT:
-            name = f"{trunk['name']}.{transit_vlan(vlan, ns_type)}"
-            if name in existing:
+            name = on_trunk.get(transit_vlan(vlan, ns_type))
+            if name is not None:
                 legs.append(ContextLeg(ctx["id"], name, ZONE_BY_NS_TYPE[ns_type]))
     return sorted(legs, key=lambda leg: (leg.context_id, leg.interface_name))
 
 
 def leg_interfaces(device: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    """``context id -> the device's leg interfaces`` (cleaned interface dicts with ``device`` ``name`` and ``role``)."""
+    """``context id -> the device's leg interfaces`` (cleaned interface dicts whose ``device`` has ``id``, ``name`` and ``role``)."""
     by_name = {i["name"]: i for i in device.get("interfaces") or [] if i.get("name")}
-    owner = {"name": device.get("name"), "role": device.get("role")}
+    owner = {"id": device.get("id"), "name": device.get("name"), "role": device.get("role")}
     found: dict[str, list[dict[str, Any]]] = {}
     for leg in context_legs(device):
-        found.setdefault(leg.context_id, []).append({**by_name[leg.interface_name], "device": owner})
+        iface = by_name[leg.interface_name]
+        # The interface's own `device` (its id, which sub_interface_parent compares) wins over the root's.
+        device_ref = {**owner, **{k: v for k, v in (iface.get("device") or {}).items() if v is not None}}
+        found.setdefault(leg.context_id, []).append({**iface, "device": device_ref})
     return found
 
 

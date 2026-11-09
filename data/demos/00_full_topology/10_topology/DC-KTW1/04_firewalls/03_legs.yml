@@ -8,6 +8,7 @@ spec:
   data:
     - vrf: [DC-KTW1, "PROD"]
       name: "ethernet1/1.3000"
+      vlan_id: 3000
       device: ktw1-fw-01
       parent_interface: ["ktw1-fw-01", "ethernet1/1"]
       role: service
@@ -18,6 +19,7 @@ spec:
           ip_namespace: "default"
     - vrf: [DC-KTW1, "PROD"]
       name: "ethernet1/1.3000"
+      vlan_id: 3000
       device: ktw1-fw-02
       parent_interface: ["ktw1-fw-02", "ethernet1/1"]
       role: service
@@ -28,6 +30,7 @@ spec:
           ip_namespace: "default"
     - vrf: [DC-KTW1, "PROD"]
       name: "ethernet1/1.3001"
+      vlan_id: 3001
       device: ktw1-xfw-01
       parent_interface: ["ktw1-xfw-01", "ethernet1/1"]
       role: service
@@ -38,6 +41,7 @@ spec:
           ip_namespace: "default"
     - vrf: [DC-KTW1, "PROD"]
       name: "ethernet1/1.3001"
+      vlan_id: 3001
       device: ktw1-xfw-02
       parent_interface: ["ktw1-xfw-02", "ethernet1/1"]
       role: service
@@ -48,6 +52,7 @@ spec:
           ip_namespace: "default"
     - vrf: [DC-KTW1, "INTERNET"]
       name: "ethernet1/1.3401"
+      vlan_id: 3401
       device: ktw1-xfw-01
       parent_interface: ["ktw1-xfw-01", "ethernet1/1"]
       role: service
@@ -58,6 +63,7 @@ spec:
           ip_namespace: "default"
     - vrf: [DC-KTW1, "INTERNET"]
       name: "ethernet1/1.3401"
+      vlan_id: 3401
       device: ktw1-xfw-02
       parent_interface: ["ktw1-xfw-02", "ethernet1/1"]
       role: service

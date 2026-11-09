@@ -240,6 +240,9 @@ def _leg_interface(name: str, address: str, namespace: str, ns_type: str, exchan
             }
         ),
         "name": _v(name),
+        "vlan_id": _v(int(name.rsplit(".", 1)[-1])),
+        "parent_interface": _node({"name": _v("eth1"), "device": _node({"id": "dev-fw-1"})}),
+        "device": _node({"id": "dev-fw-1"}),
         "ip_address": _node({"address": _v(address), "ip_namespace": {"node": {"name": {"value": "default"}}}}),
         "capabilities": _edges([exchange]),
     }
@@ -264,7 +267,12 @@ def _exchange_payload(internet_vlan: str, snat: str | None = "192.0.2.5/32") -> 
         "security_zone_z": {"node": None},
         "gateway": _node({"id": "ctx-1"}),
     }
-    uplink = {"__typename": "DcimPhysicalInterface", "name": _v("eth1"), "role": _v("uplink")}
+    uplink = {
+        "__typename": "DcimPhysicalInterface",
+        "name": _v("eth1"),
+        "role": _v("uplink"),
+        "device": _node({"id": "dev-fw-1"}),
+    }
     interfaces = [
         uplink,
         _leg_interface("eth1.3005", "100.66.0.5/29", "PROD", "prod", exchange, context),

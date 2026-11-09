@@ -208,6 +208,8 @@ class DcimHasSubInterface(CoreNode):
 
 
 class DcimSubInterface(CoreNode):
+    inner_vlan_id: IntegerOptional
+    vlan_id: IntegerOptional
     parent_interface: RelationshipAttribute[DcimInterface]
 
 
@@ -1141,7 +1143,6 @@ class CloudPeeringInterface(DcimInterface, DcimHasIPAddress, DcimSubInterface, T
     service_id: StringOptional
     tunnel_index: IntegerOptional
     tunnel_mode: DropdownOptional
-    vlan_id: IntegerOptional
     advertised_prefixes: RelationshipManager[IpamPrefix]
     auth: RelationshipAttribute[RoutingPassword]
     crypto_profile: RelationshipAttribute[SecurityIPsecProfile]

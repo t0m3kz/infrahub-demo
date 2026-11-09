@@ -305,11 +305,12 @@ class _World:
         if name == "TopologyRoutedExchange":
             return [ex for ex_name, ex in self.exchanges.items() if ex_name in kwargs["name__values"]]
         if name == "DcimVirtualInterface":
-            if "name__values" in kwargs:
+            if "vlan_id__value" in kwargs:
                 return [
                     sub
                     for sub in self.sub_interfaces.values()
-                    if sub.name.value in kwargs["name__values"]
+                    if sub.vlan_id.value == kwargs["vlan_id__value"]
+                    and sub.parent_interface.id in kwargs["parent_interface__ids"]
                     and sub.device.id in kwargs["device__ids"]
                     and set(kwargs["capabilities__ids"]).intersection(peer.id for peer in sub.capabilities.peers)
                 ]
@@ -472,6 +473,8 @@ class _World:
                     id=f"sub-{len(self.sub_interfaces)}",
                     name=SimpleNamespace(value=data["name"]),
                     device=SimpleNamespace(id=data["device"]["id"]),
+                    parent_interface=SimpleNamespace(id=(data.get("parent_interface") or {}).get("id")),
+                    vlan_id=SimpleNamespace(value=data.get("vlan_id")),
                     ip_address=SimpleNamespace(id=None),
                     capabilities=_Many(),
                 ),

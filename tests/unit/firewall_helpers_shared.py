@@ -35,11 +35,19 @@ def fw_contexts(
                 leg["name"] = (
                     f"{trunk}.{transit_vlan(context['vlan_id'], ns_type if ns_type in TRANSIT_SLOT else 'prod')}"
                 )
+            if isinstance(context.get("vlan_id"), int):
+                leg["vlan_id"] = transit_vlan(context["vlan_id"], ns_type if ns_type in TRANSIT_SLOT else "prod")
+            leg.setdefault("parent_interface", {"name": trunk, "device": {"id": "dev-fw-1"}})
+            leg.setdefault("device", {"id": "dev-fw-1"})
             leg.setdefault("typename", "DcimVirtualInterface")
             leg.setdefault("role", "service")
         plain.append(leg)
-    uplinks = [{"typename": "DcimPhysicalInterface", "name": trunk, "role": "uplink"} for trunk in sorted(trunks)]
+    uplinks = [
+        {"typename": "DcimPhysicalInterface", "name": trunk, "role": "uplink", "device": {"id": "dev-fw-1"}}
+        for trunk in sorted(trunks)
+    ]
     device = {
+        "id": "dev-fw-1",
         "name": "fw-1",
         "role": "internal-firewall",
         "shared_capabilities": [{"typename": FIREWALL_CONTEXT_KIND, **c} for c in contexts.values()],

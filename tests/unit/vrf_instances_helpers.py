@@ -209,6 +209,8 @@ def raw_service_port(
         "tenant": {"node": {"id": tenant, "environment": {"value": "p"}}} if tenant else {"node": None},
         served_key: edges(*({"id": fp, "environment": {"value": env}} for fp, env in served)),
     }
+    member_id = f"{ctx_id}:dev"
+    parent_ref = {"node": {"name": {"value": "ethernet1/1"}}}
     uplink = {
         "__typename": "DcimPhysicalInterface",
         "id": f"{ctx_id}:up",
@@ -222,6 +224,8 @@ def raw_service_port(
             "__typename": "DcimVirtualInterface",
             "id": f"{ctx_id}:{namespace}",
             "name": {"value": f"ethernet1/1.{transit_vlan(vlan_id, ns_type)}"},
+            "vlan_id": {"value": transit_vlan(vlan_id, ns_type)},
+            "parent_interface": parent_ref,
             "role": {"value": "service"},
             "ip_address": ip_address,
         }
@@ -234,6 +238,8 @@ def raw_service_port(
                 "__typename": "DcimVirtualInterface",
                 "id": f"{ctx_id}:{len(subs)}",
                 "name": {"value": f"ethernet1/1.{transit_vlan(vlan_id, raw['_ns_type'])}"},
+                "vlan_id": {"value": transit_vlan(vlan_id, raw["_ns_type"])},
+                "parent_interface": parent_ref,
                 "role": {"value": "service"},
                 **{key: value for key, value in raw.items() if key != "_ns_type"},
             }
@@ -243,7 +249,7 @@ def raw_service_port(
         "device": {
             "node": {
                 "__typename": "DcimPhysicalDevice",
-                "id": f"{ctx_id}:dev",
+                "id": member_id,
                 "name": {"value": f"{ctx_id}-member"},
                 "role": {"value": member_role or (legs[0][0] if legs else "internal-firewall")},
                 "shared_capabilities": edges(context),

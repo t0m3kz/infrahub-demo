@@ -94,7 +94,10 @@ def _activation(vlan: int = 100, *, dep: str = "dep-a", namespace: dict | None =
 
 def _member(index: int, contexts: list[dict]) -> dict[str, Any]:
     """The firewall member ``fw-0<index>`` of the pair: its contexts, its uplink and the leg of each context's address."""
-    interfaces: list[dict[str, Any]] = [{"typename": "DcimPhysicalInterface", "name": "eth1", "role": "uplink"}]
+    device_id = f"dev-fw-0{index}"
+    interfaces: list[dict[str, Any]] = [
+        {"typename": "DcimPhysicalInterface", "name": "eth1", "role": "uplink", "device": {"id": device_id}}
+    ]
     for context in contexts:
         for leg in context["legs"]:
             address = leg["ip_address"]["address"]
@@ -102,9 +105,21 @@ def _member(index: int, contexts: list[dict]) -> dict[str, Any]:
                 continue
             namespace = leg["vrf"]["security_zone"]
             name = f"eth1.{transit_vlan(context['vlan_id'], namespace['vrf_type'])}"
-            interfaces.append({**leg, "typename": "DcimVirtualInterface", "name": name, "role": "service"})
+            vlan = transit_vlan(context["vlan_id"], namespace["vrf_type"])
+            interfaces.append(
+                {
+                    **leg,
+                    "typename": "DcimVirtualInterface",
+                    "name": name,
+                    "vlan_id": vlan,
+                    "parent_interface": {"name": "eth1", "device": {"id": device_id}},
+                    "device": {"id": device_id},
+                    "role": "service",
+                }
+            )
     shared = [{key: value for key, value in c.items() if key != "legs"} | {"typename": FW} for c in contexts]
     return {
+        "id": device_id,
         "name": f"fw-0{index}",
         "role": "internal-firewall",
         "shared_capabilities": shared,

@@ -282,19 +282,25 @@ class TestGetInterfacesFirewallContextDot1q:
     customer segment."""
 
     def test_firewall_context_sets_dot1q_vlan(self):
-        iface = {"name": "Ethernet1/49.150", "parent_interface": {"name": "Ethernet1/49"}}
+        iface = {
+            "name": "Ethernet1/49.150",
+            "device": {"id": "dev-1"},
+            "parent_interface": {"name": "Ethernet1/49", "device": {"id": "dev-1"}},
+        }
         context = {"typename": "ManagedFirewallContext", "name": "dc10-shared", "vlan_id": 150}
         result = get_interfaces([iface], interface_contexts={"Ethernet1/49.150": [context]})
         assert result[0]["dot1q_vlan"] == 150
-        assert result[0]["parent_interface"] == {"name": "Ethernet1/49"}
+        assert result[0]["parent_interface"] == {"name": "Ethernet1/49", "device": {"id": "dev-1"}}
 
     def test_loadbalancer_context_vlan_id_is_not_a_dot1q_tag(self):
         """A load-balancer context's vlan_id is its pool value (3101), not the leg tag: a NONPROD
-        leg is 3101 + 200 = 3301, which the sub-interface name carries."""
+        leg is 3101 + 200 = 3301, which the sub-interface's vlan_id states."""
         iface = {
             "typename": "DcimVirtualInterface",
             "name": "eth1.3301",
-            "parent_interface": {"name": "eth1"},
+            "vlan_id": 3301,
+            "device": {"id": "dev-1"},
+            "parent_interface": {"name": "eth1", "device": {"id": "dev-1"}},
         }
         context = {"typename": "ManagedLoadbalancerContext", "name": "dc1-lb-ha-NONPROD", "vlan_id": 3101}
         result = get_interfaces([iface], interface_contexts={"eth1.3301": [context]})

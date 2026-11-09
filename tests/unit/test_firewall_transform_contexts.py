@@ -213,22 +213,25 @@ class TestFirewallTransformContextPlacement:
 
 
 class TestParentInterfaceOnlyForSubInterfaces:
-    """``parent_interface`` is also a VM NIC's host port: only a ``<parent>.<vlan>`` name is a sub-interface."""
+    """``parent_interface`` is also a VM NIC's host port: only a parent on the interface's own device is a
+    sub-interface, whatever the names say."""
 
     @staticmethod
-    def _interfaces(name: str, parent: str) -> list[dict[str, Any]]:
+    def _interfaces(name: str, parent: str, parent_device: str = "dev-1") -> list[dict[str, Any]]:
         return [
             {
                 "name": name,
+                "vlan_id": int(name.rsplit(".", 1)[1]) if "." in name else None,
+                "device": {"id": "dev-1"},
                 "ip_address": {"address": "10.0.0.2/30"},
-                "parent_interface": {"name": parent},
+                "parent_interface": {"name": parent, "device": {"id": parent_device}},
                 "capabilities": [],
             }
         ]
 
     def test_a_nic_with_an_address_and_a_host_port_parent_has_no_parent(self) -> None:
-        """A NIC named eth0 riding on the host port Ethernet5 keeps parent_interface None."""
-        (nic,) = _build_fw_interfaces(self._interfaces("eth0", "Ethernet5"), [], {})
+        """A NIC riding on the host port Ethernet5 of another device keeps parent_interface None."""
+        (nic,) = _build_fw_interfaces(self._interfaces("eth0", "Ethernet5", "host-1"), [], {})
 
         assert nic["parent_interface"] is None
 
@@ -236,8 +239,20 @@ class TestParentInterfaceOnlyForSubInterfaces:
         """ethernet1/1.210 on ethernet1/1 is the sub-interface the templates tag with its VLAN."""
         (sub,) = _build_fw_interfaces(self._interfaces("ethernet1/1.210", "ethernet1/1"), [], {})
 
-        assert sub["parent_interface"] == {"name": "ethernet1/1"}
+        assert sub["parent_interface"] == {"name": "ethernet1/1", "device": {"id": "dev-1"}}
         assert sub["vlan_id"] == 210
+
+    def test_the_name_plays_no_part(self) -> None:
+        """A sub-interface named otherwise keeps its parent and states its own tag; a NIC named like a sub-interface
+        of its host port is none."""
+        interfaces = self._interfaces("unit-7", "ethernet1/1")
+        interfaces[0]["vlan_id"] = 210
+        (renamed,) = _build_fw_interfaces(interfaces, [], {})
+        (nic,) = _build_fw_interfaces(self._interfaces("Ethernet5.100", "Ethernet5", "host-1"), [], {})
+
+        assert renamed["parent_interface"] == {"name": "ethernet1/1", "device": {"id": "dev-1"}}
+        assert renamed["vlan_id"] == 210
+        assert nic["parent_interface"] is None
 
     def test_direct_zone_is_rendered_without_segment_membership(self) -> None:
         """A routed firewall interface keeps its own zone in default IPAM."""

@@ -539,8 +539,8 @@ class CablingMixin:
         track: bool = True,
         role: str = "service",
     ) -> Any | None:
-        """Upsert a VLAN-tagged DcimVirtualInterface (<trunk>.<vlan_id>) on
-        trunk_iface, linked to capability_obj (and any extra_capability_objs,
+        """Upsert a VLAN-tagged DcimVirtualInterface on trunk_iface, named
+        <trunk>.<vlan_id> by convention and stating the tag in ``vlan_id``, linked to capability_obj (and any extra_capability_objs,
         e.g. the exchanges a firewall-context leg belongs to) via capabilities.
         Capabilities are only ever added, never removed, and carry CONTEXTS only
         (customer_dc.py/customer_colocation.py's FirewallContext sub-interfaces).
@@ -563,6 +563,7 @@ class CablingMixin:
             "name": sub_iface_name,
             "device": {"id": device_id},
             "parent_interface": {"id": trunk_iface.id},
+            "vlan_id": vlan_id_value,
             "status": "active",
             "role": role,
             **({"ip_address": {"id": ip_address_id}} if ip_address_id else {}),

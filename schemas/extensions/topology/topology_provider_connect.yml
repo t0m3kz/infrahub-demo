@@ -83,21 +83,3 @@ nodes:
         optional: true
         order_weight: 2000
         description: "The bandwidth of the connection that ends here, in megabits per second"
-      - name: vlan_id
-        kind: Number
-        label: "VLAN ID (S-tag)"
-        optional: true
-        order_weight: 2010
-        description: "The outer VLAN of the connection on the port (Fabric vlan_s_tag, Megaport ordered_vlan)"
-        parameters:
-          min_value: 1
-          max_value: 4094
-      - name: inner_vlan_id
-        kind: Number
-        label: "Inner VLAN ID (C-tag)"
-        optional: true
-        order_weight: 2020
-        description: "The inner VLAN of a QinQ connection (Fabric vlan_c_tag)"
-        parameters:
-          min_value: 1
-          max_value: 4094

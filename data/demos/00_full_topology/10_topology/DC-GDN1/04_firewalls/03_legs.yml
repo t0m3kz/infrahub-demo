@@ -6,6 +6,7 @@ spec:
   data:
     - vrf: [DC-GDN1, "PROD"]
       name: ethernet1/1.3000
+      vlan_id: 3000
       device: gdn1-fw-01
       parent_interface: ["gdn1-fw-01", "ethernet1/1"]
       role: service
@@ -23,6 +24,7 @@ spec:
               description: GDN1 internal firewall PROD transit
     - vrf: [DC-GDN1, "PROD"]
       name: ethernet1/1.3000
+      vlan_id: 3000
       device: gdn1-fw-02
       parent_interface: ["gdn1-fw-02", "ethernet1/1"]
       role: service

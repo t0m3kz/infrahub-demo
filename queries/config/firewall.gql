@@ -103,6 +103,14 @@ query firewall_config($device: String!) {
                 }
               }
               ... on DcimVirtualInterface {
+                vlan_id {
+                  value
+                }
+                device {
+                  node {
+                    id
+                  }
+                }
                 vrf {
                   node {
                     ...RoutingVrfFields
@@ -126,6 +134,11 @@ query firewall_config($device: String!) {
                   node {
                     name {
                       value
+                    }
+                    device {
+                      node {
+                        id
+                      }
                     }
                     ...FirewallFacingCableFields
                   }

@@ -189,13 +189,16 @@ class TestHandoffSession:
         [
             pytest.param(
                 session_port("if-aws", "Ethernet1", "EXT-AWS-DX-FR2", where=deployment("TopologyCloudRegion", "x")),
-                r"EXT-AWS-DX-FR2/Ethernet1 must be a DcimVirtualInterface named <parent>.<vlan>",
+                r"EXT-AWS-DX-FR2/Ethernet1 must be a DcimVirtualInterface riding on a parent_interface",
                 id="physical-port",
             ),
             pytest.param(
-                session_port("if-aws", "lo0", "EXT-AWS-DX-FR2", kind="DcimVirtualInterface"),
-                r"EXT-AWS-DX-FR2/lo0 must be a DcimVirtualInterface named <parent>.<vlan>",
-                id="no-vlan-in-the-name",
+                {
+                    **session_port("if-aws", "Ethernet1.1900", "EXT-AWS-DX-FR2", kind="DcimVirtualInterface"),
+                    "parent_interface": {"node": None},
+                },
+                r"EXT-AWS-DX-FR2/Ethernet1.1900 must be a DcimVirtualInterface riding on a parent_interface",
+                id="no-parent-whatever-the-name-says",
             ),
             pytest.param(
                 handoff_party_port(roles=("underlay", "regular")),

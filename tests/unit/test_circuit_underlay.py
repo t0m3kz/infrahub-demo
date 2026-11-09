@@ -18,7 +18,6 @@ from utils.circuit_underlay import (
     overlay_processes,
     port_cabled,
     session_circuits_on,
-    subinterface_vlan,
 )
 
 CIRCUIT = {"typename": "TopologyCarrierCircuit", "id": "pc-1", "status": "decommissioned"}
@@ -77,26 +76,6 @@ def _bgp(role: str, process_id: str = "p") -> dict[str, Any]:
 def test_overlay_processes_are_the_managed_bgp_of_role_overlay(capabilities: Any, ids: list[str]) -> None:
     """The overlay BGP processes of a device: the check counts them, the generator picks the single one."""
     assert [process["id"] for process in overlay_processes({"capabilities": capabilities})] == ids
-
-
-@pytest.mark.parametrize(
-    ("name", "vlan"),
-    [
-        pytest.param("Ethernet1/10.1900", 1900, id="physical-parent"),
-        pytest.param("et-0/0/0.3101", 3101, id="juniper"),
-        pytest.param("eth0.7", 7, id="short"),
-        pytest.param("a.b.100", 100, id="last-dot-wins"),
-        pytest.param("Ethernet1/10", None, id="no-dot"),
-        pytest.param("Ethernet1.10a", None, id="vlan-not-numeric"),
-        pytest.param("Ethernet1.", None, id="empty-vlan"),
-        pytest.param(".100", None, id="no-parent"),
-        pytest.param("", None, id="empty-name"),
-        pytest.param("?", None, id="unknown-name"),
-    ],
-)
-def test_subinterface_vlan_parses_port_dot_vlan(name: str, vlan: int | None) -> None:
-    """A handoff end is named <port>.<vlan>; anything else has no VLAN."""
-    assert subinterface_vlan(name) == vlan
 
 
 def test_the_session_types_are_the_dci_the_handoff_and_the_vpn_never_the_tunnel() -> None:

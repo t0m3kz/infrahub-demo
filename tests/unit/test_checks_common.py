@@ -2,6 +2,7 @@
 and validate_transit_vlans() for both the border leaf and the edge."""
 
 from functools import partial
+from typing import Any
 
 import pytest
 
@@ -123,6 +124,7 @@ class TestValidateRoutingPasswordCombined:
         assert len(errors) == 2
 
 
+_FROM_NAME: Any = object()  # a leg's tag defaults to the number its test name ends in
 GATEWAY_ID = "ctx-1"
 CONTEXT_VLAN = 3005
 
@@ -150,7 +152,12 @@ def _fw_leg(
     ns_type: str | None = None,
     *,
     caps: list[dict] | None = None,
+    vlan_id: int | None = _FROM_NAME,
 ) -> dict:
+    """A firewall leg; its tag is its ``vlan_id`` (by default the number its name ends in)."""
+    if vlan_id is _FROM_NAME:
+        suffix = name.rsplit(".", 1)[-1]
+        vlan_id = int(suffix) if "." in name and suffix.isdigit() else None
     ip_address = None
     if address and namespace:
         ip_address = {
@@ -159,6 +166,9 @@ def _fw_leg(
         }
     return {
         "name": name,
+        "vlan_id": vlan_id,
+        "parent_interface": {"name": "eth1", "device": {"id": "dev-fw-01"}},
+        "device": {"id": "dev-fw-01"},
         "ip_address": ip_address,
         "vrf": make_vrf({"name": namespace, "vrf_type": ns_type or _NS_TYPE.get(namespace)}) if namespace else None,
         "capabilities": [_exchange()] if caps is None else caps,
@@ -175,8 +185,9 @@ def _good_legs() -> list[dict]:
 
 def _firewall(legs: list[dict], contexts: list[dict] | None = None) -> dict:
     """The firewall: member of the contexts, its uplink ``eth1`` and the leg sub-interfaces."""
-    uplink = {"typename": "DcimPhysicalInterface", "name": "eth1", "role": "uplink"}
+    uplink = {"typename": "DcimPhysicalInterface", "name": "eth1", "role": "uplink", "device": {"id": "dev-fw-01"}}
     return {
+        "id": "dev-fw-01",
         "name": "dc1-fw-01",
         "role": "internal-firewall",
         "shared_capabilities": [_context()] if contexts is None else contexts,
@@ -243,13 +254,20 @@ class TestValidateExchangeGateways:
         assert len(errors) == 1
         assert "expected 3405" in errors[0]
 
-    def test_non_numeric_vlan_suffix_is_no_leg_of_the_context(self):
-        """A sub-interface that is not `<uplink>.<transit VLAN>` is no leg of any context."""
+    def test_an_untagged_leg_reports_error(self):
         legs = _good_legs()
         legs[0] = _fw_leg("eth1.web", "100.66.0.5/29", "PROD")
         assert any("not tagged with the exchange's gateway context" in e for e in _validate(legs))
 
-    def test_leg_of_no_context_reports_error(self):
+    def test_the_tag_is_the_field_not_the_name(self):
+        """A name that says 3005 over another tag is no leg of the context; a different name over the right tag is."""
+        legs = _good_legs()
+        legs[0] = _fw_leg("eth1.3005", "100.66.0.5/29", "PROD", vlan_id=3999)
+        assert any("not tagged with the exchange's gateway context" in e for e in _validate(legs))
+        legs[0] = _fw_leg("eth1.legacy", "100.66.0.5/29", "PROD", vlan_id=3005)
+        assert _validate(legs) == []
+
+    def test_leg_without_gateway_context_reports_error(self):
         legs = _good_legs()
         legs[0] = _fw_leg("eth1.3999", "100.66.0.5/29", "PROD")
         errors = _validate(legs)

@@ -60,7 +60,8 @@ fragment LoadbalancerServedFields on ManagedLoadbalancerContext {
   }
 }
 
-# An interface of a member device: a leg of its contexts is a sub-interface with an address in a VRF.
+# An interface of a member device: a leg of its contexts is a sub-interface of its uplink, tagged with the transit
+# VLAN (`vlan_id`), with an address in a VRF.
 fragment ServiceMemberInterfaceFields on DcimInterface {
   __typename
   id
@@ -72,6 +73,16 @@ fragment ServiceMemberInterfaceFields on DcimInterface {
   }
   ...InterfaceRoutingZoneFields
   ... on DcimVirtualInterface {
+    vlan_id {
+      value
+    }
+    parent_interface {
+      node {
+        name {
+          value
+        }
+      }
+    }
     ip_address {
       node {
         address {
@@ -90,7 +101,7 @@ fragment ServiceMemberInterfaceFields on DcimInterface {
 }
 
 # A device that is a member of service contexts (a firewall or a load balancer): its contexts and its interfaces, whose
-# legs are `<first uplink>.<transit VLAN>`.
+# legs are the sub-interfaces of the first uplink tagged with a transit VLAN.
 fragment ServiceMemberFields on DcimDevice {
   __typename
   id

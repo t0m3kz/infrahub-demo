@@ -68,15 +68,23 @@ def test_common_parent_stays_only_on_the_lag_pair() -> None:
     assert "common_parent" not in parent
 
 
-def test_the_child_marker_holds_only_parent_interface_and_the_virtual_interface_inherits_it() -> None:
+def test_the_child_marker_holds_parent_interface_and_the_vlan_tags_and_the_virtual_interface_inherits_them() -> None:
     """A VM NIC's parent_interface is its host port (another device); there is no relationship of its own, and the
-    kind repeats nothing the marker declares."""
+    kind repeats nothing the marker declares. The VLAN tag (and the QinQ inner tag) is declared once, here: a name
+    like ``<parent>.<vlan>`` is only a convention."""
     schema = _schema()
     marker = _item(schema["generics"], "SubInterface")
     virtual = _item(schema["nodes"], "VirtualInterface")
 
     assert [rel["name"] for rel in marker["relationships"]] == ["parent_interface"]
-    assert not marker.get("attributes")
+    assert [attr["name"] for attr in marker["attributes"]] == ["vlan_id", "inner_vlan_id"]
+    for attr in marker["attributes"]:
+        assert (attr["kind"], attr["optional"], attr["parameters"]) == (
+            "Number",
+            True,
+            {"min_value": 1, "max_value": 4094},
+        )
+    assert not {"vlan_id", "inner_vlan_id"} & {attr["name"] for attr in virtual.get("attributes") or []}
     assert "DcimSubInterface" in virtual["inherit_from"]
     assert "parent_interface" not in [rel["name"] for rel in virtual.get("relationships") or []]
     assert "host_interface" not in [rel["name"] for rel in virtual.get("relationships") or []]

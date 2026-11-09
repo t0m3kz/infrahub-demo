@@ -119,6 +119,14 @@ fragment LoadbalancerDeviceFields on DcimDevice {
           }
         }
         ... on DcimVirtualInterface {
+          vlan_id {
+            value
+          }
+          device {
+            node {
+              id
+            }
+          }
           vrf {
             node {
               ...RoutingVrfFields
@@ -142,6 +150,11 @@ fragment LoadbalancerDeviceFields on DcimDevice {
             node {
               name {
                 value
+              }
+              device {
+                node {
+                  id
+                }
               }
             }
           }

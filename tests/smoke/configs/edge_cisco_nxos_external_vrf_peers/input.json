@@ -2142,6 +2142,9 @@
                   "role": {
                     "value": "uplink"
                   },
+                  "vlan_id": {
+                    "value": 1000
+                  },
                   "ip_address": {
                     "node": {
                       "address": {
@@ -2203,6 +2206,9 @@
                   },
                   "role": {
                     "value": "uplink"
+                  },
+                  "vlan_id": {
+                    "value": 1001
                   },
                   "ip_address": {
                     "node": {
@@ -2266,6 +2272,9 @@
                   "role": {
                     "value": "uplink"
                   },
+                  "vlan_id": {
+                    "value": 1900
+                  },
                   "ip_address": {
                     "node": {
                       "address": {
@@ -2328,6 +2337,9 @@
                   "role": {
                     "value": "uplink"
                   },
+                  "vlan_id": {
+                    "value": 1300
+                  },
                   "ip_address": {
                     "node": {
                       "address": {
@@ -2389,6 +2401,9 @@
                   },
                   "role": {
                     "value": "uplink"
+                  },
+                  "vlan_id": {
+                    "value": 1200
                   },
                   "ip_address": {
                     "node": {

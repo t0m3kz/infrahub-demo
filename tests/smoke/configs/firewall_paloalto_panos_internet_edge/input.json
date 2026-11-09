@@ -115,10 +115,23 @@
                   "role": {
                     "value": null
                   },
+                  "device": {
+                    "node": {
+                      "id": "dev-fw"
+                    }
+                  },
+                  "vlan_id": {
+                    "value": 3002
+                  },
                   "parent_interface": {
                     "node": {
                       "name": {
                         "value": "ethernet1/1"
+                      },
+                      "device": {
+                        "node": {
+                          "id": "dev-fw"
+                        }
                       }
                     }
                   },
@@ -187,10 +200,23 @@
                   "role": {
                     "value": null
                   },
+                  "device": {
+                    "node": {
+                      "id": "dev-fw"
+                    }
+                  },
+                  "vlan_id": {
+                    "value": 3402
+                  },
                   "parent_interface": {
                     "node": {
                       "name": {
                         "value": "ethernet1/1"
+                      },
+                      "device": {
+                        "node": {
+                          "id": "dev-fw"
+                        }
                       }
                     }
                   },

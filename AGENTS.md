@@ -718,7 +718,10 @@ class MyCheck(InfrahubCheck):
   no `common_parent`, so the cross-device rule is `checks/interface_parents.py` (rooted on `DcimSubInterface`): a parent
   on another device is an ERROR unless the interface is a NIC of a `DcimVirtualDevice` pinned to a port of its
   `hosting_device`, a NIC's parent is a physical port, and an uplink's host port is cabled. The transforms render a
-  `parent_interface` only for a `<parent>.<n>` sub-interface (`transforms/helpers/addressing.py` `sub_interface_parent`). `common_parent: device`
+  `parent_interface` only for a parent on the interface's own device (`transforms/helpers/addressing.py` `sub_interface_parent`; the
+  queries select both `device` ids). The VLAN tag of a sub-interface is its `vlan_id` and `inner_vlan_id` (QinQ C-tag), declared once on
+  `DcimSubInterface` (unset: untagged); `<parent>.<vlan>` is only the default name the generators give, nothing parses it.
+  `common_parent: device`
   stays on the LAG pair `lag` / `member_interfaces`; `common_parent` works only on a node with a `kind: Parent`
   relationship and a peer with one (the interfaces' `device`, `CloudNetworkSegment`'s `virtual_network`), every other
   "same parent" rule is a check.

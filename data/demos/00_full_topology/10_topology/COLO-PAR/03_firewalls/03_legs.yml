@@ -8,6 +8,7 @@ spec:
   data:
     - vrf: [PAR, "PROD"]
       name: "ethernet1/1.3001"
+      vlan_id: 3001
       device: par-colo1-xfw-01
       parent_interface: ["par-colo1-xfw-01", "ethernet1/1"]
       role: service
@@ -18,6 +19,7 @@ spec:
           ip_namespace: "default"
     - vrf: [PAR, "PROD"]
       name: "ethernet1/1.3001"
+      vlan_id: 3001
       device: par-colo1-xfw-02
       parent_interface: ["par-colo1-xfw-02", "ethernet1/1"]
       role: service
@@ -28,6 +30,7 @@ spec:
           ip_namespace: "default"
     - vrf: [PAR, "INTERNET"]
       name: "ethernet1/1.3401"
+      vlan_id: 3401
       device: par-colo1-xfw-01
       parent_interface: ["par-colo1-xfw-01", "ethernet1/1"]
       role: service
@@ -38,6 +41,7 @@ spec:
           ip_namespace: "default"
     - vrf: [PAR, "INTERNET"]
       name: "ethernet1/1.3401"
+      vlan_id: 3401
       device: par-colo1-xfw-02
       parent_interface: ["par-colo1-xfw-02", "ethernet1/1"]
       role: service

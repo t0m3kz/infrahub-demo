@@ -131,6 +131,9 @@ query super_spine_config($device: String!) {
                 }
               }
               ... on DcimVirtualInterface {
+                vlan_id {
+                  value
+                }
                 vrf {
                   node {
                     ...RoutingVrfFields

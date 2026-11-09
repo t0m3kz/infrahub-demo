@@ -208,7 +208,22 @@ class TestMultisiteVrfImports:
 
 
 class TestSubinterfaceDot1q:
-    def test_tag_comes_from_the_name_suffix(self) -> None:
+    def test_tag_is_the_vlan_id_not_the_name(self) -> None:
+        """The name says 1900, the field 200 (an IOS fa0/0.100 encapsulating dot1Q 200): the field is the tag."""
+        (iface,) = get_interfaces(
+            [
+                {
+                    "name": "Ethernet1/13.1900",
+                    "vlan_id": 200,
+                    "typename": "DcimVirtualInterface",
+                    "ip_address": _ip("10.255.5.0/31"),
+                    **_vrf("PROD"),
+                }
+            ]
+        )
+        assert iface["dot1q_vlan"] == 200
+
+    def test_a_sub_interface_without_vlan_id_is_untagged(self) -> None:
         (iface,) = get_interfaces(
             [
                 {
@@ -218,7 +233,7 @@ class TestSubinterfaceDot1q:
                 }
             ]
         )
-        assert iface["dot1q_vlan"] == 1900
+        assert iface["dot1q_vlan"] is None
 
     @pytest.mark.parametrize(
         ("name", "typename"),
@@ -226,9 +241,10 @@ class TestSubinterfaceDot1q:
             ("loopback1", "DcimVirtualInterface"),
             ("Ethernet1/13", "DcimPhysicalInterface"),
             ("Vlan.abc", "DcimVirtualInterface"),
+            ("Ethernet1/13.1900", "DcimPhysicalInterface"),
         ],
     )
-    def test_no_tag_without_numeric_suffix(self, name: str, typename: str) -> None:
+    def test_no_tag_without_vlan_id(self, name: str, typename: str) -> None:
         (iface,) = get_interfaces([{"name": name, "typename": typename}])
         assert iface["dot1q_vlan"] is None
 

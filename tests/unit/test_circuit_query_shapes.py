@@ -136,6 +136,9 @@ _GENERATOR_READS = [
     "capabilities.capabilities.name",
     "capabilities.capabilities.circuit_id",
     "capabilities.capabilities.status",
+    # a handoff end is a sub-interface: it rides on a parent_interface, its tag is its vlan_id
+    "capabilities.parent_interface.id",
+    "capabilities.vlan_id",
     # ... and, for a sub-interface, on its parent interface
     "capabilities.parent_interface.capabilities.__typename",
     "capabilities.parent_interface.capabilities.id",

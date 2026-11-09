@@ -22,8 +22,9 @@ def _leg(device: str, name: str, address: str, namespace: str) -> dict[str, Any]
         "vrf": make_vrf(_NAMESPACES[namespace]),
         "typename": "DcimVirtualInterface",
         "name": name,
-        "device": {"name": device, "role": "load-balancer"},
-        "parent_interface": {"name": name.split(".")[0]},
+        "vlan_id": int(name.rsplit(".", 1)[-1]),
+        "device": {"id": f"dev-{device}", "name": device, "role": "load-balancer"},
+        "parent_interface": {"name": name.split(".")[0], "device": {"id": f"dev-{device}"}},
         "ip_address": {"address": address, "ip_namespace": {"node": {"name": {"value": "default"}}}},
     }
 
@@ -81,6 +82,7 @@ def _device(*contexts: dict[str, Any], member: str = "LB-01") -> dict[str, Any]:
         if leg["device"]["name"] == member
     ]
     return {
+        "id": f"dev-{member}",
         "name": member,
         "role": "load-balancer",
         "shared_capabilities": [

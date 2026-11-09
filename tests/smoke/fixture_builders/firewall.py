@@ -52,7 +52,11 @@ def _make_firewall_interface(
         "description": _v(description),
         "status": _v("active"),
         "role": _v("uplink"),
-        "parent_interface": _node({"name": _v(parent_interface_name)} if parent_interface_name else None),
+        "device": _node({"id": "dev-fw"}),
+        "vlan_id": _v(int(name.rsplit(".", 1)[1]) if parent_interface_name else None),
+        "parent_interface": _node(
+            {"name": _v(parent_interface_name), "device": _node({"id": "dev-fw"})} if parent_interface_name else None
+        ),
         "ip_address": _node(
             {
                 "address": _v(ip_address),

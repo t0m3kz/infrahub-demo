@@ -257,7 +257,9 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
                 {
                     "vrf": _one(routing_vrf(zone_name)),
                     "name": {"value": leg["name"]},
-                    "parent_interface": _one({"name": {"value": trunk[1]}}),
+                    "vlan_id": {"value": leg["vlan_id"]},
+                    "device": _one({"id": member}),
+                    "parent_interface": _one({"name": {"value": trunk[1]}, "device": _one({"id": member})}),
                     "ip_address": _one(
                         {
                             "address": {"value": address["data"]["address"]},

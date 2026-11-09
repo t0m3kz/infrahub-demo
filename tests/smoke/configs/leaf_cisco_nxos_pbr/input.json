@@ -2082,6 +2082,21 @@
                               },
                               "role": {
                                 "value": "service"
+                              },
+                              "vlan_id": {
+                                "value": 3000
+                              },
+                              "parent_interface": {
+                                "node": {
+                                  "name": {
+                                    "value": "ethernet1/1"
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "id": "member-dc1-fw-01"
+                                    }
+                                  }
+                                }
                               }
                             }
                           }
@@ -2186,6 +2201,21 @@
                               },
                               "role": {
                                 "value": "service"
+                              },
+                              "vlan_id": {
+                                "value": 3000
+                              },
+                              "parent_interface": {
+                                "node": {
+                                  "name": {
+                                    "value": "ethernet1/1"
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "id": "member-dc1-fw-02"
+                                    }
+                                  }
+                                }
                               }
                             }
                           }

@@ -240,6 +240,9 @@ fragment VirtualPort on DcimInterface {
     }
   }
   ... on DcimVirtualInterface {
+    vlan_id {
+      value
+    }
     parent_interface {
       node {
         ... on DcimPhysicalInterface {

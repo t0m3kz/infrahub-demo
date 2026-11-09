@@ -99,17 +99,20 @@ def _member_context(context: dict[str, Any], legs: list[dict[str, Any]]) -> dict
     }
 
 
-def _leg_interface(leg: dict[str, Any], vlan: int | None, index: int) -> dict[str, Any] | None:
-    """The leg as a sub-interface ``<uplink>.<transit VLAN>`` of its member (None: no VLAN, no leg)."""
+def _leg_interface(leg: dict[str, Any], vlan: int | None, index: int, member_id: str) -> dict[str, Any] | None:
+    """The leg as a sub-interface of its member's uplink tagged with the transit VLAN (None: no VLAN, no leg)."""
     if not isinstance(vlan, int):
         return None
     node = {key: leg[key] for key in ("vrf", "ip_address", "zone_capabilities") if key in leg}
+    tag = transit_vlan(vlan, _leg_ns_type(leg))
     return {
         "__typename": _VIRTUAL,
         "id": f"{leg.get('name', {}).get('value', 'leg')}-{index}",
         **node,
-        "name": {"value": f"{UPLINK}.{transit_vlan(vlan, _leg_ns_type(leg))}"},
+        "name": {"value": f"{UPLINK}.{tag}"},
         "role": {"value": "service"},
+        "vlan_id": {"value": tag},
+        "parent_interface": {"node": {"name": {"value": UPLINK}, "device": {"node": {"id": member_id}}}},
     }
 
 
@@ -127,7 +130,7 @@ def _members(contexts: list[dict[str, Any]], role: str, prefix: str) -> list[dic
     for name in names:
         interfaces: dict[str, dict[str, Any]] = {}
         for index, (context, leg) in enumerate(legs_by_member.get(name, [])):
-            iface = _leg_interface(leg, _value(context.get("vlan_id")), index)
+            iface = _leg_interface(leg, _value(context.get("vlan_id")), index, f"member-{name}")
             if iface is not None:
                 interfaces.setdefault(iface["name"]["value"], iface)
         members.append(
@@ -231,7 +234,7 @@ def _own_contexts(device: dict[str, Any]) -> None:
             owner = _value(((leg.get("device") or {}).get("node") or {}).get("name"))
             iface = own.get(_value(leg.get("name")))
             if iface is not None and owner == _value(device.get("name")):
-                for key in ("vrf", "ip_address", "zone_capabilities"):
+                for key in ("vrf", "ip_address", "zone_capabilities", "vlan_id", "parent_interface"):
                     if key in leg and not iface.get(key):
                         iface[key] = leg[key]
         context.pop("capabilities", None)

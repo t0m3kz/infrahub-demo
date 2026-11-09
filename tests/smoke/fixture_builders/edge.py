@@ -216,6 +216,7 @@ def _regular_handoff(
                 role="uplink",
                 ip_address=local_ip,
                 typename="DcimVirtualInterface",
+                vlan_id=int(iface.rsplit(".", 1)[-1]),
             ),
             "vrf": _node(routing_vrf(namespace["node"]["name"]["value"])),
             "ip_address": _node({"address": _v(local_ip), "ip_namespace": {"node": {"name": {"value": "default"}}}}),

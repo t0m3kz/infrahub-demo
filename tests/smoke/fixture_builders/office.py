@@ -157,7 +157,11 @@ def build_office_wan_exit_data(*, device_name: str, role: str) -> dict:
                 **_make_interface(
                     name=sub_interface, device_name=device_name, role="uplink", typename="DcimVirtualInterface"
                 ),
-                "parent_interface": _node({"name": _v(OFFICE_EXIT_PORT)}),
+                "device": _node({"id": f"dev-{device_name}"}),
+                "vlan_id": _v(OFFICE_EXIT_VLAN),
+                "parent_interface": _node(
+                    {"name": _v(OFFICE_EXIT_PORT), "device": _node({"id": f"dev-{device_name}"})}
+                ),
                 "ip_address": _node(
                     {
                         "address": _v(OFFICE_EXIT_SWITCH_ADDRESS),

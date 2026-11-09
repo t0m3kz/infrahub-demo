@@ -429,7 +429,9 @@ class TestHandoffCircuit:
         [
             pytest.param([FR2], [EG_FR_VLAN, AWS_VLAN], id="an-end-is-deployed-in-no-location"),
             pytest.param(
-                [FR2, EUC1], [EG_FR_VLAN, _vport("EQX-FR2-SDWAN-GW1", "eth0.3101", (XC,))], id="location-no-end-is-in"
+                [FR2, EUC1],
+                [EG_FR_VLAN, _vport("EQX-FR2-SDWAN-GW1", "eth0.3101", (XC,), parent=("eth0", ()))],
+                id="location-no-end-is-in",
             ),
             pytest.param([FR2, PA4], [EG_FR_VLAN, AWS_VLAN], id="wrong-facility"),
         ],
@@ -495,7 +497,7 @@ class TestHandoffCircuit:
 
     def test_carrier_on_the_port_itself_passes(self) -> None:
         """A handoff on an unchannelled port: the port's own circuit is the carrier."""
-        ends = [_vport("eg-fr201", "Ethernet1/13.3101", (XC,)), AWS_VLAN_NO_CARRIER]
+        ends = [_vport("eg-fr201", "Ethernet1/13.3101", (XC,), parent=("Ethernet1/13", ())), AWS_VLAN_NO_CARRIER]
         assert _run(handoffs=[_handoff("HO", None, ends)]) == []
 
     def test_one_physical_end_with_a_carrier_is_enough(self) -> None:
@@ -568,11 +570,11 @@ class TestHandoffCircuit:
         assert "has no live carrier circuit and no cable" in messages[0]
 
     def test_end_that_is_not_a_vlan_sub_interface_fails(self) -> None:
-        """A handoff end must be named <port>.<vlan> (or be a routed port); a bare port of no kind is reported."""
+        """A handoff end must be a sub-interface on a parent_interface (or a routed port); a bare port of no kind is reported."""
         ends = [EG_FR_VLAN, _vport("EXT-AWS-DX-FR2", "et-0/0/0", (XC,))]
         messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert messages == [
-            "Handoff circuit 'HO' end 'EXT-AWS-DX-FR2:et-0/0/0' is neither a VLAN sub-interface (named <port>.<vlan>) "
+            "Handoff circuit 'HO' end 'EXT-AWS-DX-FR2:et-0/0/0' is neither a sub-interface (a virtual interface on a parent_interface) "
             "nor a routed physical port (an IP address, no VLAN) nor a cloud peering interface: a physical port with "
             "no IP address and no VLAN cannot carry a handoff."
         ]

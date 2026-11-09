@@ -5,6 +5,7 @@ spec:
   kind: DcimVirtualInterface
   data:
     - name: "Ethernet1/13.1000"
+      vlan_id: 1000
       device: "eg-fr201"
       role: cloud
       status: active

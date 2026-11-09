@@ -15,7 +15,7 @@ fragment InternetEgressContext on ManagedFirewallContext {
     }
   }
   # The member firewalls with what their legs and border ports derive from (utils/service_contexts.py): the contexts
-  # they are a member of, their interfaces (the legs `<uplink>.<transit VLAN>`, with their address, VRF and link to the
+  # they are a member of, their interfaces (the legs: uplink sub-interfaces tagged with a transit VLAN, with their address, VRF and link to the
   # exchange) and the cable of the first uplink (or of the host port a hosted member's NIC is pinned to).
   shared_devices {
     edges {
@@ -71,6 +71,9 @@ fragment InternetEgressContext on ManagedFirewallContext {
                   }
                 }
                 ... on DcimVirtualInterface {
+                  vlan_id {
+                    value
+                  }
                   ip_address {
                     node {
                       id
@@ -89,6 +92,9 @@ fragment InternetEgressContext on ManagedFirewallContext {
                   parent_interface {
                     node {
                       id
+                      name {
+                        value
+                      }
                       ...EgressPortCableFields
                     }
                   }

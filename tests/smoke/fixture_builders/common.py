@@ -135,6 +135,7 @@ def _make_interface(
     remote_ip: str | None = None,
     remote_device: str | None = None,
     segments: list[dict] | None = None,
+    vlan_id: int | None = None,
 ) -> dict:
     iface: dict[str, Any] = {
         "__typename": typename,
@@ -185,6 +186,8 @@ def _make_interface(
         else:
             iface["cable"] = _node(None)
     elif typename == "DcimVirtualInterface":
+        if vlan_id is not None:
+            iface["vlan_id"] = _v(vlan_id)
         if ip_address:
             iface["ip_address"] = _node(
                 {

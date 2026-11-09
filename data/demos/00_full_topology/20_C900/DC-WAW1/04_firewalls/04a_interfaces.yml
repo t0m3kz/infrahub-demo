@@ -7,6 +7,7 @@ spec:
     - vrf: [DC-WAW1, "PROD"]
       device: c900-waw1-fw-01-prod
       name: eth1/1.3001
+      vlan_id: 3001
       parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
       role: service
       status: active
@@ -15,6 +16,7 @@ spec:
     - vrf: [DC-WAW1, "PROD"]
       device: c900-waw1-fw-02-prod
       name: eth1/1.3001
+      vlan_id: 3001
       parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
       role: service
       status: active
@@ -23,6 +25,7 @@ spec:
     - vrf: [DC-WAW1, "INTERNET"]
       device: c900-waw1-fw-01-prod
       name: eth1/1.3401
+      vlan_id: 3401
       parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
       role: service
       status: active
@@ -31,6 +34,7 @@ spec:
     - vrf: [DC-WAW1, "INTERNET"]
       device: c900-waw1-fw-02-prod
       name: eth1/1.3401
+      vlan_id: 3401
       parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
       role: service
       status: active
@@ -39,6 +43,7 @@ spec:
     - vrf: [DC-WAW1, "MANAGEMENT"]
       device: c900-waw1-fw-01-prod
       name: eth1/1.3601
+      vlan_id: 3601
       parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
       role: service
       status: active
@@ -47,6 +52,7 @@ spec:
     - vrf: [DC-WAW1, "MANAGEMENT"]
       device: c900-waw1-fw-02-prod
       name: eth1/1.3601
+      vlan_id: 3601
       parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
       role: service
       status: active

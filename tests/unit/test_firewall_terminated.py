@@ -44,7 +44,11 @@ def _segment(
 
 def _context(*segments: dict[str, Any], trunk: str | None = "eth1") -> dict[str, Any]:
     """A context in the shape get_firewall_contexts returns, with one leg on ``trunk`` (None: no leg)."""
-    legs = [{"interface": f"{trunk}.3000", "parent_interface": {"name": trunk}}] if trunk else []
+    legs = (
+        [{"interface": f"{trunk}.3000", "parent_interface": {"name": trunk, "device": {"id": "dev-fw"}}}]
+        if trunk
+        else []
+    )
     return {
         "id": "ctx-1",
         "name": "shared-fw-prod",
@@ -171,7 +175,8 @@ class TestContextShape:
                 "security_zone": {"id": "zone-prod", "name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
             },
             "name": "eth1.3000",
-            "parent_interface": {"name": "eth1"},
+            "device": {"id": "dev-fw"},
+            "parent_interface": {"name": "eth1", "device": {"id": "dev-fw"}},
             "ip_address": {"address": "10.0.0.5/29", "ip_namespace": {"node": {"name": {"value": "default"}}}},
             "capabilities": [capability],
         }
@@ -179,7 +184,7 @@ class TestContextShape:
         (context,) = fw_contexts([leg], HA)
 
         assert context["terminated_segments"] == [segment]
-        assert context["legs"][0]["parent_interface"] == {"name": "eth1"}
+        assert context["legs"][0]["parent_interface"] == {"name": "eth1", "device": {"id": "dev-fw"}}
 
     def test_a_context_without_the_field_terminates_nothing(self) -> None:
         """A cluster context (colocation) read by a query that has no terminated_segments."""

@@ -56,7 +56,7 @@ Handoff circuit (``circuit_type`` handoff: our edge port to a party device port,
        circuit, or by a DcimCable (a hop inside one facility, such as the gateway and the cage edge in one cage, is a
        cable, not a circuit; a cable has no status). A routed physical port is carried at the port itself. An end on a
        Network Edge appliance, a cloud transport or other virtual device has none and is not required to,
-    3. each end is a sub-interface named ``<port>.<vlan>`` (a VLAN), a routed physical port (a DcimPhysicalInterface
+    3. each end is a sub-interface (a virtual interface on a ``parent_interface``, its VLAN its ``vlan_id``), a routed physical port (a DcimPhysicalInterface
        with an IP address and no VLAN) or, on the cloud side, a CloudPeeringInterface (its ``vlan_id`` is optional).
        The two ends are of one shape, a cloud peering interface excepted, and the VLANs that are set are equal. A
        physical port with no IP address and no VLAN is neither and is refused.
@@ -125,7 +125,6 @@ from utils.circuit_underlay import (
     overlay_processes,
     port_cabled,
     port_underlay,
-    subinterface_vlan,
 )
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, TENANT_NAMESPACE_TYPES
@@ -148,7 +147,8 @@ INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"
 PHYSICAL_DEVICE = "DcimPhysicalDevice"
 PHYSICAL_PORT = "DcimPhysicalInterface"
-# The shape of a handoff end: a <port>.<vlan> sub-interface, a routed physical port, a cloud peering interface.
+VIRTUAL_PORT = "DcimVirtualInterface"
+# The shape of a handoff end: a sub-interface, a routed physical port, a cloud peering interface.
 SUB_INTERFACE = "sub-interface"
 ROUTED_PORT = "routed port"
 CLOUD_PEERING = "cloud peering interface"
@@ -247,14 +247,14 @@ def _carriers_label(carriers: list[dict[str, Any]]) -> str:
 def _end_shape(port: dict[str, Any]) -> tuple[str | None, int | None]:
     """(shape, VLAN) of a handoff end; the shape is None when the end is none of the three.
 
-    A cloud peering interface carries its VLAN as ``vlan_id`` (optional). Any other port named ``<port>.<vlan>`` is a
-    sub-interface; a physical port with an IP address and no VLAN is a routed port.
+    A cloud peering interface carries its VLAN as ``vlan_id`` (optional). A virtual interface riding on a
+    ``parent_interface`` is a sub-interface, its tag its ``vlan_id`` (None: untagged); a physical port with an IP
+    address and no VLAN is a routed port.
     """
     if port.get("typename") == CLOUD_PEERING_KIND:
         return CLOUD_PEERING, port.get("vlan_id")
-    vlan = subinterface_vlan(str(port.get("name") or ""))
-    if vlan is not None:
-        return SUB_INTERFACE, vlan
+    if port.get("typename") == VIRTUAL_PORT and port.get("parent_interface"):
+        return SUB_INTERFACE, port.get("vlan_id")
     if port.get("typename") == PHYSICAL_PORT and port.get("ip_address"):
         return ROUTED_PORT, None
     return None, None
@@ -574,9 +574,9 @@ class CheckCircuitPlacement(InfrahubCheck):
             self._error(
                 circuit,
                 HANDOFF,
-                f"Handoff circuit '{name}' end '{_port_label(port)}' is neither a VLAN sub-interface (named "
-                "<port>.<vlan>) nor a routed physical port (an IP address, no VLAN) nor a cloud peering interface: a "
-                "physical port with no IP address and no VLAN cannot carry a handoff.",
+                f"Handoff circuit '{name}' end '{_port_label(port)}' is neither a sub-interface (a "
+                "virtual interface on a parent_interface) nor a routed physical port (an IP address, no VLAN) nor a "
+                "cloud peering interface: a physical port with no IP address and no VLAN cannot carry a handoff.",
             )
         if unshaped:
             return

@@ -23,7 +23,9 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
         member_type=SimpleNamespace(value="address"),
     )
     members = [
-        SimpleNamespace(device_id=f"fw-{i}", offset=i + 4, trunk=SimpleNamespace(name=SimpleNamespace(value="eth1/1")))
+        SimpleNamespace(
+            device_id=f"fw-{i}", offset=i + 4, trunk=SimpleNamespace(id="trunk", name=SimpleNamespace(value="eth1/1"))
+        )
         for i in (1, 2)
     ]
     interfaces = [

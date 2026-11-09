@@ -243,7 +243,11 @@ def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
                 continue
             by_namespace.setdefault(namespace_name, []).append(iface_name)
             types[namespace_name] = namespace.get("vrf_type")
-            errors.extend(_validate_leg(label, iface_name, address, namespace.get("vrf_type"), context, exchange))
+            errors.extend(
+                _validate_leg(
+                    label, iface_name, interface.get("vlan_id"), address, namespace.get("vrf_type"), context, exchange
+                )
+            )
 
         for namespace_name, iface_names in by_namespace.items():
             if len(iface_names) != 1:
@@ -335,6 +339,7 @@ def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
 def _validate_leg(
     label: str,
     iface_name: str,
+    leg_vlan: int | None,
     address: str,
     ns_type: str | None,
     context: dict[str, Any] | None,
@@ -357,15 +362,14 @@ def _validate_leg(
         return errors
 
     context_vlan = context.get("vlan_id")
-    suffix = iface_name.rsplit(".", 1)[-1]
     if ns_type not in TRANSIT_SLOT or not isinstance(context_vlan, int):
         errors.append(
             f"{label}: leg '{iface_name}' cannot derive its transit VLAN "
             f"(namespace type '{ns_type}', context VLAN '{context_vlan}')."
         )
-    elif not suffix.isdigit() or int(suffix) != transit_vlan(context_vlan, ns_type):
+    elif leg_vlan != transit_vlan(context_vlan, ns_type):
         errors.append(
-            f"{label}: leg '{iface_name}' VLAN is '{suffix}', expected {transit_vlan(context_vlan, ns_type)} "
+            f"{label}: leg '{iface_name}' VLAN is '{leg_vlan}', expected {transit_vlan(context_vlan, ns_type)} "
             f"(context VLAN {context_vlan} in a {ns_type} namespace)."
         )
     return errors

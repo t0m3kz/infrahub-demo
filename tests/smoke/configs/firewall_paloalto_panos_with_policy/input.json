@@ -45,10 +45,23 @@
                   "role": {
                     "value": "uplink"
                   },
+                  "device": {
+                    "node": {
+                      "id": "dev-fw"
+                    }
+                  },
+                  "vlan_id": {
+                    "value": 10
+                  },
                   "parent_interface": {
                     "node": {
                       "name": {
                         "value": "ethernet1/1"
+                      },
+                      "device": {
+                        "node": {
+                          "id": "dev-fw"
+                        }
                       }
                     }
                   },
@@ -123,10 +136,23 @@
                   "role": {
                     "value": "uplink"
                   },
+                  "device": {
+                    "node": {
+                      "id": "dev-fw"
+                    }
+                  },
+                  "vlan_id": {
+                    "value": 20
+                  },
                   "parent_interface": {
                     "node": {
                       "name": {
                         "value": "ethernet1/1"
+                      },
+                      "device": {
+                        "node": {
+                          "id": "dev-fw"
+                        }
                       }
                     }
                   },
@@ -201,10 +227,23 @@
                   "role": {
                     "value": "uplink"
                   },
+                  "device": {
+                    "node": {
+                      "id": "dev-fw"
+                    }
+                  },
+                  "vlan_id": {
+                    "value": 30
+                  },
                   "parent_interface": {
                     "node": {
                       "name": {
                         "value": "ethernet1/1"
+                      },
+                      "device": {
+                        "node": {
+                          "id": "dev-fw"
+                        }
                       }
                     }
                   },

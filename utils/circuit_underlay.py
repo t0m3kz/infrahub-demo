@@ -16,13 +16,11 @@ A virtual circuit's underlay is derived, never declared. A port is carried by
 
 The session circuit kind and its ``circuit_type`` values live here once (strings, no protocols import): the
 generators, the check and the planner mapping all read :data:`SESSION_CIRCUIT_TYPES`. The two rules of a session end that the generator and the check
-must agree on are here too: the overlay BGP processes of a device (:func:`overlay_processes`) and the VLAN of a
-``<port>.<vlan>`` sub-interface (:func:`subinterface_vlan`).
+must agree on are here too: the overlay BGP processes of a device (:func:`overlay_processes`).
 """
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 DECOMMISSIONED = "decommissioned"
@@ -52,7 +50,6 @@ INTERNET_INTERFACE_KIND = "TopologyInternetInterface"
 # The facility of an ISP router: the other kind of place an internet carrier terminates on.
 ISP_KIND = "TopologyExternalProviders"
 # A handoff end is a VLAN sub-interface, <parent>.<vlan>: the VLAN lives in the name.
-_VLAN_SUBINTERFACE = re.compile(r".+\.(\d+)")
 
 
 def overlay_processes(device: dict[str, Any]) -> list[dict[str, Any]]:
@@ -64,12 +61,6 @@ def overlay_processes(device: dict[str, Any]) -> list[dict[str, Any]]:
         and process.get("typename") == BGP_PROCESS
         and process.get("process_role") == OVERLAY_ROLE
     ]
-
-
-def subinterface_vlan(name: str) -> int | None:
-    """The VLAN of a sub-interface named ``<port>.<vlan>``, None for any other name."""
-    match = _VLAN_SUBINTERFACE.fullmatch(name)
-    return int(match.group(1)) if match else None
 
 
 def is_cloud_end(port: dict[str, Any]) -> bool:

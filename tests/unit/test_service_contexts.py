@@ -56,6 +56,27 @@ def test_virtual_member_legs_sit_on_its_nic() -> None:
     assert context_legs(member) == [ContextLeg("ctx", "eth1/1.3001", "PROD")]
 
 
+def test_a_sub_interface_of_the_uplink_with_the_transit_vlan_is_a_leg_whatever_its_name() -> None:
+    """The tag is the field: a non-conventional name over ``transit_vlan(3000)`` on the uplink is the PROD leg."""
+    member = make_member("fw-1", [make_context("ctx", 3000)], subs=(("uplink-prod", 3000, "ethernet1/1"),))
+    assert context_legs(member) == [ContextLeg("ctx", "uplink-prod", "PROD")]
+
+
+def test_a_conventionally_named_sub_interface_with_another_tag_or_parent_is_no_leg() -> None:
+    """``ethernet1/1.3000`` tagged 3999, or tagged 3000 but riding on another port, or untagged, is not a leg."""
+    member = make_member(
+        "fw-1",
+        [make_context("ctx", 3000)],
+        uplinks=("ethernet1/1", "ethernet1/2"),
+        subs=(
+            ("ethernet1/1.3000", 3999, "ethernet1/1"),
+            ("ethernet1/2.3000", 3000, "ethernet1/2"),
+            ("ethernet1/1.3400", None, "ethernet1/1"),
+        ),
+    )
+    assert context_legs(member) == []
+
+
 def test_member_without_an_uplink_has_no_legs() -> None:
     """No ``role: uplink`` interface, no trunk, no leg (the generator logs it and skips the member)."""
     member = make_member("fw-1", [make_context("ctx", 3000)], uplinks=(), subs=("ethernet1/1.3000",))
@@ -173,7 +194,7 @@ def test_leg_interfaces_carry_their_member_as_device() -> None:
     (leg,) = leg_interfaces(member)["ctx"]
     assert leg["name"] == "ethernet1/1.3000"
     assert leg["ip_address"] == {"address": "100.66.0.5/29"}
-    assert leg["device"] == {"name": "fw-1", "role": "internal-firewall"}
+    assert leg["device"] == {"id": "dev-fw-1", "name": "fw-1", "role": "internal-firewall"}
 
 
 def test_leg_contexts_names_the_context_of_each_leg() -> None:

@@ -28,12 +28,14 @@ spec:
   kind: DcimVirtualInterface
   data:
     - name: "Ethernet1/12.1900"
+      vlan_id: 1900
       device: "eg-fr201"
       role: uplink
       status: active
       description: "PROD handoff to EQX-FR2-SDWAN-GW1"
       parent_interface: ["eg-fr201", "Ethernet1/12"]
     - name: "eth0.1900"
+      vlan_id: 1900
       device: "EQX-FR2-SDWAN-GW1"
       role: uplink
       status: active

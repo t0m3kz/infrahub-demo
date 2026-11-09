@@ -773,10 +773,23 @@
                   "capabilities": {
                     "edges": []
                   },
+                  "device": {
+                    "node": {
+                      "id": "dev-ds-c005-office01"
+                    }
+                  },
+                  "vlan_id": {
+                    "value": 3800
+                  },
                   "parent_interface": {
                     "node": {
                       "name": {
                         "value": "GigabitEthernet1/0/26"
+                      },
+                      "device": {
+                        "node": {
+                          "id": "dev-ds-c005-office01"
+                        }
                       }
                     }
                   },

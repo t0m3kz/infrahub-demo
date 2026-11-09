@@ -50,6 +50,8 @@ def _member(context: dict[str, Any]) -> dict[str, Any]:
             "__typename": "DcimVirtualInterface",
             "id": f"sub-{leg['namespace']}",
             "name": _v(f"eth1.{transit_vlan(3000, leg['ns_type'] or 'prod')}"),
+            "vlan_id": _v(transit_vlan(3000, leg["ns_type"] or "prod")),
+            "parent_interface": {"node": {"name": _v("eth1")}},
             "role": _v("service"),
             "ip_address": {"node": {"ip_namespace": {"node": {"name": _v("default")}}}}
             if leg["ns_type"]

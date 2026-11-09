@@ -246,18 +246,18 @@ class TransitLegsMixin:
             return incomplete
 
         sub_interfaces = {
-            (sub.device.id, sub.name.value): sub
+            (sub.device.id, sub.parent_interface.id, sub.vlan_id.value): sub
             for sub in await self.client.filters(
-                kind=DcimVirtualInterface, capabilities__ids=[context.id], include=["capabilities", "vrf.security_zone"]
+                kind=DcimVirtualInterface,
+                capabilities__ids=[context.id],
+                include=["capabilities", "parent_interface", "vrf.security_zone"],
             )
         }
         address_namespace: dict[str, str] = {}  # IpamIPAddress id -> namespace id it must be in
         for leg_type in leg_types:
             wanted = {exchange_ids[name] for name, a_type, z_type in exchange_specs if leg_type in (a_type, z_type)}
             for member in members:
-                sub = sub_interfaces.get(
-                    (member.device_id, f"{member.trunk.name.value}.{transit_vlan(vlan_id, leg_type)}")
-                )
+                sub = sub_interfaces.get((member.device_id, member.trunk.id, transit_vlan(vlan_id, leg_type)))
                 if sub is None or not sub.ip_address.id:
                     return incomplete
                 if not wanted <= {cap.id for cap in sub.capabilities.peers}:
@@ -387,7 +387,8 @@ class TransitLegsMixin:
             kind=DcimVirtualInterface,
             capabilities__ids=[context_id],
             device__ids=[member.device_id for member in members],
-            name__values=[f"{member.trunk.name.value}.{transit_vlan(vlan_id, leg_type)}" for member in members],
+            parent_interface__ids=[member.trunk.id for member in members],
+            vlan_id__value=transit_vlan(vlan_id, leg_type),
         )
         addressed = {
             interface.device.id: interface.ip_address.id for interface in interfaces if interface.ip_address.id

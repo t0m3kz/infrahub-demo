@@ -51,13 +51,18 @@ def test_device_vrfs_are_the_membership_namespaces() -> None:
     assert device_vrfs({"name": "no-vrfs"}) == []
 
 
-def test_sub_interface_parent_only_for_a_name_under_the_parent() -> None:
-    """A NIC riding on a host port is not a VLAN sub-interface of it."""
-    parent = {"name": "Ethernet5"}
+def test_sub_interface_parent_only_for_a_parent_on_the_own_device() -> None:
+    """A NIC riding on the host port of ANOTHER device is not a sub-interface of it; the name plays no part."""
+    parent = {"name": "Ethernet5", "device": {"id": "dev-1"}}
+    own = {"id": "dev-1"}
 
-    assert sub_interface_parent({"name": "Ethernet5.100", "parent_interface": parent}) == parent
-    assert sub_interface_parent({"name": "eth0", "parent_interface": parent}) is None
-    assert sub_interface_parent({"name": "Ethernet5.100", "parent_interface": None}) is None
+    assert sub_interface_parent({"name": "Ethernet5.100", "device": own, "parent_interface": parent}) == parent
+    # the name says nothing: a Junos unit, an IOS sub-interface tagged otherwise, an untagged one
+    assert sub_interface_parent({"name": "unit-7", "device": own, "parent_interface": parent}) == parent
+    assert sub_interface_parent({"name": "Ethernet5.100", "device": {"id": "vm-1"}, "parent_interface": parent}) is None
+    assert sub_interface_parent({"name": "eth0", "device": {"id": "vm-1"}, "parent_interface": parent}) is None
+    assert sub_interface_parent({"name": "Ethernet5.100", "device": own, "parent_interface": None}) is None
+    assert sub_interface_parent({"name": "Ethernet5.100", "parent_interface": parent}) is None
 
 
 def test_a_segment_in_the_capabilities_does_not_become_an_activation() -> None:

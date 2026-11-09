@@ -124,6 +124,9 @@ fragment ManagedBGPServiceFields on ManagedBGP {
                 }
               }
               ... on DcimVirtualInterface {
+                vlan_id {
+                  value
+                }
                 vrf {
                   node {
                     ...RoutingVrfFields

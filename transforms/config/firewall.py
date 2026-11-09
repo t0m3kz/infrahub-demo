@@ -64,7 +64,7 @@ def _build_fw_interfaces(
             if seg.get("name") in seg_vlan and vlan_id is None:
                 vlan_id = seg_vlan[seg["name"]]
         if vlan_id is None and parent:
-            vlan_id = int(str(iface["name"]).rsplit(".", 1)[1])
+            vlan_id = iface.get("vlan_id")
         context = leg_contexts.get(str(iface.get("name")))
         if context and not context.get("name"):
             raise ValueError(f"firewall interface {iface.get('name')!r} has an incomplete context owner")

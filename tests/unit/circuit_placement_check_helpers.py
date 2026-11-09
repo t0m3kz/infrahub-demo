@@ -147,6 +147,9 @@ def _deployment_of(device: str) -> dict[str, Any] | None:
     return {key: place[key] for key in ("id", "__typename", "name")} if place else None
 
 
+_FROM_NAME: Any = object()  # a sub-interface's VLAN tag defaults to the number its test name ends in
+
+
 def _vport(
     device: str,
     name: str,
@@ -158,7 +161,7 @@ def _vport(
     parent_cabled: bool = False,
     kind: str | None = None,
     ip_address: bool = False,
-    vlan_id: int | None = None,
+    vlan_id: int | None = _FROM_NAME,
     region: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """A virtual circuit's end port: the carrier circuits on it, the parent interface (name, circuits on it) of a
@@ -168,7 +171,8 @@ def _vport(
     sub-interface itself has no ``cable``: the query selects it on the physical interface only).
 
     ``kind`` is the port's ``__typename``, ``ip_address`` gives a physical port an address (a routed port) and
-    ``vlan_id`` a cloud peering interface its VLAN. ``region`` makes the device a cloud transport (kind
+    ``vlan_id`` a cloud peering interface or a sub-interface (one with a ``parent``) its VLAN tag, which by default
+    is the number the name ends in (None: untagged). ``region`` makes the device a cloud transport (kind
     ``device_kind``) with no deployment, placed by that region."""
     port: dict[str, Any] = {
         "id": f"id-{device}:{name}",
@@ -193,7 +197,7 @@ def _vport(
     if ip_address:
         port["ip_address"] = {"node": {"id": f"ip-{device}:{name}"}}
     if kind == "CloudPeeringInterface":
-        port["vlan_id"] = {"value": vlan_id}
+        port["vlan_id"] = {"value": None if vlan_id is _FROM_NAME else vlan_id}
     if region is not None:
         node = port["device"]["node"]
         node.pop("deployment")
@@ -204,6 +208,10 @@ def _vport(
         port["cable"] = {"node": {"id": f"cable-{device}:{name}"} if cabled else None}
     else:
         parent_name, parent_carriers = parent
+        suffix = name.rsplit(".", 1)[-1]
+        tag = int(suffix) if "." in name and suffix.isdigit() else None
+        port["__typename"] = kind or "DcimVirtualInterface"
+        port["vlan_id"] = {"value": tag if vlan_id is _FROM_NAME else vlan_id}
         port["parent_interface"] = {
             "node": {
                 "cable": {"node": {"id": f"cable-{device}:{parent_name}"} if parent_cabled else None},

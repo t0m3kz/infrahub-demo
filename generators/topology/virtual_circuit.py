@@ -107,7 +107,6 @@ from utils.circuit_underlay import (
     overlay_processes,
     port_cabled,
     session_circuits_on,
-    subinterface_vlan,
 )
 from utils.data_cleaning import clean_data
 from utils.limits import DCI_TECHNICAL_IPV4_POOL, DCI_TECHNICAL_IPV6_POOL, HANDOFF_POOL_TEMPLATE, UNDERLAY_MTU
@@ -175,6 +174,9 @@ class SessionEnd:
     processes: tuple[tuple[str, str], ...]
     overlay_ids: tuple[str, ...]
     loopbacks: tuple[Loopback, ...]
+    # The interface this port rides on (None for a port that is not a sub-interface) and its VLAN tag (None: untagged).
+    parent_id: str | None = None
+    vlan_id: int | None = None
 
     @property
     def label(self) -> str:
@@ -239,6 +241,8 @@ class SessionEnd:
             ),
             overlay_ids=tuple(process["id"] for process in overlay_processes(device) if process.get("id")),
             loopbacks=tuple(loopbacks),
+            parent_id=(port.get("parent_interface") or {}).get("id"),
+            vlan_id=port.get("vlan_id"),
         )
 
 
@@ -496,8 +500,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
     def _plan_handoff(self, circuit: dict[str, Any], name: str, ends: list[SessionEnd]) -> SessionPlan:
         """One eBGP session over the circuit's link prefix; our end (overlay process) takes the lower address."""
         for end in ends:
-            if end.port_kind != DcimVirtualInterface.__name__ or subinterface_vlan(end.port_name) is None:
-                self.fail(f"{name}: {end.label} must be a DcimVirtualInterface named <parent>.<vlan>")
+            if end.port_kind != DcimVirtualInterface.__name__ or end.parent_id is None:
+                self.fail(f"{name}: {end.label} must be a DcimVirtualInterface riding on a parent_interface")
         return self._plan_routed_link(circuit, name, ends, label="Handoff")
 
     def _plan_vpn(self, circuit: dict[str, Any], name: str, ends: list[SessionEnd]) -> SessionPlan:

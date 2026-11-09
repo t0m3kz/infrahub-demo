@@ -216,11 +216,10 @@ def get_interfaces(
             None,
         )
         # A plain routed sub-interface (e.g. the colocation edge's VRF handoff
-        # to the SD-WAN gateway) has no context capability: its tag is the
-        # name suffix, the convention every hand-authored sub-interface follows.
+        # to the SD-WAN gateway) has no context capability: its tag is its own
+        # vlan_id (None: untagged), never read off its name.
         if context_vlan_id is None and iface.get("typename") == "DcimVirtualInterface":
-            suffix = name.rpartition(".")[2] if "." in name else ""
-            context_vlan_id = int(suffix) if suffix.isdigit() else None
+            context_vlan_id = iface.get("vlan_id")
 
         # A port tagged with a context that has transit legs is a tagged trunk
         # for those VLANs; its context vlan_id is NOT a sub-interface tag here.

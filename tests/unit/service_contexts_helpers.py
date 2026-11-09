@@ -40,16 +40,38 @@ def make_member(
     *,
     role: str = "internal-firewall",
     uplinks: tuple[str, ...] = ("ethernet1/1",),
-    subs: tuple[str, ...] = (),
+    subs: tuple[str | tuple[str, int | None, str], ...] = (),
     virtual: bool = False,
 ) -> dict[str, Any]:
-    """A cleaned member device with its uplinks and the given sub-interface names."""
+    """A cleaned member device with its uplinks and the given sub-interfaces.
+
+    A sub-interface is ``"<parent>.<vlan>"`` (its ``parent_interface`` and ``vlan_id`` are read from the string, as the
+    conventional name states them; a non-numeric suffix leaves ``vlan_id`` unset) or an explicit
+    ``(name, vlan_id, parent name)`` when the name must not say what the fields say.
+    """
     kind = "DcimVirtualInterface" if virtual else "DcimPhysicalInterface"
-    interfaces = [make_iface(f"{name}:{up}", up, "uplink", kind) for up in uplinks]
-    interfaces += [make_iface(f"{name}:{sub}", sub, "service", "DcimVirtualInterface") for sub in subs]
+    device_id = f"dev-{name}"
+    interfaces = [make_iface(f"{name}:{up}", up, "uplink", kind, device={"id": device_id}) for up in uplinks]
+    for sub in subs:
+        if isinstance(sub, str):
+            parent, _, tag = sub.rpartition(".")
+            sub_name, vlan, parent_name = sub, (int(tag) if tag.isdigit() else None), parent
+        else:
+            sub_name, vlan, parent_name = sub
+        interfaces.append(
+            make_iface(
+                f"{name}:{sub_name}",
+                sub_name,
+                "service",
+                "DcimVirtualInterface",
+                vlan_id=vlan,
+                parent_interface={"name": parent_name, "device": {"id": device_id}},
+                device={"id": device_id},
+            )
+        )
     return {
         "typename": "DcimVirtualDevice" if virtual else "DcimPhysicalDevice",
-        "id": f"dev-{name}",
+        "id": device_id,
         "name": name,
         "role": role,
         "shared_capabilities": contexts,

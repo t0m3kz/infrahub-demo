@@ -111,6 +111,7 @@ def _onprem_data(
             },
             "__typename": "DcimVirtualInterface",
             "name": _v("eth1.3100"),
+            "vlan_id": _v(3100),
             "role": _v("service"),
             "ip_address": {
                 "node": {
@@ -118,7 +119,8 @@ def _onprem_data(
                     "ip_namespace": {"node": {"name": {"value": "default"}}},
                 }
             },
-            "parent_interface": {"node": {"name": _v("eth1")}},
+            "parent_interface": {"node": {"name": _v("eth1"), "device": {"node": {"id": "dev-lb-01"}}}},
+            "device": {"node": {"id": "dev-lb-01"}},
             "capabilities": _edges([]),
         },
     ]

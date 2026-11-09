@@ -387,10 +387,20 @@
                       }
                     }
                   },
+                  "device": {
+                    "node": {
+                      "id": "dev-lb"
+                    }
+                  },
                   "parent_interface": {
                     "node": {
                       "name": {
                         "value": "eth1"
+                      },
+                      "device": {
+                        "node": {
+                          "id": "dev-lb"
+                        }
                       }
                     }
                   },
@@ -424,6 +434,9 @@
                         }
                       }
                     }
+                  },
+                  "vlan_id": {
+                    "value": 3100
                   }
                 }
               },
@@ -449,10 +462,20 @@
                       }
                     }
                   },
+                  "device": {
+                    "node": {
+                      "id": "dev-lb"
+                    }
+                  },
                   "parent_interface": {
                     "node": {
                       "name": {
                         "value": "eth1"
+                      },
+                      "device": {
+                        "node": {
+                          "id": "dev-lb"
+                        }
                       }
                     }
                   },
@@ -486,6 +509,9 @@
                         }
                       }
                     }
+                  },
+                  "vlan_id": {
+                    "value": 3301
                   }
                 }
               }

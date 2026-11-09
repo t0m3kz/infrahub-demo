@@ -12,7 +12,7 @@ A DC footprint (``serving_firewall_context``), and each firewall context of a co
 
 1. exactly two member devices (``shared_devices``), both with role ``firewall`` (``external-firewall`` for the
    context a topology names as its Internet edge);
-2. for every member, an INTERNET leg: a sub-interface of the context named ``<port>.<vlan>`` (the transit VLAN of the
+2. for every member, an INTERNET leg: a sub-interface of the context tagged with ``vlan_id`` (the transit VLAN of the
    INTERNET slot, utils/exchange_transit.py) with an address in the INTERNET namespace;
 3. a ``TopologyRoutedExchange`` of the context between the tenant VRF and INTERNET, with every INTERNET leg linked to
    it (generators/firewall_context.py names it ``{context}-{A}-{Z}`` and links the legs);
@@ -127,19 +127,19 @@ def _leg_gaps(
     reported, not skipped.
     """
     member_name = _name(member)
-    suffix = f".{transit_vlan(vlan, INTERNET_TYPE)}" if vlan else None
+    wanted_vlan = transit_vlan(vlan, INTERNET_TYPE) if vlan else None
     candidates = sorted(
         (
             leg
             for leg in legs
-            if (suffix is not None and str(leg.get("name")).endswith(suffix))
+            if (wanted_vlan is not None and leg.get("vlan_id") == wanted_vlan)
             or interface_security_zone(leg).get("vrf_type") == INTERNET_TYPE
         ),
         key=_name,
     )
     if not candidates:
-        wanted = f"<port>{suffix}" if suffix else "<port>.<vlan>"
-        return [f"member '{member_name}' has no INTERNET leg (sub-interface {wanted} of the context)"]
+        wanted = f"VLAN {wanted_vlan}" if wanted_vlan is not None else "an INTERNET VLAN"
+        return [f"member '{member_name}' has no INTERNET leg (sub-interface with {wanted} of the context)"]
     leg = candidates[0]
     leg_name = f"{member_name}:{_name(leg)}"
     address = leg.get("ip_address")

@@ -91,11 +91,11 @@ class _Model:
         self._add_declared_devices()
         self._add_generated_devices()
         self.peerings = {(str(i.item["device"]), name(i)): i for i in _all(PEERING)}
-        self.parents = {
-            (str(i.item["device"]), name(i)): str(i.item["parent_interface"][1])
-            for i in _all("DcimVirtualInterface")
-            if i.item.get("parent_interface")
+        sub_interfaces = {
+            (str(i.item["device"]), name(i)): i for i in _all("DcimVirtualInterface") if i.item.get("parent_interface")
         }
+        self.parents = {key: str(i.item["parent_interface"][1]) for key, i in sub_interfaces.items()}
+        self.tags = {key: i.item.get("vlan_id") for key, i in sub_interfaces.items()}
         self.cabled: set[tuple[str, str]] = set()
         if not without_cables:
             for cable in _all("DcimCable"):
@@ -305,8 +305,11 @@ class _Model:
         if parent is None:
             node["cable"] = {"node": {"id": f"cable-{device}:{port}"} if (device, port) in self.cabled else None}
         else:
+            node["__typename"] = "DcimVirtualInterface"
+            node["vlan_id"] = {"value": self.tags[(device, port)]}
             node["parent_interface"] = {
                 "node": {
+                    "id": f"id-{device}:{parent}",
                     "cable": {"node": {"id": f"cable-{device}:{parent}"} if (device, parent) in self.cabled else None},
                     "capabilities": _edges(self.carriers_on(device, parent)),
                 }

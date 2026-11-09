@@ -443,7 +443,9 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
                     "description": _v(None),
                     "status": _v("active"),
                     "role": _v(None),
-                    "parent_interface": _node({"name": _v("ethernet1/1")}),
+                    "device": _node({"id": "dev-fw"}),
+                    "vlan_id": _v(vlan),
+                    "parent_interface": _node({"name": _v("ethernet1/1"), "device": _node({"id": "dev-fw"})}),
                     "ip_address": _node(
                         {
                             "address": _v(f"{net[5]}/{net.prefixlen}"),
@@ -573,7 +575,9 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
                 "description": _v(None),
                 "status": _v("active"),
                 "role": _v(None),
-                "parent_interface": _node({"name": _v("ethernet1/1")}),
+                "device": _node({"id": "dev-fw"}),
+                "vlan_id": _v(3002 + _XCHG_VLAN_OFFSET[ns_type]),
+                "parent_interface": _node({"name": _v("ethernet1/1"), "device": _node({"id": "dev-fw"})}),
                 "ip_address": _node(
                     {
                         "address": _v(f"{net[5]}/{net.prefixlen}"),
@@ -697,7 +701,10 @@ def build_virtual_firewall_data() -> dict:
             for physical_only in ("interface_type", "mtu", "cable", "lag"):
                 node.pop(physical_only, None)
         if node.get("parent_interface", {}).get("node"):
-            node["parent_interface"] = _node({"name": _v(rename(node["parent_interface"]["node"]["name"]["value"]))})
+            parent = node["parent_interface"]["node"]
+            node["parent_interface"] = _node(
+                {"name": _v(rename(parent["name"]["value"])), "device": parent.get("device")}
+            )
         interfaces.append(edge)
     management = _make_interface(
         name="eth0",

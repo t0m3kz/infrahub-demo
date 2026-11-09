@@ -45,8 +45,10 @@ def _leg(
     vlan: int = INTERNET_VLAN,
     namespace: tuple[str, str] | None = ("INTERNET", INTERNET_TYPE),
     exchange: str | None = "ex-1",
+    name: str | None = None,
 ) -> dict[str, Any]:
-    """The sub-interface ``<port>.<vlan>`` of a member, with an address in ``namespace`` (None: no address)."""
+    """The sub-interface of a member tagged ``vlan`` (named ``<port>.<vlan>`` unless ``name`` says otherwise), with
+    an address in ``namespace`` (None: no address)."""
     address = (
         {
             "id": f"ip-{device}-{vlan}",
@@ -59,7 +61,9 @@ def _leg(
     return {
         "id": f"leg-{device}-{vlan}",
         "typename": "DcimVirtualInterface",
-        "name": f"{port}.{vlan}",
+        "name": f"{port}.{vlan}" if name is None else name,
+        "vlan_id": vlan,
+        "parent_interface": {"name": port, "device": {"id": device}},
         "role": "firewall",
         "device": {"id": device, "name": device, "role": "internal-firewall"},
         "ip_address": address,
@@ -273,7 +277,24 @@ class TestDataCenter:
         member["interfaces"] = [i for i in member["interfaces"] if i["name"] != f"eth1.{INTERNET_VLAN}"]
         (finding,) = egress_findings(_cleaned([_dc([context])]))
         assert "member 'dc-fw-2' has no INTERNET leg" in finding
-        assert f"<port>.{INTERNET_VLAN}" in finding
+        assert f"VLAN {INTERNET_VLAN}" in finding
+
+    def test_the_leg_is_found_by_its_tag_not_its_name(self) -> None:
+        """A leg named otherwise but tagged with the INTERNET VLAN is the leg; one named .3400 over another tag is not."""
+        context = _context()
+        member = _member_of(context, "dc-fw-2")
+        leg_id = f"leg-dc-fw-2-{INTERNET_VLAN}"
+        member["interfaces"] = [
+            _leg("dc-fw-2", name="uplink-internet", exchange="ex-dc") if i["id"] == leg_id else i
+            for i in member["interfaces"]
+        ]
+        assert egress_findings(_cleaned([_dc([context])])) == []
+        member["interfaces"] = [
+            {**i, "vlan_id": 3999, "ip_address": None, "vrf": None} if i["id"] == leg_id else i
+            for i in member["interfaces"]
+        ]
+        (finding,) = egress_findings(_cleaned([_dc([context])]))
+        assert "member 'dc-fw-2' has no INTERNET leg" in finding
 
     def test_leg_without_address(self) -> None:
         """A leg of the INTERNET VLAN with no address is reported, not skipped."""
@@ -548,6 +569,8 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
                         "id": f"leg-{n}",
                         "__typename": "DcimVirtualInterface",
                         "name": value(f"eth1.{INTERNET_VLAN}"),
+                        "vlan_id": value(INTERNET_VLAN),
+                        "parent_interface": {"node": {"name": value("eth1"), "device": {"node": {"id": f"fw-{n}"}}}},
                         "role": value("firewall"),
                         "ip_address": {
                             "node": {
