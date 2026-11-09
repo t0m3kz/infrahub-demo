@@ -45,6 +45,20 @@ nodes:
         direction: inbound
         identifier: capabilities
         order_weight: 1000
+      # The interfaces the domain configures: each member's peer-link (the LAG, or the virtual peer-link) and the
+      # EOS/SONiC control SVI. NOT the ManagedGenericInterfaces edge: a node inheriting both device-edge and
+      # interface-edge generics would get two relationships called `capabilities`
+      # (tests/unit/test_capability_edge_names.py), so the interface side is a relationship of its own, one-sided
+      # (an interface has no setting of its own for the domain). Written by generators/mlag.py with RelationshipAdd.
+      - name: interfaces
+        peer: DcimInterface
+        label: "Domain Interfaces"
+        description: "Peer-link and control interfaces of both members"
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: "mlag__interfaces"
+        order_weight: 1400
     attributes:
       - name: peer_devices
         kind: Text

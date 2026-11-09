@@ -3,7 +3,9 @@
 # is in at most one domain, that a domain has exactly two distinct members and that
 # `peer_devices` names them. The rows (ManagedSegmentVlan, one per device and segment
 # deployment) and the port-channels (DcimLAGInterface) with an `mlag_domain` are read to check
-# that the two members of a domain hold equal VLAN ids and mirrored MLAG-attached LAGs.
+# that the two members of a domain hold equal VLAN ids and mirrored MLAG-attached LAGs. The domain's own `interfaces`
+# (its peer-links and control SVIs) are checked against the members, and every interface with the `mlag-peer` role
+# is read to report one the domain does not list.
 query mlag_domains {
   ManagedMLAG {
     edges {
@@ -19,6 +21,26 @@ query mlag_domains {
             }
           }
         }
+        interfaces {
+          edges {
+            node {
+              id
+              name { value }
+              role { value }
+              device { node { id name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  DcimInterface(role__value: "mlag-peer") {
+    edges {
+      node {
+        id
+        name { value }
+        device { node { id name { value } } }
       }
     }
   }

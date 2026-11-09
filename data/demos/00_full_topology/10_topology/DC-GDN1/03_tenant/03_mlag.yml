@@ -13,3 +13,10 @@ spec:
       capabilities:
         - "gdn1-leaf-01"
         - "gdn1-leaf-02"
+      # The peer-link ports of both leaves (the template's mlag-peer ports, cabled 33 to 33): the domain lists the
+      # interfaces it configures.
+      interfaces:
+        - ["gdn1-leaf-01", "Ethernet1/33"]
+        - ["gdn1-leaf-01", "Ethernet1/34"]
+        - ["gdn1-leaf-02", "Ethernet1/33"]
+        - ["gdn1-leaf-02", "Ethernet1/34"]

@@ -100,6 +100,7 @@ def _mock_mlag_obj(*, virtual_peer_link: bool = False) -> MagicMock:
     mlag_obj.id = "mlag-1"
     mlag_obj.virtual_peer_link = MagicMock(value=virtual_peer_link)
     mlag_obj.save = AsyncMock()
+    mlag_obj.add_relationships = AsyncMock()
     return mlag_obj
 
 
@@ -297,6 +298,70 @@ class TestEnsureMlagWiring:
             (dev_1.id, None, {"id": "ip-1"}),
             (dev_2.id, "svi-2", {"id": "ip-2"}),
         ]
+
+    @pytest.mark.asyncio
+    async def test_back_to_back_lists_lags_ports_and_control_svis_on_the_domain(self) -> None:
+        """One RelationshipAdd of the pair's peer-link LAGs, their ports and the control SVIs, nothing found by name."""
+        gen = _gen()
+        mlag_obj = _mock_mlag_obj()
+        dev_1, dev_2 = _mock_mlag_device("leaf-01", platform="sonic"), _mock_mlag_device("leaf-02", platform="sonic")
+        gen._allocate_control_ips = AsyncMock(return_value={dev_1.id: "ip-1", dev_2.id: "ip-2"})
+        _pair_client(
+            gen,
+            [dev_1, dev_2],
+            {
+                (DcimPhysicalInterface, "mlag-peer"): [
+                    _mock_iface("iface-1", "Ethernet0", device_id=dev_1.id),
+                    _mock_iface("iface-2", "Ethernet0", device_id=dev_2.id),
+                ],
+            },
+        )
+        _create_returning_ids(gen)
+
+        await gen.ensure_mlag_wiring(mlag_obj, "leaf-01-leaf-02-mlag", member_ids=[dev_1.id, dev_2.id])
+
+        mlag_obj.add_relationships.assert_awaited_once()
+        call = mlag_obj.add_relationships.await_args
+        assert call.kwargs["relation_to_update"] == "interfaces"
+        created = {
+            c.kwargs["data"]["name"]: c for c in gen.client.create.call_args_list if c.kwargs["kind"] is not DcimCable
+        }
+        listed = call.kwargs["related_nodes"]
+        assert {"iface-1", "iface-2"} <= set(listed)
+        assert len(listed) == len(set(listed)) == 2 + 2 + 2  # two ports, two LAGs, two control SVIs
+        assert "Vlan4094" in created
+
+    @pytest.mark.asyncio
+    async def test_virtual_lists_the_loopbacks_and_the_unused_ports(self) -> None:
+        """A virtual peer-link: the loopbacks are listed, and so are the physical mlag-peer ports (still mlag-peer)."""
+        gen = _gen()
+        mlag_obj = _mock_mlag_obj(virtual_peer_link=True)
+        dev_1, dev_2 = _mock_mlag_device("leaf-01"), _mock_mlag_device("leaf-02")
+        _pair_client(
+            gen,
+            [dev_1, dev_2],
+            {(DcimPhysicalInterface, "mlag-peer"): [_mock_iface("p1", "Ethernet1/33", device_id=dev_1.id)]},
+        )
+        _create_returning_ids(gen)
+
+        await gen.ensure_mlag_wiring(mlag_obj, "leaf-01-leaf-02-mlag", member_ids=[dev_1.id, dev_2.id])
+
+        listed = mlag_obj.add_relationships.await_args.kwargs["related_nodes"]
+        loopbacks = [c.kwargs["data"]["name"] for c in gen.client.create.call_args_list]
+        assert len(loopbacks) == 2 and len(listed) == 3 and "p1" in listed
+
+    @pytest.mark.asyncio
+    async def test_a_domain_with_nothing_to_list_adds_no_edge(self) -> None:
+        """No mlag-peer port on a back-to-back pair: no peer-link is made and no empty RelationshipAdd is sent."""
+        gen = _gen()
+        mlag_obj = _mock_mlag_obj()
+        dev_1, dev_2 = _mock_mlag_device("tor-01"), _mock_mlag_device("tor-02")
+        _pair_client(gen, [dev_1, dev_2], {})
+        _create_returning_ids(gen)
+
+        await gen.ensure_mlag_wiring(mlag_obj, "tor-01-tor-02-mlag", member_ids=[dev_1.id, dev_2.id])
+
+        mlag_obj.add_relationships.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_virtual_wires_loopback_and_skips_cable(self) -> None:

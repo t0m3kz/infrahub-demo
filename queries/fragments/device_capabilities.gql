@@ -276,45 +276,29 @@ fragment DeviceCapabilitiesFields on DcimDeviceManaged {
                   value
                 }
                 ... on DcimDevice {
-                  ... on DcimDeviceManaged {
-                    role {
-                      value
-                    }
-                    primary_address {
-                      node {
-                        address {
-                          value
-                        }
-                      }
-                    }
-                  }
-                  interfaces(role__values: ["mlag-control", "mlag-peer"]) {
-                    edges {
-                      node {
-                        name {
-                          value
-                        }
-                        role {
-                          value
-                        }
-                        ...InterfaceRoutingZoneFields
-                        ... on DcimVirtualInterface {
-                          vrf {
-                            node {
-                              ...RoutingVrfFields
-                            }
-                          }
-                          ip_address {
-                            node {
-                              address {
-                                value
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
+                  ... on DcimDeviceManaged { role { value } primary_address { node { address { value } } } }
+                }
+              }
+            }
+          }
+          # The domain's own interfaces (ManagedMLAG.interfaces): each member's peer-link and control SVI, read by
+          # transforms/helpers/mlag.py get_mlag. Each field once per object, the kind-specific ones in their own
+          # inline fragment.
+          interfaces {
+            edges {
+              node {
+                __typename
+                name { value }
+                role { value }
+                device { node { name { value } } }
+                ...InterfaceRoutingZoneFields
+                ... on DcimLAGInterface {
+                  lag_id { value }
+                  lacp_mode { value }
+                  member_interfaces { edges { node { name { value } } } }
+                }
+                ... on DcimVirtualInterface {
+                  ip_address { node { address { value } } }
                 }
               }
             }

@@ -852,7 +852,13 @@ class MyCheck(InfrahubCheck):
   a-c), M2 (exactly two distinct members: `min_count` is only enforced on update), M3 (`peer_devices` equals the
   sorted member names), M4 (both members have a VLAN row with the same `vlan_id` for every segment either has one for,
   see **VLAN rows**) and M5 (each `lag_id` has exactly one port-channel per member with equal `lacp_mode` and
-  `minimum_links`).
+  `minimum_links`) and M6 (the domain's `interfaces` belong to its members, each member has its peer-link listed, and a
+  member's `mlag-peer` interface the domain does not list is reported).
+  **A domain lists the interfaces it configures**: `ManagedMLAG.interfaces` (peer `DcimInterface`, identifier
+  `mlag__interfaces`, one-sided; not the `ManagedGenericInterfaces` edge, whose `capabilities` would collide with the
+  device edge of the same kind) holds each member's peer-link (LAG or virtual), the physical `mlag-peer` ports and the
+  control SVI, added edge by edge by `generators/mlag.py`; `get_mlag` reads them from the domain, never by role or name
+  on the device. The role `mlag-peer` stays the interface's own identity.
 - **What a deployment hosts is typed by its kind**: a device's `deployment` is its host's, and each kind of host has a generic
   of its own, so the picker and the schema refuse the rest. `TopologyDeviceHosting` (DC, pod, colocation zone, office,
   external provider) lists the physical devices and controllers (a provider's physical router lives in its

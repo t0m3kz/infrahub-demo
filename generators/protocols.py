@@ -716,6 +716,7 @@ class ManagedMLAG(ManagedGeneric, ManagedGenericDevice):
     reload_delay: Integer
     reload_delay_non_mlag: Integer
     virtual_peer_link: Boolean
+    interfaces: RelationshipManager[DcimInterface]
 
 
 class ManagedVRF(ManagedGeneric, ManagedGenericSharedDevice):

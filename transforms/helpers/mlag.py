@@ -9,14 +9,36 @@ from transforms.helpers.addressing import host_ip
 CHANNEL_GROUP_MODE = {"active": "active", "passive": "passive", "static": "on"}
 
 
-def _control_address(member: dict[str, Any]) -> tuple[str | None, str | None]:
-    """Return (interface name, address with prefix length) of the member's
-    MLAG control session: the role=mlag-control peer-link SVI, or the
-    virtual peer-link loopback (role=mlag-peer) when the domain has no
-    physical peer-link. (None, None) for vPC, which has no control session."""
+def _on_device(interfaces: list[dict[str, Any]], device_name: str) -> list[dict[str, Any]]:
+    """The domain's listed interfaces that sit on ``device_name``."""
+    return [interface for interface in interfaces if (interface.get("device") or {}).get("name") == device_name]
+
+
+def _peer_link_rank(interface: dict[str, Any]) -> tuple[int, str]:
+    """Sort key of the peer-link candidates among a member's listed ``mlag-peer`` interfaces.
+
+    The port-channel first, then the virtual peer-link, then a physical port (the LAG's member, or the port of a
+    peer-link authored without a LAG), each by name.
+    """
+    if interface.get("lag_id") is not None:
+        rank = 0
+    elif interface.get("typename") == "DcimVirtualInterface":
+        rank = 1
+    else:
+        rank = 2
+    return rank, str(interface.get("name") or "")
+
+
+def _control_address(interfaces: list[dict[str, Any]]) -> tuple[str | None, str | None]:
+    """Return (interface name, address with prefix length) of one member's MLAG control session.
+
+    ``interfaces`` are the member's interfaces listed by the domain: the control SVI (a ``mlag-control`` interface),
+    or the virtual peer-link loopback when the domain has no physical peer-link. (None, None) for vPC, which has no
+    control session.
+    """
     candidates = [
         interface
-        for interface in member.get("interfaces") or []
+        for interface in interfaces
         if interface.get("role") in {"mlag-control", "mlag-peer"} and (interface.get("ip_address") or {}).get("address")
     ]
     for interface in sorted(candidates, key=lambda interface: interface.get("role") != "mlag-control"):
@@ -40,11 +62,11 @@ def get_mlag(
     function returns the first ManagedMLAG capability found, or None if
     the device has no MLAG domain.
 
-    If interfaces are provided, the peer-link interface (role == 'mlag-peer')
-    is identified and included as peer_link in the result. The peer-link name
-    is taken directly from the database — the generator creates it with the
-    vendor-correct naming convention (Port-Channel100, port-channel100,
-    lag-100, PortChannel100, peer-link, etc.).
+    The domain's own ``interfaces`` (the ManagedMLAG edge, cleaned query data) are the peer-link and the control SVI
+    of both members; nothing is found on the device by role or name. The peer-link name is taken directly from the
+    database: the generator creates it with the vendor-correct naming convention (Port-Channel100, port-channel100,
+    lag-100, PortChannel100, peer-link, etc.). ``interfaces`` (the device's own) only tells the host-facing
+    port-channels of the domain (``mlag_domain``) from the ones the domain lists.
 
     ``virtual_peer_link`` is True when that interface is a DcimVirtualInterface:
     the generator's member-less stand-in for a pod with ``mlag_create: virtual``
@@ -61,8 +83,10 @@ def get_mlag(
         peer_link_lacp_mode = None
         peer_link_channel_group_mode = None
         peer_link_members: list[str] = []
-        peer_interfaces = [iface for iface in interfaces or [] if iface.get("role") == "mlag-peer"]
-        for iface in sorted(peer_interfaces, key=lambda iface: iface.get("lag_id") is None):
+        domain_interfaces = cap.get("interfaces") or []
+        own_interfaces = _on_device(domain_interfaces, device_name)
+        peer_interfaces = [iface for iface in own_interfaces if iface.get("role") == "mlag-peer"]
+        for iface in sorted(peer_interfaces, key=_peer_link_rank):
             iface_name = iface.get("name")
             lag_id = iface.get("lag_id")
             virtual_peer_link = iface.get("typename") == "DcimVirtualInterface"
@@ -78,8 +102,9 @@ def get_mlag(
         members = cap.get("devices") or cap.get("capabilities") or []
         own = next((member for member in members if member.get("name") == device_name), None)
         peer = next((member for member in members if member.get("name") != device_name), None) if own else None
-        control_interface, local_address = _control_address(own) if own else (None, None)
-        _, peer_address = _control_address(peer) if peer else (None, None)
+        control_interface, local_address = _control_address(own_interfaces)
+        _, peer_address = _control_address(_on_device(domain_interfaces, peer["name"])) if peer else (None, None)
+        listed_names = {interface.get("name") for interface in own_interfaces}
         mclag_interfaces = sorted(
             (
                 {
@@ -88,7 +113,7 @@ def get_mlag(
                 }
                 for interface in interfaces or []
                 if interface.get("lag_id") is not None
-                and interface.get("role") != "mlag-peer"
+                and interface.get("name") not in listed_names
                 and (interface.get("mlag_domain") or {}).get("id") == cap.get("id")
             ),
             key=lambda interface: interface["name"],

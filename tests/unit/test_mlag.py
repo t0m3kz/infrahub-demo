@@ -25,6 +25,7 @@ def _mlag_cap(
     reload_delay: int = 300,
     reload_delay_non_mlag: int = 330,
     devices: list[str] | None = None,
+    interfaces: list[dict] | None = None,
 ) -> dict:
     return {
         "typename": "ManagedMLAG",
@@ -33,11 +34,22 @@ def _mlag_cap(
         "reload_delay": reload_delay,
         "reload_delay_non_mlag": reload_delay_non_mlag,
         "devices": [{"name": d} for d in (devices or ["DC1-POD1-L1", "DC1-POD1-L2"])],
+        "interfaces": interfaces or [],
     }
+
+
+def _on(device: str, *interfaces: dict) -> list[dict]:
+    """Interfaces as the domain's ``interfaces`` edge returns them: each with the device it sits on."""
+    return [{**interface, "device": {"name": device}} for interface in interfaces]
 
 
 def _peer_link_iface(name: str = "Port-Channel100") -> dict:
     return {"name": name, "role": "mlag-peer"}
+
+
+def _domain_with(*interfaces: dict, device: str = "DC1-POD1-L1") -> list[dict]:
+    """A domain capability that lists ``interfaces`` on ``device``."""
+    return [_mlag_cap(interfaces=_on(device, *interfaces))]
 
 
 def _uplink_iface(name: str = "Ethernet1/1") -> dict:
@@ -100,23 +112,13 @@ class TestGetMlagDomainExtraction:
         """Control IPs come from the role=mlag-control SVI; management IPs stay separate."""
         cap = _mlag_cap()
         cap["devices"] = [
-            {
-                "name": "leaf-1",
-                "role": "leaf",
-                "primary_address": {"address": "192.0.2.1/32"},
-                "interfaces": [
-                    {"name": "Port-Channel100", "role": "mlag-peer"},
-                    {"name": "Vlan4094", "role": "mlag-control", "ip_address": {"address": "fd00:2400::/127"}},
-                ],
-            },
-            {
-                "name": "leaf-2",
-                "role": "leaf",
-                "primary_address": {"address": "192.0.2.2/32"},
-                "interfaces": [
-                    {"name": "Vlan4094", "role": "mlag-control", "ip_address": {"address": "fd00:2400::1/127"}},
-                ],
-            },
+            {"name": "leaf-1", "role": "leaf", "primary_address": {"address": "192.0.2.1/32"}},
+            {"name": "leaf-2", "role": "leaf", "primary_address": {"address": "192.0.2.2/32"}},
+        ]
+        cap["interfaces"] = [
+            *_on("leaf-1", {"name": "Port-Channel100", "role": "mlag-peer"}),
+            *_on("leaf-1", {"name": "Vlan4094", "role": "mlag-control", "ip_address": {"address": "fd00:2400::/127"}}),
+            *_on("leaf-2", {"name": "Vlan4094", "role": "mlag-control", "ip_address": {"address": "fd00:2400::1/127"}}),
         ]
         result = get_mlag([cap], device_name="leaf-2")
         assert result is not None
@@ -130,15 +132,14 @@ class TestGetMlagDomainExtraction:
     def test_virtual_peer_link_loopback_carries_control_address(self) -> None:
         """Without a control SVI, the addressed virtual peer-link loopback is the control interface."""
         cap = _mlag_cap()
-        cap["devices"] = [
-            {
-                "name": f"leaf-{idx}",
-                "role": "leaf",
-                "interfaces": [
-                    {"name": "Loopback100", "role": "mlag-peer", "ip_address": {"address": f"fd00:2400::{idx}/128"}}
-                ],
-            }
+        cap["devices"] = [{"name": f"leaf-{idx}", "role": "leaf"} for idx in (1, 2)]
+        cap["interfaces"] = [
+            interface
             for idx in (1, 2)
+            for interface in _on(
+                f"leaf-{idx}",
+                {"name": "Loopback100", "role": "mlag-peer", "ip_address": {"address": f"fd00:2400::{idx}/128"}},
+            )
         ]
         result = get_mlag([cap], device_name="leaf-1")
         assert result is not None
@@ -154,11 +155,16 @@ class TestGetMlagDomainExtraction:
                 "name": f"l2-{idx}",
                 "role": "l2-leaf",
                 "primary_address": {"address": f"192.0.2.{idx}/32"},
-                "interfaces": [
-                    {"name": "Vlan4094", "role": "mlag-control", "ip_address": {"address": f"10.254.0.{idx - 1}/31"}}
-                ],
             }
             for idx in (1, 2)
+        ]
+        cap["interfaces"] = [
+            interface
+            for idx in (1, 2)
+            for interface in _on(
+                f"l2-{idx}",
+                {"name": "Vlan4094", "role": "mlag-control", "ip_address": {"address": f"10.254.0.{idx - 1}/31"}},
+            )
         ]
         del cap["devices"]
         result = get_mlag([cap], device_name="l2-1")
@@ -170,10 +176,7 @@ class TestGetMlagDomainExtraction:
     def test_no_control_address_for_vpc(self) -> None:
         """vPC pairs have no control interface; only management IPs are populated."""
         cap = _mlag_cap()
-        cap["devices"] = [
-            {"name": f"nx-{idx}", "primary_address": {"address": f"192.0.2.{idx}/32"}, "interfaces": []}
-            for idx in (1, 2)
-        ]
+        cap["devices"] = [{"name": f"nx-{idx}", "primary_address": {"address": f"192.0.2.{idx}/32"}} for idx in (1, 2)]
         result = get_mlag([cap], device_name="nx-1")
         assert result is not None
         assert result["control_interface"] is None
@@ -183,44 +186,50 @@ class TestGetMlagDomainExtraction:
 
 
 class TestGetMlagPeerLink:
-    def test_peer_link_found_by_role(self) -> None:
-        ifaces = [_uplink_iface("Ethernet1/1"), _peer_link_iface("Port-Channel100")]
-        result = get_mlag([_mlag_cap()], ifaces)
+    """The peer-link is read from the domain's own listed interfaces of the rendering device."""
+
+    def test_peer_link_is_the_listed_interface_of_the_device(self) -> None:
+        listed = _domain_with(_uplink_iface("Ethernet1/1"), _peer_link_iface("Port-Channel100"))
+        result = get_mlag(listed, device_name="DC1-POD1-L1")
         assert result is not None
         assert result["peer_link"] == "Port-Channel100"
 
-    def test_no_mlag_peer_role_returns_none_peer_link(self) -> None:
-        ifaces = [_uplink_iface("Ethernet1/1"), _uplink_iface("Ethernet1/2")]
-        result = get_mlag([_mlag_cap()], ifaces)
+    def test_device_interface_with_the_peer_role_is_not_found_unless_listed(self) -> None:
+        """Nothing is found on the device by role: an unlisted mlag-peer port is not the peer-link."""
+        result = get_mlag([_mlag_cap()], [_peer_link_iface("Port-Channel100")], device_name="DC1-POD1-L1")
         assert result is not None
         assert result["peer_link"] is None
 
-    def test_peer_link_none_when_no_interfaces_passed(self) -> None:
-        result = get_mlag([_mlag_cap()])
+    def test_the_peers_listed_interface_is_not_the_peer_link(self) -> None:
+        result = get_mlag(_domain_with(_peer_link_iface(), device="DC1-POD1-L2"), device_name="DC1-POD1-L1")
         assert result is not None
         assert result["peer_link"] is None
 
-    def test_peer_link_none_when_empty_interfaces(self) -> None:
-        result = get_mlag([_mlag_cap()], [])
+    def test_no_listed_peer_interface_returns_none_peer_link(self) -> None:
+        result = get_mlag(_domain_with(_uplink_iface("Ethernet1/1")), device_name="DC1-POD1-L1")
         assert result is not None
         assert result["peer_link"] is None
 
-    def test_first_peer_link_wins_when_multiple(self) -> None:
-        ifaces = [
-            _peer_link_iface("Port-Channel100"),
-            _peer_link_iface("Port-Channel200"),
-        ]
-        result = get_mlag([_mlag_cap()], ifaces)
+    def test_peer_link_none_when_nothing_is_listed(self) -> None:
+        result = get_mlag([_mlag_cap()], device_name="DC1-POD1-L1")
+        assert result is not None
+        assert result["peer_link"] is None
+
+    def test_port_channel_wins_over_listed_ports(self) -> None:
+        listed = _domain_with(
+            {"name": "Ethernet1/33", "role": "mlag-peer", "typename": "DcimPhysicalInterface"},
+            {"name": "Port-Channel100", "role": "mlag-peer", "typename": "DcimLAGInterface", "lag_id": 100},
+        )
+        result = get_mlag(listed, device_name="DC1-POD1-L1")
         assert result is not None
         assert result["peer_link"] == "Port-Channel100"
 
-    def test_mlag_peer_ethernets_also_detected(self) -> None:
-        """Ethernet member interfaces with mlag-peer role also qualify."""
-        ifaces = [
-            {"name": "Ethernet1/33", "role": "mlag-peer"},
-            {"name": "Ethernet1/34", "role": "mlag-peer"},
-        ]
-        result = get_mlag([_mlag_cap()], ifaces)
+    def test_first_listed_port_by_name_when_there_is_no_port_channel(self) -> None:
+        """A vPC authored without a port-channel: the lowest listed mlag-peer port is the peer-link."""
+        listed = _domain_with(
+            {"name": "Ethernet1/34", "role": "mlag-peer"}, {"name": "Ethernet1/33", "role": "mlag-peer"}
+        )
+        result = get_mlag(listed, device_name="DC1-POD1-L1")
         assert result is not None
         assert result["peer_link"] == "Ethernet1/33"
 
@@ -230,21 +239,56 @@ class TestGetMlagPeerLink:
             {**_peer_link_iface(), "typename": "DcimLAGInterface", "lag_id": 100},
             _peer_link_iface(),
         ):
-            result = get_mlag([_mlag_cap()], [iface])
+            result = get_mlag(_domain_with(iface), device_name="DC1-POD1-L1")
             assert result is not None
             assert result["virtual_peer_link"] is False
 
     def test_virtual_interface_peer_link_is_flagged_virtual(self) -> None:
         """mlag_create: virtual leaves a member-less DcimVirtualInterface (loopback100) as the peer-link."""
-        result = get_mlag([_mlag_cap()], [{**_peer_link_iface("loopback100"), "typename": "DcimVirtualInterface"}])
+        listed = _domain_with(
+            {"name": "Ethernet1/33", "role": "mlag-peer", "typename": "DcimPhysicalInterface"},
+            {**_peer_link_iface("loopback100"), "typename": "DcimVirtualInterface"},
+        )
+        result = get_mlag(listed, device_name="DC1-POD1-L1")
         assert result is not None
         assert result["peer_link"] == "loopback100"
         assert result["virtual_peer_link"] is True
         assert result["peer_link_lag_id"] is None
         assert result["peer_link_members"] == []
 
+    def test_peer_link_members_come_from_the_listed_port_channel(self) -> None:
+        listed = _domain_with(
+            {
+                **_peer_link_iface(),
+                "typename": "DcimLAGInterface",
+                "lag_id": 100,
+                "lacp_mode": "active",
+                "member_interfaces": [{"name": "Ethernet1/33"}, {"name": "Ethernet1/34"}],
+            }
+        )
+        result = get_mlag(listed, device_name="DC1-POD1-L1")
+        assert result is not None
+        assert result["peer_link_members"] == ["Ethernet1/33", "Ethernet1/34"]
+
+    def test_host_port_channels_exclude_the_listed_peer_link(self) -> None:
+        """The domain's own port-channels (``mlag_domain``) are the host-facing ones, never a listed interface."""
+        listed = _domain_with({**_peer_link_iface(), "typename": "DcimLAGInterface", "lag_id": 100})
+        listed[0]["id"] = "dom-1"
+        device_interfaces = [
+            {"name": "Port-Channel100", "lag_id": 100, "mlag_domain": {"id": "dom-1"}, "member_interfaces": []},
+            {
+                "name": "Port-Channel10",
+                "lag_id": 10,
+                "mlag_domain": {"id": "dom-1"},
+                "member_interfaces": [{"name": "Ethernet1/2"}],
+            },
+        ]
+        result = get_mlag(listed, device_interfaces, device_name="DC1-POD1-L1")
+        assert result is not None
+        assert result["mclag_interfaces"] == [{"name": "Port-Channel10", "members": ["Ethernet1/2"]}]
+
     def test_no_peer_link_is_not_virtual(self) -> None:
-        result = get_mlag([_mlag_cap()], [_uplink_iface()])
+        result = get_mlag(_domain_with(_uplink_iface()), device_name="DC1-POD1-L1")
         assert result is not None
         assert result["virtual_peer_link"] is False
 
@@ -467,6 +511,12 @@ class TestDC1Pod1MLAGScenario:
                 name="DC1-POD1-L1-L2-MLAG",
                 domain_id=1,
                 devices=["DC1-POD1-L1", "DC1-POD1-L2"],
+                interfaces=_on(
+                    "DC1-POD1-L1",
+                    {"name": "Ethernet1/33", "role": "mlag-peer"},
+                    {"name": "Ethernet1/34", "role": "mlag-peer"},
+                    {"name": "Port-Channel100", "role": "mlag-peer", "lag_id": 100},
+                ),
             ),
         ]
 
@@ -480,38 +530,31 @@ class TestDC1Pod1MLAGScenario:
         ]
 
     def test_mlag_domain_extracted(self) -> None:
-        result = get_mlag(self._l1_caps(), self._l1_interfaces())
+        result = get_mlag(self._l1_caps(), self._l1_interfaces(), device_name="DC1-POD1-L1")
         assert result is not None
         assert result["name"] == "DC1-POD1-L1-L2-MLAG"
         assert result["domain_id"] == 1
 
     def test_peer_link_is_port_channel100(self) -> None:
-        result = get_mlag(self._l1_caps(), self._l1_interfaces())
+        result = get_mlag(self._l1_caps(), self._l1_interfaces(), device_name="DC1-POD1-L1")
         assert result is not None
         assert result["peer_link"] == "Port-Channel100"
 
     def test_peer_devices_include_both_leaves(self) -> None:
-        result = get_mlag(self._l1_caps(), self._l1_interfaces())
+        result = get_mlag(self._l1_caps(), self._l1_interfaces(), device_name="DC1-POD1-L1")
         assert result is not None
         assert "DC1-POD1-L1" in result["devices"]
         assert "DC1-POD1-L2" in result["devices"]
 
     def test_bgp_cap_before_mlag_does_not_block_extraction(self) -> None:
-        result = get_mlag(self._l1_caps(), self._l1_interfaces())
+        result = get_mlag(self._l1_caps(), self._l1_interfaces(), device_name="DC1-POD1-L1")
         assert result is not None
 
     def test_l2_same_domain_same_result(self) -> None:
         """Both peers share the same ManagedMLAG node — result is identical."""
-        l2_caps = [
-            {"typename": "ManagedBGP"},
-            _mlag_cap(
-                name="DC1-POD1-L1-L2-MLAG",
-                domain_id=1,
-                devices=["DC1-POD1-L1", "DC1-POD1-L2"],
-            ),
-        ]
-        result_l1 = get_mlag(self._l1_caps(), self._l1_interfaces())
-        result_l2 = get_mlag(l2_caps, self._l1_interfaces())
+        l2_caps = [{"typename": "ManagedBGP"}, self._l1_caps()[1]]
+        result_l1 = get_mlag(self._l1_caps(), self._l1_interfaces(), device_name="DC1-POD1-L1")
+        result_l2 = get_mlag(l2_caps, self._l1_interfaces(), device_name="DC1-POD1-L1")
         assert result_l1 == result_l2
 
 
@@ -520,13 +563,19 @@ class TestDC1Pod2MLAGScenario:
 
     def test_domain_id_2_extracted(self) -> None:
         caps = [_mlag_cap(name="DC1-POD2-L1-L2-MLAG", domain_id=2, devices=["DC1-POD2-L1", "DC1-POD2-L2"])]
-        result = get_mlag(caps, [_peer_link_iface("Port-Channel100")])
+        result = get_mlag(caps, device_name="DC1-POD2-L1")
         assert result is not None
         assert result["domain_id"] == 2
         assert result["name"] == "DC1-POD2-L1-L2-MLAG"
 
     def test_peer_link_port_channel100(self) -> None:
-        caps = [_mlag_cap(name="DC1-POD2-L1-L2-MLAG", domain_id=2)]
-        result = get_mlag(caps, [_peer_link_iface("Port-Channel100")])
+        caps = [
+            _mlag_cap(
+                name="DC1-POD2-L1-L2-MLAG",
+                domain_id=2,
+                interfaces=_on("DC1-POD1-L1", _peer_link_iface("Port-Channel100")),
+            )
+        ]
+        result = get_mlag(caps, device_name="DC1-POD1-L1")
         assert result is not None
         assert result["peer_link"] == "Port-Channel100"

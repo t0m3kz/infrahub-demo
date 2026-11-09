@@ -70,28 +70,6 @@
                                 "value": "172.16.0.1/32"
                               }
                             }
-                          },
-                          "interfaces": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "__typename": "DcimVirtualInterface",
-                                  "name": {
-                                    "value": "Vlan4094"
-                                  },
-                                  "role": {
-                                    "value": "mlag-control"
-                                  },
-                                  "ip_address": {
-                                    "node": {
-                                      "address": {
-                                        "value": "10.254.0.0/31"
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            ]
                           }
                         }
                       },
@@ -109,28 +87,216 @@
                                 "value": "172.16.0.2/32"
                               }
                             }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "DcimLAGInterface",
+                          "name": {
+                            "value": "PortChannel100"
                           },
-                          "interfaces": {
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "lag_id": {
+                            "value": 100
+                          },
+                          "lacp_mode": {
+                            "value": "active"
+                          },
+                          "member_interfaces": {
                             "edges": [
                               {
                                 "node": {
-                                  "__typename": "DcimVirtualInterface",
                                   "name": {
-                                    "value": "Vlan4094"
-                                  },
-                                  "role": {
-                                    "value": "mlag-control"
-                                  },
-                                  "ip_address": {
-                                    "node": {
-                                      "address": {
-                                        "value": "10.254.0.1/31"
-                                      }
-                                    }
+                                    "value": "Ethernet33"
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "Ethernet34"
                                   }
                                 }
                               }
                             ]
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L1"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet33"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L1"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet34"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L1"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimVirtualInterface",
+                          "name": {
+                            "value": "Vlan4094"
+                          },
+                          "role": {
+                            "value": "mlag-control"
+                          },
+                          "ip_address": {
+                            "node": {
+                              "address": {
+                                "value": "10.254.0.0/31"
+                              }
+                            }
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L1"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimLAGInterface",
+                          "name": {
+                            "value": "PortChannel100"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "lag_id": {
+                            "value": 100
+                          },
+                          "lacp_mode": {
+                            "value": "active"
+                          },
+                          "member_interfaces": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "Ethernet33"
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "Ethernet34"
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L2"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet33"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L2"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet34"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L2"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimVirtualInterface",
+                          "name": {
+                            "value": "Vlan4094"
+                          },
+                          "role": {
+                            "value": "mlag-control"
+                          },
+                          "ip_address": {
+                            "node": {
+                              "address": {
+                                "value": "10.254.0.1/31"
+                              }
+                            }
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L2"
+                              }
+                            }
                           }
                         }
                       }

@@ -8,6 +8,7 @@ from typing import Any, cast
 from checks.mlag_domains import (
     CheckMlagDomains,
     device_domain_errors,
+    listed_interface_errors,
     member_count_errors,
     mlag_lag_errors,
     pair_row_errors,
@@ -18,10 +19,25 @@ from utils.data_cleaning import clean_data
 from utils.segment_vlan import mlag_peer_devices
 
 
-def _domain(name: str, *devices: str, peer_devices: str | None = None) -> dict[str, Any]:
+def _peer_link(device: str, name: str = "Port-Channel100", role: str = "mlag-peer") -> dict[str, Any]:
+    """One raw interface of a device as the domain's `interfaces` edge returns it (id is 'lag-<device>-100')."""
+    return {
+        "node": {
+            "id": f"lag-{device}-100" if name == "Port-Channel100" else f"{name}-{device}",
+            "name": {"value": name},
+            "role": {"value": role},
+            "device": {"node": {"id": f"id-{device}", "name": {"value": device}}},
+        }
+    }
+
+
+def _domain(
+    name: str, *devices: str, peer_devices: str | None = None, interfaces: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """One ManagedMLAG edge whose members are the given device names (id is 'id-<name>').
 
-    `peer_devices` defaults to the value the generator writes for these members.
+    `peer_devices` defaults to the value the generator writes for these members; `interfaces` defaults to one
+    listed peer-link port-channel per member.
     """
     members = [{"node": {"id": f"id-{device}", "name": {"value": device}}} for device in devices]
     return {
@@ -30,6 +46,7 @@ def _domain(name: str, *devices: str, peer_devices: str | None = None) -> dict[s
             "name": {"value": name},
             "peer_devices": {"value": mlag_peer_devices(devices) if peer_devices is None else peer_devices},
             "capabilities": {"edges": members},
+            "interfaces": {"edges": [_peer_link(device) for device in devices] if interfaces is None else interfaces},
         }
     }
 
@@ -70,13 +87,21 @@ def _lag(
 
 
 def _raw(
-    *domains: dict[str, Any], rows: tuple[dict[str, Any], ...] = (), lags: tuple[dict[str, Any], ...] = ()
+    *domains: dict[str, Any],
+    rows: tuple[dict[str, Any], ...] = (),
+    lags: tuple[dict[str, Any], ...] = (),
+    unlisted: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
-    """The raw query response."""
+    """The raw query response: every mlag-peer interface is the ones the domains list plus `unlisted`."""
+    listed = [edge for domain in domains for edge in domain["node"]["interfaces"]["edges"]]
     return {
         "ManagedMLAG": {"edges": list(domains)},
         "ManagedSegmentVlan": {"edges": list(rows)},
         "DcimLAGInterface": {"edges": list(lags)},
+        # the query filters on the role and does not select it
+        "DcimInterface": {
+            "edges": [{"node": {k: v for k, v in edge["node"].items() if k != "role"}} for edge in [*listed, *unlisted]]
+        },
     }
 
 
@@ -96,13 +121,16 @@ def _cleaned(*domains: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _run(
-    *domains: dict[str, Any], rows: tuple[dict[str, Any], ...] = (), lags: tuple[dict[str, Any], ...] = ()
+    *domains: dict[str, Any],
+    rows: tuple[dict[str, Any], ...] = (),
+    lags: tuple[dict[str, Any], ...] = (),
+    unlisted: tuple[dict[str, Any], ...] = (),
 ) -> list[str]:
     """Run the check against canned data; return the logged errors."""
     check = cast(Any, CheckMlagDomains.__new__(CheckMlagDomains))
     errors: list[str] = []
     check.log_error = lambda message: errors.append(message)
-    check.validate(_raw(*domains, rows=rows, lags=lags))
+    check.validate(_raw(*domains, rows=rows, lags=lags, unlisted=unlisted))
     return errors
 
 
@@ -232,7 +260,7 @@ def test_m4_ignores_a_domain_that_m2_reports_and_non_members() -> None:
 
 
 def test_m5_passes_for_a_mirrored_pair_of_port_channels() -> None:
-    """One port-channel per member with equal attributes; the peer-link and a plain LAG are skipped."""
+    """One port-channel per member with equal attributes; the listed peer-link and a plain LAG are skipped."""
     lags = _lags(
         _lag(1, "a"),
         _lag(1, "b"),
@@ -281,3 +309,40 @@ def test_the_fixtures_only_emit_fields_the_query_selects() -> None:
     assert {"lag_id", "lacp_mode", "minimum_links", "role", "mlag_domain"} <= set(
         tree["DcimLAGInterface"]["edges"]["node"]
     )
+
+
+def test_m6_passes_when_each_member_lists_its_peer_link() -> None:
+    """The default domain lists one peer-link per member and every mlag-peer interface is listed."""
+    domains = _cleaned(_PAIR)
+    assert listed_interface_errors(domains, clean_data(_raw(_PAIR))["DcimInterface"]) == []
+    assert _run(_PAIR) == []
+
+
+def test_m6_fails_when_a_member_has_no_peer_link_listed() -> None:
+    """A domain that lists nothing (or only a control SVI) reports each member."""
+    bare = _domain("a-b-mlag", "a", "b", interfaces=[_peer_link("a", "Vlan4094", role="mlag-control")])
+    errors = listed_interface_errors(_cleaned(bare), [])
+    assert len(errors) == 2
+    assert all("has no peer-link listed" in error for error in errors)
+    assert "'a'" in errors[0] and "'b'" in errors[1]
+
+
+def test_m6_fails_when_a_listed_interface_is_not_of_a_member() -> None:
+    """An interface of a third device on the domain is reported with its device."""
+    stray = _domain("a-b-mlag", "a", "b", interfaces=[_peer_link("a"), _peer_link("b"), _peer_link("x", "Ethernet1")])
+    errors = listed_interface_errors(_cleaned(stray), [])
+    assert len(errors) == 1
+    assert "'Ethernet1' of 'x'" in errors[0] and "not a member" in errors[0]
+
+
+def test_m6_fails_on_a_peer_role_interface_the_domain_does_not_list() -> None:
+    """A member's mlag-peer port that the domain does not list is reported; a non-member's is not."""
+    unlisted = (_peer_link("a", "Ethernet1/34", role="mlag-peer"), _peer_link("z", "Ethernet1/34"))
+    errors = _run(_PAIR, unlisted=unlisted)
+    assert len(errors) == 1
+    assert "'Ethernet1/34' of 'a'" in errors[0] and "does not list it" in errors[0]
+
+
+def test_m6_ignores_a_domain_that_m2_reports() -> None:
+    """A one-member domain is M2's; its listed interfaces are not judged."""
+    assert listed_interface_errors(_cleaned(_domain("a-mlag", "a", interfaces=[])), []) == []

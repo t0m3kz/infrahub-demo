@@ -70,9 +70,6 @@
                                 "value": "172.16.0.1/32"
                               }
                             }
-                          },
-                          "interfaces": {
-                            "edges": []
                           }
                         }
                       },
@@ -90,9 +87,124 @@
                                 "value": "172.16.0.2/32"
                               }
                             }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet1/33"
                           },
-                          "interfaces": {
-                            "edges": []
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L1"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet1/34"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L1"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet1/33"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L2"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet1/34"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L2"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimVirtualInterface",
+                          "name": {
+                            "value": "loopback100"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "ip_address": {
+                            "node": null
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L1"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimVirtualInterface",
+                          "name": {
+                            "value": "loopback100"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "ip_address": {
+                            "node": null
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L2"
+                              }
+                            }
                           }
                         }
                       }
