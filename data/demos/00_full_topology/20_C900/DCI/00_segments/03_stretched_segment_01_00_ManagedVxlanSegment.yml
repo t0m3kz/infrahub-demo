@@ -4,7 +4,8 @@ kind: Object
 spec:
   kind: ManagedVxlanSegment
   data:
-    - owner: C900
+    - security_zone: "PROD"
+      owner: C900
       customer_name: sync
       environment: p
       stretch_scope: dc_pair

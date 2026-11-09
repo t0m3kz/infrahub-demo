@@ -12,5 +12,6 @@ spec:
   kind: TopologyCustomerOffice
   data:
     - owner: "C900"
+      lisp_site_key: "C900-OFFICE-lisp-site-key"
       parent: "Campus and Office"
       locations: ["bcn-office"]

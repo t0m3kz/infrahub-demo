@@ -56,3 +56,5 @@ spec:
     - {prefix: "10.93.255.0/24", ip_namespace: "default", status: active, description: "DC-GDN1 loopbacks"}
     - {prefix: "10.94.255.0/24", ip_namespace: "default", status: active, description: "FRA-COLO1 loopbacks"}
     - {prefix: "10.95.255.0/24", ip_namespace: "default", status: active, description: "AMS-COLO1 loopbacks"}
+    - {prefix: "10.96.255.0/24", ip_namespace: "default", status: active, description: "C900 office loopbacks"}
+    - {prefix: "10.97.255.0/24", ip_namespace: "default", status: active, description: "C901 office loopbacks"}

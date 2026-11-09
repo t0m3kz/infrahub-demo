@@ -106,7 +106,14 @@ def test_every_authored_evpn_peering_is_bound_once_without_changing_its_process_
 def test_each_overlay_process_has_one_actual_loopback_reusing_its_router_id_in_default() -> None:
     """EVPN transport is in the global table; the loopback and router ID refer to the same address."""
     processes = [process for process in _PROCESSES.values() if process["process_role"] == "overlay"]
-    assert len(processes) == len(_LOOPBACKS) == 21
+    assert len(processes) == 21
+    # The other loopbacks are the office distribution switches': LISP map-servers, addressed but running no BGP.
+    assert set(_LOOPBACKS) - {process["capabilities"][0] for process in processes} == {
+        "bcn-office-ds-01",
+        "bcn-office-ds-02",
+        "lis-office-ds-01",
+        "lis-office-ds-02",
+    }
     for process in processes:
         (device,) = process["capabilities"]
         loopback = _LOOPBACKS[device]

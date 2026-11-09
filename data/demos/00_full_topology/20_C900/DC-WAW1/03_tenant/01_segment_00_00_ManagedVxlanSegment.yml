@@ -7,7 +7,8 @@ kind: Object
 spec:
   kind: ManagedVxlanSegment
   data:
-    - owner: C900
+    - security_zone: "PROD"
+      owner: C900
       customer_name: app
       environment: p
       customer_deployments: ["C900-P-DC-WAW1"]

@@ -1,0 +1,9 @@
+---
+# The routed port of the Google Dedicated Interconnect (defined with the device in 01_physical) joins the PROD routing
+# instance of the cage: it holds the address of the link itself, so it names its VRF after 00_vrf_*.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - {device: par-colo1-edge-01, name: Ethernet1/5, vrf: [PAR, PROD]}

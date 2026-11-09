@@ -8,5 +8,6 @@ spec:
   kind: TopologyCustomerOffice
   data:
     - owner: "C901"
+      lisp_site_key: "C901-OFFICE-lisp-site-key"
       parent: "Campus and Office"
       locations: ["lis-office"]

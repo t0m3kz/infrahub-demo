@@ -568,13 +568,17 @@ query edge_config($device: String!) {
           edges {
             node {
               __typename
-              ...CircuitRoutingVrfFields
               ... on TopologySessionCircuit {
                 name {
                   value
                 }
                 circuit_type {
                   value
+                }
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
                 }
                 capabilities {
                   edges {
@@ -587,6 +591,11 @@ query edge_config($device: String!) {
                           name {
                             value
                           }
+                        }
+                      }
+                      vrf {
+                        node {
+                          ...RoutingVrfFields
                         }
                       }
                     }
