@@ -104,7 +104,7 @@ def test_nordix_is_boarded_into_aws_like_the_other_hub_tenants() -> None:
     assert network["cidr_blocks"] == [_VPC_BLOCK]
     assert tuple(_VPC_BLOCK) in _declared_prefixes()
     (block,) = [p.item for p in declared("IpamPrefix", _ALL) if p.item["prefix"] == _VPC_BLOCK[0]]
-    assert block["security_zone"] == "PROD" and block["ip_namespace"] == "default"
+    assert block["ip_namespace"] == "default" and "security_zone" not in block
 
 
 def test_the_nordix_vpc_attachment_is_a_cross_account_attachment_onto_the_hub() -> None:

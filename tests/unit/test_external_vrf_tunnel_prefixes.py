@@ -270,9 +270,10 @@ class TestEdgeQueryAndData:
             if doc
         ]
         by_kind = {doc["spec"]["kind"]: doc["spec"]["data"] for doc in documents}
-        assert {"security_zone": "PROD", "prefix": _ACME, "ip_namespace": "default"} == {
-            key: by_kind["IpamPrefix"][0][key] for key in ("prefix", "ip_namespace", "security_zone")
+        assert {"prefix": _ACME, "ip_namespace": "default"} == {
+            key: by_kind["IpamPrefix"][0][key] for key in ("prefix", "ip_namespace")
         }
+        assert "security_zone" not in by_kind["IpamPrefix"][0]
         (tunnel,) = by_kind["TopologySessionCircuit"]
         assert "owner" not in tunnel
         assert "C001-OFFICE" in tunnel["locations"]

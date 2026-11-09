@@ -96,13 +96,11 @@ class TestAllDemoData:
         registered = [prefix for office_lans in behind for prefix in office_lans]
         assert behind and registered
         assert {namespace for _, namespace in registered} == {"default"}
-        prefixes = {
-            (p["prefix"], p.get("ip_namespace", "default")): p
+        declared = {
+            (p["prefix"], p.get("ip_namespace", "default"))
             for p in _objects(_ROOT / "data" / "demos" / "30_all", "IpamPrefix")
         }
-        assert {prefixes[(prefix, namespace)]["security_zone"] for prefix, namespace in registered} == set(
-            peering["zones"]
-        )
+        assert {(prefix, namespace) for prefix, namespace in registered} <= declared
 
 
 class TestOfficeQuerySelection:
