@@ -38,7 +38,6 @@ from utils.device_services import has_pbr, overlay_pbr_bindings, pbr_bindings
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
 from utils.segment_addressing import l2_only_on, l2_only_view, segment_hosting_candidates
-from utils.segment_vlan import device_rows, row_device_ids
 from utils.service_contexts import (
     DEVICE_SERVICES_ROOT,
     attach_device_services,
@@ -49,9 +48,6 @@ from utils.service_contexts import (
 from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, svi_vlan_id
 
 _log = logging.getLogger(__name__)
-
-ROW_ACTIVATIONS_KEY = "segment_rows"
-"""The device's VLAN rows in a switch config query (DeviceSegmentRowsFields, an alias of its ``capabilities``)."""
 
 # The platforms whose BGP template (common/cisco_ios_bgp.j2) renders the session["unfiltered_banner"] comment above
 # a VRF neighbour. A hosted appliance on any other platform is refused: its template would render no banner.
@@ -182,7 +178,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
     def _device_activations(self, device: dict[str, Any]) -> list[dict[str, Any]]:
         """Segment activations of one device: from its ports' segments, the stretched segments its multi-site border
-        gateway carries, and every segment it has a VLAN row of (``segment_rows``, the device's own rows).
+        gateway carries, and every segment it has a VLAN row of (``vlans``, the device's own rows).
 
         A row is the realization of a segment on this switch, so it is the complete set: a stretched segment is
         realized on every VTEP of its sites with or without a port of it (generators/segment_vlan.py), and without the
@@ -215,7 +211,7 @@ class BaseDeviceTransform(InfrahubTransform):
             )
         activations.extend(
             self._collect_row_activations(
-                device_rows(device, ROW_ACTIVATIONS_KEY),
+                device.get("vlans") or [],
                 seen={(act.get("segment") or {}).get("id") for act in activations},
             )
         )
@@ -693,12 +689,12 @@ class BaseDeviceTransform(InfrahubTransform):
     def _own_vlan_row(deployments: list[dict], device_id: str | None) -> tuple[dict, dict] | None:
         """(row, segment deployment) of the segment's row of this device.
 
-        A row is a capability of its device (a paired device has its own row, a peer's row is
+        A row points straight at its device (a paired device has its own row, a peer's row is
         ignored). The row is a child of the deployment it sits in, so its VLAN ID and the
         deployment's VNI come from one record."""
         for deployment in deployments:
             for row in deployment.get("vlans") or []:
-                if device_id and device_id in row_device_ids(row):
+                if device_id and (row.get("device") or {}).get("id") == device_id:
                     return row, deployment
         return None
 
@@ -714,7 +710,7 @@ class BaseDeviceTransform(InfrahubTransform):
         is cardinality:many (multi-site stretch — clean_data unwraps it to a
         list, already filtered to active/provisioning by the query) and
         carries the vni and, under it, the vlans rows — the LOCAL
-        vlan_id for a VxlanSegment is the row of THIS device (its ``capabilities``;
+        vlan_id for a VxlanSegment is the row of THIS device (``row.device.id``;
         a paired device uses its own row, never its peer's)
         and the vni is its deployment's, one record for both. A VxlanSegment
         with no row for this device yet (allocation not

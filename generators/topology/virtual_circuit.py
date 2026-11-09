@@ -114,7 +114,7 @@ from utils.limits import DCI_TECHNICAL_IPV4_POOL, DCI_TECHNICAL_IPV6_POOL, HANDO
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..helpers.common import save_with_node_not_found_retry
-from ..helpers.interface_vrf import add_vrf, leave_vrfs, vrf_ids
+from ..helpers.interface_vrf import join_capabilities, leave_vrfs, vrf_ids
 from ..helpers.vrf import VrfMixin
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalInterface, DcimVirtualInterface
@@ -738,15 +738,16 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
 
         The interface comes from the device's template, not from this run: tracked, a later run that stopped
         addressing it would delete the port. A plain save() on the fetched node sends only the modified fields. The
-        VRF is the instance's interface edge: added in the interface's own save, a stale one removed edge by edge
+        VRF is the instance's interface edge, added and a stale one removed edge by edge, never in a saved list
         (generators/helpers/interface_vrf.py). The node is read with its ``capabilities``.
         """
         changed = False
         stale_vrfs: list[str] = []
+        join: list[str] = []
         if vrf_id is not None:
-            capabilities = getattr(node, "capabilities")
-            stale_vrfs = [old for old in vrf_ids(capabilities.peers) if old != vrf_id]
-            changed = add_vrf(capabilities, vrf_id)
+            peers = getattr(node, "capabilities").peers
+            stale_vrfs = [old for old in vrf_ids(peers) if old != vrf_id]
+            join = [] if vrf_id in {peer.id for peer in peers} else [vrf_id]
         if getattr(getattr(node, "ip_address", None), "id", None) != address_id:
             node.ip_address = address_id
             changed = True
@@ -761,4 +762,5 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
             changed = True
         if changed:
             await save_with_node_not_found_retry(node, self.logger, allow_upsert=False, update_group_context=False)
+        await join_capabilities(self.client, self.logger, node.id, join)
         await leave_vrfs(self.client, node.id, stale_vrfs)

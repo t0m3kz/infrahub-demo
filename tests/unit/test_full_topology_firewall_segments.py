@@ -74,6 +74,18 @@ def _vrf_zone(device: str, interface: str) -> str:
     return zone
 
 
+def _bindings(deployment: str) -> list[dict[str, Any]]:
+    """The port bindings of a hosting deployment (90_bindings/96_segment_ports): one row per segment deployment."""
+    path = _DATA / "90_bindings/96_segment_ports" / f"{deployment}.yml"
+    return [row for doc in yaml.safe_load_all(path.read_text()) if doc for row in doc["spec"]["data"]]
+
+
+def _deployment_ports(segment: str, deployment: str) -> set[tuple[str, str]]:
+    """(device, name) of the ports in the segment's deployment, as the binding lists them."""
+    (row,) = [row for row in _bindings(deployment) if row["segment"] == segment]
+    return {(port["data"]["device"], port["data"]["name"]) for port in row["capabilities"]}
+
+
 def _segment(site: str) -> dict[str, Any]:
     """The new segment as authored, without synthesizing its computed name."""
     return _items("ManagedVxlanSegment", _site(site) / "05_firewall_tenant")[0]
@@ -155,7 +167,7 @@ def _raw_segment(site: str) -> dict[str, Any]:
                     "vni": {"value": realization["vni"]},
                     "vlans": _many(
                         [
-                            {"vlan_id": {"value": row["vlan_id"]}, "capabilities": _many([{"id": row["device_name"]}])}
+                            {"vlan_id": {"value": row["vlan_id"]}, "device": _one({"id": row["device"]})}
                             for row in realization["vlans"]["data"]
                         ]
                     ),
@@ -338,7 +350,7 @@ def test_fabric_rows_are_l2_only_without_svi_gateway_l3_vni_or_new_vrf_demand(si
     _, vlan, vni = _EXPECTED[site]
     row = _items("ManagedSegmentDeployment", _site(site) / "05_firewall_tenant")[0]
     assert row["vni"] == vni and row["deployment"] == f"DC-{site.upper()}"
-    assert {v["device_name"] for v in row["vlans"]["data"]} == {
+    assert {v["device"] for v in row["vlans"]["data"]} == {
         f"{site}-leaf-01",
         f"{site}-leaf-02",
         f"{site}-bl-01",
@@ -352,7 +364,7 @@ def test_fabric_rows_are_l2_only_without_svi_gateway_l3_vni_or_new_vrf_demand(si
     assert routed_activations(activations) == []
     for switch in row["vlans"]["data"]:
         device = {
-            "name": switch["device_name"],
+            "name": switch["device"],
             "typename": "DcimPhysicalDevice",
             "role": "leaf",
             "interfaces": [],
@@ -388,26 +400,25 @@ def test_vm_port_group_and_all_upstream_trunks_keep_the_physical_host_path(site:
     group = next(pg for pg in switch["port_groups"]["data"] if pg["segment"] == segment)
     assert group["name"] == f"c900-internal-fw-{site}"
     assert group["vlan_id"] == vlan and group["nics"] == [[vm["name"], "eth0"]]
-    ports = {
-        (item["device"], item["name"]): item
-        for kind in ("DcimLAGInterface", "DcimPhysicalInterface")
-        for item in _items(kind, folder)
-    }
+    members = _deployment_ports(segment, _SITES[site])
     for uplink in switch["uplinks"]:
-        key = (uplink["data"]["device"], uplink["data"]["name"])
-        assert segment in ports[key]["segments"]
+        assert (uplink["data"]["device"], uplink["data"]["name"]) in members
     cable = next(
         item
         for item in _items("DcimCable", _site(site))
         if any(end["data"] == {"device": parent[0], "name": parent[1]} for end in item["endpoints"])
     )
     facing = next(end["data"] for end in cable["endpoints"] if end["data"]["device"] != parent[0])
-    assert segment in ports[(facing["device"], facing["name"])]["segments"]
+    assert (facing["device"], facing["name"]) in members
     for index in ("01", "02"):
-        assert segment in ports[(f"{site}-leaf-{index}", "Port-Channel10")]["segments"]
-        border = ports[(f"{site}-bl-{index}", "Ethernet1/25")]
-        assert segment in border["segments"]
-        assert not {"ip_address", "parent_interface"} & border.keys()
+        assert (f"{site}-leaf-{index}", "Port-Channel10") in members
+        assert (f"{site}-bl-{index}", "Ethernet1/25") in members
+        border = [
+            item
+            for item in _items("DcimPhysicalInterface", _DATA)
+            if (item.get("device"), item.get("name")) == (f"{site}-bl-{index}", "Ethernet1/25")
+        ]
+        assert not any({"ip_address", "parent_interface"} & item.keys() for item in border)
 
 
 @pytest.mark.parametrize("site", _SITES)
@@ -421,14 +432,14 @@ def test_upserts_preserve_existing_switch_nics_uplinks_and_allowed_segments(site
     }
     for group in old_switch["port_groups"]["data"]:
         assert group in new_switch["port_groups"]["data"]
-    for kind in ("DcimPhysicalInterface", "DcimLAGInterface"):
-        earlier = {(obj["device"], obj["name"]): obj for obj in _items(kind, _site(site) / "03_tenant")}
-        for obj in _items(kind, folder):
-            previous = earlier.get((obj["device"], obj["name"]), {})
-            assert set(previous.get("segments", [])) <= set(obj["segments"])
-            for field in ("lag_id", "lacp_mode", "minimum_links", "member_interfaces"):
-                if field in previous and field in obj:
-                    assert previous[field] == obj[field]
+    routed = next(
+        row["segment"]
+        for row in _bindings(_SITES[site])
+        if row["segment"] != _segment_name(site) and row["segment"] != "c900-sync-p"
+    )
+    # Every host-facing trunk of the routed segment carries the firewall segment too (the leaf's own access port aside).
+    trunks = {port for port in _deployment_ports(routed, _SITES[site]) if port != ("ktw1-leaf-01", "Ethernet1/1")}
+    assert trunks <= _deployment_ports(_segment_name(site), _SITES[site])
 
 
 def _port_group_load_rows() -> list[dict[str, Any]]:
@@ -522,7 +533,7 @@ def test_legacy_shared_name_loses_vm_memberships_even_with_three_distinct_hfids(
 
 def test_new_names_prefixes_vnis_vlan_rows_and_load_order_have_no_collisions() -> None:
     """Realizations/rows have their actual schema keys, reference earlier parents, and share no occupied ID."""
-    all_rows = _items("ManagedSegmentDeployment", _DATA)
+    all_rows = [row for row in _items("ManagedSegmentDeployment", _DATA) if "vlans" in row]  # not the port bindings
     for site in _SITES:
         folder = _site(site) / "05_firewall_tenant"
         segment_name = _segment_name(site)
@@ -532,7 +543,7 @@ def test_new_names_prefixes_vnis_vlan_rows_and_load_order_have_no_collisions() -
         assert not any(row["vni"] == vni and row["segment"] != segment_name for row in all_rows)
         for row in rows[0]["vlans"]["data"]:
             assert not any(
-                other["device_name"] == row["device_name"] and other["vlan_id"] == vlan
+                other["device"] == row["device"] and other["vlan_id"] == vlan
                 for other_row in all_rows
                 if other_row["segment"] != segment_name
                 for other in other_row["vlans"]["data"]
@@ -547,14 +558,11 @@ def test_new_names_prefixes_vnis_vlan_rows_and_load_order_have_no_collisions() -
             "segment__name__value",
             "deployment__name__value",
         )
-        assert human_friendly_id("ManagedSegmentVlan") == ("device_name__value", "vlan_id__value")
-        late_trunks = _DATA / "90_bindings/10_dc" / _SITES[site] / "05_firewall_tenant"
-        paths = sorted([*folder.glob("*.yml"), *late_trunks.glob("*.yml")], key=lambda path: path.name)
+        assert human_friendly_id("ManagedSegmentVlan") == ("device__name__value", "vlan_id__value")
+        paths = sorted(folder.glob("*.yml"), key=lambda path: path.name)
         assert [p.name for p in paths] == [
             "00_segment.yml",
             "00a_realization.yml",
-            "01_lag_trunks.yml",
-            "01a_port_trunks.yml",
             "02_virtual_machine.yml",
             "03_virtual_switch.yml",
         ]

@@ -1,8 +1,7 @@
 ---
-# The vPC: one port-channel per leaf (same lag_id), each with its own Ethernet1/2 as the member, the segment on both
-# (the typed port-side edge `segments`, so the segment reaches the server through the LAGs). A flat file because the
-# port-channels name the segment, which is created after the devices (the segment needs the leaf's SVI). The server's
-# bond0 is nested under the server (10_topology).
+# The vPC: one port-channel per leaf (same lag_id), each with its own Ethernet1/2 as the member. Both are members of
+# the segment's deployment in the DC (90_bindings/96_segment_ports), so the segment reaches the server through the
+# LAGs. The server's bond0 is nested under the server (10_topology).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -17,7 +16,6 @@ spec:
       minimum_links: 1
       member_interfaces:
         - ["ktw1-leaf-01", "Ethernet1/2"]
-      segments: ["c900-web-p"]
     - device: ktw1-leaf-02
       name: Port-Channel10
       description: vPC to ktw1-srv-01 (bond0)
@@ -27,4 +25,3 @@ spec:
       minimum_links: 1
       member_interfaces:
         - ["ktw1-leaf-02", "Ethernet1/2"]
-      segments: ["c900-web-p"]

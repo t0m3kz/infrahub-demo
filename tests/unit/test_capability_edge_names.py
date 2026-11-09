@@ -206,11 +206,10 @@ def test_old_name_only_remains_on_identifier_lines(root_dir: Path) -> None:
     assert not leftovers, "\n".join(leftovers[:20])
 
 
-def test_a_segment_is_not_on_the_interface_edge(schema: SchemaModel) -> None:
-    """One edge between a port and a segment: `segments` on the port, one-sided (the segment lists no ports).
-
-    The "Assigned Interfaces" tab (`capabilities` of ManagedGenericInterfaces) is gone, which also makes a segment in the
-    `capabilities` of a switch port impossible by schema (it was rule R5 of checks/interface_layers.py).
+def test_a_port_is_in_a_segment_deployment_not_in_a_segment(schema: SchemaModel) -> None:
+    """One edge between a port and a segment: the port is in the segment's DEPLOYMENT (ManagedSegmentDeployment
+    inherits the interface edge, the port's `capabilities`); the segment itself is not on the interface edge, and the
+    port-side `segments` edge is gone.
     """
     segment = "ManagedVxlanSegment"
     lineage = schema.ancestors(segment) | {segment}
@@ -226,9 +225,9 @@ def test_a_segment_is_not_on_the_interface_edge(schema: SchemaModel) -> None:
         for kind in lineage
         for rel in schema.relationships.get(kind, [])
         if "Interface" in rel["peer"]
-    ], "the segment lists no interface: a reader asks the ports (segments__ids)"
-    port_edges = [rel for rel in schema.relationships.get("DcimSwitchedInterface", []) if rel["peer"] == segment]
-    assert [(rel["name"], rel["cardinality"]) for rel in port_edges] == [("segments", "many")]
+    ], "the segment lists no interface: its deployments do"
+    assert INTERFACE_EDGE_GENERIC in schema.ancestors("ManagedSegmentDeployment")
+    assert not [rel for rel in schema.relationships.get("DcimSwitchedInterface", []) if rel["peer"] == segment]
 
 
 PANEL_KINDS = ("DcimPatchPanel", "DcimRearPatchPanelPort", "DcimFrontPatchPanelPort")

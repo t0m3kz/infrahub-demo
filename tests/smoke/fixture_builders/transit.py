@@ -11,6 +11,7 @@ from tests.smoke.fixture_builders.common import (
     _make_interface,
     _make_segment_node,
     _node,
+    _segment_memberships,
     _v,
     _write_data_fixture,
     write_data_fixtures,
@@ -225,8 +226,7 @@ def build_exchange_transit_bl_data(
     )
     if with_customer_port:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["capabilities"] = _edges([])
-        customer_port["segments"] = _edges([shared])
+        customer_port["capabilities"] = _edges(_segment_memberships([shared]))
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [_deployment_record(shared, 10100), _deployment_record(acme, 10110)]
     )
@@ -633,8 +633,8 @@ def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
                 {
                     "vlans": _edges(
                         [
-                            {"vlan_id": _v(_TERMINATED_VLAN), "capabilities": _edges([{"id": _FACING_LEAF}])},
-                            {"vlan_id": _v(205), "capabilities": _edges([{"id": "dev-dc1-leaf-01"}])},
+                            {"vlan_id": _v(_TERMINATED_VLAN), "device": _node({"id": _FACING_LEAF})},
+                            {"vlan_id": _v(205), "device": _node({"id": "dev-dc1-leaf-01"})},
                         ]
                     )
                 }

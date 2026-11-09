@@ -470,9 +470,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": [
                       {
@@ -636,9 +633,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": [
                       {
@@ -740,9 +734,6 @@
                   },
                   "cable": {
                     "node": null
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -863,14 +854,10 @@
                               "vlan_id": {
                                 "value": 100
                               },
-                              "capabilities": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "id": "dev-ds-c005-office01"
-                                    }
-                                  }
-                                ]
+                              "device": {
+                                "node": {
+                                  "id": "dev-ds-c005-office01"
+                                }
                               }
                             }
                           }
@@ -938,14 +925,10 @@
                                           "vlan_id": {
                                             "value": 100
                                           },
-                                          "capabilities": {
-                                            "edges": [
-                                              {
-                                                "node": {
-                                                  "id": "dev-ds-c005-office01"
-                                                }
-                                              }
-                                            ]
+                                          "device": {
+                                            "node": {
+                                              "id": "dev-ds-c005-office01"
+                                            }
                                           }
                                         }
                                       }
@@ -986,14 +969,10 @@
                               "vlan_id": {
                                 "value": 200
                               },
-                              "capabilities": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "id": "dev-ds-c005-office01"
-                                    }
-                                  }
-                                ]
+                              "device": {
+                                "node": {
+                                  "id": "dev-ds-c005-office01"
+                                }
                               }
                             }
                           }
@@ -1061,14 +1040,10 @@
                                           "vlan_id": {
                                             "value": 200
                                           },
-                                          "capabilities": {
-                                            "edges": [
-                                              {
-                                                "node": {
-                                                  "id": "dev-ds-c005-office01"
-                                                }
-                                              }
-                                            ]
+                                          "device": {
+                                            "node": {
+                                              "id": "dev-ds-c005-office01"
+                                            }
                                           }
                                         }
                                       }
@@ -1233,7 +1208,7 @@
           "service_ports": {
             "edges": []
           },
-          "capabilities": {
+          "vlans": {
             "edges": []
           }
         }

@@ -380,9 +380,6 @@
                   "cable": {
                     "node": null
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -425,9 +422,6 @@
                   },
                   "cable": {
                     "node": null
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -522,9 +516,6 @@
                   "cable": {
                     "node": null
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -556,9 +547,6 @@
                   },
                   "cable": {
                     "node": null
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -650,9 +638,6 @@
                   },
                   "capabilities": {
                     "edges": []
-                  },
-                  "segments": {
-                    "edges": []
                   }
                 }
               },
@@ -682,9 +667,6 @@
                   },
                   "cable": {
                     "node": null
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -744,7 +726,7 @@
           "service_ports": {
             "edges": []
           },
-          "capabilities": {
+          "vlans": {
             "edges": []
           }
         }

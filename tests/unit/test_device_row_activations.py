@@ -1,8 +1,7 @@
 """A switch renders every segment it has a VLAN row of, and a border leaf carries a stretched segment L2 only.
 
-The rows are the device's individual capabilities (``segment_rows``, an alias of ``capabilities`` in the config
-queries: queries/fragments/network_segment.gql DeviceSegmentRowsFields); transforms/common.py turns each into an
-activation after the ports' segments. A stretched segment on a border leaf gets the L2-only view
+The rows are the device's ``vlans`` (queries/fragments/network_segment.gql DeviceSegmentRowsFields);
+transforms/common.py turns each into an activation after the ports' segments. A stretched segment on a border leaf gets the L2-only view
 (utils/segment_addressing.py ``l2_only_on``): VLAN and VNI, no SVI, VRF, L3 VNI, ACL or PBR.
 """
 
@@ -11,7 +10,6 @@ from __future__ import annotations
 from typing import Any
 
 from tests.unit.base_device_transform_helpers import _make_transform
-from transforms.common import ROW_ACTIVATIONS_KEY
 from transforms.helpers.segments import _get_segment_gateways, get_vlans, routed_activations
 from utils.segment_addressing import is_fabric_l2, l2_only_on, l2_only_view, routed_segment_namespace
 
@@ -30,22 +28,21 @@ def _segment(seg_id: str, stretch_scope: str = "local", gateway: str = "10.9.0.1
 
 
 def _row(segment: dict[str, Any], vlan_id: int | None = 2500, vni: int | None = 40000) -> dict[str, Any]:
-    """A cleaned row of the device (a ``capabilities`` entry of kind ManagedSegmentVlan)."""
+    """A cleaned row of the device (one of its ``vlans``)."""
     return {
-        "typename": "ManagedSegmentVlan",
         "vlan_id": vlan_id,
         "segment_deployment": {"vni": vni, "segment": segment},
     }
 
 
 def _device(role: str, rows: list[dict[str, Any]], interfaces: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """A cleaned switch with its rows under the config query's alias; a BGP process sits on the same edge."""
+    """A cleaned switch with its rows."""
     return {
         "id": "dev-1",
         "name": "sw-1",
         "role": role,
         "interfaces": interfaces or [],
-        ROW_ACTIVATIONS_KEY: [{"typename": "ManagedBGP"}, *rows],
+        "vlans": rows,
     }
 
 
@@ -55,15 +52,19 @@ class TestRowActivations:
         activations = _make_transform("leaf")._device_activations(_device("leaf", [_row(_segment("sync", "dc_pair"))]))
         assert [(act["vlan_id"], act["vni"], act["segment"]["id"]) for act in activations] == [(2500, 40000, "sync")]
 
-    def test_only_rows_count_not_the_other_capabilities(self) -> None:
-        """The alias returns every capability of the device; only the rows are activations."""
+    def test_a_device_without_rows_has_no_row_activation(self) -> None:
+        """No row, no port: nothing to render."""
         assert _make_transform("leaf")._device_activations(_device("leaf", [])) == []
 
     def test_a_port_activation_comes_first_and_the_row_of_its_segment_adds_nothing(self) -> None:
         """Ports first: a segment a port carries keeps the activation (and flags) the port produced."""
         segment = _segment("web")
         port_segment = {**segment, "segment_deployments": [{"vni": 10100, "vlans": [_port_row(100)]}]}
-        device = _device("leaf", [_row(segment, 100, 10100)], [{"name": "Ethernet1", "segments": [port_segment]}])
+        port = {
+            "name": "Ethernet1",
+            "capabilities": [{"typename": "ManagedSegmentDeployment", "segment": port_segment}],
+        }
+        device = _device("leaf", [_row(segment, 100, 10100)], [port])
         activations = _make_transform("leaf")._device_activations(device)
         assert len(activations) == 1 and activations[0]["segment"] is port_segment
 
@@ -75,7 +76,7 @@ class TestRowActivations:
 
 def _port_row(vlan_id: int) -> dict[str, Any]:
     """The row of ``dev-1`` under a port segment's deployment."""
-    return {"vlan_id": vlan_id, "capabilities": [{"id": "dev-1"}]}
+    return {"vlan_id": vlan_id, "device": {"id": "dev-1"}}
 
 
 class TestBorderLeafCarriesAStretchedSegmentL2Only:

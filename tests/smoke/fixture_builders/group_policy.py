@@ -120,6 +120,12 @@ def _gp_segment(
     return segment
 
 
+def _tag_memberships(segments: list[dict]) -> list[dict]:
+    """A far-end port's capability entries for the segments it is tagged with (HostNicFields: the segment
+    deployment's segment id)."""
+    return [{"__typename": "ManagedSegmentDeployment", "segment": _node(segment)} for segment in segments]
+
+
 def _gp_nic(
     host: str,
     nic: str,
@@ -147,8 +153,8 @@ def _gp_nic(
         "name": _v(port),
         "role": _v(far_role or ("lag" if lag else "server")),
         "device": _node({"name": _v(switch)}),
-        "segments": _edges([] if lag else tagged),
-        "lag": _node({"name": _v(lag), "segments": _edges(tagged)} if lag else None),
+        "capabilities": _edges([] if lag else _tag_memberships(tagged)),
+        "lag": _node({"name": _v(lag), "capabilities": _edges(_tag_memberships(tagged))} if lag else None),
     }
     return {"id": near["id"], "name": _v(nic), "cable": _node({"endpoints": _edges([near, far])})}
 

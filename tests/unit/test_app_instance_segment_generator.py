@@ -102,7 +102,7 @@ class TestGenerate:
     def _ready(*, added: int = 0, removed: int = 0) -> Any:
         gen = _gen_with_lock()
         gen._fetch_segment_vlan_state = AsyncMock(
-            return_value={"segment": {"id": "seg-1", "ports": []}, "activations": {}}
+            return_value={"segment": {"id": "seg-1", "ports": []}, "deployments": []}
         )
         gen._reconcile_segment_interface_tags = AsyncMock(return_value=(added, removed))
         gen._reconcile_segment_vlans_locked = AsyncMock(return_value=False)
@@ -283,15 +283,24 @@ class TestReconcileSegmentInterfaceTags:
         gen._customer_facing_target_ids = AsyncMock(
             side_effect=lambda device_ids: {t for device_id in device_ids for t in targets_by_device.get(device_id, [])}
         )
+        # Every derived port's device sits under the segment's one deployment.
+        gen._port_deployment_targets = AsyncMock(side_effect=lambda ids, _deployments: dict.fromkeys(ids, "sd-1"))
         return gen, mutations
 
     @staticmethod
     def _reconcile(gen: Any, current: dict[str, str | None]) -> tuple[int, int]:
         """Reconcile with ports on the segment today, ``{port id: source account id}``."""
-        ports = [{"id": port_id, "device_id": "dev", "source_id": source} for port_id, source in current.items()]
+        ports = [
+            {"id": port_id, "device_id": "dev", "deployment_id": "sd-1", "source_id": source}
+            for port_id, source in current.items()
+        ]
         return asyncio.run(
             gen._reconcile_segment_interface_tags(
-                segment_id="seg-1", segment_name="seg", ports=ports, terminated_port_ids=set()
+                segment_id="seg-1",
+                segment_name="seg",
+                ports=ports,
+                terminated_port_ids=set(),
+                device_deployments={"pod-1": "sd-1"},
             )
         )
 
@@ -312,7 +321,7 @@ class TestReconcileSegmentInterfaceTags:
         # One resolution for every host of the segment (a VM resolves to its host, deduped).
         gen._customer_facing_target_ids.assert_awaited_once_with(["dev-1", "dev-2"])
         assert [(m["mutation"], m["id"], m["name"], m["nodes"]) for m in mutations] == [
-            ("RelationshipAdd", port, "segments", [{"id": "seg-1", "_relation__source": "acct-gen"}])
+            ("RelationshipAdd", port, "capabilities", [{"id": "sd-1", "_relation__source": "acct-gen"}])
             for port in ("if-a", "po-b")
         ]
         component_call = next(c for c in gen.client.execute_graphql.await_args_list if "variables" in c.kwargs)

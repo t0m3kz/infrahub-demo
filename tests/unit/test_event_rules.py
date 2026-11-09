@@ -373,8 +373,8 @@ def test_the_session_generator_is_registered_in_infrahub_yml() -> None:
 
 
 def test_a_change_of_the_segment_ports_runs_nothing() -> None:
-    """The port-to-segment edge is one-sided (`segments` on the port): nothing re-runs on it, so the reconcile's own
-    writes raise no echo run (the next run of the segment's generators picks up an edge a person added)."""
+    """A port's segment deployment (its interface `capabilities`) re-runs nothing, so the reconcile's own writes raise
+    no echo run (the next run of the segment's generators picks up an edge a person added)."""
     for rule in trigger_rules():
         assert "switched" not in str(rule), rule["name"]
         assert "segments" not in [field for _kind, field in _match_fields(rule)], rule["name"]

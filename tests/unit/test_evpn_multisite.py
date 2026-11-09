@@ -465,8 +465,8 @@ def _deployment_entry(seg_id: str, *, scope: str = "metro", vni: int | None = 10
     return {
         "vni": vni,
         "vlans": [
-            {"vlan_id": 200, "capabilities": [{"id": "other"}]},
-            {"vlan_id": 100, "capabilities": [{"id": device}]},
+            {"vlan_id": 200, "device": {"id": "other"}},
+            {"vlan_id": 100, "device": {"id": device}},
         ],
         "segment": {"id": seg_id, "stretch_scope": scope},
     }

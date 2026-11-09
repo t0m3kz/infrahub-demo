@@ -12,7 +12,7 @@ from typing import Any
 
 from checks.base import WarningCheck
 from utils.data_cleaning import clean_data
-from utils.segment_vlan import row_device, shared_vlan_id, shared_vni_band
+from utils.segment_vlan import shared_vlan_id, shared_vni_band
 
 SHARED = "shared"
 
@@ -42,7 +42,7 @@ def shared_vlan_errors(segments: list[dict[str, Any]], deployments: list[dict[st
         for item in items:
             for row in item.get("vlans") or []:
                 if row.get("vlan_id") != expected:
-                    device = row_device(row).get("name") or row_device(row).get("id")
+                    device = (row.get("device") or {}).get("name") or (row.get("device") or {}).get("id")
                     errors.append(
                         (
                             f"SV1: shared segment '{name}' has VLAN {row.get('vlan_id')} on '{device}', "

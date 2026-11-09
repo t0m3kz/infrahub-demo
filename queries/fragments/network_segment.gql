@@ -70,7 +70,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
             edges {
               node {
                 vlan_id { value }
-                capabilities { edges { node { id } } }
+                device { node { id } }
               }
             }
           }
@@ -127,7 +127,7 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
           edges {
             node {
               vlan_id { value }
-              capabilities { edges { node { id } } }
+              device { node { id } }
             }
           }
         }
@@ -205,31 +205,27 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
   }
 }
 
-# The segments a switch carries: its own VLAN rows (individual capabilities of kind ManagedSegmentVlan), each with the
-# VNI of its realization and the segment. Aliased (`segment_rows`): the device's `capabilities` are selected once
-# already (DeviceCapabilitiesFields) and a second selection of the same key would come back empty. Read nested from the
-# device, so the answer is what THIS switch realizes and nothing else; transforms/common.py _collect_row_activations
-# turns a row into an activation (a stretched segment is realized on every VTEP with or without a port of it, so ports
-# alone miss it).
+# The segments a switch carries: its own VLAN rows (`vlans`), each with the VNI of its realization and the segment.
+# Read nested from the device, so the answer is what THIS switch realizes and nothing else; transforms/common.py
+# _collect_row_activations turns a row into an activation (a stretched segment is realized on every VTEP with or
+# without a port of it, so ports alone miss it). The one selection of `vlans` on the device object of a switch config
+# query (DeviceServicesFields reads the rows on its own root, DeviceServices).
 fragment DeviceSegmentRowsFields on DcimDevice {
-  ... on DcimDeviceManaged {
-    segment_rows: capabilities {
+  ... on DcimPhysicalDevice {
+    vlans {
       edges {
         node {
-          __typename
-          ... on ManagedSegmentVlan {
-            vlan_id {
-              value
-            }
-            segment_deployment {
-              node {
-                vni {
-                  value
-                }
-                segment {
-                  node {
-                    ...NetworkSegmentFields
-                  }
+          vlan_id {
+            value
+          }
+          segment_deployment {
+            node {
+              vni {
+                value
+              }
+              segment {
+                node {
+                  ...NetworkSegmentFields
                 }
               }
             }

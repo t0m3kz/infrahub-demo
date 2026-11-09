@@ -15,6 +15,7 @@ import pytest
 
 from tests.smoke.fixture_builders.common import run_transform
 from tests.unit.cisco_xe_platform_helpers import _golden_input, _make_transform
+from tests.unit.segment_port_helpers import raw_port_segments
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.access_switch import AccessSwitch
@@ -72,7 +73,7 @@ def _host_segment(data: dict[str, Any]) -> dict[str, Any]:
     """The raw first segment node carried by Ethernet10 of a golden input."""
     interfaces = data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]
     port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-    return port["segments"]["edges"][0]["node"]
+    return raw_port_segments(port)[0]
 
 
 class TestCiscoXeAclTranslation:

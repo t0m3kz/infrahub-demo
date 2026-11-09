@@ -266,7 +266,7 @@ class TestLeafPbrRules:
             "segment_deployments": [
                 {
                     "vni": 10100,
-                    "vlans": [{"vlan_id": 100, "capabilities": [{"id": "dev-1"}]}],
+                    "vlans": [{"vlan_id": 100, "device": {"id": "dev-1"}}],
                     "segment": {"id": "seg-100", "stretch_scope": "dc_pair"},
                 }
             ]

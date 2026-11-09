@@ -103,8 +103,8 @@ class TestSegmentReconcile:
         """segment_vlans.gql returns the device with the row: no further read."""
         gen = _segment_gen()
         rows = [
-            {"node": {"id": "r1", "vlan_id": {"value": 100}, "capabilities": {"edges": [{"node": {"id": "m1"}}]}}},
-            {"node": {"id": "r2", "vlan_id": {"value": 100}, "capabilities": {"edges": [{"node": {"id": "solo"}}]}}},
+            {"node": {"id": "r1", "vlan_id": {"value": 100}, "device": {"node": {"id": "m1"}}}},
+            {"node": {"id": "r2", "vlan_id": {"value": 100}, "device": {"node": {"id": "solo"}}}},
         ]
         gen.client.execute_graphql = AsyncMock(
             return_value={

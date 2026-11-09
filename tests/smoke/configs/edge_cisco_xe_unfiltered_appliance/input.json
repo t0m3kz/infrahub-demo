@@ -1566,7 +1566,7 @@
           "service_ports": {
             "edges": []
           },
-          "capabilities": {
+          "vlans": {
             "edges": []
           }
         }

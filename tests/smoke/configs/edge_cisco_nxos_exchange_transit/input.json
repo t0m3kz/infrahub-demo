@@ -1032,9 +1032,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1127,9 +1124,6 @@
                         ]
                       }
                     }
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -1268,14 +1262,10 @@
                               "vlan_id": {
                                 "value": 100
                               },
-                              "capabilities": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "id": "dev-dc1-edge-01"
-                                    }
-                                  }
-                                ]
+                              "device": {
+                                "node": {
+                                  "id": "dev-dc1-edge-01"
+                                }
                               }
                             }
                           }
@@ -1343,14 +1333,10 @@
                                           "vlan_id": {
                                             "value": 100
                                           },
-                                          "capabilities": {
-                                            "edges": [
-                                              {
-                                                "node": {
-                                                  "id": "dev-dc1-edge-01"
-                                                }
-                                              }
-                                            ]
+                                          "device": {
+                                            "node": {
+                                              "id": "dev-dc1-edge-01"
+                                            }
                                           }
                                         }
                                       }
@@ -1397,14 +1383,10 @@
                               "vlan_id": {
                                 "value": 110
                               },
-                              "capabilities": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "id": "dev-dc1-edge-01"
-                                    }
-                                  }
-                                ]
+                              "device": {
+                                "node": {
+                                  "id": "dev-dc1-edge-01"
+                                }
                               }
                             }
                           }
@@ -1472,14 +1454,10 @@
                                           "vlan_id": {
                                             "value": 110
                                           },
-                                          "capabilities": {
-                                            "edges": [
-                                              {
-                                                "node": {
-                                                  "id": "dev-dc1-edge-01"
-                                                }
-                                              }
-                                            ]
+                                          "device": {
+                                            "node": {
+                                              "id": "dev-dc1-edge-01"
+                                            }
                                           }
                                         }
                                       }
@@ -2221,7 +2199,7 @@
               }
             ]
           },
-          "capabilities": {
+          "vlans": {
             "edges": []
           }
         }

@@ -1,6 +1,6 @@
 """Unit tests for the readers of an interface's VXLAN segments and a device's VRF memberships.
 
-A switch port or LAG carries its segments on ``segments`` (DcimSwitchedInterface); nothing is read from
+A switch port or LAG carries a segment as a member of the segment's deployment, a ManagedSegmentDeployment among its
 ``capabilities``; a device's VRF set is ``vrfs`` (its memberships), never ``capabilities``.
 """
 
@@ -9,31 +9,33 @@ from __future__ import annotations
 from typing import Any
 
 from tests.smoke.fixture_builders.common import make_transform
+from tests.unit.segment_port_helpers import deployment_caps
 from transforms.config.leaf import Leaf
 from transforms.helpers.addressing import sub_interface_parent
 from transforms.helpers.segments import interface_segments
 from transforms.helpers.vrf import device_vrfs
 
 _SEG = {"id": "seg-1", "name": "web", "typename": "ManagedVxlanSegment"}
-_SEG_OLD = {"id": "seg-2", "name": "app", "typename": "ManagedVxlanSegment"}
+_SEG_DIRECT = {"id": "seg-2", "name": "app", "typename": "ManagedVxlanSegment"}
 _OTHER = {"id": "ospf-1", "name": "ospf-eth1", "typename": "RoutingOSPFInterface"}
 
 
-def test_a_switch_port_reads_its_segments_edge() -> None:
-    """The port's L2 membership is ``segments``."""
-    assert interface_segments({"name": "Ethernet10", "segments": [_SEG], "capabilities": [_OTHER]}) == [_SEG]
+def test_a_switch_port_reads_the_segment_of_its_deployment() -> None:
+    """The port's L2 membership is the deployment among its capabilities; the other capabilities are not segments."""
+    assert interface_segments({"name": "Ethernet10", "capabilities": [_OTHER, *deployment_caps(_SEG)]}) == [_SEG]
 
 
-def test_a_segment_among_the_capabilities_is_ignored() -> None:
-    """An old-style segment entry on ``capabilities`` is not read, on a sub-interface or on a port."""
-    assert interface_segments({"name": "eth1.210", "capabilities": [_OTHER, _SEG_OLD]}) == []
-    assert interface_segments({"name": "Ethernet10", "segments": [_SEG], "capabilities": [_SEG_OLD]}) == [_SEG]
+def test_a_segment_directly_among_the_capabilities_is_ignored() -> None:
+    """A segment is never on the interface edge: only a deployment's segment is read."""
+    assert interface_segments({"name": "eth1.210", "capabilities": [_OTHER, _SEG_DIRECT]}) == []
+    assert interface_segments({"name": "Ethernet10", "capabilities": [_SEG_DIRECT, *deployment_caps(_SEG)]}) == [_SEG]
 
 
 def test_an_interface_without_the_edge_has_no_segment() -> None:
-    """A missing or empty edge is an empty list, never an error."""
+    """A missing or empty edge is an empty list, never an error; a deployment without its segment adds none."""
     assert interface_segments({"name": "Loopback0"}) == []
-    assert interface_segments({"name": "Ethernet1", "segments": None, "capabilities": None}) == []
+    assert interface_segments({"name": "Ethernet1", "capabilities": None}) == []
+    assert interface_segments({"name": "Ethernet1", "capabilities": [{"typename": "ManagedSegmentDeployment"}]}) == []
 
 
 def test_device_vrfs_are_the_membership_namespaces() -> None:
@@ -66,15 +68,15 @@ def test_sub_interface_parent_only_for_a_parent_on_the_own_device() -> None:
 
 
 def test_a_segment_in_the_capabilities_does_not_become_an_activation() -> None:
-    """The activation collector reads ``segments`` only."""
+    """The activation collector reads the ports' deployments only."""
     seg = {
         **_SEG,
-        "segment_deployments": [{"vni": 10100, "vlans": [{"capabilities": [{"id": "d"}], "vlan_id": 100}]}],
+        "segment_deployments": [{"vni": 10100, "vlans": [{"device": {"id": "d"}, "vlan_id": 100}]}],
     }
     other = {**seg, "id": "seg-9", "name": "legacy"}
     transform = make_transform(Leaf)
     activations = transform._collect_activations_from_interfaces(
-        [{"name": "Ethernet10", "segments": [seg], "capabilities": [other]}], device_id="d"
+        [{"name": "Ethernet10", "capabilities": [other, *deployment_caps(seg)]}], device_id="d"
     )
 
     assert [a["segment"]["id"] for a in activations] == ["seg-1"]

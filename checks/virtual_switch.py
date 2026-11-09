@@ -5,8 +5,8 @@ VLANs of it and the fabric segments those are (schemas/extensions/service/virtua
 
 VS1  the uplinks are ports (or bonds) of the hosts of the switch's own cluster, and every host of the cluster has one
 VS2  a VLAN id is used by one port group of a switch only
-VS3  every uplink trunks every segment of the switch's port groups (the segment is in the uplink's ``segments``, its allowed
-     VLAN list), so a VM in the port group reaches the leaf whichever host it runs on
+VS3  every uplink trunks every segment of the switch's port groups (a deployment of the segment is among the uplink's
+     ``capabilities``, its allowed VLAN list), so a VM in the port group reaches the leaf whichever host it runs on
 VS4  a VM NIC is in one port group, and the VM stands on a host of the switch's cluster
 """
 
@@ -18,6 +18,7 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
+from utils.segment_vlan import port_segments
 
 CLUSTER = "ManagedHypervisorCluster"
 SWITCH = "ManagedVirtualSwitch"
@@ -93,12 +94,12 @@ class CheckVirtualSwitch(InfrahubCheck):
             if _ref(group.get("segment"))
         }
         for uplink in uplinks:
-            trunked = {_ref(s) for s in _dicts(uplink.get("segments"))}
+            trunked = {_ref(s) for s in port_segments(uplink)}
             for segment_id, segment in wanted.items():
                 if segment_id not in trunked:
                     self._error(
                         f"VS3: uplink '{_name(uplink.get('device'))}:{_name(uplink)}' of switch '{_name(switch)}' does not "
-                        f"trunk segment '{segment}' of a port group (its `segments` list lacks it).",
+                        f"trunk segment '{segment}' of a port group (none of its segment deployments is of it).",
                         switch,
                         SWITCH,
                     )

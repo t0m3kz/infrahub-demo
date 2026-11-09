@@ -1,7 +1,7 @@
 # The rows of checks/virtual_switch.py (rules VS1 to VS4), one global query:
 #
 # - ManagedHypervisorCluster: its hosts (a switch's uplinks are ports of them).
-# - ManagedVirtualSwitch: its cluster, its uplinks (a host port or a bond) with their device and the segments they trunk,
+# - ManagedVirtualSwitch: its cluster, its uplinks (a host port or a bond) with their device and the segments they trunk (their segment deployments),
 #   and its port groups with their VLAN, their segment and the VM NICs in them (with the host each VM stands on).
 query virtual_switch {
   ManagedHypervisorCluster {
@@ -28,12 +28,12 @@ query virtual_switch {
               ... on DcimPhysicalInterface {
                 name { value }
                 device { node { id name { value } } }
-                segments { edges { node { id name { value } } } }
+                capabilities { edges { node { __typename ... on ManagedSegmentDeployment { segment { node { id name { value } } } } } } }
               }
               ... on DcimLAGInterface {
                 name { value }
                 device { node { id name { value } } }
-                segments { edges { node { id name { value } } } }
+                capabilities { edges { node { __typename ... on ManagedSegmentDeployment { segment { node { id name { value } } } } } } }
               }
             }
           }

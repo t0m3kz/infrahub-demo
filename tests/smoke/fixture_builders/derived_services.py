@@ -322,10 +322,10 @@ def with_device_services(transform: BaseDeviceTransform, data: dict[str, Any]) -
             "member_of_groups": _edges(),
             "deployment": _services_deployment(device),
             SERVICE_PORTS_KEY: _edges(*ports),
-            "capabilities": _edges(),
+            "vlans": _edges(),
         }
         result[DEVICE_SERVICES_ROOT] = _edges(services)
     prepared, _, platform = transform.prepared_device(copy.deepcopy(result))
     if platform:
-        services["capabilities"] = _edges(*_rows(prepared.get("segment_deployments") or []))
+        services["vlans"] = _edges(*_rows(prepared.get("segment_deployments") or []))
     return result

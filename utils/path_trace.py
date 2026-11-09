@@ -63,10 +63,11 @@ INCLUDE_CHOICES = ("CloudVPNConnection", "firewall")
 # An end of this kind is reached only through these kinds (crossed only when that kind is an end, so a segment's rows
 # or a cloud segment never become a shortcut between two other nodes).
 END_KINDS: dict[tuple[str, str], tuple[str, ...]] = {
-    # A segment reaches its switches in L3 through the ports that carry it (the `segments` edge of a port or LAG), never
-    # through its realization: a row and its deployment join two switches of one segment (a leaf and a border leaf of a
-    # stretched one) in a single hop and skip the BGP peerings between them. A segment with rows but no port is reached
-    # by nothing in L3.
+    # A segment reaches its switches in L3 through the ports that carry it: segment -> its deployment -> the ports that
+    # are members of it (a port's interface `capabilities`), never through the rows: a row joins two switches of one
+    # segment (a leaf and a border leaf of a stretched one) in a single hop and skips the BGP peerings between them. The
+    # deployment is crossed only when a segment is an end. A segment with rows but no port is reached by nothing in L3.
+    ("l3", "ManagedVxlanSegment"): ("ManagedSegmentDeployment",),
     ("l1", "CloudInstance"): ("CloudNetworkSegment",),
     ("l3", "CloudInstance"): ("CloudNetworkSegment",),
 }  # fmt: skip

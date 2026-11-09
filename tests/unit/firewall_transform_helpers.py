@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
+from tests.unit.segment_port_helpers import raw_deployment_edges, raw_port_segments
 from transforms.config.firewall import Firewall
 
 # Project root — needed to point root_directory at the real templates/
@@ -228,8 +229,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
             }
         },
         "ha_domain": {"node": None},
-        "segments": {"edges": [{"node": seg_node}]},
-        "capabilities": {"edges": []},
+        "capabilities": {"edges": raw_deployment_edges(seg_node)},
     }
 
     # Zone also exposed as a top-level SecurityZone root
@@ -282,7 +282,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
 def _smoke_segment(data: dict[str, Any]) -> dict[str, Any]:
     """The segment the smoke firewall carries on eth0.100."""
     iface = data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"][0]["node"]
-    return iface["segments"]["edges"][0]["node"]
+    return raw_port_segments(iface)[0]
 
 
 def _add_segment_rule(data: dict[str, Any], rule_node: dict[str, Any]) -> None:

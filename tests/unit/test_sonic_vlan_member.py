@@ -17,6 +17,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from tests.smoke.fixture_builders.vrf import with_vrf_objects
+from tests.unit.segment_port_helpers import raw_deployment_edges, raw_port_segments
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.border_spine import BorderSpine
@@ -72,7 +73,7 @@ def test_single_vlan_access_and_trunk_ports_are_distinguished(platform: str) -> 
     """Dropping the second VLAN of the trunk turns it into an untagged access member."""
     data = _load(f"leaf_{platform}_ebgp_ibgp")
     port = _port(data, "Ethernet10")
-    port["segments"]["edges"] = port["segments"]["edges"][:1]
+    port["capabilities"]["edges"] = raw_deployment_edges(*raw_port_segments(port)[:1])
     configdb = _render(Leaf, data)
     assert list(configdb["VLAN_MEMBER"].values()) == [_UNTAGGED]
 
@@ -80,7 +81,7 @@ def test_single_vlan_access_and_trunk_ports_are_distinguished(platform: str) -> 
 def test_no_vlan_on_any_port_renders_no_vlan_member_table() -> None:
     """Failure path: with no port carrying a VLAN the table is absent, not empty."""
     data = _load("leaf_sonic_ebgp_ibgp")
-    _port(data, "Ethernet10")["segments"]["edges"] = []
+    _port(data, "Ethernet10")["capabilities"]["edges"] = []
     assert "VLAN_MEMBER" not in _render(Leaf, data)
 
 
@@ -97,8 +98,8 @@ def test_mlag_peer_link_membership_is_merged_not_replaced() -> None:
     index = next(i for i, e in enumerate(node_interfaces) if e["node"]["name"]["value"] == "Ethernet10")
     # The segments' local VLAN is this device's own row: point the host fixture's rows at the MLAG fixture's device.
     own_id = data["DcimDevice"]["edges"][0]["node"]["id"]
-    node_interfaces[index]["node"]["segments"] = json.loads(
-        json.dumps(host["segments"]).replace(
+    node_interfaces[index]["node"]["capabilities"] = json.loads(
+        json.dumps(host["capabilities"]).replace(
             _load("leaf_sonic_ebgp_ibgp")["DcimDevice"]["edges"][0]["node"]["id"], own_id
         )
     )

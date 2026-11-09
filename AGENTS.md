@@ -507,7 +507,7 @@ class MyCheck(InfrahubCheck):
   - **Ports**: `add_vxlan_segment` and `add_app_component_segment` tag the border service ports of the context (derived,
     a context has no interface edge: the ports with the firewall service role that its members' uplinks are cabled to,
     `utils/service_contexts.py` `member_border_ports`, read through `queries/topology/add/segment_vlans.gql`) with the
-    segment as generated `segments` edges, in the SAME
+    segment's deployment in their DC (generated edges on the port's `capabilities`), in the SAME
     reconcile as the component ports (same provenance: an account as `source`, removed only by that account). The ports
     are not host-facing: `checks/customer_quota.py` does not count them. A change of `terminated_on` re-runs
     `add_vxlan_segment` (`data/events/99_actions.yml`).
@@ -528,8 +528,8 @@ class MyCheck(InfrahubCheck):
   `schemas/extensions/service/segment.yml`: `ManagedVxlanSegment` on `TopologyCustomerDC`, `TopologyCustomerColocation`
   and `TopologyCustomerOffice`, `CloudNetworkSegment` on `TopologyCustomerCloud`, never on the `TopologyCustomer`
   generic. A query reaches it through a per-kind inline fragment (`... on TopologyCustomerDC { network_segments }`),
-  not through a generic one. The segment lists footprints only, never its ports: the port-to-segment edge is the port's
-  `segments` (see **Interface addresses and layers**), so a reader of a segment's ports queries the ports.
+  not through a generic one. The segment lists footprints only, never its ports: its ports are members of its
+  deployments (`ManagedSegmentDeployment.capabilities`, see **Interface addresses and layers**).
 - **Clusters**: a group of hosts that run workloads is `ManagedCluster`, one generic with an implementation per technology
   (`schemas/extensions/service/cluster.yml`). The names say what the cluster is, never whose software runs it: that is its `software_image` (a
   `DcimSoftwareImage`, the release of a `DcimPlatform` such as vsphere, proxmox, nutanix, rke2, eks, aks, as on a device;
@@ -559,7 +559,7 @@ class MyCheck(InfrahubCheck):
   `uplinks`, the host ports or bonds (a generic peer without a HFID, so a data file names them as nested objects with an
   explicit kind). `ManagedPortGroup` is a component of the switch: a `vlan_id` and the fabric `segment` it is, and it lists the
   VM NICs in it (`nics`, one-sided: `DcimVirtualInterface` is not extended; a NIC still rides on its host port through
-  `parent_interface`). The `segments` edge of an uplink is its allowed VLAN list. `checks/virtual_switch.py`: VS1 the uplinks
+  `parent_interface`). The segment deployments of an uplink (its `capabilities`) are its allowed VLAN list. `checks/virtual_switch.py`: VS1 the uplinks
   are ports of the cluster's hosts and every host has one; VS2 a VLAN id is used once per switch; VS3 every uplink trunks every
   segment of the port groups; VS4 a NIC is in one port group and its VM stands on a host of the switch's cluster.
 - **Fabric design**: `TopologyDataCenter.design` (`TopologyTemplateDC`: S, M, L, XL) and `TopologyPod.design`
@@ -735,35 +735,33 @@ class MyCheck(InfrahubCheck):
   (inherited by a physical port, a LAG, a virtual interface and a cloud peering interface, not a console port): an
   Attribute with no cascade (a multisite VIP is one address on two loopbacks), so an address goes with its run's tracking or with decommission's
   explicit deletes, never with its port; a hand-deleted device leaves its port addresses behind. A switch port's L2
-  membership is the typed edge `segments` (on the marker generic `DcimSwitchedInterface`, a physical port or a LAG;
-  peer `ManagedVxlanSegment`, many) is the ONE edge between a port and a segment, one-sided: the segment has no list of
-  its ports, a reader asks the ports (`segments__ids`, `segments__isnull: false`), and a change of it raises no event.
-  Physical ports and LAGs only; a virtual interface is never assigned to a segment by anyone. The edge carries its
+  membership is the segment's DEPLOYMENT in the port's topology: the `ManagedSegmentDeployment` (it inherits
+  `ManagedGenericInterfaces`) among the port's interface `capabilities`, the ONE edge between a port and a segment; the
+  deployment lists its ports, a reader of a port reads `... on ManagedSegmentDeployment` inside the port's one
+  `capabilities` selection (`utils/segment_vlan.py` `port_deployments`, `port_segments`), and a change of it raises no
+  event. `checks/interface_layers.py` holds what the schema cannot: a deployment only on a physical port or a LAG
+  (`DcimSwitchedInterface`, a marker), the deployment of the port's device's hosting deployment, and one deployment of a
+  segment per port (ERRORs). The edge carries its
   provenance, the relationship `source` property (a `CoreAccount`; `generators/helpers/edge_source.py` is the one writer,
   a raw `RelationshipAdd` with `_relation__source`; read with `edges { properties { source { id } } node { id } }`, which
   `clean_data` drops, so the reader takes it from the raw response): a person sets an edge from the port with no source,
   the segment reconcile writes the ports its components derive with its own account (the client token's, `AccountProfile`,
-  asked once per run) as the source. A segment is on no interface's `capabilities`. The layer of a port is its content, not its kind: a
-  segment means switchport, an address, sub-interfaces or a routed capability (BGP or OSPF peering, routed exchange,
+  asked once per run) as the source, edge by edge (no writer of an interface's `capabilities` saves the list). A
+  segment itself is on no interface's `capabilities`. The layer of a port is its content, not its kind: a
+  segment deployment means switchport, an address, sub-interfaces or a routed capability (BGP or OSPF peering, routed exchange,
   interconnect, tunnel or handoff circuit) means routed; `checks/interface_layers.py` refuses both on one port (R1), or
   on a LAG member (R2). A border service port facing a context is a trunk too, but a context has no interface edge (its
   border ports are derived), so the check does not see it; a segment on a switch port's `capabilities` is
-  impossible by schema (`ManagedVxlanSegment` is not on the interface edge).
-- **VLAN rows**: a VLAN ID is local to a switch. There is no VLAN domain object and no marker generic: the row is an
-  individual capability of its switch. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or
+  impossible by schema (`ManagedVxlanSegment` is not on the interface edge, its deployment is).
+- **VLAN rows**: a VLAN ID is local to a switch. There is no VLAN domain object and no marker generic: the row
+  points straight at its device. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or
   office, with the VNI) -> `ManagedSegmentVlan` (the realization on ONE switch, with the `vlan_id`): the row is a
   `Parent`-mandatory child of the deployment its switch sits in (`device.deployment` is the hosting parent or one of its
-  pods and zones) and goes with it (`on_delete: cascade`), so the VLAN and the VNI of a port come from one lineage; it
-  inherits `ManagedGenericDevice`, so its switch is its `capabilities` peer (re-declared mandatory, exactly one: a many
-  edge cannot be capped, `checks/mlag_domains.py` V1 holds it) and the row dies with the switch. A uniqueness constraint
-  or an HFID cannot use a many relationship, so `device_name` mirrors the switch's name (like `ManagedMLAG.peer_devices`):
-  the HFID is [device_name, vlan_id] (a data file upserts a row) and the uniqueness [segment_deployment, device_name] and
-  [device_name, vlan_id]; V1 holds that the mirror names the device, V2 and V3 the two uniqueness rules on the device
-  itself. A reader reaches a device's rows through its `capabilities` (`... on ManagedSegmentVlan`,
-  `utils/segment_vlan.py` `device_rows`; a config query aliases it `segment_rows`, the device's `capabilities` being
-  selected already) and a row's switch through the row's `capabilities` (`row_device_ids`). The row is an
-  output and has no port: a port is given a SEGMENT (the port's `segments` edge), never a VLAN, and the VLAN of
-  a port is found by port -> device -> row of the segment. **MLAG pairs**: the two peers of a `ManagedMLAG` each have
+  pods and zones) and goes with it (`on_delete: cascade`), so the VLAN and the VNI of a port come from one lineage; its
+  `device` is an Attribute (mandatory, peer `DcimPhysicalDevice`, reverse `DcimPhysicalDevice.vlans`), unique on
+  [segment_deployment, device] and [device, vlan_id], HFID [device name, vlan_id] (a data file upserts a row). The row
+  is an output and has no port: a port is given a segment DEPLOYMENT (its `capabilities`), never a VLAN, and the VLAN
+  of a port is found by port -> deployment -> the row of the port's device under it. **MLAG pairs**: the two peers of a `ManagedMLAG` each have
   their own row for a segment and MUST carry the same `vlan_id` (a dual-homed port-channel is one L2 broadcast domain).
   The allocator holds it: the segment reconcile gives every device with a port of the segment AND its MLAG peers (even
   a peer with no port of the segment: a dual-homed LAG needs the tag on both) a row, takes the pair's locks in sorted
@@ -775,15 +773,14 @@ class MyCheck(InfrahubCheck):
   no `mlag <id>` / `vpc <id>` on the host-facing port-channels today (only the domain-level block and the peer-link).
   Deleting an MLAG never orphans a row. The segment owns its port tags and its rows
   (`generators/topology/segment_ports.py`): `add_vxlan_segment` and `add_app_component_segment` run the same reconcile,
-  by provenance: it removes a port edge ONLY when its `source` is the generator's account and no `AppComponent` instance
+  by provenance: it removes a port's deployment edge ONLY when its `source` is the generator's account and no `AppComponent` instance
   lands on the port any more (an instance moved, a component left, the segment has no component), and it never removes or
   changes an edge with no source (set by a person from the port), whatever the components say. A person's edge on a port
-  that is also derived stays as it is (it is not re-stamped, so it survives the component leaving). The edge is one-sided and
-  no trigger follows it: a port a person adds gets its VLAN row at the next run of either generator on the segment. A switch with no deployment of the segment, or a pair whose members map to two deployments, is a WARNING and its
+  that is also derived stays as it is (it is not re-stamped, so it survives the component leaving). No trigger follows
+  the edge: a port a person adds gets its VLAN row at the next run of either generator on the segment. A switch with no deployment of the segment, or a pair whose members map to two deployments, is a WARNING and its
   rows are left alone (the next run converges once the deployment exists). The rows are untracked and their deployment
-  tracked: a deployment that is not re-saved by its run is deleted with its rows; the rows of a deleted device go with it (the
-  cascading device edge), those of a device that no longer needs the segment are deleted by the next reconcile (check
-  rule S2 reports them meanwhile). **VLAN scope**: `ManagedVxlanSegment.vlan_scope` is `local` (the default: each switch has its own id, the VNI is the identity) or
+  tracked: a deployment that is not re-saved by its run is deleted with its rows; the rows of a device that is gone or no
+  longer needs the segment are deleted by the next reconcile (check rule S2 reports them meanwhile). **VLAN scope**: `ManagedVxlanSegment.vlan_scope` is `local` (the default: each switch has its own id, the VNI is the identity) or
   `shared` (one id on every switch, for L2 trunked between switches that cannot do VXLAN). A shared segment draws the ONE
   VNI of the `GLOBAL-L2VNI` pool like any stretched segment (even in one DC), and its id is derived from it:
   VLAN = 2500 + (VNI - 40000), so the first 500 numbers of that pool (VNI 40000-40499) give the shared band 2500-2999,
@@ -945,11 +942,11 @@ class MyCheck(InfrahubCheck):
     `Parent`, like `ManagedVRF.deployment`, or a data file); the transforms and checks read
     `shared_capabilities { __typename ... on <Kind> {...} }` once, inside `... on DcimDeviceManaged` (the field is not on
     `DcimDevice`), in `DeviceCapabilitiesOnDeviceFields`, and filter on the typename (`device_memberships`).
-  - `ManagedVRF` is also on the interface edge: its interfaces are its `capabilities` (see **VRF instances**). A
-    segment is not on the interface edge: a switch port's membership is `segments` (see **Interface addresses and
-    layers**), and a service context is not either (its legs and border ports are derived from its members,
-    `utils/service_contexts.py`); the kinds on `ManagedGenericInterfaces` are the VRF, the routed exchange, peerings
-    and OSPF.
+  - `ManagedVRF` is also on the interface edge: its interfaces are its `capabilities` (see **VRF instances**), and so
+    is `ManagedSegmentDeployment`: its ports are its `capabilities` (see **Interface addresses and layers**). A segment
+    is not on the interface edge (its deployment is), and a service context is not either (its legs and border ports
+    are derived from its members, `utils/service_contexts.py`); the kinds on `ManagedGenericInterfaces` are the VRF,
+    the segment deployment, the routed exchange, peerings and OSPF.
     The circuits are on it too: their two ends are their `capabilities` (see **Circuit placement**).
 
 #### Schema Best Practices

@@ -30,6 +30,7 @@ from graphql.language import FieldNode, FragmentDefinitionNode, FragmentSpreadNo
 
 from tests.integration.demo_data import attribute_names, relationship_names
 from tests.smoke.fixture_builders.common import make_transform, run_transform
+from tests.unit.segment_port_helpers import raw_port_segments
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.distribution_switch import DistributionSwitch
@@ -82,7 +83,7 @@ def _seg200_namespaces(data: dict[str, Any]) -> list[dict[str, Any]]:
     """The owner zones of seg-200 everywhere it appears in the input (host port and activations)."""
     segments: list[dict[str, Any]] = []
     for iface in _node(data)["interfaces"]["edges"]:
-        segments += [edge["node"] for edge in iface["node"].get("segments", {"edges": []})["edges"]]
+        segments += raw_port_segments(iface["node"])
     segments += [act["node"]["segment"]["node"] for act in _deployment(data)["segment_deployments"]["edges"]]
     return [seg["security_zone"]["node"] for seg in segments if seg["name"]["value"] == "seg-200"]
 

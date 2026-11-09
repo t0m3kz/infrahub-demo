@@ -62,26 +62,28 @@ def raw_state(
     customer_deployments: list[dict[str, Any]] | None = None,
     sources: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """A raw segment_vlans.gql response: interfaces are (id, typename, device id) and ``sources`` maps a port id
-    to the account that wrote its edge to the segment (none: a person's edge); deployments are
-    (segment deployment id, hosting deployment id), by default one in ``dc-1``; rows are (row id, device id,
-    vlan id, segment deployment id)."""
+    """A raw segment_vlans.gql response, merged with the raw SEGMENT_PORTS_QUERY one (the generator reads both and
+    each takes its own keys): interfaces are (id, typename, device id), each a member of the segment's first
+    deployment, and ``sources`` maps a port id to the account that wrote that edge (none: a person's edge);
+    deployments are (segment deployment id, hosting deployment id), by default one in ``dc-1``; rows are (row id,
+    device id, vlan id, segment deployment id)."""
+    realizations = deployments or [(segment_deployment_id(segment_id), "dc-1")]
 
     def ports(typename: str) -> dict[str, Any]:
-        """The ``segments__ids`` root of one port kind, each port with its edge to the segment."""
+        """The ``capabilities__ids`` root of one port kind, each port with its edge to the segment's deployment."""
         return {
             "edges": [
                 {
                     "node": {
                         "id": i,
                         "device": {"node": {"id": d}},
-                        "segments": {
+                        "capabilities": {
                             "edges": [
                                 {
                                     "properties": {
                                         "source": {"id": (sources or {})[i]} if i in (sources or {}) else None
                                     },
-                                    "node": {"id": segment_id},
+                                    "node": {"id": realizations[0][0], "__typename": "ManagedSegmentDeployment"},
                                 }
                             ]
                         },
@@ -120,7 +122,7 @@ def raw_state(
                                     "node": {
                                         "id": row_id,
                                         "vlan_id": {"value": vlan},
-                                        "capabilities": {"edges": [{"node": {"id": device_id}}]},
+                                        "device": {"node": {"id": device_id}},
                                     }
                                 }
                                 for row_id, device_id, vlan, row_sd in rows
@@ -129,7 +131,7 @@ def raw_state(
                         },
                     }
                 }
-                for sd_id, hosting_id in (deployments or [(segment_deployment_id(segment_id), "dc-1")])
+                for sd_id, hosting_id in realizations
             ]
         },
     }
@@ -141,8 +143,7 @@ class _Row:
     def __init__(self, world: VlanWorld, row_id: str, sd: str, device: str, vlan: int) -> None:
         self.id = row_id
         self.segment_deployment = MagicMock(id=sd)
-        self.device = MagicMock(id=device)  # the one capabilities peer, for the tests' own reads
-        self.capabilities = MagicMock(peers=[self.device])
+        self.device = MagicMock(id=device)
         self.vlan_id = MagicMock(value=vlan)
         self._world = world
         self.save_kwargs: dict[str, Any] = {}
@@ -189,21 +190,17 @@ class VlanWorld:
         self.filter_kwargs.append(kwargs)
         self.events.append(f"read:{kind.__name__}")
         if kind is ManagedSegmentVlan:
-            device_ids = set(kwargs["capabilities__ids"])
+            device_ids = set(kwargs["device__ids"])
             return [r for r in self.rows if r.device.id in device_ids]
         raise AssertionError(f"unexpected filters kind {kind}")
 
     async def _create(self, kind: Any, data: dict[str, Any]) -> _Row:
         assert kind is ManagedSegmentVlan
         self.created.append(data)
-        self.events.append(f"create:{data['capabilities'][0]['id']}")
+        self.events.append(f"create:{data['device']['id']}")
         self._counter += 1
         return _Row(
-            self,
-            f"row-{self._counter}",
-            data["segment_deployment"]["id"],
-            data["capabilities"][0]["id"],
-            data["vlan_id"],
+            self, f"row-{self._counter}", data["segment_deployment"]["id"], data["device"]["id"], data["vlan_id"]
         )
 
     async def _delete(self, kind: Any, id: str) -> None:  # noqa: A002 - the SDK's own keyword

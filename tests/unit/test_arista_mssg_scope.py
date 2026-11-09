@@ -317,8 +317,13 @@ def _tenant_input(root_dir: Path, *, enforce: bool = False) -> dict[str, Any]:
     ]
     data["SecurityTag"]["edges"] = []
     for interface in data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]:
-        carried = interface["node"].get("segments") or {"edges": []}
-        carried["edges"] = [c for c in carried["edges"] if c["node"]["id"] not in DROPPED_SEGMENTS]
+        carried = interface["node"].get("capabilities") or {"edges": []}
+        carried["edges"] = [
+            c
+            for c in carried["edges"]
+            if c["node"].get("__typename") != "ManagedSegmentDeployment"
+            or c["node"]["segment"]["node"]["id"] not in DROPPED_SEGMENTS
+        ]
 
     policies = {p["segment"]: p for p in _spec_data(root_dir / SCOPE / "05_policies/01_security_policies.yml")}
     for edge in segments:
@@ -402,7 +407,8 @@ class TestRenderExpectations:
     def test_a_device_that_hosts_no_segment_renders_no_section(self, root_dir: Path) -> None:
         data = _tenant_input(root_dir)
         for interface in data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]:
-            interface["node"]["segments"] = {"edges": []}
+            caps = interface["node"].get("capabilities") or {"edges": []}
+            caps["edges"] = [c for c in caps["edges"] if c["node"].get("__typename") != "ManagedSegmentDeployment"]
         assert scenario._section(_render_leaf(root_dir, data)) == []
 
     def test_one_vtep_below_the_release_floor_removes_the_section(self, root_dir: Path) -> None:

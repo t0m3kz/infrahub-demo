@@ -2063,9 +2063,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -2158,9 +2155,6 @@
                         ]
                       }
                     }
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -4489,7 +4483,7 @@
           "service_ports": {
             "edges": []
           },
-          "capabilities": {
+          "vlans": {
             "edges": []
           }
         }

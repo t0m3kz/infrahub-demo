@@ -237,11 +237,19 @@ def _make_interface(
                 ),
             }
         )
-    # A switch port or LAG carries its segments on `segments` (transforms/helpers/segments.py interface_segments).
-    if typename != "DcimVirtualInterface" or segments:
-        iface["segments"] = _edges(segments or [])
-    iface["capabilities"] = _edges(services)
+    # A switch port or LAG carries a segment as a member of its deployment, one of the port's `capabilities`
+    # (transforms/helpers/segments.py interface_segments).
+    iface["capabilities"] = _edges([*services, *_segment_memberships(segments or [])])
     return iface
+
+
+def _segment_memberships(segments: list[dict]) -> list[dict]:
+    """A port's capability entries for the segments it carries: the ManagedSegmentDeployment of each, with the
+    segment node under it (queries/fragments/interface_capability_fields.gql InterfaceCapabilitiesWithSegmentFields)."""
+    return [
+        {"__typename": "ManagedSegmentDeployment", "id": f"sd-{segment.get('id')}", "segment": _node(segment)}
+        for segment in segments
+    ]
 
 
 def _make_policy_rule(
@@ -278,9 +286,8 @@ def _make_security_policy(*, name: str, rules: list[dict]) -> dict:
 
 
 def _vlan_rows(vlan_id: int, row_device_id: str | None) -> dict:
-    """The ``vlans`` edges of one deployment: the row of the rendering device (its one ``capabilities`` peer), if any."""
-    rows = [{"vlan_id": _v(vlan_id), "capabilities": _edges([{"id": row_device_id}])}] if row_device_id else []
-    return _edges(rows)
+    """The ``vlans`` edges of one deployment: the row of the rendering device, if any."""
+    return _edges([{"vlan_id": _v(vlan_id), "device": _node({"id": row_device_id})}] if row_device_id else [])
 
 
 def _make_segment_node(
@@ -302,14 +309,15 @@ def _make_segment_node(
     ``routing_identity`` is the (segment routing_tag, owner routing_tag) the fragment selects
     (queries/fragments/network_segment.gql); without it the node carries neither field, as before.
 
-    This is the shape that hangs off ``interfaces[].segments`` —
+    This is the shape that hangs off a port's segment deployment (``interfaces[].capabilities``, the ``segment`` of
+    a ManagedSegmentDeployment) —
     the ONLY place BaseDeviceTransform._collect_activations_from_interfaces
     looks for segments, and therefore the only path that produces VXLAN/EVPN
     output for leaf/tor/access-leaf roles.
 
     The VNI comes from ``segment_deployments`` and the LOCAL
     vlan_id from the ``vlans`` rows under it, matched to this
-    device (the row's ``capabilities``; a paired device uses its own row).
+    device (``row.device.id``; a paired device uses its own row).
     A segment with no row for the device is skipped entirely
     by the transform, so ``row_device_id`` must match or no VXLAN is rendered.
 

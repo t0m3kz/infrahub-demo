@@ -49,12 +49,12 @@ query {
 
 ROWS_QUERY = """
 query ($devices: [ID]) {
-  ManagedSegmentVlan(capabilities__ids: $devices) {
+  ManagedSegmentVlan(device__ids: $devices) {
     edges {
       node {
         id
         vlan_id { value }
-        capabilities { edges { node { id } } }
+        device { node { id } }
         segment_deployment { node { id } }
         svi { node { id } }
       }
@@ -105,8 +105,7 @@ def parse_rows(result: dict[str, Any]) -> tuple[Rows, Svis]:
     rows: Rows = {}
     for edge in (result.get("ManagedSegmentVlan") or {}).get("edges", []):
         node = _node(edge)
-        devices = [_node(e)["id"] for e in (node.get("capabilities") or {}).get("edges", [])]
-        device, deployment = (devices[0] if len(devices) == 1 else None), _id(node, "segment_deployment")
+        device, deployment = _id(node, "device"), _id(node, "segment_deployment")
         if device and deployment:
             rows.setdefault(device, {})[deployment] = {
                 "id": node["id"],

@@ -22,7 +22,7 @@ query shared_vlan {
             node {
               id
               vlan_id { value }
-              capabilities { edges { node { id name { value } } } }
+              device { node { id name { value } } }
             }
           }
         }

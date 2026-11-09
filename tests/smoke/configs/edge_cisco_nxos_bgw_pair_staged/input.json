@@ -1743,9 +1743,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -1838,9 +1835,6 @@
                         ]
                       }
                     }
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -1942,84 +1936,83 @@
                   "cable": {
                     "node": null
                   },
-                  "segments": {
+                  "capabilities": {
                     "edges": [
                       {
                         "node": {
-                          "id": "seg-seg-l2-150",
-                          "__typename": "ManagedVxlanSegment",
-                          "name": {
-                            "value": "seg-l2-150"
-                          },
-                          "customer_name": {
-                            "value": "Customer-A"
-                          },
-                          "arp_suppression": {
-                            "value": true
-                          },
-                          "security_zone": {
+                          "__typename": "ManagedSegmentDeployment",
+                          "id": "sd-seg-seg-l2-150",
+                          "segment": {
                             "node": {
-                              "id": "fixture-zone-PROD",
+                              "id": "seg-seg-l2-150",
+                              "__typename": "ManagedVxlanSegment",
                               "name": {
-                                "value": "PROD"
+                                "value": "seg-l2-150"
                               },
-                              "vrf_type": {
-                                "value": "prod"
+                              "customer_name": {
+                                "value": "Customer-A"
                               },
-                              "l3_vni": {
-                                "value": 60000
-                              }
-                            }
-                          },
-                          "gateway": {
-                            "node": null
-                          },
-                          "segment_deployments": {
-                            "edges": [
-                              {
+                              "arp_suppression": {
+                                "value": true
+                              },
+                              "security_zone": {
                                 "node": {
-                                  "vni": {
-                                    "value": 10150
+                                  "id": "fixture-zone-PROD",
+                                  "name": {
+                                    "value": "PROD"
                                   },
-                                  "vlans": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "vlan_id": {
-                                            "value": 150
-                                          },
-                                          "capabilities": {
-                                            "edges": [
-                                              {
+                                  "vrf_type": {
+                                    "value": "prod"
+                                  },
+                                  "l3_vni": {
+                                    "value": 60000
+                                  }
+                                }
+                              },
+                              "gateway": {
+                                "node": null
+                              },
+                              "segment_deployments": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "vni": {
+                                        "value": 10150
+                                      },
+                                      "vlans": {
+                                        "edges": [
+                                          {
+                                            "node": {
+                                              "vlan_id": {
+                                                "value": 150
+                                              },
+                                              "device": {
                                                 "node": {
                                                   "id": "dev-dc1-edge-01"
                                                 }
                                               }
-                                            ]
+                                            }
                                           }
-                                        }
+                                        ]
                                       }
-                                    ]
+                                    }
                                   }
-                                }
+                                ]
+                              },
+                              "deployments": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "id": "fake-dc-0"
+                                    }
+                                  }
+                                ]
                               }
-                            ]
-                          },
-                          "deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "fake-dc-0"
-                                }
-                              }
-                            ]
+                            }
                           }
                         }
                       }
                     ]
-                  },
-                  "capabilities": {
-                    "edges": []
                   }
                 }
               },
@@ -2110,9 +2103,6 @@
                         ]
                       }
                     }
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -2207,9 +2197,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -2303,9 +2290,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -2343,14 +2327,10 @@
                               "vlan_id": {
                                 "value": 150
                               },
-                              "capabilities": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "id": "dev-dc1-edge-01"
-                                    }
-                                  }
-                                ]
+                              "device": {
+                                "node": {
+                                  "id": "dev-dc1-edge-01"
+                                }
                               }
                             }
                           }
@@ -2400,14 +2380,10 @@
                                           "vlan_id": {
                                             "value": 150
                                           },
-                                          "capabilities": {
-                                            "edges": [
-                                              {
-                                                "node": {
-                                                  "id": "dev-dc1-edge-01"
-                                                }
-                                              }
-                                            ]
+                                          "device": {
+                                            "node": {
+                                              "id": "dev-dc1-edge-01"
+                                            }
                                           }
                                         }
                                       }
@@ -3018,7 +2994,7 @@
           "service_ports": {
             "edges": []
           },
-          "capabilities": {
+          "vlans": {
             "edges": []
           }
         }

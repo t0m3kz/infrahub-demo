@@ -80,9 +80,13 @@ def _payload(*capabilities: dict[str, Any]) -> dict[str, Any]:
     interfaces = [
         {
             "name": _v(f"eth0.{i}"),
-            # A carried segment is on the interface's segments; a context is a shared capability of the device.
-            "segments": _edges([] if capability["__typename"] == "ManagedFirewallContext" else [capability]),
-            "capabilities": _edges([]),
+            # A carried segment is the segment of a deployment among the interface's capabilities; a context is a
+            # shared capability of the device.
+            "capabilities": _edges(
+                []
+                if capability["__typename"] == "ManagedFirewallContext"
+                else [{"__typename": "ManagedSegmentDeployment", "segment": _node(capability)}]
+            ),
         }
         for i, capability in enumerate(capabilities)
     ]

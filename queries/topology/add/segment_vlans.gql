@@ -8,10 +8,9 @@
 #     sits in, so a device is mapped to a deployment through its own
 #     `deployment` (the hosting parent or one of its children, see
 #     _device_deployment_ids).
-#   - DcimPhysicalInterface / DcimLAGInterface (segments__ids): the switch ports carrying the segment, read from the
-#     port (the edge is one-sided); their devices need a row. `properties { source { id } }` is who wrote the
-#     port's edge to this segment (none: a person did): the reconcile removes only its own. The reader takes the
-#     ports from the raw response, because clean_data drops `properties`.
+#   - the switch ports are NOT read here: a port is a member of a segment DEPLOYMENT (its interface `capabilities`),
+#     so they are read once the deployments are known (generators/segment_vlan.py SEGMENT_PORTS_QUERY); their devices
+#     need a row.
 #   - each row's device (the devices whose VRF instances and SVIs follow the rows).
 #   - stretch_scope + customer_deployments' hosting parents: a stretched
 #     segment's border gateways need it too (same shape as vxlan_segment.gql)
@@ -111,36 +110,8 @@ query segment_vlans($segment_id: ID!) {
             node {
               id
               vlan_id { value }
-              capabilities { edges { node { id } } }
+              device { node { id } }
             }
-          }
-        }
-      }
-    }
-  }
-  DcimPhysicalInterface(segments__ids: [$segment_id]) {
-    edges {
-      node {
-        id
-        device { node { id } }
-        segments(ids: [$segment_id]) {
-          edges {
-            properties { source { id } }
-            node { id }
-          }
-        }
-      }
-    }
-  }
-  DcimLAGInterface(segments__ids: [$segment_id]) {
-    edges {
-      node {
-        id
-        device { node { id } }
-        segments(ids: [$segment_id]) {
-          edges {
-            properties { source { id } }
-            node { id }
           }
         }
       }

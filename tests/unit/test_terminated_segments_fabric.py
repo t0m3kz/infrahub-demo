@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from tests.unit.segment_port_helpers import deployment_caps
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.origination import get_origination
 from transforms.helpers.overlay import _l3_instances
@@ -251,8 +252,8 @@ class TestPbrAndAclSkip:
 
 
 def _interface(name: str, role: str, segments: list[dict]) -> dict:
-    """A physical interface carrying `segments` (DcimSwitchedInterface.segments)."""
-    return {"name": name, "role": role, "typename": "DcimPhysicalInterface", "segments": segments, "capabilities": []}
+    """A physical interface carrying `segments` (a deployment of each among its capabilities)."""
+    return {"name": name, "role": role, "typename": "DcimPhysicalInterface", "capabilities": deployment_caps(*segments)}
 
 
 class TestTrunkMode:

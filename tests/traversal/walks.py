@@ -101,6 +101,16 @@ def _far_port(port: dict, iface: dict[str, dict], d: dict | None = None) -> dict
     return {}
 
 
+def _port_segment_ids(port: dict) -> set:
+    """The ids of the segments a port carries: the segment of each deployment among its capabilities."""
+    return {
+        segment["id"]
+        for cap in rel(port, "capabilities")
+        if cap.get("__typename") == "ManagedSegmentDeployment"
+        for segment in rel(cap, "segment")
+    }
+
+
 def _bond_homing(d: dict, cfg: dict, seg: dict | None) -> tuple[list[str], set, list[str]]:
     """(leaves whose port-channel carries the segment, their lag ids, one line per bond member)."""
     bond = next((x for x in d["lag"] if _dev(x) == cfg["server"] and val(x, "name") == cfg["bond"]), None)
@@ -113,7 +123,7 @@ def _bond_homing(d: dict, cfg: dict, seg: dict | None) -> tuple[list[str], set, 
         lines.append(
             f"{member['name']['value']} -> {_dev(far)}:{(far.get('name') or {}).get('value')} in {pc and val(pc, 'name')}"
         )
-        if pc and seg and seg["id"] in _ids(rel(pc, "segments")):
+        if pc and seg and seg["id"] in _port_segment_ids(pc):
             homed.append(str(_dev(pc)))
             lag_ids.add(val(pc, "lag_id"))
     return homed, lag_ids, lines
@@ -135,11 +145,10 @@ def pod_rows(d: dict, cfg: dict) -> list[Row]:
         ("pod: bond0 dual-homed: one lag_id port-channel per leaf, both carrying the segment", ok, "; ".join(lines))
     )
     vlans = {
-        val(device, "name"): val(row, "vlan_id")
+        row["device"]["node"]["name"]["value"]: val(row, "vlan_id")
         for sd in rel(seg or {}, "segment_deployments")
         for row in rel(sd, "vlans")
-        for device in rel(row, "capabilities")
-        if val(device, "name") in leaves
+        if row["device"]["node"]["name"]["value"] in leaves
     }
     ok = sorted(vlans) == sorted(leaves) and len(set(vlans.values())) == 1
     rows.append(("pod: VLAN row of the segment on both MLAG peers, same vlan_id", ok, str(vlans)))

@@ -96,7 +96,11 @@ def _interface_segments(data: dict, interface_name: str = "Ethernet10") -> list[
     """The segment nodes carried by one interface of the first device of a raw device response."""
     node = data["DcimDevice"]["edges"][0]["node"]
     port = next(e["node"] for e in node["interfaces"]["edges"] if e["node"]["name"]["value"] == interface_name)
-    return [edge["node"] for edge in port["segments"]["edges"]]
+    return [
+        edge["node"]["segment"]["node"]
+        for edge in port["capabilities"]["edges"]
+        if edge["node"].get("__typename") == "ManagedSegmentDeployment"
+    ]
 
 
 def build_cisco_xe_acl_data(*, device_name: str, role: str = "leaf") -> dict:

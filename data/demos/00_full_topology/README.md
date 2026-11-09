@@ -668,8 +668,8 @@ SaaS tunnels (Zscaler, office - DC) exist only in L3 (a session circuit); their 
 ## Pod, internet through the ISP and extra pairs
 
 **Pod** (`10_topology/DC-KTW1`, pod `DC-KTW1-9-POD-1`): the server `ktw1-srv-01` (`bond0` on `eno1`/`eno2`) is dual-homed to the
-leaf pair `ktw1-leaf-01`/`-02` through a vPC (one `Port-Channel10` per leaf, the same `lag_id`, both with the segment
-`c900-web-p` in the `segments` edge, one authored `ManagedMLAG`), the leaves to the spine, the spine to the two
+leaf pair `ktw1-leaf-01`/`-02` through a vPC (one `Port-Channel10` per leaf, the same `lag_id`, both members of the
+deployment of `c900-web-p` in DC-KTW1, one authored `ManagedMLAG`), the leaves to the spine, the spine to the two
 border leaves, border leaf 1 to the edge through jack 2 of the panel, border leaf 2 on a direct cable. The VLAN row of
 leaf-02 has the same `vlan_id` 100 as leaf-01. EVPN overlay: leaf-01/02 - spine - BL - edge. There are 5 L1 paths
 server -> edge: 4 through the spine and a border leaf (2 leaves x 1 spine x 2 BL) and 1 old direct connection
@@ -838,8 +838,8 @@ office - Zscaler tunnel.
 - L1 in the DC: between the port `Ethernet1/13` of the edge (the panel end) and the carrier's port (`Ethernet1/2`) there
   is no cable: it is a transition inside the device, and the script marks it so (the packet does not mind, the auditor might).
 - The cable goes from the leaf's segment port to the patch panel, while the carrier starts on another port of the edge.
-  A physically consistent path would need additional devices (and a budget). The first hop of the tenant segment is the leaf port with
-  the `segments` edge.
+  A physically consistent path would need additional devices (and a budget). The first hop of the tenant segment is the leaf port in
+  the segment's deployment.
 - The cage has ONE panel pair (`PP-PAR-COLO1-01`, jack 1): only the `virtual_connection` carriers from the Fabric port go
   through it (ExpressRoute and Partner Interconnect, three VLANs on `Ethernet1/1`: 200, 201, 400), each ending on its own `TopologyProviderInterface` of the Fabric port (S-tags 1101, 1102, 1201, with the bandwidth of the connection). The cross-connects
   (AWS, Dedicated Interconnect, Webex) end directly on edge ports, without a panel. The L1 path cage - cloud through the
@@ -872,8 +872,8 @@ office - Zscaler tunnel.
   peering.
 - A VXLAN segment has its prefix in `gateway.ip_prefix`, a cloud segment in `cidr_block` (text): the script treats them
   differently.
-- The `segments` edge on a port is one-sided (the segment has no list of ports): the script reads the ports and filters
-  by segment.
+- A port carries a segment as a member of the segment's deployment (`90_bindings/96_segment_ports`, one list per
+  deployment): the script reads the deployments among each port's `capabilities`.
 
 ## The far ends, one shortest path each (`reachability`, `invoke check-model --reach`)
 

@@ -32,7 +32,12 @@ def _uplink(host: str, port: str = "bond0", *segments: str) -> dict[str, Any]:
         "display_label": port,
         "name": _v(port),
         "device": _ref(id=f"h-{host}", name=_v(host)),
-        "segments": _edges(*({"id": f"s-{s}", "name": _v(s)} for s in segments)),
+        "capabilities": _edges(
+            *(
+                {"__typename": "ManagedSegmentDeployment", "segment": {"node": {"id": f"s-{s}", "name": _v(s)}}}
+                for s in segments
+            )
+        ),
     }
 
 

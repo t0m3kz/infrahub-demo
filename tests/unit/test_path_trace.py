@@ -135,11 +135,12 @@ def test_chain_and_ecmp_summary_fold_the_differing_positions() -> None:
 
 
 def test_layer_kinds_add_the_end_kinds_only_where_measured() -> None:
-    """A segment end adds nothing in L3: it reaches its switches through the ports that carry it, and a row or a
-    deployment would join two switches of one segment in a hop that is no route. The ends are never in the filter."""
+    """A segment end adds its deployment in L3 (segment -> deployment -> the ports that are members of it), never a row:
+    a row would join two switches of one segment in a hop that is no route. The ends are never in the filter."""
     assert layer_kinds("l1", "ManagedVxlanSegment", DX) == [*LAYERS["l1"], *CLOUD]
     l3 = layer_kinds("l3", "ManagedVxlanSegment", "CloudNetworkSegment")
-    assert "ManagedSegmentDeployment" not in l3 and "ManagedSegmentVlan" not in l3
+    assert "ManagedSegmentDeployment" in l3 and "ManagedSegmentVlan" not in l3
+    assert "ManagedSegmentDeployment" not in layer_kinds("l3", DEV, DX)
     assert "ManagedVxlanSegment" not in l3 and "CloudNetworkSegment" not in l3
     assert "CloudNetworkSegment" in layer_kinds("l1", "CloudInstance", DEV)
 

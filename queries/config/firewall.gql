@@ -151,7 +151,6 @@ query firewall_config($device: String!) {
                 }
               }
               ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
-              ...FirewallInterfaceZoneFields
             }
           }
         }

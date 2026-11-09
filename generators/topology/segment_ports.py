@@ -9,16 +9,19 @@ them, so the same reconcile runs from both directions that change the answer:
   - add_app_component_segment, when a component's instances or segment change;
   - add_vxlan_segment, when the segment itself is written — creation and its footprints.
 
-The edge between a port and a segment is ``segments`` on the PORT (one-sided: the segment has no list of its ports,
-and a change of it re-runs nothing). Provenance is the edge's ``source`` property (generators/helpers/edge_source.py):
-this reconcile writes the ports its components derive with its own account as the source, and removes an edge ONLY
-when its source is that account and the port is no longer derived (an instance moved, a component left, the segment
-has no component any more). An edge with no source was set by a person from the port: no generator removes or changes
-it, whatever the components say. A person's edge on a port that is also derived stays as it is (source unset: it is
-not re-stamped, so it survives a later component leaving); a port a person adds gets its VLAN row at the next run
-of the segment's generators.
+A port carries the segment as a member of the segment's DEPLOYMENT in its device's topology: the
+``ManagedSegmentDeployment`` among the port's interface ``capabilities``, the deployment whose hosting deployment
+(a DC, a metro, an office) the port's device sits in or under (``_deployment_by_device_deployment``). A derived port
+whose device sits in no deployment of the segment is reported and skipped (the next run, once the deployment exists,
+converges). Provenance is the edge's ``source`` property (generators/helpers/edge_source.py): this reconcile writes
+the (port, deployment) edges its components derive with its own account as the source, and removes an edge ONLY when
+its source is that account and the pair is no longer derived (an instance moved, a component left, the segment has no
+component any more, the port's device moved to another deployment: the edge moves with it). An edge with no source was set by a person from the port: no generator removes or changes
+it, whatever the components say. A person's edge of the segment on a port that is also derived stays as it is (source
+unset: it is not re-stamped, so it survives a later component leaving); a port a person adds gets its VLAN row at the
+next run of the segment's generators.
 
-Writes RelationshipAdd/RelationshipRemove on the port, untracked: a tagged port belongs to the device's generator, not
+Writes RelationshipAdd/RelationshipRemove on the port's ``capabilities``, edge by edge, untracked: a tagged port belongs to the device's generator, not
 to a run.
 
 The rows (one per device, the MLAG peers of a tagged device included even with no port of the segment, so a dual-homed
@@ -51,17 +54,23 @@ from utils.segment_addressing import segment_namespace, tenant_pool_name
 from utils.service_contexts import member_border_ports
 
 from ..far_end import far_end_interfaces
-from ..helpers.edge_source import add_edges_with_source, current_account_id, remove_edges
+from ..helpers.edge_source import add_edge_with_source, current_account_id, remove_edge
 from ..helpers.vrf import VrfMixin
 from ..protocols import DcimPhysicalInterface, IpamPrefix
-from ..segment_vlan import SegmentVlanMixin, segment_lock_key
+from ..segment_vlan import SWITCHED_PORT_KINDS, SegmentVlanMixin, segment_lock_key
 from .endpoint import ENDPOINT_NIC_ROLES
 
 if TYPE_CHECKING:
     from ..connections import CablingMixin
 
-_SWITCHED_PORT_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface"})
-"""The kinds of DcimSwitchedInterface: the ports that can carry a segment."""
+# The device's deployment of each port, one read: the port joins the segment's deployment in that topology.
+_PORT_DEVICE_DEPLOYMENTS_QUERY = """
+query port_device_deployments($ids: [ID]) {
+  DcimInterface(ids: $ids) {
+    edges { node { id device { node { id ... on DcimPhysicalDevice { deployment { node { id } } } } } } }
+  }
+}
+"""
 
 _SEGMENT_COMPONENTS_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/topology/add/segment_components.gql"
 
@@ -132,6 +141,7 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
                 segment_name=segment_name,
                 ports=state["segment"].get("ports") or [],
                 terminated_port_ids=self._terminated_service_port_ids(state["segment"]),
+                device_deployments=self._deployment_by_device_deployment(state),
             )
             if added or removed:
                 state = await self._fetch_segment_vlan_state(segment_id)
@@ -155,7 +165,7 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
             for member in context.get("shared_devices") or []
             for port in member_border_ports(member)
             if port.get("id")
-            and port.get("typename") in _SWITCHED_PORT_KINDS
+            and port.get("typename") in SWITCHED_PORT_KINDS
             and port.get("role") == SERVICE_CONTEXT_ROLES[FIREWALL_CONTEXT_KIND]
         }
 
@@ -185,26 +195,23 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
         segment_name: str,
         ports: list[dict[str, Any]],
         terminated_port_ids: set[str],
+        device_deployments: dict[str, str],
     ) -> tuple[int, int]:
-        """Make the ports this reconcile owns exactly the customer-facing
-        targets of the instances of EVERY component on the segment plus
-        ``terminated_port_ids`` (the border service ports of the firewall
-        context terminating it): add the
-        missing ones with this run's account as the edge source, remove an edge
-        whose source is that account and that no instance lands on any more (an
-        instance that moved, a component that left, a segment no longer terminated). ``ports`` are the ports
-        on the segment today, ``{"id", "source_id", ...}``
-        (SegmentVlanMixin._segment_ports). An edge with another source or none is
-        never removed (a person's port stays, even with no component on the
-        segment), and a port already on the segment is not written again, so a
-        person's edge on a derived port keeps its (empty) source. Written with
-        RelationshipAdd/RelationshipRemove on the port's ``segments`` — touches
-        only this segment's edge on each port and never enters this run's
-        tracking group.
+        """Make the (port, deployment) edges this reconcile owns exactly the customer-facing targets of the instances
+        of EVERY component on the segment plus ``terminated_port_ids`` (the border service ports of the firewall
+        context terminating it), each joined to the segment's deployment its device sits in
+        (``device_deployments``: {deployment id a device sits in: segment deployment id}).
 
-        The account is resolved only when there is something to compare or write.
+        Adds a missing pair with this run's account as the edge source and removes an edge whose source is that
+        account and whose pair is no longer derived. ``ports`` are the segment's port edges today,
+        ``{"id", "device_id", "deployment_id", "source_id"}`` (SegmentVlanMixin._segment_ports). An edge with another
+        source or none is never removed, and a port that already has a person's edge of the segment is not written
+        (it keeps its empty source). A derived port whose device sits in no deployment of the segment is reported
+        and its edges are left as they are. RelationshipAdd/RelationshipRemove on the port's ``capabilities``, one
+        edge each, never in this run's tracking group. The account is resolved only when there is something to
+        compare or write.
 
-        Returns (interfaces tagged, interfaces untagged).
+        Returns (edges added, edges removed).
         """
         components = await self._segment_components(segment_id)
         # Several components/virtual instances can resolve to the same host.
@@ -217,25 +224,56 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
             )
         )
         desired_ids = await self._customer_facing_target_ids(device_ids) | terminated_port_ids
+        targets = await self._port_deployment_targets(desired_ids, device_deployments)
+        undecided = sorted(port_id for port_id, deployment_id in targets.items() if deployment_id is None)
+        for port_id in undecided:
+            self.logger.warning(
+                f"Segment {segment_name}: port {port_id} sits on a device in no deployment of the segment — not tagged"
+            )
+        desired = {(port_id, deployment_id) for port_id, deployment_id in targets.items() if deployment_id}
 
-        current_ids = {port["id"] for port in ports}
-        to_add = sorted(desired_ids - current_ids)
-        owned = [port["id"] for port in ports if port.get("source_id") and port["id"] not in desired_ids]
-        to_remove: list[str] = []
+        current = {(port["id"], port["deployment_id"]) for port in ports}
+        by_person = {port["id"] for port in ports if not port.get("source_id")}
+        to_add = sorted(pair for pair in desired - current if pair[0] not in by_person)
+        owned = [
+            port
+            for port in ports
+            if port.get("source_id")
+            and (port["id"], port["deployment_id"]) not in desired
+            and port["id"] not in undecided
+        ]
+        to_remove: list[tuple[str, str]] = []
         if to_add or owned:
             account_id = await self._generator_account_id()
-            to_remove = sorted(
-                port["id"] for port in ports if port.get("source_id") == account_id and port["id"] not in desired_ids
-            )
-            await add_edges_with_source(
-                self.client, node_ids=to_add, relation="segments", peer_id=segment_id, source_id=account_id
-            )
-            await remove_edges(self.client, node_ids=to_remove, relation="segments", peer_id=segment_id)
+            to_remove = sorted((port["id"], port["deployment_id"]) for port in owned if port["source_id"] == account_id)
+            for port_id, deployment_id in to_add:
+                await add_edge_with_source(
+                    self.client, node_id=port_id, relation="capabilities", peer_id=deployment_id, source_id=account_id
+                )
+            for port_id, deployment_id in to_remove:
+                await remove_edge(self.client, node_id=port_id, relation="capabilities", peer_id=deployment_id)
         self.logger.info(
             f"Segment {segment_name}: {len(desired_ids)} port(s) from {len(components)} "
             f"component(s) and {len(terminated_port_ids)} firewall service port(s) — tagged {len(to_add)}, untagged {len(to_remove)}"
         )
         return len(to_add), len(to_remove)
+
+    async def _port_deployment_targets(
+        self, port_ids: set[str], device_deployments: dict[str, str]
+    ) -> dict[str, str | None]:
+        """{port id: the segment deployment the port's device sits in, None when it sits in none of them}, one read
+        of the ports' devices and their ``deployment``."""
+        if not port_ids:
+            return {}
+        result = await self.client.execute_graphql(
+            query=_PORT_DEVICE_DEPLOYMENTS_QUERY, variables={"ids": sorted(port_ids)}
+        )
+        targets: dict[str, str | None] = dict.fromkeys(port_ids)
+        for port in clean_data(result).get("DcimInterface") or []:
+            deployment_id = (((port.get("device") or {}).get("deployment")) or {}).get("id")
+            if port.get("id") in targets:
+                targets[port["id"]] = device_deployments.get(deployment_id) if deployment_id else None
+        return targets
 
     @staticmethod
     def _resolve_physical_device_id(instance: dict[str, Any]) -> str | None:

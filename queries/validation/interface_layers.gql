@@ -12,6 +12,14 @@ query interface_layers {
             name {
               value
             }
+            # R4: the port's deployments sit in the hosting deployment of its device (utils/segment_addressing.py).
+            ... on DcimPhysicalDevice {
+              deployment {
+                node {
+                  ...ServiceHostingFields
+                }
+              }
+            }
           }
         }
         lag {
@@ -24,9 +32,6 @@ query interface_layers {
             id
           }
         }
-        segments {
-          count
-        }
         sub_interfaces {
           count
         }
@@ -34,6 +39,26 @@ query interface_layers {
           edges {
             node {
               __typename
+              # A segment deployment is the port's switchport membership (utils/segment_vlan.py port_deployments).
+              ... on ManagedSegmentDeployment {
+                id
+                deployment {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+                segment {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -53,15 +78,20 @@ query interface_layers {
             name {
               value
             }
+            # R4: the port's deployments sit in the hosting deployment of its device (utils/segment_addressing.py).
+            ... on DcimPhysicalDevice {
+              deployment {
+                node {
+                  ...ServiceHostingFields
+                }
+              }
+            }
           }
         }
         ip_address {
           node {
             id
           }
-        }
-        segments {
-          count
         }
         sub_interfaces {
           count
@@ -70,6 +100,66 @@ query interface_layers {
           edges {
             node {
               __typename
+              # A segment deployment is the port's switchport membership (utils/segment_vlan.py port_deployments).
+              ... on ManagedSegmentDeployment {
+                id
+                deployment {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+                segment {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  # R3: the interfaces of every segment deployment, any kind (only a physical port or a LAG may carry a segment).
+  ManagedSegmentDeployment {
+    edges {
+      node {
+        id
+        segment {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        deployment {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              __typename
+              id
+              name {
+                value
+              }
+              device {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
             }
           }
         }

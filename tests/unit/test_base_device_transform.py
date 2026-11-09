@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tests.unit.base_device_transform_helpers import _device_data, _make_tor, _make_transform
+from tests.unit.segment_port_helpers import deployment_caps
 from transforms.common import BaseDeviceTransform, get_capabilities
 from transforms.config.tor import ToR
 
@@ -149,7 +150,7 @@ class TestTransformDataRouting:
         interfaces = [
             {
                 "name": "Ethernet10",
-                "segments": [
+                "capabilities": deployment_caps(
                     {
                         "id": "seg-1",
                         "typename": "ManagedVxlanSegment",
@@ -157,7 +158,7 @@ class TestTransformDataRouting:
                         "customer_name": "seg-100",
                         "segment_deployments": [{"vlan_id": 100, "vni": 10100}],
                     }
-                ],
+                ),
             }
         ]
         device = _device_data(interfaces=interfaces)
@@ -249,12 +250,12 @@ class TestTransformDataRouting:
 
 class TestCollectActivationsOwnRow:
     """A VXLAN segment's local vlan_id comes from the row (under a segment deployment) of THIS device
-    (the row's ``capabilities``), and its VNI from that same deployment."""
+    (``row.device.id``), and its VNI from that same deployment."""
 
     @staticmethod
     def _vxlan_iface(row_device_id: str, vlan_id: int = 100) -> dict:
         return {
-            "segments": [
+            "capabilities": deployment_caps(
                 {
                     "typename": "ManagedVxlanSegment",
                     "id": "seg-1",
@@ -262,11 +263,11 @@ class TestCollectActivationsOwnRow:
                     "segment_deployments": [
                         {
                             "vni": 10100,
-                            "vlans": [{"capabilities": [{"id": row_device_id}], "vlan_id": vlan_id}],
+                            "vlans": [{"device": {"id": row_device_id}, "vlan_id": vlan_id}],
                         }
                     ],
                 }
-            ]
+            )
         }
 
     def test_device_reads_its_own_row(self) -> None:
@@ -280,7 +281,7 @@ class TestCollectActivationsOwnRow:
         """Both MLAG peers carry a row of the segment; each renders its own (ids may differ)."""
         t = _make_transform("leaf")
         iface = {
-            "segments": [
+            "capabilities": deployment_caps(
                 {
                     "typename": "ManagedVxlanSegment",
                     "id": "seg-1",
@@ -289,13 +290,13 @@ class TestCollectActivationsOwnRow:
                         {
                             "vni": 10100,
                             "vlans": [
-                                {"capabilities": [{"id": "dev-leaf-02"}], "vlan_id": 250},
-                                {"capabilities": [{"id": "dev-leaf-01"}], "vlan_id": 150},
+                                {"device": {"id": "dev-leaf-02"}, "vlan_id": 250},
+                                {"device": {"id": "dev-leaf-01"}, "vlan_id": 150},
                             ],
                         }
                     ],
                 }
-            ]
+            )
         }
         for device_id, expected in (("dev-leaf-01", 150), ("dev-leaf-02", 250)):
             activations = t._collect_activations_from_interfaces([iface], device_id=device_id)
@@ -306,20 +307,20 @@ class TestCollectActivationsOwnRow:
         and the VNI is that deployment's, never the first one's."""
         t = _make_transform("leaf")
         iface = {
-            "segments": [
+            "capabilities": deployment_caps(
                 {
                     "typename": "ManagedVxlanSegment",
                     "id": "seg-1",
                     "name": "tenant-a-web",
                     "segment_deployments": [
-                        {"vni": 10100, "vlans": [{"capabilities": [{"id": "other"}], "vlan_id": 100}]},
+                        {"vni": 10100, "vlans": [{"device": {"id": "other"}, "vlan_id": 100}]},
                         {
                             "vni": 20200,
-                            "vlans": [{"capabilities": [{"id": "dev-leaf-01"}], "vlan_id": 120}],
+                            "vlans": [{"device": {"id": "dev-leaf-01"}, "vlan_id": 120}],
                         },
                     ],
                 }
-            ]
+            )
         }
         activations = t._collect_activations_from_interfaces([iface], device_id="dev-leaf-01")
         assert [(a["vlan_id"], a["vni"]) for a in activations] == [(120, 20200)]

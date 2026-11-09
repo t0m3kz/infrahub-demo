@@ -840,9 +840,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -936,9 +933,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -970,9 +964,6 @@
                   },
                   "cable": {
                     "node": null
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -2371,26 +2362,46 @@
                                                   }
                                                 }
                                               },
-                                              "segments": {
+                                              "capabilities": {
                                                 "edges": [
                                                   {
                                                     "node": {
-                                                      "id": "seg-web-np"
+                                                      "__typename": "ManagedSegmentDeployment",
+                                                      "segment": {
+                                                        "node": {
+                                                          "id": "seg-web-np"
+                                                        }
+                                                      }
                                                     }
                                                   },
                                                   {
                                                     "node": {
-                                                      "id": "seg-app-np"
+                                                      "__typename": "ManagedSegmentDeployment",
+                                                      "segment": {
+                                                        "node": {
+                                                          "id": "seg-app-np"
+                                                        }
+                                                      }
                                                     }
                                                   },
                                                   {
                                                     "node": {
-                                                      "id": "seg-pay-p"
+                                                      "__typename": "ManagedSegmentDeployment",
+                                                      "segment": {
+                                                        "node": {
+                                                          "id": "seg-pay-p"
+                                                        }
+                                                      }
                                                     }
                                                   },
                                                   {
                                                     "node": {
-                                                      "id": "seg-portal-p"
+                                                      "__typename": "ManagedSegmentDeployment",
+                                                      "segment": {
+                                                        "node": {
+                                                          "id": "seg-portal-p"
+                                                        }
+                                                      }
                                                     }
                                                   }
                                                 ]
@@ -2509,11 +2520,16 @@
                                                       }
                                                     }
                                                   },
-                                                  "segments": {
+                                                  "capabilities": {
                                                     "edges": [
                                                       {
                                                         "node": {
-                                                          "id": "seg-pay-p"
+                                                          "__typename": "ManagedSegmentDeployment",
+                                                          "segment": {
+                                                            "node": {
+                                                              "id": "seg-pay-p"
+                                                            }
+                                                          }
                                                         }
                                                       }
                                                     ]
@@ -2579,11 +2595,16 @@
                                                       }
                                                     }
                                                   },
-                                                  "segments": {
+                                                  "capabilities": {
                                                     "edges": [
                                                       {
                                                         "node": {
-                                                          "id": "seg-pay-p"
+                                                          "__typename": "ManagedSegmentDeployment",
+                                                          "segment": {
+                                                            "node": {
+                                                              "id": "seg-pay-p"
+                                                            }
+                                                          }
                                                         }
                                                       }
                                                     ]
@@ -2651,7 +2672,7 @@
           "service_ports": {
             "edges": []
           },
-          "capabilities": {
+          "vlans": {
             "edges": []
           }
         }

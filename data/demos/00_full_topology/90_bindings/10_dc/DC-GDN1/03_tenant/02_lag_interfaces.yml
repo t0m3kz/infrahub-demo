@@ -1,5 +1,6 @@
 ---
-# The vPC: one port-channel per leaf (same lag_id), each with its Ethernet1/2, the segment c900-db-p on both.
+# The vPC: one port-channel per leaf (same lag_id), each with its Ethernet1/2, both members of c900-db-p
+# (90_bindings/96_segment_ports).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -14,7 +15,6 @@ spec:
       minimum_links: 1
       member_interfaces:
         - ["gdn1-leaf-01", "Ethernet1/2"]
-      segments: ["c900-db-p"]
     - device: gdn1-leaf-02
       name: Port-Channel10
       description: vPC to gdn1-srv-01 (bond0)
@@ -24,4 +24,3 @@ spec:
       minimum_links: 1
       member_interfaces:
         - ["gdn1-leaf-02", "Ethernet1/2"]
-      segments: ["c900-db-p"]

@@ -29,13 +29,7 @@ def _deployment(vni: int | None, *rows: tuple[str, int], name: str = "c900-sync-
         "deployment": {"node": {"id": "dc-1", "display_label": "DC-1"}},
         "vlans": {
             "edges": [
-                {
-                    "node": {
-                        "id": f"row-{dev}",
-                        "vlan_id": _v(vlan),
-                        "capabilities": {"edges": [{"node": {"id": dev, "name": _v(dev)}}]},
-                    }
-                }
+                {"node": {"id": f"row-{dev}", "vlan_id": _v(vlan), "device": {"node": {"id": dev, "name": _v(dev)}}}}
                 for dev, vlan in rows
             ]
         },

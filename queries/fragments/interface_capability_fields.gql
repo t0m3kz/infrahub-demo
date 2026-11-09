@@ -127,28 +127,26 @@ fragment InterfaceCapabilitiesFields on DcimInterface {
   }
 }
 
-fragment InterfaceSegmentsFields on DcimInterface {
-  ... on DcimSwitchedInterface {
-    segments {
-      edges {
-        node {
-          __typename
-          ...NetworkSegmentFields
-        }
-      }
-    }
-  }
-}
-
+# The interface's own `capabilities`, the ONE plain selection of the field on an interface object: OSPF, the routed
+# exchange and the segment deployments a switch port is a member of (transforms/helpers/segments.py
+# interface_segments reads the segment of each).
 fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
   ...InterfaceRoutingZoneFields
-  ...InterfaceSegmentsFields
   capabilities {
     edges {
       node {
         __typename
         ...OspfInterfaceCapabilityFields
         ...ExchangeGatewayInterfaceCapabilityFields
+        ... on ManagedSegmentDeployment {
+          id
+          segment {
+            node {
+              __typename
+              ...NetworkSegmentFields
+            }
+          }
+        }
       }
     }
   }

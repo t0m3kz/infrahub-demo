@@ -384,9 +384,9 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         """An edge a person sets from a port is never removed by the segment reconcile.
 
         The reconcile writes the ports its components derive with its own account as the edge source and removes
-        only those. Here an uncabled customer port of a switch the server is cabled to gets the segment with no
-        source (the SDK writes none), add_vxlan_segment runs again, and the edge is still there, still sourceless,
-        next to the generated ones. The edge is then removed by hand and the generator rerun, which must not put it
+        only those. Here an uncabled customer port of a switch the server is cabled to joins the segment's deployment
+        with no source (the SDK writes none), add_vxlan_segment runs again, and the edge is still there, still
+        sourceless, next to the generated ones. The edge is then removed by hand and the generator rerun, which must not put it
         back (no instance lands on that port) - the branch ends as it began, before the proposed change merges it.
         """
         logging.info("=== %s - Step 3e: A person's port edge survives the reconcile ===", SCENARIO_NAME)
@@ -408,18 +408,20 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
             kind="DcimPhysicalInterface",
             device__name__value=switch,
             role__value="customer",
-            include=["cable", "segments"],
+            include=["cable", "capabilities"],
             branch=scenario_branch,
         )
         free = sorted(
-            (port for port in candidates if not getattr(port.cable, "id", None) and not _peers(port, "segments")),
+            (port for port in candidates if not getattr(port.cable, "id", None) and not _peers(port, "capabilities")),
             key=_port_name,
         )
         assert free, f"{switch} has no uncabled customer port left to tag by hand"
         port = free[0]
+        # The segment's deployment in the switch's DC: the one its generated ports on that switch are in.
+        deployment_id = next(p["deployment_id"] for p in generated if p["device"] == switch)
 
-        # A person's edge: added from the port, no source.
-        await port.add_relationships(relation_to_update="segments", related_nodes=[segment_id])
+        # A person's edge: the port added to the segment's deployment from the port, no source.
+        await port.add_relationships(relation_to_update="capabilities", related_nodes=[deployment_id])
         by_hand = await fetch_segment_ports(client, scenario_branch, segment_id)
         assert [p["id"] for p in by_hand if p["source_id"] is None] == [port.id], (
             f"the hand-set edge on {switch}:{_port_name(port)} should be the only sourceless one: {by_hand}"
@@ -441,7 +443,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         )
 
         # Back to the generated set: a person removes it, and the generator does not bring it back.
-        await port.remove_relationships(relation_to_update="segments", related_nodes=[segment_id])
+        await port.remove_relationships(relation_to_update="capabilities", related_nodes=[deployment_id])
         outcome = await run_generator(
             client=client, generator_name="add_vxlan_segment", node_ids=[segment_id], branch=scenario_branch
         )

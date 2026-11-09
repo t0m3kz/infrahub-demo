@@ -73,7 +73,7 @@ class TestShared:
 
         _run_shared(world, "seg-1", ["a", "b"], vni=40000)
 
-        assert {c["capabilities"][0]["id"]: c["vlan_id"] for c in world.created} == {"sw-a": 2500, "sw-b": 2500}
+        assert {c["device"]["id"]: c["vlan_id"] for c in world.created} == {"sw-a": 2500, "sw-b": 2500}
 
     def test_a_device_that_already_uses_the_id_fails_and_creates_nothing(self) -> None:
         """No fallback to another id: the point of a shared id is that it is the same everywhere."""
@@ -151,14 +151,7 @@ class TestChoice:
         _run(world, "seg-1", ["a", "b"])
 
         assert world.vlan_ids("seg-1") == {"sw-a": 250, "sw-b": 250}
-        assert world.created == [
-            {
-                "segment_deployment": {"id": "sd-seg-1"},
-                "capabilities": [{"id": "sw-b"}],
-                "device_name": "sw-b",
-                "vlan_id": 250,
-            }
-        ]
+        assert world.created == [{"segment_deployment": {"id": "sd-seg-1"}, "device": {"id": "sw-b"}, "vlan_id": 250}]
 
     def test_existing_ids_that_disagree_prefer_the_lowest(self) -> None:
         """Earlier data may differ per device: the new device follows the lowest, existing rows never change."""
@@ -252,12 +245,11 @@ class TestIsolation:
         assert world.vlan_ids("seg-1") == {"sw-b": 100}
 
     def test_uniqueness_is_enforced_by_the_schema_too(self, root_dir: Path) -> None:
-        """The DB-level backstop: a VLAN id is unique per device (on the ``device_name`` mirror of the row's one
-        capabilities peer), and there is no VLAN domain generic any more."""
+        """The DB-level backstop: a VLAN id is unique per device, and there is no VLAN domain generic any more."""
         segment_schema = yaml.safe_load((root_dir / "schemas/extensions/service/segment.yml").read_text())
         node = next(n for n in segment_schema["nodes"] if n["name"] == "SegmentVlan")
-        assert ["segment_deployment", "device_name__value"] in node["uniqueness_constraints"]
-        assert ["device_name__value", "vlan_id__value"] in node["uniqueness_constraints"]
+        assert ["segment_deployment", "device"] in node["uniqueness_constraints"]
+        assert ["device", "vlan_id__value"] in node["uniqueness_constraints"]
         dcim_schema = yaml.safe_load((root_dir / "schemas/base/dcim.yml").read_text())
         assert "GenericVlanDomain" not in {g["name"] for g in dcim_schema["generics"]}
 
@@ -297,7 +289,7 @@ class TestReadsAndLocks:
 
         used = world.reads(ManagedSegmentVlan)
         assert len(used) == 1
-        assert used[0]["capabilities__ids"] == ["sw-a", "sw-b", "sw-m", "sw-n"]
+        assert used[0]["device__ids"] == ["sw-a", "sw-b", "sw-m", "sw-n"]
 
     def test_used_ids_read_also_covers_the_segments_kept_devices(self) -> None:
         """The segment's own ids on its kept devices come from the same read."""
@@ -308,7 +300,7 @@ class TestReadsAndLocks:
 
         used = world.reads(ManagedSegmentVlan)
         assert len(used) == 1
-        assert used[0]["capabilities__ids"] == ["sw-a", "sw-b"]
+        assert used[0]["device__ids"] == ["sw-a", "sw-b"]
 
     def test_devices_are_locked_in_sorted_order_inside_the_segment_lock(self) -> None:
         """Consistent order, whatever order the devices come in, so two segments never deadlock."""

@@ -70,7 +70,7 @@ def _graph(cables: list = CABLES, vlans: dict | None = None, mlag_members: list 
                 "name": _v(port),
                 "device": _node(name=_v(dev)),
                 "lag": {"node": None},
-                "segments": _edges(),
+                "capabilities": _edges(),
                 "cable": {"node": None},
             }
     d: dict[str, list] = {k: [] for k in ("front", "rear", "lag", "seg", "mlag", "dev", "bgp", "peering")}
@@ -123,7 +123,8 @@ def _graph(cables: list = CABLES, vlans: dict | None = None, mlag_members: list 
             "device": _node(name=_v(leaf)),
             "lag_id": _v(10),
             "member_interfaces": _edges(),
-            "segments": _edges({"id": "seg"}),
+            # The port-channel is in the segment's deployment: one of its capabilities.
+            "capabilities": _edges({"__typename": "ManagedSegmentDeployment", "id": "sd", "segment": _node(id="seg")}),
         }
         ports[f"{leaf}:{port}"]["lag"] = _node(id=lag["id"], name=_v("Port-Channel10"))
         d["lag"].append(lag)
@@ -133,13 +134,12 @@ def _graph(cables: list = CABLES, vlans: dict | None = None, mlag_members: list 
             "name": _v("bond0"),
             "device": _node(name=_v("srv")),
             "lag_id": _v(1),
-            "segments": _edges(),
+            "capabilities": _edges(),
             "member_interfaces": _edges({"id": "srv:eno1", "name": _v("eno1")}, {"id": "srv:eno2", "name": _v("eno2")}),
         }
     )
     rows = [
-        {"capabilities": _edges({"name": _v(leaf)}), "vlan_id": _v(v)}
-        for leaf, v in (vlans or dict.fromkeys(LEAVES, 100)).items()
+        {"device": _node(name=_v(leaf)), "vlan_id": _v(v)} for leaf, v in (vlans or dict.fromkeys(LEAVES, 100)).items()
     ]
     d["seg"] = [{"id": "seg", "name": _v("seg"), "segment_deployments": _edges({"vlans": _edges(*rows)})}]
     members = mlag_members if mlag_members is not None else LEAVES
@@ -192,7 +192,7 @@ def test_an_mlag_with_a_wrong_member_fails() -> None:
 def test_a_leaf_without_the_port_channel_on_the_segment_fails() -> None:
     """The dual-homing row needs the segment on both port-channels."""
     d = _graph()
-    d["lag"][0]["segments"] = _edges()
+    d["lag"][0]["capabilities"] = _edges()
     assert any("dual-homed" in name for name in _failed(walks.pod_rows(d, CFG)))
 
 

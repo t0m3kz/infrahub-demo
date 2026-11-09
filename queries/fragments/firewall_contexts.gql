@@ -154,11 +154,9 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
                     vlan_id {
                       value
                     }
-                    capabilities {
-                      edges {
-                        node {
-                          id
-                        }
+                    device {
+                      node {
+                        id
                       }
                     }
                   }
@@ -333,22 +331,6 @@ fragment FirewallZoneFields on SecurityZone {
           }
         }
         ...SegmentRulesFields
-      }
-    }
-  }
-}
-
-fragment FirewallInterfaceZoneFields on DcimInterface {
-  ... on DcimSwitchedInterface {
-    segments {
-      edges {
-        node {
-          security_zone {
-            node {
-              ...RoutingZoneFields
-            }
-          }
-        }
       }
     }
   }

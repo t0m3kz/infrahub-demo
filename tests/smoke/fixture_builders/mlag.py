@@ -7,6 +7,7 @@ from tests.smoke.fixture_builders.common import (
     _make_interface,
     _make_segment_node,
     _node,
+    _segment_memberships,
     _v,
     _write_data_fixture,
     write_data_fixtures,
@@ -207,7 +208,7 @@ def build_mlag_device_data(
                 "role": _v("lag"),
                 "lag_id": _v(host_lag_id),
                 "member_interfaces": _edges([{"name": _v(host_member)}]),
-                "segments": _edges(host_segments),
+                "capabilities": _edges(_segment_memberships(host_segments)),
             },
             _make_interface(name=host_member, device_name=device_name, description="MLAG host member", role="customer"),
         ]

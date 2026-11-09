@@ -216,7 +216,7 @@ class DcimHasIPAddress(CoreNode):
 
 
 class DcimSwitchedInterface(CoreNode):
-    segments: RelationshipManager[ManagedVxlanSegment]
+    pass
 
 
 class DcimInterface(CoreNode):
@@ -810,6 +810,7 @@ class TopologyCarrierCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
 
 
 class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppInstance):
+    vlans: RelationshipManager[ManagedSegmentVlan]
     position: IntegerOptional
     rack_face: Dropdown
     serial: StringOptional
@@ -990,7 +991,7 @@ class SecuritySecurityProfile(CoreNode):
     name: String
 
 
-class ManagedSegmentDeployment(CoreNode):
+class ManagedSegmentDeployment(ManagedGenericInterfaces):
     status: Dropdown
     vni: IntegerOptional
     deployment: RelationshipAttribute[TopologySegmentHosting]
@@ -998,10 +999,10 @@ class ManagedSegmentDeployment(CoreNode):
     vlans: RelationshipManager[ManagedSegmentVlan]
 
 
-class ManagedSegmentVlan(ManagedGenericDevice):
-    device_name: String
+class ManagedSegmentVlan(CoreNode):
     vlan_id: Integer
     segment_deployment: RelationshipAttribute[ManagedSegmentDeployment]
+    device: RelationshipAttribute[DcimPhysicalDevice]
     svi: RelationshipAttribute[DcimVirtualInterface]
 
 

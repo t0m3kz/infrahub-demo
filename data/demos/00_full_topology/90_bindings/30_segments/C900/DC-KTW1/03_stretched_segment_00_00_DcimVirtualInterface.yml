@@ -11,7 +11,7 @@
 # row each: eight in all. Only the leaves have an SVI (four): a border leaf carries a stretched segment as VLAN and VNI
 # only, it relays the DCI routes and has no host in it (utils/segment_addressing.py l2_only_on). Every SVI has the
 # anycast gateway above, which is why a host keeps its gateway when it moves between the DCs. No workload is attached
-# yet: tagging a port with the segment (`segments` on a LAG or port) is all a host needs.
+# yet: a LAG or port in the segment's deployment (its `capabilities`) is all a host needs.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

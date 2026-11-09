@@ -270,8 +270,15 @@ def build_edge_unfiltered_appliance_data(*, device_name: str) -> dict:
         port = edge["node"]
         if port["__typename"] == "DcimPhysicalInterface":
             port["__typename"] = "DcimVirtualInterface"
-            for physical_only in ("cable", "interface_type", "mtu", "segments"):
+            for physical_only in ("cable", "interface_type", "mtu"):
                 port.pop(physical_only, None)
+            port["capabilities"] = _edges(
+                [
+                    cap["node"]
+                    for cap in port["capabilities"]["edges"]
+                    if cap["node"].get("__typename") != "ManagedSegmentDeployment"
+                ]
+            )
     prod = _node({"name": _v("PROD"), "l3_vni": _v(60000), "vrf_type": _v("prod")})
     peerings = []
     for iface, local_ip, remote_ip, remote, remote_iface, remote_asn, name, far_role in (

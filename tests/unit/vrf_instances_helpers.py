@@ -83,12 +83,7 @@ def raw_row(
                 "ip_prefix": {"node": {"ip_namespace": namespace_ref("default")}},
             }
         }
-    return {
-        "__typename": "ManagedSegmentVlan",
-        "id": row_id,
-        "vlan_id": {"value": vlan_id},
-        "segment_deployment": {"node": {"segment": {"node": seg}}},
-    }
+    return {"id": row_id, "vlan_id": {"value": vlan_id}, "segment_deployment": {"node": {"segment": {"node": seg}}}}
 
 
 def raw_instance(
@@ -324,12 +319,10 @@ def raw_device(
         "member_of_groups": edges(*({"name": {"value": group}} for group in groups)),
         "shared_capabilities": edges(*members, *({"__typename": kind} for kind in shared_others or [])),
         "deployment": raw_deployment(deployment_kind, hosting_id),
-        # The device's individual capabilities, one list: its VLAN rows and, when it steers, its ManagedPBR.
-        "capabilities": edges(
-            *(rows or []), *([{"__typename": "ManagedPBR", "id": f"pbr-{device_id}"}] if pbr else [])
-        ),
+        "vlans": edges(*(rows or [])),
         "interfaces": edges(*(interfaces or [])),
         "service_ports": edges(*(service_ports or [])),
+        "capabilities": edges(*([{"__typename": "ManagedPBR", "id": f"pbr-{device_id}"}] if pbr else [])),
     }
     if status:
         node["status"] = {"value": status}

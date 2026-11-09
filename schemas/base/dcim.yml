@@ -289,9 +289,9 @@ generics:
         on_delete: no-action
         order_weight: 1900
 
-  # Ports that can be switchport members of VXLAN segments: a physical port and a LAG. Its one relationship,
-  # `segments` (the typed L2 membership, one-sided: the segment has no list of its ports), is declared in
-  # schemas/extensions/service/segment.yml next to the segment.
+  # Ports that can be switchport members of VXLAN segments: a physical port and a LAG (a marker: a port's membership is
+  # a ManagedSegmentDeployment among its interface `capabilities`, checks/interface_layers.py holds the kinds; a
+  # virtual switch's `uplinks` peer it).
   - name: SwitchedInterface
     namespace: Dcim
     label: Switched Interface

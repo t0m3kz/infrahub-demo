@@ -146,7 +146,20 @@ class _World:
         self.vrf_edges: list[tuple[str, str, list[str]]] = []
 
     async def execute_graphql(self, *, query: str, variables: dict[str, Any]) -> dict[str, Any]:
-        """Return the current border-device graph, including scoped memberships and context legs."""
+        """Return the current border-device graph, including scoped memberships and context legs; a RelationshipAdd
+        or RelationshipRemove on a sub-interface's ``capabilities`` (generators/helpers/interface_vrf.py: the edges
+        are written one by one, never as a saved list) changes that sub-interface's peers."""
+        if "RelationshipAdd" in query or "RelationshipRemove" in query:
+            data = variables["data"]
+            assert data["name"] == "capabilities"
+            sub = next(sub for sub in self.sub_interfaces.values() if sub.id == data["id"])
+            for peer in data["nodes"]:
+                if "RelationshipAdd" in query:
+                    sub.capabilities.add({"id": peer["id"]})
+                else:
+                    self.vrf_edges.append(("remove", peer["id"], [sub.id]))
+                    sub.capabilities.peers = [p for p in sub.capabilities.peers if p.id != peer["id"]]
+            return {}
         assert "query vrf_instances" in query
         devices = []
         for device_id in variables["device_ids"]:
@@ -379,8 +392,6 @@ class _World:
             return next(prefix for prefix in self.allocated.values() if prefix.id == kwargs["id"])
         if name == "ManagedVRF":
             instance_id = kwargs["id"]
-            if "include" not in kwargs:  # generators/helpers/interface_vrf.py: the node an interface edge is written on
-                return self._vrf_node(instance_id)
             self.routing.store.external_refs[instance_id] = {"capabilities": set(self.vrf_interfaces(instance_id))}
             return await self.routing._get(kind, instance_id, kwargs["include"])
         raise AssertionError(f"unexpected get({name})")
@@ -552,8 +563,8 @@ class _World:
         return [sub.id for sub in self.sub_interfaces.values() if self.vrf_of(sub) == vrf_id]
 
     def _joined(self, key: tuple[str, str], peer_id: str) -> str | None:
-        """A capability added to a sub-interface's loaded manager: a VRF instance is the leg joining it, saved with the
-        sub-interface while the border devices' VRF locks and the context's lock are held."""
+        """A capability added to a sub-interface (its RelationshipAdd): a VRF instance is the leg joining it, while the
+        border devices' VRF locks and the context's lock are held."""
         vrf = self.routing.store.vrfs.get(peer_id)
         if vrf is None:
             return None
@@ -569,22 +580,12 @@ class _World:
         return "ManagedVRF"
 
     def _vrf_node(self, vrf_id: str) -> Any:
-        """An instance as a ``capabilities__ids`` read or ``leave_vrfs`` (RelationshipRemove) sees it."""
+        """An instance as a ``capabilities__ids`` read sees it."""
         vrf = self.routing.store.vrfs[vrf_id]
-        world = self
-
-        async def remove_relationships(*, relation_to_update: str, related_nodes: list[str]) -> None:
-            assert relation_to_update == "capabilities"
-            world.vrf_edges.append(("remove", vrf_id, list(related_nodes)))
-            for sub in world.sub_interfaces.values():
-                if sub.id in related_nodes:
-                    sub.capabilities.peers = [peer for peer in sub.capabilities.peers if peer.id != vrf_id]
-
         return SimpleNamespace(
             id=vrf_id,
             security_zone=vrf.security_zone,
             capabilities=SimpleNamespace(peers=[SimpleNamespace(id=sub) for sub in self.vrf_interfaces(vrf_id)]),
-            remove_relationships=remove_relationships,
         )
 
     # --- assertions helpers ---------------------------------------------

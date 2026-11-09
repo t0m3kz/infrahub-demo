@@ -5,14 +5,13 @@ from typing import Any
 
 from utils.limits import DEFAULT_NAMESPACE
 from utils.segment_addressing import is_fabric_l2, routed_segment_namespace
+from utils.segment_vlan import port_segments
 
 
 def interface_segments(iface: dict[str, Any]) -> list[dict[str, Any]]:
-    """The VXLAN segments an interface carries.
-
-    A switch port or LAG carries them on ``segments`` (DcimSwitchedInterface). Nothing is read from ``capabilities``.
-    """
-    return iface.get("segments") or []
+    """The VXLAN segments an interface carries: the segment of each ManagedSegmentDeployment among its
+    ``capabilities`` (queries/fragments/interface_capability_fields.gql InterfaceCapabilitiesWithSegmentFields)."""
+    return port_segments(iface)
 
 
 def routed_activations(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:

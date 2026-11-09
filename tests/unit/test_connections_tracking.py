@@ -35,7 +35,19 @@ def _make_gen() -> Any:
     gen.client.get = AsyncMock(return_value=None)
     gen.client.filters = AsyncMock(return_value=[])
     gen.client.create = AsyncMock()
+    gen.client.execute_graphql = AsyncMock(return_value={})
     return gen
+
+
+def _joined(gen: Any) -> list[tuple[str, list[str]]]:
+    """(node id, peer ids) of every RelationshipAdd on an interface's ``capabilities`` (interface_vrf
+    ``join_capabilities``): the edges are added one call each, never saved as a list."""
+    calls = []
+    for call in gen.client.execute_graphql.await_args_list:
+        data = (call.kwargs.get("variables") or {}).get("data") or {}
+        if "RelationshipAdd" in call.kwargs.get("query", "") and data.get("name") == "capabilities":
+            calls.append((data["id"], [node["id"] for node in data["nodes"]]))
+    return calls
 
 
 def _address(address: str, ip_id: str) -> Any:
@@ -57,8 +69,8 @@ def _sub_iface(*, existing_peer_ids: list[str], gen: Any = None) -> Any:
     """A created DcimVirtualInterface; with ``gen``, the stored node its capabilities are read from.
 
     The created node does not know the capabilities the server holds, so the helper reads them off one
-    get(include=["capabilities"]) of the stored node, which is ``node.stored`` here (saved when a capability
-    is added).
+    get(include=["capabilities"]) of the stored node, which is ``node.stored`` here (never saved: a missing
+    capability is a RelationshipAdd, ``_joined``).
     """
     node = MagicMock(id="sub-1")
     node.save = AsyncMock()
@@ -152,7 +164,7 @@ class TestUpsertP2pAddressesTrack:
 
 
 class TestEnsureVlanSubinterfaceTrack:
-    """ensure_vlan_subinterface(track=...) covers the sub-interface save and its capability re-save."""
+    """ensure_vlan_subinterface(track=...) covers the sub-interface save; its capabilities are edges, not a save."""
 
     async def _run(self, gen: Any, *, track: bool | None) -> Any:
         """Call ensure_vlan_subinterface with or without an explicit track kwarg."""
@@ -169,8 +181,9 @@ class TestEnsureVlanSubinterfaceTrack:
         return await gen.ensure_vlan_subinterface(**kwargs)
 
     @pytest.mark.asyncio
-    async def test_default_tracks_both_saves(self) -> None:
-        """Default: the sub-interface and its capability-link re-save are both tracked."""
+    async def test_default_tracks_the_save_and_adds_the_capability_as_an_edge(self) -> None:
+        """Default: the sub-interface save is tracked; the capability is one RelationshipAdd, the stored node is
+        never saved (a list save would replace the port's other edges)."""
         gen = _make_gen()
         node = _sub_iface(existing_peer_ids=[], gen=gen)
 
@@ -178,18 +191,20 @@ class TestEnsureVlanSubinterfaceTrack:
 
         assert result is node
         node.save.assert_awaited_once_with(**_TRACKED)
-        node.stored.save.assert_awaited_once_with(**_TRACKED)
+        node.stored.save.assert_not_awaited()
+        assert _joined(gen) == [("sub-1", ["ex-1"])]
 
     @pytest.mark.asyncio
-    async def test_track_false_makes_both_saves_untracked(self) -> None:
-        """track=False: neither the sub-interface save nor the capability re-save claims the node."""
+    async def test_track_false_makes_the_save_untracked(self) -> None:
+        """track=False: the sub-interface save does not claim the node; the capability is still an edge."""
         gen = _make_gen()
         node = _sub_iface(existing_peer_ids=[], gen=gen)
 
         await self._run(gen, track=False)
 
         node.save.assert_awaited_once_with(**_UNTRACKED)
-        node.stored.save.assert_awaited_once_with(**_UNTRACKED)
+        node.stored.save.assert_not_awaited()
+        assert _joined(gen) == [("sub-1", ["ex-1"])]
         data = gen.client.create.call_args.kwargs["data"]
         assert data["name"] == "Ethernet1/25.3000"
         assert data["ip_address"] == {"id": "ip-a"}
@@ -265,15 +280,15 @@ class TestEnsureVlanSubinterfaceExtraCapabilities:
         )
 
     @pytest.mark.asyncio
-    async def test_only_missing_capabilities_are_added_in_one_resave(self) -> None:
-        """The stored capabilities are read once; only the ones not linked yet are added, then one re-save."""
+    async def test_only_missing_capabilities_are_added_in_one_relationship_add(self) -> None:
+        """The stored capabilities are read once; only the ones not linked yet are added, in one RelationshipAdd."""
         gen = _make_gen()
         node = _sub_iface(existing_peer_ids=["ex-0"], gen=gen)
 
         await self._run(gen, [MagicMock(id="ex-0"), MagicMock(id="ex-1"), MagicMock(id="ex-2")])
 
-        assert [c.args[0] for c in node.stored.capabilities.add.call_args_list] == [{"id": "ex-1"}, {"id": "ex-2"}]
-        node.stored.save.assert_awaited_once_with(**_TRACKED)
+        assert _joined(gen) == [("sub-1", ["ex-1", "ex-2"])]
+        node.stored.save.assert_not_awaited()
         gen.client.get.assert_awaited_once_with(kind=DcimVirtualInterface, id="sub-1", include=["capabilities"])
 
     @pytest.mark.asyncio
@@ -286,7 +301,7 @@ class TestEnsureVlanSubinterfaceExtraCapabilities:
 
         node.save.assert_awaited_once_with(**_TRACKED)
         node.stored.save.assert_not_awaited()
-        node.stored.capabilities.add.assert_not_called()
+        assert _joined(gen) == []
 
     @pytest.mark.asyncio
     async def test_a_failed_capability_read_is_logged_and_returns_none(self) -> None:
@@ -384,9 +399,9 @@ class TestEnsureVlanSubinterfaceVrf:
     """A leg is put in its VRF instance by its own capabilities, never a ``vrf`` of the interface."""
 
     @pytest.mark.asyncio
-    async def test_the_vrf_is_saved_with_the_leg_and_a_stale_one_is_left(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """No ``vrf`` in the create data; the new instance is added to the stored capabilities and saved with them
-        (one retrying save, with the missing exchanges), then the leg leaves the instance it was in."""
+    async def test_the_vrf_is_added_as_an_edge_and_a_stale_one_is_left(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No ``vrf`` in the create data; the new instance is added with the missing exchanges in one RelationshipAdd
+        (never a saved list), then the leg leaves the instance it was in."""
         gen = _make_gen()
         node = _sub_iface(existing_peer_ids=["ex-1"], gen=gen)
         old = MagicMock(id="vrf-old", typename="ManagedVRF")
@@ -405,8 +420,8 @@ class TestEnsureVlanSubinterfaceVrf:
 
         data = gen.client.create.call_args.kwargs["data"]
         assert "vrf" not in data and "capabilities" not in data
-        assert [c.args[0] for c in node.stored.capabilities.add.call_args_list] == [{"id": "ex-2"}, {"id": "vrf-new"}]
-        node.stored.save.assert_awaited_once_with(**_TRACKED)
+        assert _joined(gen) == [("sub-1", ["ex-2", "vrf-new"])]
+        node.stored.save.assert_not_awaited()
         leave.assert_awaited_once_with(gen.client, "sub-1", ["vrf-old"])
 
     @pytest.mark.asyncio
@@ -427,6 +442,6 @@ class TestEnsureVlanSubinterfaceVrf:
             vrf_id="vrf-new",
         )
 
-        node.stored.capabilities.add.assert_not_called()
+        assert _joined(gen) == []
         node.stored.save.assert_not_awaited()
         assert not leave.await_args or leave.await_args.args[2] == []

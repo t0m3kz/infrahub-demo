@@ -46,6 +46,15 @@ async def add_edge_with_source(client: Any, *, node_id: str, relation: str, peer
     )
 
 
+async def add_edges(client: Any, *, node_id: str, relation: str, peer_ids: Iterable[str]) -> None:
+    """Add ``peer_ids`` to ``relation`` of ``node_id`` with no source (one RelationshipAdd); the other peers, and the
+    source of a peer already on the edge, stay."""
+    await client.execute_graphql(
+        query=_ADD_MUTATION,
+        variables={"data": {"id": node_id, "name": relation, "nodes": [{"id": peer_id} for peer_id in peer_ids]}},
+    )
+
+
 async def remove_edge(client: Any, *, node_id: str, relation: str, peer_id: str) -> None:
     """Remove ``peer_id`` from ``relation`` of ``node_id`` (one RelationshipRemove); the other peers stay."""
     await client.execute_graphql(
