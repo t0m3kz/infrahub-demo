@@ -33,7 +33,7 @@ def val(d: dict, k: str) -> Any:
 QUERIES = {
     "seg": """ManagedVxlanSegment { edges { node { id name { value } gateway { node { address { value } ip_prefix { node { prefix { value } } } } }
       segment_deployments { edges { node { deployment { node { name { value } } }
-        vlans { edges { node { vlan_id { value } device { node { name { value } } }
+        vlans { edges { node { vlan_id { value } capabilities { edges { node { name { value } } } }
           svi { node { name { value } capabilities { edges { node { __typename ... on ManagedVRF { name { value } security_zone { node { name { value } } } } } } } } } } } } } } } } } }""",
     "iface": f"""DcimPhysicalInterface {{ edges {{ node {{ {IF_TOP} {CAPS} lag {{ node {{ id name {{ value }} }} }} segments {{ edges {{ node {{ id }} }} }} sub_interfaces {{ edges {{ node {{ id }} }} }} ip_address {{ node {{ address {{ value }} ip_namespace {{ node {{ name {{ value }} }} }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",
     "front": f"""DcimFrontPatchPanelPort {{ edges {{ node {{ {PP_TOP} rear_port {{ node {{ port_id {{ value }} }} }} cable {{ node {{ name {{ value }} endpoints {{ edges {{ node {{ {EPC} }} }} }} }} }} }} }} }}""",

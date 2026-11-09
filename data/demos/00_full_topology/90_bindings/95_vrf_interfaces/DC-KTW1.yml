@@ -23,11 +23,7 @@ spec:
       security_zone: "PROD"
       capabilities:
         - kind: DcimVirtualInterface
-          data: {device: ktw1-bl-01, name: "Vlan2500"}
-        - kind: DcimVirtualInterface
           data: {device: ktw1-bl-01, name: "Vlan3900"}
-        - kind: DcimVirtualInterface
-          data: {device: ktw1-bl-02, name: "Vlan2500"}
         - kind: DcimVirtualInterface
           data: {device: ktw1-bl-02, name: "Vlan3900"}
         - kind: DcimVirtualInterface

@@ -155,7 +155,7 @@ def _raw_segment(site: str) -> dict[str, Any]:
                     "vni": {"value": realization["vni"]},
                     "vlans": _many(
                         [
-                            {"vlan_id": {"value": row["vlan_id"]}, "device": _one({"id": row["device"]})}
+                            {"vlan_id": {"value": row["vlan_id"]}, "capabilities": _many([{"id": row["device_name"]}])}
                             for row in realization["vlans"]["data"]
                         ]
                     ),
@@ -338,7 +338,7 @@ def test_fabric_rows_are_l2_only_without_svi_gateway_l3_vni_or_new_vrf_demand(si
     _, vlan, vni = _EXPECTED[site]
     row = _items("ManagedSegmentDeployment", _site(site) / "05_firewall_tenant")[0]
     assert row["vni"] == vni and row["deployment"] == f"DC-{site.upper()}"
-    assert {v["device"] for v in row["vlans"]["data"]} == {
+    assert {v["device_name"] for v in row["vlans"]["data"]} == {
         f"{site}-leaf-01",
         f"{site}-leaf-02",
         f"{site}-bl-01",
@@ -352,7 +352,7 @@ def test_fabric_rows_are_l2_only_without_svi_gateway_l3_vni_or_new_vrf_demand(si
     assert routed_activations(activations) == []
     for switch in row["vlans"]["data"]:
         device = {
-            "name": switch["device"],
+            "name": switch["device_name"],
             "typename": "DcimPhysicalDevice",
             "role": "leaf",
             "interfaces": [],
@@ -532,7 +532,7 @@ def test_new_names_prefixes_vnis_vlan_rows_and_load_order_have_no_collisions() -
         assert not any(row["vni"] == vni and row["segment"] != segment_name for row in all_rows)
         for row in rows[0]["vlans"]["data"]:
             assert not any(
-                other["device"] == row["device"] and other["vlan_id"] == vlan
+                other["device_name"] == row["device_name"] and other["vlan_id"] == vlan
                 for other_row in all_rows
                 if other_row["segment"] != segment_name
                 for other in other_row["vlans"]["data"]
@@ -547,7 +547,7 @@ def test_new_names_prefixes_vnis_vlan_rows_and_load_order_have_no_collisions() -
             "segment__name__value",
             "deployment__name__value",
         )
-        assert human_friendly_id("ManagedSegmentVlan") == ("device__name__value", "vlan_id__value")
+        assert human_friendly_id("ManagedSegmentVlan") == ("device_name__value", "vlan_id__value")
         late_trunks = _DATA / "90_bindings/10_dc" / _SITES[site] / "05_firewall_tenant"
         paths = sorted([*folder.glob("*.yml"), *late_trunks.glob("*.yml")], key=lambda path: path.name)
         assert [p.name for p in paths] == [

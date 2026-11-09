@@ -111,7 +111,7 @@ query segment_vlans($segment_id: ID!) {
             node {
               id
               vlan_id { value }
-              device { node { id } }
+              capabilities { edges { node { id } } }
             }
           }
         }

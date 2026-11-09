@@ -1,6 +1,8 @@
 """An MLAG domain has two distinct members, a device is in at most one domain, peer_devices names them.
 
 The two members also hold equal VLAN ids per segment deployment, and each MLAG-attached port-channel is mirrored.
+The same query reads every VLAN row, so the rules of a row that the schema cannot hold live here too (V1-V3): a row is
+an individual capability of ONE device, and a uniqueness constraint cannot use that many relationship.
 """
 
 from __future__ import annotations
@@ -11,10 +13,9 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
-from utils.segment_vlan import MLAG_KIND, mlag_peer_devices
+from utils.segment_vlan import MLAG_KIND, ROW_KIND, mlag_peer_devices, row_device, row_device_ids
 
 MLAG_MEMBERS = 2
-ROW_KIND = "ManagedSegmentVlan"
 LAG_KIND = "DcimLAGInterface"
 INTERFACE_KIND = "DcimInterface"
 
@@ -83,9 +84,9 @@ def pair_row_errors(domains: list[dict[str, Any]], rows: list[dict[str, Any]]) -
     by_device: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
     for row in rows:
         deployment_id = (row.get("segment_deployment") or {}).get("id")
-        device_id = (row.get("device") or {}).get("id")
-        if deployment_id and device_id:
-            by_device[str(device_id)][str(deployment_id)] = row
+        device_ids = row_device_ids(row)
+        if deployment_id and len(device_ids) == 1:  # V1 reports any other row
+            by_device[device_ids[0]][str(deployment_id)] = row
     errors = []
     for domain in sorted(domains, key=lambda item: str(item.get("name"))):
         members = _members(domain)
@@ -108,10 +109,65 @@ def pair_row_errors(domains: list[dict[str, Any]], rows: list[dict[str, Any]]) -
             if have:
                 errors.append(
                     f"MLAG domain '{domain.get('name')}': segment '{_row_label(have)}' has VLAN {have.get('vlan_id')} "
-                    f"on '{(have.get('device') or {}).get('name')}' but '{missing_name}' has no row for it "
+                    f"on '{row_device(have).get('name')}' but '{missing_name}' has no row for it "
                     "(rule: both members of an MLAG hold a row per segment). Re-run add_vxlan_segment for the segment"
                 )
     return errors
+
+
+def _row_where(row: dict[str, Any]) -> str:
+    """The row for a message: its segment and VLAN."""
+    return f"VLAN row of segment '{_row_label(row)}' (VLAN {row.get('vlan_id')})"
+
+
+def row_device_errors(rows: list[dict[str, Any]]) -> list[str]:
+    """V1: a row has exactly one device (its ``capabilities``), and ``device_name`` (the HFID mirror) is its name."""
+    errors = []
+    for row in rows:
+        devices = row.get("capabilities") or []
+        if len(devices) != 1:
+            names = ", ".join(sorted(str(device.get("name")) for device in devices)) or "none"
+            errors.append(
+                f"{_row_where(row)} has {len(devices)} device(s) ({names}) "
+                "(rule V1: a VLAN row is a capability of exactly one switch). Delete it and re-run add_vxlan_segment"
+            )
+        elif row.get("device_name") != devices[0].get("name"):
+            errors.append(
+                f"{_row_where(row)} has device_name '{row.get('device_name')}' but is on '{devices[0].get('name')}' "
+                "(rule V1: device_name mirrors the row's switch). Set device_name to the switch's name"
+            )
+    return sorted(errors)
+
+
+def row_uniqueness_errors(rows: list[dict[str, Any]]) -> list[str]:
+    """V2: one row per (segment deployment, device); V3: one row per (device, vlan_id).
+
+    Read on the device itself, not on the ``device_name`` mirror the schema's uniqueness uses (V1 holds the mirror).
+    """
+    per_deployment: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    per_vlan: dict[tuple[str, Any], list[dict[str, Any]]] = defaultdict(list)
+    names: dict[str, str] = {}
+    for row in rows:
+        deployment_id = str((row.get("segment_deployment") or {}).get("id"))
+        for device in row.get("capabilities") or []:
+            device_id = str(device.get("id"))
+            names[device_id] = str(device.get("name"))
+            per_deployment[(deployment_id, device_id)].append(row)
+            per_vlan[(device_id, row.get("vlan_id"))].append(row)
+    errors = [
+        f"device '{names[device_id]}' has {len(found)} VLAN rows of segment '{_row_label(found[0])}' "
+        "(rule V2: one row per segment deployment and device). Delete the extra rows"
+        for (_, device_id), found in per_deployment.items()
+        if len(found) > 1
+    ]
+    errors += [
+        f"device '{names[device_id]}' has VLAN {vlan_id} on {len(found)} rows "
+        f"({', '.join(sorted(_row_label(row) for row in found))}) "
+        "(rule V3: a VLAN id is used once per switch). Renumber or delete one row"
+        for (device_id, vlan_id), found in per_vlan.items()
+        if len(found) > 1
+    ]
+    return sorted(errors)
 
 
 def _listed(domain: dict[str, Any]) -> list[dict[str, Any]]:
@@ -204,7 +260,9 @@ class CheckMlagDomains(InfrahubCheck):
     - M5: each MLAG-attached port-channel (`lag_id`) exists exactly once per member with equal `lacp_mode` and
       `minimum_links` (the peer-link port-channel, a listed interface of the domain, is skipped);
     - M6: the interfaces a domain lists belong to its two members, each member has its peer-link listed, and a
-      member's `mlag-peer` interface the domain does not list is reported.
+      member's `mlag-peer` interface the domain does not list is reported;
+    - V1-V3, every VLAN row: exactly one device whose name `device_name` mirrors, one row per (segment deployment,
+      device), one row per (device, vlan_id).
     """
 
     query = "mlag_domains"
@@ -222,5 +280,7 @@ class CheckMlagDomains(InfrahubCheck):
             + pair_row_errors(domains, rows)
             + mlag_lag_errors(domains, lags)
             + listed_interface_errors(domains, peer_links)
+            + row_device_errors(rows)
+            + row_uniqueness_errors(rows)
         ):
             self.log_error(message=message)

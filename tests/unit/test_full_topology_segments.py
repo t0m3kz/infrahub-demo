@@ -34,7 +34,7 @@ def test_the_realization_and_the_vlan_row_are_named_by_their_parents() -> None:
     """The names an object file upserts by: segment + deployment, and device + VLAN id (each backed by a uniqueness)."""
     nodes = _nodes()
     assert nodes["SegmentDeployment"]["human_friendly_id"] == ["segment__name__value", "deployment__name__value"]
-    assert nodes["SegmentVlan"]["human_friendly_id"] == ["device__name__value", "vlan_id__value"]
+    assert nodes["SegmentVlan"]["human_friendly_id"] == ["device_name__value", "vlan_id__value"]
 
 
 def test_no_segment_nests_its_deployment() -> None:
@@ -74,10 +74,10 @@ def test_each_dc_declares_its_deployment_with_the_same_vlan_on_both_leaves() -> 
         terminated = row["segment"] == f"c900-internal-fw-{site}-p"
         if terminated:
             expected_devices |= {f"{site}-bl-01", f"{site}-bl-02"}
-        assert {vlan["device"] for vlan in vlans} == expected_devices
+        assert {vlan["device_name"] for vlan in vlans} == expected_devices
         assert len(vlans) == len(expected_devices) and len({vlan["vlan_id"] for vlan in vlans}) == 1
         assert all(("svi" not in vlan) if terminated else ("svi" in vlan) for vlan in vlans)
-        assert {vlan["device"].split("-")[0] for vlan in vlans} == {row["deployment"].split("-")[1].lower()}
+        assert {vlan["device_name"].split("-")[0] for vlan in vlans} == {row["deployment"].split("-")[1].lower()}
 
 
 def test_the_stretched_segment_is_shared_one_vni_and_the_vlan_it_gives_on_every_leaf_of_both_dcs() -> None:
@@ -88,6 +88,10 @@ def test_the_stretched_segment_is_shared_one_vni_and_the_vlan_it_gives_on_every_
     assert len(vnis) == 1 and shared_vlan_id(vnis.pop()) is not None
     assert {vlan["vlan_id"] for row in rows for vlan in row["vlans"]["data"]} == {shared_vlan_id(rows[0]["vni"])}
     assert len([vlan for row in rows for vlan in row["vlans"]["data"]]) == 8
+    # A border leaf carries the stretched segment as VLAN and VNI only: its row has no SVI, a leaf's has one.
+    for vlan in (vlan for row in rows for vlan in row["vlans"]["data"]):
+        assert ("svi" in vlan) == ("-leaf-" in vlan["device_name"]), vlan["device_name"]
+        assert vlan["capabilities"] == [vlan["device_name"]]
     segment = next(
         item
         for _, doc in _documents()
@@ -106,7 +110,7 @@ def test_the_office_wifi_segments_are_a_guest_and_a_staff_one_on_the_access_swit
     assert set(rows) == {"c900-wifi-guest-p", "c900-wifi-corp-p"}
     for row in rows.values():
         vlans = row["vlans"]["data"]
-        assert {vlan["device"] for vlan in vlans} == {"bcn-office-as-01", "bcn-office-as-02"}
+        assert {vlan["device_name"] for vlan in vlans} == {"bcn-office-as-01", "bcn-office-as-02"}
         assert len({vlan["vlan_id"] for vlan in vlans}) == 1
 
     policies = {

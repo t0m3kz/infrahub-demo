@@ -541,10 +541,14 @@
                                           "vlan_id": {
                                             "value": 100
                                           },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-as-c005-office01"
-                                            }
+                                          "capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "dev-as-c005-office01"
+                                                }
+                                              }
+                                            ]
                                           }
                                         }
                                       }
@@ -876,10 +880,14 @@
                                           "vlan_id": {
                                             "value": 200
                                           },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-as-c005-office01"
-                                            }
+                                          "capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "dev-as-c005-office01"
+                                                }
+                                              }
+                                            ]
                                           }
                                         }
                                       }
@@ -1225,10 +1233,14 @@
                               "vlan_id": {
                                 "value": 100
                               },
-                              "device": {
-                                "node": {
-                                  "id": "dev-as-c005-office01"
-                                }
+                              "capabilities": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "id": "dev-as-c005-office01"
+                                    }
+                                  }
+                                ]
                               }
                             }
                           }
@@ -1296,10 +1308,14 @@
                                           "vlan_id": {
                                             "value": 100
                                           },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-as-c005-office01"
-                                            }
+                                          "capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "dev-as-c005-office01"
+                                                }
+                                              }
+                                            ]
                                           }
                                         }
                                       }
@@ -1589,10 +1605,14 @@
                               "vlan_id": {
                                 "value": 200
                               },
-                              "device": {
-                                "node": {
-                                  "id": "dev-as-c005-office01"
-                                }
+                              "capabilities": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "id": "dev-as-c005-office01"
+                                    }
+                                  }
+                                ]
                               }
                             }
                           }
@@ -1660,10 +1680,14 @@
                                           "vlan_id": {
                                             "value": 200
                                           },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-as-c005-office01"
-                                            }
+                                          "capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "dev-as-c005-office01"
+                                                }
+                                              }
+                                            ]
                                           }
                                         }
                                       }
@@ -1868,10 +1892,11 @@
           "service_ports": {
             "edges": []
           },
-          "vlans": {
+          "capabilities": {
             "edges": [
               {
                 "node": {
+                  "__typename": "ManagedSegmentVlan",
                   "id": "fixture-row-100",
                   "vlan_id": {
                     "value": 100
@@ -1948,6 +1973,7 @@
               },
               {
                 "node": {
+                  "__typename": "ManagedSegmentVlan",
                   "id": "fixture-row-200",
                   "vlan_id": {
                     "value": 200

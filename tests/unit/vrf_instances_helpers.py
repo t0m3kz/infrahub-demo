@@ -59,11 +59,12 @@ def raw_row(
     *,
     terminated: bool = False,
     footprints: list[dict[str, Any]] | None = None,
+    stretch_scope: str | None = None,
 ) -> dict[str, Any]:
     """A ManagedSegmentVlan row; ``namespace`` None means a segment without a gateway (pure L2).
 
     ``terminated`` is a segment terminated on a firewall context: it keeps its gateway (the pair's VIP) and is pure
-    L2 on the fabric all the same."""
+    L2 on the fabric all the same. ``stretch_scope`` (unset: not selected, read as local) makes it a stretched one."""
     seg: dict[str, Any] = {
         "__typename": "ManagedVxlanSegment",
         "id": f"seg-{segment}",
@@ -72,6 +73,8 @@ def raw_row(
         "terminated_on": {"node": {"id": "ctx-1"}} if terminated else None,
         "customer_deployments": edges(*(footprints or [])),
     }
+    if stretch_scope:
+        seg["stretch_scope"] = {"value": stretch_scope}
     if namespace:
         seg["security_zone"] = namespace_ref(namespace)
         seg["gateway"] = {
@@ -80,7 +83,12 @@ def raw_row(
                 "ip_prefix": {"node": {"ip_namespace": namespace_ref("default")}},
             }
         }
-    return {"id": row_id, "vlan_id": {"value": vlan_id}, "segment_deployment": {"node": {"segment": {"node": seg}}}}
+    return {
+        "__typename": "ManagedSegmentVlan",
+        "id": row_id,
+        "vlan_id": {"value": vlan_id},
+        "segment_deployment": {"node": {"segment": {"node": seg}}},
+    }
 
 
 def raw_instance(
@@ -316,10 +324,12 @@ def raw_device(
         "member_of_groups": edges(*({"name": {"value": group}} for group in groups)),
         "shared_capabilities": edges(*members, *({"__typename": kind} for kind in shared_others or [])),
         "deployment": raw_deployment(deployment_kind, hosting_id),
-        "vlans": edges(*(rows or [])),
+        # The device's individual capabilities, one list: its VLAN rows and, when it steers, its ManagedPBR.
+        "capabilities": edges(
+            *(rows or []), *([{"__typename": "ManagedPBR", "id": f"pbr-{device_id}"}] if pbr else [])
+        ),
         "interfaces": edges(*(interfaces or [])),
         "service_ports": edges(*(service_ports or [])),
-        "capabilities": edges(*([{"__typename": "ManagedPBR", "id": f"pbr-{device_id}"}] if pbr else [])),
     }
     if status:
         node["status"] = {"value": status}

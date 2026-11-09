@@ -278,8 +278,9 @@ def _make_security_policy(*, name: str, rules: list[dict]) -> dict:
 
 
 def _vlan_rows(vlan_id: int, row_device_id: str | None) -> dict:
-    """The ``vlans`` edges of one deployment: the row of the rendering device, if any."""
-    return _edges([{"vlan_id": _v(vlan_id), "device": _node({"id": row_device_id})}] if row_device_id else [])
+    """The ``vlans`` edges of one deployment: the row of the rendering device (its one ``capabilities`` peer), if any."""
+    rows = [{"vlan_id": _v(vlan_id), "capabilities": _edges([{"id": row_device_id}])}] if row_device_id else []
+    return _edges(rows)
 
 
 def _make_segment_node(
@@ -308,7 +309,7 @@ def _make_segment_node(
 
     The VNI comes from ``segment_deployments`` and the LOCAL
     vlan_id from the ``vlans`` rows under it, matched to this
-    device (``row.device.id``; a paired device uses its own row).
+    device (the row's ``capabilities``; a paired device uses its own row).
     A segment with no row for the device is skipped entirely
     by the transform, so ``row_device_id`` must match or no VXLAN is rendered.
 

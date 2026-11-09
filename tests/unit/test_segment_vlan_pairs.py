@@ -153,7 +153,7 @@ class TestPairIds:
         _run(world, _PAIR, ["a1", "a2"])
 
         assert world.vlan_ids("seg-1") == {"a1": 250, "a2": 250}
-        assert [(d["device"]["id"], d["vlan_id"]) for d in world.created] == [("a2", 250)]
+        assert [(d["capabilities"][0]["id"], d["vlan_id"]) for d in world.created] == [("a2", 250)]
 
     def test_the_peer_row_wins_over_the_segments_lowest_id_elsewhere(self) -> None:
         world = VlanWorld()
@@ -190,7 +190,7 @@ class TestPairIds:
 
         gen.logger.warning.assert_called()
         assert world.vlan_ids("seg-1")["a1"] == 300
-        assert "a2" in {d["device"]["id"] for d in world.created}
+        assert "a2" in {d["capabilities"][0]["id"] for d in world.created}
 
 
 class TestLatePairing:
@@ -260,7 +260,7 @@ class TestLocksAndIdempotency:
             "vlan-device-ids-z2",
         ]
         reads = world.reads(ManagedSegmentVlan)
-        assert len(reads) == 1 and reads[0]["device__ids"] == ["m1", "m2", "z1", "z2"]
+        assert len(reads) == 1 and reads[0]["capabilities__ids"] == ["m1", "m2", "z1", "z2"]
 
     def test_a_rerun_writes_and_locks_nothing_more(self) -> None:
         world = VlanWorld()

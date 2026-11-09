@@ -254,7 +254,8 @@ fragment ServiceHostingFields on TopologyDeployment {
   }
 }
 
-# A routed segment row of the device's VLAN domain, with the footprints of its segment and the contexts that serve them.
+# A segment row of the device (one of its capabilities), with the footprints of its segment and the contexts that serve
+# them. `stretch_scope`: a border leaf carries a stretched segment as L2 only (utils/segment_addressing.py).
 fragment ServiceRowFields on ManagedSegmentVlan {
   id
   vlan_id {
@@ -297,6 +298,9 @@ fragment ServiceRowFields on ManagedSegmentVlan {
               node {
                 id
               }
+            }
+            stretch_scope {
+              value
             }
             customer_deployments {
               edges {
@@ -366,11 +370,13 @@ fragment DeviceServicesFields on DcimDeviceManaged {
         ...ServiceHostingFields
       }
     }
-    vlans {
-      edges {
-        node {
-          ...ServiceRowFields
-        }
+  }
+  # The switch's VLAN rows: its individual capabilities of kind ManagedSegmentVlan (utils/segment_vlan.py device_rows).
+  capabilities {
+    edges {
+      node {
+        __typename
+        ...ServiceRowFields
       }
     }
   }

@@ -37,8 +37,18 @@ def _payload(
                     "node": {
                         "vlans": {
                             "edges": [
-                                {"node": {"vlan_id": {"value": 150}, "device": {"node": {"id": "leaf"}}}},
-                                {"node": {"vlan_id": {"value": 999}, "device": {"node": {"id": "host"}}}},
+                                {
+                                    "node": {
+                                        "vlan_id": {"value": 150},
+                                        "capabilities": {"edges": [{"node": {"id": "leaf"}}]},
+                                    }
+                                },
+                                {
+                                    "node": {
+                                        "vlan_id": {"value": 999},
+                                        "capabilities": {"edges": [{"node": {"id": "host"}}]},
+                                    }
+                                },
                             ]
                         },
                     }

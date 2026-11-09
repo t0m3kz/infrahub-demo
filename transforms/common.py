@@ -37,7 +37,8 @@ from utils.data_cleaning import clean_data
 from utils.device_services import has_pbr, overlay_pbr_bindings, pbr_bindings
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
-from utils.segment_addressing import segment_hosting_candidates
+from utils.segment_addressing import l2_only_on, l2_only_view, segment_hosting_candidates
+from utils.segment_vlan import device_rows, row_device_ids
 from utils.service_contexts import (
     DEVICE_SERVICES_ROOT,
     attach_device_services,
@@ -48,6 +49,9 @@ from utils.service_contexts import (
 from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, svi_vlan_id
 
 _log = logging.getLogger(__name__)
+
+ROW_ACTIVATIONS_KEY = "segment_rows"
+"""The device's VLAN rows in a switch config query (DeviceSegmentRowsFields, an alias of its ``capabilities``)."""
 
 # The platforms whose BGP template (common/cisco_ios_bgp.j2) renders the session["unfiltered_banner"] comment above
 # a VRF neighbour. A hosted appliance on any other platform is refused: its template would render no banner.
@@ -177,8 +181,15 @@ class BaseDeviceTransform(InfrahubTransform):
     external_policy_platforms: ClassVar[frozenset[str]] = frozenset()
 
     def _device_activations(self, device: dict[str, Any]) -> list[dict[str, Any]]:
-        """Segment activations of one device: from its interface capabilities, plus the
-        stretched segments its multi-site border gateway carries."""
+        """Segment activations of one device: from its ports' segments, the stretched segments its multi-site border
+        gateway carries, and every segment it has a VLAN row of (``segment_rows``, the device's own rows).
+
+        A row is the realization of a segment on this switch, so it is the complete set: a stretched segment is
+        realized on every VTEP of its sites with or without a port of it (generators/segment_vlan.py), and without the
+        rows such a switch would carry the segment in the model but not in its config. Ports and the border-gateway
+        site list come first, so what they already produced keeps its order and flags. A segment the device carries
+        L2 only (a stretched one on a border leaf, utils/segment_addressing.py ``l2_only_on``) gets the L2-only view:
+        VLAN and VNI, no SVI, VRF, L3 VNI, ACL or PBR."""
         interfaces = device.get("interfaces") or []
         activations = self._collect_activations_from_interfaces(interfaces, device_id=device.get("id"))
         if any(iface.get("role") == "multisite-vip" for iface in interfaces):
@@ -202,6 +213,35 @@ class BaseDeviceTransform(InfrahubTransform):
                     seen={(act.get("segment") or {}).get("id") for act in activations},
                 )
             )
+        activations.extend(
+            self._collect_row_activations(
+                device_rows(device, ROW_ACTIVATIONS_KEY),
+                seen={(act.get("segment") or {}).get("id") for act in activations},
+            )
+        )
+        role = device.get("role")
+        return [
+            {**act, "segment": l2_only_view(act["segment"])} if l2_only_on(role, act.get("segment") or {}) else act
+            for act in activations
+        ]
+
+    @staticmethod
+    def _collect_row_activations(rows: list[dict[str, Any]], *, seen: set[str | None]) -> list[dict[str, Any]]:
+        """One activation per segment the device has its own VLAN row of and no activation yet.
+
+        ``rows`` are the device's rows (queries/fragments/network_segment.gql DeviceSegmentRowsFields): each carries
+        its VLAN id and, through its segment deployment, the VNI and the segment, the same record a port's segment
+        resolves its row from. A row without a VLAN id or a deployment without a VNI is not converged yet and is
+        skipped, as on a port."""
+        activations: list[dict[str, Any]] = []
+        for row in rows:
+            deployment = row.get("segment_deployment") or {}
+            segment = deployment.get("segment") or {}
+            segment_id = segment.get("id")
+            if not segment_id or segment_id in seen or not row.get("vlan_id") or not deployment.get("vni"):
+                continue
+            seen.add(segment_id)
+            activations.append({"vlan_id": row["vlan_id"], "vni": deployment["vni"], "segment": segment})
         return activations
 
     def prepared_device(self, data: Any) -> tuple[dict, dict, str | None]:
@@ -653,12 +693,12 @@ class BaseDeviceTransform(InfrahubTransform):
     def _own_vlan_row(deployments: list[dict], device_id: str | None) -> tuple[dict, dict] | None:
         """(row, segment deployment) of the segment's row of this device.
 
-        A row points straight at its device (a paired device has its own row, a peer's row is
+        A row is a capability of its device (a paired device has its own row, a peer's row is
         ignored). The row is a child of the deployment it sits in, so its VLAN ID and the
         deployment's VNI come from one record."""
         for deployment in deployments:
             for row in deployment.get("vlans") or []:
-                if device_id and (row.get("device") or {}).get("id") == device_id:
+                if device_id and device_id in row_device_ids(row):
                     return row, deployment
         return None
 
@@ -674,7 +714,7 @@ class BaseDeviceTransform(InfrahubTransform):
         is cardinality:many (multi-site stretch — clean_data unwraps it to a
         list, already filtered to active/provisioning by the query) and
         carries the vni and, under it, the vlans rows — the LOCAL
-        vlan_id for a VxlanSegment is the row of THIS device (``row.device.id``;
+        vlan_id for a VxlanSegment is the row of THIS device (its ``capabilities``;
         a paired device uses its own row, never its peer's)
         and the vni is its deployment's, one record for both. A VxlanSegment
         with no row for this device yet (allocation not

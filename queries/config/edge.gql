@@ -50,6 +50,7 @@ query edge_config($device: String!) {
           }
         }
         ...DeviceCapabilitiesOnDeviceFields
+        ...DeviceSegmentRowsFields
         ... on DcimPhysicalDevice {
           deployment {
             node {

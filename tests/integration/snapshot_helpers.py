@@ -77,7 +77,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     ),
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value }",
-    "ManagedSegmentVlan": "vlan_id { value } device { node { id } } svi { node { id } }",
+    "ManagedSegmentVlan": "vlan_id { value } device_name { value } capabilities { edges { node { id } } } svi { node { id } }",
     # The VRF instances (one per hosting deployment and namespace) and the segment SVIs are untracked and converged by
     # generators/helpers/vrf.py: a rerun that rebuilt an instance (new id), moved it to another topology or namespace,
     # changed its members, or re-pointed an SVI is a diff.

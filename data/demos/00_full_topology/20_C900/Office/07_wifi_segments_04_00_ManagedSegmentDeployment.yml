@@ -9,12 +9,24 @@ spec:
       vni: 10110
       vlans:
         data:
-          - {device: bcn-office-as-01, vlan_id: 110, svi: ["bcn-office-as-01", "Vlan110"]}
-          - {device: bcn-office-as-02, vlan_id: 110, svi: ["bcn-office-as-02", "Vlan110"]}
+          - device_name: bcn-office-as-01
+            capabilities: ["bcn-office-as-01"]
+            vlan_id: 110
+            svi: ["bcn-office-as-01", "Vlan110"]
+          - device_name: bcn-office-as-02
+            capabilities: ["bcn-office-as-02"]
+            vlan_id: 110
+            svi: ["bcn-office-as-02", "Vlan110"]
     - segment: c900-wifi-guest-p
       deployment: C900-OFFICE
       vni: 10120
       vlans:
         data:
-          - {device: bcn-office-as-01, vlan_id: 120, svi: ["bcn-office-as-01", "Vlan120"]}
-          - {device: bcn-office-as-02, vlan_id: 120, svi: ["bcn-office-as-02", "Vlan120"]}
+          - device_name: bcn-office-as-01
+            capabilities: ["bcn-office-as-01"]
+            vlan_id: 120
+            svi: ["bcn-office-as-01", "Vlan120"]
+          - device_name: bcn-office-as-02
+            capabilities: ["bcn-office-as-02"]
+            vlan_id: 120
+            svi: ["bcn-office-as-02", "Vlan120"]

@@ -49,10 +49,11 @@ def test_the_query_has_the_services_root_after_the_device(path: Path) -> None:
 
 @pytest.mark.parametrize("path", _SVI_READERS, ids=lambda path: path.name)
 def test_the_services_root_reads_the_rows_the_hosting_and_the_service_ports(path: Path) -> None:
-    """The segment rows with the footprints and their serving contexts, the hosting DC, the ports with their members."""
+    """The segment rows (the device's capabilities) with the footprints and their serving contexts, the hosting DC, the
+    ports with their members."""
     node = _tree(path)[DEVICE_SERVICES_ROOT]["edges"]["node"]
-    row = node["vlans"]["edges"]["node"]["segment_deployment"]["node"]["segment"]["node"]
-    assert {"terminated_on", "customer_deployments", "gateway", "security_zone"} <= set(row)
+    row = node["capabilities"]["edges"]["node"]["segment_deployment"]["node"]["segment"]["node"]
+    assert {"terminated_on", "customer_deployments", "gateway", "security_zone", "stretch_scope"} <= set(row)
     footprint = row["customer_deployments"]["edges"]["node"]
     assert {"parent", "serving_firewall_context", "serving_firewall_contexts"} <= set(footprint)
     assert "parent" in node["deployment"]["node"]

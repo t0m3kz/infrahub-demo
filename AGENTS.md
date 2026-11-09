@@ -749,12 +749,19 @@ class MyCheck(InfrahubCheck):
   on a LAG member (R2). A border service port facing a context is a trunk too, but a context has no interface edge (its
   border ports are derived), so the check does not see it; a segment on a switch port's `capabilities` is
   impossible by schema (`ManagedVxlanSegment` is not on the interface edge).
-- **VLAN rows**: a VLAN ID is local to a switch. There is no VLAN domain object and no marker generic: the row
-  points straight at its device. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or
+- **VLAN rows**: a VLAN ID is local to a switch. There is no VLAN domain object and no marker generic: the row is an
+  individual capability of its switch. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or
   office, with the VNI) -> `ManagedSegmentVlan` (the realization on ONE switch, with the `vlan_id`): the row is a
   `Parent`-mandatory child of the deployment its switch sits in (`device.deployment` is the hosting parent or one of its
-  pods and zones) and goes with it (`on_delete: cascade`), so the VLAN and the VNI of a port come from one lineage; its
-  `device` is an Attribute (mandatory), unique on [segment_deployment, device] and [device, vlan_id]. The row is an
+  pods and zones) and goes with it (`on_delete: cascade`), so the VLAN and the VNI of a port come from one lineage; it
+  inherits `ManagedGenericDevice`, so its switch is its `capabilities` peer (re-declared mandatory, exactly one: a many
+  edge cannot be capped, `checks/mlag_domains.py` V1 holds it) and the row dies with the switch. A uniqueness constraint
+  or an HFID cannot use a many relationship, so `device_name` mirrors the switch's name (like `ManagedMLAG.peer_devices`):
+  the HFID is [device_name, vlan_id] (a data file upserts a row) and the uniqueness [segment_deployment, device_name] and
+  [device_name, vlan_id]; V1 holds that the mirror names the device, V2 and V3 the two uniqueness rules on the device
+  itself. A reader reaches a device's rows through its `capabilities` (`... on ManagedSegmentVlan`,
+  `utils/segment_vlan.py` `device_rows`; a config query aliases it `segment_rows`, the device's `capabilities` being
+  selected already) and a row's switch through the row's `capabilities` (`row_device_ids`). The row is an
   output and has no port: a port is given a SEGMENT (the port's `segments` edge), never a VLAN, and the VLAN of
   a port is found by port -> device -> row of the segment. **MLAG pairs**: the two peers of a `ManagedMLAG` each have
   their own row for a segment and MUST carry the same `vlan_id` (a dual-homed port-channel is one L2 broadcast domain).
@@ -774,8 +781,9 @@ class MyCheck(InfrahubCheck):
   that is also derived stays as it is (it is not re-stamped, so it survives the component leaving). The edge is one-sided and
   no trigger follows it: a port a person adds gets its VLAN row at the next run of either generator on the segment. A switch with no deployment of the segment, or a pair whose members map to two deployments, is a WARNING and its
   rows are left alone (the next run converges once the deployment exists). The rows are untracked and their deployment
-  tracked: a deployment that is not re-saved by its run is deleted with its rows; the rows of a device that is gone or
-  no longer needs the segment are deleted by the next reconcile (check rule S2 reports them meanwhile). **VLAN scope**: `ManagedVxlanSegment.vlan_scope` is `local` (the default: each switch has its own id, the VNI is the identity) or
+  tracked: a deployment that is not re-saved by its run is deleted with its rows; the rows of a deleted device go with it (the
+  cascading device edge), those of a device that no longer needs the segment are deleted by the next reconcile (check
+  rule S2 reports them meanwhile). **VLAN scope**: `ManagedVxlanSegment.vlan_scope` is `local` (the default: each switch has its own id, the VNI is the identity) or
   `shared` (one id on every switch, for L2 trunked between switches that cannot do VXLAN). A shared segment draws the ONE
   VNI of the `GLOBAL-L2VNI` pool like any stretched segment (even in one DC), and its id is derived from it:
   VLAN = 2500 + (VNI - 40000), so the first 500 numbers of that pool (VNI 40000-40499) give the shared band 2500-2999,
@@ -783,8 +791,12 @@ class MyCheck(InfrahubCheck):
   the pool). A third DC joins with one more realization under the same VNI and so the same id. The generator gives a
   shared segment that id on every row and fails when a switch already uses it; `checks/shared_vlan.py` (SV1) reports a
   row that differs, a VNI outside the band or two VNIs. A stretched segment (`stretch_scope` not `local`) is realized on every VTEP of its hosting
-  parents (leaves, ToRs and border gateways, `VTEP_ROLES`), with or without a port of it: each has a row and an SVI carrying the
-  same anycast gateway, so a host keeps its gateway when it moves between the DCs.
+  parents (leaves, ToRs and border gateways, `VTEP_ROLES`), with or without a port of it: each has a row, and each leaf
+  and ToR an SVI carrying the same anycast gateway, so a host keeps its gateway when it moves between the DCs. A border
+  leaf carries a stretched segment L2 only (VLAN and VNI, no SVI: it relays the DCI routes and has no host there;
+  `utils/segment_addressing.py` `l2_only_on`, the one rule for the generator's SVIs and VRF demand and the transform's
+  L2-only view, `is_fabric_l2`). A switch renders every segment it has a row of, with or without a port of it
+  (`transforms/common.py` `_collect_row_activations`).
   A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
   `svi` named `Vlan<vlan_id>`, a Component of the row (`svi`, `on_delete: cascade`), with no address (the anycast
   gateway is `segment.gateway`) and in the `ManagedVRF` of its device's topology (the instance lists it in its
@@ -918,7 +930,8 @@ class MyCheck(InfrahubCheck):
   one, `tests/unit/test_capability_edge_names.py`) and interfaces via `ManagedGenericInterfaces` (inherit it only when
   something reads the interface edge). Both device edges sit on `DcimDeviceManaged`:
   - **Individual**, `ManagedGenericDevice`: `DcimDeviceManaged.capabilities` (identifier `capabilities`) cascades with the
-    device. Anything that must die with its device stays here: a BGP or OSPF process, an MLAG domain, a firewall HA pair.
+    device. Anything that must die with its device stays here: a BGP or OSPF process, an MLAG domain, a firewall HA pair,
+    a VLAN row (`ManagedSegmentVlan`, see **VLAN rows**).
   - **Shared**, `ManagedGenericSharedDevice`: `DcimDeviceManaged.shared_capabilities` (identifier `shared_capabilities`,
     `on_delete: no-action`, explicit) never cascades; the object's members are its `shared_devices`. Deleting a member
     never deletes the object and deleting the object leaves its devices. `ManagedVRF` and the service contexts

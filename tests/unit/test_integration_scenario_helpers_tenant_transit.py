@@ -137,7 +137,9 @@ def _segment_vlan_client() -> MagicMock:
                                         "node": {
                                             "id": "vds-1",
                                             "vlan_id": {"value": 100},
-                                            "device": {"node": {"id": "dev-1", "display_label": "leaf-01"}},
+                                            "capabilities": {
+                                                "edges": [{"node": {"id": "dev-1", "display_label": "leaf-01"}}]
+                                            },
                                         }
                                     }
                                 ]

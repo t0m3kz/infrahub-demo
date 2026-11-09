@@ -341,20 +341,6 @@ fabric forwarding anycast-gateway-mac 001c7300dc01
 !
 ! VLAN SVI Configuration
 !
-interface Vlan100
-  description Customer-A
-  vrf member PROD
-  ip address 10.1.0.1/24
-  fabric forwarding mode anycast-gateway
-  no shutdown
-!
-interface Vlan110
-  description Customer-A
-  vrf member PROD
-  ip address 10.2.0.1/24
-  fabric forwarding mode anycast-gateway
-  no shutdown
-!
 interface Vlan3000
   description XCHG-dc1-fw-shared-PROD
   vrf member PROD

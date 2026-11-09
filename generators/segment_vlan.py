@@ -1,4 +1,4 @@
-"""Mixin realizing a segment's LOCAL VLAN ID per device (a ManagedSegmentVlan row is on ONE device).
+"""Mixin realizing a segment's LOCAL VLAN ID per device (a ManagedSegmentVlan row is a capability of ONE device).
 
 Shared by VxlanSegmentGenerator (generators/topology/segment.py, border
 gateway realization for a stretched segment) and AppInstanceSegmentGenerator
@@ -26,7 +26,7 @@ the pair is reported and left as it is.
 Local significance and consistency: an IEEE 802.1Q VLAN ID only has to be
 unique within one device (the real DC-wide segment identity is the VNI,
 allocated in segment.py), so a device never gives one id to two segments
-(ManagedSegmentVlan is unique on [device, vlan_id]). But a
+(ManagedSegmentVlan is unique on [device_name, vlan_id], device_name mirroring its one device). But a
 virtualisation cluster spans racks served by different switches and wants ONE
 VLAN id per port group, so the id is chosen, not drawn from a per-device pool:
 a segment keeps the id it already has elsewhere (a pair follows its existing member); a segment with
@@ -56,7 +56,7 @@ from utils.limits import (
     GROUP_SDWAN_GATEWAYS,
     LOCAL_VLAN_ID_MAX,
 )
-from utils.segment_vlan import mlag_id, shared_vlan_id, shared_vni_band
+from utils.segment_vlan import mlag_id, row_device_ids, shared_vlan_id, shared_vni_band
 
 from .protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
 
@@ -186,13 +186,14 @@ class SegmentVlanMixin:
         new: dict[str, str],
         groups: list[tuple[str, ...]],
         kept_devices: list[str],
+        names: dict[str, str],
         fixed: int | None = None,
     ) -> None:
         """Create the missing rows of the segment, choosing each vlan_id (``fixed``: a shared segment's id).
 
         ``new`` is {device id: id of the segment deployment its row goes
         under}; only rows that do not exist yet, so an existing row's vlan_id
-        is never re-chosen. ``groups`` are the devices sharing one id (an MLAG pair or a single
+        is never re-chosen. ``names`` is {device id: name}, mirrored on the row (``device_name``, its HFID). ``groups`` are the devices sharing one id (an MLAG pair or a single
         device) for every group with a new row, the peers included. The members are locked in sorted order (inside
         the caller's segment lock, so two runs never hold one device each while
         waiting for the other's), then ONE read returns the ids in use on them
@@ -210,19 +211,19 @@ class SegmentVlanMixin:
                 await stack.enter_async_context(self.resource_lock(vlan_device_lock_key(device_id)))
             rows = await self.client.filters(
                 kind=ManagedSegmentVlan,
-                device__ids=sorted({*members, *kept_devices}),
-                include=["segment_deployment", "device"],
+                capabilities__ids=sorted({*members, *kept_devices}),
+                include=["segment_deployment", "capabilities"],
             )
             taken: dict[str, set[int]] = {device_id: set() for device_id in members}
             held: dict[str, int] = {}
             own_ids: list[int] = []
             for row in rows:
-                device_id = row.device.id
-                if row.segment_deployment.id in segment_deployment_ids:
-                    own_ids.append(row.vlan_id.value)
-                    held[device_id] = row.vlan_id.value
-                elif device_id in taken:
-                    taken[device_id].add(row.vlan_id.value)
+                for device_id in (peer.id for peer in row.capabilities.peers):
+                    if row.segment_deployment.id in segment_deployment_ids:
+                        own_ids.append(row.vlan_id.value)
+                        held[device_id] = row.vlan_id.value
+                    elif device_id in taken:
+                        taken[device_id].add(row.vlan_id.value)
             chosen = self._choose_vlan_ids(
                 segment_name, groups, set(new), taken, held, min(own_ids, default=None), fixed
             )
@@ -232,7 +233,8 @@ class SegmentVlanMixin:
                     kind=ManagedSegmentVlan,
                     data={
                         "segment_deployment": {"id": new[device_id]},
-                        "device": {"id": device_id},
+                        "capabilities": [{"id": device_id}],
+                        "device_name": names[device_id],
                         "vlan_id": vlan_id,
                     },
                 )
@@ -269,7 +271,7 @@ class SegmentVlanMixin:
             rows = {
                 device_id: {"id": row["id"], "vlan_id": row.get("vlan_id")}
                 for row in segment_deployment.get("vlans") or []
-                if (device_id := (row.get("device") or {}).get("id"))
+                for device_id in row_device_ids(row)
             }
             deployments.append(
                 {
@@ -485,6 +487,7 @@ class SegmentVlanMixin:
                 new,
                 [group for group in groups if not new.keys().isdisjoint(group)],
                 kept_devices,
+                {device.id: device.name.value for device in devices},
                 self._shared_vlan_id(segment_name, state),
             )
 

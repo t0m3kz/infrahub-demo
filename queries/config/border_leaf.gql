@@ -43,6 +43,7 @@ query border_leaf_config($device: String!) {
           }
         }
         ...DeviceCapabilitiesOnDeviceFields
+        ...DeviceSegmentRowsFields
         ... on DcimPhysicalDevice {
           deployment {
             node {

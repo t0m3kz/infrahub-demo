@@ -71,11 +71,13 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
               ...ServiceHostingFields
             }
           }
-          vlans {
-            edges {
-              node {
-                ...ServiceRowFields
-              }
+        }
+        # The device's VLAN rows: its individual capabilities of kind ManagedSegmentVlan.
+        capabilities {
+          edges {
+            node {
+              __typename
+              ...ServiceRowFields
             }
           }
         }

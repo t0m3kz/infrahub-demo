@@ -154,9 +154,11 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
                     vlan_id {
                       value
                     }
-                    device {
-                      node {
-                        id
+                    capabilities {
+                      edges {
+                        node {
+                          id
+                        }
                       }
                     }
                   }

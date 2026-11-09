@@ -135,10 +135,11 @@ def pod_rows(d: dict, cfg: dict) -> list[Row]:
         ("pod: bond0 dual-homed: one lag_id port-channel per leaf, both carrying the segment", ok, "; ".join(lines))
     )
     vlans = {
-        row["device"]["node"]["name"]["value"]: val(row, "vlan_id")
+        val(device, "name"): val(row, "vlan_id")
         for sd in rel(seg or {}, "segment_deployments")
         for row in rel(sd, "vlans")
-        if row["device"]["node"]["name"]["value"] in leaves
+        for device in rel(row, "capabilities")
+        if val(device, "name") in leaves
     }
     ok = sorted(vlans) == sorted(leaves) and len(set(vlans.values())) == 1
     rows.append(("pod: VLAN row of the segment on both MLAG peers, same vlan_id", ok, str(vlans)))

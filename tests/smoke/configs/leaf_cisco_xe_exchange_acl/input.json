@@ -1239,10 +1239,14 @@
                                           "vlan_id": {
                                             "value": 100
                                           },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-dc1-leaf-01"
-                                            }
+                                          "capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "dev-dc1-leaf-01"
+                                                }
+                                              }
+                                            ]
                                           }
                                         }
                                       }
@@ -1480,10 +1484,14 @@
                               "vlan_id": {
                                 "value": 100
                               },
-                              "device": {
-                                "node": {
-                                  "id": "dev-dc1-leaf-01"
-                                }
+                              "capabilities": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "id": "dev-dc1-leaf-01"
+                                    }
+                                  }
+                                ]
                               }
                             }
                           }
@@ -1551,10 +1559,14 @@
                                           "vlan_id": {
                                             "value": 100
                                           },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-dc1-leaf-01"
-                                            }
+                                          "capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "dev-dc1-leaf-01"
+                                                }
+                                              }
+                                            ]
                                           }
                                         }
                                       }
@@ -1686,10 +1698,14 @@
                               "vlan_id": {
                                 "value": 110
                               },
-                              "device": {
-                                "node": {
-                                  "id": "dev-dc1-leaf-01"
-                                }
+                              "capabilities": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "id": "dev-dc1-leaf-01"
+                                    }
+                                  }
+                                ]
                               }
                             }
                           }
@@ -1757,10 +1773,14 @@
                                           "vlan_id": {
                                             "value": 110
                                           },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-dc1-leaf-01"
-                                            }
+                                          "capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "dev-dc1-leaf-01"
+                                                }
+                                              }
+                                            ]
                                           }
                                         }
                                       }
@@ -2502,10 +2522,11 @@
               }
             ]
           },
-          "vlans": {
+          "capabilities": {
             "edges": [
               {
                 "node": {
+                  "__typename": "ManagedSegmentVlan",
                   "id": "fixture-row-100",
                   "vlan_id": {
                     "value": 100

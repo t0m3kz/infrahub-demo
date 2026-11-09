@@ -116,7 +116,7 @@ query ($name: String!) {
                   edges {
                     node {
                       vlan_id { value }
-                      device { node { name { value } } }
+                      capabilities { edges { node { name { value } } } }
                     }
                   }
                 }
@@ -166,8 +166,8 @@ async def _segment_on_switches(client: InfrahubClient, branch: str, segment_name
         for row in deployment["node"]["vlans"]["edges"]
     ]
     for realization in realizations:
-        device = (realization.get("device") or {}).get("node") or {}
-        if device.get("name"):
+        for device_edge in (realization.get("capabilities") or {}).get("edges") or []:
+            device = device_edge["node"]
             vlans_by_device[device["name"]["value"]] = int(realization["vlan_id"]["value"])
     return _SegmentOnSwitches(prefix=gateway["ip_prefix"]["node"]["prefix"]["value"], vlans_by_device=vlans_by_device)
 

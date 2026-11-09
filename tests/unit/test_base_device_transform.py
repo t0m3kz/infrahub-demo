@@ -249,7 +249,7 @@ class TestTransformDataRouting:
 
 class TestCollectActivationsOwnRow:
     """A VXLAN segment's local vlan_id comes from the row (under a segment deployment) of THIS device
-    (``row.device.id``), and its VNI from that same deployment."""
+    (the row's ``capabilities``), and its VNI from that same deployment."""
 
     @staticmethod
     def _vxlan_iface(row_device_id: str, vlan_id: int = 100) -> dict:
@@ -262,7 +262,7 @@ class TestCollectActivationsOwnRow:
                     "segment_deployments": [
                         {
                             "vni": 10100,
-                            "vlans": [{"device": {"id": row_device_id}, "vlan_id": vlan_id}],
+                            "vlans": [{"capabilities": [{"id": row_device_id}], "vlan_id": vlan_id}],
                         }
                     ],
                 }
@@ -289,8 +289,8 @@ class TestCollectActivationsOwnRow:
                         {
                             "vni": 10100,
                             "vlans": [
-                                {"device": {"id": "dev-leaf-02"}, "vlan_id": 250},
-                                {"device": {"id": "dev-leaf-01"}, "vlan_id": 150},
+                                {"capabilities": [{"id": "dev-leaf-02"}], "vlan_id": 250},
+                                {"capabilities": [{"id": "dev-leaf-01"}], "vlan_id": 150},
                             ],
                         }
                     ],
@@ -312,10 +312,10 @@ class TestCollectActivationsOwnRow:
                     "id": "seg-1",
                     "name": "tenant-a-web",
                     "segment_deployments": [
-                        {"vni": 10100, "vlans": [{"device": {"id": "other"}, "vlan_id": 100}]},
+                        {"vni": 10100, "vlans": [{"capabilities": [{"id": "other"}], "vlan_id": 100}]},
                         {
                             "vni": 20200,
-                            "vlans": [{"device": {"id": "dev-leaf-01"}, "vlan_id": 120}],
+                            "vlans": [{"capabilities": [{"id": "dev-leaf-01"}], "vlan_id": 120}],
                         },
                     ],
                 }

@@ -4,8 +4,9 @@ An instance is one namespace realized in one topology: the device's hosting depl
 an office, utils/segment_addressing.py ``hosting_deployment``). A device is a member of its topology's instance of
 exactly the non-``default`` namespaces it routes in (demand-driven, never pre-provisioned):
 
-- the gateway namespace of each ROUTED segment row on its VLAN domain (a gateway-less or firewall-terminated segment,
-  ``terminated_on``, is pure L2 on the fabric), border gateways' stretched rows included;
+- the gateway namespace of each ROUTED segment row of the device (its ``capabilities`` of kind ManagedSegmentVlan; a
+  gateway-less or firewall-terminated segment, ``terminated_on``, is pure L2 on the fabric, and so is a stretched
+  segment on a border leaf, utils/segment_addressing.py ``l2_only_on``), border gateways' stretched rows included;
 - the VRF of each of its SVI objects (an instance is never removed while an SVI still routes in it);
 - the namespace of each address on its own interfaces (handoff /31s, WAN exit sub-interfaces, the upstream
   transit address of a border gateway: a BGP session's local address is one of them);
@@ -36,7 +37,8 @@ from utils.exchange_transit import (
 from utils.fabric_roles import BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE, GROUP_PROVIDER_STUBS
 from utils.routing_domain import VRF_KIND, interface_security_zone, interface_vrfs
-from utils.segment_addressing import hosting_deployment, routed_segment_namespace
+from utils.segment_addressing import hosting_deployment, l2_only_on, routed_segment_namespace
+from utils.segment_vlan import device_rows
 from utils.service_contexts import border_contexts, service_footprints
 
 PBR_KIND = "ManagedPBR"
@@ -186,7 +188,7 @@ class Footprint:
 
 @dataclass(frozen=True)
 class RoutedRow:
-    """A routed segment row of the device's VLAN domain: the device needs its SVI and (unless default) its VRF."""
+    """A routed segment row of the device: the device needs its SVI and (unless default) its VRF."""
 
     id: str
     vlan_id: int
@@ -325,9 +327,12 @@ class DeviceVrfFacts:
         return {svi_name(row.vlan_id): row for row in sorted(self.routed_rows, key=lambda row: row.vlan_id)}
 
 
-def _routed_row(row: dict[str, Any]) -> RoutedRow | None:
-    """The row as a RoutedRow, or None when the fabric does not route its segment (no gateway, or terminated)."""
+def _routed_row(row: dict[str, Any], role: str | None) -> RoutedRow | None:
+    """The row as a RoutedRow, or None when the device of ``role`` does not route its segment (no gateway, terminated,
+    or a stretched segment on a border leaf: ``l2_only_on``)."""
     segment = (row.get("segment_deployment") or {}).get("segment") or {}
+    if l2_only_on(role, segment):
+        return None
     namespace = routed_segment_namespace(segment).get("name")
     if not namespace or not row.get("id") or not isinstance(row.get("vlan_id"), int):
         return None
@@ -407,8 +412,8 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
     """The facts of one cleaned ``DcimDevice`` node of queries/validation/vrf_instances.gql."""
     interfaces = device.get("interfaces") or []
     conflicts = vrf_conflicts(interfaces)
-    rows = device.get("vlans") or []
-    row_facts = [(row, _routed_row(row)) for row in rows]
+    rows = device_rows(device)
+    row_facts = [(row, _routed_row(row, device.get("role"))) for row in rows]
     routed = [routed_row for _, routed_row in row_facts if routed_row]
     svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == SVI_ROLE)
     l3vni_svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == L3VNI_ROLE)

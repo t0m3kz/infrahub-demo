@@ -120,7 +120,7 @@ def raw_state(
                                     "node": {
                                         "id": row_id,
                                         "vlan_id": {"value": vlan},
-                                        "device": {"node": {"id": device_id}},
+                                        "capabilities": {"edges": [{"node": {"id": device_id}}]},
                                     }
                                 }
                                 for row_id, device_id, vlan, row_sd in rows
@@ -141,7 +141,8 @@ class _Row:
     def __init__(self, world: VlanWorld, row_id: str, sd: str, device: str, vlan: int) -> None:
         self.id = row_id
         self.segment_deployment = MagicMock(id=sd)
-        self.device = MagicMock(id=device)
+        self.device = MagicMock(id=device)  # the one capabilities peer, for the tests' own reads
+        self.capabilities = MagicMock(peers=[self.device])
         self.vlan_id = MagicMock(value=vlan)
         self._world = world
         self.save_kwargs: dict[str, Any] = {}
@@ -188,17 +189,21 @@ class VlanWorld:
         self.filter_kwargs.append(kwargs)
         self.events.append(f"read:{kind.__name__}")
         if kind is ManagedSegmentVlan:
-            device_ids = set(kwargs["device__ids"])
+            device_ids = set(kwargs["capabilities__ids"])
             return [r for r in self.rows if r.device.id in device_ids]
         raise AssertionError(f"unexpected filters kind {kind}")
 
     async def _create(self, kind: Any, data: dict[str, Any]) -> _Row:
         assert kind is ManagedSegmentVlan
         self.created.append(data)
-        self.events.append(f"create:{data['device']['id']}")
+        self.events.append(f"create:{data['capabilities'][0]['id']}")
         self._counter += 1
         return _Row(
-            self, f"row-{self._counter}", data["segment_deployment"]["id"], data["device"]["id"], data["vlan_id"]
+            self,
+            f"row-{self._counter}",
+            data["segment_deployment"]["id"],
+            data["capabilities"][0]["id"],
+            data["vlan_id"],
         )
 
     async def _delete(self, kind: Any, id: str) -> None:  # noqa: A002 - the SDK's own keyword

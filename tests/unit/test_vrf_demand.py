@@ -50,6 +50,36 @@ def test_terminated_and_routed_segments_on_one_device_demand_only_the_routed_one
     assert list(facts.desired_svis()) == ["Vlan100"]
 
 
+def test_a_border_leaf_carries_a_stretched_segment_l2_only() -> None:
+    """A border leaf relays the DCI routes of a stretched segment and has no host in it: VLAN and VNI, no SVI, no VRF."""
+    row = raw_row("r1", 2500, "PROD", "sync", stretch_scope="dc_pair")
+    facts = facts_of(raw_device("d1", "bl-1", role="border-leaf", deployment_kind="TopologyDataCenter", rows=[row]))
+    assert facts.demand == frozenset()
+    assert facts.routed_rows == ()
+    assert facts.desired_svis() == {}
+    assert facts.unrouted_row_ids == frozenset({"r1"})
+
+
+def test_a_leaf_routes_the_same_stretched_segment() -> None:
+    """The anycast gateway of a stretched segment is on every leaf: the L2-only rule is the border leaf's alone."""
+    row = raw_row("r1", 2500, "PROD", "sync", stretch_scope="dc_pair")
+    facts = facts_of(raw_device("d1", "leaf-1", rows=[row]))
+    assert facts.demand == frozenset({"PROD"})
+    assert list(facts.desired_svis()) == ["Vlan2500"]
+
+
+def test_a_border_leaf_keeps_a_vrf_another_row_still_demands() -> None:
+    """Only the stretched row's demand goes: a routed local row of the same namespace keeps the border leaf's VRF."""
+    rows = [
+        raw_row("r1", 2500, "PROD", "sync", stretch_scope="dc_pair"),
+        raw_row("r2", 100, "PROD", "local", stretch_scope="local"),
+    ]
+    facts = facts_of(raw_device("d1", "bl-1", role="border-leaf", deployment_kind="TopologyDataCenter", rows=rows))
+    assert facts.demand == frozenset({"PROD"})
+    assert list(facts.desired_svis()) == ["Vlan100"]
+    assert facts.unrouted_row_ids == frozenset({"r1"})
+
+
 def test_routed_row_needs_its_gateway_namespace() -> None:
     """A routed row demands its namespace and an SVI named Vlan<id>."""
     facts = facts_of(raw_device("d1", "leaf-1", rows=[raw_row("r1", 100, "PROD")]))

@@ -1,7 +1,7 @@
 """MLAG pair helpers shared by generators, transforms and checks.
 
-There is no VLAN domain object: a segment's VLAN ID is a row on ONE device (``ManagedSegmentVlan.device``,
-unique on [device, vlan_id]). The two peers of an MLAG pair must carry the same VLAN ID for a segment (a dual-homed
+There is no VLAN domain object: a segment's VLAN ID is a row on ONE device, an individual capability of it
+(``ManagedSegmentVlan.capabilities``, one peer; ``device_name`` mirrors it for the [device, vlan_id] uniqueness). The two peers of an MLAG pair must carry the same VLAN ID for a segment (a dual-homed
 port-channel is one L2 broadcast domain): the allocator (generators/segment_vlan.py) gives them one id and
 checks/mlag_domains.py reports a pair whose rows differ. The generator reads the capabilities as SDK peers and the
 checks as cleaned query data; both pass ``(typename, id)`` pairs here.
@@ -10,10 +10,27 @@ checks as cleaned query data; both pass ``(typename, id)`` pairs here.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any
 
 from utils.limits import GLOBAL_L2_VNI_START, SHARED_VLAN_COUNT, SHARED_VLAN_ID_MIN
 
 MLAG_KIND = "ManagedMLAG"
+ROW_KIND = "ManagedSegmentVlan"
+
+
+def row_device_ids(row: dict[str, Any]) -> list[str]:
+    """The ids of the devices of a cleaned VLAN row (its ``capabilities``): one on a well-formed row."""
+    return [str(device["id"]) for device in row.get("capabilities") or [] if device.get("id")]
+
+
+def row_device(row: dict[str, Any]) -> dict[str, Any]:
+    """The device of a cleaned VLAN row (the first ``capabilities`` peer), {} for a row without one."""
+    return next(iter(row.get("capabilities") or []), None) or {}
+
+
+def device_rows(device: dict[str, Any], key: str = "capabilities") -> list[dict[str, Any]]:
+    """The VLAN rows of a cleaned device: its individual capabilities (``key``) of kind ManagedSegmentVlan."""
+    return [cap for cap in device.get(key) or [] if cap.get("typename") == ROW_KIND]
 
 
 def mlag_id(capabilities: Iterable[tuple[str | None, str | None]]) -> str | None:

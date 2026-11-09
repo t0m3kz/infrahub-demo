@@ -131,6 +131,12 @@ async def fetch_segment_deployments(
     return {"deployment_count": deployment_count, "deployments": deployments}
 
 
+def _row_device(row: dict[str, Any]) -> dict[str, Any]:
+    """The device of a raw VLAN row: its one ``capabilities`` peer, {} without one."""
+    edges = (row.get("capabilities") or {}).get("edges") or []
+    return edges[0]["node"] if edges else {}
+
+
 async def fetch_segment_vlans(
     *,
     client: InfrahubClient,
@@ -188,10 +194,12 @@ async def fetch_segment_vlans(
                             node {{
                                 id
                                 vlan_id {{ value }}
-                                device {{
-                                    node {{
-                                        id
-                                        display_label
+                                capabilities {{
+                                    edges {{
+                                        node {{
+                                            id
+                                            display_label
+                                        }}
                                     }}
                                 }}
                             }}
@@ -233,8 +241,8 @@ async def fetch_segment_vlans(
             "vlan_id": row["vlan_id"]["value"],
             "vni": (row.get("vni") or {}).get("value"),
             "segment_name": ((row.get("segment") or {}).get("node") or {}).get("name", {}).get("value"),
-            "device_id": (row.get("device") or {}).get("node", {}).get("id"),
-            "device_label": (row.get("device") or {}).get("node", {}).get("display_label"),
+            "device_id": _row_device(row).get("id"),
+            "device_label": _row_device(row).get("display_label"),
         }
         for row in rows
     ]

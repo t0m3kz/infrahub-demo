@@ -19,6 +19,7 @@ import logging
 from typing import Any
 
 from utils.circuit_underlay import cabled_port
+from utils.segment_vlan import row_device_ids
 
 _log = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ def _row_vlan(segment: dict[str, Any], device_ids: set[str]) -> int | None:
     """The VLAN id of the segment's row on one of the devices, None when it has none there."""
     for deployment in segment.get("segment_deployments") or []:
         for row in deployment.get("vlans") or []:
-            if (row.get("device") or {}).get("id") in device_ids and isinstance(row.get("vlan_id"), int):
+            if device_ids.intersection(row_device_ids(row)) and isinstance(row.get("vlan_id"), int):
                 return row["vlan_id"]
     return None
 

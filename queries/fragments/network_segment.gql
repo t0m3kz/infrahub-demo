@@ -70,7 +70,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
             edges {
               node {
                 vlan_id { value }
-                device { node { id } }
+                capabilities { edges { node { id } } }
               }
             }
           }
@@ -127,7 +127,7 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
           edges {
             node {
               vlan_id { value }
-              device { node { id } }
+              capabilities { edges { node { id } } }
             }
           }
         }
@@ -194,6 +194,41 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                         }
                       }
                     }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# The segments a switch carries: its own VLAN rows (individual capabilities of kind ManagedSegmentVlan), each with the
+# VNI of its realization and the segment. Aliased (`segment_rows`): the device's `capabilities` are selected once
+# already (DeviceCapabilitiesFields) and a second selection of the same key would come back empty. Read nested from the
+# device, so the answer is what THIS switch realizes and nothing else; transforms/common.py _collect_row_activations
+# turns a row into an activation (a stretched segment is realized on every VTEP with or without a port of it, so ports
+# alone miss it).
+fragment DeviceSegmentRowsFields on DcimDevice {
+  ... on DcimDeviceManaged {
+    segment_rows: capabilities {
+      edges {
+        node {
+          __typename
+          ... on ManagedSegmentVlan {
+            vlan_id {
+              value
+            }
+            segment_deployment {
+              node {
+                vni {
+                  value
+                }
+                segment {
+                  node {
+                    ...NetworkSegmentFields
                   }
                 }
               }

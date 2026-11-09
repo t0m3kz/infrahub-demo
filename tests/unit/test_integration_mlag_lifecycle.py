@@ -36,7 +36,7 @@ def _row(row_id: str, device: str, deployment: str, vlan: int, svi: str | None) 
         "node": {
             "id": row_id,
             "vlan_id": {"value": vlan},
-            "device": {"node": {"id": device}},
+            "capabilities": {"edges": [{"node": {"id": device}}]},
             "segment_deployment": {"node": {"id": deployment}},
             "svi": {"node": {"id": svi}} if svi else {"node": None},
         }
@@ -243,7 +243,8 @@ def _check_result(vlan_b: int) -> dict[str, Any]:
     row_b = _row("r2", "dev-b", "dep-1", vlan_b, None)
     for row in (row_a, row_b):
         row["node"]["segment_deployment"]["node"]["segment"] = {"node": {"name": {"value": "web"}}}
-        row["node"]["device"]["node"]["name"] = {"value": "x"}
+        row["node"]["capabilities"]["edges"][0]["node"]["name"] = {"value": "x"}
+        row["node"]["device_name"] = {"value": "x"}
     return {
         "ManagedMLAG": {
             "edges": [

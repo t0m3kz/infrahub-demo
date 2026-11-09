@@ -85,7 +85,7 @@ class TestFetchSegmentVlanState:
                 "segments(ids: [$segment_id]) { edges { properties { source { id } } node { id } } } } } }" in compact
             )
         assert "ManagedSegmentDeployment(segment__ids: [$segment_id])" in compact
-        assert "vlans { edges { node { id vlan_id { value } device { node { id } } } } }" in compact
+        assert "vlans { edges { node { id vlan_id { value } capabilities { edges { node { id } } } } } }" in compact
         assert "ManagedMLAG" not in compact
 
 

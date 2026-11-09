@@ -300,7 +300,7 @@ class TestValidateExchangeGateways:
 
 def _segment_port(vlan: int, seg_id: str = "seg-1", name: str = "web") -> dict:
     """A customer port of a VXLAN segment whose row for the device (``bl-1``) is ``vlan``."""
-    row = {"vlan_id": vlan, "device": {"id": "bl-1"}}
+    row = {"vlan_id": vlan, "capabilities": [{"id": "bl-1"}]}
     return {
         "name": "Ethernet1",
         "role": "customer",

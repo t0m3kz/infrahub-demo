@@ -69,7 +69,7 @@ def test_a_segment_in_the_capabilities_does_not_become_an_activation() -> None:
     """The activation collector reads ``segments`` only."""
     seg = {
         **_SEG,
-        "segment_deployments": [{"vni": 10100, "vlans": [{"device": {"id": "d"}, "vlan_id": 100}]}],
+        "segment_deployments": [{"vni": 10100, "vlans": [{"capabilities": [{"id": "d"}], "vlan_id": 100}]}],
     }
     other = {**seg, "id": "seg-9", "name": "legacy"}
     transform = make_transform(Leaf)

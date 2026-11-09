@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from utils.limits import DEFAULT_NAMESPACE
-from utils.segment_addressing import is_terminated, routed_segment_namespace
+from utils.segment_addressing import is_fabric_l2, routed_segment_namespace
 
 
 def interface_segments(iface: dict[str, Any]) -> list[dict[str, Any]]:
@@ -16,12 +16,12 @@ def interface_segments(iface: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def routed_activations(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """The activations whose segment the fabric routes (not terminated on a firewall context).
+    """The activations whose segment the fabric routes (not terminated on a firewall context, not carried L2 only).
 
     Input for everything that hangs off the segment's SVI: leaf/border-leaf
     PBR and the zero-trust SVI ACLs.
     """
-    return [act for act in activations or [] if not is_terminated(act.get("segment") or {})]
+    return [act for act in activations or [] if not is_fabric_l2(act.get("segment") or {})]
 
 
 def _get_segment_gateways(seg: dict) -> tuple[str | None, str | None, str | None, Any]:
@@ -32,11 +32,11 @@ def _get_segment_gateways(seg: dict) -> tuple[str | None, str | None, str | None
     (either IPv4 or IPv6), so at most one subnet/VRF is derivable this way.
     Segments with no gateway (L2-only) have no resolvable subnet/VRF, and a
     terminated segment's gateway belongs to its firewall pair (the VIP), so the
-    fabric sees none either (is_terminated).
+    fabric sees none either, nor does a device that carries the segment L2 only (is_fabric_l2).
 
     Returns: (gateway_ip, gateway_ipv6, vrf, l3_vni)
     """
-    if is_terminated(seg):
+    if is_fabric_l2(seg):
         return None, None, None, None
     gateway_ip: str | None = None
     gateway_ipv6: str | None = None
@@ -109,7 +109,7 @@ def _vlans_from_activations(
                 "isolation_mode": seg.get("isolation_mode") or "normal",
                 # Pure L2 on the fabric: no SVI of any kind (SONiC's
                 # VLAN_INTERFACE is emitted even for gateway-less VLANs).
-                "terminated": is_terminated(seg),
+                "terminated": is_fabric_l2(seg),
             }
         )
         seen.add(vlan_id)

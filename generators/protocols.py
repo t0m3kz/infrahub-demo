@@ -810,7 +810,6 @@ class TopologyCarrierCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
 
 
 class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppInstance):
-    vlans: RelationshipManager[ManagedSegmentVlan]
     position: IntegerOptional
     rack_face: Dropdown
     serial: StringOptional
@@ -999,10 +998,10 @@ class ManagedSegmentDeployment(CoreNode):
     vlans: RelationshipManager[ManagedSegmentVlan]
 
 
-class ManagedSegmentVlan(CoreNode):
+class ManagedSegmentVlan(ManagedGenericDevice):
+    device_name: String
     vlan_id: Integer
     segment_deployment: RelationshipAttribute[ManagedSegmentDeployment]
-    device: RelationshipAttribute[DcimPhysicalDevice]
     svi: RelationshipAttribute[DcimVirtualInterface]
 
 

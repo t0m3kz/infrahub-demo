@@ -3,7 +3,7 @@
 Two gatherers feed the one derivation (utils/vrf_demand.py ``vrf_demand``): the generators and checks/vrf_instances.py
 read queries/validation/vrf_instances.gql through ``device_vrf_facts``, the transforms read their config query through
 transforms/helpers/vrf.py ``vrf_requirements``. For each smoke input (a config query response) the device is re-shaped
-into the vrf_instances.gql shape (its routed rows are the rows of its own VLAN domain behind its segment activations),
+into the vrf_instances.gql shape (its routed rows are its own rows, capabilities, behind its segment activations),
 and both must name the same namespaces: a drift in the address, leg, SVI or role handling of either side fails here.
 """
 
@@ -37,13 +37,18 @@ def _prepared(path: Path) -> dict[str, Any] | None:
 def _as_vrf_instances_node(device: dict[str, Any]) -> dict[str, Any]:
     """The device in the cleaned vrf_instances.gql shape: its activations become its own rows."""
     rows = [
-        {"id": f"row-{act['vlan_id']}", "vlan_id": act["vlan_id"], "segment_deployment": {"segment": act["segment"]}}
+        {
+            "typename": "ManagedSegmentVlan",
+            "id": f"row-{act['vlan_id']}",
+            "vlan_id": act["vlan_id"],
+            "segment_deployment": {"segment": act["segment"]},
+        }
         for act in device.get("segment_deployments") or []
         if act.get("vlan_id")
     ]
-    capabilities = [dict(cap) for cap in device.get("capabilities") or []]
+    capabilities = [*(dict(cap) for cap in device.get("capabilities") or []), *rows]
     ports = device_services(device).get(SERVICE_PORTS_KEY) or []
-    node = {**device, "capabilities": capabilities, "member_of_groups": [], "vlans": rows, SERVICE_PORTS_KEY: ports}
+    node = {**device, "capabilities": capabilities, "member_of_groups": [], SERVICE_PORTS_KEY: ports}
     return node
 
 

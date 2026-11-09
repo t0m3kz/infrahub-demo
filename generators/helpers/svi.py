@@ -5,8 +5,9 @@ switch (``segment_vlan``) and is an interface of the VRF the switch routes it in
 ``capabilities``). An SVI's only capability is its VRF (checks/vrf_instances.py S4), so the save of the SVI writes its
 ``capabilities`` as the one-instance list (generators/helpers/interface_vrf.py ``vrf_capability``): one write, which is
 safe even right after the instance was created in the same pass, where a RelationshipAdd on the new node can reach the
-other replica first. What a device needs is derived by
-``utils.vrf_demand.device_vrf_facts``; this module only turns the difference with what exists into writes.
+other replica first. What a device needs is derived by ``utils.vrf_demand.device_vrf_facts`` (a border leaf has none
+for a stretched segment: it carries it L2 only, utils/segment_addressing.py ``l2_only_on``); this module only turns
+the difference with what exists into writes.
 
 Identity: an SVI is found by its own uniqueness, (device, ``Vlan<vlan id>``), among the device's role-svi interfaces.
 That is not the row link of the design (a row moving between deployments then needs no delete-before-create ordering): a

@@ -1043,7 +1043,7 @@
           "service_ports": {
             "edges": []
           },
-          "vlans": {
+          "capabilities": {
             "edges": []
           }
         }

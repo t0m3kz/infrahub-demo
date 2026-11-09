@@ -13,6 +13,8 @@ from checks.mlag_domains import (
     mlag_lag_errors,
     pair_row_errors,
     peer_devices_errors,
+    row_device_errors,
+    row_uniqueness_errors,
 )
 from tests.unit.query_shape_helpers import query_tree, unselected
 from utils.data_cleaning import clean_data
@@ -58,7 +60,8 @@ def _row(row_id: str, device: str, vlan_id: int, deployment: str = "sd-web", seg
             "id": row_id,
             "vlan_id": {"value": vlan_id},
             "segment_deployment": {"node": {"id": deployment, "segment": {"node": {"name": {"value": segment}}}}},
-            "device": {"node": {"id": f"id-{device}", "name": {"value": device}}},
+            "device_name": {"value": device},
+            "capabilities": {"edges": [{"node": {"id": f"id-{device}", "name": {"value": device}}}]},
         }
     }
 
@@ -304,8 +307,10 @@ def test_the_fixtures_only_emit_fields_the_query_selects() -> None:
     tree = query_tree(Path(__file__).parents[2] / "queries" / "validation" / "mlag_domains.gql")
     raw = _raw(_PAIR, rows=(_row("r1", "a", 100),), lags=(_lag(1, "a"),))
     assert unselected(raw, tree) == []
-    # the pair rule needs the segment deployment, the row's device and the LAG's MLAG
-    assert {"segment_deployment", "device", "vlan_id"} <= set(tree["ManagedSegmentVlan"]["edges"]["node"])
+    # the pair and row rules need the segment deployment, the row's device and its mirror, and the LAG's MLAG
+    assert {"segment_deployment", "capabilities", "device_name", "vlan_id"} <= set(
+        tree["ManagedSegmentVlan"]["edges"]["node"]
+    )
     assert {"lag_id", "lacp_mode", "minimum_links", "role", "mlag_domain"} <= set(
         tree["DcimLAGInterface"]["edges"]["node"]
     )
@@ -346,3 +351,57 @@ def test_m6_fails_on_a_peer_role_interface_the_domain_does_not_list() -> None:
 def test_m6_ignores_a_domain_that_m2_reports() -> None:
     """A one-member domain is M2's; its listed interfaces are not judged."""
     assert listed_interface_errors(_cleaned(_domain("a-mlag", "a", interfaces=[])), []) == []
+
+
+def _on(row: dict[str, Any], *devices: str, device_name: str | None = None) -> dict[str, Any]:
+    """The row on other devices (none, two) and/or with another ``device_name`` mirror."""
+    node = row["node"]
+    node["capabilities"] = {"edges": [{"node": {"id": f"id-{d}", "name": {"value": d}}} for d in devices]}
+    if device_name is not None:
+        node["device_name"] = {"value": device_name}
+    return row
+
+
+def test_v1_passes_for_a_row_on_one_device_named_by_its_mirror() -> None:
+    """A well-formed row: one capabilities peer, ``device_name`` its name."""
+    assert row_device_errors(_rows(_row("r1", "a", 100))) == []
+
+
+def test_v1_fails_for_a_row_with_no_device_or_two() -> None:
+    """A many edge cannot be capped at one: the check holds exactly one device per row."""
+    errors = row_device_errors(_rows(_on(_row("r1", "a", 100)), _on(_row("r2", "a", 101), "a", "b")))
+    assert len(errors) == 2
+    assert all("rule V1" in error for error in errors)
+    assert any("0 device(s) (none)" in error for error in errors)
+    assert any("2 device(s) (a, b)" in error for error in errors)
+
+
+def test_v1_fails_when_the_mirror_names_another_device() -> None:
+    """``device_name`` carries the HFID and the uniqueness: a rename or a hand edit makes it lie."""
+    errors = row_device_errors(_rows(_on(_row("r1", "a", 100), "a", device_name="old-a")))
+    assert len(errors) == 1 and "device_name 'old-a' but is on 'a'" in errors[0]
+
+
+def test_v2_and_v3_pass_for_distinct_rows() -> None:
+    """Two segments on one switch with two ids, and one segment on two switches with one id."""
+    rows = _rows(_row("r1", "a", 100), _row("r2", "a", 101, "sd-app", "app"), _row("r3", "b", 100))
+    assert row_uniqueness_errors(rows) == []
+
+
+def test_v2_fails_for_two_rows_of_one_deployment_on_one_device() -> None:
+    """One row per (segment deployment, device), held on the device itself, not on the mirror."""
+    errors = row_uniqueness_errors(_rows(_row("r1", "a", 100), _row("r2", "a", 101)))
+    assert len(errors) == 1 and "rule V2" in errors[0] and "'a' has 2 VLAN rows of segment 'web'" in errors[0]
+
+
+def test_v3_fails_for_one_vlan_id_on_two_rows_of_one_device() -> None:
+    """A VLAN id is used once per switch: two segments never share it there."""
+    errors = row_uniqueness_errors(_rows(_row("r1", "a", 100), _row("r2", "a", 100, "sd-app", "app")))
+    assert len(errors) == 1 and "rule V3" in errors[0] and "VLAN 100 on 2 rows (app, web)" in errors[0]
+
+
+def test_check_logs_v_errors() -> None:
+    """The check runs V1-V3 on every row of the query, MLAG member or not."""
+    errors = _run(rows=(_on(_row("r1", "z", 100)), _row("r2", "y", 7), _row("r3", "y", 7, "sd-app", "app")))
+    assert sum("rule V1" in error for error in errors) == 1
+    assert sum("rule V3" in error for error in errors) == 1
