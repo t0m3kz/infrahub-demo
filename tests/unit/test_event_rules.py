@@ -372,9 +372,33 @@ def test_the_session_generator_is_registered_in_infrahub_yml() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_a_change_of_the_segment_ports_runs_nothing() -> None:
-    """A port's segment deployment (its interface `capabilities`) re-runs nothing, so the reconcile's own writes raise
-    no echo run (the next run of the segment's generators picks up an edge a person added)."""
+def test_a_change_of_the_realized_segment_ports_runs_nothing() -> None:
+    """A port's VLAN row (the row's interface `capabilities`, the realization the reconcile writes) re-runs nothing,
+    so the reconcile's own writes raise no echo run; no rule sits on a port kind either (an edge edit fires `updated`
+    on both ends, measured on 1.11.9)."""
     for rule in trigger_rules():
         assert "switched" not in str(rule), rule["name"]
         assert "segments" not in [field for _kind, field in _match_fields(rule)], rule["name"]
+        assert rule["node_kind"] not in {"ManagedSegmentVlan", "DcimPhysicalInterface", "DcimLAGInterface"}, rule
+
+
+def test_an_assignment_of_a_port_to_a_deployment_re_runs_the_reconcile() -> None:
+    """The request (the deployment's `capabilities`) has one `updated` rule, on the deployment, whose action runs
+    add_segment_deployment_ports on segment_deployments (a group add_vxlan_segment puts every deployment in), with no
+    group trigger: joining the group runs nothing."""
+    rules = _rules_for("ManagedSegmentDeployment")
+    assert sorted(rules) == ["trigger-segment-deployment-ports-updated"]
+    rule = rules["trigger-segment-deployment-ports-updated"]
+    assert (rule["mutation_action"], rule["action"]) == ("updated", "run-segment-deployment-ports-generator")
+    assert _match_fields(rule) == [("CoreNodeTriggerRelationshipMatch", "capabilities")]
+    assert action_generators()["run-segment-deployment-ports-generator"] == "add_segment_deployment_ports"
+    assert definition_targets()["add_segment_deployment_ports"] == "segment_deployments"
+    assert _group_rules_for("segment_deployments") == {}
+    config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
+    definition = {d["name"]: d for d in config["generator_definitions"]}["add_segment_deployment_ports"]
+    queries = {query["name"]: query["file_path"] for query in config["queries"]}
+    assert definition["class_name"] == "SegmentDeploymentPortsGenerator"
+    assert (ROOT / queries[definition["query"]]).is_file() and (ROOT / definition["file_path"]).is_file()
+    documents = yaml.safe_load_all((ROOT / "data" / "bootstrap" / "00_groups.yml").read_text())
+    names = {item["name"] for doc in documents if doc for item in doc["spec"]["data"]}
+    assert "segment_deployments" in names

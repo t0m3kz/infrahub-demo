@@ -128,8 +128,8 @@ fragment InterfaceCapabilitiesFields on DcimInterface {
 }
 
 # The interface's own `capabilities`, the ONE plain selection of the field on an interface object: OSPF, the routed
-# exchange and the segment deployments a switch port is a member of (transforms/helpers/segments.py
-# interface_segments reads the segment of each).
+# exchange and the VLAN rows a switch port is a member of, its switch's ManagedSegmentVlan per segment
+# (transforms/helpers/segments.py interface_segments reads the segment of each row's deployment).
 fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
   ...InterfaceRoutingZoneFields
   capabilities {
@@ -138,12 +138,28 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
         __typename
         ...OspfInterfaceCapabilityFields
         ...ExchangeGatewayInterfaceCapabilityFields
-        ... on ManagedSegmentDeployment {
+        ... on ManagedSegmentVlan {
           id
-          segment {
+          vlan_id {
+            value
+          }
+          device {
             node {
-              __typename
-              ...NetworkSegmentFields
+              id
+            }
+          }
+          segment_deployment {
+            node {
+              id
+              vni {
+                value
+              }
+              segment {
+                node {
+                  __typename
+                  ...NetworkSegmentFields
+                }
+              }
             }
           }
         }

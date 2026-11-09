@@ -56,7 +56,7 @@ from utils.limits import (
     GROUP_SDWAN_GATEWAYS,
     LOCAL_VLAN_ID_MAX,
 )
-from utils.segment_vlan import DEPLOYMENT_KIND, mlag_id, shared_vlan_id, shared_vni_band
+from utils.segment_vlan import ROW_KIND, mlag_id, shared_vlan_id, shared_vni_band
 
 from .protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
 
@@ -77,28 +77,27 @@ NON_BORDER_GATEWAY_GROUPS = frozenset({GROUP_SDWAN_GATEWAYS, GROUP_PROVIDER_STUB
 _SEGMENT_VLAN_DOMAINS_QUERY_PATH = Path(__file__).resolve().parents[1] / "queries/topology/add/segment_vlans.gql"
 
 SWITCHED_PORT_KINDS = ("DcimPhysicalInterface", "DcimLAGInterface")
-"""The kinds of DcimSwitchedInterface: the ports that can carry a segment (a member of its deployment)."""
+"""The kinds of DcimSwitchedInterface: the ports that can carry a segment (a member of its switch's VLAN row)."""
 
-# The ports of a segment, read from the PORT side once its deployments are known: a port carries the segment as a
-# member of one of its deployments (the port's interface `capabilities`), and `properties { source { id } }` is who
-# wrote that edge (none: a person did); the reconcile removes only its own.
+# The ports of a segment, read from the PORT side once its rows are known: a port carries the segment as a member of
+# its switch's VLAN row (the port's interface `capabilities`), an edge only the reconcile writes.
 SEGMENT_PORTS_QUERY = """
-query segment_ports($deployment_ids: [ID]) {
-  DcimPhysicalInterface(capabilities__ids: $deployment_ids) {
+query segment_ports($row_ids: [ID]) {
+  DcimPhysicalInterface(capabilities__ids: $row_ids) {
     edges {
       node {
         id
         device { node { id } }
-        capabilities(ids: $deployment_ids) { edges { properties { source { id } } node { id __typename } } }
+        capabilities(ids: $row_ids) { edges { node { id __typename } } }
       }
     }
   }
-  DcimLAGInterface(capabilities__ids: $deployment_ids) {
+  DcimLAGInterface(capabilities__ids: $row_ids) {
     edges {
       node {
         id
         device { node { id } }
-        capabilities(ids: $deployment_ids) { edges { properties { source { id } } node { id __typename } } }
+        capabilities(ids: $row_ids) { edges { node { id __typename } } }
       }
     }
   }
@@ -281,10 +280,10 @@ class SegmentVlanMixin:
         return [hosting_parent["id"], *pod_ids]
 
     async def _fetch_segment_vlan_state(self, segment_id: str) -> dict[str, Any] | None:
-        """The segment's reconciliation inputs (segment_vlans.gql, then the ports of its deployments), as
+        """The segment's reconciliation inputs (segment_vlans.gql, then the ports of its rows), as
         {"segment": cleaned segment with its "ports", "deployments": [{"id", "deployment_id", "vni",
-        "rows": {device id: {"id", "vlan_id"}}}]}, one entry per ManagedSegmentDeployment; None when ``segment_id``
-        is not a ManagedVxlanSegment."""
+        "rows": {device id: {"id", "vlan_id"}}, "requested": [assigned port id]}]}, one entry per ManagedSegmentDeployment;
+        None when ``segment_id`` is not a ManagedVxlanSegment."""
         result = await self.client.execute_graphql(
             query=load_query(_SEGMENT_VLAN_DOMAINS_QUERY_PATH), variables={"segment_id": segment_id}
         )
@@ -305,20 +304,26 @@ class SegmentVlanMixin:
                     "deployment_id": (segment_deployment.get("deployment") or {}).get("id"),
                     "vni": segment_deployment.get("vni"),
                     "rows": rows,
+                    # The ports assigned to the deployment (its interface `capabilities`): a person's request.
+                    "requested": [
+                        port["id"]
+                        for port in segment_deployment.get("capabilities") or []
+                        if port.get("id") and port.get("typename") in SWITCHED_PORT_KINDS
+                    ],
                 }
             )
-        segments[0]["ports"] = await self._fetch_segment_ports([item["id"] for item in deployments])
+        segments[0]["ports"] = await self._fetch_segment_ports(
+            [row["id"] for item in deployments for row in item["rows"].values()]
+        )
         return {"segment": segments[0], "deployments": deployments}
 
-    async def _fetch_segment_ports(self, deployment_ids: list[str]) -> list[dict[str, Any]]:
-        """The switch ports that are members of the segment's deployments (``_segment_ports``), one read; none
-        without a deployment (a port joins a deployment, never the segment itself)."""
-        if not deployment_ids:
+    async def _fetch_segment_ports(self, row_ids: list[str]) -> list[dict[str, Any]]:
+        """The switch ports that are members of the segment's VLAN rows (``_segment_ports``), one read; none without a
+        row (a port joins its switch's row, never the segment or its deployment)."""
+        if not row_ids:
             return []
-        result = await self.client.execute_graphql(
-            query=SEGMENT_PORTS_QUERY, variables={"deployment_ids": sorted(deployment_ids)}
-        )
-        return self._segment_ports(result, set(deployment_ids))
+        result = await self.client.execute_graphql(query=SEGMENT_PORTS_QUERY, variables={"row_ids": sorted(row_ids)})
+        return self._segment_ports(result, set(row_ids))
 
     @classmethod
     def _deployment_by_device_deployment(cls, state: dict[str, Any]) -> dict[str, str]:
@@ -337,36 +342,32 @@ class SegmentVlanMixin:
         return mapping
 
     @staticmethod
-    def _segment_ports(result: dict[str, Any], deployment_ids: set[str]) -> list[dict[str, Any]]:
+    def _segment_ports(result: dict[str, Any], row_ids: set[str]) -> list[dict[str, Any]]:
         """The switch ports (physical, port-channel) carrying the segment, one entry per edge from a port to one of
-        the segment's ``deployment_ids``, read from the RAW response of SEGMENT_PORTS_QUERY (clean_data drops the
-        edge's ``properties``): ``{"id", "device_id", "deployment_id", "source_id"}``, ``source_id`` being the
-        account that wrote the edge, None for an edge no generator wrote (a person did)."""
+        the segment's ``row_ids``, read from the response of SEGMENT_PORTS_QUERY: ``{"id", "device_id", "row_id"}``."""
         ports: list[dict[str, Any]] = []
         for kind in SWITCHED_PORT_KINDS:
             for port_edge in (result.get(kind) or {}).get("edges") or []:
                 node = port_edge["node"]
                 for edge in (node.get("capabilities") or {}).get("edges") or []:
                     peer = edge.get("node") or {}
-                    if peer.get("__typename") != DEPLOYMENT_KIND or peer.get("id") not in deployment_ids:
+                    if peer.get("__typename") != ROW_KIND or peer.get("id") not in row_ids:
                         continue
-                    source = (edge.get("properties") or {}).get("source") or {}
                     ports.append(
                         {
                             "id": node["id"],
                             "device_id": ((node.get("device") or {}).get("node") or {}).get("id"),
-                            "deployment_id": peer["id"],
-                            "source_id": source.get("id"),
+                            "row_id": peer["id"],
                         }
                     )
         return ports
 
-    async def _segment_vlan_devices(self, segment: dict[str, Any]) -> list[Any]:
+    async def _segment_vlan_devices(self, segment: dict[str, Any], port_device_ids: set[str]) -> list[Any]:
         """Every device that needs a row of the segment, capabilities and deployment
-        included: the devices of the switch ports tagged with it, plus — for
+        included: ``port_device_ids`` (the devices of the switch ports that carry it), plus — for
         a stretched segment — every VTEP of each hosting parent (leaves and border gateways), plus the MLAG peer of each of them
         (a peer with no port of the segment still carries its VLAN: a dual-homed port-channel is on both)."""
-        tagged_device_ids = sorted({port["device_id"] for port in segment.get("ports") or [] if port.get("device_id")})
+        tagged_device_ids = sorted(port_device_ids)
         devices: dict[str, Any] = {}
         if tagged_device_ids:
             for device in await self.client.filters(
@@ -430,9 +431,14 @@ class SegmentVlanMixin:
         return next(iter(vlan_ids))
 
     async def _reconcile_segment_vlans_locked(
-        self, segment_id: str, segment_name: str, state: dict[str, Any] | None = None
+        self,
+        segment_id: str,
+        segment_name: str,
+        state: dict[str, Any] | None,
+        port_device_ids: set[str],
     ) -> bool:
-        """Desired rows = every switch with a port carrying the segment, plus every VTEP of the hosting parents when the
+        """Desired rows = every switch with a port that must carry the segment (``port_device_ids``: the devices of the
+        ports the components derive and the deployments request), plus every VTEP of the hosting parents when the
         segment is stretched, plus the MLAG peer of each (a pair shares one VLAN id), each under the segment's
         deployment its switch sits in. Rows on devices that no longer need the segment (or that moved to
         another deployment) are deleted (freeing their ids); missing ones are
@@ -457,7 +463,7 @@ class SegmentVlanMixin:
             self.logger.info(f"Segment {segment_name}: not a VXLAN segment — no VLAN rows")
             return False
 
-        devices = await self._segment_vlan_devices(state["segment"])
+        devices = await self._segment_vlan_devices(state["segment"], port_device_ids)
         deployment_by_device_deployment = self._deployment_by_device_deployment(state)
 
         by_group: dict[str, list[Any]] = {}

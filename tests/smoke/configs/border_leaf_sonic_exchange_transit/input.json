@@ -1161,100 +1161,105 @@
                     "edges": [
                       {
                         "node": {
-                          "__typename": "ManagedSegmentDeployment",
-                          "id": "sd-seg-seg-shared",
-                          "segment": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "sv-seg-seg-shared",
+                          "segment_deployment": {
                             "node": {
-                              "id": "seg-seg-shared",
-                              "__typename": "ManagedVxlanSegment",
-                              "name": {
-                                "value": "seg-shared"
-                              },
-                              "customer_name": {
-                                "value": "Customer-A"
-                              },
-                              "arp_suppression": {
-                                "value": true
-                              },
-                              "security_zone": {
+                              "id": "sd-seg-seg-shared",
+                              "segment": {
                                 "node": {
-                                  "id": "fixture-zone-PROD",
+                                  "id": "seg-seg-shared",
+                                  "__typename": "ManagedVxlanSegment",
                                   "name": {
-                                    "value": "PROD"
+                                    "value": "seg-shared"
                                   },
-                                  "vrf_type": {
-                                    "value": "prod"
+                                  "customer_name": {
+                                    "value": "Customer-A"
                                   },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              },
-                              "gateway": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.1.0.1/24"
+                                  "arp_suppression": {
+                                    "value": true
                                   },
-                                  "ip_prefix": {
+                                  "security_zone": {
                                     "node": {
-                                      "prefix": {
-                                        "value": "10.1.0.0/24"
+                                      "id": "fixture-zone-PROD",
+                                      "name": {
+                                        "value": "PROD"
                                       },
-                                      "ip_namespace": {
+                                      "vrf_type": {
+                                        "value": "prod"
+                                      },
+                                      "l3_vni": {
+                                        "value": 60000
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.1.0.1/24"
+                                      },
+                                      "ip_prefix": {
                                         "node": {
-                                          "name": {
-                                            "value": "default"
+                                          "prefix": {
+                                            "value": "10.1.0.0/24"
+                                          },
+                                          "ip_namespace": {
+                                            "node": {
+                                              "name": {
+                                                "value": "default"
+                                              }
+                                            }
                                           }
                                         }
                                       }
                                     }
-                                  }
-                                }
-                              },
-                              "segment_deployments": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "vni": {
-                                        "value": 10100
-                                      },
-                                      "vlans": {
-                                        "edges": [
-                                          {
-                                            "node": {
-                                              "vlan_id": {
-                                                "value": 100
-                                              },
-                                              "device": {
+                                  },
+                                  "segment_deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vni": {
+                                            "value": 10100
+                                          },
+                                          "vlans": {
+                                            "edges": [
+                                              {
                                                 "node": {
-                                                  "id": "dev-dc1-border-leaf-01"
+                                                  "vlan_id": {
+                                                    "value": 100
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "id": "dev-dc1-border-leaf-01"
+                                                    }
+                                                  }
                                                 }
                                               }
-                                            }
+                                            ]
                                           }
-                                        ]
+                                        }
                                       }
-                                    }
+                                    ]
+                                  },
+                                  "deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "fake-dc-0"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "customer_deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "dep-shared"
+                                        }
+                                      }
+                                    ]
                                   }
-                                ]
-                              },
-                              "deployments": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "id": "fake-dc-0"
-                                    }
-                                  }
-                                ]
-                              },
-                              "customer_deployments": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "id": "dep-shared"
-                                    }
-                                  }
-                                ]
+                                }
                               }
                             }
                           }

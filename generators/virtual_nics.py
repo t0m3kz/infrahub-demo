@@ -15,7 +15,7 @@ from netutils.interface import sort_interface_list
 
 from utils.limits import WAIT_FOR_PEER_GENERATOR
 
-from .helpers.edge_source import remove_edge
+from .helpers.edges import remove_edge
 from .protocols import DcimPhysicalInterface, DcimVirtualInterface
 
 if TYPE_CHECKING:

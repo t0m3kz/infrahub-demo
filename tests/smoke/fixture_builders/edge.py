@@ -276,7 +276,7 @@ def build_edge_unfiltered_appliance_data(*, device_name: str) -> dict:
                 [
                     cap["node"]
                     for cap in port["capabilities"]["edges"]
-                    if cap["node"].get("__typename") != "ManagedSegmentDeployment"
+                    if cap["node"].get("__typename") != "ManagedSegmentVlan"
                 ]
             )
     prod = _node({"name": _v("PROD"), "l3_vni": _v(60000), "vrf_type": _v("prod")})

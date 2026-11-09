@@ -29,22 +29,20 @@ A segment with no AppComponent at all referencing it gets no generated customer-
 assignment — there is intentionally no DC-wide fallback (see
 generators/topology/segment.py's module docstring).
 
-A ManagedVxlanSegment has its ports tagged, then its VLAN rows
-reconciled (its local VLAN is per switch). Any other segment (a cloud segment)
+A ManagedVxlanSegment has its VLAN rows reconciled (its local VLAN is per
+switch), then its ports joined to them. Any other segment (a cloud segment)
 has no on-prem port to tag.
 
 Reconciled per SEGMENT, not per component: the triggering component only
 names the segment. The desired ports are the union over every AppComponent
-on it (queries/topology/add/segment_components.gql). The edge is the port's
-``segments`` (one-sided) and this generator stamps what it writes with its
-account as the edge's ``source``; a port no instance lands on any more (an
-instance moved, a component left) is removed ONLY when its edge has that
-source. An edge with no source is a person's and is never removed or changed
-(SegmentPortTagMixin, shared with add_vxlan_segment; no trigger follows a port
-edit, the next run of either generator on the segment gives the port its VLAN
-row). A component that moves to ANOTHER segment leaves the old segment's
-generated ports until that segment is reconciled again (the next run of either
-generator on it).
+on it (queries/topology/add/segment_components.gql) plus the ports assigned to
+the segment's deployments (a person's request). The edge is the port's
+membership of its switch's row (the row's ``capabilities``), written only by the
+reconcile; a port no longer desired (an instance moved, a component left, an
+assignment withdrawn) loses it (SegmentPortTagMixin, shared with
+add_vxlan_segment and add_segment_deployment_ports). A component that moves to
+ANOTHER segment leaves the old segment's ports until that segment is reconciled
+again (the next run of any of those generators on it).
 
 An instance's physical device may not be cabled yet (add_endpoint has not
 run, or hasn't reached it) — nothing is tagged until it is. Once add_endpoint
@@ -76,8 +74,7 @@ class AppInstanceSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, 
     row is shared by every component on the segment and by add_vxlan_segment,
     so this run claims neither. Both are shared desired state of the SEGMENT,
     written untracked and reconciled explicitly — tags via
-    RelationshipAdd/RelationshipRemove on the port (with this run's account
-    as the source), rows via
+    RelationshipAdd/RelationshipRemove on the port, rows via
     SegmentVlanMixin — under the per-segment lock. This generator saves
     nothing into its own tracking group.
     """

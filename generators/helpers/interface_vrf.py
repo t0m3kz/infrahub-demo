@@ -2,9 +2,9 @@
 
 An interface's VRF is the ``ManagedVRF`` among its ``capabilities`` (the VRF lists its interfaces through the interface
 edge, ``ManagedGenericInterfaces``). The same edge holds the interface's other capabilities: the circuits it ends, the
-exchanges a leg belongs to and, on a switch port, the segment deployments it carries, each with the ``source`` of who
-wrote it (generators/helpers/edge_source.py). So an existing interface's ``capabilities`` are never saved as a list (a
-list save replaces the edge set): the VRF, and any other peer, is added edge by edge (``join_capabilities``, one
+exchanges a leg belongs to and, on a switch port, the VLAN rows of its switch it is a member of, each written by
+another generator. So an existing interface's ``capabilities`` are never saved as a list (a list save replaces the edge
+set; generators/helpers/edges.py): the VRF, and any other peer, is added edge by edge (``join_capabilities``, one
 RelationshipAdd) and a stale instance removed edge by edge (``leave_vrfs``, RelationshipRemove). The instance an
 interface joins is often created in the same pass (generators/helpers/vrf.py ``vrfs_held``), and a RelationshipAdd
 naming a node created a moment before, in another request, can reach the other replica first: the add is retried on
@@ -20,7 +20,7 @@ from typing import Any
 
 from ..protocols import ManagedVRF
 from .common import call_with_node_not_found_retry
-from .edge_source import add_edges, remove_edge
+from .edges import add_edges, remove_edge
 
 _RELATION = "capabilities"
 

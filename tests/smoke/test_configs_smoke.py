@@ -178,7 +178,7 @@ def test_firewall_builder_uses_direct_subinterface_zone(platform: str) -> None:
         interface = edge["node"]
         assert interface["name"]["value"].startswith("ethernet1/1.")
         assert not any(
-            edge["node"].get("__typename") == "ManagedSegmentDeployment"
+            edge["node"].get("__typename") == "ManagedSegmentVlan"
             for edge in (interface.get("capabilities") or {}).get("edges") or []
         )
         zone = interface["security_zone"]["node"]
@@ -335,7 +335,7 @@ def test_config_fixture_raw_zone_and_svi_contract(transform_cls: type, fixture_d
         if isinstance(node, dict):
             if node.get("__typename") == "DcimVirtualInterface":
                 assert not any(
-                    edge["node"].get("__typename") == "ManagedSegmentDeployment"
+                    edge["node"].get("__typename") == "ManagedSegmentVlan"
                     for edge in (node.get("capabilities") or {}).get("edges") or []
                 )
             if namespace := (node.get("ip_namespace") or {}).get("node"):

@@ -999,7 +999,7 @@ class ManagedSegmentDeployment(ManagedGenericInterfaces):
     vlans: RelationshipManager[ManagedSegmentVlan]
 
 
-class ManagedSegmentVlan(CoreNode):
+class ManagedSegmentVlan(ManagedGenericInterfaces):
     vlan_id: Integer
     segment_deployment: RelationshipAttribute[ManagedSegmentDeployment]
     device: RelationshipAttribute[DcimPhysicalDevice]

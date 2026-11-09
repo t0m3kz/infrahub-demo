@@ -607,6 +607,8 @@ queries:
     file_path: queries/topology/add/app_component.gql
   - name: app_component_segment
     file_path: queries/topology/add/app_component_segment.gql
+  - name: segment_deployment_ports
+    file_path: queries/topology/add/segment_deployment_ports.gql
   - name: lb_segment_gateways
     file_path: queries/topology/add/lb_segment_gateways.gql
   - name: lb_serving_contexts
@@ -891,6 +893,15 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       fqdn: fqdn__value
+  - name: add_segment_deployment_ports
+    file_path: generators/topology/segment_deployment_ports.py
+    targets: segment_deployments
+    query: segment_deployment_ports
+    class_name: SegmentDeploymentPortsGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      id: id
   - name: add_customer_deployment_dc
     file_path: generators/topology/customer_dc.py
     targets: customer_deployments_dc

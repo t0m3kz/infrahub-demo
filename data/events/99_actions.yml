@@ -210,6 +210,23 @@ spec:
           - relationship_name: terminated_on
             modification_type: updated
 
+    # Re-run the segment reconcile when a port is assigned to, or withdrawn from, a segment deployment (its
+    # `capabilities`, the request): the reconcile gives the port its switch's VLAN row. An edit of the edge from either
+    # side (the port or the deployment) fires `updated` on both nodes (measured on 1.11.9). The target is the
+    # deployment, a member of segment_deployments (add_vxlan_segment adds every deployment it builds; a data file that
+    # authors one declares it). The reconcile writes the port -> ROW edge, never this one, so its run raises no event
+    # of this rule.
+    - name: trigger-segment-deployment-ports-updated
+      branch_scope: "other_branches"
+      node_kind: ManagedSegmentDeployment
+      mutation_action: "updated"
+      action: run-segment-deployment-ports-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: capabilities
+            modification_type: updated
+
     # Re-run generator when stretch_scope changes (e.g. local -> dc_pair) —
     # it picks the VNI identifier strategy (per-deployment vs shared, see
     # generators/topology/segment.py's _activate_segment_in_deployment), so a

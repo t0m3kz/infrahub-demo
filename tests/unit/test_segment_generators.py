@@ -399,10 +399,12 @@ class TestResolveHostingParent:
 # ===========================================================================
 
 
-def _activation_node() -> MagicMock:
-    """A fresh SegmentDeployment node whose save() is awaitable."""
+def _activation_node(*groups: str) -> MagicMock:
+    """A fresh SegmentDeployment node whose save() is awaitable, a member of ``groups`` (by name)."""
     node = MagicMock()
     node.save = AsyncMock()
+    node.add_relationships = AsyncMock()
+    node.member_of_groups.peers = [MagicMock(hfid=[group]) for group in groups]
     return node
 
 
@@ -439,6 +441,29 @@ class TestActivateSegmentInDeployment:
         existing.save.assert_called_once()
         info_msgs = " ".join(str(c) for c in gen.logger.info.call_args_list)
         assert "already exists" in info_msgs
+
+    def test_an_existing_deployment_joins_the_segment_deployments_group_once(self) -> None:
+        """A deployment outside segment_deployments is added with one RelationshipAdd (its other groups stay); a
+        member is not written again."""
+        gen = _make_gen()
+        gen.client.get = AsyncMock(return_value=MagicMock(id="grp-sd"))
+        outside = _activation_node("some_generator_group")
+        assert self._run(gen, existing_deployment=outside) is True
+        outside.add_relationships.assert_awaited_once_with(
+            relation_to_update="member_of_groups", related_nodes=["grp-sd"]
+        )
+
+        member = _activation_node("segment_deployments")
+        assert self._run(gen, existing_deployment=member) is True
+        member.add_relationships.assert_not_awaited()
+
+    def test_a_new_deployment_is_created_in_the_segment_deployments_group(self) -> None:
+        """The target group of add_segment_deployment_ports is in the create data (one write)."""
+        gen = _make_gen()
+        gen.client.get = AsyncMock(return_value=MagicMock(id="grp-sd"))
+        gen.client.create = AsyncMock(return_value=_activation_node())
+        assert self._run(gen, vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"}) is True
+        assert gen.client.create.call_args.kwargs["data"]["member_of_groups"] == [{"id": "grp-sd"}]
 
     def test_existing_deployment_resave_failure_stops_the_run(self):
         """The tracker re-save of an existing record is what keeps it out of this run's cleanup, which would

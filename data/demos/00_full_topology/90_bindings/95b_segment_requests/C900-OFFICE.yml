@@ -1,0 +1,34 @@
+---
+# The switch ports a person asks to carry each segment in C900-OFFICE: the ports assigned to the segment's deployment
+# (its interface `capabilities`), the intent (schemas/extensions/service/segment.yml). The segment reconcile
+# realizes a request as the port's membership of its switch's VLAN row; 00_full runs no generator, so it authors
+# the realization too (96_segment_ports), consistent with this file: per deployment, the ports listed here are
+# exactly the members of its rows (tests/unit/test_full_topology_segments.py). An upsert of the list replaces it, so
+# each deployment's whole list is here, once.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSegmentDeployment
+  data:
+    - segment: c900-wifi-corp-p
+      deployment: C900-OFFICE
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/2"}
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/2"}
+    - segment: c900-wifi-guest-p
+      deployment: C900-OFFICE
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/2"}
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/2"}

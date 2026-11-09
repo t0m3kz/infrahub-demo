@@ -75,13 +75,14 @@ def _vrf_zone(device: str, interface: str) -> str:
 
 
 def _bindings(deployment: str) -> list[dict[str, Any]]:
-    """The port bindings of a hosting deployment (90_bindings/96_segment_ports): one row per segment deployment."""
-    path = _DATA / "90_bindings/96_segment_ports" / f"{deployment}.yml"
+    """The port requests of a hosting deployment (90_bindings/95b_segment_requests): one entry per segment deployment,
+    its assigned ports (equal to the members of its rows in 96_segment_ports, tests/unit/test_full_topology_segments.py)."""
+    path = _DATA / "90_bindings/95b_segment_requests" / f"{deployment}.yml"
     return [row for doc in yaml.safe_load_all(path.read_text()) if doc for row in doc["spec"]["data"]]
 
 
 def _deployment_ports(segment: str, deployment: str) -> set[tuple[str, str]]:
-    """(device, name) of the ports in the segment's deployment, as the binding lists them."""
+    """(device, name) of the ports assigned to the segment's deployment, as the request lists them."""
     (row,) = [row for row in _bindings(deployment) if row["segment"] == segment]
     return {(port["data"]["device"], port["data"]["name"]) for port in row["capabilities"]}
 
@@ -401,8 +402,9 @@ def test_vm_port_group_and_all_upstream_trunks_keep_the_physical_host_path(site:
     assert group["name"] == f"c900-internal-fw-{site}"
     assert group["vlan_id"] == vlan and group["nics"] == [[vm["name"], "eth0"]]
     members = _deployment_ports(segment, _SITES[site])
+    # A server port carries no segment membership: the uplinks trunk the port groups (checks/virtual_switch.py VS3).
     for uplink in switch["uplinks"]:
-        assert (uplink["data"]["device"], uplink["data"]["name"]) in members
+        assert (uplink["data"]["device"], uplink["data"]["name"]) not in members
     cable = next(
         item
         for item in _items("DcimCable", _site(site))

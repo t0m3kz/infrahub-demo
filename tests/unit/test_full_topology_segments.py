@@ -57,30 +57,53 @@ def _deployment_declarations() -> list[dict]:
 
 
 def _deployment_rows() -> list[dict]:
-    """The realizations with their VLAN rows (the port bindings of 90_bindings/96_segment_ports upsert the same
-    deployments with only their ``capabilities``)."""
+    """The realizations with their VLAN rows."""
     return [row for row in _deployment_declarations() if "vlans" in row]
 
 
-_SITE_PREFIX = {"DC-KTW1": "ktw1-", "DC-WAW1": "waw1-", "DC-GDN1": "gdn1-", "C900-OFFICE": "bcn-office-"}
+def _row_bindings() -> list[dict]:
+    """The port lists of the VLAN rows (90_bindings/96_segment_ports upserts each row by [device, vlan_id] with its
+    ``capabilities``)."""
+    return [
+        row
+        for _, doc in _documents()
+        if (doc.get("spec") or {}).get("kind") == "ManagedSegmentVlan"
+        for row in doc["spec"]["data"]
+        if "capabilities" in row
+    ]
 
 
-def test_every_port_of_a_deployment_is_a_switch_port_of_its_hosting_deployment() -> None:
-    """A port is a member of the segment's deployment in its device's hosting deployment, a physical port or a LAG,
-    each deployment's list declared once (an upsert of the list replaces it), and the deployment is realized."""
-    realized = {(row["segment"], row["deployment"]) for row in _deployment_rows()}
-    bindings = [row for row in _deployment_declarations() if "capabilities" in row]
-    keys = [(row["segment"], row["deployment"]) for row in bindings]
+def test_every_port_of_a_row_is_a_switch_port_of_the_row_s_switch() -> None:
+    """A port is a member of its own switch's VLAN row, a physical port or a LAG, each row's list declared once (an
+    upsert of the list replaces it), and the row is one its deployment declares (a person only picks an existing
+    row)."""
+    declared = {
+        (vlan["device"], vlan["vlan_id"]): (row["segment"], row["deployment"])
+        for row in _deployment_rows()
+        for vlan in row["vlans"]["data"]
+    }
+    bindings = _row_bindings()
+    keys = [(row["device"], row["vlan_id"]) for row in bindings]
     assert bindings and len(keys) == len(set(keys))
     for row in bindings:
-        assert (row["segment"], row["deployment"]) in realized, row["segment"]
+        assert declared.get((row["device"], row["vlan_id"])) == tuple(row["segment_deployment"]), row
         for port in row["capabilities"]:
             assert port["kind"] in {"DcimPhysicalInterface", "DcimLAGInterface"}, port
-            assert port["data"]["device"].startswith(_SITE_PREFIX[row["deployment"]]), (row["deployment"], port)
+            assert port["data"]["device"] == row["device"], (row["device"], port)
+
+
+def test_one_row_of_a_segment_per_port() -> None:
+    """A port names at most one row of a segment (checks/interface_layers.py R4)."""
+    seen: dict[tuple[str, str, str], list[int]] = {}
+    for row in _row_bindings():
+        segment = row["segment_deployment"][0]
+        for port in row["capabilities"]:
+            seen.setdefault((port["data"]["device"], port["data"]["name"], segment), []).append(row["vlan_id"])
+    assert {key: vlans for key, vlans in seen.items() if len(vlans) > 1} == {}
 
 
 def test_no_port_names_a_segment() -> None:
-    """The port-to-segment edge is gone: a port reaches a segment through the deployment only."""
+    """The port-to-segment edge is gone: a port reaches a segment through its switch's VLAN row only."""
     ports = [
         item
         for _, doc in _documents()
@@ -162,3 +185,27 @@ def test_the_office_wifi_segments_are_a_guest_and_a_staff_one_on_the_access_swit
     assert any(
         rule.get("destination_segment") == "c900-web-p" for rule in policies["c900-wifi-corp-p"]["rules"]["data"]
     )
+
+
+def _port_key(port: dict[str, Any]) -> tuple[str, str, str]:
+    return (port["kind"], port["data"]["device"], port["data"]["name"])
+
+
+def test_the_memberships_are_exactly_the_requests_per_deployment() -> None:
+    """00_full runs no generator, so it authors the intent (the ports assigned to a deployment, its ``capabilities``,
+    95b_segment_requests) and its realization (the rows' ports, 96_segment_ports) by hand: per deployment, the same
+    set of ports."""
+    requests: dict[tuple[str, str], set[tuple[str, str, str]]] = {}
+    for row in _deployment_declarations():
+        if "capabilities" in row:
+            key = (row["segment"], row["deployment"])
+            assert key not in requests, key
+            requests[key] = {_port_key(port) for port in row["capabilities"]}
+    memberships: dict[tuple[str, str], set[tuple[str, str, str]]] = {}
+    for row in _row_bindings():
+        memberships.setdefault(tuple(row["segment_deployment"]), set()).update(
+            _port_key(port) for port in row["capabilities"]
+        )
+    assert requests and requests == memberships
+    for ports in requests.values():
+        assert {kind for kind, _, _ in ports} <= {"DcimPhysicalInterface", "DcimLAGInterface"}

@@ -12,14 +12,6 @@ query interface_layers {
             name {
               value
             }
-            # R4: the port's deployments sit in the hosting deployment of its device (utils/segment_addressing.py).
-            ... on DcimPhysicalDevice {
-              deployment {
-                node {
-                  ...ServiceHostingFields
-                }
-              }
-            }
           }
         }
         lag {
@@ -39,22 +31,21 @@ query interface_layers {
           edges {
             node {
               __typename
-              # A segment deployment is the port's switchport membership (utils/segment_vlan.py port_deployments).
-              ... on ManagedSegmentDeployment {
+              # A VLAN row of its switch is the port's switchport membership (utils/segment_vlan.py port_rows).
+              ... on ManagedSegmentVlan {
                 id
-                deployment {
-                  node {
-                    id
-                    name {
-                      value
-                    }
-                  }
+                vlan_id {
+                  value
                 }
-                segment {
+                segment_deployment {
                   node {
-                    id
-                    name {
-                      value
+                    segment {
+                      node {
+                        id
+                        name {
+                          value
+                        }
+                      }
                     }
                   }
                 }
@@ -78,14 +69,6 @@ query interface_layers {
             name {
               value
             }
-            # R4: the port's deployments sit in the hosting deployment of its device (utils/segment_addressing.py).
-            ... on DcimPhysicalDevice {
-              deployment {
-                node {
-                  ...ServiceHostingFields
-                }
-              }
-            }
           }
         }
         ip_address {
@@ -100,22 +83,21 @@ query interface_layers {
           edges {
             node {
               __typename
-              # A segment deployment is the port's switchport membership (utils/segment_vlan.py port_deployments).
-              ... on ManagedSegmentDeployment {
+              # A VLAN row of its switch is the port's switchport membership (utils/segment_vlan.py port_rows).
+              ... on ManagedSegmentVlan {
                 id
-                deployment {
-                  node {
-                    id
-                    name {
-                      value
-                    }
-                  }
+                vlan_id {
+                  value
                 }
-                segment {
+                segment_deployment {
                   node {
-                    id
-                    name {
-                      value
+                    segment {
+                      node {
+                        id
+                        name {
+                          value
+                        }
+                      }
                     }
                   }
                 }
@@ -126,7 +108,98 @@ query interface_layers {
       }
     }
   }
-  # R3: the interfaces of every segment deployment, any kind (only a physical port or a LAG may carry a segment).
+  # R3, R5: every VLAN row with its ports (any kind), the ports assigned to its deployment (the request) and, per port,
+  # the far ends of its cable (of a LAG: of its members' cables), so the check can tell a membership nobody asked for:
+  # neither assigned nor derived from a component's hosts nor a firewall service port of a terminated segment.
+  ManagedSegmentVlan {
+    edges {
+      node {
+        id
+        vlan_id {
+          value
+        }
+        device {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        segment_deployment {
+          node {
+            capabilities {
+              edges {
+                node {
+                  id
+                }
+              }
+            }
+            segment {
+              node {
+                id
+                name {
+                  value
+                }
+                ... on ManagedVxlanSegment {
+                  terminated_on {
+                    node {
+                      id
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              __typename
+              id
+              name {
+                value
+              }
+              role {
+                value
+              }
+              device {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+              ... on DcimPhysicalInterface {
+                cable {
+                  node {
+                    ...InterfaceLayersCableEndsFields
+                  }
+                }
+              }
+              ... on DcimLAGInterface {
+                member_interfaces {
+                  edges {
+                    node {
+                      id
+                      role {
+                        value
+                      }
+                      cable {
+                        node {
+                          ...InterfaceLayersCableEndsFields
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  # R3: every segment deployment with the ports assigned to it (the request), any kind.
   ManagedSegmentDeployment {
     edges {
       node {
@@ -160,6 +233,61 @@ query interface_layers {
                   }
                 }
               }
+            }
+          }
+        }
+      }
+    }
+  }
+  # R5: the hosts each component's instances stand on (utils/app_instances.py physical_host), per segment.
+  AppComponent {
+    edges {
+      node {
+        id
+        network_segment {
+          node {
+            id
+          }
+        }
+        instances {
+          edges {
+            node {
+              id
+              __typename
+              ... on DcimVirtualDevice {
+                hosting_device {
+                  node {
+                    id
+                  }
+                }
+              }
+              ... on ManagedControllerVirtual {
+                hosting_device {
+                  node {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment InterfaceLayersCableEndsFields on DcimCable {
+  endpoints {
+    edges {
+      node {
+        id
+        ... on DcimPhysicalInterface {
+          role {
+            value
+          }
+          device {
+            node {
+              id
             }
           }
         }

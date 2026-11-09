@@ -97,9 +97,9 @@ def _interface_segments(data: dict, interface_name: str = "Ethernet10") -> list[
     node = data["DcimDevice"]["edges"][0]["node"]
     port = next(e["node"] for e in node["interfaces"]["edges"] if e["node"]["name"]["value"] == interface_name)
     return [
-        edge["node"]["segment"]["node"]
+        edge["node"]["segment_deployment"]["node"]["segment"]["node"]
         for edge in port["capabilities"]["edges"]
-        if edge["node"].get("__typename") == "ManagedSegmentDeployment"
+        if edge["node"].get("__typename") == "ManagedSegmentVlan"
     ]
 
 

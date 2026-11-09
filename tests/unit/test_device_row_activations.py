@@ -62,7 +62,7 @@ class TestRowActivations:
         port_segment = {**segment, "segment_deployments": [{"vni": 10100, "vlans": [_port_row(100)]}]}
         port = {
             "name": "Ethernet1",
-            "capabilities": [{"typename": "ManagedSegmentDeployment", "segment": port_segment}],
+            "capabilities": [{"typename": "ManagedSegmentVlan", "segment_deployment": {"segment": port_segment}}],
         }
         device = _device("leaf", [_row(segment, 100, 10100)], [port])
         activations = _make_transform("leaf")._device_activations(device)

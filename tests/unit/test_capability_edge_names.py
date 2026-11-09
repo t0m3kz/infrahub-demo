@@ -206,10 +206,10 @@ def test_old_name_only_remains_on_identifier_lines(root_dir: Path) -> None:
     assert not leftovers, "\n".join(leftovers[:20])
 
 
-def test_a_port_is_in_a_segment_deployment_not_in_a_segment(schema: SchemaModel) -> None:
-    """One edge between a port and a segment: the port is in the segment's DEPLOYMENT (ManagedSegmentDeployment
-    inherits the interface edge, the port's `capabilities`); the segment itself is not on the interface edge, and the
-    port-side `segments` edge is gone.
+def test_a_port_is_in_a_vlan_row_not_in_a_segment(schema: SchemaModel) -> None:
+    """The port's segment is its switch's VLAN ROW (ManagedSegmentVlan inherits the interface edge, the port's
+    `capabilities`, the realization); the deployment inherits it too (the ports a person asks for); the segment itself
+    is not on the interface edge, and the port-side `segments` edge is gone.
     """
     segment = "ManagedVxlanSegment"
     lineage = schema.ancestors(segment) | {segment}
@@ -225,7 +225,8 @@ def test_a_port_is_in_a_segment_deployment_not_in_a_segment(schema: SchemaModel)
         for kind in lineage
         for rel in schema.relationships.get(kind, [])
         if "Interface" in rel["peer"]
-    ], "the segment lists no interface: its deployments do"
+    ], "the segment lists no interface: its rows do"
+    assert INTERFACE_EDGE_GENERIC in schema.ancestors("ManagedSegmentVlan")
     assert INTERFACE_EDGE_GENERIC in schema.ancestors("ManagedSegmentDeployment")
     assert not [rel for rel in schema.relationships.get("DcimSwitchedInterface", []) if rel["peer"] == segment]
 

@@ -1,0 +1,20 @@
+# add_segment_deployment_ports: the ports assigned to a segment deployment (its `capabilities`, the request) changed.
+# The segment of the deployment is what the reconcile runs on (generators/topology/segment_deployment_ports.py); the
+# reconcile reads the rest itself (segment_vlans.gql).
+query segment_deployment_ports($id: ID!) {
+  ManagedSegmentDeployment(ids: [$id]) {
+    edges {
+      node {
+        id
+        deployment { node { name { value } } }
+        segment {
+          node {
+            id
+            __typename
+            name { value }
+          }
+        }
+      }
+    }
+  }
+}

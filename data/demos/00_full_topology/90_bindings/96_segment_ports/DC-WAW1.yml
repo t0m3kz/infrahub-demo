@@ -1,41 +1,53 @@
 ---
-# The switch ports of each segment deployment of DC-WAW1: a port carries a segment as a member of the segment's
-# deployment in its device's hosting deployment, one of the deployment's `capabilities` (the interface edge,
-# schemas/extensions/service/segment.yml). An upsert of that list replaces it, so each deployment's whole list is here,
-# once, after every port it names is loaded (90_bindings loads last). The ports are a person's: no source on the edge,
-# so the segment reconcile never removes them. Server ports (a bond, an eno1) are the trunks of a virtual switch's
-# uplinks (checks/virtual_switch.py VS3); a border leaf's Ethernet1/25 is the service port facing the firewall pair
-# that terminates the segment.
+# The switch ports of each VLAN row of DC-WAW1: a port carries a segment as a member of its switch's VLAN row
+# (ManagedSegmentVlan: the segment's deployment on that one switch, with its vlan_id), one of the row's `capabilities`
+# (the interface edge, schemas/extensions/service/segment.yml). An upsert of that list replaces it, so each row's whole
+# list is here, once, after every port and row it names is loaded (90_bindings loads last). This is the REALIZATION:
+# where a generator runs, the segment reconcile writes it from the deployment's assigned interfaces (the request,
+# 95b_segment_requests) and the component-derived ports; 00_full runs no generator, so both are data and a unit test
+# keeps them equal. A server port carries no membership (checks/virtual_switch.py reads the port groups); a border
+# leaf's Ethernet1/25 is the service port facing the firewall pair that terminates the segment.
+
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: ManagedSegmentDeployment
+  kind: ManagedSegmentVlan
   data:
-    - segment: c900-app-p
-      deployment: DC-WAW1
+    - device: waw1-bl-01
+      vlan_id: 250
+      segment_deployment: ["c900-internal-fw-waw1-p", "DC-WAW1"]
       capabilities:
-        - kind: DcimLAGInterface
-          data: {device: waw1-leaf-01, name: "Port-Channel10", lag_id: 10}
-        - kind: DcimLAGInterface
-          data: {device: waw1-leaf-02, name: "Port-Channel10", lag_id: 10}
-        - kind: DcimLAGInterface
-          data: {device: waw1-srv-01, name: "bond0", lag_id: 1}
-        - kind: DcimPhysicalInterface
-          data: {device: waw1-srv-02, name: "eno1"}
-    - segment: c900-internal-fw-waw1-p
-      deployment: DC-WAW1
-      capabilities:
-        - kind: DcimLAGInterface
-          data: {device: waw1-leaf-01, name: "Port-Channel10", lag_id: 10}
-        - kind: DcimLAGInterface
-          data: {device: waw1-leaf-02, name: "Port-Channel10", lag_id: 10}
-        - kind: DcimLAGInterface
-          data: {device: waw1-srv-01, name: "bond0", lag_id: 1}
-        - kind: DcimPhysicalInterface
-          data: {device: waw1-srv-02, name: "eno1"}
-        - kind: DcimPhysicalInterface
-          data: {device: waw1-leaf-01, name: "Ethernet1/5"}
         - kind: DcimPhysicalInterface
           data: {device: waw1-bl-01, name: "Ethernet1/25"}
+    - device: waw1-bl-02
+      vlan_id: 250
+      segment_deployment: ["c900-internal-fw-waw1-p", "DC-WAW1"]
+      capabilities:
         - kind: DcimPhysicalInterface
           data: {device: waw1-bl-02, name: "Ethernet1/25"}
+    - device: waw1-leaf-01
+      vlan_id: 200
+      segment_deployment: ["c900-app-p", "DC-WAW1"]
+      capabilities:
+        - kind: DcimLAGInterface
+          data: {device: waw1-leaf-01, name: "Port-Channel10", lag_id: 10}
+    - device: waw1-leaf-01
+      vlan_id: 250
+      segment_deployment: ["c900-internal-fw-waw1-p", "DC-WAW1"]
+      capabilities:
+        - kind: DcimLAGInterface
+          data: {device: waw1-leaf-01, name: "Port-Channel10", lag_id: 10}
+        - kind: DcimPhysicalInterface
+          data: {device: waw1-leaf-01, name: "Ethernet1/5"}
+    - device: waw1-leaf-02
+      vlan_id: 200
+      segment_deployment: ["c900-app-p", "DC-WAW1"]
+      capabilities:
+        - kind: DcimLAGInterface
+          data: {device: waw1-leaf-02, name: "Port-Channel10", lag_id: 10}
+    - device: waw1-leaf-02
+      vlan_id: 250
+      segment_deployment: ["c900-internal-fw-waw1-p", "DC-WAW1"]
+      capabilities:
+        - kind: DcimLAGInterface
+          data: {device: waw1-leaf-02, name: "Port-Channel10", lag_id: 10}

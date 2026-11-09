@@ -374,22 +374,23 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         )
 
     @pytest.mark.order(253)
-    @pytest.mark.dependency(scope="session", name="dc6_add_ep_person_edge", depends=["dc6_add_ep_verify_segment_vlan"])
+    @pytest.mark.dependency(
+        scope="session", name="dc6_add_ep_assigned_port", depends=["dc6_add_ep_verify_segment_vlan"]
+    )
     @pytest.mark.asyncio
-    async def test_03e_a_port_set_by_a_person_survives_the_segment_reconcile(
+    async def test_03e_a_port_assigned_by_a_person_is_realized_and_withdrawn(
         self,
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """An edge a person sets from a port is never removed by the segment reconcile.
+        """A port a person assigns to the segment's deployment (the request) becomes a member of its switch's row.
 
-        The reconcile writes the ports its components derive with its own account as the edge source and removes
-        only those. Here an uncabled customer port of a switch the server is cabled to joins the segment's deployment
-        with no source (the SDK writes none), add_vxlan_segment runs again, and the edge is still there, still
-        sourceless, next to the generated ones. The edge is then removed by hand and the generator rerun, which must not put it
-        back (no instance lands on that port) - the branch ends as it began, before the proposed change merges it.
+        Here an uncabled customer port of a switch the server is cabled to is assigned to the deployment its generated
+        ports' row is under; add_vxlan_segment runs again and the port is a member of that row, next to the generated
+        ones. The assignment is then withdrawn and the generator rerun, which removes the membership (no instance lands
+        on that port) - the branch ends as it began, before the proposed change merges it.
         """
-        logging.info("=== %s - Step 3e: A person's port edge survives the reconcile ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 3e: A port assigned by a person is realized and withdrawn ===", SCENARIO_NAME)
 
         client = async_client_main
         client.default_branch = scenario_branch
@@ -400,7 +401,6 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
 
         generated = await fetch_segment_ports(client, scenario_branch, segment_id)
         assert generated, f"'{SCENARIO_ENDPOINT_SEGMENT}' has no generated port to compare with"
-        assert all(port["source_id"] for port in generated), f"a generated edge has no source: {generated}"
 
         hosts = {host["name"]: host for host in await fetch_endpoint_cabling(client, scenario_branch)}
         switch = sorted({link["peer_device"] for link in hosts[SCENARIO_ENDPOINT_SERVER]["links"]})[0]
@@ -415,43 +415,31 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
             (port for port in candidates if not getattr(port.cable, "id", None) and not _peers(port, "capabilities")),
             key=_port_name,
         )
-        assert free, f"{switch} has no uncabled customer port left to tag by hand"
+        assert free, f"{switch} has no uncabled customer port left to assign by hand"
         port = free[0]
-        # The segment's deployment in the switch's DC: the one its generated ports on that switch are in.
-        deployment_id = next(p["deployment_id"] for p in generated if p["device"] == switch)
+        # The deployment of the switch's row of the segment: a person assigns the port to it (the request).
+        row_id, deployment_id = next((p["row_id"], p["deployment_id"]) for p in generated if p["device"] == switch)
 
-        # A person's edge: the port added to the segment's deployment from the port, no source.
+        async def _reconcile() -> list[dict[str, Any]]:
+            outcome = await run_generator(
+                client=client, generator_name="add_vxlan_segment", node_ids=[segment_id], branch=scenario_branch
+            )
+            assert outcome["success"], f"add_vxlan_segment failed: {outcome}"
+            await wait_for_tasks_completion(client, scenario_branch)
+            await verify_no_failed_tasks(client=client, branch=scenario_branch)
+            return await fetch_segment_ports(client, scenario_branch, segment_id)
+
         await port.add_relationships(relation_to_update="capabilities", related_nodes=[deployment_id])
-        by_hand = await fetch_segment_ports(client, scenario_branch, segment_id)
-        assert [p["id"] for p in by_hand if p["source_id"] is None] == [port.id], (
-            f"the hand-set edge on {switch}:{_port_name(port)} should be the only sourceless one: {by_hand}"
-        )
+        after = await _reconcile()
+        assert {(p["id"], p["row_id"]) for p in after} == {(p["id"], p["row_id"]) for p in generated} | {
+            (port.id, row_id)
+        }, f"the assigned port {switch}:{_port_name(port)} is not a member of its switch's row: {after}"
 
-        outcome = await run_generator(
-            client=client, generator_name="add_vxlan_segment", node_ids=[segment_id], branch=scenario_branch
-        )
-        assert outcome["success"], f"add_vxlan_segment failed: {outcome}"
-        await wait_for_tasks_completion(client, scenario_branch)
-        await verify_no_failed_tasks(client=client, branch=scenario_branch)
-
-        after = await fetch_segment_ports(client, scenario_branch, segment_id)
-        assert [p["id"] for p in after if p["source_id"] is None] == [port.id], (
-            f"the reconcile removed or re-stamped the edge a person set on {switch}:{_port_name(port)}: {after}"
-        )
-        assert {p["id"] for p in after if p["source_id"]} == {p["id"] for p in generated}, (
-            f"the generated ports changed with the hand-set one: before {generated}, after {after}"
-        )
-
-        # Back to the generated set: a person removes it, and the generator does not bring it back.
+        # Back to the generated set: the assignment is withdrawn and the reconcile removes the membership.
         await port.remove_relationships(relation_to_update="capabilities", related_nodes=[deployment_id])
-        outcome = await run_generator(
-            client=client, generator_name="add_vxlan_segment", node_ids=[segment_id], branch=scenario_branch
-        )
-        assert outcome["success"], f"add_vxlan_segment failed: {outcome}"
-        await wait_for_tasks_completion(client, scenario_branch)
-        final = await fetch_segment_ports(client, scenario_branch, segment_id)
+        final = await _reconcile()
         assert {p["id"] for p in final} == {p["id"] for p in generated}, (
-            f"the reconcile tagged a port no instance lands on: {final}"
+            f"the reconcile kept a port nobody asks for: {final}"
         )
 
     # ------------------------------------------------------------------

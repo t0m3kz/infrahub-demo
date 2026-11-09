@@ -290,8 +290,8 @@ generics:
         order_weight: 1900
 
   # Ports that can be switchport members of VXLAN segments: a physical port and a LAG (a marker: a port's membership is
-  # a ManagedSegmentDeployment among its interface `capabilities`, checks/interface_layers.py holds the kinds; a
-  # virtual switch's `uplinks` peer it).
+  # its switch's VLAN row, a ManagedSegmentVlan among its interface `capabilities`, checks/interface_layers.py holds the
+  # kinds; a virtual switch's `uplinks` peer it).
   - name: SwitchedInterface
     namespace: Dcim
     label: Switched Interface

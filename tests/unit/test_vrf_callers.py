@@ -45,7 +45,9 @@ def _segment_gen() -> Any:
         gen.events.append(f"unlock:{key}")
 
     gen.resource_lock = _lock
-    gen._reconcile_segment_interface_tags = AsyncMock(return_value=(0, 0))
+    gen._derived_segment_port_ids = AsyncMock(return_value=set())
+    gen._port_devices = AsyncMock(return_value={})
+    gen._reconcile_segment_port_rows = AsyncMock(return_value=(0, 0))
     return gen
 
 

@@ -9,8 +9,9 @@ from utils.segment_vlan import port_segments
 
 
 def interface_segments(iface: dict[str, Any]) -> list[dict[str, Any]]:
-    """The VXLAN segments an interface carries: the segment of each ManagedSegmentDeployment among its
-    ``capabilities`` (queries/fragments/interface_capability_fields.gql InterfaceCapabilitiesWithSegmentFields)."""
+    """The VXLAN segments an interface carries: the segment of the deployment of each VLAN row (ManagedSegmentVlan)
+    among its ``capabilities`` (queries/fragments/interface_capability_fields.gql
+    InterfaceCapabilitiesWithSegmentFields)."""
     return port_segments(iface)
 
 

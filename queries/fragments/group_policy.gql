@@ -47,8 +47,8 @@ fragment SecurityTagGroupPolicyFields on SecurityTag {
 #
 # Per instance: a physical device/controller is its own host; a virtual one walks
 # hosting_device (utils/app_instances.physical_host). The host's uplink/lag NICs are
-# selected with the far end of each cable: its device, role, tags (the segment deployments
-# the generator tagged the port with) and, for a LAG member, its port-channel. That NIC
+# selected with the far end of each cable: its device, role, tags (the VLAN rows of its switch
+# the port is a member of, each with its deployment's segment) and, for a LAG member, its port-channel. That NIC
 # selection is HostNicFields, written once and spread in the `node` of each host kind's
 # `interfaces(role__values: [...]) { edges { node { ...HostNicFields } } }`: the role
 # filter stays per host kind. Rule: a named fragment is spread only under a field
@@ -68,11 +68,11 @@ fragment HostNicFields on DcimInterface {
                 name { value }
                 role { value }
                 device { node { name { value } } }
-                capabilities { edges { node { __typename ... on ManagedSegmentDeployment { segment { node { id } } } } } }
+                capabilities { edges { node { __typename ... on ManagedSegmentVlan { segment_deployment { node { segment { node { id } } } } } } } }
                 lag {
                   node {
                     name { value }
-                    capabilities { edges { node { __typename ... on ManagedSegmentDeployment { segment { node { id } } } } } }
+                    capabilities { edges { node { __typename ... on ManagedSegmentVlan { segment_deployment { node { segment { node { id } } } } } } } }
                   }
                 }
               }

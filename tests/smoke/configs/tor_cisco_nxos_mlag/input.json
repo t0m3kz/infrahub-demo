@@ -556,73 +556,78 @@
                     "edges": [
                       {
                         "node": {
-                          "__typename": "ManagedSegmentDeployment",
-                          "id": "sd-seg-seg-100",
-                          "segment": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "sv-seg-seg-100",
+                          "segment_deployment": {
                             "node": {
-                              "id": "seg-seg-100",
-                              "__typename": "ManagedVxlanSegment",
-                              "name": {
-                                "value": "seg-100"
-                              },
-                              "customer_name": {
-                                "value": "Customer-A"
-                              },
-                              "arp_suppression": {
-                                "value": true
-                              },
-                              "security_zone": {
+                              "id": "sd-seg-seg-100",
+                              "segment": {
                                 "node": {
-                                  "id": "fixture-zone-PROD",
+                                  "id": "seg-seg-100",
+                                  "__typename": "ManagedVxlanSegment",
                                   "name": {
-                                    "value": "PROD"
+                                    "value": "seg-100"
                                   },
-                                  "vrf_type": {
-                                    "value": "prod"
+                                  "customer_name": {
+                                    "value": "Customer-A"
                                   },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              },
-                              "gateway": {
-                                "node": null
-                              },
-                              "segment_deployments": {
-                                "edges": [
-                                  {
+                                  "arp_suppression": {
+                                    "value": true
+                                  },
+                                  "security_zone": {
                                     "node": {
-                                      "vni": {
-                                        "value": 10100
+                                      "id": "fixture-zone-PROD",
+                                      "name": {
+                                        "value": "PROD"
                                       },
-                                      "vlans": {
-                                        "edges": [
-                                          {
-                                            "node": {
-                                              "vlan_id": {
-                                                "value": 100
-                                              },
-                                              "device": {
-                                                "node": {
-                                                  "id": "dev-DC1-POD1-L1"
-                                                }
-                                              }
-                                            }
-                                          }
-                                        ]
+                                      "vrf_type": {
+                                        "value": "prod"
+                                      },
+                                      "l3_vni": {
+                                        "value": 60000
                                       }
                                     }
+                                  },
+                                  "gateway": {
+                                    "node": null
+                                  },
+                                  "segment_deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vni": {
+                                            "value": 10100
+                                          },
+                                          "vlans": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "vlan_id": {
+                                                    "value": 100
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "id": "dev-DC1-POD1-L1"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "fake-dc-0"
+                                        }
+                                      }
+                                    ]
                                   }
-                                ]
-                              },
-                              "deployments": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "id": "fake-dc-0"
-                                    }
-                                  }
-                                ]
+                                }
                               }
                             }
                           }

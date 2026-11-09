@@ -321,8 +321,8 @@ def _tenant_input(root_dir: Path, *, enforce: bool = False) -> dict[str, Any]:
         carried["edges"] = [
             c
             for c in carried["edges"]
-            if c["node"].get("__typename") != "ManagedSegmentDeployment"
-            or c["node"]["segment"]["node"]["id"] not in DROPPED_SEGMENTS
+            if c["node"].get("__typename") != "ManagedSegmentVlan"
+            or c["node"]["segment_deployment"]["node"]["segment"]["node"]["id"] not in DROPPED_SEGMENTS
         ]
 
     policies = {p["segment"]: p for p in _spec_data(root_dir / SCOPE / "05_policies/01_security_policies.yml")}
@@ -408,7 +408,7 @@ class TestRenderExpectations:
         data = _tenant_input(root_dir)
         for interface in data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]:
             caps = interface["node"].get("capabilities") or {"edges": []}
-            caps["edges"] = [c for c in caps["edges"] if c["node"].get("__typename") != "ManagedSegmentDeployment"]
+            caps["edges"] = [c for c in caps["edges"] if c["node"].get("__typename") != "ManagedSegmentVlan"]
         assert scenario._section(_render_leaf(root_dir, data)) == []
 
     def test_one_vtep_below_the_release_floor_removes_the_section(self, root_dir: Path) -> None:

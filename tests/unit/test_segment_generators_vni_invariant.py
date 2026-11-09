@@ -40,6 +40,8 @@ class _FakeSegmentDeploymentStore:
         record.deployment.id = deployment_id
         record.vni.value = vni
         record.save = AsyncMock()
+        record.add_relationships = AsyncMock()
+        record.member_of_groups.peers = []
         self.records.append(record)
         return record
 

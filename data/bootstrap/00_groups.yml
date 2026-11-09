@@ -52,6 +52,8 @@ spec:
       description: Equinix POPs
     - name: vxlan_segments
       description: VXLAN Segments (EVPN overlay)
+    - name: segment_deployments
+      description: Segment deployments (a segment in a DC, metro or office); a port assigned re-runs the reconcile
     - name: saas_proxies
       description: SaaS forwarding proxies (Zscaler, Prisma, Netskope, etc.)
     - name: sdwan_gateways

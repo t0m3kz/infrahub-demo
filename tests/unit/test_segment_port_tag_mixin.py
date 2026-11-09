@@ -1,11 +1,11 @@
-"""Unit tests for SegmentPortTagMixin (generators/topology/segment_ports.py): the segment owns the ports it is
-tagged on and its VLAN rows, so add_vxlan_segment and add_app_component_segment run the same reconcile.
+"""Unit tests for SegmentPortTagMixin (generators/topology/segment_ports.py): the segment owns its VLAN rows and the
+ports tagged with them, so add_vxlan_segment and add_app_component_segment run the same reconcile.
 
-A port is tagged from the instances of the AppComponents on the segment: it joins the segment's DEPLOYMENT its device
-sits in (an edge of the port's ``capabilities``), stamped with the run's account as its source. The reconcile removes an
-edge only when its source is that account and the (port, deployment) pair is no longer derived: an edge with no source
-(a person's, set from the port) is never touched. The tag step and the row step run under one
-segment lock, in that order.
+The desired ports are the ones derived from the instances of the AppComponents on the segment (and the border service
+ports of a terminating firewall context) plus the ones a deployment requests (``requested_ports``). The rows come
+FIRST, for the devices of the desired ports; then each desired port joins its switch's ROW of the segment (an edge of
+the port's ``capabilities``). Every port edge of the segment is the reconcile's: a missing one is added, one no longer
+desired is removed. Both steps run under one segment lock, rows then tags.
 """
 
 from __future__ import annotations
@@ -41,19 +41,15 @@ def _gen() -> Any:
     return gen
 
 
-ACCOUNT = "acct-gen"
 ADD = "mutation EdgeAdd($data: RelationshipNodesInput!) { RelationshipAdd(data: $data) { ok } }"
 REMOVE = "mutation EdgeRemove($data: RelationshipNodesInput!) { RelationshipRemove(data: $data) { ok } }"
 
 
 def _wire(gen: Any) -> list[dict[str, Any]]:
-    """Answer the account query and record every mutation (query text and variables) in the returned list."""
+    """Record every mutation (query text and variables) in the returned list."""
     writes: list[dict[str, Any]] = []
 
     async def _execute(query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
-        if "AccountProfile" in query:
-            writes.append({"account": True})
-            return {"AccountProfile": {"id": ACCOUNT}}
         writes.append({"query": query, "variables": variables})
         return {}
 
@@ -61,18 +57,35 @@ def _wire(gen: Any) -> list[dict[str, Any]]:
     return writes
 
 
-SD = "sd-dc1"
-"""The segment's deployment every test port's device sits in (unless a test moves it)."""
+ROW = "row-dev"
+"""The segment's row on ``dev``, the device every test port sits on (unless a test names another)."""
 
 
-def _port(port_id: str, source: str | None, deployment: str = SD) -> dict[str, Any]:
-    """A port on the segment, its edge to ``deployment`` written by ``source`` (None: a person)."""
-    return {"id": port_id, "device_id": "dev", "deployment_id": deployment, "source_id": source}
+def _port(port_id: str, row: str = ROW, device: str = "dev") -> dict[str, Any]:
+    """A port on the segment, its edge to ``row``."""
+    return {"id": port_id, "device_id": device, "row_id": row}
 
 
-def _components(*instance_ids: str) -> list[dict[str, Any]]:
-    """One AppComponent on the segment with the given physical instances."""
-    return [{"id": "comp-1", "instances": [{"id": i, "typename": "DcimPhysicalDevice"} for i in instance_ids]}]
+def _state(
+    ports: list[dict[str, Any]],
+    rows: dict[str, str] | None = None,
+    requested: list[str] | None = None,
+    **segment: Any,
+) -> dict[str, Any]:
+    """A segment state with ``ports``, the rows ``{device id: row id}`` (default: ``dev`` has ROW) under one
+    deployment ``sd-1``, which requests ``requested``."""
+    rows = {"dev": ROW} if rows is None else rows
+    return {
+        "segment": {"id": "seg-1", "ports": ports, **segment},
+        "deployments": [
+            {
+                "id": "sd-1",
+                "deployment_id": "dc-1",
+                "rows": {device: {"id": row, "vlan_id": 100} for device, row in rows.items()},
+                "requested": requested or [],
+            }
+        ],
+    }
 
 
 class TestEveryHostRunsTheSameReconcile:
@@ -81,150 +94,142 @@ class TestEveryHostRunsTheSameReconcile:
         """Both generators inherit the mixin's methods: no second copy of the tag step."""
         assert issubclass(host, SegmentPortTagMixin)
         assert host.reconcile_vxlan_segment is SegmentPortTagMixin.reconcile_vxlan_segment
-        assert host._reconcile_segment_interface_tags is SegmentPortTagMixin._reconcile_segment_interface_tags
+        assert host._reconcile_segment_port_rows is SegmentPortTagMixin._reconcile_segment_port_rows
+        assert host._derived_segment_port_ids is SegmentPortTagMixin._derived_segment_port_ids
 
 
-class TestPortProvenance:
-    """A port is added with the run's account as the edge source and removed only by that account."""
-
-    @staticmethod
-    def _reconcile(gen: Any, ports: list[dict[str, Any]], terminated: set[str] | None = None) -> tuple[int, int]:
-        return asyncio.run(
-            gen._reconcile_segment_interface_tags(
-                segment_id="seg-1",
-                segment_name="seg",
-                ports=ports,
-                terminated_port_ids=terminated or set(),
-                device_deployments={"pod-1": SD},
-            )
-        )
+class TestPortEdges:
+    """End to end through reconcile_vxlan_segment; the row step is stubbed and records the devices it was given."""
 
     @staticmethod
-    def _gen(
-        desired: set[str],
-        components: list[dict[str, Any]] | None = None,
-        targets: dict[str, str | None] | None = None,
-    ) -> tuple[Any, list[dict[str, Any]]]:
-        """``targets`` overrides the deployment of a port (default: every port in SD)."""
+    def _gen(derived: set[str], devices: dict[str, str | None] | None = None) -> tuple[Any, list[dict[str, Any]]]:
+        """``derived`` are the component ports; ``devices`` overrides the device of a port (default: ``dev``)."""
         gen = _gen()
-        gen._segment_components = AsyncMock(return_value=_components("dev-1") if components is None else components)
-        gen._customer_facing_target_ids = AsyncMock(return_value=desired)
-        gen._port_deployment_targets = AsyncMock(
-            side_effect=lambda ids, _deployments: {port_id: (targets or {}).get(port_id, SD) for port_id in ids}
+        gen._derived_segment_port_ids = AsyncMock(return_value=derived)
+        gen._port_devices = AsyncMock(
+            side_effect=lambda ids: {port_id: (devices or {}).get(port_id, "dev") for port_id in ids}
         )
+        gen._reconcile_segment_vlans_locked = AsyncMock(return_value=False)
+        gen.reconcile_vrfs = AsyncMock()
         return gen, _wire(gen)
 
-    def test_a_derived_port_is_added_on_the_port_with_the_account_as_source(self) -> None:
-        """One RelationshipAdd on the PORT: name `capabilities`, the deployment as the node, the account as source."""
-        gen, writes = self._gen({"if-a"})
+    @staticmethod
+    def _reconcile(gen: Any, state: dict[str, Any]) -> tuple[int, int]:
+        gen._fetch_segment_vlan_state = AsyncMock(return_value=state)
+        result = asyncio.run(gen.reconcile_vxlan_segment("seg-1", "seg"))
+        assert result is not None
+        return result
 
-        assert self._reconcile(gen, []) == (1, 0)
+    @staticmethod
+    def _row_devices(gen: Any) -> set[str]:
+        """The devices the row step was asked to give a row (the desired ports')."""
+        return gen._reconcile_segment_vlans_locked.await_args.args[3]
 
-        assert writes == [
-            {"account": True},
-            {
-                "query": ADD,
-                "variables": {
-                    "data": {"id": "if-a", "name": "capabilities", "nodes": [{"id": SD, "_relation__source": ACCOUNT}]}
-                },
-            },
+    @staticmethod
+    def _mutations(writes: list[dict[str, Any]]) -> list[tuple[str, str, str]]:
+        return [
+            (w["query"], w["variables"]["data"]["id"], w["variables"]["data"]["nodes"][0]["id"])
+            for w in writes
+            if "query" in w
         ]
 
-    def test_a_person_edge_is_never_removed(self) -> None:
-        """A sourceless edge on a port no instance lands on stays, with components or without any."""
-        for components in (None, []):
-            gen, writes = self._gen({"if-a"} if components is None else set(), components)
-            ports = [_port("if-a", ACCOUNT), _port("if-x", None)]
+    def test_a_derived_port_is_added_on_the_port(self) -> None:
+        """One RelationshipAdd on the PORT: name `capabilities`, its switch's row as the node."""
+        gen, writes = self._gen({"if-a"})
 
-            assert self._reconcile(gen, ports if components is None else ports[1:]) == (0, 0)
-            assert writes == []
+        assert self._reconcile(gen, _state([])) == (1, 0)
 
-    def test_a_generated_edge_is_removed_when_the_component_leaves(self) -> None:
-        """No component left: the edge this account wrote goes, one RelationshipRemove on the port."""
-        gen, writes = self._gen(set(), components=[])
+        assert writes == [
+            {"query": ADD, "variables": {"data": {"id": "if-a", "name": "capabilities", "nodes": [{"id": ROW}]}}}
+        ]
+        assert self._row_devices(gen) == {"dev"}
 
-        assert self._reconcile(gen, [_port("if-old", ACCOUNT)]) == (0, 1)
+    def test_an_edge_no_longer_desired_is_removed(self) -> None:
+        """No component and no request: every port edge of the segment goes, and no device needs a row."""
+        gen, writes = self._gen(set())
 
-        assert writes[-1] == {
-            "query": REMOVE,
-            "variables": {"data": {"id": "if-old", "name": "capabilities", "nodes": [{"id": SD}]}},
-        }
-        gen._customer_facing_target_ids.assert_awaited_once_with([])
+        assert self._reconcile(gen, _state([_port("if-old")])) == (0, 1)
+
+        assert writes == [
+            {"query": REMOVE, "variables": {"data": {"id": "if-old", "name": "capabilities", "nodes": [{"id": ROW}]}}}
+        ]
+        assert self._row_devices(gen) == set()
 
     def test_a_moved_instance_swaps_its_port(self) -> None:
-        """The instance now lands on if-b: if-b is added with the source, the old generated if-a removed."""
+        """The instance now lands on if-b: if-b is added, the old if-a removed."""
         gen, writes = self._gen({"if-b"})
 
-        assert self._reconcile(gen, [_port("if-a", ACCOUNT)]) == (1, 1)
+        assert self._reconcile(gen, _state([_port("if-a")])) == (1, 1)
+        assert [w["query"] for w in writes] == [ADD, REMOVE]
 
-        assert [w["query"] for w in writes if "query" in w] == [ADD, REMOVE]
-
-    def test_an_edge_of_another_account_is_not_removed(self) -> None:
-        """Only the generator's own account's edges are its to remove."""
-        gen, writes = self._gen(set(), components=[])
-
-        assert self._reconcile(gen, [_port("if-other", "acct-other")]) == (0, 0)
-        assert [w for w in writes if "query" in w] == []
-
-    def test_a_person_edge_on_a_derived_port_is_kept_in_place(self) -> None:
-        """The port is derived and already on the segment: nothing is written, the edge keeps its (empty) source,
-        so it survives the component leaving later."""
+    def test_a_matching_set_writes_nothing(self) -> None:
+        """Idempotent: the edges already are the desired ports."""
         gen, writes = self._gen({"if-a"})
 
-        assert self._reconcile(gen, [_port("if-a", None)]) == (0, 0)
+        assert self._reconcile(gen, _state([_port("if-a")])) == (0, 0)
         assert writes == []
 
-    def test_a_matching_set_writes_nothing_and_asks_no_account(self) -> None:
-        """Idempotent: the generated edges already are the instances' ports, and the account is not even read."""
-        gen, writes = self._gen({"if-a"})
+    def test_a_port_whose_device_got_no_row_is_skipped(self) -> None:
+        """No row of the segment on the port's device after the row pass (no deployment there): a WARNING, no add."""
+        gen, writes = self._gen({"if-a"}, devices={"if-a": "dev-out"})
 
-        assert self._reconcile(gen, [_port("if-a", None)]) == (0, 0)
-        assert self._reconcile(gen, []) == (1, 0)
-        assert self._reconcile(gen, [_port("if-a", ACCOUNT)]) == (0, 0)
-        assert [w.get("query") for w in writes if "query" in w] == [ADD]
+        assert self._reconcile(gen, _state([])) == (0, 0)
+        assert writes == []
+        gen.logger.warning.assert_called_once()
+        assert self._row_devices(gen) == {"dev-out"}
 
-    def test_a_component_without_instances_removes_every_generated_port(self) -> None:
-        """A component that exists but has no instance left is a desired set of nothing."""
-        gen, _writes = self._gen(set(), components=_components())
+    def test_a_port_joins_the_row_of_its_own_device(self) -> None:
+        """Two derived ports on two switches: each joins its own switch's row."""
+        gen, writes = self._gen({"if-a", "if-b"}, devices={"if-b": "dev-2"})
 
-        assert self._reconcile(gen, [_port("if-old", ACCOUNT)]) == (0, 1)
+        assert self._reconcile(gen, _state([], rows={"dev": ROW, "dev-2": "row-dev-2"})) == (2, 0)
+        assert self._mutations(writes) == [(ADD, "if-a", ROW), (ADD, "if-b", "row-dev-2")]
 
-    def test_a_port_on_a_device_in_no_deployment_is_skipped_and_its_edges_kept(self) -> None:
-        """No deployment of the segment where the device sits: a WARNING, no add, and its generated edge stays."""
-        gen, writes = self._gen({"if-a"}, targets={"if-a": None})
+    def test_a_requested_port_gets_its_switch_row_and_edge(self) -> None:
+        """A port the deployment requests (no component derives it): its device is handed to the row step and the
+        port joins the row."""
+        gen, writes = self._gen(set())
 
-        assert self._reconcile(gen, [_port("if-a", ACCOUNT, "sd-old")]) == (0, 0)
-        assert [w for w in writes if "query" in w] == []
+        assert self._reconcile(gen, _state([], requested=["if-r"])) == (1, 0)
+        assert self._row_devices(gen) == {"dev"}
+        assert self._mutations(writes) == [(ADD, "if-r", ROW)]
+
+    def test_a_withdrawn_request_has_its_edge_removed(self) -> None:
+        """The port was requested and tagged; the request is gone: its edge is removed."""
+        gen, writes = self._gen(set())
+
+        assert self._reconcile(gen, _state([_port("if-r")])) == (0, 1)
+        assert self._mutations(writes) == [(REMOVE, "if-r", ROW)]
+
+    def test_a_requested_port_whose_row_is_under_another_deployment_is_skipped(self) -> None:
+        """The switch's row is under another deployment than the requesting one: a WARNING, no edge."""
+        gen, writes = self._gen(set())
+        state = _state([], rows={})
+        state["deployments"].append(
+            {"id": "sd-2", "deployment_id": "dc-2", "rows": {"dev": {"id": ROW, "vlan_id": 100}}, "requested": []}
+        )
+        state["deployments"][0]["requested"] = ["if-r"]
+
+        assert self._reconcile(gen, state) == (0, 0)
+        assert writes == []
         gen.logger.warning.assert_called_once()
 
-    def test_a_device_moved_to_another_deployment_moves_its_generated_edge(self) -> None:
-        """The port's device now sits under another deployment of the segment: the new edge, then the old one goes."""
-        gen, writes = self._gen({"if-a"}, targets={"if-a": "sd-dc2"})
+    def test_a_derived_port_that_is_also_requested_follows_the_derivation(self) -> None:
+        """Derived and requested: the request's deployment check does not apply, the port joins its switch's row."""
+        gen, writes = self._gen({"if-r"})
+        state = _state([], rows={})
+        state["deployments"].append(
+            {"id": "sd-2", "deployment_id": "dc-2", "rows": {"dev": {"id": ROW, "vlan_id": 100}}, "requested": []}
+        )
+        state["deployments"][0]["requested"] = ["if-r"]
 
-        assert self._reconcile(gen, [_port("if-a", ACCOUNT, SD)]) == (1, 1)
-        mutations = [(w["query"], w["variables"]["data"]["nodes"][0]["id"]) for w in writes if "query" in w]
-        assert mutations == [(ADD, "sd-dc2"), (REMOVE, SD)]
-
-    def test_a_person_edge_to_another_deployment_is_neither_moved_nor_doubled(self) -> None:
-        """A person's edge of the segment on a derived port stays as it is, even on another deployment."""
-        gen, writes = self._gen({"if-a"}, targets={"if-a": "sd-dc2"})
-
-        assert self._reconcile(gen, [_port("if-a", None, SD)]) == (0, 0)
-        assert writes == []
-
-    def test_the_account_is_resolved_once_per_run(self) -> None:
-        """Two reconciles on one generator ask AccountProfile once."""
-        gen, writes = self._gen({"if-a"})
-
-        self._reconcile(gen, [])
-        self._reconcile(gen, [_port("if-gone", ACCOUNT)])
-
-        assert [w for w in writes if w.get("account")] == [{"account": True}]
+        assert self._reconcile(gen, state) == (1, 0)
+        assert self._mutations(writes) == [(ADD, "if-r", ROW)]
 
 
 class TestTerminatedServicePorts:
     """A segment terminated on a firewall context is tagged on the border service ports facing its pair, in the same
-    reconcile as the component ports and with the same provenance."""
+    reconcile as the component ports."""
 
     @staticmethod
     def _context(*far_ends: dict[str, Any]) -> dict[str, Any]:
@@ -271,83 +276,57 @@ class TestTerminatedServicePorts:
         assert SegmentPortTagMixin._terminated_service_port_ids({"terminated_on": None}) == set()
         assert SegmentPortTagMixin._terminated_service_port_ids(self._context()) == set()
 
-    def test_the_service_port_is_added_next_to_the_component_ports_with_the_account_as_source(self) -> None:
-        """The border port is a desired port like a host-facing one: one RelationshipAdd on the PORT, source set."""
-        gen, writes = TestPortProvenance._gen({"if-a"})
+    def test_the_service_port_is_added_next_to_the_component_ports(self) -> None:
+        """The border port is a desired port like a host-facing one: one RelationshipAdd on the PORT."""
+        gen = _gen()
+        gen._fetch_segment_vlan_state = AsyncMock(return_value=_state([], **self._context(self._cap("bl-1"))))
+        gen._segment_components = AsyncMock(return_value=[])
+        gen._customer_facing_target_ids = AsyncMock(return_value={"if-a"})
+        gen._port_devices = AsyncMock(side_effect=lambda ids: dict.fromkeys(ids, "dev"))
+        gen._reconcile_segment_vlans_locked = AsyncMock(return_value=False)
+        gen.reconcile_vrfs = AsyncMock()
+        writes = _wire(gen)
 
-        assert TestPortProvenance._reconcile(gen, [], {"bl-1"}) == (2, 0)
+        assert asyncio.run(gen.reconcile_vxlan_segment("seg-1", "seg")) == (2, 0)
 
+        gen._port_devices.assert_awaited_once_with({"if-a", "bl-1"})
         added = [w["variables"]["data"] for w in writes if w.get("query") == ADD]
         assert {data["id"] for data in added} == {"if-a", "bl-1"}
-        assert all(data["nodes"] == [{"id": SD, "_relation__source": ACCOUNT}] for data in added)
-
-    def test_a_segment_with_no_component_keeps_its_service_ports(self) -> None:
-        """No instance lands anywhere, yet the generated service port is still desired: nothing is removed."""
-        gen, writes = TestPortProvenance._gen(set(), components=[])
-
-        assert TestPortProvenance._reconcile(gen, [_port("bl-1", ACCOUNT)], {"bl-1"}) == (0, 0)
-        assert [w for w in writes if "query" in w] == []
-
-    def test_a_service_port_is_removed_when_the_segment_leaves_the_context(self) -> None:
-        """terminated_on cleared or moved: the port this account wrote and no context derives any more goes."""
-        gen, writes = TestPortProvenance._gen(set(), components=[])
-
-        assert TestPortProvenance._reconcile(gen, [_port("bl-old", ACCOUNT)], set()) == (0, 1)
-        assert writes[-1]["query"] == REMOVE
-
-    def test_a_person_edge_on_a_service_port_is_never_removed(self) -> None:
-        """A sourceless edge on a border port stays when the segment is not (or no longer) terminated."""
-        gen, writes = TestPortProvenance._gen(set(), components=[])
-
-        assert TestPortProvenance._reconcile(gen, [_port("bl-1", None)], set()) == (0, 0)
-        assert [w for w in writes if "query" in w] == []
-
-    def test_reconcile_hands_the_context_ports_to_the_tag_step(self) -> None:
-        """reconcile_vxlan_segment derives the ids from the state's segment, in the same call as the ports."""
-        gen = TestReconcileVxlanSegment._ready(changed=False)
-        gen._fetch_segment_vlan_state.return_value = {
-            "segment": {"id": "seg-1", "ports": [], **self._context(self._cap("bl-1"))},
-            "deployments": [],
-        }
-
-        asyncio.run(gen.reconcile_vxlan_segment("seg-1", "seg"))
-
-        assert gen._reconcile_segment_interface_tags.await_args.kwargs["terminated_port_ids"] == {"bl-1"}
+        assert all(data["nodes"] == [{"id": ROW}] for data in added)
 
 
 class TestReconcileVxlanSegment:
     @staticmethod
     def _ready(*, changed: bool) -> Any:
         gen = _gen()
-        gen._fetch_segment_vlan_state = AsyncMock(
-            return_value={"segment": {"id": "seg-1", "ports": [_port("if-a", None)]}, "deployments": []}
-        )
-        gen._reconcile_segment_interface_tags = AsyncMock(
-            side_effect=lambda **_: gen.events.append("tags") or ((1, 0) if changed else (0, 0))
-        )
+        gen._fetch_segment_vlan_state = AsyncMock(return_value=_state([_port("if-a")], requested=["if-r"]))
+        gen._derived_segment_port_ids = AsyncMock(side_effect=lambda *_a: gen.events.append("derive") or {"if-a"})
+        gen._port_devices = AsyncMock(side_effect=lambda ids: dict.fromkeys(ids, "dev"))
         gen._reconcile_segment_vlans_locked = AsyncMock(
-            side_effect=lambda *_a, **_k: gen.events.append("rows") or False
+            side_effect=lambda *_a, **_k: gen.events.append("rows") or changed
         )
+        gen._reconcile_segment_port_rows = AsyncMock(side_effect=lambda **_: gen.events.append("tags") or (0, 0))
         # The VRF pass over the domains' devices has its own tests (test_vrf_callers.py).
         gen.reconcile_vrfs = AsyncMock()
         return gen
 
-    def test_tags_then_rows_under_one_segment_lock(self) -> None:
-        """The rows are derived from the tags just written, inside the same lock."""
+    def test_rows_then_tags_under_one_segment_lock(self) -> None:
+        """The rows are reconciled first, then the port tags on them, inside the same lock."""
         gen = self._ready(changed=True)
 
         result = asyncio.run(gen.reconcile_vxlan_segment("seg-1", "seg"))
 
-        assert result == (1, 0)
+        assert result == (0, 0)
         assert gen.events == [
             f"lock:{segment_lock_key('seg-1')}",
-            "tags",
+            "derive",
             "rows",
+            "tags",
             f"unlock:{segment_lock_key('seg-1')}",
         ]
 
-    def test_the_state_is_read_again_only_when_a_tag_changed(self) -> None:
-        """The rows are reconciled from a fresh read after a tag write, and from the first read otherwise."""
+    def test_the_state_is_read_again_only_when_a_row_changed(self) -> None:
+        """The tags are reconciled against a fresh read after a row write, and against the first read otherwise."""
         changed = self._ready(changed=True)
         asyncio.run(changed.reconcile_vxlan_segment("seg-1", "seg"))
         unchanged = self._ready(changed=False)
@@ -356,60 +335,30 @@ class TestReconcileVxlanSegment:
         assert changed._fetch_segment_vlan_state.await_count == 2
         assert unchanged._fetch_segment_vlan_state.await_count == 1
 
-    def test_the_tag_step_starts_from_the_customer_ports_the_segment_has(self) -> None:
-        """ports are the segment's switch ports (with their edge source) as the state query returned them."""
+    def test_the_tag_step_gets_the_ports_the_desired_ports_and_the_rows(self) -> None:
+        """ports are the segment's switch ports today; port_devices the derived and requested ports; requested only
+        the ports no component derives; rows by device with their deployment."""
         gen = self._ready(changed=False)
 
         asyncio.run(gen.reconcile_vxlan_segment("seg-1", "seg"))
 
-        assert gen._reconcile_segment_interface_tags.await_args.kwargs["ports"] == [_port("if-a", None)]
+        gen._port_devices.assert_awaited_once_with({"if-a", "if-r"})
+        kwargs = gen._reconcile_segment_port_rows.await_args.kwargs
+        assert kwargs["ports"] == [_port("if-a")]
+        assert kwargs["port_devices"] == {"if-a": "dev", "if-r": "dev"}
+        assert kwargs["requested"] == {"if-r": "sd-1"}
+        assert kwargs["rows_by_device"] == {"dev": (ROW, "sd-1")}
+        assert gen._reconcile_segment_vlans_locked.await_args.args[3] == {"dev"}
 
     def test_a_segment_that_is_no_vxlan_segment_is_left_alone(self) -> None:
         """No state (a cloud segment id, or a deleted segment): None, no tag, no row."""
         gen = _gen()
         gen._fetch_segment_vlan_state = AsyncMock(return_value=None)
-        gen._reconcile_segment_interface_tags = AsyncMock()
+        gen._derived_segment_port_ids = AsyncMock()
+        gen._reconcile_segment_port_rows = AsyncMock()
         gen._reconcile_segment_vlans_locked = AsyncMock()
 
         assert asyncio.run(gen.reconcile_vxlan_segment("seg-1", "seg")) is None
-        gen._reconcile_segment_interface_tags.assert_not_awaited()
+        gen._derived_segment_port_ids.assert_not_awaited()
+        gen._reconcile_segment_port_rows.assert_not_awaited()
         gen._reconcile_segment_vlans_locked.assert_not_awaited()
-
-
-class TestPortDeploymentTargets:
-    def test_a_port_joins_the_deployment_its_device_sits_in(self) -> None:
-        """One read of the ports' devices: a device in pod-1 maps to the DC's deployment, one elsewhere to None, and
-        a port the read does not return stays None."""
-        gen = _gen()
-        gen.client.execute_graphql = AsyncMock(
-            return_value={
-                "DcimInterface": {
-                    "edges": [
-                        {
-                            "node": {
-                                "id": "if-a",
-                                "device": {"node": {"id": "d1", "deployment": {"node": {"id": "pod-1"}}}},
-                            }
-                        },
-                        {
-                            "node": {
-                                "id": "if-b",
-                                "device": {"node": {"id": "d2", "deployment": {"node": {"id": "pod-9"}}}},
-                            }
-                        },
-                    ]
-                }
-            }
-        )
-
-        targets = asyncio.run(gen._port_deployment_targets({"if-a", "if-b", "if-c"}, {"pod-1": SD}))
-
-        assert targets == {"if-a": SD, "if-b": None, "if-c": None}
-        assert gen.client.execute_graphql.call_args.kwargs["variables"] == {"ids": ["if-a", "if-b", "if-c"]}
-
-    def test_no_port_reads_nothing(self) -> None:
-        """Nothing derived: no read."""
-        gen = _gen()
-
-        assert asyncio.run(gen._port_deployment_targets(set(), {})) == {}
-        gen.client.execute_graphql.assert_not_awaited()

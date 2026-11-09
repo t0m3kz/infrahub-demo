@@ -227,7 +227,7 @@ class ComponentCoverage:
 
 
 def _segment_ids(interface: dict[str, Any]) -> set[str]:
-    """The ids of the segments a switch port or LAG carries (its segment deployments; a sub-interface is never a host
+    """The ids of the segments a switch port or LAG carries (through its VLAN rows; a sub-interface is never a host
     port)."""
     return {str(item["id"]) for item in port_segments(interface) if item.get("id")}
 

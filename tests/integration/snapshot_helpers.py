@@ -42,7 +42,7 @@ async def render_device_config(
 # changed value or a deleted-and-added id. The kinds after the generator
 # outputs are mostly data-loaded or owned by another generator: an id lost
 # there is a foreign deletion, i.e. a generator cleaned up a node it does not
-# own. A switch port's segment tags are the segment deployments among its capabilities (the tag reconcile's output),
+# own. A switch port's segment tags are the VLAN rows among its capabilities (the tag reconcile's output),
 # next to the circuits, VRFs and sessions on it.
 TOPOLOGY_SNAPSHOT_KINDS = {
     "DcimDevice": "name { value }",

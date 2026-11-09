@@ -8,9 +8,10 @@
 #     sits in, so a device is mapped to a deployment through its own
 #     `deployment` (the hosting parent or one of its children, see
 #     _device_deployment_ids).
-#   - the switch ports are NOT read here: a port is a member of a segment DEPLOYMENT (its interface `capabilities`),
-#     so they are read once the deployments are known (generators/segment_vlan.py SEGMENT_PORTS_QUERY); their devices
-#     need a row.
+#   - capabilities: the ports assigned to each deployment, a person's request to carry the segment there (they need a
+#     row, like the ports the components derive).
+#   - the member switch ports are NOT read here: a port is a member of its switch's VLAN ROW (its interface
+#     `capabilities`), so they are read once the rows are known (generators/segment_vlan.py SEGMENT_PORTS_QUERY).
 #   - each row's device (the devices whose VRF instances and SVIs follow the rows).
 #   - stretch_scope + customer_deployments' hosting parents: a stretched
 #     segment's border gateways need it too (same shape as vxlan_segment.gql)
@@ -105,6 +106,7 @@ query segment_vlans($segment_id: ID!) {
         id
         vni { value }
         deployment { node { id } }
+        capabilities { edges { node { id __typename } } }
         vlans {
           edges {
             node {

@@ -237,17 +237,22 @@ def _make_interface(
                 ),
             }
         )
-    # A switch port or LAG carries a segment as a member of its deployment, one of the port's `capabilities`
+    # A switch port or LAG carries a segment as a member of its switch's VLAN row, one of the port's `capabilities`
     # (transforms/helpers/segments.py interface_segments).
     iface["capabilities"] = _edges([*services, *_segment_memberships(segments or [])])
     return iface
 
 
 def _segment_memberships(segments: list[dict]) -> list[dict]:
-    """A port's capability entries for the segments it carries: the ManagedSegmentDeployment of each, with the
-    segment node under it (queries/fragments/interface_capability_fields.gql InterfaceCapabilitiesWithSegmentFields)."""
+    """A port's capability entries for the segments it carries: its switch's VLAN row (ManagedSegmentVlan) of each,
+    with the segment under the row's deployment (queries/fragments/interface_capability_fields.gql
+    InterfaceCapabilitiesWithSegmentFields)."""
     return [
-        {"__typename": "ManagedSegmentDeployment", "id": f"sd-{segment.get('id')}", "segment": _node(segment)}
+        {
+            "__typename": "ManagedSegmentVlan",
+            "id": f"sv-{segment.get('id')}",
+            "segment_deployment": _node({"id": f"sd-{segment.get('id')}", "segment": _node(segment)}),
+        }
         for segment in segments
     ]
 

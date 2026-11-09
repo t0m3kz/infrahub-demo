@@ -306,13 +306,15 @@ def _segment_port(vlan: int, seg_id: str = "seg-1", name: str = "web") -> dict:
         "role": "customer",
         "capabilities": [
             {
-                "typename": "ManagedSegmentDeployment",
-                "segment": {
-                    "typename": "ManagedVxlanSegment",
-                    "id": seg_id,
-                    "name": name,
-                    "status": "active",
-                    "segment_deployments": [{"vni": 10100, "vlans": [row]}],
+                "typename": "ManagedSegmentVlan",
+                "segment_deployment": {
+                    "segment": {
+                        "typename": "ManagedVxlanSegment",
+                        "id": seg_id,
+                        "name": name,
+                        "status": "active",
+                        "segment_deployments": [{"vni": 10100, "vlans": [row]}],
+                    }
                 },
             }
         ],

@@ -1,8 +1,10 @@
 # The rows of checks/virtual_switch.py (rules VS1 to VS4), one global query:
 #
 # - ManagedHypervisorCluster: its hosts (a switch's uplinks are ports of them).
-# - ManagedVirtualSwitch: its cluster, its uplinks (a host port or a bond) with their device and the segments they trunk (their segment deployments),
-#   and its port groups with their VLAN, their segment and the VM NICs in them (with the host each VM stands on).
+# - ManagedVirtualSwitch: its cluster, its uplinks (a host port or a bond) with their device and where it stands (a server
+#   port carries no segment membership: the uplinks trunk the VLANs of the port groups), and its port groups with their
+#   VLAN, their segment with the hosting deployments it is realized in, and the VM NICs in them (with the host each VM
+#   stands on).
 query virtual_switch {
   ManagedHypervisorCluster {
     edges {
@@ -27,13 +29,11 @@ query virtual_switch {
               display_label
               ... on DcimPhysicalInterface {
                 name { value }
-                device { node { id name { value } } }
-                capabilities { edges { node { __typename ... on ManagedSegmentDeployment { segment { node { id name { value } } } } } } }
+                device { node { id name { value } ... on DcimPhysicalDevice { deployment { node { ...ServiceHostingFields } } } } }
               }
               ... on DcimLAGInterface {
                 name { value }
-                device { node { id name { value } } }
-                capabilities { edges { node { __typename ... on ManagedSegmentDeployment { segment { node { id name { value } } } } } } }
+                device { node { id name { value } ... on DcimPhysicalDevice { deployment { node { ...ServiceHostingFields } } } } }
               }
             }
           }
@@ -44,7 +44,7 @@ query virtual_switch {
               id
               name { value }
               vlan_id { value }
-              segment { node { id name { value } } }
+              segment { node { id name { value } ... on ManagedVxlanSegment { segment_deployments { edges { node { deployment { node { id } } } } } } } }
               nics {
                 edges {
                   node {

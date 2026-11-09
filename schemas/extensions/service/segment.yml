@@ -112,12 +112,12 @@ nodes:
     label: Segment Deployment
     icon: "carbon:network-overlay"
     include_in_menu: false
-    # The switch ports (physical, LAG) that carry the segment in this deployment are its interface `capabilities`
-    # (ManagedGenericInterfaces, the interface edge): a port is a member of the deployment, like an
-    # interface of a VRF. Written by a person from the port or by the segment reconcile
-    # (generators/topology/segment_ports.py), which stamps its own edges with its account as the relationship
-    # `source`; checks/interface_layers.py holds what the schema cannot (a switch port only, in the port's device's
-    # hosting deployment, one deployment of a segment per port).
+    # The switch ports (physical, LAG) a person asks to carry the segment in this deployment are its interface
+    # `capabilities` (ManagedGenericInterfaces, the interface edge): the INTENT, "this port carries this segment in this
+    # DC", written by a person (or the 00_full data). The segment reconcile (generators/topology/segment_ports.py)
+    # realizes it, with the ports its components derive: the row of each port's switch, then the port -> row edge (the
+    # row's `capabilities`). It never writes or removes this list. checks/interface_layers.py holds what the schema
+    # cannot (a physical port or a LAG only).
     inherit_from:
       - ManagedGenericInterfaces
     display_label: "{{ segment__customer_name__value }} @ {{ deployment__name__value }}"  # yamllint disable-line rule:line-length
@@ -187,27 +187,39 @@ nodes:
         on_delete: cascade
         description: "The switches of this DC that carry the segment, each with its local VLAN ID"
 
-  # SegmentVlan: the realization of a VXLAN segment's LOCAL VLAN ID on ONE switch, a child of the segment's
-  # realization in the DC it sits in (SegmentDeployment): segment -> realization in the DC (VNI) -> realization on the
-  # switch (VLAN ID). The row points straight at its device: there is no domain object. IEEE 802.1Q VLAN ID has only
-  # local significance and is unique on a device (the [device, vlan_id__value] constraint): two segments never share
-  # it on one switch. The two peers of an MLAG pair MUST carry the same vlan_id for a segment (one L2 broadcast
-  # domain for a dual-homed port-channel): the allocator gives them one id and checks/mlag_domains.py reports a pair
-  # whose rows differ. The generator reuses a segment's vlan_id across the switches it lands on. The segment's
-  # DC-wide identity remains SegmentDeployment.vni (L2 VNI).
+  # SegmentVlan: the realization of a VXLAN segment's LOCAL VLAN ID on ONE switch, a child of that switch, under the
+  # segment's realization in the DC it sits in (SegmentDeployment): segment -> realization in the DC (VNI) ->
+  # realization on the switch (VLAN ID). The row points straight at its device: there is no domain object. IEEE
+  # 802.1Q VLAN ID has only local significance and is unique on a device (the [device, vlan_id__value] constraint):
+  # two segments never share it on one switch. The two peers of an MLAG pair MUST carry the same vlan_id for a
+  # segment (one L2 broadcast domain for a dual-homed port-channel): the allocator gives them one id and
+  # checks/mlag_domains.py reports a pair whose rows differ. The generator reuses a segment's vlan_id across the
+  # switches it lands on. The segment's DC-wide identity remains SegmentDeployment.vni (L2 VNI).
   #
   # Created by: the segment reconcile (generators/segment_vlan.py), once per (segment deployment, device) pair and for
-  # the MLAG peers of every device that has a port of the segment, untracked. It is an output: a port is given the
-  # segment's DEPLOYMENT (its interface `capabilities`), never a VLAN; the VLAN of a port is found by port ->
-  # deployment -> the row of the port's device. A row of a device
-  # that no longer needs the segment (or is gone) is deleted by the next reconcile, not by a cascade from the device.
-  # Read by: leaf-side transforms, keyed by the rendering device.
+  # the MLAG peers of every device that has a port of the segment (derived or assigned to a deployment), untracked.
+  # Only the reconcile creates a row. The row is a child of its switch (Parent `device`, deleted with it) and goes
+  # with its deployment too (the deployment's cascading `vlans`); a row of a device that no longer needs the segment
+  # is deleted by the next reconcile.
+  #
+  # The switch ports (physical, LAG) of the row's device that carry the segment are its interface `capabilities`
+  # (ManagedGenericInterfaces, the interface edge): a port is a member of its switch's row, so the VLAN of a port is
+  # its row's vlan_id and the VNI and segment come through `segment_deployment`: the REALIZATION. Only the reconcile
+  # (generators/topology/segment_ports.py) writes these edges, AFTER the rows: for the ports its components derive and
+  # the ports assigned to the deployment (a person's intent lives there, never on this edge). A port then shows both in
+  # its `capabilities`, its deployment (asked) and its row (realized); a reader of a port's segment reads the row. The
+  # server holds that a port is of the row's own switch (`common_parent: device` on the edge);
+  # checks/interface_layers.py holds a physical port or LAG only, one row of a segment per port, and reports a
+  # membership nobody asked for.
+  # Read by: the switch transforms, from the device's `vlans` and the port's capabilities.
   - name: SegmentVlan
     namespace: Managed
     description: "A segment's local VLAN ID on one switch, under its deployment."
     label: Segment VLAN
     icon: "carbon:network-overlay"
     include_in_menu: false
+    inherit_from:
+      - ManagedGenericInterfaces
     display_label: "vlan {{ vlan_id__value }} @ {{ device__name__value }} (VNI {{ segment_deployment__vni__value }})"  # yamllint disable-line rule:line-length
     # A VLAN id is unique on a switch, so the pair names the row: an object file upserts it (a second load updates it).
     human_friendly_id:
@@ -227,22 +239,25 @@ nodes:
           min_value: 1
           max_value: 4094
     relationships:
+      # A plain mandatory edge, not the Parent: the deployment's `vlans` is a Component with on_delete cascade, so the
+      # row still goes with its deployment (measured on 1.11.9: a cascading Component side deletes a non-Parent peer).
       - name: segment_deployment
         peer: ManagedSegmentDeployment
         label: Segment Deployment
         cardinality: one
-        kind: Parent
+        kind: Attribute
         optional: false
         order_weight: 2000
         identifier: "segmentvlan__segment_deployment"
         description: "The segment's realization in the DC or metro this switch belongs to"
-      # An Attribute, not a second Parent: the row goes with its deployment (cascade), and the reconcile deletes the
-      # rows of a device that no longer needs the segment or is gone.
+      # The Parent: the row is a child of its switch (DcimPhysicalDevice.vlans, Component, cascade: a row dies with its
+      # switch), which lets `capabilities` below hold `common_parent: device`. The reconcile also deletes the rows of
+      # a device that no longer needs the segment.
       - name: device
         peer: DcimPhysicalDevice
         label: Device
         cardinality: one
-        kind: Attribute
+        kind: Parent
         optional: false
         order_weight: 2100
         identifier: "segmentvlan__device"
@@ -259,6 +274,19 @@ nodes:
         order_weight: 2200
         identifier: "segmentvlan__svi"
         description: "The routed SVI of this segment on the row's switch (role svi); deleted with the row"
+      # The interface edge of ManagedGenericInterfaces, re-declared to add `common_parent: device`: the server refuses
+      # a port of another switch on create and on update (measured on 1.11.9). Physical ports and LAGs only, one row of
+      # a segment per port: checks/interface_layers.py.
+      - name: capabilities
+        peer: DcimInterface
+        label: Ports
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: interface_capabilities
+        common_parent: device
+        order_weight: 2300
+        description: "The switch ports (physical, LAG) of the row's switch that carry the segment with this VLAN ID"
 
 extensions:
   nodes:
@@ -301,12 +329,13 @@ extensions:
         - name: vlans
           label: Segment VLANs
           peer: ManagedSegmentVlan
-          kind: Generic
+          kind: Component
           cardinality: many
           optional: true
+          on_delete: cascade
           identifier: "segmentvlan__device"
           order_weight: 7950
-          description: "Segments locally realized on this switch, each with its VLAN ID"
+          description: "Segments locally realized on this switch, each with its VLAN ID (deleted with the switch)"
 
     - kind: OrganizationCustomer
       relationships:

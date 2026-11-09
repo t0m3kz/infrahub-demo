@@ -41,6 +41,8 @@ upserts go under `90_bindings/`. Splitting a mixed file retains each complete ne
 | `90_bindings/70_public_sides/` | Shared public provider ports and service endpoints, after their regions and customer virtual networks |
 | `90_bindings/80_fabric/`, `90_bindings/90_internet/` | 45 preserved EVPN endpoint bindings, six route-target upserts, internet access carriers, routed ports, final VRF membership and routing policies |
 | `90_bindings/95_vrf_interfaces/` | The interfaces of each VRF instance (its `capabilities`), one whole list per instance, after every interface it names |
+| `90_bindings/95b_segment_requests/` | The ports assigned to each segment deployment (its `capabilities`, the request), one whole list per deployment |
+| `90_bindings/96_segment_ports/` | The ports of each VLAN row (its `capabilities`, the realization), one whole list per row |
 
 All object files load once in sorted recursive order, without a manifest or fallback ordering.
 The numbered reorganization preserved the original objects; subsequent WAW service additions are explicit dataset
@@ -793,5 +795,7 @@ office - Zscaler tunnel.
   passes the schema (the schema was not asked to look).
 - The BGP sessions of the cloud legs are manual (artisanal, small batch); nothing allocates a /31 or an AS for a circuit whose end is a cloud
   peering.
-- A port carries a segment as a member of the segment's deployment (`90_bindings/96_segment_ports`, one list per
-  deployment).
+- A port is asked for on the segment's deployment (`90_bindings/95b_segment_requests`, one list per deployment) and
+  carries the segment as a member of its switch's VLAN row (`90_bindings/96_segment_ports`, one list per row); no
+  generator runs here, so both are data and list the same ports (`tests/unit/test_full_topology_segments.py`). A
+  server port carries no membership.

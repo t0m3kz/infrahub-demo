@@ -981,73 +981,270 @@
                     "edges": [
                       {
                         "node": {
-                          "__typename": "ManagedSegmentDeployment",
-                          "id": "sd-seg-seg-100",
-                          "segment": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "sv-seg-seg-100",
+                          "segment_deployment": {
                             "node": {
-                              "id": "seg-seg-100",
-                              "__typename": "ManagedVxlanSegment",
-                              "name": {
-                                "value": "seg-100"
-                              },
-                              "customer_name": {
-                                "value": "Customer-A"
-                              },
-                              "arp_suppression": {
-                                "value": true
-                              },
-                              "security_zone": {
+                              "id": "sd-seg-seg-100",
+                              "segment": {
                                 "node": {
-                                  "id": "fixture-zone-PROD",
+                                  "id": "seg-seg-100",
+                                  "__typename": "ManagedVxlanSegment",
                                   "name": {
-                                    "value": "PROD"
+                                    "value": "seg-100"
                                   },
-                                  "vrf_type": {
-                                    "value": "prod"
+                                  "customer_name": {
+                                    "value": "Customer-A"
                                   },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              },
-                              "gateway": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.100.0.1/24"
+                                  "arp_suppression": {
+                                    "value": true
                                   },
-                                  "ip_prefix": {
+                                  "security_zone": {
                                     "node": {
-                                      "prefix": {
-                                        "value": "10.100.0.0/24"
+                                      "id": "fixture-zone-PROD",
+                                      "name": {
+                                        "value": "PROD"
                                       },
-                                      "ip_namespace": {
+                                      "vrf_type": {
+                                        "value": "prod"
+                                      },
+                                      "l3_vni": {
+                                        "value": 60000
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.100.0.1/24"
+                                      },
+                                      "ip_prefix": {
                                         "node": {
-                                          "name": {
-                                            "value": "default"
+                                          "prefix": {
+                                            "value": "10.100.0.0/24"
+                                          },
+                                          "ip_namespace": {
+                                            "node": {
+                                              "name": {
+                                                "value": "default"
+                                              }
+                                            }
                                           }
                                         }
                                       }
                                     }
-                                  }
-                                }
-                              },
-                              "segment_deployments": {
-                                "edges": [
-                                  {
+                                  },
+                                  "segment_deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vni": {
+                                            "value": 10100
+                                          },
+                                          "vlans": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "vlan_id": {
+                                                    "value": 100
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "id": "dev-dc1-leaf-01"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "security_policy": {
                                     "node": {
-                                      "vni": {
-                                        "value": 10100
+                                      "name": {
+                                        "value": "policy-vxlan-seg"
                                       },
-                                      "vlans": {
+                                      "default_action": {
+                                        "value": "deny"
+                                      },
+                                      "enabled": {
+                                        "value": true
+                                      },
+                                      "rules": {
                                         "edges": [
                                           {
                                             "node": {
-                                              "vlan_id": {
-                                                "value": 100
+                                              "index": {
+                                                "value": 10
                                               },
-                                              "device": {
+                                              "name": {
+                                                "value": "allow-seg-200-ssh"
+                                              },
+                                              "action": {
+                                                "value": "permit"
+                                              },
+                                              "protocol": {
+                                                "value": "tcp"
+                                              },
+                                              "port_start": {
+                                                "value": 22
+                                              },
+                                              "port_end": {
+                                                "value": null
+                                              },
+                                              "log": {
+                                                "value": false
+                                              },
+                                              "disabled": {
+                                                "value": false
+                                              },
+                                              "source_segment": {
                                                 "node": {
-                                                  "id": "dev-dc1-leaf-01"
+                                                  "id": "seg-seg-100",
+                                                  "__typename": "ManagedVxlanSegment",
+                                                  "name": {
+                                                    "value": "seg-100"
+                                                  },
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "PROD"
+                                                      },
+                                                      "id": "fixture-zone-PROD",
+                                                      "vrf_type": {
+                                                        "value": "prod"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 60000
+                                                      }
+                                                    }
+                                                  },
+                                                  "gateway": {
+                                                    "node": {
+                                                      "ip_prefix": {
+                                                        "node": {
+                                                          "prefix": {
+                                                            "value": "10.100.0.0/24"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "destination_segment": {
+                                                "node": {
+                                                  "id": "seg-seg-200",
+                                                  "__typename": "ManagedVxlanSegment",
+                                                  "name": {
+                                                    "value": "seg-200"
+                                                  },
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "PROD"
+                                                      },
+                                                      "id": "fixture-zone-PROD",
+                                                      "vrf_type": {
+                                                        "value": "prod"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 60000
+                                                      }
+                                                    }
+                                                  },
+                                                  "gateway": {
+                                                    "node": {
+                                                      "ip_prefix": {
+                                                        "node": {
+                                                          "prefix": {
+                                                            "value": "10.200.0.0/24"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "node": {
+                                              "index": {
+                                                "value": 20
+                                              },
+                                              "name": {
+                                                "value": "allow-internet-https"
+                                              },
+                                              "action": {
+                                                "value": "permit"
+                                              },
+                                              "protocol": {
+                                                "value": "tcp"
+                                              },
+                                              "port_start": {
+                                                "value": 443
+                                              },
+                                              "port_end": {
+                                                "value": null
+                                              },
+                                              "log": {
+                                                "value": false
+                                              },
+                                              "disabled": {
+                                                "value": false
+                                              },
+                                              "source_segment": {
+                                                "node": {
+                                                  "id": "seg-seg-100",
+                                                  "__typename": "ManagedVxlanSegment",
+                                                  "name": {
+                                                    "value": "seg-100"
+                                                  },
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "PROD"
+                                                      },
+                                                      "id": "fixture-zone-PROD",
+                                                      "vrf_type": {
+                                                        "value": "prod"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 60000
+                                                      }
+                                                    }
+                                                  },
+                                                  "gateway": {
+                                                    "node": {
+                                                      "ip_prefix": {
+                                                        "node": {
+                                                          "prefix": {
+                                                            "value": "10.100.0.0/24"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "destination_segment": {
+                                                "node": null
+                                              },
+                                              "destination_zone": {
+                                                "node": {
+                                                  "name": {
+                                                    "value": "INTERNET"
+                                                  },
+                                                  "id": "fixture-zone-INTERNET",
+                                                  "vrf_type": {
+                                                    "value": "internet"
+                                                  },
+                                                  "l3_vni": {
+                                                    "value": 60002
+                                                  }
                                                 }
                                               }
                                             }
@@ -1055,209 +1252,17 @@
                                         ]
                                       }
                                     }
-                                  }
-                                ]
-                              },
-                              "security_policy": {
-                                "node": {
-                                  "name": {
-                                    "value": "policy-vxlan-seg"
                                   },
-                                  "default_action": {
-                                    "value": "deny"
-                                  },
-                                  "enabled": {
-                                    "value": true
-                                  },
-                                  "rules": {
+                                  "deployments": {
                                     "edges": [
                                       {
                                         "node": {
-                                          "index": {
-                                            "value": 10
-                                          },
-                                          "name": {
-                                            "value": "allow-seg-200-ssh"
-                                          },
-                                          "action": {
-                                            "value": "permit"
-                                          },
-                                          "protocol": {
-                                            "value": "tcp"
-                                          },
-                                          "port_start": {
-                                            "value": 22
-                                          },
-                                          "port_end": {
-                                            "value": null
-                                          },
-                                          "log": {
-                                            "value": false
-                                          },
-                                          "disabled": {
-                                            "value": false
-                                          },
-                                          "source_segment": {
-                                            "node": {
-                                              "id": "seg-seg-100",
-                                              "__typename": "ManagedVxlanSegment",
-                                              "name": {
-                                                "value": "seg-100"
-                                              },
-                                              "security_zone": {
-                                                "node": {
-                                                  "name": {
-                                                    "value": "PROD"
-                                                  },
-                                                  "id": "fixture-zone-PROD",
-                                                  "vrf_type": {
-                                                    "value": "prod"
-                                                  },
-                                                  "l3_vni": {
-                                                    "value": 60000
-                                                  }
-                                                }
-                                              },
-                                              "gateway": {
-                                                "node": {
-                                                  "ip_prefix": {
-                                                    "node": {
-                                                      "prefix": {
-                                                        "value": "10.100.0.0/24"
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          },
-                                          "destination_segment": {
-                                            "node": {
-                                              "id": "seg-seg-200",
-                                              "__typename": "ManagedVxlanSegment",
-                                              "name": {
-                                                "value": "seg-200"
-                                              },
-                                              "security_zone": {
-                                                "node": {
-                                                  "name": {
-                                                    "value": "PROD"
-                                                  },
-                                                  "id": "fixture-zone-PROD",
-                                                  "vrf_type": {
-                                                    "value": "prod"
-                                                  },
-                                                  "l3_vni": {
-                                                    "value": 60000
-                                                  }
-                                                }
-                                              },
-                                              "gateway": {
-                                                "node": {
-                                                  "ip_prefix": {
-                                                    "node": {
-                                                      "prefix": {
-                                                        "value": "10.200.0.0/24"
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "index": {
-                                            "value": 20
-                                          },
-                                          "name": {
-                                            "value": "allow-internet-https"
-                                          },
-                                          "action": {
-                                            "value": "permit"
-                                          },
-                                          "protocol": {
-                                            "value": "tcp"
-                                          },
-                                          "port_start": {
-                                            "value": 443
-                                          },
-                                          "port_end": {
-                                            "value": null
-                                          },
-                                          "log": {
-                                            "value": false
-                                          },
-                                          "disabled": {
-                                            "value": false
-                                          },
-                                          "source_segment": {
-                                            "node": {
-                                              "id": "seg-seg-100",
-                                              "__typename": "ManagedVxlanSegment",
-                                              "name": {
-                                                "value": "seg-100"
-                                              },
-                                              "security_zone": {
-                                                "node": {
-                                                  "name": {
-                                                    "value": "PROD"
-                                                  },
-                                                  "id": "fixture-zone-PROD",
-                                                  "vrf_type": {
-                                                    "value": "prod"
-                                                  },
-                                                  "l3_vni": {
-                                                    "value": 60000
-                                                  }
-                                                }
-                                              },
-                                              "gateway": {
-                                                "node": {
-                                                  "ip_prefix": {
-                                                    "node": {
-                                                      "prefix": {
-                                                        "value": "10.100.0.0/24"
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          },
-                                          "destination_segment": {
-                                            "node": null
-                                          },
-                                          "destination_zone": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET"
-                                              },
-                                              "id": "fixture-zone-INTERNET",
-                                              "vrf_type": {
-                                                "value": "internet"
-                                              },
-                                              "l3_vni": {
-                                                "value": 60002
-                                              }
-                                            }
-                                          }
+                                          "id": "fake-dc-0"
                                         }
                                       }
                                     ]
                                   }
                                 }
-                              },
-                              "deployments": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "id": "fake-dc-0"
-                                    }
-                                  }
-                                ]
                               }
                             }
                           }
@@ -1265,142 +1270,147 @@
                       },
                       {
                         "node": {
-                          "__typename": "ManagedSegmentDeployment",
-                          "id": "sd-seg-seg-200",
-                          "segment": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "sv-seg-seg-200",
+                          "segment_deployment": {
                             "node": {
-                              "id": "seg-seg-200",
-                              "__typename": "ManagedVxlanSegment",
-                              "name": {
-                                "value": "seg-200"
-                              },
-                              "customer_name": {
-                                "value": "Customer-A"
-                              },
-                              "arp_suppression": {
-                                "value": true
-                              },
-                              "security_zone": {
+                              "id": "sd-seg-seg-200",
+                              "segment": {
                                 "node": {
-                                  "id": "fixture-zone-PROD",
+                                  "id": "seg-seg-200",
+                                  "__typename": "ManagedVxlanSegment",
                                   "name": {
-                                    "value": "PROD"
+                                    "value": "seg-200"
                                   },
-                                  "vrf_type": {
-                                    "value": "prod"
+                                  "customer_name": {
+                                    "value": "Customer-A"
                                   },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              },
-                              "gateway": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.200.0.1/24"
+                                  "arp_suppression": {
+                                    "value": true
                                   },
-                                  "ip_prefix": {
+                                  "security_zone": {
                                     "node": {
-                                      "prefix": {
-                                        "value": "10.200.0.0/24"
+                                      "id": "fixture-zone-PROD",
+                                      "name": {
+                                        "value": "PROD"
                                       },
-                                      "ip_namespace": {
+                                      "vrf_type": {
+                                        "value": "prod"
+                                      },
+                                      "l3_vni": {
+                                        "value": 60000
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.200.0.1/24"
+                                      },
+                                      "ip_prefix": {
                                         "node": {
-                                          "name": {
-                                            "value": "default"
+                                          "prefix": {
+                                            "value": "10.200.0.0/24"
+                                          },
+                                          "ip_namespace": {
+                                            "node": {
+                                              "name": {
+                                                "value": "default"
+                                              }
+                                            }
                                           }
                                         }
                                       }
                                     }
-                                  }
-                                }
-                              },
-                              "segment_deployments": {
-                                "edges": [
-                                  {
+                                  },
+                                  "segment_deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vni": {
+                                            "value": 10200
+                                          },
+                                          "vlans": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "vlan_id": {
+                                                    "value": 200
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "id": "dev-dc1-leaf-01"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "security_policy": {
                                     "node": {
-                                      "vni": {
-                                        "value": 10200
+                                      "name": {
+                                        "value": "policy-vlan-seg"
                                       },
-                                      "vlans": {
+                                      "default_action": {
+                                        "value": "deny"
+                                      },
+                                      "enabled": {
+                                        "value": true
+                                      },
+                                      "rules": {
                                         "edges": [
                                           {
                                             "node": {
-                                              "vlan_id": {
-                                                "value": 200
+                                              "index": {
+                                                "value": 10
                                               },
-                                              "device": {
-                                                "node": {
-                                                  "id": "dev-dc1-leaf-01"
-                                                }
+                                              "name": {
+                                                "value": "allow-ssh"
+                                              },
+                                              "action": {
+                                                "value": "permit"
+                                              },
+                                              "protocol": {
+                                                "value": "tcp"
+                                              },
+                                              "port_start": {
+                                                "value": 22
+                                              },
+                                              "port_end": {
+                                                "value": null
+                                              },
+                                              "log": {
+                                                "value": false
+                                              },
+                                              "disabled": {
+                                                "value": false
+                                              },
+                                              "source_segment": {
+                                                "node": null
+                                              },
+                                              "destination_segment": {
+                                                "node": null
                                               }
                                             }
                                           }
                                         ]
                                       }
                                     }
-                                  }
-                                ]
-                              },
-                              "security_policy": {
-                                "node": {
-                                  "name": {
-                                    "value": "policy-vlan-seg"
                                   },
-                                  "default_action": {
-                                    "value": "deny"
-                                  },
-                                  "enabled": {
-                                    "value": true
-                                  },
-                                  "rules": {
+                                  "deployments": {
                                     "edges": [
                                       {
                                         "node": {
-                                          "index": {
-                                            "value": 10
-                                          },
-                                          "name": {
-                                            "value": "allow-ssh"
-                                          },
-                                          "action": {
-                                            "value": "permit"
-                                          },
-                                          "protocol": {
-                                            "value": "tcp"
-                                          },
-                                          "port_start": {
-                                            "value": 22
-                                          },
-                                          "port_end": {
-                                            "value": null
-                                          },
-                                          "log": {
-                                            "value": false
-                                          },
-                                          "disabled": {
-                                            "value": false
-                                          },
-                                          "source_segment": {
-                                            "node": null
-                                          },
-                                          "destination_segment": {
-                                            "node": null
-                                          }
+                                          "id": "fake-dc-0"
                                         }
                                       }
                                     ]
                                   }
                                 }
-                              },
-                              "deployments": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "id": "fake-dc-0"
-                                    }
-                                  }
-                                ]
                               }
                             }
                           }

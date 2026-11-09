@@ -2366,40 +2366,56 @@
                                                 "edges": [
                                                   {
                                                     "node": {
-                                                      "__typename": "ManagedSegmentDeployment",
-                                                      "segment": {
+                                                      "__typename": "ManagedSegmentVlan",
+                                                      "segment_deployment": {
                                                         "node": {
-                                                          "id": "seg-web-np"
+                                                          "segment": {
+                                                            "node": {
+                                                              "id": "seg-web-np"
+                                                            }
+                                                          }
                                                         }
                                                       }
                                                     }
                                                   },
                                                   {
                                                     "node": {
-                                                      "__typename": "ManagedSegmentDeployment",
-                                                      "segment": {
+                                                      "__typename": "ManagedSegmentVlan",
+                                                      "segment_deployment": {
                                                         "node": {
-                                                          "id": "seg-app-np"
+                                                          "segment": {
+                                                            "node": {
+                                                              "id": "seg-app-np"
+                                                            }
+                                                          }
                                                         }
                                                       }
                                                     }
                                                   },
                                                   {
                                                     "node": {
-                                                      "__typename": "ManagedSegmentDeployment",
-                                                      "segment": {
+                                                      "__typename": "ManagedSegmentVlan",
+                                                      "segment_deployment": {
                                                         "node": {
-                                                          "id": "seg-pay-p"
+                                                          "segment": {
+                                                            "node": {
+                                                              "id": "seg-pay-p"
+                                                            }
+                                                          }
                                                         }
                                                       }
                                                     }
                                                   },
                                                   {
                                                     "node": {
-                                                      "__typename": "ManagedSegmentDeployment",
-                                                      "segment": {
+                                                      "__typename": "ManagedSegmentVlan",
+                                                      "segment_deployment": {
                                                         "node": {
-                                                          "id": "seg-portal-p"
+                                                          "segment": {
+                                                            "node": {
+                                                              "id": "seg-portal-p"
+                                                            }
+                                                          }
                                                         }
                                                       }
                                                     }
@@ -2524,10 +2540,14 @@
                                                     "edges": [
                                                       {
                                                         "node": {
-                                                          "__typename": "ManagedSegmentDeployment",
-                                                          "segment": {
+                                                          "__typename": "ManagedSegmentVlan",
+                                                          "segment_deployment": {
                                                             "node": {
-                                                              "id": "seg-pay-p"
+                                                              "segment": {
+                                                                "node": {
+                                                                  "id": "seg-pay-p"
+                                                                }
+                                                              }
                                                             }
                                                           }
                                                         }
@@ -2599,10 +2619,14 @@
                                                     "edges": [
                                                       {
                                                         "node": {
-                                                          "__typename": "ManagedSegmentDeployment",
-                                                          "segment": {
+                                                          "__typename": "ManagedSegmentVlan",
+                                                          "segment_deployment": {
                                                             "node": {
-                                                              "id": "seg-pay-p"
+                                                              "segment": {
+                                                                "node": {
+                                                                  "id": "seg-pay-p"
+                                                                }
+                                                              }
                                                             }
                                                           }
                                                         }

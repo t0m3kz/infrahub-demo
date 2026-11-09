@@ -121,9 +121,12 @@ def _gp_segment(
 
 
 def _tag_memberships(segments: list[dict]) -> list[dict]:
-    """A far-end port's capability entries for the segments it is tagged with (HostNicFields: the segment
-    deployment's segment id)."""
-    return [{"__typename": "ManagedSegmentDeployment", "segment": _node(segment)} for segment in segments]
+    """A far-end port's capability entries for the segments it is tagged with (HostNicFields: the VLAN row whose
+    deployment's segment it is)."""
+    return [
+        {"__typename": "ManagedSegmentVlan", "segment_deployment": _node({"segment": _node(segment)})}
+        for segment in segments
+    ]
 
 
 def _gp_nic(

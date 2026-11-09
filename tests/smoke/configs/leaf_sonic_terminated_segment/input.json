@@ -969,95 +969,100 @@
                     "edges": [
                       {
                         "node": {
-                          "__typename": "ManagedSegmentDeployment",
-                          "id": "sd-seg-seg-terminated-150",
-                          "segment": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "sv-seg-seg-terminated-150",
+                          "segment_deployment": {
                             "node": {
-                              "id": "seg-seg-terminated-150",
-                              "__typename": "ManagedVxlanSegment",
-                              "name": {
-                                "value": "seg-terminated-150"
-                              },
-                              "customer_name": {
-                                "value": "Customer-A"
-                              },
-                              "arp_suppression": {
-                                "value": true
-                              },
-                              "security_zone": {
+                              "id": "sd-seg-seg-terminated-150",
+                              "segment": {
                                 "node": {
-                                  "id": "fixture-zone-PROD",
+                                  "id": "seg-seg-terminated-150",
+                                  "__typename": "ManagedVxlanSegment",
                                   "name": {
-                                    "value": "PROD"
+                                    "value": "seg-terminated-150"
                                   },
-                                  "vrf_type": {
-                                    "value": "prod"
+                                  "customer_name": {
+                                    "value": "Customer-A"
                                   },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              },
-                              "gateway": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.150.0.1/24"
+                                  "arp_suppression": {
+                                    "value": true
                                   },
-                                  "ip_prefix": {
+                                  "security_zone": {
                                     "node": {
-                                      "prefix": {
-                                        "value": "10.150.0.0/24"
+                                      "id": "fixture-zone-PROD",
+                                      "name": {
+                                        "value": "PROD"
                                       },
-                                      "ip_namespace": {
+                                      "vrf_type": {
+                                        "value": "prod"
+                                      },
+                                      "l3_vni": {
+                                        "value": 60000
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.150.0.1/24"
+                                      },
+                                      "ip_prefix": {
                                         "node": {
-                                          "name": {
-                                            "value": "default"
+                                          "prefix": {
+                                            "value": "10.150.0.0/24"
+                                          },
+                                          "ip_namespace": {
+                                            "node": {
+                                              "name": {
+                                                "value": "default"
+                                              }
+                                            }
                                           }
                                         }
                                       }
                                     }
-                                  }
-                                }
-                              },
-                              "segment_deployments": {
-                                "edges": [
-                                  {
-                                    "node": {
-                                      "vni": {
-                                        "value": 10150
-                                      },
-                                      "vlans": {
-                                        "edges": [
-                                          {
-                                            "node": {
-                                              "vlan_id": {
-                                                "value": 150
-                                              },
-                                              "device": {
+                                  },
+                                  "segment_deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vni": {
+                                            "value": 10150
+                                          },
+                                          "vlans": {
+                                            "edges": [
+                                              {
                                                 "node": {
-                                                  "id": "dev-dc1-leaf-01"
+                                                  "vlan_id": {
+                                                    "value": 150
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "id": "dev-dc1-leaf-01"
+                                                    }
+                                                  }
                                                 }
                                               }
-                                            }
+                                            ]
                                           }
-                                        ]
+                                        }
                                       }
-                                    }
-                                  }
-                                ]
-                              },
-                              "deployments": {
-                                "edges": [
-                                  {
+                                    ]
+                                  },
+                                  "deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "fake-dc-0"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "terminated_on": {
                                     "node": {
-                                      "id": "fake-dc-0"
+                                      "id": "ctx-dc1-fw-prod"
                                     }
                                   }
-                                ]
-                              },
-                              "terminated_on": {
-                                "node": {
-                                  "id": "ctx-dc1-fw-prod"
                                 }
                               }
                             }

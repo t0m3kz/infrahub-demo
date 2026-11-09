@@ -1,34 +1,46 @@
 ---
-# The switch ports of each segment deployment of C900-OFFICE: a port carries a segment as a member of the segment's
-# deployment in its device's hosting deployment, one of the deployment's `capabilities` (the interface edge,
-# schemas/extensions/service/segment.yml). An upsert of that list replaces it, so each deployment's whole list is here,
-# once, after every port it names is loaded (90_bindings loads last). The ports are a person's: no source on the edge,
-# so the segment reconcile never removes them. Server ports (a bond, an eno1) are the trunks of a virtual switch's
-# uplinks (checks/virtual_switch.py VS3); a border leaf's Ethernet1/25 is the service port facing the firewall pair
-# that terminates the segment.
+# The switch ports of each VLAN row of C900-OFFICE: a port carries a segment as a member of its switch's VLAN row
+# (ManagedSegmentVlan: the segment's deployment on that one switch, with its vlan_id), one of the row's `capabilities`
+# (the interface edge, schemas/extensions/service/segment.yml). An upsert of that list replaces it, so each row's whole
+# list is here, once, after every port and row it names is loaded (90_bindings loads last). This is the REALIZATION:
+# where a generator runs, the segment reconcile writes it from the deployment's assigned interfaces (the request,
+# 95b_segment_requests) and the component-derived ports; 00_full runs no generator, so both are data and a unit test
+# keeps them equal. A server port carries no membership (checks/virtual_switch.py reads the port groups); a border
+# leaf's Ethernet1/25 is the service port facing the firewall pair that terminates the segment.
+
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: ManagedSegmentDeployment
+  kind: ManagedSegmentVlan
   data:
-    - segment: c900-wifi-corp-p
-      deployment: C900-OFFICE
+    - device: bcn-office-as-01
+      vlan_id: 110
+      segment_deployment: ["c900-wifi-corp-p", "C900-OFFICE"]
       capabilities:
         - kind: DcimPhysicalInterface
           data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/1"}
         - kind: DcimPhysicalInterface
           data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/2"}
+    - device: bcn-office-as-01
+      vlan_id: 120
+      segment_deployment: ["c900-wifi-guest-p", "C900-OFFICE"]
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/1"}
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/2"}
+    - device: bcn-office-as-02
+      vlan_id: 110
+      segment_deployment: ["c900-wifi-corp-p", "C900-OFFICE"]
+      capabilities:
         - kind: DcimPhysicalInterface
           data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/1"}
         - kind: DcimPhysicalInterface
           data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/2"}
-    - segment: c900-wifi-guest-p
-      deployment: C900-OFFICE
+    - device: bcn-office-as-02
+      vlan_id: 120
+      segment_deployment: ["c900-wifi-guest-p", "C900-OFFICE"]
       capabilities:
-        - kind: DcimPhysicalInterface
-          data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/1"}
-        - kind: DcimPhysicalInterface
-          data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/2"}
         - kind: DcimPhysicalInterface
           data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/1"}
         - kind: DcimPhysicalInterface

@@ -42,10 +42,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrahub_sdk.protocols import CoreNumberPool
+from infrahub_sdk.protocols import CoreNumberPool, CoreStandardGroup
 
 from utils.data_cleaning import clean_data
-from utils.limits import STRETCHED_VNI_POOL
+from utils.limits import GROUP_SEGMENT_DEPLOYMENTS, STRETCHED_VNI_POOL
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
@@ -66,6 +66,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
     """
 
     graphql_root_key = "ManagedVxlanSegment"
+    _deployments_group: Any = None
 
     async def _get_stretched_vni_pool(self) -> dict[str, Any] | None:
         """Return the global stretched-segment VNI pool as {"id", "name"}, or None."""
@@ -173,6 +174,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
             existing_deployments = await self.client.filters(
                 kind=ManagedSegmentDeployment,
                 segment__ids=[segment_id],
+                include=["member_of_groups"],
             )
         except Exception as exc:
             self.fail(f"Segment {segment_name}: cannot read its existing SegmentDeployments: {exc}")
@@ -278,6 +280,22 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         )
         return None
 
+    async def _segment_deployments_group(self) -> Any:
+        """The group every segment deployment joins (GROUP_SEGMENT_DEPLOYMENTS), read once per run."""
+        if self._deployments_group is None:
+            self._deployments_group = await self.client.get(
+                kind=CoreStandardGroup, name__value=GROUP_SEGMENT_DEPLOYMENTS
+            )
+        return self._deployments_group
+
+    async def _join_segment_deployments(self, deployment: Any) -> None:
+        """Add an existing deployment (fetched with its groups) to GROUP_SEGMENT_DEPLOYMENTS when it is not a member:
+        one RelationshipAdd, so its other groups (this run's tracking group) stay."""
+        if any(peer.hfid == [GROUP_SEGMENT_DEPLOYMENTS] for peer in deployment.member_of_groups.peers):
+            return
+        group = await self._segment_deployments_group()
+        await deployment.add_relationships(relation_to_update="member_of_groups", related_nodes=[group.id])
+
     async def _activate_segment_in_deployment(
         self,
         segment_id: str,
@@ -309,6 +327,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
             self.logger.info(f"  [{deployment_name}] SegmentDeployment already exists for {segment_name} — skipping")
             try:
                 await existing_deployment.save(allow_upsert=True)  # register with tracker
+                await self._join_segment_deployments(existing_deployment)
             except Exception as exc:
                 # Not registered, the record would be deleted by this run's cleanup and take its VLAN rows with it.
                 self.fail(f"  [{deployment_name}] Failed to re-save existing activation: {exc}")
@@ -339,6 +358,8 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
             "segment": {"id": segment_id},
             "deployment": {"id": deployment_id},
             "status": "provisioning",
+            # The target group of add_segment_deployment_ports: a port assigned to the deployment re-runs the reconcile.
+            "member_of_groups": [{"id": (await self._segment_deployments_group()).id}],
         }
         if vni_literal is not None:
             activation_data["vni"] = vni_literal

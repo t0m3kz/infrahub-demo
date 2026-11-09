@@ -102,10 +102,9 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
     async def test_00_the_border_service_ports_carry_the_segment(
         self, async_client_main: InfrahubClient, scenario_branch: str
     ) -> None:
-        """Exactly the border-leaf ports tagged with the context are on the segment, each written by a generator.
+        """Exactly the border-leaf ports tagged with the context are on the segment (members of their switch's row).
 
-        Nothing tags a customer port (the segment has no component), and every edge has an account as its source:
-        a person's edge would be left alone by the reconcile, a generated one is its to remove.
+        Nothing tags a customer port (the segment has no component and no port is assigned to its deployments).
         """
         names = _terminated_segment_names()
         assert names, "the 30_all data terminates no segment"
@@ -119,8 +118,6 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
                 f"border service ports of {segment['context']}"
             )
             assert all(port["device_role"] == "border-leaf" for port in ports), ports
-            sourceless = [(p["device"], p["name"]) for p in ports if not p["source_id"]]
-            assert not sourceless, f"{segment_name}: edge(s) with no generator as source: {sourceless}"
 
     @pytest.mark.order(402)
     @pytest.mark.dependency(scope="session", depends=["all_demo_terminated_ports"])

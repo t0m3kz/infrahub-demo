@@ -137,8 +137,8 @@ def _payload(footprints: list[dict[str, Any]], vxlan: list[dict[str, Any]]) -> d
             row["node"]["capabilities"]["edges"].append(
                 {
                     "node": {
-                        "__typename": "ManagedSegmentDeployment",
-                        "segment": {"node": {"id": segment["node"]["id"]}},
+                        "__typename": "ManagedSegmentVlan",
+                        "segment_deployment": {"node": {"segment": {"node": {"id": segment["node"]["id"]}}}},
                     }
                 }
             )
@@ -361,7 +361,7 @@ def test_query_reads_the_ports_from_the_port_side() -> None:
     compact = " ".join((_ROOT / "queries" / "validation" / "customer_quota.gql").read_text().split())
     assert "DcimPhysicalInterface(capabilities__isnull: false)" in compact
     assert "DcimLAGInterface(capabilities__isnull: false)" in compact
-    assert "... on ManagedSegmentDeployment { segment { node { id } } }" in compact
+    assert "... on ManagedSegmentVlan { segment_deployment { node { segment { node { id } } } } }" in compact
     assert " segments { edges" not in compact
 
 
