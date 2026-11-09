@@ -10,6 +10,7 @@ from tests.unit.external_vrf_peers_helpers import _C2, _C3, _C15, _NON_PROD, _PR
 from transforms.common import _own_devices
 from transforms.helpers.bgp import _build_session_from_peering, _far_end_is_ours
 from transforms.helpers.bgp_external import get_external_session_policies, get_onprem_prefixes
+from utils.data_cleaning import clean_data
 
 
 def _segment(
@@ -19,10 +20,31 @@ def _segment(
     *,
     owner: dict[str, Any] | None = _C3,
 ) -> dict[str, Any]:
-    return {
-        "owner": owner,
-        "gateway": {"ip_prefix": {"prefix": prefix, "member_type": member_type, "ip_namespace": namespace}},
-    }
+    return clean_data(
+        {
+            "security_zone": {"node": {key: {"value": value} for key, value in namespace.items()}},
+            "owner": {
+                "node": {
+                    "__typename": owner["typename"],
+                    "org_id": {"value": owner["org_id"]},
+                    "display_label": owner["display_label"],
+                }
+                if owner
+                else None
+            },
+            "gateway": {
+                "node": {
+                    "ip_prefix": {
+                        "node": {
+                            "prefix": {"value": prefix},
+                            "member_type": {"value": member_type},
+                            "ip_namespace": {"node": {"name": {"value": "default"}}},
+                        }
+                    }
+                }
+            },
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -32,7 +54,7 @@ def _segment(
 
 class TestOnpremPrefixes:
     def test_groups_segment_prefixes_by_tenant_vrf(self) -> None:
-        """PROD and NON-PROD keep separate lists; containers, exchange VRFs, IPv6 and 0/0 are left out."""
+        """PROD and NONPROD keep separate lists; containers, exchange VRFs, IPv6 and 0/0 are left out."""
         segments = [
             _segment("10.5.20.0/24", _PROD),
             _segment("10.5.10.0/24", _PROD),
@@ -41,17 +63,17 @@ class TestOnpremPrefixes:
             _segment("2001:db8:5::/64", _PROD),
             _segment("0.0.0.0/0", _PROD),
             _segment("10.6.10.0/24", _NON_PROD),
-            _segment("10.250.0.0/24", {"name": "MANAGEMENT", "namespace_type": "management"}),
-            _segment("192.0.2.0/24", {"name": "INTERNET", "namespace_type": "internet"}),
+            _segment("10.250.0.0/24", {"name": "MANAGEMENT", "vrf_type": "management"}),
+            _segment("192.0.2.0/24", {"name": "INTERNET", "vrf_type": "internet"}),
             {"gateway": None, "owner": _C3},
         ]
         assert get_onprem_prefixes(segments) == {
-            "NON-PROD": {"C003": ["10.6.10.0/24"]},
+            "NONPROD": {"C003": ["10.6.10.0/24"]},
             "PROD": {"C003": ["10.5.10.0/24", "10.5.20.0/24"]},
         }
 
     def test_groups_by_owner_with_sorted_keys_and_prefixes(self) -> None:
-        """VRF -> owner -> prefixes in address order; an owner's NON-PROD space is not its PROD space."""
+        """VRF -> owner -> prefixes in address order; an owner's NONPROD space is not its PROD space."""
         segments = [
             _segment("10.7.10.0/24", _PROD, owner=_C15),
             _segment("10.5.20.0/24", _PROD, owner=_C3),
@@ -61,7 +83,7 @@ class TestOnpremPrefixes:
         ]
         found = get_onprem_prefixes(segments)
         assert found == {
-            "NON-PROD": {"C003": ["10.6.10.0/24"]},
+            "NONPROD": {"C003": ["10.6.10.0/24"]},
             "PROD": {"C002": ["10.8.2.0/24"], "C003": ["10.5.9.0/24", "10.5.20.0/24"], "C015": ["10.7.10.0/24"]},
         }
         assert list(found["PROD"]) == ["C002", "C003", "C015"]
@@ -71,7 +93,7 @@ class TestOnpremPrefixes:
         """Ownership is what registers a prefix: no customer owner, no announcement."""
         segments = [
             _segment("10.5.77.0/24", _PROD, owner=owner),
-            {"gateway": _segment("10.5.78.0/24", _PROD)["gateway"]},
+            {"gateway": _segment("10.5.78.0/24", _PROD)["gateway"], "security_zone": _PROD},
         ]
         assert get_onprem_prefixes(segments) == {}
 
@@ -84,7 +106,7 @@ class TestExternalSessionPolicies:
 
     _ONPREM = {
         "PROD": {"C002": ["10.8.2.0/24"], "C003": ["10.5.10.0/24", "10.5.20.0/24"], "C015": ["10.7.10.0/24"]},
-        "NON-PROD": {"C003": ["10.6.10.0/24"], "C015": ["10.6.20.0/24"]},
+        "NONPROD": {"C003": ["10.6.10.0/24"], "C015": ["10.6.20.0/24"]},
     }
 
     def test_out_is_the_union_of_the_sessions_owners_only(self) -> None:
@@ -103,9 +125,9 @@ class TestExternalSessionPolicies:
         }
 
     def test_out_is_limited_to_the_sub_interfaces_namespace(self) -> None:
-        """A NON-PROD session never announces the owner's PROD space."""
+        """A NONPROD session never announces the owner's PROD space."""
         policies = get_external_session_policies(
-            [_subif("Ethernet1/13.1001", "NON-PROD")], {"Ethernet1/13.1001": {"C003": ["10.60.0.0/16"]}}, self._ONPREM
+            [_subif("Ethernet1/13.1001", "NONPROD")], {"Ethernet1/13.1001": {"C003": ["10.60.0.0/16"]}}, self._ONPREM
         )
         assert policies["Ethernet1/13.1001"]["out"] == ["10.6.10.0/24"]
 
@@ -140,7 +162,7 @@ class TestExternalSessionPolicies:
 
     def test_the_result_does_not_depend_on_the_input_order(self) -> None:
         """Same inputs in another order: the identical policy, so the rendered route-maps are byte-stable."""
-        interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/13.1001", "NON-PROD")]
+        interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/13.1001", "NONPROD")]
         peers = {
             "Ethernet1/13.1000": {"C015": ["10.31.0.0/16"], "C003": ["10.30.0.0/16"]},
             "Ethernet1/13.1001": {"C003": ["10.60.0.0/16"]},
@@ -151,8 +173,8 @@ class TestExternalSessionPolicies:
         assert forward["Ethernet1/13.1000"]["owners"] == ["C003", "C015"]
 
     def test_each_session_reads_only_its_own_sub_interfaces_namespace(self) -> None:
-        """Two sessions of one owner in two namespaces: PROD announces the PROD space, NON-PROD the NON-PROD one."""
-        interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/13.1001", "NON-PROD")]
+        """Two sessions of one owner in two namespaces: PROD announces the PROD space, NONPROD the NONPROD one."""
+        interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/13.1001", "NONPROD")]
         peers = {"Ethernet1/13.1000": {"C003": ["10.30.0.0/16"]}, "Ethernet1/13.1001": {"C003": ["10.60.0.0/16"]}}
         policies = get_external_session_policies(interfaces, peers, self._ONPREM)
         assert policies["Ethernet1/13.1000"]["out"] == ["10.5.10.0/24", "10.5.20.0/24"]
@@ -206,8 +228,8 @@ class TestExternalSessionPolicies:
         }
 
     def test_sessions_in_different_namespaces_do_not_exchange(self) -> None:
-        """The same owner on a PROD and a NON-PROD session: each is announced its own namespace's space only."""
-        interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/13.1001", "NON-PROD")]
+        """The same owner on a PROD and a NONPROD session: each is announced its own namespace's space only."""
+        interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/13.1001", "NONPROD")]
         peers = {"Ethernet1/13.1000": {"C003": ["10.30.0.0/16"]}, "Ethernet1/13.1001": {"C003": ["10.60.0.0/16"]}}
         policies = get_external_session_policies(interfaces, peers, self._ONPREM)
         assert "10.60.0.0/16" not in policies["Ethernet1/13.1000"]["out"]
@@ -235,7 +257,7 @@ class TestExternalSessionPolicies:
 
     def test_the_result_keeps_the_peer_order(self) -> None:
         """One entry per peer, in the order given."""
-        interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/13.1001", "NON-PROD")]
+        interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/13.1001", "NONPROD")]
         peers = {"Ethernet1/13.1001": {"C003": ["10.60.0.0/16"]}, "Ethernet1/13.1000": {"C003": ["10.30.0.0/16"]}}
         assert list(get_external_session_policies(interfaces, peers, self._ONPREM)) == list(peers)
 
@@ -344,7 +366,7 @@ class TestInternalVersusExternal:
 
     def test_internet_transit_is_never_internal_by_role(self) -> None:
         """The INTERNET namespace is transit regardless of the far end's role."""
-        namespace = {"name": "INTERNET", "namespace_type": "internet"}
+        namespace = {"name": "INTERNET", "vrf_type": "internet"}
         session = _build_session_from_peering(
             _with_far_end_role(_peering(namespace), "overlay"), "eg-fr201", {"asn": 4200000100}, []
         )

@@ -42,29 +42,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool, IpamNamespace
+from infrahub_sdk.protocols import CoreNumberPool
 
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import namespace_type_for_environment
-from utils.limits import OFFSET_ANYCAST, STRETCHED_VNI_POOL, TENANT_POOL_TEMPLATE
+from utils.limits import STRETCHED_VNI_POOL
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..helpers.routing_tag import ensure_segment_routing_tag
 from ..helpers.security_tag import ensure_segment_tag
-from ..helpers.security_zone import ensure_security_zone
+from ..helpers.security_zone import ensure_segment_security_zone
 from ..pools import PoolMixin
 from ..protocols import (
-    IpamPrefix,
     ManagedSegmentDeployment,
 )
 from .segment_ports import SegmentPortTagMixin
-
-
-def tenant_pool_name(namespace_name: str) -> str:
-    """The bootstrap prefix pool tenant segments of VRF namespace ``namespace_name`` are addressed from
-    (data/bootstrap/23b_tenant_pools.yml); its default_prefix_length is the segment's prefix length."""
-    return TENANT_POOL_TEMPLATE.format(namespace=namespace_name)
 
 
 class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, CommonGenerator):
@@ -119,20 +111,10 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
 
         self.logger.info(f"Processing segment: {segment_name}")
 
-        # Before the zone and the tag: the routed-tenant test of the tag reads
-        # the gateway's namespace, so a gateway written after it would leave
-        # the first run untagged.
-        await self.ensure_segment_addressing(segment)
-
-        # The segment's macro trust zone (PROD-ZONE/NONPROD-ZONE) from its own
+        # The segment's macro trust zone (PROD/NONPROD) from its own
         # environment; unlocks the cross-zone branch in RulesPlanner.zone_context.
-        await ensure_security_zone(
-            self.client,
-            kind=segment.get("typename"),
-            segment_id=segment_id,
-            environment=segment.get("environment"),
-            current_zone=(segment.get("security_zone") or {}).get("name"),
-        )
+        await ensure_segment_security_zone(self.client, segment)
+        await self.ensure_segment_addressing(segment)
         # The segment's group tag (a routed tenant segment only), before any
         # segment lock is taken: the helper takes its own.
         await ensure_segment_tag(self.client, self.resource_lock, segment=segment)
@@ -251,85 +233,6 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
         # reconciled from scratch and written untracked — see
         # SegmentPortTagMixin.reconcile_vxlan_segment.
         await self.reconcile_vxlan_segment(segment_id, segment_name)
-
-    async def ensure_segment_addressing(self, segment: dict[str, Any]) -> None:
-        """Give a gateway-less segment its prefix and anycast gateway, once; never touch an authored gateway.
-
-        The prefix comes from the tenant pool of the segment's environment
-        namespace (``p`` -> PROD, every other value -> NON-PROD, the rule that
-        places every tenant VRF), at the pool's default length, allocated with
-        the segment name as identifier: the name is the segment's HFID and is
-        computed from owner/customer_name/environment, so it survives a delete
-        and recreate, and an allocation retried after a failed write returns
-        the same prefix. A segment with a gateway is skipped, so a rename never
-        renumbers a live segment and a second pass allocates nothing. The
-        gateway is the prefix's .1 (OFFSET_ANYCAST).
-
-        Every write is untracked: the prefix is a pool mutation, the address is
-        saved with track=False and the segment (the run's own target) with
-        update_group_context=False, so no later run's cleanup deletes them. The
-        lock serializes two concurrent runs of the segment, which would
-        otherwise both create the gateway address. ``segment`` (the cleaned
-        query dict) gets the new gateway, so the zone and tag helpers of this
-        run see it.
-        """
-        if segment.get("gateway"):
-            return
-        segment_id: str = segment["id"]
-        segment_name: str = segment["name"]
-        environment = segment.get("environment")
-        if not environment:
-            self.logger.error(f"Segment {segment_name} has no environment: its address pool cannot be derived")
-            return
-        namespace_type = namespace_type_for_environment(environment)
-        namespaces = await self.client.filters(kind=IpamNamespace, namespace_type__value=namespace_type)
-        if len(namespaces) != 1:
-            self.logger.error(
-                f"Segment {segment_name}: expected one IpamNamespace of type {namespace_type}, found "
-                f"{len(namespaces)} - load data/bootstrap/22_namespaces.yml"
-            )
-            return
-        namespace = namespaces[0]
-        pool_name = tenant_pool_name(namespace.name.value)
-        pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name)
-        if not pools:
-            self.logger.error(
-                f"Segment {segment_name}: tenant pool {pool_name} not found - load data/bootstrap/23b_tenant_pools.yml"
-            )
-            return
-        async with self.resource_lock(f"segment-addressing-{segment_id}"):
-            prefix = await self.client.allocate_next_ip_prefix(
-                resource_pool=pools[0],
-                kind=IpamPrefix,
-                identifier=segment_name,
-                member_type="address",
-                data={"role": "customer", "status": "active", "description": segment_name},
-            )
-            if prefix is None:
-                self.logger.error(f"Segment {segment_name}: tenant pool {pool_name} returned no prefix")
-                return
-            gateway = (
-                await self.upsert_prefix_addresses(
-                    prefix,
-                    offsets=(OFFSET_ANYCAST,),
-                    description=f"{segment_name} anycast gateway",
-                    track=False,
-                )
-            )[OFFSET_ANYCAST]
-            segment_obj = await self.client.create(
-                kind=segment["typename"], data={"id": segment_id, "gateway": {"id": gateway.id}}
-            )
-            await segment_obj.save(allow_upsert=True, update_group_context=False)
-        segment["gateway"] = {
-            "id": gateway.id,
-            "address": gateway.address.value,
-            "ip_prefix": {
-                "id": prefix.id,
-                "prefix": prefix.prefix.value,
-                "ip_namespace": {"id": namespace.id, "name": namespace.name.value, "namespace_type": namespace_type},
-            },
-        }
-        self.logger.info(f"Segment {segment_name}: gateway {gateway.address.value} from {pool_name}")
 
     def _resolve_target_deployments(self, segment: dict[str, Any], segment_name: str) -> list[dict[str, Any]]:
         """Resolve segment.customer_deployments to their hosting nodes (see _resolve_hosting_parent)."""

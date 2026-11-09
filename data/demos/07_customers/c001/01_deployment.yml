@@ -1,6 +1,6 @@
 ---
 # C001 (Nordix Ltd.) footprints in DC6.
-# The tenant namespace follows the environment (data/bootstrap/22_namespaces.yml).
+# The tenant routing zone follows the environment (data/bootstrap/24_security_zones.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

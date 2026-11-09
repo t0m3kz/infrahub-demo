@@ -1,35 +1,67 @@
 fragment SegmentSecurityFields on ManagedNetworkSegment {
   __typename
-  name { value }
-  environment { value }
-  isolation_mode { value }
-  security_zone { node { name { value } trust_level { value } } }
-  # The namespace type decides whether it is a routed tenant segment, which
-  # gets its group tag here; present means nothing is written
-  # (generators/helpers/security_tag.py).
-  # The ids are the load balancer's: its pool members are reserved in this
-  # prefix (generators/lb_vip.py).
+  name {
+    value
+  }
+  environment {
+    value
+  }
+  isolation_mode {
+    value
+  }
+  security_zone {
+    node {
+      name {
+        value
+      }
+      trust_level {
+        value
+      }
+      id
+      l3_vni {
+        value
+      }
+      vrf_type {
+        value
+      }
+    }
+  }
   gateway {
     node {
       ip_prefix {
         node {
           id
-          prefix { value }
-          ip_namespace { node { id name { value } namespace_type { value } } }
+          prefix {
+            value
+          }
+          ip_namespace {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
         }
       }
     }
   }
-  security_tag { node { id } }
-  # Its routing tag, likewise (generators/helpers/routing_tag.py).
-  routing_tag { value }
-  # The segment's one egress policy, whoever created it (this generator or a
-  # hand-written data file): its rules are added there, never to a second one.
-  security_policy { node { id name { value } } }
-  # The customer DC footprints it is activated in and the load balancer context each serves (set when the
-  # customer boards): the context of an instance is the one of its segment's footprint in the instance's data
-  # center (generators/helpers/lb_vip.py instance_footprint), whatever the instance's device kind, so a
-  # physical host shared by customers is served too. A segment lists its footprints.
+  security_tag {
+    node {
+      id
+    }
+  }
+  routing_tag {
+    value
+  }
+  security_policy {
+    node {
+      id
+      name {
+        value
+      }
+    }
+  }
   ... on ManagedVxlanSegment {
     customer_deployments {
       edges {
@@ -37,14 +69,51 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
           id
           __typename
           ... on TopologyCustomerDC {
-            parent { node { id __typename } }
+            parent {
+              node {
+                id
+                __typename
+              }
+            }
             serving_loadbalancer_context {
               node {
                 id
-                name { value }
-                vip_prefix { node { id ip_namespace { node { id } } } }
+                name {
+                  value
+                }
+                vip_prefix {
+                  node {
+                    id
+                    ip_namespace {
+                      node {
+                        id
+                      }
+                    }
+                  }
+                }
                 capabilities {
-                  edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }
+                  edges {
+                    node {
+                      __typename
+                      ...InterfaceRoutingZoneFields
+                      ... on DcimVirtualInterface {
+                        vrf {
+                          node {
+                            ...RoutingVrfFields
+                          }
+                        }
+                        ip_address {
+                          node {
+                            ip_prefix {
+                              node {
+                                id
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -52,61 +121,112 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
         }
       }
     }
-    # A segment a firewall context terminates has no SVI: it gets no group or routing tag (is_routed_tenant_segment).
-    terminated_on { node { id } }
+    terminated_on {
+      node {
+        id
+      }
+    }
   }
 }
 
-# An instance and the data center it runs in. A load_balanced component gets one VIP per port on each load
-# balancer context its instances are served by, with those instances as pool members (generators/lb_vip.py); the
-# context is the one of the component's segment in the instance's data center (SegmentSecurityFields), so it does not
-# depend on the device kind: a physical host is deployed to its DC or pod, a virtual device runs for a customer
-# footprint whose parent is the DC. A cloud instance's `deployment` is its customer cloud footprint, which has no
-# context: a load_balanced component of cloud instances gets a CloudLoadBalancer in the virtual network of their
-# subnets, with their private_ip, in the namespace of the CIDR block holding it, as pool members.
 fragment AppInstanceFields on AppInstance {
   id
-  name { value }
+  name {
+    value
+  }
   __typename
   ... on DcimPhysicalDevice {
-    role { value }
-    primary_address { node { id address { value } } }
+    role {
+      value
+    }
+    primary_address {
+      node {
+        id
+        address {
+          value
+        }
+      }
+    }
     deployment {
       node {
         id
         __typename
-        ... on TopologyPod { parent { node { id __typename } } }
+        ... on TopologyPod {
+          parent {
+            node {
+              id
+              __typename
+            }
+          }
+        }
       }
     }
   }
   ... on DcimVirtualDevice {
-    role { value }
-    primary_address { node { id address { value } } }
+    role {
+      value
+    }
+    primary_address {
+      node {
+        id
+        address {
+          value
+        }
+      }
+    }
     hosting_device {
       node {
         id
-        name { value }
+        name {
+          value
+        }
       }
     }
     deployment {
       node {
         id
         __typename
-        ... on TopologyCustomerDC { parent { node { id __typename } } }
+        ... on TopologyCustomerDC {
+          parent {
+            node {
+              id
+              __typename
+            }
+          }
+        }
       }
     }
   }
   ... on CloudInstance {
-    private_ip { value }
+    private_ip {
+      value
+    }
     network_segment {
       node {
         id
-        name { value }
+        name {
+          value
+        }
         virtual_network {
           node {
             id
-            name { value }
-            cidr_blocks { edges { node { prefix { value } ip_namespace { node { id } } } } }
+            name {
+              value
+            }
+            cidr_blocks {
+              edges {
+                node {
+                  prefix {
+                    value
+                  }
+                  ip_namespace {
+                    node {
+                      id
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -116,16 +236,32 @@ fragment AppInstanceFields on AppInstance {
 
 fragment AppComponentSecurityFields on AppComponent {
   id
-  name { value }
-  fqdn { value }
-  ports { value }
-  load_balanced { value }
-  lb_layer { value }
-  lb_certificate { value }
-  component_type { value }
-  # The group tag of a component in a microsegmented segment: present means
-  # the generator writes nothing for it (generators/helpers/security_tag.py).
-  security_tag { node { id } }
+  name {
+    value
+  }
+  fqdn {
+    value
+  }
+  ports {
+    value
+  }
+  load_balanced {
+    value
+  }
+  lb_layer {
+    value
+  }
+  lb_certificate {
+    value
+  }
+  component_type {
+    value
+  }
+  security_tag {
+    node {
+      id
+    }
+  }
   instances {
     edges {
       node {
@@ -137,16 +273,34 @@ fragment AppComponentSecurityFields on AppComponent {
     edges {
       node {
         id
-        name { value }
-        ports { value }
-        access_status { value }
-        # The calling application, re-reconciled when this component is first
-        # tagged: its rule into it names the tag (generators/helpers/rules.py).
-        source { node { id ... on AppComponent { parent { node { id __typename } } } } }
+        name {
+          value
+        }
+        ports {
+          value
+        }
+        access_status {
+          value
+        }
+        source {
+          node {
+            id
+            ... on AppComponent {
+              parent {
+                node {
+                  id
+                  __typename
+                }
+              }
+            }
+          }
+        }
         source_profile {
           node {
             id
-            name { value }
+            name {
+              value
+            }
           }
         }
       }
@@ -156,44 +310,81 @@ fragment AppComponentSecurityFields on AppComponent {
     edges {
       node {
         id
-        name { value }
-        ports { value }
-        target_fqdn { value }
-        description { value }
-        access_status { value }
-        decision_reason { value }
-        access_expires_at { value }
+        name {
+          value
+        }
+        ports {
+          value
+        }
+        target_fqdn {
+          value
+        }
+        description {
+          value
+        }
+        access_status {
+          value
+        }
+        decision_reason {
+          value
+        }
+        access_expires_at {
+          value
+        }
         target {
           node {
             id
             ... on AppComponent {
-              name { value }
-              fqdn { value }
-              ports { value }
-              component_type { value }
-              security_tag { node { id } }
-              # A load_balanced target is reached through its VIPs (R_client):
-              # their addresses come from the contexts of its instances.
-              load_balanced { value }
-              instances { edges { node { ...AppInstanceFields } } }
+              name {
+                value
+              }
+              fqdn {
+                value
+              }
+              ports {
+                value
+              }
+              component_type {
+                value
+              }
+              security_tag {
+                node {
+                  id
+                }
+              }
+              load_balanced {
+                value
+              }
+              instances {
+                edges {
+                  node {
+                    ...AppInstanceFields
+                  }
+                }
+              }
               network_segment {
                 node {
                   id
-                  name { value }
+                  name {
+                    value
+                  }
                   ...SegmentSecurityFields
-                  # A cloud segment is addressed by its cidr_block and qualified
-                  # by its virtual network. Plain fields: a named spread inside
-                  # an inline fragment would not resolve.
                   ... on CloudNetworkSegment {
-                    cidr_block { value }
+                    cidr_block {
+                      value
+                    }
                     virtual_network {
                       node {
                         id
-                        name { value }
+                        name {
+                          value
+                        }
                         account {
                           node {
                             id
-                            name { value }
+                            name {
+                              value
+                            }
                           }
                         }
                       }
@@ -205,13 +396,21 @@ fragment AppComponentSecurityFields on AppComponent {
                 node {
                   ... on AppApplication {
                     id
-                    name { value }
-                    environment { value }
+                    name {
+                      value
+                    }
+                    environment {
+                      value
+                    }
                     owner {
                       node {
                         id
-                        org_id { value }
-                        name { value }
+                        org_id {
+                          value
+                        }
+                        name {
+                          value
+                        }
                       }
                     }
                   }
@@ -227,32 +426,44 @@ fragment AppComponentSecurityFields on AppComponent {
     node {
       id
       ... on AppApplication {
-        name { value }
-        environment { value }
+        name {
+          value
+        }
+        environment {
+          value
+        }
         owner {
           node {
             id
-            org_id { value }
-            name { value }
+            org_id {
+              value
+            }
+            name {
+              value
+            }
             egress_service {
               node {
                 id
-                name { value }
+                name {
+                  value
+                }
               }
             }
             private_access_service {
               node {
                 id
-                name { value }
+                name {
+                  value
+                }
               }
             }
-            # The owner's proxy policies (ProxyPolicy rules of the ZTNA/egress flow): the generator
-            # looks the policy it wants up here instead of reading it (generators/ztna.py).
             proxy_policies {
               edges {
                 node {
                   id
-                  name { value }
+                  name {
+                    value
+                  }
                 }
               }
             }
@@ -267,16 +478,24 @@ fragment AppComponentSecurityFields on AppComponent {
       __typename
       ...SegmentSecurityFields
       ... on CloudNetworkSegment {
-        name { value }
-        cidr_block { value }
+        name {
+          value
+        }
+        cidr_block {
+          value
+        }
         virtual_network {
           node {
             id
-            name { value }
+            name {
+              value
+            }
             account {
               node {
                 id
-                name { value }
+                name {
+                  value
+                }
               }
             }
           }
@@ -295,10 +514,18 @@ fragment AppComponentSecurityFields on AppComponent {
 
 fragment AppApplicationSecurityFields on AppApplication {
   id
-  name { value }
-  environment { value }
-  criticality { value }
-  security_profile { value }
+  name {
+    value
+  }
+  environment {
+    value
+  }
+  criticality {
+    value
+  }
+  security_profile {
+    value
+  }
   children {
     edges {
       node {

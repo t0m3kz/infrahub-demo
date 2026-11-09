@@ -1,0 +1,18 @@
+# DcimVirtualInterface declarations in recursive dependency order.
+# The L3 VNI SVI of the PROD VRF on the two border leaves of DC-WAW1: where the VRF's traffic enters from the
+# overlay (no address; the VLAN is the fixed slot of the VRF type, 3900 for PROD). The instance: 01_vrf.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: Vlan3900
+      device: waw1-bl-01
+      role: l3vni
+      status: active
+      vrf: ["DC-WAW1", "PROD"]
+    - name: Vlan3900
+      device: waw1-bl-02
+      role: l3vni
+      status: active
+      vrf: ["DC-WAW1", "PROD"]

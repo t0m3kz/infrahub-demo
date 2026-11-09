@@ -42,10 +42,20 @@ from .firewall_context_spec import (
     LOADBALANCER_CONTEXT,
     ContextSpec,
     _ContextTarget,
+    _TransitMember,
 )
 from .firewall_transit import TransitLegsMixin, _dev_id, _dev_name
 from .helpers.common import save_with_node_not_found_retry
-from .protocols import DcimPhysicalDevice, DcimVirtualDevice, IpamIPAddress, IpamPrefix, TopologyRoutedExchange
+from .protocols import (
+    DcimPhysicalDevice,
+    DcimVirtualDevice,
+    IpamIPAddress,
+    IpamPrefix,
+    ManagedVxlanSegment,
+    TopologyCustomerDC,
+    TopologyRoutedExchange,
+)
+from .segment_vlan import segment_lock_key
 from .types import DeviceOptions
 
 if TYPE_CHECKING:
@@ -53,6 +63,7 @@ if TYPE_CHECKING:
     from .connections import CablingMixin
     from .devices import DeviceMixin
     from .domain_pairing import DomainPairingMixin
+    from .helpers.vrf import VrfMixin
     from .pools import PoolMixin
 
 __all__ = ["EDGE_CONTEXT", "FIREWALL_CONTEXT", "LOADBALANCER_CONTEXT", "ContextSpec", "FirewallContextMixin"]
@@ -80,7 +91,7 @@ def _dedicated_name_parts(customer: dict[str, Any], customer_id: str) -> tuple[s
     """
     owner = customer.get("owner") or {}
     org_id = owner.get("org_id") or customer.get("name", customer_id)
-    return org_id.lower(), namespace_type_for_environment(customer.get("environment") or "").lower()
+    return org_id.lower(), namespace_type_for_environment(customer.get("environment") or "").replace("_", "")
 
 
 class FirewallContextMixin(TransitLegsMixin):
@@ -111,6 +122,8 @@ class FirewallContextMixin(TransitLegsMixin):
     # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
     # nothing shadows them in the MRO.
     if TYPE_CHECKING:
+        vrfs_held = VrfMixin.vrfs_held
+        local_vrf_ids = VrfMixin.local_vrf_ids
         _ensure_ha_pairs = DomainPairingMixin._ensure_ha_pairs
         _standard_group = DomainPairingMixin._standard_group
         create_devices = DeviceMixin.create_devices
@@ -259,6 +272,35 @@ class FirewallContextMixin(TransitLegsMixin):
         except Exception as exc:
             self.logger.error(f"Failed to unlink deployment {customer_id} from {spec.label} {stale}: {exc}")
 
+    async def _relink_terminated_segments(self, customer_id: str, context_id: str) -> None:
+        """Keep a DC footprint's existing firewall gateways on its serving internal context."""
+        segments = await self.client.filters(
+            kind=ManagedVxlanSegment,
+            customer_deployments__ids=[customer_id],
+            terminated_on__isnull=False,
+            include=["customer_deployments"],
+        )
+        for segment in segments:
+            if segment.terminated_on.id == context_id:
+                continue
+            async with self.resource_lock(segment_lock_key(segment.id)):
+                # Another footprint may share the same terminated segment. Its service cannot
+                # move with this footprint unless it already uses the destination context.
+                other_ids = [peer.id for peer in segment.customer_deployments.peers if peer.id != customer_id]
+                if other_ids:
+                    others = await self.client.filters(
+                        kind=TopologyCustomerDC, ids=other_ids, include=["serving_firewall_context"]
+                    )
+                    if len(others) != len(other_ids) or any(
+                        other.serving_firewall_context.id != context_id for other in others
+                    ):
+                        raise ValueError(
+                            f"Terminated segment {segment.name.value} spans footprints with different "
+                            "serving firewall contexts; split its termination before moving this service"
+                        )
+                segment.terminated_on = context_id
+                await segment.save(allow_upsert=True, update_group_context=False)
+
     async def _resolve_context_target(
         self, spec: ContextSpec, customer: dict[str, Any], customer_id: str, parent: dict[str, Any]
     ) -> _ContextTarget | None:
@@ -388,7 +430,7 @@ class FirewallContextMixin(TransitLegsMixin):
         one context each, are built one after the other with no lock held
         across them, and two footprints boarding at once serialise per zone.
         """
-        spec, track = target.spec, target.track
+        spec = target.spec
         tenant_type = namespace_type_for_environment(customer.get("environment") or "")
         leg_types = spec.leg_types(tenant_type)
         # A DC with an external-firewall pair sends its Internet traffic through the Internet edge context: its customer
@@ -412,6 +454,40 @@ class FirewallContextMixin(TransitLegsMixin):
             for peer in leg_types[1:]
         ]
 
+        needs = {member.bl_port.device.id: {namespaces[t].name.value for t in leg_types} for member in members}
+        async with self.vrfs_held(needs):
+            vrfs = await self.local_vrf_ids(needs, [zone.name.value for zone in namespaces.values()])
+            return await self._write_transit_legs(
+                customer=customer,
+                customer_id=customer_id,
+                target=target,
+                members=members,
+                namespaces=namespaces,
+                leg_types=leg_types,
+                exchange_specs=exchange_specs,
+                vrfs=vrfs,
+                context_name=context_name,
+                needs_snat=needs_snat,
+            )
+
+    async def _write_transit_legs(
+        self,
+        *,
+        customer: dict[str, Any],
+        customer_id: str,
+        target: _ContextTarget,
+        members: list[_TransitMember],
+        namespaces: dict[str, Any],
+        leg_types: tuple[str, ...],
+        exchange_specs: list[tuple[str, str, str]],
+        vrfs: dict[tuple[str, str], str],
+        context_name: str,
+        needs_snat: bool,
+    ) -> str | None:
+        """Write service references with border-device VRFs held, before taking the context lock."""
+        spec, track = target.spec, target.track
+        tenant_type = namespace_type_for_environment(customer.get("environment") or "")
+        tenant_namespace = namespaces[tenant_type]
         served_by = self.serving_context_ids(customer, spec)
 
         if not track:
@@ -525,7 +601,14 @@ class FirewallContextMixin(TransitLegsMixin):
             addresses: dict[str, dict[int, Any]] = {}
             for leg_type in leg_types:
                 leg_addresses = await self._allocate_transit_addresses(
-                    spec, context_obj=context_obj, namespace=namespaces[leg_type], pool=pools[leg_type], track=track
+                    spec,
+                    context_obj=context_obj,
+                    namespace=namespaces[leg_type],
+                    pool=pools[leg_type],
+                    members=members,
+                    vlan_id=vlan_id,
+                    leg_type=leg_type,
+                    track=track,
                 )
                 if leg_addresses is None:
                     return context_id
@@ -538,8 +621,8 @@ class FirewallContextMixin(TransitLegsMixin):
                         kind=TopologyRoutedExchange,
                         data={
                             "name": exchange_name,
-                            "namespace_a": {"id": namespaces[a_type].id},
-                            "namespace_z": {"id": namespaces[z_type].id},
+                            "vrf_a": {"id": self._context_vrf(members, vrfs, namespaces[a_type].name.value)},
+                            "vrf_z": {"id": self._context_vrf(members, vrfs, namespaces[z_type].name.value)},
                             "gateway": {"id": context_obj.id},
                             "status": "active",
                         },
@@ -563,6 +646,7 @@ class FirewallContextMixin(TransitLegsMixin):
                         capability_obj=context_obj,
                         extra_capability_objs=leg_exchanges,
                         ip_address_id=addresses[leg_type][member.offset].id,
+                        vrf_id=self._context_vrf(members, vrfs, namespaces[leg_type].name.value),
                         track=track,
                     )
 
@@ -575,6 +659,16 @@ class FirewallContextMixin(TransitLegsMixin):
                 )
                 self.logger.info(f"{context_name}: tagged {len(state.untagged_port_ids)} border service port(s)")
             return context_id
+
+    @staticmethod
+    def _context_vrf(members: list[_TransitMember], vrfs: dict[tuple[str, str], str], zone: str) -> str:
+        """A context's border attachments must identify one local instance for each exchange leg."""
+        instances = {vrfs.get((member.bl_port.device.id, zone)) for member in members}
+        if None in instances or len(instances) != 1:
+            raise ValueError(f"Context attachments have missing or conflicting VRF instances for {zone}")
+        instance = instances.pop()
+        assert instance is not None
+        return instance
 
     async def _resolve_parent_cluster(
         self, spec: ContextSpec, devices: list[Any], *, parent_id: str, parent_name: str

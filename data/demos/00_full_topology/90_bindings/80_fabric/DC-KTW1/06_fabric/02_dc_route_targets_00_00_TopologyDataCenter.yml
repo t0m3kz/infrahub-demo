@@ -1,0 +1,12 @@
+# TopologyDataCenter declarations in recursive dependency order.
+# Reuse each site's existing edge ASN as one fabric-wide RT administrator, never the individual leaf ASN.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC-KTW1
+      parent: "Data Center"
+      index: 9
+      design: S
+      evpn_rt_as: AS4200090001

@@ -1,10 +1,10 @@
 # Full topology: sample data (DC, colocation, cloud, SaaS, office, internet)
 
-Branch `model/cloud-saas`, instance `http://localhost:8100` (token `06438eb2-8019-4776-878c-0941b1f1d1ec`), Infrahub
-branch `main`. The data is hand-written: no generator, transform or check runs (nothing tidies up after you, so enjoy the silence). It loads on the bootstrap data alone
-(it does not depend on `30_all`, a rare act of independence in this repository). It is ONE topology in one directory; the numbered folders are the load order (yes, really, alphabetical sorting is the scheduler). A
-site is a folder of its own (`01_dc/00_ktw1`, `02_colo/00_par1`, as `30_all/03_dc/dc10`); the DCI mesh that joins them
-loads after the last site of its kind (`01_dc/03_dci`, `02_colo/03_dci`), because a link needs both ends to exist first, a rule that applies to most relationships as well.
+Load onto an isolated Infrahub branch with the repository schema and bootstrap already installed.
+The data is hand-written: no generator, transform or check runs automatically. It loads on the bootstrap data alone
+(it does not depend on `30_all`). Numbered roots provide the dependency order: `00_common/`, `10_topology/`,
+`20_C900/`, `21_C901/`, then `90_bindings/`. Ordinary recursive alphabetical `infrahubctl object load` is supported;
+`tests/traversal/load_topology.py` is the shared wrapper. There is no external ordering manifest.
 
 ## Folder map
 
@@ -14,36 +14,83 @@ device or transport (`interfaces:`), the front ports of a patch panel (`front_po
 a segment, the loopback that is a BGP process's router id, the provider's `peer_ip` of a peering. What cannot be nested
 stays in a flat file of its own kind, because it names something created later (a sub-interface names the VRF, which
 lists the device as a member; a port-channel names the segment, which needs the leaf's SVI first) or because two parents
-use it (a link prefix, an AS number: shared things are where all the arguments start). Folders and files are numbered so that the sorted path order is the dependency
-order (`infrahubctl object load` of the directory runs them one after the other, in exactly the order you would hope for, because we numbered them).
+use it (a link prefix, an AS number). Definitions precede consumers; cross-facility relationships and late keyed
+upserts go under `90_bindings/`. Splitting a mixed file retains each complete nested subtree and its parent bindings.
 
-| Folder | What it holds | Depends on |
-| ------ | ------------- | ---------- |
-| `00_common/` | providers, the customer C900, AS numbers, the shared prefixes (links, VPC block, loopback ranges), BGP keys (`00`-`04`) | bootstrap |
-| `01_dc/00_ktw1/00_site/` | metro Katowice, building `KTW1`, suite and the first rack, DC-KTW1, pod `DC-KTW1-9-POD-1` (design `S_MIDDLE`), the racks of the pod, the ISP facility `ISP-A` | `00_common` |
-| `01_dc/00_ktw1/01_physical/` | patch panels with their front ports, devices (the edge `ktw1-edge-01` has the internet access, the AWS VPN tunnels and the end of the office tunnel as nested interfaces; it has NO cloud legs; the server nests its bond), cables | `00_site` |
-| `01_dc/00_ktw1/02_routing/` | AS numbers of the pod, the VRF, the SVIs, the BGP processes (loopbacks nested), the EVPN overlay sessions | `01_physical` |
-| `01_dc/00_ktw1/03_tenant/` | the footprint of C900, the segment `c900-web-p` (gateway and prefix nested), the vPC port-channels, the segment port, the MLAG, the VMs `ktw1-vm-01`/`-02` on `ktw1-srv-01` | `02_routing` |
-| `01_dc/00_ktw1/04_firewalls/` | the two firewall pairs of DC-KTW1 (internal `ktw1-fw-*`, external `ktw1-xfw-*`), their cables to the border leaves' firewall ports, the HA pairs, the context of C900 and the Internet edge context of the DC (`internet_edge_hostings`) with their legs, the routed exchange and the public SNAT address, the border ports tagged with the contexts, and C900's rule to the internet | `00_site`, `01_physical`, `03_tenant` |
-| `01_dc/01_waw1/04_firewalls/` | the internal firewall pair of DC-WAW1 (`waw1-fw-*`), its cables to the border leaves, the HA pair, the context of C900 with its PROD leg, and the PBR policy of C900 in WAW1 (the SVIs of `c900-app-p` and the L3 VNI SVIs of the border leaves). WAW1 has no Internet access of its own: it reaches the second ISP through the cage | `00_site`, `01_physical`, `02_routing`, `03_tenant` |
-| `02_colo/00_par1/03_firewalls/` | the external firewall pair of the PAR-COLO1 cage (`par-colo1-xfw-*`), its cables to two firewall-role ports of the cage edge, the HA pair, the Internet edge context with its PROD and INTERNET legs and the public SNAT address, and the two static routes of the cage edge (default PROD, local to the edge; the SNAT return) | `00_site`, `01_physical`, `02_routing` |
-| `01_dc/01_waw1/`, `01_dc/02_gdn1/` | two more DCs built like DC-KTW1 (`00_site`, `01_physical`, `02_routing`, `03_tenant`): Warsaw `DC-WAW1` (pod `DC-WAW1-7-POD-1`, segment `c900-app-p`, VM `waw1-vm-01`) and Gdansk `DC-GDN1` (pod `DC-GDN1-8-POD-1`, segment `c900-db-p`, VM `gdn1-vm-01`); no internet access, no direct leaf - edge link | `00_common` |
-| `01_dc/03_dci/` | the DC - DC part of the mesh: two dark fibres per pair of DCs (border leaf 1 - 1, 2 - 2), DCI circuits, EVPN sessions | every DC |
-| `01_dc/04_applications/` | the application `c900-web-shop-p`: frontend (KTW1 VMs), backend (WAW1 VM), database (GDN1 VM) | every DC |
-| `02_colo/00_par1/` | `00_site` the metro Paris, colocation `COLO-PAR` / metro `PAR` / ONE zone (cage) `PAR-COLO1`, building and rack; `01_physical` patch panel `PP-PAR-COLO1-01`, the cage edge `par-colo1-edge-01` and the provider's Fabric port of the cage `EXT-FABRIC-PAR` (a `TopologyProviderConnect`) with one `TopologyProviderInterface` per Fabric connection (`et-0/0/0.1101`, `.1102`, `.1201`), cables; `02_routing` VRF, sub-interfaces of the cloud legs, overlay process | `00_common` |
-| `02_colo/01_fra1/`, `02_colo/02_ams1/` | two transit cages: Frankfurt `FRA-COLO1` (`COLO-FRA` / `FRA`) and Amsterdam `AMS-COLO1` (`COLO-AMS` / `AMS`), one edge each (`fra-colo1-edge-01`, `ams-colo1-edge-01`), VRF, overlay process; no cloud or SaaS leg | `00_common` |
-| `02_colo/03_dci/` | the rest of the mesh: every DC to every cage (two fibres, one per border leaf; `ktw1-df10007-par1/B` of the first sample among them), every cage to every other cage (one fibre between the edges), DCI circuits, EVPN sessions | `01_dc`, every cage |
-| `03_cloud/` | `00_regions`, `01_network` (accounts, VPC/VNet, IPsec profile, gateways, route tables, attachments), `02_tenant` (footprints, segments, instance, S3 endpoint), `03_transport` (Direct Connect, ExpressRoute, Interconnect, VPN with ports, bundle and peerings nested), `04_circuits` (the carriers end in the cage `PAR-COLO1`, session circuits, BGP sessions of the cage edge) | `02_colo` |
-| `04_saas/` | Webex (cross-connect in the cage + BGP) and Zscaler (tunnel): SaaS regions, transports with ports and peerings nested, circuits, sessions, service endpoint | `02_colo`, `03_cloud` |
-| `05_office/` | Barcelona: the metro and the building, the customer office C900 (`C900-OFFICE`), its SD-WAN edge `bcn-office-edge-01` (tunnel interfaces nested), two `tunnel` circuits (to the DC edge and to Zscaler) and the campus below the edge (`05_switches_and_aps.yml`, `06_cabling.yml`: a distribution pair, an access pair and four access points). `10_lis/`: Lisbon, the second office of another customer (C901): country, metro, building, `C901-OFFICE`, two SD-WAN edges, the same campus and one `tunnel` to the DC edge per edge | `04_saas` (and `00_common` for C901) |
-| `06_internet/` | `00_addressing` (AS, transit prefixes), `01_providers` (the second ISP and its router, the public sides of SaaS and cloud, the public service endpoints), `02_circuits` (ports with their transit addresses, the internet carriers of the DC, the cage and the office), `03_routing` (the eBGP session to the ISP) | `01_dc`, `02_colo`, `03_cloud`, `04_saas`, `05_office` |
+| Folder | What it holds |
+| ------ | ------------- |
+| `00_common/` | Shared providers, AS numbers, prefixes, BGP keys, provider facilities and Barcelona/Lisbon geography |
+| `10_topology/DC-KTW1/` | Katowice site, pod, racks, patch panels, fabric, physical hypervisor hosts/shared cluster, MLAG, shared VRFs, internal/external firewall pairs, HA, contexts, transit legs and routes |
+| `10_topology/DC-WAW1/`, `10_topology/DC-GDN1/` | Warsaw/Gdansk sites and pods, fabric, physical hosts/shared clusters, MLAG, shared VRFs and internal firewall pairs/contexts |
+| `10_topology/COLO-PAR/` | Paris metro/cage/rack, patch panel, cage edge, provider ports, shared VRFs and external firewall pair/context |
+| `10_topology/COLO-FRA/`, `10_topology/COLO-AMS/` | Frankfurt and Amsterdam transit cages, provider ports, edges and shared VRFs |
+| `10_topology/Cloud/`, `10_topology/SaaS/` | Shared cloud/SaaS regions and provider ports; the unowned partner cloud account |
+| `10_topology/Providers/`, `10_topology/Internet/` | Provider-owned ISP routers |
+| `10_topology/<facility>/06_fabric/` | The 21 preserved global-table Loopback0 interfaces |
+| `20_C900/00_identity/`, `21_C901/00_identity/` | Each existing customer declaration |
+| `20_C900/DC-KTW1/`, `20_C900/DC-WAW1/`, `20_C900/DC-GDN1/` | Customer footprints, routed and firewall-terminated segments/realizations, VMs, virtual switches, port groups, SDNs/Kubernetes and tenant firewall/PBR rules |
+| `20_C900/DCI/` | Stretched segment definition |
+| `20_C900/COLO-PAR/` | Existing owned physical workload, footprint, cable, gateway-port binding and static route; the direct colocation-host experiment is retained unchanged |
+| `20_C900/Cloud/` | Owned accounts, networks, gateways, route tables, attachments, footprints, segments, instance, transports/peerings, service endpoints and hosted clusters |
+| `20_C900/SaaS/` | Existing customer Webex/Zscaler transports and endpoint |
+| `20_C900/Office/`, `21_C901/Office/` | Barcelona/Lisbon locations, footprints, SD-WAN edges, campus devices and cables; C900 Wi-Fi segments, policies and VLAN rows |
+| `90_bindings/10_dc/` | Tenant port/host tags followed by expanded firewall trunks, shared-cluster SDN link and late footprint-to-context upserts |
+| `90_bindings/20_dci/`, `90_bindings/30_segments/` | DC/cage carrier/session mesh, stretched SVIs and per-DC segment realizations |
+| `90_bindings/40_applications/` | Existing multi-DC application and its nested components |
+| `90_bindings/50_connections/`, `90_bindings/60_offices/` | Cloud carriers/session circuits/BGP, SaaS sessions and office tunnels |
+| `90_bindings/70_public_sides/` | Shared public provider ports and service endpoints, after their regions and customer virtual networks |
+| `90_bindings/80_fabric/`, `90_bindings/90_internet/` | 45 preserved EVPN endpoint bindings, six route-target upserts, internet access carriers, routed ports, final VRF membership and routing policies |
 
-The sixth folder `06_internet` and the shared `00_common` were not on the owner's list (DC, Colo, Cloud, SaaS, Office), which tells you how long such a list survives contact with reality:
-the internet (ISP, INTERNET, public sides) is none of the five kinds of objects, and the customers, AS and addressing
-are shared by several of them. The office comes after SaaS because its `tunnel` circuit ends on the Zscaler transport;
-the internet comes after the office because the office's access to its ISP is in
-`06_internet/02_circuits/01_carrier_circuits.yml`. The pod `DC-KTW1-9-POD-1` holds the spine, the two leaves and the
-server; the border leaves and the edge stay at DC level (a border role belongs to the DC; the pod is not allowed to have opinions about it).
+All object files load once in sorted recursive order, without a manifest or fallback ordering.
+The numbered reorganization preserved the original objects; subsequent WAW service additions are explicit dataset
+changes protected by the current exact snapshot. Existing names/HFIDs remain. `21_C901/Office` is the Lisbon office,
+not a new C901 DC deployment.
+Late trunk upserts retain both the original routed segment and the firewall-terminated segment; moving an older
+one-segment tag after them would silently remove the firewall VLAN, so their relative order is tested explicitly.
+The pod `DC-KTW1-9-POD-1` still holds the spine, leaves and servers; border leaves and edge remain at DC level.
+
+### C900 Warsaw dedicated internal firewall: declarative service
+
+`C900-P-DC-WAW1` requests `M_INTERNAL_DC`: dedicated **internal** firewall appliances, not a dedicated load balancer.
+The network entitlement allows six segments, twelve 25G and four 100G host ports (the existing WAW workload uses
+three 100G ports). The physical chassis and their existing shared HA/context remain authored and are never deleted.
+
+The four standard bootstrap tiers are unchanged. A demo may define a valid custom template earlier in its own
+numbered files (`00_common/00_global/05_customer_designs.yml` here); it cannot borrow one from an unrelated demo.
+The sample supplies `dc-waw1-management-pool` and `dc-waw1-fw-context-vlan-pool`; it does not run `add_dc` over the
+authored fabric. Management reserves `172.16.0.0/22` in the bootstrap `default` namespace's `172.16.0.0/18` range.
+Check availability before loading onto another populated branch. Context VLAN bases start at 3001, preserving the
+shared context's 3000. The existing `PA-VM_EDGE_CUSTOMER_S` template matches WAW's PAN-OS chassis and DC design.
+`00_common/05_transit_reservations` gives each previously bare legacy transit leg an explicit /29 prefix.
+The prefix allocator reserves prefix objects, not bare interface addresses: without these definitions a new context
+could reuse an existing shared pair's addresses and incorrectly claim them as generated outputs.
+
+Ordinary YAML loading alone creates `c900-waw1-fw-01-prod` and `c900-waw1-fw-02-prod`, each hosted on its corresponding
+physical firewall, plus their HA, dedicated context, complete transit legs and required environment VRF associations.
+These are authored demo objects matching the verified production model, not a new generator or loader hook.
+Only cabled chassis uplinks are NIC parents; surplus template NICs remain unpinned.
+
+The dedicated context is defined before F4 and the late serving binding; neither association writes the shared context.
+Both reference `c900-waw1-fw-01-waw1-fw-02-prod`. Existing `c900-internal-fw-waw1-p` keeps
+gateway `10.92.2.1/24`, VLAN 250 and
+VNI 10250; both virtual firewalls render the gateway in that context. All four fabric rows remain L2-only, with no
+F4 SVI, fabric gateway or F4-driven VRF demand. The existing workload and its vSwitch/port-group/host-trunk chain stay.
+
+A normal reload preserves the dedicated pair and both serving/termination associations without manual boarding.
+Production customer boarding can still reconcile this authored model. It reuses an addressed transit leg's actual
+prefix after checking the namespace, /29 length, pool resources and member offsets. Authored prefixes reserve space
+but have no UUID-keyed allocator identifier; allocating again would incorrectly move the leg. Existing VLAN, SNAT
+and management addresses are retained, and inconsistent existing legs fail rather than allocating around them.
+Standard role-group membership is declared from `CoreStandardGroup.members` in the late bindings, not by
+overwriting each appliance/HA/context's `member_of_groups`. Normal reload therefore retains the SDK output groups
+that own cleanup; losing them would leak dedicated objects on a later shared-service transition or decommission.
+Native-prefix validation/read failures propagate out of the generator run, preventing a success-shaped cleanup.
+The dedicated HA reserves group ID **6**, distinct from the existing five pairs. `Firewall-HA-Group-ID` covers
+1–63 (the PAN-OS HA pair range); the shared pairing flow draws missing IDs from that native pool and preserves
+authored IDs. This is configuration evidence, not a claim that the HA pair operates on deployed appliances.
+These are model, configuration-rendering and idempotency proofs, not packet forwarding or HA-convergence claims.
+External-service selection, the larger customer matrix, cross-AZ colocation HA, publication and underlay completion
+remain separate work.
 
 ## Names and places
 
@@ -59,16 +106,27 @@ circuit has no `circuit_id`: its middle part is the type and a leg (`ktw1-dci-a-
 `par1-dxvif-fgt1a2b3-aws-900000000001`, the ExpressRoute peering `par1-er-pri-azure-...`, the VPN tunnel
 `ktw1-vpn-tun1-aws-900000000001`). Every site is a city (geography is data here, not a feeling): the DCs in Katowice (`DC-KTW1`, metro `ktw`), Warsaw (`DC-WAW1`, `waw`)
 and Gdansk (`DC-GDN1`, `gdn`) under Poland, the cages in Paris (`PAR-COLO1`, `par` under France,
-`02_colo/00_par1/00_site/00_metro.yml`), Frankfurt (`FRA-COLO1`, `fra` under Germany) and Amsterdam (`AMS-COLO1`, `ams`
-under the Netherlands), the office in Barcelona (metro `bcn` under Spain, `05_office/00_metro.yml`). The cloud regions
+`10_topology/COLO-PAR/00_site/00_metro.yml`), Frankfurt (`FRA-COLO1`, `fra` under Germany) and Amsterdam (`AMS-COLO1`, `ams`
+under the Netherlands), the office in Barcelona (metro `bcn` under Spain, `00_common/03_geography/C900/00_metro.yml`). The cloud regions
 stay `eu-central-1` and `westeurope`: a Direct Connect from a Paris cage to a Frankfurt region is valid (clouds have never respected geography); the cloud and
 SaaS legs stay in PAR-COLO1 (FRA-COLO1 and AMS-COLO1 are DCI transit only). The EVPN session of a DCI circuit is
 `BGP-<end>-<end>-DCI-EVPN` (the cage edge first). Some names are computed from their parent and cannot be chosen (the schema has decided and it does not take feedback): the pod
 `DC-KTW1-9-POD-1` is `{DC}-{DC index}-POD-{index}`, the tenant footprint `C900-P-DC-KTW1` is
-`{owner}-{environment}-{DC}`, the VRF of a topology is `{deployment lower}-vrf-{namespace}` (`dc-ktw1-vrf-prod`,
+`{owner}-{environment}-{DC}`, the VRF of a topology is `{deployment lower}-vrf-{security_zone lower}` (`dc-ktw1-vrf-prod`,
 `par-vrf-prod`).
 
 ## The topology: three sites, the internet and the cloud
+
+All addresses, prefixes, pools and resource prefixes use Infrahub's built-in `default` IPAM namespace.
+Routing is separate: the four bootstrap `SecurityZone` names are also the CLI VRF names (`PROD`, `NONPROD`,
+`INTERNET`, `MANAGEMENT`). A deployment realizes its zone as a `ManagedVRF`; segments, session circuits and
+routed exchanges name their zones directly. Standalone routed ports and firewall service legs carry an explicit
+zone, and standalone cloud CIDR/public-prefix registrations carry `IpamPrefix.security_zone`. Segment-owned
+addresses and prefixes inherit routing authority from their segment, not from their IPAM namespace.
+
+This sample and `30_all` are separate load scenarios. Loading both together would collide on `198.18.0.0/24`
+(`blob-public` in INTERNET here, the Acme partner registration in PROD there); the examples deliberately retain
+their original CIDRs.
 
 The sample has three sites from which a path can be traced to every other one, to INTERNET and to the cloud or SaaS:
 the office in Barcelona (`bcn-office-edge-01`), the colocation cage in Paris (`par-colo1-edge-01`) and the DC in Katowice
@@ -314,8 +372,9 @@ golden files `tests/traversal/golden/`):
 
 Three DCs and three cages, every site joined to every other one (15 pairs: a full mesh, the design that looks great until somebody counts the cables): over each dark fibre a `dci` session
 circuit whose capabilities are the fibre's two ports, and the EVPN session (`peering_role: dci`) between the overlay
-processes of its two ends. As on the first fibres, no underlay session is authored (it would be a second equal-cost hop
-for every tenant trace, and nobody asked for that). A DC has two border leaves, so every pair with a DC has two fibres (`-A` on border leaf 1,
+processes of its two ends, with their actual Loopback0 endpoints bound in `90_bindings/80_fabric/`.
+Connected underlay sessions are not yet authored: this remains a model, not proof of packet forwarding.
+A DC has two border leaves, so every pair with a DC has two fibres (`-A` on border leaf 1,
 `-B` on border leaf 2); a cage has one edge, so a cage - cage pair has one (redundancy is whatever the ports allow).
 
 ```mermaid
@@ -366,7 +425,7 @@ pairs of the first sample keep their chains, which is the whole point of not bre
 Each DC server hosts C900 VMs (`DcimVirtualDevice`, template `LINUX-SVC`, `hosting_device` the server): `ktw1-vm-01` and
 `ktw1-vm-02` in DC-KTW1, `waw1-vm-01`, `gdn1-vm-01`. A VM has no cable (it is a VM, that is rather the point): its NIC `eth0` rides on the host port of its
 role (`parent_interface`, the first uplink `eno1`, the rule of `generators/virtual_nics.py`), and its address is in the
-segment of its DC. The application `c900-web-shop-p` (`01_dc/04_applications`) names the VMs as the instances of its
+segment of its DC. The application `c900-web-shop-p` (`90_bindings/40_applications/C900/`) names the VMs as the instances of its
 components: frontend (`c900-web-p`, the KTW1 VMs), backend (`c900-app-p`, WAW1), database (`c900-db-p`, GDN1).
 
 - **L1** of a VM is its NIC and the host's cabling: `vm - eth0 - eno1 - cable - panel - panel - leaf` (11 hops; or
@@ -469,12 +528,14 @@ A circuit ends on interfaces through ONE edge, `capabilities` (the shared edge `
 peer `DcimInterface`, min 1, max 2 on every circuit). An interface has only `capabilities` as a circuit edge; there is
 no `endpoints` field, no `TopologyCircuitEnd` generic and no `far_end` (we deleted them, it felt great). An end in an object file is the HFID of the
 interface `[device, interface]`: `["par-colo1-edge-01", "Ethernet1/3"]`, `["dx-c900-fra-lag", "lag1.1100"]`. So the objects must
-exist earlier, and the files load alphabetically and in order: `03_cloud/01_network` (accounts, gateways) ->
-`03_transport` (the transports, each with its ports, bundle and peerings nested, in that order) -> `04_circuits`
-(carriers, session circuits, hand-written BGP sessions), then the same in `04_saas`. Dependent objects are in a later
+exist earlier, and the files load alphabetically and in order: `20_C900/Cloud/01_network` (accounts, gateways) ->
+`20_C900/Cloud/03_transport` (transports with ports, bundle and peerings nested) ->
+`90_bindings/50_connections/Cloud` (carriers, session circuits, hand-written BGP sessions).
+The SaaS transports are in `20_C900/SaaS`, their sessions in `90_bindings/50_connections/SaaS`. Dependent objects are in a later
 file because the HFID index of objects from the same run can lag (eventual consistency, now in your YAML).
 
-The BGP sessions of the cloud legs are hand-written (`03_cloud/04_circuits/02_bgp_sessions.yml`, `04_saas/05_bgp_sessions.yml`: our
+The BGP sessions of the cloud legs are hand-written (`90_bindings/50_connections/Cloud/01_sessions/02_bgp_sessions.yml`,
+`90_bindings/50_connections/SaaS/05_bgp_sessions.yml`: our
 sub-interface or routed port in `capabilities`, our process); no generator builds them (type them by hand, like it is 2009), and `add_virtual_circuit` is not
 to build sessions for a circuit whose end is a cloud peering.
 
@@ -492,12 +553,12 @@ peering is an interface of the transport, and `scope: saas` lies on a transport 
 
 ## Pools (a convention, no fields)
 
-There are no pool fields (a convention, not a feature, in the grand tradition of "we agreed on it once"). The convention: our address is a /31 (a /30 for a tunnel pair) from `Handoff-<namespace>-IPv4`
-(the `ip_namespace` of the session circuit), our private AS from `PRIVATE-ASN32`; a provider that assigns the range
+There are no pool fields (a convention, not a feature, in the grand tradition of "we agreed on it once"). The convention: our address is a /31 (a /30 for a tunnel pair) from `Handoff-<SecurityZone.name>-IPv4`
+(the `security_zone` of the session circuit), our private AS from `PRIVATE-ASN32`; a provider that assigns the range
 itself (Azure /30, GCP /29, AWS VPN 169.254/30) gives it as the circuit's `link_prefix`. An object file cannot draw from
-a pool, so the allocated values are hard-coded (yes, hard-coded, we know): our address in the sub-interface (`02_colo/00_par1/02_routing/01_virtual_interfaces.yml`), our AS in the
+a pool, so the allocated values are hard-coded (yes, hard-coded, we know): our address in the sub-interface (`10_topology/COLO-PAR/02_routing/01_virtual_interfaces.yml`), our AS in the
 BGP process's `local_as`, the provider's address and AS in the peering's `peer_ip` and `peer_asn`
-(nested in the transport, `03_cloud/03_transport/00_direct_connects.yml`).
+(nested in the transport, `20_C900/Cloud/03_transport/00_direct_connects.yml`).
 
 ## Scenario coverage
 
@@ -524,23 +585,25 @@ Full = in the model and in the data; partial = a field exists but simplified; no
 | Azure spoke subscriptions on the hub VNet (cross-subscription peering, gateway transit) | full | `c900-azure-payments`, `-analytics`, `-identity`: a VNet each that `peers` `vnet-c900-weu`; the `allowed_prefixes` of `ergwa-c900-weu` list the hub and every spoke block |
 | Owner account of a SaaS resource | none | SaaS has no account; there are `owner` and `service_id` |
 
-## Loading from scratch
+## Loading onto an isolated branch
 
-The data loads once on a clean stack (the nested `segment_deployments` is not idempotent on a second load, so no, do not just run it again to see what happens). The schema
-removes kinds, which the server does not do in place, so the stack is built anew (turn it off and on again, but with Docker):
+Use an existing instance with the repository schema and bootstrap installed. Create an isolated branch first;
+do not load this sample onto a shared `main`. Supply the instance's token through the environment.
 
 ```bash
-uv run invoke clean-testcontainers
-INFRAHUB_TESTING_ENABLE_INTEGRATION=1 INFRAHUB_TESTING_KEEP_STACK=1 uv run invoke test-integration --tests tests/integration/test_01_setup.py
-export INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec
-uv run python tests/traversal/load_topology.py --branch main
+export INFRAHUB_ADDRESS=http://localhost:8000
+# Set INFRAHUB_API_TOKEN securely for your instance.
+uv run infrahubctl branch create full-topology-example
+uv run python tests/traversal/load_topology.py --branch full-topology-example
+# Equivalent ordinary sorted recursive load:
+uv run infrahubctl object load data/demos/00_full_topology --branch full-topology-example
 ```
 
-The SDK loads a directory recursively, the files sorted by name, in order, so the whole directory is ONE
-`infrahubctl object load data/demos/00_full_topology/`. The load is idempotent: every object is upserted by its
+The SDK loads the numbered directories recursively, files sorted by full path, in ONE object-load command.
+The load is idempotent: every object is upserted by its
 human-friendly id, including the realization of a segment in a DC (`ManagedSegmentDeployment`, named by its segment and
 its deployment) and the VLAN row of a switch (named by its device and its VLAN id), so a second load updates what is there.
-The small script `tests/traversal/load_topology.py` (the data directory holds no code) runs that one directory load;
+The small script `tests/traversal/load_topology.py` (the data directory holds no code) runs that ordinary directory load;
 `invoke check-model` and the test `tests/integration/test_03_full_topology.py` use the same script.
 
 ## Fast model test
@@ -603,7 +666,7 @@ SaaS tunnels (Zscaler, office - DC) exist only in L3 (a session circuit); their 
 
 ## Pod, internet through the ISP and extra pairs
 
-**Pod** (`01_dc`, pod `DC-KTW1-9-POD-1`): the server `ktw1-srv-01` (`bond0` on `eno1`/`eno2`) is dual-homed to the
+**Pod** (`10_topology/DC-KTW1`, pod `DC-KTW1-9-POD-1`): the server `ktw1-srv-01` (`bond0` on `eno1`/`eno2`) is dual-homed to the
 leaf pair `ktw1-leaf-01`/`-02` through a vPC (one `Port-Channel10` per leaf, the same `lag_id`, both with the segment
 `c900-web-p` in the `segments` edge, one authored `ManagedMLAG`), the leaves to the spine, the spine to the two
 border leaves, border leaf 1 to the edge through jack 2 of the panel, border leaf 2 on a direct cable. The VLAN row of
@@ -655,7 +718,7 @@ their edge (U 40), the office rack `BCN-OFFICE-RACK-01` the SD-WAN edge
 (U 40), and the same rack holds the campus switches (U 39 to U 36). The Lisbon rack `LIS-OFFICE-RACK-01` holds two edges (U 40, U 39) and the campus (U 38 to U 35). Only the ISP routers (`EXT-ISP-*`) have no rack: they stand at the providers, whose buildings the sample does
 not model (somewhere out there, in a rack nobody documents).
 
-**Internet through the ISP** (`06_internet`): INTERNET is one shared object (the whole internet as a single device; ambition has limits) that every internet connection goes
+**Internet through the ISP** (`90_bindings/90_internet`): INTERNET is one shared object (the whole internet as a single device; ambition has limits) that every internet connection goes
 through, "a kind of cable or switch for everyone". `TopologyInternet` (the singleton `INTERNET`, with the interface `bus`
 in the startup data: `data/bootstrap/03b_internet.yml`, because it does not change) sits in the topology tree under the
 label "Internet", next to the ISPs (`TopologyExternalProviders`; the label is a grouping place and INTERNET is the
@@ -688,7 +751,7 @@ transport (never a DC or a cage), I3 an ISP router with internet access has an a
 exchange through a firewall is not in the sample (the internet egress from the cloud and the office is a known gap of
 `checks/internet_egress.py`); the second ISP has no L3 (it is there to be a second ISP and nothing more).
 
-**Cage and office access** (`06_internet/02_circuits`): the cage and the office have their own ISP access next to
+**Cage and office access** (`90_bindings/90_internet/02_circuits`): the cage and the office have their own ISP access next to
 the DC's, following the pattern `INET-LUMEN-EQXFR2` of 30_all and `INET-<office>` of `add_sdwan_edge`:
 `par-colo1-edge-01:Ethernet1/14` - `par1-ispb-77302-isp-b` - `EXT-ISP-B-PE1:et-0/0/1` and `bcn-office-edge-01:GE1` -
 `bcn-office-ispa-48212-isp-a` - `EXT-ISP-A-PE1:et-0/0/1`. Both ISP routers already have an uplink to `INTERNET:bus` (rule I3), so
@@ -718,7 +781,7 @@ reached through `peers` of the ExpressRoute hub) and one negative pair (a segmen
 IPsec and always with IPsec (a GRE tunnel has no profile). Azure ExpressRoute: a `logical` circuit without
 `partner_account` is correct (the provider is the carrier's `provider`), so there is no new rule (a rare victory for restraint).
 
-**Clusters** (`01_dc/*/01_physical/03_servers_and_clusters.yml`, `03_cloud/05_clusters`): one cluster model, three vendors on
+**Clusters** (`10_topology/DC-*/01_physical/03_servers_and_clusters_*`, `20_C900/Cloud/05_clusters`): one cluster model, three vendors on
 purpose. Each DC has extra servers (cabled straight to the leaf pair) and a cluster, `ktw1-vsphere-cl01` (vSphere, three
 hosts), `waw1-proxmox-cl01` (Proxmox VE) and `gdn1-nutanix-cl01` (Nutanix AHV): the `software_image` (a release of a platform, as on a device) is the only thing that changes.
 A VM has no cluster field, because it is always hosted on a physical node and the node is in the cluster: the two web
@@ -729,7 +792,7 @@ account `c900-equinix-prod`), `eks-c900-euc1` (EKS on `vpc-c900-prod`, nodes in 
 payments subscription, nodes in `c900-payments-azure-p`). `checks/cluster.py` (rules CL1 to CL7) judges them; the inventory
 golden lists them. The Equinix cluster has no VM and no Fabric connection to the cage yet.
 
-**Virtual switches and SDNs** (`01_dc/*/03_tenant`): each cluster has a virtual switch, a distributed switch in KTW1, a
+**Virtual switches and SDNs** (`20_C900/DC-*/03_tenant`): each cluster has a virtual switch, a distributed switch in KTW1, a
 Linux bridge in WAW1 and an Open vSwitch in GDN1, with the host bond and the single ports as uplinks, a port group per tenant
 segment (its VLAN, its fabric segment and the VM NICs in it) and, in KTW1, the `nsx-uplink` port group of the NSX Edge nodes.
 A cluster may have an SDN: `ktw1-nsx` (NSX, Geneve, the two Edge VMs as gateway nodes) on the vSphere cluster, `ktw1-cilium`
@@ -738,7 +801,7 @@ Edge nodes, so none is listed), and the CNIs of the managed clusters, `eks-c900-
 with ranges of its own). It is one kind for all of them (`ManagedClusterSdn`). Not modelled: the Tier-0 and Tier-1 gateways
 of NSX and their BGP towards the fabric.
 
-**Campus below the edges** (`05_office`, `05_office/10_lis`): both offices have the same hand-written campus, because a
+**Campus below the edges** (`20_C900/Office`, `21_C901/Office`): both offices have the same hand-written campus, because a
 branch with one box and a prayer is not "full infra". The SD-WAN edge goes (GE3, and GE4 in Barcelona) to a distribution pair
 (`C9500-32C_DISTRIBUTION`, role `distribution-switch`), the pair is joined by its interlink and cabled in a square to an access
 pair (`C9300-48UXM_ACCESS_SWITCH`, role `access-switch`), and every access switch feeds two access points
@@ -748,7 +811,8 @@ schema (the template used to call an AP a `controller`, which it is not). It is 
 below the edge (U 39 down in Barcelona, U 38 down in Lisbon); the access points are ceiling devices without a rack. L1 from an
 access point to its edge is a traced pair (`full_topology__bcn__campus.txt`, `full_topology__lis__campus.txt`).
 
-**The second office, Lisbon** (`05_office/10_lis`): the customer is C901 (`Lusitana Retail Lda`, `00_common/01_customers.yml`),
+**The second office, Lisbon** (`21_C901/Office`): the customer is C901
+(`Lusitana Retail Lda`, `21_C901/00_identity/01_customers_00_01_OrganizationCustomer.yml`),
 because the name of an office is `{OWNER}-OFFICE` and unique, so C900 can have exactly one (the model has an opinion on this).
 Portugal is declared next to its metro, since the bootstrap countries stop at Spain. The two SD-WAN edges (`lis-office-edge-01/02`,
 `VCE-610_EDGE`, owner C901) are a pair with different providers: edge 1 has `lis-office-ispa-48213-isp-a` to `EXT-ISP-A-PE1:et-0/0/2`,
@@ -758,7 +822,8 @@ ISP-A access as the other tunnels). The tunnels of C901 end on C901's edges and 
 There is no Zscaler tunnel for Lisbon, because the Zscaler transport belongs to C900. The traversal config checks each edge reaches
 THE INTERNET through its own access (`office-lisbon-1`, `office-lisbon-2`) and the first edge reaches the DC (`full_topology__lis__dc.txt`).
 
-**Office, its edge and the tunnels** (`05_office`): the office has its own SD-WAN edge `bcn-office-edge-01` (template
+**Office, its edge and the tunnels** (`20_C900/Office`, `90_bindings/60_offices/C900/Office`):
+the office has its own SD-WAN edge `bcn-office-edge-01` (template
 `VCE-610_EDGE` as in `add_sdwan_edge`, `GE1` is the uplink to the ISP: `bcn-office-ispa-48212-isp-a`). Two `tunnel` circuits end on
 its interfaces `Tunnel1` and `Tunnel2` (parent `GE1`): `bcn-office-tunnel-ktw1` to `Tunnel4` of the edge `ktw1-edge-01` (the
 SD-WAN hub, the same internet access as the AWS VPN) and `bcn-office-tunnel1-zscaler-muc` to Zscaler. Both have the office among

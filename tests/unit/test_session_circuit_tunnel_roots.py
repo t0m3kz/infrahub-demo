@@ -21,12 +21,13 @@ _TUNNEL_QUERIES = [
 
 
 def _session_roots(path: Path) -> list[FieldNode]:
+    """The un-aliased ``TopologySessionCircuit`` roots (an aliased root, edge.gql ``public_origins``, is another read)."""
     document = parse(path.read_text())
     operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
     return [
         s
         for s in operation.selection_set.selections
-        if isinstance(s, FieldNode) and s.name.value == "TopologySessionCircuit"
+        if isinstance(s, FieldNode) and s.name.value == "TopologySessionCircuit" and s.alias is None
     ]
 
 

@@ -272,7 +272,7 @@ def test_one_dependency_per_source_and_target(directory: Path) -> None:
 
 @pytest.mark.parametrize(("directory", "dep"), _COMPONENT_TO_COMPONENT, ids=_COMPONENT_TO_COMPONENT_IDS)
 def test_dependency_stays_inside_one_environment(directory: Path, dep: dict[str, Any]) -> None:
-    """Prod and non-prod are never connected, so a call never crosses environments."""
+    """Prod and nonprod are never connected, so a call never crosses environments."""
     components = _catalogue(directory)
     assert components[dep["source"]].environment == components[dep["target"]].environment
 

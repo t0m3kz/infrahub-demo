@@ -2,11 +2,9 @@
 
   INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=... uv run python tests/traversal/load_topology.py [--branch main]
 
-The SDK loads a directory recursively, files sorted by name, one after the other, so the numbered folders and files of
-the sample are the dependency order. Loading is idempotent: every object is upserted by its human-friendly id, the
-realization of a segment in a DC (`ManagedSegmentDeployment`, named by its segment and its deployment) and the VLAN row of
-a switch (named by its device and its VLAN id) included, so a second load of the same directory, or a load onto a branch
-that inherited the data, updates what is there.
+The SDK loads a directory recursively, files sorted by name, one after the other. The numbered roots
+00_common, 10_topology, 20_C900, 21_C901 and 90_bindings provide the dependency order. Loading is idempotent:
+every object is upserted by its human-friendly id, including segment realizations and VLAN rows.
 
 Used by this script, `tests/traversal/check_model.py` (`invoke check-model`) and
 `tests/integration/test_03_full_topology.py`. No Python lives under data/ (tests/unit/test_no_python_in_data.py).
@@ -34,9 +32,10 @@ def object_load(address: str, token: str, branch: str) -> subprocess.CompletedPr
 
 async def apply(client: InfrahubClient, branch: str) -> str:
     """Load the topology onto the branch; returns what was done. Raises on a failed load."""
-    loaded = object_load(client.config.address, str(client.config.api_token), branch)
+    token = str(client.config.api_token)
+    loaded = object_load(client.config.address, token, branch)
     if loaded.returncode != 0:
-        tail = "\n".join((loaded.stdout + loaded.stderr).strip().splitlines()[-12:])
+        tail = "\n".join((loaded.stdout + loaded.stderr).replace(token, "[REDACTED]").strip().splitlines()[-12:])
         raise RuntimeError(f"infrahubctl object load failed (exit {loaded.returncode}):\n{tail}")
     return "objects loaded"
 

@@ -1,0 +1,24 @@
+# ManagedBGPPeering declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "BGP-KTW1-EDGE01-ISP-A"
+      description: "eBGP transit to the ISP: default route in, our public prefixes out"
+      session_type: EBGP
+      peering_role: regular
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "ktw1-edge-01-inet-bgp"
+        - "EXT-ISP-A-PE1-bgp"
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: ktw1-edge-01
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: EXT-ISP-A-PE1
+            name: et-0/0/0

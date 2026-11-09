@@ -1,0 +1,47 @@
+# ManagedBGP declarations in recursive dependency order.
+# The pod: each device an overlay process.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: ktw1-leaf-02-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200090003
+      router_id:
+        data:
+          address: "10.90.255.3/32"
+          ip_namespace: default
+          description: ktw1-leaf-02 loopback
+      capabilities: ["ktw1-leaf-02"]
+    - name: ktw1-spine-01-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200090004
+      router_id:
+        data:
+          address: "10.90.255.4/32"
+          ip_namespace: default
+          description: ktw1-spine-01 loopback
+      capabilities: ["ktw1-spine-01"]
+    - name: ktw1-bl-01-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200090005
+      router_id:
+        data:
+          address: "10.90.255.5/32"
+          ip_namespace: default
+          description: ktw1-bl-01 loopback
+      capabilities: ["ktw1-bl-01"]
+    - name: ktw1-bl-02-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200090006
+      router_id:
+        data:
+          address: "10.90.255.6/32"
+          ip_namespace: default
+          description: ktw1-bl-02 loopback
+      capabilities: ["ktw1-bl-02"]

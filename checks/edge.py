@@ -25,7 +25,7 @@ def warn_transit_without_internet_bgw(device: dict[str, Any]) -> list[str]:
     whose session renders but whose default cannot be reached from any DC (it
     has no site VIP, or the fabric has no evpn_rt_as).
     """
-    namespaces = [ns for ns in device_vrfs(device) if ns.get("namespace_type") == _INTERNET_NAMESPACE_TYPE]
+    namespaces = [ns for ns in device_vrfs(device) if ns.get("vrf_type") == _INTERNET_NAMESPACE_TYPE]
     if not namespaces:
         return []
 

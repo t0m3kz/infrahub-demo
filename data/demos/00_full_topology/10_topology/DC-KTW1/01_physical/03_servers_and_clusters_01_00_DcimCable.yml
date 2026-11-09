@@ -1,0 +1,54 @@
+# DcimCable declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-KTW1-SRV02-ENO1-LEAF01"
+      type: copper
+      deployment: "DC-KTW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ktw1-srv-02"
+            name: "eno1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ktw1-leaf-01"
+            name: "Ethernet1/5"
+    - name: "CBL-KTW1-SRV02-ENO2-LEAF02"
+      type: copper
+      deployment: "DC-KTW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ktw1-srv-02"
+            name: "eno2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ktw1-leaf-02"
+            name: "Ethernet1/5"
+    - name: "CBL-KTW1-SRV03-ENO1-LEAF01"
+      type: copper
+      deployment: "DC-KTW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ktw1-srv-03"
+            name: "eno1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ktw1-leaf-01"
+            name: "Ethernet1/6"
+    - name: "CBL-KTW1-SRV03-ENO2-LEAF02"
+      type: copper
+      deployment: "DC-KTW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ktw1-srv-03"
+            name: "eno2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ktw1-leaf-02"
+            name: "Ethernet1/6"

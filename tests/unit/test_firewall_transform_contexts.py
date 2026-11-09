@@ -12,6 +12,7 @@ import pytest
 
 from tests.unit.firewall_transform_helpers import _make_context_smoke_data, _make_fw, _render_template
 from transforms.config.firewall import _build_fw_interfaces
+from utils.routing_domain import RoutingDomainError
 
 
 class TestAddressFamilyAwareRendering:
@@ -71,8 +72,8 @@ _CTX_RULE = {
     "raw_protocol": "tcp",
     "port_start": 8443,
     "port_end": None,
-    "src_zone": "PROD-ZONE",
-    "dst_zone": "PROD-ZONE",
+    "src_zone": "PROD",
+    "dst_zone": "PROD",
     "src": "10.5.1.0/24",
     "dst": "10.5.2.0/24",
     "dst_port": "eq 8443",
@@ -97,6 +98,47 @@ def _policy_context(**extra: Any) -> dict[str, Any]:
 
 class TestPerContextPolicyRendering:
     """Rules placed in a context render inside that vsys/tenant/context, not at root."""
+
+    @pytest.mark.parametrize(
+        ("platform", "interface_marker", "route_marker"),
+        [
+            (
+                "paloalto_panos",
+                "set vsys c005-dedicated import network interface eth1",
+                "set network virtual-router vr-c005-dedicated routing-table ip static-route rt-1 destination 10.9.0.0/24",
+            ),
+            (
+                "checkpoint_gaia",
+                "set virtual-system c005-dedicated interface eth1",
+                "set virtual-system c005-dedicated\nset static-route 10.9.0.0/24",
+            ),
+            (
+                "juniper_junos",
+                "set tenants c005-dedicated routing-instances ri-c005-dedicated interface eth1.0",
+                "set tenants c005-dedicated routing-instances ri-c005-dedicated routing-options static route 10.9.0.0/24",
+            ),
+        ],
+    )
+    def test_authored_interfaces_and_routes_use_the_context_table(
+        self, platform: str, interface_marker: str, route_marker: str
+    ) -> None:
+        """A context owns authored /30 interfaces and routes without generated /29 transit legs."""
+        interface = {
+            **TestAddressFamilyAwareRendering._FW_IFACE_V4,
+            "context_name": "c005-dedicated",
+            "security_zone": {"name": "PROD"},
+        }
+        context = _policy_context(
+            authored_interfaces=["eth1"],
+            routes=[{"destination": "10.9.0.0/24", "nexthop": "10.0.0.2", "interface": "eth1", "vrf": "PROD"}],
+            nat=[],
+            isolation=[],
+        )
+
+        output = _render_template(platform, name="fw1", contexts=[context], fw_interfaces=[interface])
+
+        assert interface_marker in output
+        assert route_marker in output
 
     @pytest.mark.parametrize(
         "platform,scope_marker,rule_marker",
@@ -195,3 +237,63 @@ class TestParentInterfaceOnlyForSubInterfaces:
         (sub,) = _build_fw_interfaces(self._interfaces("ethernet1/1.210", "ethernet1/1"), [])
 
         assert sub["parent_interface"] == {"name": "ethernet1/1"}
+        assert sub["vlan_id"] == 210
+
+    def test_direct_zone_is_rendered_without_segment_membership(self) -> None:
+        """A routed firewall interface keeps its own zone in default IPAM."""
+        interfaces = self._interfaces("ethernet1/1.210", "ethernet1/1")
+        zone = {"id": "zone-prod", "name": "PROD", "vrf_type": "prod", "l3_vni": 60000}
+        interfaces[0]["vrf"] = {"id": "vrf-dc10-prod", "security_zone": zone}
+        interfaces[0]["ip_address"]["ip_namespace"] = {"name": "default"}
+
+        (interface,) = _build_fw_interfaces(interfaces, [])
+
+        assert interface["security_zone"] == zone
+        assert interface["vlan_id"] == 210
+
+    def test_ipam_namespace_is_not_a_firewall_zone(self) -> None:
+        """An underlay address does not gain a zone from an IPAM namespace label."""
+        interfaces = self._interfaces("eth0", "Ethernet5")
+        interfaces[0]["ip_address"]["ip_namespace"] = {"name": "PROD", "vrf_type": "prod"}
+
+        (interface,) = _build_fw_interfaces(interfaces, [])
+
+        assert interface["security_zone"] is None
+        assert interface["vlan_id"] is None
+
+    def test_conflicting_interface_and_prefix_zones_are_refused(self) -> None:
+        """The interface's own VRF zone cannot hide a contradictory handoff circuit VRF."""
+        interfaces = self._interfaces("eth0", "Ethernet5")
+        interfaces[0]["vrf"] = {"id": "vrf-prod", "security_zone": {"id": "zone-prod", "name": "PROD"}}
+        interfaces[0]["capabilities"] = [
+            {
+                "typename": "TopologySessionCircuit",
+                "circuit_type": "handoff",
+                "vrf": {"id": "vrf-nonprod", "security_zone": {"id": "zone-nonprod", "name": "NONPROD"}},
+            }
+        ]
+
+        with pytest.raises(RoutingDomainError, match="conflicting security zones"):
+            _build_fw_interfaces(interfaces, [])
+
+    def test_authored_interface_keeps_its_native_context_owner(self) -> None:
+        """An authored routed interface belongs to its context without a generated transit VLAN."""
+        interfaces = self._interfaces("ethernet1/1.210", "ethernet1/1")
+        interfaces[0]["capabilities"] = [
+            {"id": "ctx-prod", "name": "prod-policy", "typename": "ManagedFirewallContext"}
+        ]
+
+        (interface,) = _build_fw_interfaces(interfaces, [])
+
+        assert interface["context_name"] == "prod-policy"
+
+    def test_authored_interface_cannot_belong_to_two_contexts(self) -> None:
+        """A routed interface cannot silently choose one of two context routing tables."""
+        interfaces = self._interfaces("ethernet1/1.210", "ethernet1/1")
+        interfaces[0]["capabilities"] = [
+            {"id": "ctx-a", "name": "policy-a", "typename": "ManagedFirewallContext"},
+            {"id": "ctx-b", "name": "policy-b", "typename": "ManagedFirewallContext"},
+        ]
+
+        with pytest.raises(ValueError, match="belongs to multiple contexts"):
+            _build_fw_interfaces(interfaces, [])

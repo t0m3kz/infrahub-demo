@@ -98,7 +98,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
         "__typename": "TopologySessionCircuit",
         "circuit_type": value("handoff"),
         "name": value("HANDOFF-C005-DC10-AWS-EUC1"),
-        "ip_namespace": {"node": {"id": "ns-prod", "name": value("PROD")}},
+        "vrf": {"node": {"id": "vrf-prod", "security_zone": {"node": {"id": "zone-prod", "name": value("PROD")}}}},
         "password": {"node": {"name": value("eqx-fr2-aws-vif-key")}},
         "locations": {
             "edges": [
@@ -237,7 +237,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
     assert (virtual_end["kind"], virtual_end["address"], virtual_end["cabled"]) == ("DcimVirtualInterface", None, False)
     assert (virtual_end["parent_id"], virtual_end["parent_name"]) == ("if-parent", "Ethernet1/13")
     assert [c["circuit_id"] for c in virtual_end["carriers"]] == ["XC-EQXFR2-AWS-EUC1"]
-    assert (handoff["ip_namespace"], handoff["password"]) == (
+    assert (handoff["security_zone"], handoff["password"]) == (
         "PROD",
         "eqx-fr2-aws-vif-key",
     )
@@ -246,7 +246,7 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
 
 
 async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_the_other_kinds() -> None:
-    """A tunnel or an interconnect has no namespace, limit, key or cloud endpoint."""
+    """A tunnel or an interconnect has no security zone, key or cloud endpoint."""
     tunnel = {
         "id": "vc2",
         "__typename": "TopologySessionCircuit",
@@ -266,4 +266,4 @@ async def test_fetch_interconnect_inventory_leaves_the_handoff_fields_empty_on_t
     (circuit,) = inventory["virtual"]
     assert circuit["circuit_type"] == "tunnel"
     assert (circuit["owner"], circuit["ends"], circuit["carrier"], circuit["end_nodes"]) == (None, [], [], [])
-    assert (circuit["ip_namespace"], circuit["password"]) == (None, None)
+    assert (circuit["security_zone"], circuit["password"]) == (None, None)

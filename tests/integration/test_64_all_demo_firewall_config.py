@@ -25,7 +25,7 @@ generators build through each firewall context (utils/exchange_transit.py), a
 DC's and the FR2 colocation zone's alike:
 CheckFirewall on a DC10 (Check Point), DC11 and FR2 (PAN-OS) member, the rendered
 firewall config of every site (leg interface, VIP, default route via the INTERNET
-leg, PROD/NON-PROD isolation), a DC11 border-leaf config carrying the
+leg, PROD/NONPROD isolation), a DC11 border-leaf config carrying the
 transit VRF routes, and the FR edges' config carrying the zone's transit legs. Everything is derived from the loaded graph and from
 all_demo_firewall_constants' environment-driven expectations.
 
@@ -338,7 +338,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         Per leg: the sub-interface, the firewall VIP (/29 .4) and, per vendor,
         the member address (Check Point) and the default route 0.0.0.0/0 via the
         INTERNET leg's border-leaf anycast (/29 .1). No context holds both PROD and
-        NON-PROD (each tenant namespace has its own), so no PROD<->NON-PROD deny
+        NONPROD (each tenant namespace has its own), so no PROD<->NONPROD deny
         is rendered anywhere.
         """
         logging.info("=== %s - Step 4: Render transit legs ===", SCENARIO_NAME)
@@ -390,7 +390,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     )
                 for name in deny_names:
                     if name in rendered:
-                        errors.append(f"{dc}/{device}: '{name}' present, no context holds both PROD and NON-PROD")
+                        errors.append(f"{dc}/{device}: '{name}' present, no context holds both PROD and NONPROD")
 
         assert rendered_count, "no firewall config was rendered"
         assert not errors, f"rendered transit legs on branch '{scenario_branch}' are wrong:\n" + "\n".join(
@@ -488,7 +488,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         """A permit to the internet zone (destination_zone, ALL_DEMO_INTERNET_EGRESS_RULES).
 
         Firewall: every member of the DC's shared context renders the rule in
-        that context's vsys from the source's zone to INTERNET-ZONE, source the
+        that context's vsys from the source's zone to INTERNET, source the
         segment's prefix, destination any. Leaf: the ACL of the source segment's
         VLAN denies every NON_INTERNET_PREFIXES range from the segment before
         the `permit ... any`, and has no `permit <proto> <src> any` ahead of
@@ -641,8 +641,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                         base = f"set vsys {name} rulebase nat rules snat-{zone}"
                         if f"{base} source-translation dynamic-ip-and-port translated-address {snat}" not in rendered:
                             errors.append(f"{dc}/{device}: no PAN-OS SNAT rule for zone {zone} translating to {snat}")
-                        if f"{base} to INTERNET-ZONE" not in rendered:
-                            errors.append(f"{dc}/{device}: SNAT rule for zone {zone} does not go to INTERNET-ZONE")
+                        if f"{base} to INTERNET" not in rendered:
+                            errors.append(f"{dc}/{device}: SNAT rule for zone {zone} does not go to INTERNET")
                     if not re.search(rf"layer3 units \S+ ip {re.escape(snat)}/32$", rendered, re.MULTILINE):
                         errors.append(f"{dc}/{device}: {snat}/32 is not a secondary IP on the INTERNET unit")
                 else:

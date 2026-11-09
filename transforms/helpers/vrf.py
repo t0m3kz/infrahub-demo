@@ -51,7 +51,7 @@ class VrfRequirements:
 
 def device_vrfs(data: dict[str, Any]) -> list[dict[str, Any]]:
     """The namespace dicts (name, l3_vni, namespace_type) of the ManagedVRF instances the device is a member of."""
-    return [vrf["namespace"] for vrf in device_memberships(data) if vrf.get("namespace")]
+    return [vrf["security_zone"] for vrf in device_memberships(data) if vrf.get("security_zone")]
 
 
 def l3_vrf_names(lisp: dict[str, Any] | None, vxlan: dict[str, Any] | None) -> list[str]:
@@ -80,7 +80,7 @@ def svi_vrfs(interfaces: list[dict[str, Any]] | None) -> dict[int, str | None]:
     for iface in interfaces or []:
         vlan_id = svi_vlan_id(iface.get("name"))
         if iface.get("role") == SVI_ROLE and vlan_id is not None:
-            found[vlan_id] = ((iface.get("vrf") or {}).get("namespace") or {}).get("name")
+            found[vlan_id] = ((iface.get("vrf") or {}).get("security_zone") or {}).get("name")
     return found
 
 

@@ -1,7 +1,7 @@
 """Integration test: the full-topology sample on the stack's main, then the traversal checks over it.
 
-Loads ``data/demos/00_full_topology`` with the loader the sample README documents (``tests/traversal/load_topology.py``: one ``infrahubctl object load``
-of the directory, then the VLAN-domain row) and runs the cases of ``tests/traversal/cases.yml`` through the functions of
+Loads ``data/demos/00_full_topology`` with the ordinary sorted SDK loader the sample README documents
+(``tests/traversal/load_topology.py``) and runs the cases of ``tests/traversal/cases.yml`` through the functions of
 ``tests/traversal/check_model.py`` (the same assertions as ``uv run invoke check-model``, no second copy of the logic).
 Part of ``invoke test-integration-fast``; NOT part of the 30_all subset: the sample lands on main, and 30_all builds
 its branch from main.

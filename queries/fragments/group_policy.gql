@@ -173,14 +173,15 @@ fragment SegmentGroupPolicyFields on ManagedNetworkSegment {
   name { value }
   isolation_mode { value }
   owner { node { org_id { value } } }
-  security_zone { node { name { value } } }
+  security_zone { node { ...RoutingZoneFields } }
   security_tag { node { id name { value } group_id { value } } }
   gateway {
     node {
       ip_prefix {
         node {
+
           prefix { value }
-          ip_namespace { node { name { value } namespace_type { value } } }
+          ip_namespace { node { name { value }  } }
         }
       }
     }

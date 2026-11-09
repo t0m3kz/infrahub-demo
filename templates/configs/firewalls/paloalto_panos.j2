@@ -50,7 +50,7 @@ set network interface ethernet {{ iface.parent_interface.name }} layer3 units {{
 set network interface ethernet {{ iface_ref }} comment "{{ iface.description }}"
 {%- endif %}
 {%- if iface.security_zone %}
-set zone {{ iface.security_zone.name }} network layer3 {{ iface_ref }}
+set {{ ('vsys ' ~ iface.context_name ~ ' ') if iface.get('context_name') else '' }}zone {{ iface.security_zone.name }} network layer3 {{ iface_ref }}
 {%- endif %}
 {%- else %}
 set network interface ethernet {{ iface.name }} layer3 {{ 'ipv6' if iface.ip_address and ':' in (iface.virtual_ip or iface.ip_address.address) else 'ipv4' }} addr {{ (iface.virtual_ip or iface.ip_address.address) if iface.ip_address else '' }}
@@ -112,10 +112,14 @@ set vsys {{ context.name }}
 {%- if context.tenant_name %}
 set vsys {{ context.name }} display-name "{{ context.tenant_name }}"
 {%- endif %}
+{%- for iface in fw_interfaces if iface.get('context_name') == context.name %}
+set vsys {{ context.name }} import network interface {{ iface.name }}
+set network virtual-router vr-{{ context.name }} interface {{ iface.name }}
+{%- endfor %}
 {#- Transit legs: one VLAN sub-interface per VRF (zone), all in the vsys's own
     virtual router — a global router cannot hold two contexts' 0/0. The HA
     pair's VIP is the interface address (config sync gives both members it). #}
-{%- if context.legs %}
+{%- if context.legs or context.get('authored_interfaces') %}
 {%- set vr = 'vr-' + context.name %}
 {%- for leg in context.legs %}
 {%- set leg_ref = leg.parent_interface.name + '.' + leg.vlan | string %}
@@ -154,7 +158,7 @@ set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix 
 {%- endfor %}
 {%- for context in contexts if context.isolation %}
 #
-# --- Zone isolation (PROD <-> NON-PROD, MANAGEMENT -> tenants) in vsys {{ context.name }} ---
+# --- Zone isolation (PROD <-> NONPROD, MANAGEMENT -> tenants) in vsys {{ context.name }} ---
 {%- for deny in context.isolation %}
 set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} from {{ deny.src_zone }}
 set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} to {{ deny.dst_zone }}

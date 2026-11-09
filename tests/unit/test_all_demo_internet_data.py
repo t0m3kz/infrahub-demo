@@ -2,7 +2,7 @@
 
 The loader accepts these files as long as every reference resolves, so a
 peering wired to the wrong circuit's interfaces, a missing MD5 key, or an
-address outside the INTERNET namespace would only surface as a broken config
+interface outside the INTERNET security zone would only surface as a broken config
 artifact or a failed edge check in the Proposed Change.
 """
 
@@ -28,7 +28,9 @@ def _interface_ips() -> dict[tuple[str, str], ipaddress.IPv4Interface]:
     """Map (device, interface) to its transit address."""
     ips = {}
     for iface in _objects("DcimPhysicalInterface"):
-        assert iface["ip_address"]["data"]["ip_namespace"] == "INTERNET", iface
+        assert iface["security_zone"] == "INTERNET", iface
+        assert iface["ip_address"]["data"]["ip_namespace"] == "default", iface
+        assert "security_zone" not in iface["ip_address"]["data"], iface
         ips[(iface["device"], iface["name"])] = ipaddress.IPv4Interface(iface["ip_address"]["data"]["address"])
     return ips
 
@@ -66,7 +68,7 @@ def test_peering_rides_its_circuit(circuit_id: str) -> None:
 
 @pytest.mark.parametrize("circuit_id", sorted(_circuits()))
 def test_transit_link_is_one_31_with_isp_on_even(circuit_id: str) -> None:
-    """Both ends share a /31 in INTERNET and the ISP takes the even address."""
+    """Both ends share a /31 in default IPAM, owned by INTERNET, and the ISP takes the even address."""
     circuit = _circuits()[circuit_id]
     ips = _interface_ips()
     cage_end, isp_end = circuit["capabilities"]
@@ -98,7 +100,7 @@ def test_isp_router_id_is_its_transit_address() -> None:
     by_device = {device: ip for (device, _), ip in _interface_ips().items() if device not in _CAGE_EDGES}
     for bgp in _objects("ManagedBGP"):
         (device,) = bgp["capabilities"]
-        assert bgp["router_id"] == [str(by_device[device]), "INTERNET"], bgp["name"]
+        assert bgp["router_id"] == [str(by_device[device]), "default"], bgp["name"]
 
 
 def test_transit_circuits_are_unowned() -> None:

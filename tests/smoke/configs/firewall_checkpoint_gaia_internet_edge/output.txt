@@ -8,12 +8,12 @@ add virtual-system name shared-dc1-xfw-prod
 set interface ethernet1/1.3002 vlan 3002
 set interface ethernet1/1.3002 state on
 set interface ethernet1/1.3002 ipv4-address 100.66.0.21 mask-length 29
-set interface ethernet1/1.3002 security-zone PROD-ZONE
+set interface ethernet1/1.3002 security-zone PROD
 set virtual-system shared-dc1-xfw-prod interface ethernet1/1.3002
 set interface ethernet1/1.3402 vlan 3402
 set interface ethernet1/1.3402 state on
 set interface ethernet1/1.3402 ipv4-address 100.66.32.21 mask-length 29
-set interface ethernet1/1.3402 security-zone INTERNET-ZONE
+set interface ethernet1/1.3402 security-zone INTERNET
 set virtual-system shared-dc1-xfw-prod interface ethernet1/1.3402
 set virtual-system shared-dc1-xfw-prod
 set static-route 10.1.0.0/24 nexthop gateway address 100.66.0.17 on
@@ -22,21 +22,21 @@ set static-route default nexthop gateway address 100.66.32.17 on
 mgmt_cli add host name "SNAT-shared-dc1-xfw-prod-C006-P-DC10" ip-address "198.51.100.9"
 mgmt_cli add network name "SRC-shared-dc1-xfw-prod-C006-P-DC10-1" subnet "10.2.0.0" mask-length 24
 mgmt_cli add group name "SRC-shared-dc1-xfw-prod-C006-P-DC10" members.1 "SRC-shared-dc1-xfw-prod-C006-P-DC10-1"
-mgmt_cli add nat-rule package "shared-dc1-xfw-prod" position "top" original-source "SRC-shared-dc1-xfw-prod-C006-P-DC10" original-destination "INTERNET-ZONE" translated-source "SNAT-shared-dc1-xfw-prod-C006-P-DC10" method "hide" install-on "dc1-fw-ha"
+mgmt_cli add nat-rule package "shared-dc1-xfw-prod" position "top" original-source "SRC-shared-dc1-xfw-prod-C006-P-DC10" original-destination "INTERNET" translated-source "SNAT-shared-dc1-xfw-prod-C006-P-DC10" method "hide" install-on "dc1-fw-ha"
 mgmt_cli add host name "SNAT-shared-dc1-xfw-prod" ip-address "198.51.100.5"
-mgmt_cli add nat-rule package "shared-dc1-xfw-prod" position "top" original-source "PROD-ZONE" original-destination "INTERNET-ZONE" translated-source "SNAT-shared-dc1-xfw-prod" method "hide" install-on "dc1-fw-ha"
+mgmt_cli add nat-rule package "shared-dc1-xfw-prod" position "top" original-source "PROD" original-destination "INTERNET" translated-source "SNAT-shared-dc1-xfw-prod" method "hide" install-on "dc1-fw-ha"
 !
 ! --- Security Policies in virtual system shared-dc1-xfw-prod ---
 set virtual-system shared-dc1-xfw-prod
 ! --- Security Policy Rules ---
 add service-tcp name svc-tcp-443 port 443
 add access-rule layer "Network" position 10 name "a-to-internet" action accept source 10.1.0.0/24 destination Any service svc-tcp-443 track None
-set access-rule layer "Network" name "a-to-internet" source PROD-ZONE
-set access-rule layer "Network" name "a-to-internet" destination INTERNET-ZONE
+set access-rule layer "Network" name "a-to-internet" source PROD
+set access-rule layer "Network" name "a-to-internet" destination INTERNET
 add service-tcp name svc-tcp-80 port 80
 add access-rule layer "Network" position 20 name "b-to-internet" action accept source 10.2.0.0/24 destination Any service svc-tcp-80 track None
-set access-rule layer "Network" name "b-to-internet" source PROD-ZONE
-set access-rule layer "Network" name "b-to-internet" destination INTERNET-ZONE
+set access-rule layer "Network" name "b-to-internet" source PROD
+set access-rule layer "Network" name "b-to-internet" destination INTERNET
 add access-rule layer "Network" position 9990 name "implicit-deny-all" action drop source Any destination Any service Any track Log
 !
 !

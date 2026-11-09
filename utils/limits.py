@@ -17,6 +17,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# PAN-OS HA pairs sharing a broadcast domain require distinct group IDs (1..63).
+FIREWALL_HA_GROUP_POOL = "Firewall-HA-Group-ID"
+FIREWALL_HA_GROUP_MIN = 1
+FIREWALL_HA_GROUP_MAX = 63
+
 # --- 1. Design ranges and limits -------------------------------------------------------------------------------
 
 # VLAN bands of a border leaf's VLAN table (get_vlans de-duplicates by VLAN ID, so no two bands may overlap):

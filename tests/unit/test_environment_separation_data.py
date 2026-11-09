@@ -1,4 +1,4 @@
-"""Prod and non-prod never meet in the 30_all data.
+"""Prod and nonprod never meet in the 30_all data.
 
 A segment, a VM and the application component running on it each carry an
 environment, directly or through the customer footprint they sit on. The

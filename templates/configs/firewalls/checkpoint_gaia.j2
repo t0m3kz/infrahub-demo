@@ -72,10 +72,13 @@ add virtual-system name {{ context.name }}
 {%- if context.tenant_name %}
 set virtual-system {{ context.name }} comments "{{ context.tenant_name }}"
 {%- endif %}
+{%- for iface in fw_interfaces if iface.get('context_name') == context.name %}
+set virtual-system {{ context.name }} interface {{ iface.name }}
+{%- endfor %}
 {#- Transit legs: one VLAN interface per VRF (security zone) in the virtual
     system, whose own routing table holds the routes. Each member keeps its
     own address; the cluster VIP (below, in ClusterXL) is the gateway. #}
-{%- if context.legs %}
+{%- if context.legs or context.get('authored_interfaces') %}
 {%- for leg in context.legs %}
 {%- set leg_name = leg.parent_interface.name + '.' + leg.vlan | string %}
 set interface {{ leg_name }} vlan {{ leg.vlan }}
@@ -108,7 +111,7 @@ mgmt_cli add nat-rule package "{{ context.name }}" position "top" original-sourc
 {%- endfor %}
 !
 {%- for context in contexts if context.isolation %}
-! --- Zone isolation (PROD <-> NON-PROD, MANAGEMENT -> tenants) in virtual system {{ context.name }} ---
+! --- Zone isolation (PROD <-> NONPROD, MANAGEMENT -> tenants) in virtual system {{ context.name }} ---
 set virtual-system {{ context.name }}
 {%- for deny in context.isolation %}
 add access-rule layer "Network" position top name "deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }}" action drop source {{ deny.src_zone }} destination {{ deny.dst_zone }} service Any track Log

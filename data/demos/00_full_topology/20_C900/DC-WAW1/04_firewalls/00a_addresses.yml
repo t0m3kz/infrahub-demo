@@ -1,0 +1,39 @@
+# Complete dedicated leg addresses, management endpoints and existing-pool SNAT reservation.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "100.66.0.41/29"
+      ip_namespace: "default"
+    - address: "100.66.0.44/29"
+      ip_namespace: "default"
+    - address: "100.66.0.45/29"
+      ip_namespace: "default"
+    - address: "100.66.0.46/29"
+      ip_namespace: "default"
+    - address: "100.66.32.9/29"
+      ip_namespace: "default"
+    - address: "100.66.32.12/29"
+      ip_namespace: "default"
+    - address: "100.66.32.13/29"
+      ip_namespace: "default"
+    - address: "100.66.32.14/29"
+      ip_namespace: "default"
+    - address: "100.66.48.1/29"
+      ip_namespace: "default"
+    - address: "100.66.48.4/29"
+      ip_namespace: "default"
+    - address: "100.66.48.5/29"
+      ip_namespace: "default"
+    - address: "100.66.48.6/29"
+      ip_namespace: "default"
+    - address: "172.16.0.0/32"
+      ip_namespace: default
+      description: Management IP for c900-waw1-fw-01-prod
+    - address: "172.16.0.1/32"
+      ip_namespace: default
+      description: Management IP for c900-waw1-fw-02-prod
+    - address: "192.0.2.0/32"
+      ip_namespace: "default"
+      description: SNAT address of c900-waw1-fw-01-waw1-fw-02-prod

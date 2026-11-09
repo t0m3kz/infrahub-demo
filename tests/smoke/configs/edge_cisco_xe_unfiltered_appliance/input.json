@@ -800,19 +800,6 @@
                                     "node": {
                                       "address": {
                                         "value": "10.255.9.0/31"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "PROD"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60000
-                                          },
-                                          "namespace_type": {
-                                            "value": "prod"
-                                          }
-                                        }
                                       }
                                     }
                                   },
@@ -820,6 +807,34 @@
                                     "node": {
                                       "name": {
                                         "value": "eg-am-ne02"
+                                      }
+                                    }
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
                                       }
                                     }
                                   }
@@ -835,19 +850,6 @@
                                     "node": {
                                       "address": {
                                         "value": "10.255.9.1/31"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "PROD"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60000
-                                          },
-                                          "namespace_type": {
-                                            "value": "prod"
-                                          }
-                                        }
                                       }
                                     }
                                   },
@@ -857,6 +859,34 @@
                                         "value": "EXT-AWS-DX-FR2"
                                       },
                                       "__typename": "DcimPhysicalDevice"
+                                    }
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
+                                      }
                                     }
                                   }
                                 }
@@ -998,19 +1028,6 @@
                                     "node": {
                                       "address": {
                                         "value": "10.255.8.1/31"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "PROD"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60000
-                                          },
-                                          "namespace_type": {
-                                            "value": "prod"
-                                          }
-                                        }
                                       }
                                     }
                                   },
@@ -1018,6 +1035,34 @@
                                     "node": {
                                       "name": {
                                         "value": "eg-am-ne02"
+                                      }
+                                    }
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
                                       }
                                     }
                                   }
@@ -1033,19 +1078,6 @@
                                     "node": {
                                       "address": {
                                         "value": "10.255.8.0/31"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "PROD"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60000
-                                          },
-                                          "namespace_type": {
-                                            "value": "prod"
-                                          }
-                                        }
                                       }
                                     }
                                   },
@@ -1055,6 +1087,34 @@
                                         "value": "eg-fr201"
                                       },
                                       "__typename": "DcimPhysicalDevice"
+                                    }
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
+                                      }
                                     }
                                   }
                                 }
@@ -1280,13 +1340,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "PROD"
-                          },
-                          "l3_vni": {
-                            "value": 60000
-                          },
-                          "namespace_type": {
-                            "value": "prod"
+                            "value": "default"
                           }
                         }
                       }
@@ -1294,6 +1348,34 @@
                   },
                   "capabilities": {
                     "edges": []
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-PROD",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "id": "fixture-zone-PROD",
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "vrf_type": {
+                            "value": "prod"
+                          },
+                          "l3_vni": {
+                            "value": 60000
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               },
@@ -1320,13 +1402,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "PROD"
-                          },
-                          "l3_vni": {
-                            "value": 60000
-                          },
-                          "namespace_type": {
-                            "value": "prod"
+                            "value": "default"
                           }
                         }
                       }
@@ -1334,6 +1410,34 @@
                   },
                   "capabilities": {
                     "edges": []
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-PROD",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "id": "fixture-zone-PROD",
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "vrf_type": {
+                            "value": "prod"
+                          },
+                          "l3_vni": {
+                            "value": 60000
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -1362,16 +1466,26 @@
               {
                 "node": {
                   "__typename": "ManagedVRF",
-                  "namespace": {
+                  "id": "fixture-vrf-fixture-deployment-PROD",
+                  "deployment": {
                     "node": {
+                      "id": "fixture-deployment",
+                      "name": {
+                        "value": "fixture-deployment"
+                      }
+                    }
+                  },
+                  "security_zone": {
+                    "node": {
+                      "id": "fixture-zone-PROD",
                       "name": {
                         "value": "PROD"
                       },
+                      "vrf_type": {
+                        "value": "prod"
+                      },
                       "l3_vni": {
                         "value": 60000
-                      },
-                      "namespace_type": {
-                        "value": "prod"
                       }
                     }
                   }

@@ -1,0 +1,20 @@
+---
+# The workload's default route names the actual cabled gateway port.
+# This structural route edge does not assert firewall permission or deployed forwarding.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedStaticRoute
+  data:
+    - name: par-colo1-srv-01-default
+      prefix: "0.0.0.0/0"
+      next_hop: "10.90.4.1"
+      exported: false
+      status: active
+      interface:
+        kind: DcimPhysicalInterface
+        data: {device: par-colo1-srv-01, name: eno1}
+      next_hop_interface:
+        kind: DcimPhysicalInterface
+        data: {device: par-colo1-xfw-01, name: ethernet1/2}
+      capabilities: ["par-colo1-srv-01"]

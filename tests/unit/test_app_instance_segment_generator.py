@@ -54,7 +54,13 @@ def _component_response(
     }
 
 
-_VXLAN_SEGMENT: dict[str, Any] = {"id": "seg-1", "name": "seg", "typename": "ManagedVxlanSegment"}
+_VXLAN_SEGMENT: dict[str, Any] = {
+    "id": "seg-1",
+    "name": "seg",
+    "typename": "ManagedVxlanSegment",
+    "environment": "p",
+    "security_zone": {"id": "zone-prod", "name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
+}
 
 
 def _iface(name: str, *, role: str = "uplink", cabled: bool = True, iface_id: str | None = None) -> MagicMock:
@@ -100,6 +106,7 @@ class TestGenerate:
         )
         gen._reconcile_segment_interface_tags = AsyncMock(return_value=(added, removed))
         gen._reconcile_segment_vlans_locked = AsyncMock(return_value=False)
+        gen.ensure_segment_addressing = AsyncMock()
         # The VRF pass over the domains' devices has its own tests (test_vrf_callers.py).
         gen.reconcile_vrfs = AsyncMock()
         gen._domain_member_device_ids = AsyncMock(return_value=[])

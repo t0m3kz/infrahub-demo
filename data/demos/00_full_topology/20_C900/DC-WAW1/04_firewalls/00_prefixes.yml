@@ -1,0 +1,18 @@
+# Dedicated internal service leg reservations; ordinary loading reserves these ranges without allocator identifiers.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "100.66.0.40/29"
+      ip_namespace: "default"
+      role: technical
+      member_type: address
+    - prefix: "100.66.32.8/29"
+      ip_namespace: "default"
+      role: technical
+      member_type: address
+    - prefix: "100.66.48.0/29"
+      ip_namespace: "default"
+      role: technical
+      member_type: address

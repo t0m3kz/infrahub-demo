@@ -17,6 +17,36 @@ from ..protocols import SecurityZone
 # zone name -> zone id, and segment id -> zone name already in place.
 _ZONE_IDS: WeakKeyDictionary[Any, dict[str, str]] = WeakKeyDictionary()
 _ZONED_SEGMENTS: WeakKeyDictionary[Any, dict[str, str]] = WeakKeyDictionary()
+_ZONE_METADATA: WeakKeyDictionary[Any, dict[str, dict[str, Any]]] = WeakKeyDictionary()
+
+
+async def ensure_segment_security_zone(client: Any, segment: dict[str, Any]) -> None:
+    """Resolve and hydrate the segment's authority before addressing or reconciliation."""
+    current = segment.get("security_zone") or {}
+    name = await ensure_security_zone(
+        client,
+        kind=segment.get("typename"),
+        segment_id=segment.get("id"),
+        environment=segment.get("environment"),
+        current_zone=current.get("name"),
+    )
+    if name is None:
+        raise ValueError("Segment security zone could not be resolved")
+    if current.get("name") == name and all(current.get(key) is not None for key in ("id", "vrf_type", "l3_vni")):
+        return
+    metadata = _ZONE_METADATA.setdefault(client, {})
+    if name not in metadata:
+        zones = await client.filters(kind=SecurityZone, name__value=name)
+        if not zones:
+            raise LookupError(f"Security zone {name} not found")
+        zone = zones[0]
+        metadata[name] = {
+            "id": zone.id,
+            "name": zone.name.value,
+            "vrf_type": zone.vrf_type.value,
+            "l3_vni": zone.l3_vni.value,
+        }
+    segment["security_zone"] = metadata[name].copy()
 
 
 async def ensure_security_zone(
@@ -66,6 +96,13 @@ async def ensure_security_zone(
             if not zones:
                 raise LookupError(f"Security zone {zone_name} not found - load data/bootstrap/24_security_zones.yml")
             zone_ids[zone_name] = zones[0].id
+            zone = zones[0]
+            _ZONE_METADATA.setdefault(client, {})[zone_name] = {
+                "id": zone.id,
+                "name": zone.name.value,
+                "vrf_type": zone.vrf_type.value,
+                "l3_vni": zone.l3_vni.value,
+            }
         segment_obj = await client.create(
             kind=kind,
             data={"id": segment_id, "security_zone": {"id": zone_ids[zone_name]}},

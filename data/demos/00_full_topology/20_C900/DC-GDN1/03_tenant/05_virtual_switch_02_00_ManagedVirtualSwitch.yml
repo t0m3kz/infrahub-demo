@@ -1,0 +1,34 @@
+# ManagedVirtualSwitch declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVirtualSwitch
+  data:
+    - name: gdn1-br0
+      description: "The Open vSwitch br0 of Nutanix AHV of gdn1-nutanix-cl01"
+      status: active
+      switch_type: ovs
+      mtu: 1500
+      cluster: gdn1-nutanix-cl01
+      uplinks:
+        - kind: DcimLAGInterface
+          data:
+            device: gdn1-srv-01
+            name: bond0
+            status: active
+            lag_id: 1
+            lacp_mode: active
+            minimum_links: 1
+        - kind: DcimPhysicalInterface
+          data:
+            device: gdn1-srv-02
+            name: eno1
+      port_groups:
+        kind: ManagedPortGroup
+        data:
+          - name: c900-db
+            description: "C900 c900-db-p on the hosts"
+            vlan_id: 300
+            segment: c900-db-p
+            nics:
+              - ["gdn1-vm-01", "eth0"]

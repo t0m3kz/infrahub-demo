@@ -1,0 +1,34 @@
+# Internal service exchanges use the same authored leg interfaces as the context.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyRoutedExchange
+  data:
+    - name: c900-waw1-fw-01-waw1-fw-02-prod-PROD-INTERNET
+      status: active
+      gateway: c900-waw1-fw-01-waw1-fw-02-prod
+      security_zone_a: PROD
+      security_zone_z: INTERNET
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3401"}
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3401"}
+    - name: c900-waw1-fw-01-waw1-fw-02-prod-PROD-MANAGEMENT
+      status: active
+      gateway: c900-waw1-fw-01-waw1-fw-02-prod
+      security_zone_a: PROD
+      security_zone_z: MANAGEMENT
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3601"}
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3601"}

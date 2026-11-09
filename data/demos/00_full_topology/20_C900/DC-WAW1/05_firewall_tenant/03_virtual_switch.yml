@@ -1,0 +1,30 @@
+# Upsert the existing Proxmox bridge, retaining its original port group and VM NIC.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVirtualSwitch
+  data:
+    - name: waw1-vmbr0
+      description: The Proxmox Linux bridge vmbr0 of waw1-proxmox-cl01
+      status: active
+      switch_type: linux-bridge
+      mtu: 1500
+      cluster: waw1-proxmox-cl01
+      uplinks:
+        - kind: DcimLAGInterface
+          data: {device: waw1-srv-01, name: bond0, status: active, lag_id: 1, lacp_mode: active, minimum_links: 1}
+        - kind: DcimPhysicalInterface
+          data: {device: waw1-srv-02, name: eno1}
+      port_groups:
+        kind: ManagedPortGroup
+        data:
+          - name: c900-app
+            description: C900 c900-app-p on the hosts
+            vlan_id: 200
+            segment: c900-app-p
+            nics: [["waw1-vm-01", "eth0"]]
+          - name: c900-internal-fw-waw1
+            description: C900's local internal-firewall segment
+            vlan_id: 250
+            segment: c900-internal-fw-waw1-p
+            nics: [["waw1-vm-fw-01", "eth0"]]

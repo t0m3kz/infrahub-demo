@@ -443,7 +443,7 @@ class TestReconcileApplicationRulesCloudEndpoints:
         assert gen._segment_policy.await_args.args[1] == "seg-seg-src-name-egress"
 
     def test_cloud_to_other_environment_is_refused_not_ruled(self) -> None:
-        """The prod/non-prod guard still applies to a cloud endpoint: no rule is written."""
+        """The prod/nonprod guard still applies to a cloud endpoint: no rule is written."""
         gen = self._make_gen_ready()
         app = self._single_port_app(dst_typename="CloudNetworkSegment")
         app["children"][0]["depends_on"][0]["target"]["network_segment"]["environment"] = "n"
@@ -642,7 +642,7 @@ class TestReconcileApplicationRulesPerPort:
 
 
 class TestReconcileApplicationRulesSegmentEnvironmentGuard:
-    """The prod/non-prod guard reads each segment's environment, so a flow onto a non-prod segment makes no rule."""
+    """The prod/nonprod guard reads each segment's environment, so a flow onto a nonprod segment makes no rule."""
 
     @staticmethod
     def _run(dst_env: str | None) -> Any:
@@ -659,7 +659,7 @@ class TestReconcileApplicationRulesSegmentEnvironmentGuard:
         return gen
 
     def test_prod_to_non_prod_segment_creates_no_rule(self) -> None:
-        """A prod source segment and a non-prod destination segment are never joined."""
+        """A prod source segment and a nonprod destination segment are never joined."""
         self._run("s")._reconcile_segment_rule.assert_not_awaited()
 
     def test_destination_segment_without_environment_creates_no_rule(self) -> None:

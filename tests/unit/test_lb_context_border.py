@@ -23,6 +23,7 @@ from graphql.language import FragmentDefinitionNode
 from tests.smoke.fixture_builders.common import run_transform
 from tests.smoke.fixture_builders.firewall import build_leaf_lb_client_data
 from tests.smoke.fixture_builders.transit import build_lb_context_bl_data
+from tests.unit.routing_helpers import make_vrf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
 from transforms.helpers.firewall import get_exchange_transits
@@ -30,9 +31,10 @@ from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from transforms.helpers.group_policy import UNCLASSIFIED, get_vrf_contracts
 from transforms.helpers.vxlan import get_interfaces
 from utils.exchange_transit import service_context_caps
+from utils.graphql_queries import load_query
 
-_PROD = {"name": "PROD", "namespace_type": "prod", "l3_vni": 60000}
-_NONPROD = {"name": "NON-PROD", "namespace_type": "non_prod", "l3_vni": 60001}
+_PROD = {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000}
+_NONPROD = {"name": "NONPROD", "vrf_type": "non_prod", "l3_vni": 60001}
 
 
 def _lb_context(
@@ -51,9 +53,13 @@ def _lb_context(
     net = ipaddress.ip_network(leg)
     members = [
         {
+            "vrf": make_vrf(namespace),
             "name": f"1.1.{vlan}",
             "device": {"name": member, "role": "load-balancer"},
-            "ip_address": {"address": f"{net[host]}/{net.prefixlen}", "ip_namespace": namespace},
+            "ip_address": {
+                "address": f"{net[host]}/{net.prefixlen}",
+                "ip_namespace": {"name": "default"},
+            },
         }
         for member, host in (("dc10-lb-01a", 5), ("dc10-lb-01b", 6))
     ]
@@ -107,44 +113,45 @@ class TestLoadBalancerLeg:
         segment = transit["segment"]
         # A shared context's name already ends in its namespace: the leg does not repeat it.
         assert segment["name"] == segment["customer_name"] == segment["vlan_description"] == "LB-dc10-lb-01-PROD"
+        assert segment["security_zone"] == _PROD
         assert segment["gateway"] == {
             "address": "100.67.0.1/29",
             "ip_prefix": {
                 "prefix": "100.67.0.0/29",
-                "ip_namespace": {"name": "PROD", "l3_vni": 60000, "namespace_type": "prod"},
+                "ip_namespace": {"name": "default"},
             },
         }
 
     def test_non_prod_leg_takes_the_non_prod_slot(self) -> None:
-        ctx = _lb_context(name="dc10-lb-01-NON-PROD", vlan=3101, namespace=_NONPROD, leg="100.67.16.0/29")
+        ctx = _lb_context(name="dc10-lb-01-NONPROD", vlan=3101, namespace=_NONPROD, leg="100.67.16.0/29")
         (transit,) = self._transits(ctx)
         assert (transit["vlan_id"], transit["vni"]) == (3301, 64301)
 
     def test_a_leg_name_past_32_characters_is_cut_with_a_digest_for_the_vlan_name(self) -> None:
         """The VLAN name fits NX-OS (32), deterministically; the full name stays the segment's and the SVI's."""
-        name = "dc1-lb-01-dc1-lb-02-ha-NON-PROD"
+        name = "dc1-lb-01-dc1-lb-02-ha-NONPROD"
         ctx = _lb_context(name=name, vlan=3101, namespace=_NONPROD, leg="100.67.16.0/29")
         (transit,) = self._transits(ctx)
         segment = transit["segment"]
         assert segment["name"] == segment["vlan_description"] == f"LB-{name}"
-        assert segment["customer_name"] == "LB-dc1-lb-01-dc1-lb-02-ha-N-7de0"
+        assert segment["customer_name"] == "LB-dc1-lb-01-dc1-lb-02-ha-N-3f91"
         assert len(segment["customer_name"]) == 32
         assert self._transits(ctx)[0]["segment"]["customer_name"] == segment["customer_name"]
 
     def test_two_long_names_sharing_a_stem_get_distinct_vlan_names(self) -> None:
-        first = _lb_context(name="dc1-lb-01-dc1-lb-02-ha-NON-PROD", vlan=3101, namespace=_NONPROD)
-        second = _lb_context(name="dc1-lb-01-dc1-lb-02-ha-NON-PROD-B", vlan=3102, namespace=_NONPROD)
+        first = _lb_context(name="dc1-lb-01-dc1-lb-02-ha-NONPROD", vlan=3101, namespace=_NONPROD)
+        second = _lb_context(name="dc1-lb-01-dc1-lb-02-ha-NONPROD-B", vlan=3102, namespace=_NONPROD)
         names = [t["segment"]["customer_name"] for t in self._transits(first, second)]
         assert len(set(names)) == 2
 
     def test_a_long_firewall_leg_name_is_not_cut(self) -> None:
         """Only the load-balancer legs are cut; the XCHG names stay as they are."""
         fw = {
-            **_lb_context(name="dc1-fw-01-dc1-fw-02-ha-NON-PROD"),
+            **_lb_context(name="dc1-fw-01-dc1-fw-02-ha-NONPROD"),
             "typename": "ManagedFirewallContext",
         }
         (transit,) = get_exchange_transits([fw])
-        assert transit["segment"]["customer_name"] == "XCHG-dc1-fw-01-dc1-fw-02-ha-NON-PROD-PROD"
+        assert transit["segment"]["customer_name"] == "XCHG-dc1-fw-01-dc1-fw-02-ha-NONPROD-PROD"
 
     def test_the_border_port_tagged_with_the_context_is_no_leg(self) -> None:
         """Only the members' (role load-balancer) addressed sub-interfaces are legs."""
@@ -152,7 +159,7 @@ class TestLoadBalancerLeg:
 
     def test_the_leg_port_is_a_trunk_of_the_leg_vlans(self) -> None:
         prod = _lb_context()
-        nonprod = _lb_context(name="dc10-lb-01-NON-PROD", vlan=3101, namespace=_NONPROD, leg="100.67.16.0/29")
+        nonprod = _lb_context(name="dc10-lb-01-NONPROD", vlan=3101, namespace=_NONPROD, leg="100.67.16.0/29")
         port = _port("load-balancer", prod, nonprod)
         transits = get_exchange_transits(service_context_caps([port]))
         (iface,) = get_interfaces([port], activations=transits)
@@ -169,8 +176,8 @@ class TestBorderLeafRender:
     def test_nxos_border_renders_both_legs_and_both_vip_statics(self) -> None:
         config = run_transform(BorderLeaf, build_lb_context_bl_data(device_name="dc1-bl-01", platform="cisco_nxos"))
         assert "  name LB-dc1-lb-01-dc1-lb-02-ha-PROD\n" in config
-        assert "  name LB-dc1-lb-01-dc1-lb-02-ha-N-7de0\n" in config
-        assert "  description LB-dc1-lb-01-dc1-lb-02-ha-NON-PROD\n" in config
+        assert "  name LB-dc1-lb-01-dc1-lb-02-ha-N-3f91\n" in config
+        assert "  description LB-dc1-lb-01-dc1-lb-02-ha-NONPROD\n" in config
         assert "  switchport trunk allowed vlan 3100,3301" in config
         assert "  ip route 100.66.96.0/26 100.66.64.4" in config
         assert "  ip route 100.66.112.0/26 100.66.80.4" in config
@@ -206,9 +213,15 @@ def _gp_seg(seg_id: str, rules: list[dict[str, Any]], inbound: list[dict[str, An
         "typename": "ManagedVxlanSegment",
         "name": seg_id,
         "owner": {"org_id": "C005"},
-        "security_zone": {"name": "PROD-ZONE"},
+        "security_zone": {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
         "security_tag": {"id": f"tag-{seg_id}", "name": seg_id, "group_id": 40 + len(seg_id)},
-        "gateway": {"ip_prefix": {"prefix": "10.0.0.0/24", "ip_namespace": {"name": "PROD", "namespace_type": "prod"}}},
+        "gateway": {
+            "ip_prefix": {
+                "security_zone": {"name": "PROD", "vrf_type": "prod"},
+                "prefix": "10.0.0.0/24",
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
+        },
         "security_policy": {"name": f"seg-{seg_id}", "enabled": True, "default_action": "deny", "rules": rules},
         "inbound_rules": inbound or [],
         "segment_deployments": [{"deployment": {"id": "dc10"}}],
@@ -274,7 +287,7 @@ class TestQueries:
 
     @staticmethod
     def _fragment(root_dir: Path, path: str, name: str) -> str:
-        document = parse((root_dir / path).read_text())
+        document = parse(load_query(root_dir / path))
         return next(
             print_ast(item)
             for item in document.definitions
@@ -294,8 +307,7 @@ class TestQueries:
             "vip_prefix {\n    node {\n      prefix {",
             "role {",
             "... on DcimVirtualInterface",
-            "namespace_type {",
-            "l3_vni {",
+            "...InterfaceRoutingZoneFields",
         ):
             assert selection in fragment
 

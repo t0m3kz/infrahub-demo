@@ -20,14 +20,18 @@ PLACEMENT = _QUERIES / "validation" / "circuit_placement.gql"
 _PHYSICAL_READS = [
     "id",
     "name",
+    "status",
+    "circuit_type",
     "locations.id",
     "locations.__typename",
     "locations.name",
     "locations.owner.id",
     "locations.owner.org_id",
     "capabilities.id",
+    "capabilities.__typename",
     "capabilities.name",
     "capabilities.device.id",
+    "capabilities.device.__typename",
     "capabilities.device.name",
     "capabilities.device.deployment.id",
     "capabilities.device.deployment.__typename",
@@ -104,8 +108,10 @@ _SESSION_READS = [
     "locations.name",
     "locations.owner.id",
     "locations.owner.org_id",
-    "ip_namespace.name",
-    "ip_namespace.namespace_type",
+    "vrf.id",
+    "vrf.deployment.id",
+    "vrf.deployment.name",
+    *(f"vrf.security_zone.{field}" for field in ("id", "name", "vrf_type", "l3_vni")),
     "password.id",
     "registered_prefixes.id",
 ]
@@ -136,6 +142,16 @@ def test_the_placement_query_selects_nothing_the_check_never_reads(placement_pat
     prefixes = {".".join(path.split(".")[:i]) for path in read for i in range(1, len(path.split(".")))}
     unread = {path for paths in placement_paths.values() for path in paths} - read - prefixes
     assert not unread, f"selected but never read: {sorted(unread)}"
+
+
+def test_the_placement_query_has_no_direct_zone_or_ipam_routing_edges(
+    placement_paths: dict[str, set[str]],
+) -> None:
+    """A session's routing context is its local VRF, not a direct zone or prefix annotation."""
+    paths = placement_paths["TopologySessionCircuit"]
+    assert {"vrf.id", "vrf.deployment.id", "vrf.deployment.name", "vrf.security_zone.id"} <= paths
+    assert not {"security_zone", "ip_namespace"} & paths
+    assert not any(".ip_address.security_zone" in path or ".ip_prefix.security_zone" in path for path in paths)
 
 
 @pytest.mark.parametrize(

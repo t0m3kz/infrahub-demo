@@ -1,0 +1,11 @@
+# Shared native firewall HA IDs for every demo; PAN-OS broadcast-domain group IDs are 1..63.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreNumberPool
+  data:
+    - name: Firewall-HA-Group-ID
+      node: ManagedFirewallHA
+      node_attribute: group_id
+      start_range: 1
+      end_range: 63

@@ -16,6 +16,9 @@ query app_component_segment($fqdn: String!) {
             id
             __typename
             name { value }
+            environment { value }
+            security_zone { node { ...RoutingZoneFields } }
+            gateway { node { id address { value } } }
           }
         }
         instances {

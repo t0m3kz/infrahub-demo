@@ -483,8 +483,7 @@ class TestHandoffCircuit:
         """The schema leaves ip_namespace optional (a dci and a tunnel have none); a handoff needs it."""
         messages = _run(handoffs=[_handoff("HO", None, [EG_FR_VLAN, AWS_VLAN], namespace=None)])
         assert messages == [
-            "Handoff circuit 'HO' has no ip_namespace: its /31 is allocated and its session runs in an environment "
-            "namespace."
+            "Handoff circuit 'HO' has no vrf: its /31 is allocated and its session runs in an environment namespace."
         ]
 
     @pytest.mark.parametrize("field", ["registered_prefixes"])

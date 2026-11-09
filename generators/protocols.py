@@ -16,7 +16,6 @@ from infrahub_sdk.protocols import (
     CoreNode,
     CoreNumberPool,
     CoreObjectTemplate,
-    IpamNamespace,
 )
 
 if TYPE_CHECKING:
@@ -151,8 +150,8 @@ class OrganizationEntity(CoreNode):
 
 
 class TopologyExchangeGateway(CoreNode):
-    namespace_a: RelationshipAttribute[IpamNamespace]
-    namespace_z: RelationshipAttribute[IpamNamespace]
+    vrf_a: RelationshipAttribute[ManagedVRF]
+    vrf_z: RelationshipAttribute[ManagedVRF]
 
 
 class LocationGeneric(CoreNode):
@@ -234,6 +233,7 @@ class DcimInterface(CoreNode):
     role: DropdownOptional
     status: Dropdown
     device: RelationshipAttribute[DcimDevice]
+    vrf: RelationshipAttribute[ManagedVRF]
     tags: RelationshipManager[BuiltinTag]
 
 
@@ -259,6 +259,7 @@ class ManagedNetworkSegment(CoreNode):
     inbound_rules: RelationshipManager[SecurityPolicyRule]
     owner: RelationshipAttribute[OrganizationCustomer]
     security_policy: RelationshipAttribute[SecurityPolicy]
+    security_zone: RelationshipAttribute[SecurityZone]
     security_tag: RelationshipAttribute[SecurityTag]
 
 
@@ -721,9 +722,12 @@ class ManagedMLAG(ManagedGeneric, ManagedGenericDevice):
 
 
 class ManagedVRF(ManagedGeneric, ManagedGenericSharedDevice):
-    l3_vni: StringOptional
     deployment: RelationshipAttribute[TopologySegmentHosting]
-    namespace: RelationshipAttribute[IpamNamespace]
+    security_zone: RelationshipAttribute[SecurityZone]
+    interfaces: RelationshipManager[DcimInterface]
+    session_circuits: RelationshipManager[TopologySessionCircuit]
+    exchanges_a: RelationshipManager[TopologyExchangeGateway]
+    exchanges_z: RelationshipManager[TopologyExchangeGateway]
 
 
 class OrganizationManufacturer(CoreNode):
@@ -935,6 +939,7 @@ class SecurityPolicyRule(CoreNode):
     source_prefixes: RelationshipManager[IpamPrefix]
     source_security_tag: RelationshipAttribute[SecurityTag]
     source_segment: RelationshipAttribute[ManagedNetworkSegment]
+    source_zone: RelationshipAttribute[SecurityZone]
 
 
 class IpamPrefix(BuiltinIPPrefix):
@@ -1074,10 +1079,11 @@ class LoadbalancerVIP(CoreNode):
 
 class TopologySessionCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
     circuit_type: Dropdown
-    ip_namespace: RelationshipAttribute[IpamNamespace]
+    vrf: RelationshipAttribute[ManagedVRF]
     link_prefix: RelationshipAttribute[IpamPrefix]
     password: RelationshipAttribute[RoutingPassword]
     registered_prefixes: RelationshipManager[IpamPrefix]
+    originated_prefixes: RelationshipManager[IpamPrefix]
 
 
 class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, DcimCapabilities, AppInstance):
@@ -1089,7 +1095,6 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, DcimC
 
 class DcimVirtualInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress, DcimSubInterface):
     segment_vlan: RelationshipAttribute[ManagedSegmentVlan]
-    vrf: RelationshipAttribute[ManagedVRF]
 
 
 class CloudVirtualNetwork(CloudResource):
@@ -1112,9 +1117,12 @@ class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment):
 
 class SecurityZone(CoreNode):
     description: StringOptional
+    l3_vni: Integer
     name: String
     trust_level: Integer
+    vrf_type: Dropdown
     network_segments: RelationshipManager[ManagedNetworkSegment]
+    vrfs: RelationshipManager[ManagedVRF]
 
 
 class SecurityIPsecProfile(ManagedGeneric):

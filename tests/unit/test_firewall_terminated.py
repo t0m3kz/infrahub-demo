@@ -28,7 +28,7 @@ def _segment(
     *,
     gateway: str | None = "10.9.0.1/24",
     rows: list[tuple[str, int]] | None = None,
-    zone: str | None = "PROD-ZONE",
+    zone: str | None = "PROD",
 ) -> dict[str, Any]:
     """A terminated segment as FirewallContextConfigFields returns it, its rows being ``(device id, vlan id)``."""
     return {
@@ -75,7 +75,7 @@ class TestTerminatedInterfaces:
             "vlan_id": 101,
             "parent_interface": {"name": "eth1"},
             "ip_address": {"address": "10.9.0.1/24"},
-            "security_zone": {"name": "PROD-ZONE"},
+            "security_zone": {"name": "PROD"},
             "virtual_ip": "10.9.0.1/24",
         }
 
@@ -166,9 +166,13 @@ class TestContextShape:
             "served_deployments": [{"id": "dep", "network_segments": [{"id": segment["id"]}]}],
         }
         leg = {
+            "vrf": {
+                "id": "vrf-prod",
+                "security_zone": {"id": "zone-prod", "name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
+            },
             "name": "eth1.3000",
             "parent_interface": {"name": "eth1"},
-            "ip_address": {"address": "10.0.0.5/29", "ip_namespace": {"name": "PROD", "namespace_type": "prod"}},
+            "ip_address": {"address": "10.0.0.5/29", "ip_namespace": {"node": {"name": {"value": "default"}}}},
             "capabilities": [capability],
         }
 
@@ -193,7 +197,7 @@ class TestRoutes:
             "interface": "eth1.3000",
             "vlan": 3000,
             "ns_type": "prod",
-            "zone": "PROD-ZONE",
+            "zone": "PROD",
             "nameif": "prod",
             "vrf": "PROD",
             "anycast": "10.0.0.1",
@@ -205,12 +209,12 @@ class TestRoutes:
         routed = {
             "id": "id-routed",
             "gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}},
-            "security_zone": {"name": "PROD-ZONE"},
+            "security_zone": {"name": "PROD"},
         }
         terminated = {
             "id": "id-seg-a",
             "gateway": {"ip_prefix": {"prefix": "10.9.0.0/24"}},
-            "security_zone": {"name": "PROD-ZONE"},
+            "security_zone": {"name": "PROD"},
         }
         context = {
             "legs": [self._leg()],
@@ -226,13 +230,12 @@ class TestRoutes:
 
     def test_an_interface_with_a_virtual_ip_gets_no_static_route(self) -> None:
         """get_firewall_static_routes derives a leaf next hop in a /30; a VIP interface has no leaf behind it."""
-        namespace = {"name": "PROD"}
         base = {
             "name": "eth1.101",
-            "ip_address": {"address": "10.9.0.1/30", "ip_namespace": namespace},
-            "security_zone": {"name": "PROD-ZONE"},
+            "ip_address": {"address": "10.9.0.1/30", "ip_namespace": {"node": {"name": {"value": "default"}}}},
+            "vrf": {"id": "vrf-prod", "security_zone": {"id": "zone-prod", "name": "PROD"}},
         }
-        zones = [{"name": "PROD-ZONE", "member_cidrs": ["10.1.0.0/24"]}]
+        zones = [{"name": "PROD", "member_cidrs": ["10.1.0.0/24"]}]
 
         assert len(get_firewall_static_routes([base], zones)) == 1
         assert get_firewall_static_routes([base | {"virtual_ip": "10.9.0.1/30"}], zones) == []

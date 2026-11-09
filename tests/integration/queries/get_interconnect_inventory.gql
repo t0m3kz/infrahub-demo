@@ -1,10 +1,3 @@
-# The circuit layer of a branch. A location carries its kind, its parent (a cage's or virtual colocation's metro, a
-# footprint's facility) and a footprint's owner, an end its device's deployment (an on-ramp edge: its zone or virtual
-# colocation, with that one's metro): what test_62 checks circuit placement against.
-# A session circuit is one of four `circuit_type`s (tunnel, dci, handoff, vpn); a handoff or a vpn adds its namespace
-# and its key. A circuit has no owner of its own, it is derived from the offices among its locations. Its carrier is derived: the
-# carrier circuits in the `capabilities` of each end port, or of the port's `parent_interface` for a sub-interface,
-# else the cable on the port or on that parent (a hop inside one facility is a cable, not a circuit).
 query GetInterconnectInventory {
   TopologyCarrierCircuit {
     edges {
@@ -69,12 +62,9 @@ query GetInterconnectInventory {
             }
           }
         }
-        ip_namespace {
+        vrf {
           node {
-            id
-            name {
-              value
-            }
+            ...RoutingVrfFields
           }
         }
         password {
@@ -93,6 +83,11 @@ query GetInterconnectInventory {
                 value
               }
               ... on DcimPhysicalInterface {
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
+                }
                 cable {
                   node {
                     id
@@ -112,6 +107,11 @@ query GetInterconnectInventory {
                 }
               }
               ... on DcimVirtualInterface {
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
+                }
                 ip_address {
                   node {
                     address {
@@ -162,7 +162,6 @@ query GetInterconnectInventory {
   }
 }
 
-# A port's carrier: the carrier circuits among what terminates on it (segments, peerings and other circuits too).
 fragment CircuitCarrier on ManagedGenericInterfaces {
   __typename
   ... on TopologyCarrierCircuit {
@@ -253,7 +252,6 @@ fragment CircuitLocation on TopologyConnectableLocation {
   }
 }
 
-# An owner is only a customer when it is an OrganizationCustomer (utils.ownership.customer_owner); its org_id is the key.
 fragment CircuitOwner on OrganizationEntity {
   id
   __typename
@@ -346,8 +344,6 @@ fragment CircuitEndDevice on DcimDevice {
       }
     }
   }
-  # A provider connect (TopologyProviderConnect) has no deployment: it stands at its location, a zone, a region or a SaaS
-  # region.
   ... on TopologyProviderConnect {
     location {
       node {
@@ -369,7 +365,6 @@ fragment CircuitEndDevice on DcimDevice {
       }
     }
   }
-  # A cloud transport has no deployment: it sits in a cloud region (or a SaaS region).
   ... on CloudTransport {
     region {
       node {

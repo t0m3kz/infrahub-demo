@@ -28,6 +28,7 @@ from tests.unit.lb_vip_helpers import (
     _vip_gen,
     _web,
 )
+from tests.unit.query_shape_helpers import fragment_tree
 
 # ===========================================================================
 # AppApplicationGenerator: R_client and the run's errors
@@ -245,10 +246,15 @@ class TestCloudClientRule:
 
 
 def test_application_query_reads_the_cloud_placement_of_instances(root_dir: Path) -> None:
-    """A cloud instance's private_ip and its subnet's virtual network with the CIDR blocks' namespaces."""
+    """A cloud instance's private IP, virtual network and CIDR blocks (neutral IPAM, no routing zone)."""
     query = (root_dir / "queries/topology/add/application.gql").read_text()
     fragment = query.split("fragment AppInstanceFields", 1)[1].split("fragment AppComponentSecurityFields", 1)[0]
-    cloud = fragment.split("... on CloudInstance {", 1)[1]
+    cloud = " ".join(fragment.split("... on CloudInstance {", 1)[1].split())
     assert "private_ip { value }" in cloud
     assert "virtual_network {" in cloud
-    assert "cidr_blocks { edges { node { prefix { value } ip_namespace { node { id } } } } }" in cloud
+    fields = fragment_tree(root_dir / "queries/topology/add/application.gql", "AppInstanceFields")
+    prefix = fields["network_segment"]["node"]["virtual_network"]["node"]["cidr_blocks"]["edges"]["node"]
+    assert {"prefix", "ip_namespace"} <= set(prefix)
+    assert "id" in prefix["ip_namespace"]["node"]
+    # IPAM is neutral: a prefix carries no routing zone, the segment's security_zone does.
+    assert "security_zone" not in prefix

@@ -65,6 +65,250 @@
                         }
                       }
                     ]
+                  },
+                  "contexts": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedFirewallContext",
+                          "id": "ctx-shared",
+                          "name": {
+                            "value": "dc1-fw-shared"
+                          },
+                          "vlan_id": {
+                            "value": 3000
+                          },
+                          "context_id": {
+                            "value": null
+                          },
+                          "tenant": {
+                            "node": null
+                          },
+                          "served_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "dep-shared",
+                                  "network_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "seg-prod",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-prod"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.1.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "security_zone": {
+                                            "node": {
+                                              "name": {
+                                                "value": "PROD"
+                                              },
+                                              "trust_level": {
+                                                "value": 50
+                                              },
+                                              "description": {
+                                                "value": ""
+                                              },
+                                              "id": "fixture-zone-PROD",
+                                              "vrf_type": {
+                                                "value": "prod"
+                                              },
+                                              "l3_vni": {
+                                                "value": 60000
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "id": "seg-nonprod",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-nonprod"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.2.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "security_zone": {
+                                            "node": {
+                                              "name": {
+                                                "value": "NONPROD"
+                                              },
+                                              "trust_level": {
+                                                "value": 50
+                                              },
+                                              "description": {
+                                                "value": ""
+                                              },
+                                              "id": "fixture-zone-NONPROD",
+                                              "vrf_type": {
+                                                "value": "non_prod"
+                                              },
+                                              "l3_vni": {
+                                                "value": 60001
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "id": "seg-infra",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-infra"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.250.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "security_zone": {
+                                            "node": {
+                                              "name": {
+                                                "value": "MANAGEMENT"
+                                              },
+                                              "trust_level": {
+                                                "value": 50
+                                              },
+                                              "description": {
+                                                "value": ""
+                                              },
+                                              "id": "fixture-zone-MANAGEMENT",
+                                              "vrf_type": {
+                                                "value": "management"
+                                              },
+                                              "l3_vni": {
+                                                "value": 60003
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "snat_address": {
+                            "node": {
+                              "address": {
+                                "value": "192.0.2.5/32"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "ManagedFirewallContext",
+                          "id": "ctx-dedicated",
+                          "name": {
+                            "value": "dc1-fw-acme"
+                          },
+                          "vlan_id": {
+                            "value": 3001
+                          },
+                          "context_id": {
+                            "value": null
+                          },
+                          "tenant": {
+                            "node": {
+                              "name": {
+                                "value": "Acme"
+                              }
+                            }
+                          },
+                          "served_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "dep-acme",
+                                  "network_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "seg-acme",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-acme"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.3.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "security_zone": {
+                                            "node": {
+                                              "name": {
+                                                "value": "PROD"
+                                              },
+                                              "trust_level": {
+                                                "value": 50
+                                              },
+                                              "description": {
+                                                "value": ""
+                                              },
+                                              "id": "fixture-zone-PROD",
+                                              "vrf_type": {
+                                                "value": "prod"
+                                              },
+                                              "l3_vni": {
+                                                "value": 60000
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "snat_address": {
+                            "node": {
+                              "address": {
+                                "value": "192.0.2.6/32"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }
@@ -102,10 +346,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "PROD"
-                          },
-                          "namespace_type": {
-                            "value": "prod"
+                            "value": "default"
                           }
                         }
                       }
@@ -122,99 +363,38 @@
                           "id": "ctx-shared",
                           "name": {
                             "value": "dc1-fw-shared"
-                          },
-                          "vlan_id": {
-                            "value": 3000
-                          },
-                          "context_id": {
-                            "value": null
-                          },
-                          "tenant": {
-                            "node": null
-                          },
-                          "served_deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "dep-shared",
-                                  "network_segments": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "id": "seg-prod",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-prod"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.1.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "id": "seg-nonprod",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-nonprod"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.2.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "id": "seg-infra",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-infra"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.250.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "snat_address": {
-                            "node": {
-                              "address": {
-                                "value": "192.0.2.5/32"
-                              }
-                            }
                           }
                         }
                       }
                     ]
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-PROD",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "vrf_type": {
+                            "value": "prod"
+                          },
+                          "id": "fixture-zone-PROD",
+                          "l3_vni": {
+                            "value": 60000
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               },
@@ -248,10 +428,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "NON-PROD"
-                          },
-                          "namespace_type": {
-                            "value": "non_prod"
+                            "value": "default"
                           }
                         }
                       }
@@ -268,99 +445,38 @@
                           "id": "ctx-shared",
                           "name": {
                             "value": "dc1-fw-shared"
-                          },
-                          "vlan_id": {
-                            "value": 3000
-                          },
-                          "context_id": {
-                            "value": null
-                          },
-                          "tenant": {
-                            "node": null
-                          },
-                          "served_deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "dep-shared",
-                                  "network_segments": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "id": "seg-prod",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-prod"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.1.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "id": "seg-nonprod",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-nonprod"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.2.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "id": "seg-infra",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-infra"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.250.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "snat_address": {
-                            "node": {
-                              "address": {
-                                "value": "192.0.2.5/32"
-                              }
-                            }
                           }
                         }
                       }
                     ]
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-NONPROD",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "NONPROD"
+                          },
+                          "vrf_type": {
+                            "value": "non_prod"
+                          },
+                          "id": "fixture-zone-NONPROD",
+                          "l3_vni": {
+                            "value": 60001
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               },
@@ -394,10 +510,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "INTERNET"
-                          },
-                          "namespace_type": {
-                            "value": "internet"
+                            "value": "default"
                           }
                         }
                       }
@@ -414,99 +527,38 @@
                           "id": "ctx-shared",
                           "name": {
                             "value": "dc1-fw-shared"
-                          },
-                          "vlan_id": {
-                            "value": 3000
-                          },
-                          "context_id": {
-                            "value": null
-                          },
-                          "tenant": {
-                            "node": null
-                          },
-                          "served_deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "dep-shared",
-                                  "network_segments": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "id": "seg-prod",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-prod"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.1.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "id": "seg-nonprod",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-nonprod"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.2.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "id": "seg-infra",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-infra"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.250.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "snat_address": {
-                            "node": {
-                              "address": {
-                                "value": "192.0.2.5/32"
-                              }
-                            }
                           }
                         }
                       }
                     ]
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-INTERNET",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "INTERNET"
+                          },
+                          "vrf_type": {
+                            "value": "internet"
+                          },
+                          "id": "fixture-zone-INTERNET",
+                          "l3_vni": {
+                            "value": 60002
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               },
@@ -540,10 +592,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "MANAGEMENT"
-                          },
-                          "namespace_type": {
-                            "value": "management"
+                            "value": "default"
                           }
                         }
                       }
@@ -560,99 +609,38 @@
                           "id": "ctx-shared",
                           "name": {
                             "value": "dc1-fw-shared"
-                          },
-                          "vlan_id": {
-                            "value": 3000
-                          },
-                          "context_id": {
-                            "value": null
-                          },
-                          "tenant": {
-                            "node": null
-                          },
-                          "served_deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "dep-shared",
-                                  "network_segments": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "id": "seg-prod",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-prod"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.1.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "id": "seg-nonprod",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-nonprod"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.2.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "id": "seg-infra",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-infra"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.250.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "snat_address": {
-                            "node": {
-                              "address": {
-                                "value": "192.0.2.5/32"
-                              }
-                            }
                           }
                         }
                       }
                     ]
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-MANAGEMENT",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "MANAGEMENT"
+                          },
+                          "vrf_type": {
+                            "value": "management"
+                          },
+                          "id": "fixture-zone-MANAGEMENT",
+                          "l3_vni": {
+                            "value": 60003
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               },
@@ -686,10 +674,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "PROD"
-                          },
-                          "namespace_type": {
-                            "value": "prod"
+                            "value": "default"
                           }
                         }
                       }
@@ -706,63 +691,38 @@
                           "id": "ctx-dedicated",
                           "name": {
                             "value": "dc1-fw-acme"
-                          },
-                          "vlan_id": {
-                            "value": 3001
-                          },
-                          "context_id": {
-                            "value": null
-                          },
-                          "tenant": {
-                            "node": {
-                              "name": {
-                                "value": "Acme"
-                              }
-                            }
-                          },
-                          "served_deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "dep-acme",
-                                  "network_segments": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "id": "seg-acme",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-acme"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.3.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "snat_address": {
-                            "node": {
-                              "address": {
-                                "value": "192.0.2.6/32"
-                              }
-                            }
                           }
                         }
                       }
                     ]
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-PROD",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "vrf_type": {
+                            "value": "prod"
+                          },
+                          "id": "fixture-zone-PROD",
+                          "l3_vni": {
+                            "value": 60000
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               },
@@ -796,10 +756,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "INTERNET"
-                          },
-                          "namespace_type": {
-                            "value": "internet"
+                            "value": "default"
                           }
                         }
                       }
@@ -816,63 +773,38 @@
                           "id": "ctx-dedicated",
                           "name": {
                             "value": "dc1-fw-acme"
-                          },
-                          "vlan_id": {
-                            "value": 3001
-                          },
-                          "context_id": {
-                            "value": null
-                          },
-                          "tenant": {
-                            "node": {
-                              "name": {
-                                "value": "Acme"
-                              }
-                            }
-                          },
-                          "served_deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "dep-acme",
-                                  "network_segments": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "id": "seg-acme",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-acme"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.3.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "snat_address": {
-                            "node": {
-                              "address": {
-                                "value": "192.0.2.6/32"
-                              }
-                            }
                           }
                         }
                       }
                     ]
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-INTERNET",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "INTERNET"
+                          },
+                          "vrf_type": {
+                            "value": "internet"
+                          },
+                          "id": "fixture-zone-INTERNET",
+                          "l3_vni": {
+                            "value": 60002
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               },
@@ -906,10 +838,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "MANAGEMENT"
-                          },
-                          "namespace_type": {
-                            "value": "management"
+                            "value": "default"
                           }
                         }
                       }
@@ -926,63 +855,38 @@
                           "id": "ctx-dedicated",
                           "name": {
                             "value": "dc1-fw-acme"
-                          },
-                          "vlan_id": {
-                            "value": 3001
-                          },
-                          "context_id": {
-                            "value": null
-                          },
-                          "tenant": {
-                            "node": {
-                              "name": {
-                                "value": "Acme"
-                              }
-                            }
-                          },
-                          "served_deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "dep-acme",
-                                  "network_segments": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "id": "seg-acme",
-                                          "__typename": "ManagedVxlanSegment",
-                                          "name": {
-                                            "value": "seg-acme"
-                                          },
-                                          "gateway": {
-                                            "node": {
-                                              "ip_prefix": {
-                                                "node": {
-                                                  "prefix": {
-                                                    "value": "10.3.0.0/24"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "snat_address": {
-                            "node": {
-                              "address": {
-                                "value": "192.0.2.6/32"
-                              }
-                            }
                           }
                         }
                       }
                     ]
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-MANAGEMENT",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "MANAGEMENT"
+                          },
+                          "vrf_type": {
+                            "value": "management"
+                          },
+                          "id": "fixture-zone-MANAGEMENT",
+                          "l3_vni": {
+                            "value": 60003
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               },
@@ -1023,101 +927,7 @@
       {
         "node": {
           "name": {
-            "value": "PROD-ZONE"
-          },
-          "trust_level": {
-            "value": 50
-          },
-          "description": {
-            "value": ""
-          },
-          "network_segments": {
-            "edges": [
-              {
-                "node": {
-                  "id": "seg-prod",
-                  "__typename": "ManagedVxlanSegment",
-                  "name": {
-                    "value": "seg-prod"
-                  },
-                  "gateway": {
-                    "node": {
-                      "ip_prefix": {
-                        "node": {
-                          "prefix": {
-                            "value": "10.1.0.0/24"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                "node": {
-                  "id": "seg-acme",
-                  "__typename": "ManagedVxlanSegment",
-                  "name": {
-                    "value": "seg-acme"
-                  },
-                  "gateway": {
-                    "node": {
-                      "ip_prefix": {
-                        "node": {
-                          "prefix": {
-                            "value": "10.3.0.0/24"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            ]
-          }
-        }
-      },
-      {
-        "node": {
-          "name": {
-            "value": "NONPROD-ZONE"
-          },
-          "trust_level": {
-            "value": 50
-          },
-          "description": {
-            "value": ""
-          },
-          "network_segments": {
-            "edges": [
-              {
-                "node": {
-                  "id": "seg-nonprod",
-                  "__typename": "ManagedVxlanSegment",
-                  "name": {
-                    "value": "seg-nonprod"
-                  },
-                  "gateway": {
-                    "node": {
-                      "ip_prefix": {
-                        "node": {
-                          "prefix": {
-                            "value": "10.2.0.0/24"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            ]
-          }
-        }
-      },
-      {
-        "node": {
-          "name": {
-            "value": "MANAGEMENT-ZONE"
+            "value": "MANAGEMENT"
           },
           "trust_level": {
             "value": 50
@@ -1144,10 +954,37 @@
                         }
                       }
                     }
+                  },
+                  "security_zone": {
+                    "node": {
+                      "name": {
+                        "value": "MANAGEMENT"
+                      },
+                      "trust_level": {
+                        "value": 50
+                      },
+                      "description": {
+                        "value": ""
+                      },
+                      "id": "fixture-zone-MANAGEMENT",
+                      "vrf_type": {
+                        "value": "management"
+                      },
+                      "l3_vni": {
+                        "value": 60003
+                      }
+                    }
                   }
                 }
               }
             ]
+          },
+          "id": "fixture-zone-MANAGEMENT",
+          "vrf_type": {
+            "value": "management"
+          },
+          "l3_vni": {
+            "value": 60003
           }
         }
       }

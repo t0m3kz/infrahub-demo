@@ -36,7 +36,7 @@ query customer_quota {
       node {
         id
         name { value }
-        security_zone { node { name { value } } }
+        security_zone { node { ...RoutingZoneFields } }
         customer_deployments { edges { node { id name { value } } } }
       }
     }

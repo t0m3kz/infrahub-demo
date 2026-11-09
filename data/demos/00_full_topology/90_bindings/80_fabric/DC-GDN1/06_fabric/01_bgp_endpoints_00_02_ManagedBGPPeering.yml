@@ -1,0 +1,55 @@
+# ManagedBGPPeering declarations in recursive dependency order.
+# Bind every authored EVPN session to its two actual loopbacks after all facilities have been loaded.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: BGP-GDN1-LEAF01-SPINE01
+      bgp_processes: ["gdn1-leaf-01-bgp", "gdn1-spine-01-bgp"]
+      peering_role: overlay
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-leaf-01", "Loopback0"], ["gdn1-spine-01", "Loopback0"]]
+    - name: BGP-GDN1-LEAF02-SPINE01
+      bgp_processes: ["gdn1-leaf-02-bgp", "gdn1-spine-01-bgp"]
+      peering_role: overlay
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-leaf-02", "Loopback0"], ["gdn1-spine-01", "Loopback0"]]
+    - name: BGP-GDN1-SPINE01-BL01
+      bgp_processes: ["gdn1-spine-01-bgp", "gdn1-bl-01-bgp"]
+      peering_role: overlay
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-spine-01", "Loopback0"], ["gdn1-bl-01", "Loopback0"]]
+    - name: BGP-GDN1-SPINE01-BL02
+      bgp_processes: ["gdn1-spine-01-bgp", "gdn1-bl-02-bgp"]
+      peering_role: overlay
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-spine-01", "Loopback0"], ["gdn1-bl-02", "Loopback0"]]
+    - name: BGP-GDN1-BL01-EDGE01
+      bgp_processes: ["gdn1-bl-01-bgp", "gdn1-edge-01-bgp"]
+      peering_role: overlay
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-bl-01", "Loopback0"], ["gdn1-edge-01", "Loopback0"]]
+    - name: BGP-GDN1-BL02-EDGE01
+      bgp_processes: ["gdn1-bl-02-bgp", "gdn1-edge-01-bgp"]
+      peering_role: overlay
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-bl-02", "Loopback0"], ["gdn1-edge-01", "Loopback0"]]

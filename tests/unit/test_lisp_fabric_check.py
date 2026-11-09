@@ -36,10 +36,14 @@ def _run_offices(*offices: dict[str, Any]) -> list[str]:
     return check._captured_errors
 
 
-def _gateway(vrf: str | None = "VRF_A", l3_vni: int | None = 50001) -> dict[str, Any]:
-    """A cleaned segment gateway whose prefix sits in the namespace ``vrf`` (None: no namespace at all)."""
-    namespace = {"name": vrf, "l3_vni": l3_vni} if vrf else None
-    return {"id": "ip-1", "ip_prefix": {"ip_namespace": namespace}}
+def _segment(name: str, vrf: str | None = "VRF_A", l3_vni: int | None = 50001) -> dict[str, Any]:
+    """An explicitly owned segment; historical global cases model missing ownership."""
+    zone = {"name": vrf, "l3_vni": l3_vni, "vrf_type": "prod"} if vrf and vrf != "default" else None
+    return {
+        "name": name,
+        "security_zone": zone,
+        "gateway": {"id": "ip-1", "ip_prefix": {"ip_namespace": {"name": "default"}}},
+    }
 
 
 def _office(**overrides: Any) -> dict[str, Any]:
@@ -60,7 +64,7 @@ def _office(**overrides: Any) -> dict[str, Any]:
             _device("as-c005-office01", "access-switch"),
             {**_device("C005-OFFICE-EDGE1", "edge", "linux"), "capabilities": [{"typename": "ManagedBGP"}]},
         ],
-        "segment_deployments": [{"vni": 10100, "segment": {"name": "web", "gateway": _gateway()}}],
+        "segment_deployments": [{"vni": 10100, "segment": _segment("web")}],
     }
     office.update(overrides)
     return office
@@ -162,15 +166,13 @@ class TestOfficeFabric:
     @pytest.mark.parametrize("vrf", ["default", None])
     def test_segment_in_the_default_namespace_is_an_error(self, vrf: str | None) -> None:
         """A gateway outside a VRF would render a host SVI in the global table (the transform refuses it)."""
-        office = _office(segment_deployments=[{"vni": 10200, "segment": {"name": "db", "gateway": _gateway(vrf)}}])
+        office = _office(segment_deployments=[{"vni": 10200, "segment": _segment("db", vrf)}])
         errors = _run_offices(office)
         assert len(errors) == 1
-        assert "db" in errors[0] and "10200" in errors[0] and "default namespace" in errors[0]
+        assert "db" in errors[0] and "10200" in errors[0] and "missing security zone" in errors[0]
 
     def test_segment_in_a_vrf_without_l3_vni_is_an_error(self) -> None:
-        office = _office(
-            segment_deployments=[{"vni": 10200, "segment": {"name": "db", "gateway": _gateway("DEV", None)}}]
-        )
+        office = _office(segment_deployments=[{"vni": 10200, "segment": _segment("db", "DEV", None)}])
         errors = _run_offices(office)
         assert len(errors) == 1
         assert "db" in errors[0] and "'DEV'" in errors[0] and "l3_vni" in errors[0]
@@ -183,9 +185,9 @@ class TestOfficeFabric:
         office = _office(
             segment_deployments=[
                 {"vni": 1, "segment": {"name": "a", "gateway": None}},
-                {"vni": 2, "segment": {"name": "b", "gateway": _gateway("default", None)}},
-                {"vni": 3, "segment": {"name": "c", "gateway": _gateway()}},
-                {"vni": 4, "segment": {"name": "d", "gateway": _gateway("DEV", None)}},
+                {"vni": 2, "segment": _segment("b", "default", None)},
+                {"vni": 3, "segment": _segment("c")},
+                {"vni": 4, "segment": _segment("d", "DEV", None)},
             ]
         )
         assert len(_run_offices(office)) == 3

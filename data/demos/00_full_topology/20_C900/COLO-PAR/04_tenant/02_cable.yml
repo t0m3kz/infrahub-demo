@@ -1,0 +1,15 @@
+---
+# The physical workload attachment is inside one cage, so it is a cable, never a carrier circuit.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: CBL-PAR1-SRV01-XFW01
+      type: copper
+      deployment: PAR-COLO1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: par-colo1-srv-01, name: eno1}
+        - kind: DcimPhysicalInterface
+          data: {device: par-colo1-xfw-01, name: ethernet1/2}

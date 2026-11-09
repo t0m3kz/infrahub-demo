@@ -1,0 +1,37 @@
+---
+# The end of each Equinix Fabric virtual connection on the Fabric port of the cage, the colocation counterpart of the
+# cloud's peering interface: one TopologyProviderInterface per connection, riding on the physical port
+# (`parent_interface`) and named <port>.<S-tag>. It carries the S-tag (`vlan_id`) and the bandwidth of the connection,
+# and the virtual_connection carrier circuit (90_bindings/50_connections/Cloud/00_carriers/00_carrier_circuits.yml)
+# ends on it, so the port
+# itself is no longer shared between connections. L2 only: the BGP session is on the cloud side.
+#
+#   et-0/0/0.1101   EQX-7C1E9A2B  ExpressRoute, primary link
+#   et-0/0/0.1102   EQX-7C1E9A2C  ExpressRoute, secondary link
+#   et-0/0/0.1201   EQX-3F4D8B10  Google Partner Interconnect
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderInterface
+  data:
+    - device: EXT-FABRIC-PAR
+      name: et-0/0/0.1101
+      description: Fabric connection EQX-7C1E9A2B to the ExpressRoute circuit, primary link
+      status: active
+      parent_interface: ["EXT-FABRIC-PAR", "et-0/0/0"]
+      vlan_id: 1101
+      bandwidth: 1000
+    - device: EXT-FABRIC-PAR
+      name: et-0/0/0.1102
+      description: Fabric connection EQX-7C1E9A2C to the ExpressRoute circuit, secondary link
+      status: active
+      parent_interface: ["EXT-FABRIC-PAR", "et-0/0/0"]
+      vlan_id: 1102
+      bandwidth: 1000
+    - device: EXT-FABRIC-PAR
+      name: et-0/0/0.1201
+      description: Fabric connection EQX-3F4D8B10 to the Google Partner Interconnect
+      status: active
+      parent_interface: ["EXT-FABRIC-PAR", "et-0/0/0"]
+      vlan_id: 1201
+      bandwidth: 1000

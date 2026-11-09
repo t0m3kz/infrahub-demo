@@ -92,6 +92,7 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, PROD_TYPE, namespace_type_for_environment
 from utils.fabric_roles import FIREWALL_ROLES
 from utils.ownership import CircuitOwnerError, customer_owner, ownership_conflicts
+from utils.routing_domain import interface_security_zone, resolve_security_zone
 from utils.segment_addressing import segment_namespace
 
 from .base import WarningCheck
@@ -115,6 +116,7 @@ class _Aggregate(NamedTuple):
     origin: str  # where the expected type comes from, for messages
     expected: str | None
     prefix: dict[str, Any]
+    zone: dict[str, Any]
 
 
 class CheckRoutingInvariants(WarningCheck):
@@ -124,7 +126,7 @@ class CheckRoutingInvariants(WarningCheck):
 
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
-        namespaces = cleaned.get("IpamNamespace") or []
+        namespaces = cleaned.get("SecurityZone") or []
         self._validate_l3_vni_sharing(namespaces)
         self._validate_internet_vrf(
             segments=cleaned.get("ManagedNetworkSegment") or [],
@@ -134,12 +136,12 @@ class CheckRoutingInvariants(WarningCheck):
         networks = cleaned.get("CloudVirtualNetwork") or []
         offices = cleaned.get("TopologyCustomerOffice") or []
         tunnels = cleaned.get(SESSION_CIRCUIT) or []
-        aggregates = _vpc_aggregates(networks) + _office_aggregates(offices) + _tunnel_aggregates(tunnels)
+        legs = cloud_legs(cleaned.get("CloudPeeringInterface"), cleaned.get("CloudGatewayAttachment"))
+        aggregates = _vpc_aggregates(networks, legs) + _office_aggregates(offices) + _tunnel_aggregates(tunnels)
         self._validate_aggregate_namespaces(aggregates)
         self._validate_subnets_in_vpc(networks, cleaned.get("CloudNetworkSegment") or [])
         self._validate_segment_overlaps(cleaned.get("ManagedNetworkSegment") or [])
         self._validate_aggregate_overlaps(aggregates, cleaned.get("ManagedNetworkSegment") or [])
-        legs = cloud_legs(cleaned.get("CloudPeeringInterface"), cleaned.get("CloudGatewayAttachment"))
         self._validate_registered_prefix_owners(networks, offices, tunnels, legs)
         self._validate_ownership_conflicts(cleaned.get("ManagedNetworkSegment") or [], offices, tunnels, legs)
         self._validate_offices_register(offices)
@@ -154,12 +156,12 @@ class CheckRoutingInvariants(WarningCheck):
             if isinstance(namespace.get("l3_vni"), int):
                 by_vni.setdefault(namespace["l3_vni"], []).append(namespace)
         for vni, sharing in sorted(by_vni.items()):
-            types = {ns.get("namespace_type") for ns in sharing}
+            types = {ns.get("vrf_type") for ns in sharing}
             if len(types) > 1:
                 self.log_error(
                     message=(
                         f"L3 VNI {vni} is used by namespaces of different types "
-                        f"({sorted(ns.get('name', '') + '=' + str(ns.get('namespace_type')) for ns in sharing)}): "
+                        f"({sorted(ns.get('name', '') + '=' + str(ns.get('vrf_type')) for ns in sharing)}): "
                         "they share a route-target and so import each other's routes"
                     )
                 )
@@ -171,7 +173,7 @@ class CheckRoutingInvariants(WarningCheck):
     def _validate_internet_vrf(self, segments: list[dict[str, Any]], interfaces: list[dict[str, Any]]) -> None:
         for segment in segments:
             namespace = segment_namespace(segment)
-            if namespace.get("namespace_type") == INTERNET_TYPE:
+            if namespace.get("vrf_type") == INTERNET_TYPE:
                 self.log_error(
                     message=(
                         f"{segment.get('typename')} '{segment.get('name')}' has its gateway in the INTERNET "
@@ -179,8 +181,8 @@ class CheckRoutingInvariants(WarningCheck):
                     )
                 )
         for iface in interfaces:
-            namespace = (iface.get("ip_address") or {}).get("ip_namespace") or {}
-            if namespace.get("namespace_type") != INTERNET_TYPE:
+            namespace = interface_security_zone(iface)
+            if namespace.get("vrf_type") != INTERNET_TYPE:
                 continue
             device = iface.get("device") or {}
             device_role = device.get("role")
@@ -239,8 +241,8 @@ class CheckRoutingInvariants(WarningCheck):
 
     def _validate_aggregate_namespaces(self, aggregates: list[_Aggregate]) -> None:
         for agg in aggregates:
-            namespace = agg.prefix.get("ip_namespace") or {}
-            actual = namespace.get("namespace_type")
+            namespace = agg.zone
+            actual = namespace.get("vrf_type")
             if agg.expected and actual != agg.expected:
                 self.log_error(
                     message=(
@@ -280,15 +282,15 @@ class CheckRoutingInvariants(WarningCheck):
         segment stretched over several sites is one object and appears once.
         """
         routed = _onprem_prefixes(segments)
-        for index, (name, owner, prefix, net) in enumerate(routed):
-            namespace = _namespace_key(prefix)
-            for other_name, other_owner, other_prefix, other_net in routed[index + 1 :]:
-                if _namespace_key(other_prefix) == namespace and _overlap(net, other_net):
+        for index, (name, owner, prefix, net, zone) in enumerate(routed):
+            namespace = _namespace_key(zone)
+            for other_name, other_owner, other_prefix, other_net, other_zone in routed[index + 1 :]:
+                if _namespace_key(other_zone) == namespace and _overlap(net, other_net):
                     self.log_error(
                         message=(
                             f"On-prem segment '{name}' ({_describe_owner(owner)}) {net} overlaps segment "
                             f"'{other_name}' ({_describe_owner(other_owner)}) {other_net} in namespace "
-                            f"'{(prefix.get('ip_namespace') or {}).get('name')}'"
+                            f"'{zone.get('name')}'"
                         )
                     )
 
@@ -296,21 +298,21 @@ class CheckRoutingInvariants(WarningCheck):
         """Within one namespace an aggregate overlaps neither another aggregate nor an on-prem prefix."""
         routed = [(agg, net) for agg in aggregates if (net := _network(agg.prefix.get("prefix")))]
 
-        onprem = [(name, prefix, net) for name, _owner, prefix, net in _onprem_prefixes(segments)]
+        onprem = [(name, prefix, net, zone) for name, _owner, prefix, net, zone in _onprem_prefixes(segments)]
 
         for index, (agg, net) in enumerate(routed):
-            namespace = _namespace_key(agg.prefix)
-            namespace_name = (agg.prefix.get("ip_namespace") or {}).get("name")
+            namespace = _namespace_key(agg.zone)
+            namespace_name = agg.zone.get("name")
             for other, other_net in routed[index + 1 :]:
-                if _namespace_key(other.prefix) == namespace and _overlap(net, other_net):
+                if _namespace_key(other.zone) == namespace and _overlap(net, other_net):
                     self.log_error(
                         message=(
                             f"{agg.owner} {agg.noun} {net} overlaps {other.owner} {other.noun} {other_net} in "
                             f"namespace '{namespace_name}'"
                         )
                     )
-            for segment_name, prefix, prefix_net in onprem:
-                if _namespace_key(prefix) != namespace:
+            for segment_name, prefix, prefix_net, zone in onprem:
+                if _namespace_key(zone) != namespace:
                     continue
                 if agg.prefix.get("id") and agg.prefix.get("id") == prefix.get("id"):
                     self.log_error(
@@ -425,7 +427,9 @@ class CheckRoutingInvariants(WarningCheck):
 
 def _onprem_prefixes(
     segments: list[dict[str, Any]],
-) -> list[tuple[str, dict[str, Any] | None, dict[str, Any], ipaddress.IPv4Network | ipaddress.IPv6Network]]:
+) -> list[
+    tuple[str, dict[str, Any] | None, dict[str, Any], ipaddress.IPv4Network | ipaddress.IPv6Network, dict[str, Any]]
+]:
     """(name, owner, prefix, network) of the routed prefix behind each on-prem segment's gateway."""
     found = []
     for segment in segments:
@@ -435,11 +439,19 @@ def _onprem_prefixes(
         if prefix.get("member_type") == "prefix":
             continue  # a container, not a routed subnet
         if net := _network(prefix.get("prefix")):
-            found.append((str(segment.get("name")), segment.get("owner"), prefix, net))
+            found.append(
+                (
+                    str(segment.get("name")),
+                    segment.get("owner"),
+                    prefix,
+                    net,
+                    segment_namespace(segment),
+                )
+            )
     return found
 
 
-def _vpc_aggregates(networks: list[dict[str, Any]]) -> list[_Aggregate]:
+def _vpc_aggregates(networks: list[dict[str, Any]], legs: list[CloudLeg]) -> list[_Aggregate]:
     """Each VPC cidr_blocks entry, expected in its account's environment namespace."""
     return [
         _Aggregate(
@@ -448,9 +460,13 @@ def _vpc_aggregates(networks: list[dict[str, Any]]) -> list[_Aggregate]:
             origin="its account's environment",
             expected=_type_for_environment((network.get("account") or {}).get("environment")),
             prefix=block,
+            zone=dict(registration.zone),
         )
         for network in networks
         for block in network.get("cidr_blocks") or []
+        for leg in legs
+        for registration in leg.registered
+        if registration.prefix == block
     ]
 
 
@@ -462,10 +478,12 @@ def _office_aggregates(offices: list[dict[str, Any]]) -> list[_Aggregate]:
             noun="LAN prefix",
             origin="its being an office (always production)",
             expected=PROD_TYPE,
-            prefix=prefix,
+            prefix=dict(registration.prefix),
+            zone=dict(registration.zone),
         )
         for office in offices
-        for prefix in office.get("lan_prefixes") or []
+        if (office.get("sdwan_gateway") or {}).get("name")
+        for registration in office_registered(office)
     ]
 
 
@@ -478,6 +496,7 @@ def _tunnel_aggregates(tunnels: list[dict[str, Any]]) -> list[_Aggregate]:
             origin="its being a tunnel (always production)",
             expected=PROD_TYPE,
             prefix=prefix,
+            zone=resolve_security_zone([tunnel], required=True, label=str(tunnel.get("name") or "tunnel")),
         )
         for tunnel in tunnels
         for prefix in tunnel.get("registered_prefixes") or []
@@ -498,8 +517,7 @@ def _network(prefix: str | None) -> ipaddress.IPv4Network | ipaddress.IPv6Networ
         return None
 
 
-def _namespace_key(prefix: dict[str, Any]) -> Any:
-    namespace = prefix.get("ip_namespace") or {}
+def _namespace_key(namespace: dict[str, Any]) -> Any:
     return namespace.get("id") or namespace.get("name")
 
 

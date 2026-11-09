@@ -18,8 +18,8 @@ uv run invoke check-model --jobs 1             # pairs traced one at a time (def
 
 Steps: (1) the stack on `:8100` (if it does not answer on `/api/info`, the runner starts it like the integration test
 `test_01`; about 5 minutes once, the containers stay); (2) a branch `tv-<time>`; (3) `infrahubctl schema load` from the
-working tree onto that branch (server refusals are printed verbatim); (4) `infrahubctl object load` of the data
-directories, in order; (5) for every segment pair: read the graph, walk L1 and L3, assert, compare with the golden file;
+working tree onto that branch (server refusals are printed verbatim); (4) ordinary recursive `infrahubctl object load`
+of the numbered sample roots (`tests/traversal/load_topology.py`); (5) for every segment pair: read the graph, walk L1 and L3, assert, compare with the golden file;
 (6) delete the branch (also after a failure) and print the total time. Nothing is written to `main`.
 
 The paths are the server's (`utils/path_trace.py`, `traverse_paths`): a pair in `cases.yml` gives its ends as
@@ -34,8 +34,9 @@ search. On failure the PASS/FAIL table shows the tracer result or the difference
 
 ## Data directories, pod, internet, pairs
 
-`data:` is the directory of the sample (`data/demos/00_full_topology`: the numbered folders are the load order, one
-`infrahubctl object load`); `tests/traversal/load_topology.py` loads it (`async apply(client, branch)`; command:
+`data:` is the directory of the sample (`data/demos/00_full_topology`: numbered roots `00_common`, `10_topology`,
+`20_C900`, `21_C901`, `90_bindings` define the sorted dependency order); `tests/traversal/load_topology.py` loads it
+(`async apply(client, branch)`; command:
 `uv run python tests/traversal/load_topology.py --branch main`): the load is idempotent, so a branch that inherited the data from
 `main` after `test_03` loads again without a skip. `tests/integration/test_03_full_topology.py` runs the same assertions on the `main` of the
 stack (`assert_case` from `check_model.py`, part of `invoke test-integration-fast`). Case keys: `pods` (one entry per DC: the

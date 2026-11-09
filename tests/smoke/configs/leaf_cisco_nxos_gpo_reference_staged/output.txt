@@ -244,8 +244,8 @@ router bgp 65000
 ! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
 !
 vrf context NONPROD
-  vni 50011
-  rd 10.0.0.1:50011
+  vni 60001
+  rd 10.0.0.1:60001
   ! UNCLASSIFIED -> web-np
   ! documented-not-lab-verified: reserved group 0 (UNCLASSIFIED) as the source of a contract; the guide does not define it
   ! documented-not-lab-verified: two bidir contracts on one pair
@@ -300,12 +300,12 @@ vrf context NONPROD
   security contract source 42 destination 41 policy GPO-43fde9701f bidir
   ! unenforced: data center DC10 stages group policy (group_policy_enforce is false): contracts are configured, security enforce is not
   address-family ipv4 unicast
-    route-target both 65000:50011
-    route-target both 65000:50011 evpn
+    route-target both 65000:60001
+    route-target both 65000:60001 evpn
 !
 vrf context PROD
-  vni 50012
-  rd 10.0.0.1:50012
+  vni 60000
+  rd 10.0.0.1:60000
   ! UNCLASSIFIED -> web_pay_demo_local
   ! documented-not-lab-verified: reserved group 0 (UNCLASSIFIED) as the source of a contract; the guide does not define it
   security contract source 0 destination 50 policy GPO-478bae982c bidir
@@ -318,8 +318,8 @@ vrf context PROD
   security contract source 50 destination 51 policy GPO-d77ed0702f bidir
   ! unenforced: data center DC10 stages group policy (group_policy_enforce is false): contracts are configured, security enforce is not
   address-family ipv4 unicast
-    route-target both 65000:50012
-    route-target both 65000:50012 evpn
+    route-target both 65000:60000
+    route-target both 65000:60000 evpn
 !
 interface nve1
   source-interface Loopback0
@@ -336,8 +336,8 @@ interface nve1
   member vni 10220
     suppress-arp
     ingress-replication protocol bgp
-  member vni 50011 associate-vrf
-  member vni 50012 associate-vrf
+  member vni 60001 associate-vrf
+  member vni 60000 associate-vrf
   no shutdown
 !
 !
@@ -377,7 +377,7 @@ vlan 220
 !
 vlan 3901
   name L3VNI_NONPROD
-  vn-segment 50011
+  vn-segment 60001
 !
 interface Vlan3901
   description L3VNI transit SVI for VRF NONPROD
@@ -388,7 +388,7 @@ interface Vlan3901
 !
 vlan 3900
   name L3VNI_PROD
-  vn-segment 50012
+  vn-segment 60000
 !
 interface Vlan3900
   description L3VNI transit SVI for VRF PROD

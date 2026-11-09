@@ -1,0 +1,46 @@
+---
+# The two targets behind the ISP, as public service endpoints (access `public`) with their range in the INTERNET
+# routing zone (00_common/04_internet/01_prefixes.yml) as `prefix`: a cloud public endpoint (the object store API of
+# the AWS account, reached from vpc-c900-prod) and a SaaS public service (Webex, named by its SaaS region, no virtual
+# network). Their public sides end on INTERNET (90_bindings/90_internet/02_circuits).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudServiceEndpoint
+  data:
+    - name: "s3-public"
+      # yamllint disable-line rule:line-length
+      description: "Object store API of eu-central-1 over its public range 192.0.2.0/24, through the internet (no VPN, no endpoint in the VPC)"  # yamllint disable-line rule:line-length
+      status: active
+      service_name: "s3"
+      access: public
+      prefix: ["192.0.2.0/24", "default"]
+      virtual_network: "vpc-c900-prod"
+      provider: "P004"
+    - name: "webex-public"
+      # yamllint disable-line rule:line-length
+      description: "Webex Frankfurt over its public range 203.0.113.0/24, through the internet (no tunnel, no private peering)"  # yamllint disable-line rule:line-length
+      status: active
+      service_name: "webex"
+      access: public
+      prefix: ["203.0.113.0/24", "default"]
+      provider: "P901"
+      saas_region: "WEBEX-FRANKFURT"
+    - name: "blob-public"
+      # yamllint disable-line rule:line-length
+      description: "Blob storage API of westeurope over its public range 198.18.0.0/24, through the internet (no private endpoint)"  # yamllint disable-line rule:line-length
+      status: active
+      service_name: "blob"
+      access: public
+      prefix: ["198.18.0.0/24", "default"]
+      virtual_network: "vnet-c900-weu"
+      provider: "P005"
+    - name: "gcs-public"
+      # yamllint disable-line rule:line-length
+      description: "Object storage API of europe-west3 over its public range 198.18.1.0/24, through the internet (no private access)"  # yamllint disable-line rule:line-length
+      status: active
+      service_name: "gcs"
+      access: public
+      prefix: ["198.18.1.0/24", "default"]
+      virtual_network: "vpc-c900-gcp"
+      provider: "P006"

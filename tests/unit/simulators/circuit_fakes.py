@@ -312,7 +312,22 @@ def session_payload(
         "circuit_type": {"value": circuit_type},
     }
     if circuit_type in ("handoff", "vpn"):
-        node["ip_namespace"] = {"node": {"name": {"value": namespace}} if namespace else None}
+        node["vrf"] = {
+            "node": {
+                "id": f"vrf-FR-{namespace}",
+                "deployment": {"node": {"id": "dep-FR", "name": {"value": "FR"}}},
+                "security_zone": {
+                    "node": {
+                        "id": f"zone-{namespace}",
+                        "name": {"value": namespace},
+                        "vrf_type": {"value": "prod" if namespace == "PROD" else "non_prod"},
+                        "l3_vni": {"value": 10001 if namespace == "PROD" else 10002},
+                    }
+                },
+            }
+            if namespace
+            else None
+        }
         node["password"] = {"node": {"id": password} if password else None}
     node["capabilities"] = {"edges": [{"node": port} for port in ends]}
     return {"TopologySessionCircuit": {"edges": [{"node": node}]}}
@@ -501,6 +516,9 @@ class FakeClient:
             if not self.address_families:
                 return []
             return [MagicMock(id=f"af-{kwargs['afi__value']}-{kwargs['safi__value']}")]
+        if name == "ManagedVRF":
+            # VRF provisioning is stubbed by make_generator; no native provider instance is invented here.
+            return []
         if name in ("DcimPhysicalInterface", "DcimVirtualInterface"):
             if "parent_interface__ids" in kwargs:
                 return [self.interface_node(iface_id) for iface_id in self.sub_interfaces]

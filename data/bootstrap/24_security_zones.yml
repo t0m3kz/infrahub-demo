@@ -1,9 +1,31 @@
 ---
-# The macro trust zones: PROD-ZONE / NONPROD-ZONE are what every tenant segment
-# is classified into by environment (utils/exchange_transit.py
-# zone_name_for_namespace_type); INTERNET-ZONE and MANAGEMENT-ZONE are the
-# exchange peers (utils/exchange_transit.py ZONE_BY_NS_TYPE), assigned
-# explicitly to the segments that live there.
+# Four fixed routing/security domains. The zone name is the CLI VRF name;
+# vrf_type selects routing behavior, independently of the trust level.
+# Each deployment realizes a zone as its own ManagedVRF. IPAM addresses,
+# prefixes, pools and resource prefixes all use Infrahub's built-in default
+# namespace; do not author another default namespace here.
+#
+# PROD and NONPROD never exchange directly. Each reaches INTERNET (egress)
+# and MANAGEMENT (core services, tenant-initiated only) through an inspected
+# TopologyRoutedExchange on a firewall context, never a bare route-target leak.
+# MANAGEMENT is DC-local: its services have no global route-target.
+#
+# L3 VNI band: 60000-60003, the fixed-zone band. No pool allocates L3 VNIs:
+# these four are hand-set. A VNI is one flat 24-bit field on the wire with
+# no L2/L3 discriminator, so every band must remain disjoint:
+#
+#   10001-39999  L2 VNI     dcN-vni-pool    (per-site, local segments)
+#   40000-49999  L2 VNI     GLOBAL-L2VNI    (stretched segments, all sites)
+#   50000-59999  unused     (no pool allocates here)
+#   60000-60003  L3 VNI     these four, allocated by hand, deliberately pool-free
+#   64000-64799  L2 VNI     exchange transit VLANs (61000 + transit VLAN), derived
+#                           by utils/exchange_transit.py, never pool-allocated
+#
+# The former 30000/30001/40000/40001 values overlapped the dynamic L2 pools.
+# A segment drawing the same VNI as a routed VRF could bridge tenant traffic
+# into that VRF; checks/evpn_fabric.py catches that otherwise inconspicuous
+# config defect. Staying under 65535 also keeps each VNI encodable in a
+# type-1 RD / type-2 RT.
 # On main from the start so branches boarding segments in parallel share one
 # node each; a zone created on a branch (segment.py's fallback) collides with
 # every other such branch on merge (unique name).
@@ -12,15 +34,23 @@ kind: Object
 spec:
   kind: SecurityZone
   data:
-    - name: "PROD-ZONE"
+    - name: "PROD"
       description: "Production workload zone — web, app, and database tiers"
       trust_level: 70
-    - name: "NONPROD-ZONE"
+      vrf_type: prod
+      l3_vni: 60000
+    - name: "NONPROD"
       description: "Non-production zone — dev, staging, QA environments"
       trust_level: 50
-    - name: "INTERNET-ZONE"
+      vrf_type: non_prod
+      l3_vni: 60001
+    - name: "INTERNET"
       description: "Untrusted external networks — the internet"
       trust_level: 0
-    - name: "MANAGEMENT-ZONE"
+      vrf_type: internet
+      l3_vni: 60002
+    - name: "MANAGEMENT"
       description: "Core services (DNS/NTP/syslog/monitoring), reached by tenants, never initiating towards them"
       trust_level: 90
+      vrf_type: management
+      l3_vni: 60003

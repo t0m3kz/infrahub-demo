@@ -60,12 +60,14 @@ from typing import Any
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
+from ..connections import CablingMixin
+from ..helpers.security_zone import ensure_segment_security_zone
 from ..pools import PoolMixin
 from ..protocols import ManagedVxlanSegment
 from .segment_ports import SegmentPortTagMixin
 
 
-class AppInstanceSegmentGenerator(PoolMixin, SegmentPortTagMixin, CommonGenerator):
+class AppInstanceSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, CommonGenerator):
     """Reconciles a segment's customer-facing switch-port tags from the
     instances of every AppComponent on it, then, for a VXLAN segment, the
     segment's LOCAL VLAN ID rows on the switches those ports belong to
@@ -110,6 +112,8 @@ class AppInstanceSegmentGenerator(PoolMixin, SegmentPortTagMixin, CommonGenerato
             # leave their switch ports tagged until the segment is.
             self.logger.info(f"Component {fqdn}: no instances set — reconciling segment '{segment_name}' anyway")
 
+        await ensure_segment_security_zone(self.client, segment)
+        await self.ensure_segment_addressing(segment)
         tags = await self.reconcile_vxlan_segment(segment_id, segment_name)
         if tags is None:
             # The segment is gone or is no VXLAN segment: nothing to assign.

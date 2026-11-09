@@ -171,10 +171,10 @@ class TestHandoffSession:
     @pytest.mark.parametrize(
         ("payload", "message"),
         [
-            pytest.param(handoff_payload(namespace=None), r"needs its ip_namespace", id="no-namespace"),
+            pytest.param(handoff_payload(namespace=None), r"needs its routing VRF", id="no-vrf"),
             pytest.param(
-                handoff_payload(namespace="NON-PROD"),
-                r"pool 'Handoff-NON-PROD-IPv4' not found",
+                handoff_payload(namespace="NONPROD"),
+                r"pool 'Handoff-NONPROD-IPv4' not found",
                 id="namespace-without-pool",
             ),
         ],
@@ -252,15 +252,15 @@ class TestHandoffPoolData:
 
     def test_every_namespace_has_its_pool_in_that_namespace(self) -> None:
         """Each namespace has one Handoff pool in it, handing out /31 prefixes (point-to-point IPv4 link)."""
-        namespaces = [row["name"] for row in self._rows("IpamNamespace", "22_namespaces.yml")]
+        namespaces = [row["name"] for row in self._rows("SecurityZone", "24_security_zones.yml")]
         pools = {row["name"]: row for row in self._rows("CoreIPPrefixPool", "26_handoff_pools.yml")}
 
         assert sorted(pools) == sorted(handoff_pool_name(ns) for ns in namespaces)
         for namespace in namespaces:
             pool = pools[handoff_pool_name(namespace)]
-            assert pool["ip_namespace"] == namespace
+            assert pool["ip_namespace"] == "default"
             assert pool["default_prefix_length"] == 31
-            assert [resource["ip_namespace"] for resource in pool["resources"]["data"]] == [namespace]
+            assert [resource["ip_namespace"] for resource in pool["resources"]["data"]] == ["default"]
             assert [resource["member_type"] for resource in pool["resources"]["data"]] == ["prefix"]
 
     def test_the_pool_prefixes_do_not_overlap_each_other_or_the_authored_handoffs(self) -> None:

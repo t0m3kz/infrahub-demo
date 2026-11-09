@@ -9,6 +9,7 @@ from typing import Any
 from infrahub_sdk import InfrahubClient
 
 from utils.data_cleaning import clean_data
+from utils.routing_domain import interface_security_zone
 
 from .circuit_helpers import _deployed_dc_names
 from .query_files import QUERY_GET_LOADBALANCER_INVENTORY, QUERY_GET_TENANT_SERVICES, QUERY_GET_TRANSIT_INVENTORY
@@ -135,8 +136,9 @@ def _context_legs_and_ports(node: dict[str, Any]) -> tuple[list[dict[str, Any]],
     """A service context's legs and the service ports tagged with it, from its raw ``capabilities``.
 
     A leg is a DcimVirtualInterface (a member's VLAN sub-interface): {"interface", "device",
-    "device_id", "address", "namespace", "namespace_type", "exchanges"}, ``exchanges`` the names of
-    the TopologyRoutedExchanges it is linked to (always empty for a load-balancer leg). A service port
+    "device_id", "address", "namespace", "vrf_type", "exchanges"}, ``exchanges`` the names of
+    the TopologyRoutedExchanges it is linked to (always empty for a load-balancer leg). The legacy
+    ``namespace`` key holds the routing SecurityZone name, not the address's IPAM namespace. A service port
     is a DcimPhysicalInterface on a border leaf (DC) or an edge (colocation metro): {"id",
     "interface", "device", "role"}, ``role`` the port's own role where the query selects it.
     """
@@ -146,15 +148,15 @@ def _context_legs_and_ports(node: dict[str, Any]) -> tuple[list[dict[str, Any]],
         device = _rel_node(cap.get("device"))
         if cap["__typename"] == "DcimVirtualInterface":
             address = _rel_node(cap.get("ip_address"))
-            namespace = _rel_node(address.get("ip_namespace"))
+            zone = interface_security_zone(clean_data(cap))
             legs.append(
                 {
                     "interface": _value(cap.get("name")),
                     "device": _value(device.get("name")),
                     "device_id": device.get("id"),
                     "address": _value(address.get("address")),
-                    "namespace": _value(namespace.get("name")),
-                    "namespace_type": _value(namespace.get("namespace_type")),
+                    "namespace": zone.get("name"),
+                    "vrf_type": zone.get("vrf_type"),
                     "exchanges": sorted(
                         _value(exchange.get("name"))
                         for exchange in _edge_nodes(cap.get("capabilities"))
@@ -196,10 +198,10 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
         {"contexts": [{"id", "name", "vlan", "snat", "snat_namespace", "tenant", "cluster_dcs",
                        "served": [{"name", "environment"}],
                        "legs": [{"interface", "device", "device_id", "address",
-                                 "namespace", "namespace_type", "exchanges"}],
+                                 "namespace", "vrf_type", "exchanges"}],
                        "border_ports": [{"id", "interface", "device", "role"}]}],
-         "exchanges": [{"id", "name", "namespace_a", "namespace_a_type",
-                        "namespace_z", "namespace_z_type", "gateway_id",
+         "exchanges": [{"id", "name", "security_zone_a", "namespace_a_type",
+                        "security_zone_z", "namespace_z_type", "gateway_id",
                         "gateway_name"}]}
 
         ``legs`` and ``border_ports`` as _context_legs_and_ports returns them.
@@ -235,10 +237,10 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
         {
             "id": node["id"],
             "name": _value(node.get("name")),
-            "namespace_a": _value(_rel_node(node.get("namespace_a")).get("name")),
-            "namespace_a_type": _value(_rel_node(node.get("namespace_a")).get("namespace_type")),
-            "namespace_z": _value(_rel_node(node.get("namespace_z")).get("name")),
-            "namespace_z_type": _value(_rel_node(node.get("namespace_z")).get("namespace_type")),
+            "security_zone_a": _value(_rel_node(node.get("security_zone_a")).get("name")),
+            "namespace_a_type": _value(_rel_node(node.get("security_zone_a")).get("vrf_type")),
+            "security_zone_z": _value(_rel_node(node.get("security_zone_z")).get("name")),
+            "namespace_z_type": _value(_rel_node(node.get("security_zone_z")).get("vrf_type")),
             "gateway_id": _rel_node(node.get("gateway")).get("id"),
             "gateway_name": _value(_rel_node(node.get("gateway")).get("name")),
         }
@@ -254,8 +256,8 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
 
 
 def _tenant_namespace(context: dict[str, Any]) -> str | None:
-    """The one of PROD / NON-PROD a firewall context has a leg in (INTERNET and MANAGEMENT are its peers), else None."""
-    namespaces = {str(leg["namespace"]) for leg in context["legs"]} & {"PROD", "NON-PROD"}
+    """The one of PROD / NONPROD a firewall context has a leg in (INTERNET and MANAGEMENT are its peers), else None."""
+    namespaces = {str(leg["namespace"]) for leg in context["legs"]} & {"PROD", "NONPROD"}
     return next(iter(namespaces)) if len(namespaces) == 1 else None
 
 
@@ -268,7 +270,7 @@ def match_transit_contexts(
     """Split the contexts into the ones the suite owns, keyed by site, and the other colocation ones.
 
     Returns ({(site, namespace, tenant): context}, [unmatched contexts]). The namespace is the context's
-    tenant VRF (PROD or NON-PROD, see _tenant_namespace): a shared context is one per (cluster, namespace). A
+    tenant VRF (PROD or NONPROD, see _tenant_namespace): a shared context is one per (cluster, namespace). A
     shared context is keyed (dc, namespace, None) by the DC its member firewalls are deployed in; a dedicated
     one (its members are virtual, so carry no deployment) by the tenant's own trailing DC (`C007-P-DC10` -> DC10)
     and the tenant name. Contexts of a DC outside ``dc_names`` (the DC6 chain's) and dedicated contexts of

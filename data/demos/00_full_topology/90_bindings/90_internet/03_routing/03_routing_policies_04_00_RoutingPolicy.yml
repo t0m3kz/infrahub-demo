@@ -1,0 +1,32 @@
+# RoutingPolicy declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPolicy
+  data:
+    - name: "transit-in"
+      origin: generated
+      priority: 100
+      default_action: deny
+      import_peerings:
+        - "BGP-KTW1-EDGE01-ISP-A"
+        - "BGP-PAR1-EDGE01-ISP-B"
+      terms:
+        data:
+          - seq: 10
+            action: permit
+            set_local_pref: 80
+            add_communities: ["64498:1"]
+            match_prefix_list: "TRANSIT-DEFAULT-IN"
+    - name: "transit-out"
+      origin: generated
+      priority: 100
+      default_action: deny
+      export_peerings:
+        - "BGP-KTW1-EDGE01-ISP-A"
+        - "BGP-PAR1-EDGE01-ISP-B"
+      terms:
+        data:
+          - seq: 10
+            action: deny
+            match_community_list: "CL-LEARNED-FROM-TRANSIT"

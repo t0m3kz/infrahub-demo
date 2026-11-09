@@ -18,17 +18,26 @@ def edges(*nodes: dict[str, Any]) -> dict[str, Any]:
     return {"edges": [{"node": node} for node in nodes]}
 
 
-def namespace_ref(name: str, namespace_type: str | None = None) -> dict[str, Any]:
+def namespace_ref(name: str, vrf_type: str | None = None) -> dict[str, Any]:
     """An ``ip_namespace`` relationship."""
     node: dict[str, Any] = {"name": {"value": name}}
-    if namespace_type:
-        node["namespace_type"] = {"value": namespace_type}
+    if vrf_type:
+        node["vrf_type"] = {"value": vrf_type}
     return {"node": node}
 
 
-def address(addr: str, namespace: str, namespace_type: str | None = None) -> dict[str, Any]:
-    """An ``ip_address`` relationship."""
-    return {"node": {"address": {"value": addr}, "ip_namespace": namespace_ref(namespace, namespace_type)}}
+def address(addr: str, namespace: str, vrf_type: str | None = None) -> dict[str, Any]:
+    """An ``ip_address`` relationship; IPAM stays in ``default``, the routing zone rides in ``_zone``.
+
+    ``_zone`` is a fixture-only hint, popped by ``zone_vrf`` when the address is put on an interface: the query reads
+    the zone from the interface's ``vrf``, never from the address."""
+    return {
+        "node": {
+            "address": {"value": addr},
+            "ip_namespace": namespace_ref("default"),
+        },
+        "_zone": namespace_ref(namespace, vrf_type),
+    }
 
 
 def raw_footprint(footprint_id: str, parent_id: str = HOSTING_ID, *, context: bool = True) -> dict[str, Any]:
@@ -63,10 +72,11 @@ def raw_row(
         "customer_deployments": edges(*(footprints or [])),
     }
     if namespace:
+        seg["security_zone"] = namespace_ref(namespace)
         seg["gateway"] = {
             "node": {
                 "address": {"value": "10.0.0.1/24"},
-                "ip_prefix": {"node": {"ip_namespace": namespace_ref(namespace)}},
+                "ip_prefix": {"node": {"ip_namespace": namespace_ref("default")}},
             }
         }
     return {"id": row_id, "vlan_id": {"value": vlan_id}, "segment_deployment": {"node": {"segment": {"node": seg}}}}
@@ -85,13 +95,13 @@ def raw_instance(
     the callers that pass the member's name. ``deployment_id`` None means an instance with no deployment node."""
     ns: dict[str, Any] = {"name": {"value": namespace}}
     ns["l3_vni"] = {"value": l3_vni}
-    ns["namespace_type"] = {"value": ns_type}
+    ns["vrf_type"] = {"value": ns_type}
     return {
         "__typename": VRF_KIND,
         "id": instance_id,
         "name": {"value": instance_name(hosting_name, namespace)},
         "deployment": {"node": {"id": deployment_id}} if deployment_id else None,
-        "namespace": {"node": ns},
+        "security_zone": {"node": ns},
     }
 
 
@@ -105,6 +115,16 @@ def raw_root_instance(instance: dict[str, Any], *member_ids: str) -> dict[str, A
 def raw_mlag(mlag_id: str) -> dict[str, Any]:
     """A ManagedMLAG capability (the query selects no rows on it: rows sit on the device)."""
     return {"__typename": "ManagedMLAG", "id": mlag_id}
+
+
+def zone_vrf(addr: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Split an ``address()`` into the real ``ip_address`` and the ``vrf`` the interface carries for its zone."""
+    clean = {key: value for key, value in addr.items() if key != "_zone"}
+    zone = addr.get("_zone")
+    if not zone or zone["node"]["name"]["value"] == "default":
+        return clean, None
+    vrf = {"node": {"id": f"vrf-{zone['node']['name']['value']}", "security_zone": zone}}
+    return clean, vrf
 
 
 def raw_interface(
@@ -124,7 +144,9 @@ def raw_interface(
         "capabilities": edges(*(capabilities or [])),
     }
     if addr:
-        node["ip_address"] = addr
+        node["ip_address"], vrf = zone_vrf(addr)
+        if vrf:
+            node["vrf"] = vrf
     return node
 
 
@@ -146,7 +168,7 @@ def raw_svi(
             "node": {
                 "id": vrf_id,
                 "deployment": {"node": {"id": vrf_deployment_id}},
-                "namespace": namespace_ref(vrf_namespace or ""),
+                "security_zone": namespace_ref(vrf_namespace or ""),
             }
         }
         if vrf_id
@@ -158,10 +180,13 @@ def raw_svi(
 
 def raw_context(kind: str, vlan_id: int, *legs: tuple[str, str, str]) -> dict[str, Any]:
     """A service context capability; each leg is ``(member role, namespace, namespace type)``."""
-    members = [
-        {"device": {"node": {"role": {"value": role}}}, "ip_address": address("10.1.0.1/29", ns, ns_type)}
-        for role, ns, ns_type in legs
-    ]
+    members = []
+    for role, ns, ns_type in legs:
+        ip_address, vrf = zone_vrf(address("10.1.0.1/29", ns, ns_type))
+        member: dict[str, Any] = {"device": {"node": {"role": {"value": role}}}, "ip_address": ip_address}
+        if vrf:
+            member["vrf"] = vrf
+        members.append(member)
     return {
         "__typename": kind,
         "id": f"ctx-{kind}-{vlan_id}",
@@ -232,7 +257,7 @@ def raw_response(*devices: dict[str, Any], instances: tuple[dict[str, Any], ...]
             members.setdefault(edge["node"]["id"], []).append(device["id"])
             shapes[edge["node"]["id"]] = edge["node"]
     roots = [raw_root_instance(shapes[vrf_id], *ids) for vrf_id, ids in members.items()]
-    return {"IpamNamespace": edges(), VRF_KIND: edges(*roots, *instances), "DcimDevice": edges(*devices)}
+    return {"SecurityZone": edges(), VRF_KIND: edges(*roots, *instances), "DcimDevice": edges(*devices)}
 
 
 def facts_of(device: dict[str, Any]) -> DeviceVrfFacts:

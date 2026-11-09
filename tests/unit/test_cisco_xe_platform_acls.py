@@ -325,9 +325,9 @@ class TestCiscoXeAclRenderingThroughTransform:
             " 20 permit tcp any any eq 443\n",
             " 70 permit udp any 10.200.0.0 0.0.0.255 range 5000 5010\n",
             " 90 permit icmp any any\n",
-            " 110 permit tcp any host 10.9.9.9 eq 5432 log\n",
-            " 130 deny ip any any log\n",
-            " 50 remark Zone: any -> web\n",
+            " 120 permit tcp any host 10.9.9.9 eq 5432 log\n",
+            " 140 deny ip any any log\n",
+            " 50 remark Zone: any -> PROD\n",
             " 50 permit tcp 10.200.0.0 0.0.0.255 eq 8443 10.100.0.0 0.0.0.255 established\n",
         ):
             assert expected in output, expected
@@ -368,9 +368,9 @@ class TestCiscoXeAclRenderingThroughTransform:
         output = run_transform(AccessSwitch, _golden_input(ACL_LISP))
 
         assert re.search(r"^router lisp$", output, re.M)
-        assert " instance-id 50001\n" in output
+        assert " instance-id 60000\n" in output
         assert " instance-id 10100\n" in output
-        assert re.search(r"^ lisp mobility VRF_A-IPV4$", output, re.M)
+        assert re.search(r"^ lisp mobility PROD-IPV4$", output, re.M)
         for absent in ("l2vpn evpn", "nve1", "router bgp"):
             assert absent not in output, absent
 
@@ -380,9 +380,9 @@ class TestCiscoXeAclRenderingThroughTransform:
     ) -> None:
         """A rule whose destination is an IPv6 prefix cannot go into an `ip access-list extended`."""
         data = _golden_input(golden)
-        _first_policy_rule(data)["destination_ip_addresses"] = {
-            "edges": [{"node": {"address": {"value": "2001:db8::/32"}}}]
-        }
+        rule = _first_policy_rule(data)
+        rule["destination_zone"] = {"node": {"name": {"value": "PROD"}}}
+        rule["destination_ip_addresses"] = {"edges": [{"node": {"address": {"value": "2001:db8::/32"}}}]}
 
         with pytest.raises(ValueError) as excinfo:
             run_transform(transform_cls, data)

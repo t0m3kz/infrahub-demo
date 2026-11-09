@@ -25,11 +25,11 @@ def test_a_segment_inside_the_prefix_of_another_is_an_error() -> None:
 
 
 def test_the_same_prefix_in_two_namespaces_passes() -> None:
-    """PROD and NON-PROD never meet: the same range may exist in each."""
+    """PROD and NONPROD never meet: the same range may exist in each."""
     check = _run(
         ManagedNetworkSegment=[
             _onprem("a", "10.1.1.0/24", pid="p1"),
-            _onprem("b", "10.1.1.0/24", ns_name="NON-PROD", ns_type="non_prod", pid="p2"),
+            _onprem("b", "10.1.1.0/24", ns_name="NONPROD", ns_type="non_prod", pid="p2"),
         ]
     )
     assert _errors(check) == []

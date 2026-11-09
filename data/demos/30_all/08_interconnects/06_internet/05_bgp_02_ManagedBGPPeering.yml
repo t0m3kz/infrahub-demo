@@ -1,0 +1,93 @@
+# Transit eBGP, in VRF INTERNET on the cage edge (the local port's security zone,
+# 03_addressing.yml). It rides each edge's existing overlay process: a colocation
+# edge has no other one, and the session never joins its global peer groups.
+#
+# Named TRANSIT-*, not after the circuit: ManagedBGPPeering and
+# TopologyCarrierCircuit both inherit ManagedGeneric, whose name HFID is shared,
+# so INET-* here would upsert onto the circuit.
+#
+# The maximum-prefix of an ISP session is derived (utils/bgp_expectation.py): the ISPs send a default route only,
+# so the limit is that one route plus the slack. A full table (~1M IPv4 routes) would not fit an N9K-C9316D-GX,
+# which holds 512k.
+#
+# Both edges of each metro (eg-fr201/02, eg-pa401/02) reach a DC over their own
+# dark fibre and are Multi-Site BGWs: each carries VRF INTERNET as an L3VNI and
+# exports its ISP default into the DC fabric as EVPN type-5. The sessions on
+# eg-fr202 and eg-pa402 (Cogent) are reachable from the DCs via the second BGW.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "TRANSIT-LUMEN-EQXFR2"
+      description: "Internet transit eg-fr201 <-> EXT-LUMEN-FRA1 (AS3356) over INET-LUMEN-EQXFR2"
+      session_type: EBGP
+      peering_role: regular
+      member_of_groups: [transit_peerings]
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-fr201-bgp-overlay"
+        - "EXT-LUMEN-FRA1-bgp"
+      password: "inet-lumen-eqxfr2-key"
+      capabilities:
+        - ["eg-fr201", "Ethernet1/14"]
+        - ["EXT-LUMEN-FRA1", "et-0/0/0"]
+    - name: "TRANSIT-COGENT-EQXFR2"
+      description: "Internet transit eg-fr202 <-> EXT-COGENT-FRA1 (AS174) over INET-COGENT-EQXFR2"
+      session_type: EBGP
+      peering_role: regular
+      member_of_groups: [transit_peerings]
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-fr202-bgp-overlay"
+        - "EXT-COGENT-FRA1-bgp"
+      password: "inet-cogent-eqxfr2-key"
+      capabilities:
+        - ["eg-fr202", "Ethernet1/14"]
+        - ["EXT-COGENT-FRA1", "et-0/0/0"]
+    - name: "TRANSIT-LUMEN-EQXPA4"
+      description: "Internet transit eg-pa401 <-> EXT-LUMEN-PAR1 (AS3356) over INET-LUMEN-EQXPA4"
+      session_type: EBGP
+      peering_role: regular
+      member_of_groups: [transit_peerings]
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-pa401-bgp-overlay"
+        - "EXT-LUMEN-PAR1-bgp"
+      password: "inet-lumen-eqxpa4-key"
+      capabilities:
+        - ["eg-pa401", "Ethernet1/14"]
+        - ["EXT-LUMEN-PAR1", "et-0/0/0"]
+    - name: "TRANSIT-COGENT-EQXPA4"
+      description: "Internet transit eg-pa402 <-> EXT-COGENT-PAR1 (AS174) over INET-COGENT-EQXPA4"
+      session_type: EBGP
+      peering_role: regular
+      member_of_groups: [transit_peerings]
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-pa402-bgp-overlay"
+        - "EXT-COGENT-PAR1-bgp"
+      password: "inet-cogent-eqxpa4-key"
+      capabilities:
+        - ["eg-pa402", "Ethernet1/14"]
+        - ["EXT-COGENT-PAR1", "et-0/0/0"]

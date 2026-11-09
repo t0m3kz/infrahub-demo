@@ -1,8 +1,12 @@
 """Unit tests for the customer PBR rules in transforms/helpers/firewall_pbr.py."""
 
+import pytest
+
 from tests.unit.firewall_helpers_shared import _make_pbr_activation
+from tests.unit.routing_helpers import make_vrf
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
 from transforms.helpers.firewall_pbr import get_customer_pbr_rules
+from utils.routing_domain import RoutingDomainError
 
 
 def _make_pbr_rule(*, action: str = "permit", dst_prefix: str | None = "10.0.2.0/24", disabled: bool = False) -> dict:
@@ -24,8 +28,9 @@ def _make_context_leg(
     ctx: dict = {
         "capabilities": [
             {
+                "vrf": make_vrf({"name": "PROD"}),
                 "device": {"role": "internal-firewall"},
-                "ip_address": {"address": fw_ip, "ip_namespace": {"name": "PROD"}},
+                "ip_address": {"address": fw_ip, "ip_namespace": {"node": {"name": {"value": "default"}}}},
             }
         ],
     }
@@ -158,9 +163,16 @@ class TestGetCustomerPbrRules:
                     "id": "seg-1",
                     "name": "seg-1",
                     "customer_name": "web",
+                    "security_zone": {"name": "PROD", "vrf_type": "prod"},
                     "customer_deployments": [{"id": "dep-a"}, {"id": "dep-b"}],
                     "security_policy": None,
-                    "gateway": {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "PROD"}}},
+                    "gateway": {
+                        "ip_prefix": {
+                            "security_zone": {"name": "PROD"},
+                            "prefix": "10.0.1.0/24",
+                            "ip_namespace": {"node": {"name": {"value": "default"}}},
+                        }
+                    },
                 },
             }
         ]
@@ -180,6 +192,7 @@ class TestGetCustomerPbrRules:
                     "name": "seg-1",
                     "customer_name": "web",
                     "owner": {"id": "dep-a"},
+                    "security_zone": {"name": "PROD", "vrf_type": "prod"},
                     "customer_deployments": [],
                     "security_policy": None,
                 },
@@ -225,7 +238,7 @@ class TestGetCustomerPbrRules:
 
     def test_permit_to_the_internet_zone_is_no_bypass(self) -> None:
         """The internet has no prefix: the leaf keeps redirecting to the firewall."""
-        rule = {"action": "permit", "disabled": False, "destination_zone": {"name": "INTERNET-ZONE"}}
+        rule = {"action": "permit", "disabled": False, "destination_zone": {"name": "INTERNET"}}
         policies = [{"enabled": True, "rules": [rule]}]
         activations = [_make_pbr_activation(security_policies=policies)]
         result = get_customer_pbr_rules(activations, [_make_context_leg()])
@@ -352,52 +365,73 @@ class TestCustomerPbrNeverBypassesExchangePeers:
         return get_customer_pbr_rules([activation], [_make_context_leg()])
 
     def test_permit_to_a_tenant_zone_segment_is_still_a_bypass(self) -> None:
-        assert self._rules("PROD-ZONE")[0]["bypass_prefixes"] == ["10.0.2.0/24"]
+        assert self._rules("PROD")[0]["bypass_prefixes"] == ["10.0.2.0/24"]
 
     def test_permit_to_a_segment_without_zone_is_still_a_bypass(self) -> None:
         assert self._rules(None)[0]["bypass_prefixes"] == ["10.0.2.0/24"]
 
     def test_permit_to_an_exchange_peer_zone_segment_is_not_a_bypass(self) -> None:
-        assert self._rules("INTERNET-ZONE")[0]["bypass_prefixes"] == []
+        assert self._rules("INTERNET")[0]["bypass_prefixes"] == []
 
     def test_permit_to_the_management_zone_is_not_a_bypass(self) -> None:
-        assert self._rules("MANAGEMENT-ZONE")[0]["bypass_prefixes"] == []
+        assert self._rules("MANAGEMENT")[0]["bypass_prefixes"] == []
 
 
 class TestCustomerPbrPrefixSelectorBypass:
     """A permit to a pure prefix selector (no peer segment) is bypassed symmetrically in the segment's own VRF."""
 
     @staticmethod
-    def _bypass(selector: dict | None, *, inbound: bool = False) -> list[str]:
+    def _bypass(selector: dict | None, *, inbound: bool = False, zone: str | None = "PROD") -> list[str]:
         """The bypass prefixes of a PROD segment whose only rule carries ``selector``."""
         activation = _make_pbr_activation(security_policies=[{"enabled": True, "rules": []}])
         if inbound:
             activation["segment"]["inbound_rules"] = [
-                {"action": "permit", "disabled": False, "policy": {"enabled": True}, "source_prefixes": [selector]}
+                {
+                    "action": "permit",
+                    "disabled": False,
+                    "policy": {"enabled": True},
+                    "source_prefixes": [selector],
+                    "source_zone": {"name": zone} if zone else None,
+                }
             ]
         else:
-            rule = {"action": "permit", "disabled": False, "destination_prefixes": [selector] if selector else []}
+            rule = {
+                "action": "permit",
+                "disabled": False,
+                "destination_prefixes": [selector] if selector else [],
+                "destination_zone": {"name": zone} if zone else None,
+            }
             activation["segment"]["security_policy"]["rules"] = [rule]
         return get_customer_pbr_rules([activation], [_make_context_leg()])[0]["bypass_prefixes"]
 
     def test_selector_in_the_segments_own_vrf_is_bypassed(self) -> None:
         """Forward and reply both stay on the fabric: the firewall never sees half a session."""
-        selector = {"prefix": "10.40.0.0/16", "ip_namespace": {"name": "PROD"}}
+        selector = {
+            "prefix": "10.40.0.0/16",
+            "ip_namespace": {"node": {"name": {"value": "default"}}},
+        }
         assert self._bypass(selector) == ["10.40.0.0/16"]
 
     def test_reply_leg_of_a_selector_source_is_bypassed(self) -> None:
         """An inbound permit from a selector in the same VRF is answered past the firewall too."""
-        selector = {"prefix": "10.40.0.0/16", "ip_namespace": {"name": "PROD"}}
+        selector = {
+            "prefix": "10.40.0.0/16",
+            "ip_namespace": {"node": {"name": {"value": "default"}}},
+        }
         assert self._bypass(selector, inbound=True) == ["10.40.0.0/16"]
 
     def test_selector_in_another_vrf_stays_on_the_firewall(self) -> None:
         """A prefix the tenant VRF cannot route is redirected, as before."""
-        selector = {"prefix": "198.51.100.0/24", "ip_namespace": {"name": "INTERNET"}}
-        assert self._bypass(selector) == []
+        selector = {
+            "prefix": "198.51.100.0/24",
+            "ip_namespace": {"node": {"name": {"value": "default"}}},
+        }
+        assert self._bypass(selector, zone="INTERNET") == []
 
-    def test_selector_without_namespace_stays_on_the_firewall(self) -> None:
-        """Unknown VRF: fail towards inspection, not towards a blackholing bypass."""
-        assert self._bypass({"prefix": "10.40.0.0/16"}) == []
+    def test_selector_without_policy_zone_is_rejected(self) -> None:
+        """Missing policy context must not produce a success-shaped bypass or redirect."""
+        with pytest.raises(RoutingDomainError, match="destination: missing security zone"):
+            self._bypass({"prefix": "10.40.0.0/16"}, zone=None)
 
     def test_ip_address_selector_in_the_own_vrf_is_bypassed(self) -> None:
         """A host selector is a /32-style CIDR and follows the same rule."""
@@ -406,7 +440,13 @@ class TestCustomerPbrPrefixSelectorBypass:
             {
                 "action": "permit",
                 "disabled": False,
-                "destination_ip_addresses": [{"address": "10.40.0.9/32", "ip_namespace": {"name": "PROD"}}],
+                "destination_zone": {"name": "PROD"},
+                "destination_ip_addresses": [
+                    {
+                        "address": "10.40.0.9/32",
+                        "ip_namespace": {"name": "default"},
+                    }
+                ],
             }
         ]
         assert get_customer_pbr_rules([activation], [_make_context_leg()])[0]["bypass_prefixes"] == ["10.40.0.9/32"]

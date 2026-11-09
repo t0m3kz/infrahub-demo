@@ -1,0 +1,13 @@
+---
+# The INTERNET scenario: no private circuit and no tunnel. Our edge port Ethernet1/2 already rides the internet
+# carrier ktw1-ispa-48211-isp-a to the ISP router EXT-ISP-A-PE1
+# (90_bindings/50_connections/Cloud/00_carriers/00_carrier_circuits.yml). Here
+# the edge and the ISP router get an address and an eBGP session in the INTERNET routing zone, and two public ranges
+# stand for the services behind the ISP. Documentation ranges only (RFC 5737 / RFC 5398). The AS of the first ISP:
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - {asn: 64496, owner: "P014", description: "ISP-A (documentation AS)"}
+    - {asn: 64497, owner: "P023", description: "ISP-B (documentation AS)"}

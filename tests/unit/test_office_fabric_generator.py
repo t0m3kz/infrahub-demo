@@ -169,7 +169,7 @@ class TestPools:
                 "prefix_length": _OFFICE_MANAGEMENT_PREFIX_LENGTH,
                 "role": "management",
                 "kind": "address",
-                "namespace": "MANAGEMENT",
+                "namespace": "default",
             },
             "c005-office-technical-pool": {
                 "pool_name": "c005-office-technical-pool",

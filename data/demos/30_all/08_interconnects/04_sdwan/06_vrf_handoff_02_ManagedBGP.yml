@@ -1,0 +1,16 @@
+# GW1's own BGP process. Its config is pushed by the Orchestrator, not by a
+# transform here — this exists so the generated session has a remote AS (the party
+# ASN of a handoff is this process's local_as) and a second endpoint, and so
+# eg-fr201's transform can render its side. It is GW1's only ManagedBGP process,
+# which is how the generator picks it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "EQX-FR2-SDWAN-GW1-bgp"
+      status: active
+      local_as: "AS65028"
+      router_id: ["10.255.64.2/32", "default"]
+      capabilities:
+        - "EQX-FR2-SDWAN-GW1"

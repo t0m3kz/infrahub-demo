@@ -25,6 +25,7 @@ from typing import Any
 from generators.helpers.naming import sdwan_edge_name
 from generators.topology.circuit import CircuitEndpoint, CircuitLocation, plan_locations
 from tests.integration.demo_data import ROOT, Declared, declared, distinct, name
+from tests.unit.external_vrf_peers_helpers import _raw_vrf
 
 ALL_DEMO = ROOT / "data" / "demos" / "30_all"
 BOOTSTRAP = ROOT / "data" / "bootstrap"
@@ -84,9 +85,7 @@ class _Model:
     def __init__(self, without_cables: bool, without_circuits: frozenset[str]) -> None:
         self.without_circuits = without_circuits
         self.places = self._places()
-        self.namespaces = {
-            name(ns): str(ns.value("namespace_type")) for ns in distinct(declared("IpamNamespace", BOOTSTRAP))
-        }
+        self.namespaces = {name(ns): str(ns.value("vrf_type")) for ns in distinct(declared("SecurityZone", BOOTSTRAP))}
         self.sdwan_offices = [office for office in _all("TopologyCustomerOffice") if office.item.get("sdwan_gateway")]
         self.devices: dict[str, dict[str, Any]] = {}
         self._add_declared_devices()
@@ -373,9 +372,15 @@ def _handoff(
     """A handoff as the query selects it: a circuit has no owner."""
     payload = model.virtual_payload(circuit_name, locations, ends, facility_only=True)
     del payload["owner"]
-    payload["ip_namespace"] = {
-        "node": {"name": {"value": namespace}, "namespace_type": {"value": model.namespaces[namespace]}}
-    }
+    payload["vrf"] = {"node": _raw_vrf(namespace)}
+    for edge in payload["capabilities"]["edges"]:
+        port = edge["node"]
+        device = port["device"]["node"]
+        if any(
+            process["node"].get("process_role", {}).get("value") == "overlay"
+            for process in device.get("capabilities", {}).get("edges", [])
+        ):
+            port["vrf"] = payload["vrf"]
     return payload
 
 
@@ -423,7 +428,7 @@ def build_payloads(without_cables: bool = False, without_circuits: Iterable[str]
                 name(circuit),
                 [str(p) for p in circuit.item["locations"]],
                 [(str(d), str(p)) for d, p in circuit.item["capabilities"]],
-                str(circuit.item["ip_namespace"]),
+                str(circuit.item["security_zone"]),
             )
         )
 

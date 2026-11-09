@@ -1,6 +1,6 @@
 """Unit tests for CheckHypervisorEnvironment, fed canned hypervisor_environment query responses.
 
-Two rules: prod and non-prod VMs never share a hypervisor, and a VM runs in the DC (or metro) of its footprint.
+Two rules: prod and nonprod VMs never share a hypervisor, and a VM runs in the DC (or metro) of its footprint.
 """
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ def _run(vms: list[dict[str, Any]]) -> list[str]:
 
 
 class TestCheckHypervisorEnvironment:
-    """One environment class per hypervisor: prod and non-prod never share a host."""
+    """One environment class per hypervisor: prod and nonprod never share a host."""
 
     def test_one_class_per_host_passes(self) -> None:
         """Prod VMs of two customers on one host and dev + staging VMs on another are each one class."""
@@ -290,5 +290,5 @@ def test_the_scan_finds_the_all_demo_vms() -> None:
 
 
 def test_all_demo_placement_passes_the_check() -> None:
-    """The check run on the 30_all data: no hypervisor mixes prod and non-prod VMs, every VM runs in its footprint's DC."""
+    """The check run on the 30_all data: no hypervisor mixes prod and nonprod VMs, every VM runs in its footprint's DC."""
     assert _run(_all_demo_vms()) == []

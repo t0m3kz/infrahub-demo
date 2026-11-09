@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from tests.smoke.fixture_builders.vrf import routing_vrf
 from transforms.config.controller import ControllerPayload
 
 
@@ -207,9 +208,10 @@ class TestVelocloudVcoPayload:
 def _raw_iface(device: str, name: str, address: str, namespace: str) -> dict:
     return {
         "node": {
+            "vrf": {"node": routing_vrf(namespace) if namespace != "default" else None},
             "name": {"value": name},
             "ip_address": {
-                "node": {"address": {"value": address}, "ip_namespace": {"node": {"name": {"value": namespace}}}}
+                "node": {"address": {"value": address}, "ip_namespace": {"node": {"name": {"value": "default"}}}}
             },
             "device": {"node": {"name": {"value": device}}},
         }

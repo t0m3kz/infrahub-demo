@@ -11,7 +11,9 @@ import yaml
 from graphql import parse, print_ast
 from graphql.language import FieldNode, FragmentDefinitionNode, FragmentSpreadNode, OperationDefinitionNode
 
+from tests.unit.test_circuit_query_shapes import _selected_paths
 from utils.fabric_roles import DC_VTEP_ROLES, VTEP_ROLES
+from utils.graphql_queries import load_query
 from utils.group_policy import (
     fabric_reason,
     gbp_required,
@@ -414,10 +416,8 @@ class TestQueries:
     )
     BGP_ROOTS = (
         "DcimVirtualInterface",
-        "environment_prefixes_prod",
-        "environment_prefixes_non_prod",
-        "environment_prefixes_internet",
-        "environment_prefixes_management",
+        "environment_segments",
+        "environment_zones",
         "ManagedVRF",
         "ManagedVxlanSegment",
     )
@@ -430,15 +430,46 @@ class TestQueries:
         The SecurityTag root also spreads the placement of each component's instances
         (``SecurityTagPlacementFields``, component_coverage).
         """
-        reference = self._roots((root_dir / self.DEVICE_QUERIES[0]).read_text())
-        device = self._roots((root_dir / query).read_text())
+        reference = self._roots(load_query(root_dir / self.DEVICE_QUERIES[0]))
+        device = self._roots(load_query(root_dir / query))
         assert list(device)[0] == "DcimDevice"
         fleet = len(self.FLEET_ROOTS)
         assert list(device)[1 : 1 + fleet] == list(self.FLEET_ROOTS)
-        # What follows the fleet roots is the BGP route protection's (queries/config/*.gql): VIPs, prefixes, VRFs.
+        # What follows the fleet roots is the BGP route protection's: VIPs, segment/prefix registrations, VRFs.
         assert set(list(device)[1 + fleet :]) <= set(self.BGP_ROOTS)
+        assert "environment_zones" in device
+        assert not any(key.startswith("environment_prefixes_") for key in device)
         assert {key: device[key] for key in self.FLEET_ROOTS} == {key: reference[key] for key in self.FLEET_ROOTS}
         assert self.PLACEMENT_SPREAD in device["SecurityTag"]
+
+    @pytest.mark.parametrize("query", DEVICE_QUERIES)
+    def test_route_protection_reads_segment_owned_prefixes_in_every_device_query(
+        self, root_dir: Path, query: str
+    ) -> None:
+        """Segment gateway prefixes reach route protection through their explicit SecurityZone owner."""
+        reference = self._roots(load_query(root_dir / self.DEVICE_QUERIES[0]))
+        device = self._roots(load_query(root_dir / query))
+        selection = device["environment_segments"]
+
+        assert selection.startswith("environment_segments: ManagedNetworkSegment")
+        assert "...SegmentRoutingPrefixFields" in selection
+        assert selection == reference["environment_segments"]
+
+        paths = _selected_paths(root_dir / query, "environment_zones")
+        assert {
+            "id",
+            "name",
+            "vrf_type",
+            "l3_vni",
+            "vrfs.id",
+            "vrfs.deployment.id",
+            "vrfs.security_zone.id",
+            "vrfs.interfaces.vrf.id",
+            "vrfs.interfaces.capabilities.vrf.id",
+            "vrfs.session_circuits.vrf.id",
+        } <= paths
+        assert not {"registered_prefixes", "routed_interfaces", "session_circuits"} & paths
+        assert not any("ip_prefix.security_zone" in path for path in paths)
 
     @pytest.mark.parametrize("query", DEVICE_QUERIES)
     def test_every_query_reads_the_tags_through_the_one_fragment(self, root_dir: Path, query: str) -> None:
@@ -451,8 +482,8 @@ class TestQueries:
     @pytest.mark.parametrize("query", DEVICE_QUERIES)
     def test_the_enforcement_switch_is_read_on_the_data_center_root(self, root_dir: Path, query: str) -> None:
         """``group_policy_enforce`` (A6) rides on the fleet TopologyDataCenter root of every device query."""
-        roots = self._roots((root_dir / query).read_text())
-        assert "group_policy_enforce {\n" in roots["TopologyDataCenter"]
+        paths = _selected_paths(root_dir / query, "TopologyDataCenter")
+        assert "group_policy_enforce" in paths
 
     @pytest.mark.parametrize("query", DEVICE_QUERIES)
     def test_every_spread_resolves_against_the_fragments_directory(self, root_dir: Path, query: str) -> None:

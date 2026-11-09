@@ -1,13 +1,10 @@
----
 # Per-VRF /29 transit pools for firewall-context legs (see
 # generators/firewall_context.py and utils/exchange_transit.py). Each pool
-# allocates inside its VRF namespace, so the resource prefix itself lives in
-# that namespace. This file sorts after 22_namespaces.yml on purpose: the
-# object loader processes files in name order and the namespaces must exist
-# before a prefix or pool can reference them.
-# One pool per fixed VRF namespace, RFC 6598 100.66.0.0/18 split in /20s:
-# PROD .0, NON-PROD .16, INTERNET .32, MANAGEMENT .48. 100.66.64.0/18 holds the
-# load-balancer legs (/29, .64 PROD and .80 NON-PROD) and VIP ranges (/26, .96 and .112).
+# and its resource prefix use built-in default IPAM; the pool name selects
+# the routing domain, whose SecurityZone is defined in 24_security_zones.yml.
+# One pool per fixed VRF, RFC 6598 100.66.0.0/18 split in /20s:
+# PROD .0, NONPROD .16, INTERNET .32, MANAGEMENT .48. 100.66.64.0/18 holds the
+# load-balancer legs (/29, .64 PROD and .80 NONPROD) and VIP ranges (/26, .96 and .112).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -26,24 +23,23 @@ spec:
             member_type: prefix
             is_pool: true
             role: technical
-            ip_namespace: "PROD"
-      ip_namespace: "PROD"
-
-    - name: FW-Transit-NON-PROD-IPv4
-      description: "FirewallContext transit /29 legs in the NON-PROD VRF (RFC 6598)"
+            ip_namespace: "default"
+      ip_namespace: "default"
+    - name: FW-Transit-NONPROD-IPv4
+      description: "FirewallContext transit /29 legs in the NONPROD VRF (RFC 6598)"
       default_prefix_type: IpamPrefix
       default_prefix_length: 29
       resources:
         kind: IpamPrefix
         data:
           - prefix: 100.66.16.0/20
-            description: "RFC 6598 transit space, NON-PROD VRF"
+            description: "RFC 6598 transit space, NONPROD VRF"
             status: active
             member_type: prefix
             is_pool: true
             role: technical
-            ip_namespace: "NON-PROD"
-      ip_namespace: "NON-PROD"
+            ip_namespace: "default"
+      ip_namespace: "default"
 
     - name: FW-Transit-INTERNET-IPv4
       description: "FirewallContext transit /29 legs in the INTERNET VRF (RFC 6598)"
@@ -58,8 +54,8 @@ spec:
             member_type: prefix
             is_pool: true
             role: technical
-            ip_namespace: "INTERNET"
-      ip_namespace: "INTERNET"
+            ip_namespace: "default"
+      ip_namespace: "default"
 
     - name: FW-Transit-MANAGEMENT-IPv4
       description: "FirewallContext transit /29 legs in the MANAGEMENT VRF (RFC 6598)"
@@ -74,8 +70,8 @@ spec:
             member_type: prefix
             is_pool: true
             role: technical
-            ip_namespace: "MANAGEMENT"
-      ip_namespace: "MANAGEMENT"
+            ip_namespace: "default"
+      ip_namespace: "default"
 
     - name: LB-Leg-PROD-IPv4
       description: "LoadbalancerContext one-arm /29 legs in the PROD VRF (RFC 6598)"
@@ -90,24 +86,24 @@ spec:
             member_type: prefix
             is_pool: true
             role: technical
-            ip_namespace: "PROD"
-      ip_namespace: "PROD"
+            ip_namespace: "default"
+      ip_namespace: "default"
 
-    - name: LB-Leg-NON-PROD-IPv4
-      description: "LoadbalancerContext one-arm /29 legs in the NON-PROD VRF (RFC 6598)"
+    - name: LB-Leg-NONPROD-IPv4
+      description: "LoadbalancerContext one-arm /29 legs in the NONPROD VRF (RFC 6598)"
       default_prefix_type: IpamPrefix
       default_prefix_length: 29
       resources:
         kind: IpamPrefix
         data:
           - prefix: 100.66.80.0/20
-            description: "RFC 6598 load-balancer leg space, NON-PROD VRF"
+            description: "RFC 6598 load-balancer leg space, NONPROD VRF"
             status: active
             member_type: prefix
             is_pool: true
             role: technical
-            ip_namespace: "NON-PROD"
-      ip_namespace: "NON-PROD"
+            ip_namespace: "default"
+      ip_namespace: "default"
 
     - name: LB-VIP-PROD-IPv4
       description: "LoadbalancerContext routed VIP /26 ranges in the PROD VRF (RFC 6598)"
@@ -122,46 +118,21 @@ spec:
             member_type: prefix
             is_pool: true
             role: technical
-            ip_namespace: "PROD"
-      ip_namespace: "PROD"
+            ip_namespace: "default"
+      ip_namespace: "default"
 
-    - name: LB-VIP-NON-PROD-IPv4
-      description: "LoadbalancerContext routed VIP /26 ranges in the NON-PROD VRF (RFC 6598)"
+    - name: LB-VIP-NONPROD-IPv4
+      description: "LoadbalancerContext routed VIP /26 ranges in the NONPROD VRF (RFC 6598)"
       default_prefix_type: IpamPrefix
       default_prefix_length: 26
       resources:
         kind: IpamPrefix
         data:
           - prefix: 100.66.112.0/20
-            description: "RFC 6598 load-balancer VIP space, NON-PROD VRF"
+            description: "RFC 6598 load-balancer VIP space, NONPROD VRF"
             status: active
             member_type: prefix
             is_pool: true
             role: technical
-            ip_namespace: "NON-PROD"
-      ip_namespace: "NON-PROD"
-
----
-# One public SNAT /32 per FirewallContext with an INTERNET leg
-# (generators/firewall_context.py). RFC 5737 TEST-NET-1 stands in for the
-# provider-assigned public block; the edge aggregates it into the ISP sessions.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: CoreIPAddressPool
-  data:
-    - name: FW-SNAT-INTERNET-IPv4
-      description: "FirewallContext SNAT addresses in the INTERNET VRF (RFC 5737 TEST-NET-1)"
-      default_address_type: IpamIPAddress
-      default_prefix_length: 32
-      resources:
-        kind: IpamPrefix
-        data:
-          - prefix: 192.0.2.0/24
-            description: "Public SNAT space, INTERNET VRF"
-            status: active
-            member_type: address
-            is_pool: true
-            role: public
-            ip_namespace: "INTERNET"
-      ip_namespace: "INTERNET"
+            ip_namespace: "default"
+      ip_namespace: "default"

@@ -168,13 +168,13 @@ def _l3_instances(
     instances = []
     for name in sorted(realized):
         namespace = realized[name]
-        svi_vlan_id = l3vni_svi_vlan(namespace.get("namespace_type"))
+        svi_vlan_id = l3vni_svi_vlan(namespace.get("vrf_type"))
         if svi_vlan_id is None:
             _log.warning(
                 "VRF %s: namespace type %r has no L3 VNI SVI slot (%s-%s). NX-OS symmetric IRB will not be "
                 "rendered for it.",
                 name,
-                namespace.get("namespace_type"),
+                namespace.get("vrf_type"),
                 L3VNI_SVI_VLAN_BASE,
                 L3VNI_SVI_VLAN_MAX,
             )
@@ -183,7 +183,7 @@ def _l3_instances(
                 instance_id=namespace["l3_vni"],
                 vrf=name,
                 svi_vlan_id=svi_vlan_id,
-                default_exit=namespace.get("namespace_type") == _INTERNET_NAMESPACE_TYPE,
+                default_exit=namespace.get("vrf_type") == _INTERNET_NAMESPACE_TYPE,
             )
         )
     return tuple(instances)

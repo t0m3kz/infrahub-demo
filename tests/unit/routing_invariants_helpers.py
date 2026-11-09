@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from checks.routing_invariants import CheckRoutingInvariants
+from tests.unit.external_vrf_peers_helpers import _raw_gateway, _raw_vrf
 
 
 def _v(value: Any) -> dict[str, Any]:
@@ -25,7 +26,7 @@ def _check() -> Any:
 
 def _ns(name: str, ns_type: str | None, vni: int | None = None) -> dict[str, Any]:
     """An IpamNamespace in the raw query shape."""
-    return {"id": f"ns-{name}", "name": _v(name), "l3_vni": _v(vni), "namespace_type": _v(ns_type)}
+    return {"id": f"zone-{name}", "name": _v(name), "l3_vni": _v(vni), "vrf_type": _v(ns_type)}
 
 
 def _run(**sections: Any) -> Any:
@@ -40,7 +41,7 @@ def _block(prefix: str, ns_name: str = "PROD", ns_type: str = "prod", block_id: 
     return {
         "id": block_id or f"pfx-{ns_name}-{prefix}",
         "prefix": _v(prefix),
-        "ip_namespace": {"node": {**_ns(ns_name, ns_type), "id": f"ns-{ns_name}"}},
+        "ip_namespace": {"node": {"name": {"value": "default"}}},
     }
 
 
@@ -83,6 +84,7 @@ def _onprem(
 ) -> dict[str, Any]:
     """An on-prem segment whose gateway sits in the given prefix."""
     return {
+        "security_zone": {"node": _ns(ns_name, ns_type)},
         "__typename": "ManagedVxlanSegment",
         "id": f"seg-{name}",
         "name": _v(name),
@@ -93,7 +95,7 @@ def _onprem(
                         "id": pid,
                         "prefix": _v(prefix),
                         "member_type": _v(member_type),
-                        "ip_namespace": {"node": {**_ns(ns_name, ns_type), "id": f"ns-{ns_name}"}},
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
                     }
                 }
             }
@@ -145,20 +147,22 @@ def _gateway_office(
     """An office behind an SD-WAN gateway with its LANs and hosted segments, (prefix, owner) each (PROD)."""
     return {
         **_office(name, *lans, owner=owner),
-        "sdwan_gateway": {"node": {"name": _v(gateway)}} if gateway else {"node": None},
+        "sdwan_gateway": {"node": _raw_gateway(gateway)} if gateway else {"node": None},
+        "vrfs": {"edges": [{"node": _raw_vrf("PROD", name)}]},
         "segment_deployments": {
             "edges": [
                 {
                     "node": {
                         "segment": {
                             "node": {
+                                "security_zone": {"node": {"id": "zone-PROD", "name": _v("PROD")}},
                                 "owner": _owner(segment_owner),
                                 "gateway": {
                                     "node": {
                                         "ip_prefix": {
                                             "node": {
                                                 "prefix": _v(prefix),
-                                                "ip_namespace": {"node": {"name": _v("PROD")}},
+                                                "ip_namespace": {"node": {"name": {"value": "default"}}},
                                             }
                                         }
                                     }

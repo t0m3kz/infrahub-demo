@@ -1,20 +1,41 @@
-# add_context_routes (generators/topology/context_routes.py): one service context, its legs and the border ports tagged with
-# it. A virtual interface is a leg (its address gives the leg's /29, its namespace the VRF); a physical port or a LAG is a
-# border service port, whose device holds the routes. Targeted by the context's name (unique across both kinds).
 fragment FirewallContextRoutesFields on ManagedFirewallContext {
   id
-  name { value }
+  name {
+    value
+  }
   capabilities {
     edges {
       node {
         __typename
         id
-        device { node { id name { value } } }
+        device {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        ...InterfaceRoutingZoneFields
         ... on DcimVirtualInterface {
+          vrf {
+            node {
+              ...RoutingVrfFields
+            }
+          }
           ip_address {
             node {
-              address { value }
-              ip_namespace { node { id name { value } namespace_type { value } l3_vni { value } } }
+              address {
+                value
+              }
+              ip_namespace {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
             }
           }
         }
@@ -25,18 +46,42 @@ fragment FirewallContextRoutesFields on ManagedFirewallContext {
 
 fragment LoadbalancerContextRoutesFields on ManagedLoadbalancerContext {
   id
-  name { value }
+  name {
+    value
+  }
   capabilities {
     edges {
       node {
         __typename
         id
-        device { node { id name { value } } }
+        device {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        ...InterfaceRoutingZoneFields
         ... on DcimVirtualInterface {
+          vrf {
+            node {
+              ...RoutingVrfFields
+            }
+          }
           ip_address {
             node {
-              address { value }
-              ip_namespace { node { id name { value } namespace_type { value } l3_vni { value } } }
+              address {
+                value
+              }
+              ip_namespace {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
             }
           }
         }
@@ -50,8 +95,18 @@ query context_routes($name: String!) {
     edges {
       node {
         ...FirewallContextRoutesFields
-        tenant { node { id } }
-        snat_address { node { address { value } } }
+        tenant {
+          node {
+            id
+          }
+        }
+        snat_address {
+          node {
+            address {
+              value
+            }
+          }
+        }
       }
     }
   }
@@ -59,7 +114,13 @@ query context_routes($name: String!) {
     edges {
       node {
         ...LoadbalancerContextRoutesFields
-        vip_prefix { node { prefix { value } } }
+        vip_prefix {
+          node {
+            prefix {
+              value
+            }
+          }
+        }
       }
     }
   }

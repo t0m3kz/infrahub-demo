@@ -26,6 +26,7 @@ from transforms.helpers.vrf import device_vrfs
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 from utils.fabric_roles import BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE, MAX_ENCODABLE_VNI
+from utils.routing_domain import interface_security_zone
 from utils.segment_addressing import routed_segment_namespace
 from utils.vrf_demand import internet_exits
 
@@ -105,7 +106,7 @@ def _l3_mapping(l3: L3Instance) -> dict[str, Any]:
     """The L3 VNI (VRF) mapping dict the templates read, from a neutral L3 instance."""
     mapping: dict[str, Any] = {"vrf_name": l3.vrf, "l3_vni": l3.instance_id}
     if l3.default_exit:
-        mapping["namespace_type"] = _INTERNET_NAMESPACE_TYPE
+        mapping["vrf_type"] = _INTERNET_NAMESPACE_TYPE
     mapping["svi_vlan_id"] = l3.svi_vlan_id
     return mapping
 
@@ -132,7 +133,7 @@ def _l3_route_target(mapping: dict[str, Any], rt_asn: int | None) -> str | None:
     other site's AS.
     """
     vni = mapping["l3_vni"]
-    if mapping.get("namespace_type") == _INTERNET_NAMESPACE_TYPE:
+    if mapping.get("vrf_type") == _INTERNET_NAMESPACE_TYPE:
         return f"{vni}:{vni}"
     return f"{rt_asn}:{vni}" if rt_asn else None
 
@@ -282,6 +283,7 @@ def get_interfaces(
             "interface_type": iface.get("interface_type"),
             "mtu": iface.get("mtu"),
             "ip_addresses": ip_addresses,
+            "vrf": interface_security_zone(iface).get("name") if ip_addresses else None,
             "dot1q_vlan": context_vlan_id,
             "parent_interface": sub_interface_parent(iface),
         }

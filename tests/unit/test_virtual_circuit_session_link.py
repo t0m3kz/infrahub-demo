@@ -66,4 +66,4 @@ class TestVpn:
     @pytest.mark.asyncio
     async def test_a_vpn_needs_its_namespace(self) -> None:
         """No ip_namespace, no pool: refused before any write."""
-        await _assert_refused(vpn_payload(namespace=None), "needs its ip_namespace")
+        await _assert_refused(vpn_payload(namespace=None), "needs its routing VRF")

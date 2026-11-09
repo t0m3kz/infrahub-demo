@@ -219,7 +219,10 @@ class TestPools:
         }
 
     def test_management_namespace_exists(self) -> None:
-        assert "MANAGEMENT" in {entry["name"] for entry in _spec_data(BOOTSTRAP / "22_namespaces.yml")}
+        """Management routing belongs to its SecurityZone, not an IPAM namespace."""
+        zones = {entry["name"]: entry for entry in _spec_data(BOOTSTRAP / "24_security_zones.yml")}
+        assert (zones["MANAGEMENT"]["vrf_type"], zones["MANAGEMENT"]["l3_vni"]) == ("management", 60003)
+        assert not (BOOTSTRAP / "22_namespaces.yml").exists()
 
     def test_technical_slice_holds_the_links_of_the_demo_office(self) -> None:
         """2 distribution x 2 access uplinks + 1 interlink = 5 /31s; a /27 holds 16."""
@@ -264,12 +267,17 @@ class TestWanExitData:
         from utils.exchange_transit import transit_pool_name
         from utils.limits import PRIVATE_ASN32_POOL
 
-        namespaces = {entry["name"] for entry in _spec_data(BOOTSTRAP / "22_namespaces.yml")}
-        pools = {entry["name"] for entry in _spec_data(BOOTSTRAP / "23_transit_pools.yml") if "resources" in entry}
+        zones = {entry["name"] for entry in _spec_data(BOOTSTRAP / "24_security_zones.yml")}
+        pools = {
+            name(pool): pool.item
+            for pool in declared("CoreIPPrefixPool", BOOTSTRAP)
+            if pool.path.name.startswith("23_transit_pools")
+        }
         # an office is always PROD: its exit lives in the PROD tenant VRF
         assert self._sdwan_fabric_offices()
-        assert "PROD" in namespaces
+        assert "PROD" in zones
         assert transit_pool_name("PROD") in pools
+        assert pools[transit_pool_name("PROD")]["ip_namespace"] == "default"
         assert PRIVATE_ASN32_POOL in {entry["name"] for entry in _spec_data(BOOTSTRAP / "16_asn_pools.yml")}
 
     def test_the_demo_office_hosts_one_derived_vxlan_segment_in_its_own_environment(self) -> None:

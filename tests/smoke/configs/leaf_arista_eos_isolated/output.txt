@@ -125,16 +125,16 @@ interface Vxlan1
    vxlan vlan 200 vni 10200
    !
    ! L3 VNI Mappings (VRF segments for microsegmentation)
-   vxlan vrf VRF_A vni 50001
+   vxlan vrf PROD vni 60000
 !
 !
 ! VRF Definitions (Microsegmentation)
 !
-vrf instance VRF_A
+vrf instance PROD
    description Tenant VRF for microsegmentation
-   rd 10.0.0.1:50001
+   rd 10.0.0.1:60000
 !
-ip routing vrf VRF_A
+ip routing vrf PROD
 !
 !
 ! EVPN Configuration (L2 + L3 VNI)
@@ -154,10 +154,10 @@ router bgp 65000
       arp proxy
    !
    ! L3 EVPN (VRF-based for microsegmentation)
-   vrf VRF_A
-      rd 10.0.0.1:50001
-      route-target import evpn 65000:50001
-      route-target export evpn 65000:50001
+   vrf PROD
+      rd 10.0.0.1:60000
+      route-target import evpn 65000:60000
+      route-target export evpn 65000:60000
       redistribute connected
 
 !
@@ -166,11 +166,12 @@ router bgp 65000
 ip virtual-router mac-address 00:1c:73:00:dc:01
 interface Vlan100
    ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
-   vrf VRF_A
+   vrf PROD
    ip address virtual 10.100.0.1/24
    ip access-group ACL-VLAN100-IN in
 interface Vlan200
    ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
+   vrf PROD
    ip address virtual 10.200.0.1/24
    ip access-group ACL-VLAN200-IN in
 

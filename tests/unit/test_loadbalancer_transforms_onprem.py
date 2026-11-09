@@ -60,6 +60,14 @@ def _onprem_data(
 ) -> dict:
     """Raw query data of LB-01 (first member of LB-01/LB-02) with a shared PROD context on eth1.3100."""
     leg = {
+        "vrf": {
+            "node": {
+                "id": "vrf-dc10-prod",
+                "security_zone": {
+                    "node": {"id": "zone-prod", "name": _v("PROD"), "vrf_type": _v("prod"), "l3_vni": _v(60000)}
+                },
+            }
+        },
         "__typename": "DcimVirtualInterface",
         "name": _v("eth1.3100"),
         "device": {"node": {"name": _v("LB-01"), "role": _v("load-balancer")}},
@@ -67,7 +75,7 @@ def _onprem_data(
         "ip_address": {
             "node": {
                 "address": _v("100.66.64.5/29"),
-                "ip_namespace": {"node": {"name": _v("PROD"), "namespace_type": _v("prod"), "l3_vni": _v(60000)}},
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         },
     }

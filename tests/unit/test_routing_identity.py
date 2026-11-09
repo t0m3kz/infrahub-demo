@@ -115,7 +115,7 @@ def _raw_segment(
     typename: str = "ManagedVxlanSegment",
     prefix: str | None = "10.100.0.0/24",
     address: str | None = "10.100.0.1/24",
-    namespace: str = "VRF_A",
+    zone: str = "VRF_A",
     segment_tag: int | None = 12,
     owner_tag: int | None = 5,
 ) -> dict[str, Any]:
@@ -125,6 +125,7 @@ def _raw_segment(
         "id": f"seg-{name}",
         "name": {"value": name},
         "routing_tag": {"value": segment_tag},
+        "security_zone": {"node": {"name": {"value": zone}, "vrf_type": {"value": "prod"}, "l3_vni": {"value": 60000}}},
         "owner": {"node": {"id": "cust", "org_id": {"value": "C005"}, "routing_tag": {"value": owner_tag}}},
         "gateway": {"node": None},
     }
@@ -135,7 +136,7 @@ def _raw_segment(
                 "ip_prefix": {
                     "node": {
                         "prefix": {"value": prefix},
-                        "ip_namespace": {"node": {"name": {"value": namespace}, "l3_vni": {"value": 50001}}},
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
                     }
                 },
             }
@@ -196,13 +197,12 @@ class TestOrigination:
         [
             _raw_segment("seg-nogw", prefix=None),
             _raw_segment("seg-v6", prefix="2001:db8::/64", address="2001:db8::1/64"),
-            _raw_segment("seg-default", namespace="default"),
-            _raw_segment("seg-other-vrf", namespace="VRF_B"),
+            _raw_segment("seg-other-vrf", zone="VRF_B"),
         ],
         ids=lambda segment: segment["name"]["value"],
     )
     def test_a_segment_the_fabric_does_not_route_into_evpn_is_skipped(self, segment: dict[str, Any]) -> None:
-        """Gateway-less, IPv6, default-namespace and not-in-the-VRFs segments have no SVI export."""
+        """Gateway-less, IPv6 and unrealized-zone segments have no SVI export."""
         assert get_origination(_activations(segment), ["VRF_A"]) == []
 
     def test_the_vrfs_are_the_ones_that_redistribute_into_evpn(self) -> None:
@@ -231,7 +231,7 @@ def _fields(selection_owner: Any, *path: str) -> dict[str, FieldNode]:
     for name in path:
         selection_owner = _fields(selection_owner)[name]
     assert selection_owner.selection_set is not None
-    return {s.name.value: s for s in selection_owner.selection_set.selections if isinstance(s, FieldNode)}
+    return {(s.alias or s.name).value: s for s in selection_owner.selection_set.selections if isinstance(s, FieldNode)}
 
 
 class TestQueriesSelectTheTags:

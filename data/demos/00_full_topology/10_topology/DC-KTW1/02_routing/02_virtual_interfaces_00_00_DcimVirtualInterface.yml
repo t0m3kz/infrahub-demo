@@ -1,0 +1,14 @@
+# DcimVirtualInterface declarations in recursive dependency order.
+# The SVI of the leaf in the PROD VRF of DC-KTW1 (the segment's VLAN row of this leaf is nested under the segment,
+# 20_C900/DC-KTW1/03_tenant). The tunnel interfaces of the DC edge are nested under the device
+# (10_topology).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: Vlan100
+      device: ktw1-leaf-01
+      role: svi
+      status: active
+      vrf: ["DC-KTW1", "PROD"]

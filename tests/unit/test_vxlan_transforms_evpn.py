@@ -565,8 +565,8 @@ class TestL3VniSviVlanAssignment:
     """
 
     @staticmethod
-    def _ns(name: str, l3_vni: int, namespace_type: str = "prod") -> dict:
-        return {"name": name, "l3_vni": l3_vni, "namespace_type": namespace_type}
+    def _ns(name: str, l3_vni: int, vrf_type: str = "prod") -> dict:
+        return {"name": name, "l3_vni": l3_vni, "vrf_type": vrf_type}
 
     @staticmethod
     def _slots(namespaces: list[dict]) -> dict[str, int | None]:
@@ -581,10 +581,10 @@ class TestL3VniSviVlanAssignment:
         every = [
             self._ns("MANAGEMENT", 60003, "management"),
             self._ns("INTERNET", 60002, "internet"),
-            self._ns("NON-PROD", 60001, "non_prod"),
+            self._ns("NONPROD", 60001, "non_prod"),
             self._ns("PROD", 60000, "prod"),
         ]
-        expected = {"PROD": 3900, "NON-PROD": 3901, "INTERNET": 3902, "MANAGEMENT": 3903}
+        expected = {"PROD": 3900, "NONPROD": 3901, "INTERNET": 3902, "MANAGEMENT": 3903}
         assert self._slots(every) == expected
         assert self._slots(list(reversed(every))) == expected
         assert self._slots([self._ns("INTERNET", 60002, "internet")]) == {"INTERNET": 3902}
@@ -616,4 +616,4 @@ class TestL3VniSviVlanAssignment:
         assert self._slots([self._ns("default", 50001)]) == {}
 
     def test_namespace_without_an_l3_vni_is_excluded(self) -> None:
-        assert self._slots([{"name": "production", "l3_vni": None, "namespace_type": "prod"}]) == {}
+        assert self._slots([{"name": "production", "l3_vni": None, "vrf_type": "prod"}]) == {}

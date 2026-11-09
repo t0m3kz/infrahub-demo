@@ -255,7 +255,7 @@ def _handoff(
     ends: list[dict[str, Any]],
     namespace: tuple[str, str | None] | None = ("PROD", "prod"),
 ) -> dict[str, Any]:
-    """A handoff in ``namespace`` (name, namespace_type).
+    """A handoff in ``namespace`` (name, vrf_type).
 
     ``locations=None`` places the handoff where its ends are deployed (what the check requires); a list states them.
     """
@@ -264,9 +264,7 @@ def _handoff(
         deployments = [(device.get("deployment") or device.get("region") or {}).get("node") for device in devices]
         locations = list({deployment["id"]: deployment for deployment in deployments if deployment}.values())
     node = _virtual(name, "handoff", locations, ends)
-    node["ip_namespace"] = {
-        "node": {"name": {"value": namespace[0]}, "namespace_type": {"value": namespace[1]}} if namespace else None
-    }
+    node["vrf"] = _routing_vrf(namespace)
     return node
 
 
@@ -278,10 +276,28 @@ def _vpn(
 ) -> dict[str, Any]:
     """A vpn circuit in ``namespace``."""
     node = _virtual(name, "vpn", locations, ends)
-    node["ip_namespace"] = {
-        "node": {"name": {"value": namespace[0]}, "namespace_type": {"value": namespace[1]}} if namespace else None
-    }
+    node["vrf"] = _routing_vrf(namespace)
     return node
+
+
+def _routing_vrf(namespace: tuple[str, str | None] | None) -> dict[str, Any]:
+    """The authored our-side routing context, independent of the provider endpoint."""
+    return {
+        "node": {
+            "id": f"vrf-FR-{namespace[0]}",
+            "deployment": {"node": {"id": "dep-FR", "name": {"value": "FR"}}},
+            "security_zone": {
+                "node": {
+                    "id": f"zone-{namespace[0]}",
+                    "name": {"value": namespace[0]},
+                    "vrf_type": {"value": namespace[1]},
+                    "l3_vni": {"value": 10001},
+                }
+            },
+        }
+        if namespace
+        else None
+    }
 
 
 def _run(

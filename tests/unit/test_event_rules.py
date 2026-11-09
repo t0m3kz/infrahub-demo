@@ -310,7 +310,7 @@ _SESSION_COMMON_RULES = {
 }
 # What only a handoff reads, beyond its ends and status (they fire for every type of the one kind, harmlessly).
 _HANDOFF_ONLY_RULES = {
-    "namespace-updated": ("CoreNodeTriggerRelationshipMatch", "ip_namespace"),
+    "vrf-updated": ("CoreNodeTriggerRelationshipMatch", "vrf"),
     "password-updated": ("CoreNodeTriggerRelationshipMatch", "password"),
 }
 

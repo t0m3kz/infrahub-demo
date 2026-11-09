@@ -3,7 +3,7 @@
 Each rule is stored once, in its source segment's policy (``security_policy``,
 which also holds the segment's egress ``default_action``). ``inbound_rules`` is
 only the schema reverse index of ``destination_segment``. A rule to the internet has no destination
-segment: its ``destination_zone`` is INTERNET-ZONE (``is_internet_destination``). ``segment_flows``
+segment: its ``destination_zone`` is INTERNET (``is_internet_destination``). ``segment_flows``
 is the one view of both; every consumer builds on it according to whether its
 enforcement point tracks sessions:
 
@@ -22,6 +22,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from utils.exchange_transit import INTERNET_ZONE
+from utils.routing_domain import resolve_security_zone
 from utils.segment_addressing import segment_prefix
 
 
@@ -59,17 +60,16 @@ def active_rules(policy: dict[str, Any], order_by: str = "index") -> list[dict[s
 
 
 def rule_zone(rule: dict[str, Any], side: str) -> str | None:
-    """Zone a rule matches on `side` ("source"/"destination"): the rule's own ``destination_zone`` (the internet),
-    else its segment's security_zone."""
-    zone = (rule.get("destination_zone") if side == "destination" else None) or (
-        (rule.get(f"{side}_segment") or {}).get("security_zone")
+    """Resolve a segment or explicit rule-side zone, never the IPAM selector's metadata."""
+    zone = resolve_security_zone(
+        [rule.get(f"{side}_segment"), {"security_zone": rule.get(f"{side}_zone")}],
+        required=bool(_first_selector(rule.get(f"{side}_prefixes"), rule.get(f"{side}_ip_addresses"))),
+        label=f"rule {rule.get('name') or '<unnamed>'} {side}",
     )
-    return (zone or {}).get("name") or None
+    return zone.get("name") or None
 
 
-def _first_selector(
-    prefixes: list[dict[str, Any]] | None, ip_addresses: list[dict[str, Any]] | None
-) -> tuple[str, str | None] | None:
+def _first_selector(prefixes: list[dict[str, Any]] | None, ip_addresses: list[dict[str, Any]] | None) -> str | None:
     """First explicit *_prefixes or *_ip_addresses selector, as a
     ``(CIDR/address string, namespace name)`` pair. Every rendered src/dst is a
     single scalar (ACL lines, firewall templates), so a multi-value selector
@@ -80,18 +80,19 @@ def _first_selector(
     for prefix in prefixes or []:
         cidr = prefix.get("prefix")
         if cidr:
-            return cidr, (prefix.get("ip_namespace") or {}).get("name")
+            return cidr
     for ip in ip_addresses or []:
         address = ip.get("address")
         if address:
-            return address, (ip.get("ip_namespace") or {}).get("name")
+            return address
     return None
 
 
 def rule_selector(rule: dict[str, Any], side: str) -> tuple[str, str | None] | None:
     """The rule's explicit selector on `side` ("source"/"destination") as
     ``(CIDR, namespace name)``, or None."""
-    return _first_selector(rule.get(f"{side}_prefixes"), rule.get(f"{side}_ip_addresses"))
+    selector = _first_selector(rule.get(f"{side}_prefixes"), rule.get(f"{side}_ip_addresses"))
+    return (selector, rule_zone(rule, side)) if selector else None
 
 
 def rule_endpoint(rule: dict[str, Any], side: str) -> str | None:
@@ -105,7 +106,7 @@ def rule_endpoint(rule: dict[str, Any], side: str) -> str | None:
 
 
 def is_internet_destination(rule: dict[str, Any]) -> bool:
-    """Whether the rule's destination is the internet: ``destination_zone`` is INTERNET-ZONE and no
+    """Whether the rule's destination is the internet: ``destination_zone`` is INTERNET and no
     selector narrows it.
 
     rule_endpoint returns None (any) for it, but unlike a rule with no destination

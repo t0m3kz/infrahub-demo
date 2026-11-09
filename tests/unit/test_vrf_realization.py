@@ -66,7 +66,7 @@ def _render(transform_cls: type, data: dict[str, Any]) -> str:
 
 def _without_instance(data: dict[str, Any], namespace: str) -> dict[str, Any]:
     edges = _node(data)["shared_capabilities"]["edges"]
-    edges[:] = [edge for edge in edges if edge["node"]["namespace"]["node"]["name"]["value"] != namespace]
+    edges[:] = [edge for edge in edges if edge["node"]["security_zone"]["node"]["name"]["value"] != namespace]
     return data
 
 
@@ -77,12 +77,16 @@ def _without_svi(data: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def _instances(data: dict[str, Any]) -> list[str]:
-    return [edge["node"]["namespace"]["node"]["name"]["value"] for edge in _node(data)["shared_capabilities"]["edges"]]
+    return [
+        edge["node"]["security_zone"]["node"]["name"]["value"] for edge in _node(data)["shared_capabilities"]["edges"]
+    ]
 
 
 def _svis(data: dict[str, Any]) -> dict[str, str | None]:
     return {
-        edge["node"]["name"]["value"]: (((edge["node"]["vrf"]["node"] or {}).get("namespace") or {}).get("node") or {})
+        edge["node"]["name"]["value"]: (
+            ((edge["node"]["vrf"]["node"] or {}).get("security_zone") or {}).get("node") or {}
+        )
         .get("name", {})
         .get("value")
         for edge in _node(data)["interfaces"]["edges"]
@@ -101,10 +105,10 @@ class TestTheGoldenInputsAreComplete:
 
 class TestRefusal:
     def test_a_routed_segment_in_a_vrf_without_an_instance_is_refused(self) -> None:
-        data = _without_instance(_raw(_LEAF), "VRF_A")
-        assert "VRF_A" in _svis(data).values()
+        data = _without_instance(_raw(_LEAF), "PROD")
+        assert "PROD" in _svis(data).values()
 
-        with pytest.raises(VrfRealizationError, match="no VRF instance of namespace VRF_A"):
+        with pytest.raises(VrfRealizationError, match="no VRF instance of namespace PROD"):
             _render(Leaf, data)
 
     def test_a_vrf_session_in_a_vrf_without_an_instance_is_refused(self) -> None:
@@ -132,17 +136,17 @@ class TestRefusal:
             if edge["node"]["name"]["value"] == "Vlan100":
                 edge["node"]["vrf"] = {"node": None}
 
-        with pytest.raises(VrfRealizationError, match="SVI Vlan100 is in VRF default, its segment routes in VRF_A"):
+        with pytest.raises(VrfRealizationError, match="SVI Vlan100 is in VRF default, its segment routes in PROD"):
             _render(Leaf, data)
 
     def test_one_raise_lists_everything_missing(self) -> None:
-        data = _without_svi(_without_instance(_raw(_LEAF), "VRF_A"), "Vlan200")
+        data = _without_svi(_without_instance(_raw(_LEAF), "PROD"), "Vlan200")
 
         with pytest.raises(VrfRealizationError) as error:
             _render(Leaf, data)
 
         message = str(error.value)
-        assert "no VRF instance of namespace VRF_A" in message and "no SVI Vlan200" in message
+        assert "no VRF instance of namespace PROD" in message and "no SVI Vlan200" in message
         assert message.startswith("dc1-leaf-01: arista_eos config")
 
     def test_the_exception_is_a_value_error(self) -> None:
@@ -153,7 +157,7 @@ class TestRefusal:
         """A spine has no segment, VRF or SVI; whatever its data says is not demand."""
         data = _raw(_LEAF)
         _node(data)["role"]["value"] = "spine"
-        _without_instance(data, "VRF_A")
+        _without_instance(data, "PROD")
 
         assert unrealized_vrfs(clean_data(data)["DcimDevice"][0]) == []
         assert vrf_requirements(clean_data(data)["DcimDevice"][0]).namespaces == frozenset()
@@ -207,27 +211,28 @@ class TestRequirements:
         return device
 
     def test_the_demand_names_segments_sessions_and_legs(self) -> None:
-        assert set(vrf_requirements(self._device(_LEAF)).namespaces) == {"VRF_A"}
+        assert set(vrf_requirements(self._device(_LEAF)).namespaces) == {"PROD"}
         assert set(vrf_requirements(self._device(_BORDER)).namespaces) == {"INTERNET", "MANAGEMENT", "PROD"}
 
     def test_a_routed_segment_needs_the_svi_of_its_vlan_in_its_namespace(self) -> None:
-        """VLAN 200's gateway is in the default namespace: its SVI is needed, in no VRF."""
-        assert vrf_requirements(self._device(_LEAF)).svis == {100: "VRF_A", 200: None}
+        """The historical global SVI now belongs to an explicitly owned PROD VRF."""
+        assert vrf_requirements(self._device(_LEAF)).svis == {100: "PROD", 200: "PROD"}
 
-    def test_the_default_namespace_is_never_demanded_and_its_svi_has_no_vrf(self) -> None:
+    def test_default_ipam_identity_does_not_suppress_explicit_zone_demand(self) -> None:
+        """IPAM default is containment identity, not routing-table authority."""
         device = self._device(_LEAF)
         for activation in device["segment_deployments"]:
             activation["segment"]["gateway"]["ip_prefix"]["ip_namespace"] = {"name": "default"}
         device["interfaces"] = [iface for iface in device["interfaces"] if iface.get("role") != "svi"]
         requirements = vrf_requirements(device)
-        assert requirements.namespaces == frozenset()
-        assert requirements.svis == {100: None, 200: None}
+        assert requirements.namespaces == frozenset({"PROD"})
+        assert requirements.svis == {100: "PROD", 200: "PROD"}
 
 
 class TestReaders:
     def test_device_vrfs_reads_the_namespace_of_each_instance_once(self) -> None:
         device = clean_data(_raw(_BORDER))["DcimDevice"][0]
-        assert {ns["name"]: ns["namespace_type"] for ns in device_vrfs(device)} == {
+        assert {ns["name"]: ns["vrf_type"] for ns in device_vrfs(device)} == {
             "INTERNET": "internet",
             "MANAGEMENT": "management",
             "PROD": "prod",
@@ -235,7 +240,7 @@ class TestReaders:
 
     def test_svi_vrfs_maps_the_vlan_to_the_vrf_name(self) -> None:
         interfaces = [
-            {"name": "Vlan100", "role": "svi", "vrf": {"namespace": {"name": "PROD"}}},
+            {"name": "Vlan100", "role": "svi", "vrf": {"security_zone": {"name": "PROD"}}},
             {"name": "Vlan200", "role": "svi", "vrf": None},
             {"name": "Vlan4094", "role": "mlag-control"},
             {"name": "Vlanx", "role": "svi"},
@@ -251,9 +256,9 @@ class TestReaders:
 
 class TestRealizationRule:
     def test_a_vrf_lite_instance_on_an_edge_with_an_overlay_process_stays_vrf_lite(self) -> None:
-        """The edge has an overlay BGP process and PROD / NON-PROD instances for its handoffs: no L3 VNI for them."""
+        """The edge has an overlay BGP process and PROD / NONPROD instances for its handoffs: no L3 VNI for them."""
         device = clean_data(_raw(_EDGE_PEERS))["DcimDevice"][0]
-        assert {ns["name"] for ns in device_vrfs(device)} >= {"PROD", "NON-PROD"}
+        assert {ns["name"] for ns in device_vrfs(device)} >= {"PROD", "NONPROD"}
         assert any(cap.get("name") == "bgp-overlay" for cap in device["capabilities"])
 
         assert get_vxlan_config(device, "cisco_nxos", device_role="edge", activations=[], fabric_rt_asn=65100) is None
@@ -268,7 +273,7 @@ class TestRealizationRule:
             fabric_rt_asn=65100,
         )
         assert config is not None
-        assert [m["vrf_name"] for m in config["l3_vni_mappings"]] == ["VRF_A"]
+        assert {m["vrf_name"] for m in config["l3_vni_mappings"]} == {"PROD"}
 
 
 class TestFixtureHook:
@@ -302,11 +307,11 @@ class TestMembershipOfAnotherDeployment:
         stray = {
             "node": {
                 "__typename": "ManagedVRF",
-                "namespace": {
+                "security_zone": {
                     "node": {
                         "name": {"value": "OTHER-DC"},
                         "l3_vni": {"value": 50009},
-                        "namespace_type": {"value": "prod"},
+                        "vrf_type": {"value": "prod"},
                     }
                 },
                 "deployment": {"node": {"name": {"value": "some-other-dc"}}},

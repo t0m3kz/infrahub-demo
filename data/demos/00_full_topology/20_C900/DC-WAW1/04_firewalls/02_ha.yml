@@ -1,0 +1,13 @@
+# The two authored dedicated appliance members, not a logical context on the shared physical pair.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallHA
+  data:
+    - name: c900-waw1-fw-01-waw1-fw-02-ha-prod
+      status: active
+      group_id: 6
+      mode: active-passive
+      capabilities:
+        - c900-waw1-fw-01-prod
+        - c900-waw1-fw-02-prod

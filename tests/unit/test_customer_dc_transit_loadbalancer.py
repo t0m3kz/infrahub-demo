@@ -82,12 +82,12 @@ class TestLoadbalancerSharedContext:
             "100.66.64.5/29",
             "100.66.64.6/29",
         ]
-        assert {namespace for _, namespace in world.addresses} == {"ns-prod"}
+        assert {namespace for _, namespace in world.addresses} == {"default"}
         assert world.sub_interfaces[("lb-1", "Ethernet1/25.3100")].ip_address.id == (
-            world.addresses[("100.66.64.5/29", "ns-prod")].id
+            world.addresses[("100.66.64.5/29", "default")].id
         )
         assert world.sub_interfaces[("lb-2", "Ethernet1/25.3100")].ip_address.id == (
-            world.addresses[("100.66.64.6/29", "ns-prod")].id
+            world.addresses[("100.66.64.6/29", "default")].id
         )
         assert world.tags == [(context.id, ["bl-port-lb-1", "bl-port-lb-2"])]
         assert events == [f"acquire:lb-context-{_LB_PROD}", "release"]
@@ -129,7 +129,7 @@ class TestLoadbalancerSharedContext:
 
     @pytest.mark.asyncio
     async def test_one_shared_context_per_tenant_namespace_created_lazily(self) -> None:
-        """The first NON-PROD customer creates the cluster's NON-PROD context; the PROD one is untouched."""
+        """The first NONPROD customer creates the cluster's NONPROD context; the PROD one is untouched."""
         world = _World()
         gen, _ = _make_gen(world)
         await _run(gen, world, _lb_payload(customer_id="cust-1", environment="p"))
@@ -143,8 +143,8 @@ class TestLoadbalancerSharedContext:
         non_prod = world.contexts[_LB_NON_PROD]
         assert non_prod.vlan_id.value == 3101
         assert ("lb-1", f"Ethernet1/25.{transit_vlan(3101, 'non_prod')}") in world.sub_interfaces
-        assert world.allocated[f"{non_prod.id}-NON-PROD-lb-leg"].prefix.value == "100.66.80.0/29"
-        assert world.allocated[f"{non_prod.id}-NON-PROD-lb-vip"].prefix.value == "100.66.112.0/26"
+        assert world.allocated[f"{non_prod.id}-NONPROD-lb-leg"].prefix.value == "100.66.80.0/29"
+        assert world.allocated[f"{non_prod.id}-NONPROD-lb-vip"].prefix.value == "100.66.112.0/26"
         assert all(label != _LB_PROD for _, label, _ in world.saves[prod_saves:])
         assert prod_context.vlan_id.value == 3100
         gen.link_serving_context.assert_awaited_with(

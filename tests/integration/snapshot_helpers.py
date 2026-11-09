@@ -95,7 +95,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "TopologySessionCircuit": (
         "name { value } circuit_type { value } locations { edges { node { id } } } "
         "capabilities { edges { node { id capabilities { edges { node { id } } } } } } "
-        "ip_namespace { node { id } } password { node { id } } "
+        "security_zone { node { id } } password { node { id } } "
         "link_prefix { node { id } } registered_prefixes { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",

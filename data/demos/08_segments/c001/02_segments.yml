@@ -13,7 +13,7 @@ spec:
         data:
           address: "10.1.10.1/24"
           description: "Anycast GW — C001 prod web-frontend (DC6)"
-          ip_namespace: "C001-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -21,7 +21,7 @@ spec:
               description: "C001 prod web-frontend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C001-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -34,7 +34,7 @@ spec:
         data:
           address: "10.1.20.1/24"
           description: "Anycast GW — C001 prod app-backend (DC6)"
-          ip_namespace: "C001-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -42,7 +42,7 @@ spec:
               description: "C001 prod app-backend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C001-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -55,7 +55,7 @@ spec:
         data:
           address: "10.1.30.1/24"
           description: "Anycast GW — C001 prod database (DC6)"
-          ip_namespace: "C001-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -63,7 +63,7 @@ spec:
               description: "C001 prod database subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C001-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -76,7 +76,7 @@ spec:
         data:
           address: "10.1.40.1/24"
           description: "Anycast GW — C001 prod cache (DC6)"
-          ip_namespace: "C001-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -84,7 +84,7 @@ spec:
               description: "C001 prod cache subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C001-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -99,7 +99,7 @@ spec:
         data:
           address: "10.1.110.1/24"
           description: "Anycast GW — C001 test web-frontend (DC6)"
-          ip_namespace: "C001-T"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -107,7 +107,7 @@ spec:
               description: "C001 test web-frontend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C001-T"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -120,7 +120,7 @@ spec:
         data:
           address: "10.1.120.1/24"
           description: "Anycast GW — C001 test app-backend (DC6)"
-          ip_namespace: "C001-T"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -128,7 +128,7 @@ spec:
               description: "C001 test app-backend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C001-T"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -141,7 +141,7 @@ spec:
         data:
           address: "10.1.130.1/24"
           description: "Anycast GW — C001 test database (DC6)"
-          ip_namespace: "C001-T"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -149,7 +149,7 @@ spec:
               description: "C001 test database subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C001-T"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -162,7 +162,7 @@ spec:
         data:
           address: "10.1.140.1/24"
           description: "Anycast GW — C001 test cache (DC6)"
-          ip_namespace: "C001-T"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -170,6 +170,6 @@ spec:
               description: "C001 test cache subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C001-T"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments

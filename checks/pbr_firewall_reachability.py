@@ -9,6 +9,7 @@ from infrahub_sdk.checks import InfrahubCheck
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import TENANT_NAMESPACE_TYPES
 from utils.fabric_roles import CARRIER_ROLES, INTERNAL_FIREWALL_ROLE
+from utils.routing_domain import interface_security_zone
 
 PORT_KEYS = ("FirewallPhysicalPorts", "FirewallVirtualPorts")
 
@@ -58,11 +59,10 @@ class CheckPbrFirewallReachability(InfrahubCheck):
         """Names of the PROD/NON-PROD VRFs the context has a firewall-member leg in."""
         return sorted(
             {
-                leg["ip_address"]["ip_namespace"]["name"]
+                interface_security_zone(leg)["name"]
                 for leg in ctx.get("capabilities") or []
                 if (leg.get("device") or {}).get("role") == INTERNAL_FIREWALL_ROLE
-                and ((leg.get("ip_address") or {}).get("ip_namespace") or {}).get("namespace_type")
-                in TENANT_NAMESPACE_TYPES
+                and interface_security_zone(leg).get("vrf_type") in TENANT_NAMESPACE_TYPES
             }
         )
 

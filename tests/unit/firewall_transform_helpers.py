@@ -6,10 +6,107 @@ import copy
 from pathlib import Path
 from typing import Any
 
+from tests.smoke.fixture_builders.vrf import routing_vrf
 from transforms.config.firewall import Firewall
 
 # Project root — needed to point root_directory at the real templates/
 ROOT = str(Path(__file__).parent.parent.parent)
+
+_LEG_NAMESPACES = {
+    "prod": ("PROD", "100.66.0.5/29", 3000),
+    "non_prod": ("NONPROD", "100.66.16.5/29", 3200),
+    "internet": ("INTERNET", "100.66.32.5/29", 3400),
+}
+
+
+def _leg_interface(ns_type: str, *, context_id: str = "ctx-shared") -> dict[str, Any]:
+    """A raw addressed transit leg referencing its HA-owned context."""
+    ns_name, address, vlan = _LEG_NAMESPACES[ns_type]
+    return {
+        "vrf": {"node": routing_vrf(ns_name)},
+        "__typename": {"value": "DcimVirtualInterface"},
+        "name": {"value": f"eth1.{vlan}"},
+        "description": {"value": None},
+        "status": {"value": "active"},
+        "role": {"value": None},
+        "parent_interface": {"node": {"name": {"value": "eth1"}}},
+        "ip_address": {
+            "node": {
+                "address": {"value": address},
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
+        },
+        "ha_domain": {"node": None},
+        "capabilities": {"edges": [{"node": {"__typename": "ManagedFirewallContext", "id": context_id}}]},
+    }
+
+
+def _make_exchange_data(platform: str, *, ns_types: tuple[str, ...]) -> dict[str, Any]:
+    """Shared HA context with nested served segments and namespace transit legs."""
+    data = _make_smoke_data(platform)
+    device = data["DcimPhysicalDevice"]["edges"][0]["node"]
+    device["name"] = {"value": "dc11-fw-01"}
+    device["interfaces"]["edges"] = [{"node": _leg_interface(ns)} for ns in ns_types]
+
+    def segment(name: str, segment_id: str, prefix: str) -> dict[str, Any]:
+        return {
+            "id": segment_id,
+            "gateway": {"node": {"ip_prefix": {"node": {"prefix": {"value": prefix}}}}},
+            "security_zone": {
+                "node": {
+                    "name": {"value": name},
+                    "trust_level": {"value": 50},
+                    "description": {"value": ""},
+                }
+            },
+        }
+
+    context = {
+        "id": "ctx-shared",
+        "name": {"value": "dc11-fw-shared"},
+        "vlan_id": {"value": 3000},
+        "context_id": {"value": None},
+        "tenant": {"node": None},
+        "served_deployments": {
+            "edges": [
+                {
+                    "node": {
+                        "id": "dep-1",
+                        "network_segments": {
+                            "edges": [
+                                {"node": segment("PROD", "seg-prod", "10.1.0.0/24")},
+                                {"node": segment("NONPROD", "seg-nonprod", "10.2.0.0/24")},
+                            ]
+                        },
+                    }
+                }
+            ]
+        },
+    }
+    device["capabilities"] = {
+        "edges": [
+            {
+                "node": {
+                    "__typename": "ManagedFirewallHA",
+                    "name": {"value": "dc11-fw-ha"},
+                    "group_id": {"value": 1},
+                    "mode": {"value": "active-passive"},
+                    "priority": {"value": 100},
+                    "preempt": {"value": False},
+                    "ha_timer": {"value": "standard"},
+                    "capabilities": {
+                        "edges": [
+                            {"node": {"name": {"value": "dc11-fw-01"}}},
+                            {"node": {"name": {"value": "dc11-fw-02"}}},
+                        ]
+                    },
+                    "contexts": {"edges": [{"node": context}]},
+                }
+            }
+        ]
+    }
+    data.pop("SecurityZone", None)
+    return data
 
 
 def _make_fw() -> Firewall:
@@ -50,7 +147,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
                 {
                     "node": {
                         "prefix": {"value": "10.10.10.0/24"},
-                        "ip_namespace": {"node": {"name": {"value": "VRF-SMOKE"}, "l3_vni": {"value": None}}},
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
                     }
                 }
             ]
@@ -58,6 +155,8 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
         "security_zone": {
             "node": {
                 "name": {"value": "internal"},
+                "vrf_type": {"value": "prod"},
+                "l3_vni": {"value": 60000},
                 "trust_level": {"value": 100},
             }
         },
@@ -97,6 +196,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
 
     # FW interface with IP — zone and policies come from the interface's segments
     fw_iface_node: dict[str, Any] = {
+        "vrf": {"node": routing_vrf(seg_node["security_zone"]["node"]["name"]["value"])},
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth0.100"},
         "description": {"value": "Smoke test interface"},
@@ -106,7 +206,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
         "ip_address": {
             "node": {
                 "address": {"value": "10.99.99.1/30"},
-                "ip_namespace": {"node": {"name": {"value": "VRF-SMOKE"}}},
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         },
         "ha_domain": {"node": None},
@@ -204,13 +304,16 @@ def _make_context_smoke_data(platform: str, *, serves_segment: bool) -> dict[str
         "inbound_rules": {"edges": []},
     }
     context_iface: dict[str, Any] = {
+        "vrf": {"node": None},
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth1.3005"},
         "description": {"value": None},
         "status": {"value": "active"},
         "role": {"value": None},
         "parent_interface": {"node": {"name": {"value": "eth1"}}},
-        "ip_address": {"node": {"address": {"value": "100.65.0.4/31"}, "ip_namespace": {"node": None}}},
+        "ip_address": {
+            "node": {"address": {"value": "100.65.0.4/31"}, "ip_namespace": {"node": {"name": {"value": "default"}}}}
+        },
         "ha_domain": {"node": None},
         "capabilities": {
             "edges": [

@@ -68,8 +68,10 @@ class TestFreshSharedBoarding:
         await _run(gen, world, _payload())
 
         by_namespace: dict[str, list[str]] = {}
-        for address, namespace_id in world.addresses:
-            by_namespace.setdefault(namespace_id, []).append(address)
+        for (address, ipam_id), ip in world.addresses.items():
+            assert ipam_id == "default"
+            assert not hasattr(ip.ip_prefix, "security_zone")
+            by_namespace.setdefault(world.leg_zone(ip.ip_prefix), []).append(address)
         assert sorted(by_namespace) == ["ns-internet", "ns-management", "ns-prod"]
         assert sorted(by_namespace["ns-prod"]) == ["100.66.0.1/29", "100.66.0.4/29", "100.66.0.5/29", "100.66.0.6/29"]
         assert sorted(by_namespace["ns-internet"]) == [
@@ -85,8 +87,8 @@ class TestFreshSharedBoarding:
             "100.66.48.6/29",
         ]
         member_ips = {(device, name): sub.ip_address.id for (device, name), sub in world.sub_interfaces.items()}
-        fw1 = world.addresses[("100.66.0.5/29", "ns-prod")].id
-        fw2 = world.addresses[("100.66.0.6/29", "ns-prod")].id
+        fw1 = world.addresses[("100.66.0.5/29", "default")].id
+        fw2 = world.addresses[("100.66.0.6/29", "default")].id
         assert member_ips[("fw-1", "Ethernet1/25.3000")] == fw1
         assert member_ips[("fw-2", "Ethernet1/25.3000")] == fw2
 
@@ -102,8 +104,11 @@ class TestFreshSharedBoarding:
         for peer, namespace_id in (("INTERNET", "ns-internet"), ("MANAGEMENT", "ns-management")):
             exchange = world.exchanges[f"{_SHARED}-PROD-{peer}"]
             assert exchange.data["gateway"] == {"id": context.id}
-            assert exchange.data["namespace_a"] == {"id": "ns-prod"}
-            assert exchange.data["namespace_z"] == {"id": namespace_id}
+            a = world.routing.store.vrfs[exchange.data["vrf_a"]["id"]]
+            z = world.routing.store.vrfs[exchange.data["vrf_z"]["id"]]
+            assert a.security_zone.id == "ns-prod"
+            assert z.security_zone.id == namespace_id
+            assert a.deployment.id == z.deployment.id == "dc10-id"
         vlan = context.vlan_id.value
         for ns_type, expected in (
             ("prod", {f"{_SHARED}-PROD-INTERNET", f"{_SHARED}-PROD-MANAGEMENT"}),
@@ -150,6 +155,19 @@ class TestFreshSharedBoarding:
         await _run(gen, world, _payload())
 
         assert events == [f"acquire:fw-context-{_SHARED}", "release"]
+        held: set[str] = set()
+        context_key = f"fw-context-{_SHARED}"
+        for operation, key in world.lock_events:
+            if operation == "acquire":
+                if key == context_key:
+                    assert {"vrf-device-bl-fw-1", "vrf-device-bl-fw-2"} <= held
+                    assert not any(lock.startswith("vrf-dc10-id-") for lock in held)
+                held.add(key)
+            else:
+                held.remove(key)
+        assert held == set()
+        assert len(world.routing.store.vrfs) == 3
+        assert all(vrf.members == {"bl-fw-1", "bl-fw-2"} for vrf in world.routing.store.vrfs.values())
         gen.link_serving_context.assert_awaited_once_with(
             FIREWALL_CONTEXT,
             customer_id="cust-1",
@@ -217,10 +235,12 @@ class TestRerunAndSecondCustomer:
         await _run(gen, world, _payload())
         events.clear()
         before = world.writes
+        routing_before = (list(world.routing.created), list(world.routing.saves), list(world.routing.edge_ops))
 
         await _run(gen, world, _payload())
 
         assert world.writes == before
+        assert (world.routing.created, world.routing.saves, world.routing.edge_ops) == routing_before
         assert events == []
         assert gen.link_serving_context.await_count == 2
 
@@ -254,13 +274,15 @@ class TestRerunAndSecondCustomer:
 
         assert {_SHARED, _SHARED_NON_PROD} <= set(world.contexts)
         assert sorted(world.exchanges) == [
-            f"{_SHARED_NON_PROD}-NON-PROD-INTERNET",
-            f"{_SHARED_NON_PROD}-NON-PROD-MANAGEMENT",
+            f"{_SHARED_NON_PROD}-NONPROD-INTERNET",
+            f"{_SHARED_NON_PROD}-NONPROD-MANAGEMENT",
             f"{_SHARED}-PROD-INTERNET",
             f"{_SHARED}-PROD-MANAGEMENT",
         ]
         for name, exchange in world.exchanges.items():
-            assert {exchange.data["namespace_a"]["id"], exchange.data["namespace_z"]["id"]} in (
+            assert {
+                world.routing.store.vrfs[exchange.data[end]["id"]].security_zone.id for end in ("vrf_a", "vrf_z")
+            } in (
                 {"ns-prod", "ns-internet"},
                 {"ns-prod", "ns-management"},
                 {"ns-nonprod", "ns-internet"},
@@ -274,7 +296,7 @@ class TestRerunAndSecondCustomer:
             ("fw-1", f"Ethernet1/25.{transit_vlan(non_prod_vlan, 'internet')}")
         ]
         prod_exchange = world.exchanges[f"{_SHARED}-PROD-INTERNET"].id
-        non_prod_exchange = world.exchanges[f"{_SHARED_NON_PROD}-NON-PROD-INTERNET"].id
+        non_prod_exchange = world.exchanges[f"{_SHARED_NON_PROD}-NONPROD-INTERNET"].id
         prod_peers = {peer.id for peer in prod_internet_sub.capabilities.peers}
         non_prod_peers = {peer.id for peer in non_prod_internet_sub.capabilities.peers}
         assert prod_exchange in prod_peers and non_prod_exchange not in prod_peers
@@ -291,10 +313,15 @@ class TestRerunAndSecondCustomer:
         await _run(gen, world, _payload(environment="t"))
 
         assert sorted(world.exchanges) == [
-            f"{_SHARED_NON_PROD}-NON-PROD-INTERNET",
-            f"{_SHARED_NON_PROD}-NON-PROD-MANAGEMENT",
+            f"{_SHARED_NON_PROD}-NONPROD-INTERNET",
+            f"{_SHARED_NON_PROD}-NONPROD-MANAGEMENT",
         ]
-        assert {ns for _, ns in world.addresses} == {"ns-nonprod", "ns-internet", "ns-management"}
+        assert {ns for _, ns in world.addresses} == {"default"}
+        assert {world.leg_zone(ip.ip_prefix) for ip in world.addresses.values()} == {
+            "ns-nonprod",
+            "ns-internet",
+            "ns-management",
+        }
         assert {name for _, name in world.sub_interfaces} == {
             "Ethernet1/25.3200",
             "Ethernet1/25.3400",
@@ -418,7 +445,7 @@ class TestHealingAndFailures:
 
         assert {device for device, _ in world.sub_interfaces} == {"fw-2"}
         fw2_ip = world.sub_interfaces[("fw-2", "Ethernet1/25.3000")].ip_address.id
-        assert fw2_ip == world.addresses[("100.66.0.6/29", "ns-prod")].id
+        assert fw2_ip == world.addresses[("100.66.0.6/29", "default")].id
 
 
 class TestSnatAddress:
@@ -516,7 +543,7 @@ class TestTransitMemberResolution:
 
         assert world.uplink_lookups == [["fw-1", "fw-2"], ["lb-1", "lb-2"]]
         assert world.executed_filters.count("DcimCable") == 2
-        assert world.executed_filters.count("IpamNamespace") == 1
+        assert world.executed_filters.count("SecurityZone") == 1
         assert "DcimCable" not in world.gets
         assert "DcimPhysicalInterface" not in world.gets
         assert sorted(world.contexts) == [_SHARED, _LB_PROD]

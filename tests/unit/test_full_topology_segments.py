@@ -57,12 +57,26 @@ def _deployment_rows() -> list[dict]:
 
 
 def test_each_dc_declares_its_deployment_with_the_same_vlan_on_both_leaves() -> None:
-    """One deployment row per DC for its own (local) segment, a VLAN row for each leaf of the MLAG pair under one id."""
+    """Each DC's routed local segment has two leaf rows; its firewall-terminated segment also reaches both borders."""
     rows = [row for row in _deployment_rows() if row["segment"] != _STRETCHED and row["deployment"].startswith("DC-")]
-    assert sorted(row["deployment"] for row in rows) == ["DC-GDN1", "DC-KTW1", "DC-WAW1"]
+    assert sorted(row["deployment"] for row in rows) == [
+        "DC-GDN1",
+        "DC-GDN1",
+        "DC-KTW1",
+        "DC-KTW1",
+        "DC-WAW1",
+        "DC-WAW1",
+    ]
     for row in rows:
         vlans = row["vlans"]["data"]
-        assert len(vlans) == 2 and len({vlan["vlan_id"] for vlan in vlans}) == 1
+        site = row["deployment"].split("-")[1].lower()
+        expected_devices = {f"{site}-leaf-01", f"{site}-leaf-02"}
+        terminated = row["segment"] == f"c900-internal-fw-{site}-p"
+        if terminated:
+            expected_devices |= {f"{site}-bl-01", f"{site}-bl-02"}
+        assert {vlan["device"] for vlan in vlans} == expected_devices
+        assert len(vlans) == len(expected_devices) and len({vlan["vlan_id"] for vlan in vlans}) == 1
+        assert all(("svi" not in vlan) if terminated else ("svi" in vlan) for vlan in vlans)
         assert {vlan["device"].split("-")[0] for vlan in vlans} == {row["deployment"].split("-")[1].lower()}
 
 
@@ -104,7 +118,7 @@ def test_the_office_wifi_segments_are_a_guest_and_a_staff_one_on_the_access_swit
     }
     guest = policies["c900-wifi-guest-p"]["rules"]["data"]
     assert [(rule["action"], rule.get("destination_zone"), rule.get("destination_segment")) for rule in guest] == [
-        ("permit", "INTERNET-ZONE", None)
+        ("permit", "INTERNET", None)
     ]
     assert policies["c900-wifi-guest-p"]["default_action"] == "deny"
     assert any(

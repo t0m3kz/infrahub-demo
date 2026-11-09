@@ -19,7 +19,7 @@ def _cap(
         "next_hop": "10.0.0.4",
         "distance": distance,
         "exported": exported,
-        "vrf": {"namespace": {"name": vrf, "l3_vni": 50001}} if vrf else None,
+        "vrf": {"security_zone": {"name": vrf, "l3_vni": 60000}} if vrf else None,
     }
 
 
@@ -27,8 +27,8 @@ def test_routes_are_sorted_and_a_local_one_is_marked() -> None:
     """The sort key is (vrf, prefix, next hop); an unexported route carries local_only."""
     routes = get_static_routes([_cap("10.9.0.0/24"), {"typename": "ManagedBGP"}, _cap(exported=False)])
     assert routes == [
-        {"vrf": "PROD", "l3_vni": 50001, "prefix": "0.0.0.0/0", "nexthop": "10.0.0.4", "local_only": True},
-        {"vrf": "PROD", "l3_vni": 50001, "prefix": "10.9.0.0/24", "nexthop": "10.0.0.4"},
+        {"vrf": "PROD", "l3_vni": 60000, "prefix": "0.0.0.0/0", "nexthop": "10.0.0.4", "local_only": True},
+        {"vrf": "PROD", "l3_vni": 60000, "prefix": "10.9.0.0/24", "nexthop": "10.0.0.4"},
     ]
 
 

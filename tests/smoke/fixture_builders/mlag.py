@@ -201,7 +201,7 @@ def build_mlag_device_data(
         "primary_address": _node(
             {
                 "address": _v("172.16.0.1/32"),
-                "ip_namespace": _node({"name": _v("default")}),
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         ),
         "tags": _edges([]),

@@ -103,7 +103,13 @@ def _data(prefixes: list[str]) -> dict[str, Any]:
         "ManagedBGPPeering": {"edges": [{"node": {"id": "peer-1", "name": {"value": "TRANSIT-X"}}}]},
         "IpamPrefix": {
             "edges": [
-                {"node": {"prefix": {"value": p}, "ip_namespace": {"node": {"namespace_type": {"value": "internet"}}}}}
+                {
+                    "node": {
+                        "security_zone": {"node": {"vrf_type": {"value": "internet"}}},
+                        "prefix": {"value": p},
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
+                    }
+                }
                 for p in prefixes
             ]
         },
@@ -168,14 +174,19 @@ def test_the_full_topology_data_is_the_spec_of_the_generator() -> None:
 
     from tests.integration.demo_data import ROOT  # noqa: PLC0415
 
-    folder = ROOT / "data" / "demos" / "00_full_topology" / "06_internet"
+    folder = ROOT / "data" / "demos" / "00_full_topology"
     documents = [
-        doc for doc in yaml.safe_load_all((folder / "03_routing" / "03_routing_policies.yml").read_text()) if doc
+        doc
+        for path in sorted((folder / "90_bindings/90_internet/03_routing").glob("03_routing_policies*.yml"))
+        for doc in yaml.safe_load_all(path.read_text())
+        if doc
     ]
-    by_kind = {doc["spec"]["kind"]: doc["spec"]["data"] for doc in documents}
+    by_kind: dict[str, list[dict]] = {}
+    for doc in documents:
+        by_kind.setdefault(doc["spec"]["kind"], []).extend(doc["spec"]["data"])
     public = [
         item["prefix"]
-        for doc in yaml.safe_load_all((folder / "00_addressing" / "01_prefixes.yml").read_text())
+        for doc in yaml.safe_load_all((folder / "00_common/04_internet/01_prefixes.yml").read_text())
         if doc
         for item in doc["spec"]["data"]
         if item.get("role") == "public" and ":" not in item["prefix"]

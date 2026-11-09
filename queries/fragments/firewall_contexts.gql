@@ -1,24 +1,57 @@
 fragment FirewallContextLegFields on ManagedFirewallContext {
   id
-  # Name and VLAN derive the context's transit VLAN; the namespace l3_vni is
-  # the VRF's L3 VNI. A leaf renders the transit leg locally from these
-  # (get_leaf_firewall_transits), border leaves/edges from their own ports.
-  name { value }
-  vlan_id { value }
-  tenant { node { id } }
-  # Deployments whose segments terminate here: a leaf sends a flow through
-  # the firewall only when both its segments are served by one context.
-  served_deployments { edges { node { id } } }
+  name {
+    value
+  }
+  vlan_id {
+    value
+  }
+  tenant {
+    node {
+      id
+    }
+  }
+  served_deployments {
+    edges {
+      node {
+        id
+      }
+    }
+  }
   capabilities {
     edges {
       node {
-        name { value }
-        device { node { ... on DcimDeviceManaged { role { value } } } }
+        name {
+          value
+        }
+        device {
+          node {
+            ... on DcimDeviceManaged {
+              role {
+                value
+              }
+            }
+          }
+        }
+        ...InterfaceRoutingZoneFields
         ... on DcimVirtualInterface {
+          vrf {
+            node {
+              ...RoutingVrfFields
+            }
+          }
           ip_address {
             node {
-              address { value }
-              ip_namespace { node { name { value } namespace_type { value } l3_vni { value } } }
+              address {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
             }
           }
         }
@@ -54,17 +87,6 @@ fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
   }
 }
 
-# A device's own `deployment` is the DC directly for DC-level tiers
-# (border-leaf, firewall, spine, super-spine) but the POD for pod-level
-# tiers (leaf, tor, access-leaf) — see generators/topology/rack.py's
-# deployment_id=self.data["pod"]["id"] vs generators/topology/dc.py's
-# deployment_id=dc_id. One extra `parent` hop covers the pod case; DC-level
-# devices' deployment has no `parent` fragment match, so only the direct
-# TopologyDeviceHosting fragment applies for them. A colocation firewall's
-# deployment is its zone, which is a TopologyDeviceHosting itself and holds the
-# firewall pair, so it takes the direct shape and needs no hop (the metro owns no
-# devices). A virtual colocation's firewalls are CloudNetworkAppliances, hosted
-# provider-side with no context of ours, so nothing here selects them.
 fragment FirewallContextsOnDeploymentFields on TopologyDeployment {
   ...FirewallContextsOnDeviceHostingFields
   ... on TopologyPod {
@@ -78,61 +100,135 @@ fragment FirewallContextsOnDeploymentFields on TopologyDeployment {
 
 fragment FirewallContextConfigFields on ManagedFirewallContext {
   id
-  name { value }
-  context_id { value }
-  vlan_id { value }
-  snat_address { node { address { value } } }
+  name {
+    value
+  }
+  context_id {
+    value
+  }
+  vlan_id {
+    value
+  }
+  snat_address {
+    node {
+      address {
+        value
+      }
+    }
+  }
   tenant {
     node {
       id
-      ... on TopologyCustomerDC { name { value } }
-      ... on TopologyCustomerColocation { name { value } }
+      ... on TopologyCustomerDC {
+        name {
+          value
+        }
+      }
+      ... on TopologyCustomerColocation {
+        name {
+          value
+        }
+      }
     }
   }
-  # The segments this context terminates (ManagedVxlanSegment.terminated_on): their gateway is the pair's floating
-  # VIP and the fabric only bridges them. The firewall transform derives each one's `<uplink trunk>.<vlan>`
-  # sub-interface from the VLAN row of the border leaf at the far end of the trunk
-  # (transforms/helpers/firewall_terminated.py).
   terminated_segments {
     edges {
       node {
         id
-        name { value }
-        security_zone { node { name { value } } }
-        gateway { node { address { value } } }
+        name {
+          value
+        }
+        security_zone {
+          node {
+            name {
+              value
+            }
+            trust_level {
+              value
+            }
+            description {
+              value
+            }
+            id
+            l3_vni {
+              value
+            }
+            vrf_type {
+              value
+            }
+          }
+        }
+        gateway {
+          node {
+            address {
+              value
+            }
+          }
+        }
         segment_deployments {
           edges {
             node {
-              vlans { edges { node { vlan_id { value } device { node { id } } } } }
+              vlans {
+                edges {
+                  node {
+                    vlan_id {
+                      value
+                    }
+                    device {
+                      node {
+                        id
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
       }
     }
   }
-  # The segments terminating on this context: every
-  # segment of a deployment it serves. Its rule table is
-  # their rules and the rules into them.
   served_deployments {
     edges {
       node {
         id
-        # network_segments is declared per footprint kind (schemas/extensions/service/segment.yml), not on the
-        # TopologyCustomer generic: a context serves a DC or a colocation footprint, both with VXLAN segments, so
-        # the two spreads select the same field of the same peer type.
         ... on TopologyCustomerDC {
-          # The DC names its Internet edge when it has an external-firewall pair: this (internal) context then keeps no
-          # Internet rule (transforms/helpers/firewall_contexts.py).
-          parent { node { id ... on TopologySegmentHosting { internet_edge_contexts { edges { node { id } } } } } }
-          network_segments { edges { node { id ...ContextServedSegmentFields } } }
+          parent {
+            node {
+              id
+              ... on TopologySegmentHosting {
+                internet_edge_contexts {
+                  edges {
+                    node {
+                      id
+                    }
+                  }
+                }
+              }
+            }
+          }
+          network_segments {
+            edges {
+              node {
+                id
+                ...ContextServedSegmentFields
+              }
+            }
+          }
         }
-        ... on TopologyCustomerColocation { network_segments { edges { node { id ...ContextServedSegmentFields } } } }
+        ... on TopologyCustomerColocation {
+          network_segments {
+            edges {
+              node {
+                id
+                ...ContextServedSegmentFields
+              }
+            }
+          }
+        }
       }
     }
   }
-  # The topologies whose Internet traffic this context enforces and translates (an external-firewall pair's context):
-  # their DC footprints, with the segments whose Internet rules it holds and the serving context whose public address a
-  # dedicated customer is translated to.
   internet_edge_hostings {
     edges {
       node {
@@ -143,10 +239,37 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
               node {
                 id
                 ... on TopologyCustomerDC {
-                  name { value }
-                  environment { value }
-                  network_segments { edges { node { id ...ContextServedSegmentFields } } }
-                  serving_firewall_context { node { id tenant { node { id } } snat_address { node { address { value } } } } }
+                  name {
+                    value
+                  }
+                  environment {
+                    value
+                  }
+                  network_segments {
+                    edges {
+                      node {
+                        id
+                        ...ContextServedSegmentFields
+                      }
+                    }
+                  }
+                  serving_firewall_context {
+                    node {
+                      id
+                      tenant {
+                        node {
+                          id
+                        }
+                      }
+                      snat_address {
+                        node {
+                          address {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -157,10 +280,94 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
   }
 }
 
-# A segment a context serves: its rules, and its own gateway prefix and zone (the context's routes,
-# apply_context_routes, read these, not the SecurityZone root).
 fragment ContextServedSegmentFields on ManagedNetworkSegment {
   ...SegmentRulesFields
-  gateway { node { ip_prefix { node { prefix { value } } } } }
-  security_zone { node { name { value } } }
+  gateway {
+    node {
+      ip_prefix {
+        node {
+          prefix {
+            value
+          }
+        }
+      }
+    }
+  }
+  security_zone {
+    node {
+      name {
+        value
+      }
+      trust_level {
+        value
+      }
+      description {
+        value
+      }
+      id
+      l3_vni {
+        value
+      }
+      vrf_type {
+        value
+      }
+    }
+  }
+}
+
+fragment FirewallZoneFields on SecurityZone {
+  name {
+    value
+  }
+  trust_level {
+    value
+  }
+  description {
+    value
+  }
+  network_segments {
+    edges {
+      node {
+        id
+        ... on ManagedVxlanSegment {
+          security_zone {
+            node {
+              ...RoutingZoneFields
+            }
+          }
+          name {
+            value
+          }
+          gateway {
+            node {
+              ip_prefix {
+                node {
+                  prefix {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        ...SegmentRulesFields
+      }
+    }
+  }
+}
+
+fragment FirewallInterfaceZoneFields on DcimInterface {
+  ... on DcimSwitchedInterface {
+    segments {
+      edges {
+        node {
+          security_zone {
+            node {
+              ...RoutingZoneFields
+            }
+          }
+        }
+      }
+    }
+  }
 }

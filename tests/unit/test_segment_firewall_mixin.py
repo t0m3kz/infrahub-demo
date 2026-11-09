@@ -407,7 +407,7 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
         gen._get_profile = AsyncMock(return_value=None)
         planner = MagicMock(wraps=RulesPlanner())
-        planner.zone_context = MagicMock(return_value=("PROD-ZONE", "PROD-ZONE", False))
+        planner.zone_context = MagicMock(return_value=("PROD", "PROD", False))
         result = asyncio.run(
             gen._reconcile_segment_rule(
                 app_name="checkout",
@@ -538,8 +538,8 @@ class TestExistingRuleReconciliation:
         gen._create_or_update_policy_rule = AsyncMock()
         gen._get_profile = AsyncMock(return_value=MagicMock(id=profile_id) if profile_id else None)
         planner = MagicMock(wraps=RulesPlanner())
-        dst_zone = "PROD-ZONE" if same_zone else "NONPROD-ZONE"
-        planner.zone_context = MagicMock(return_value=("PROD-ZONE", dst_zone, not same_zone))
+        dst_zone = "PROD" if same_zone else "NONPROD"
+        planner.zone_context = MagicMock(return_value=("PROD", dst_zone, not same_zone))
         result = asyncio.run(
             gen._reconcile_segment_rule(
                 app_name="checkout",
@@ -598,7 +598,7 @@ class TestExistingRuleReconciliation:
         gen._segment_policy = AsyncMock(return_value=policy)
         gen._find_policy_rule = AsyncMock(return_value=rule)
         planner = MagicMock(wraps=RulesPlanner())
-        planner.zone_context = MagicMock(return_value=("PROD-ZONE", "NONPROD-ZONE", True))
+        planner.zone_context = MagicMock(return_value=("PROD", "NONPROD", True))
 
         asyncio.run(
             gen._reconcile_segment_rule(
@@ -625,7 +625,7 @@ class TestExistingRuleReconciliation:
         gen._find_policy_rule = AsyncMock(return_value=rule)
         gen._get_profile = AsyncMock(return_value=None)
         planner = MagicMock(wraps=RulesPlanner())
-        planner.zone_context = MagicMock(return_value=("PROD-ZONE", "PROD-ZONE", False))
+        planner.zone_context = MagicMock(return_value=("PROD", "PROD", False))
 
         asyncio.run(
             gen._reconcile_segment_rule(
@@ -667,7 +667,7 @@ class TestExistingRuleGroupTags:
         gen._create_or_update_policy_rule = AsyncMock()
         gen._get_profile = AsyncMock(return_value=MagicMock(id="profile-strict"))
         planner = MagicMock(wraps=RulesPlanner())
-        planner.zone_context = MagicMock(return_value=("PROD-ZONE", "PROD-ZONE", False))
+        planner.zone_context = MagicMock(return_value=("PROD", "PROD", False))
         asyncio.run(
             gen._reconcile_segment_rule(
                 app_name="fraud-detection",
@@ -830,7 +830,7 @@ class TestEnsureSegmentZones:
 
         asyncio.run(gen._ensure_segment_zones([segment]))
 
-        assert segment["security_zone"]["name"] == "PROD-ZONE"
+        assert segment["security_zone"]["name"] == "PROD"
         assert RulesPlanner.zone_context(segment, dict(segment))[2] is False
         assert gen.client.create.call_args.kwargs["kind"] == "ManagedVxlanSegment"
 
@@ -846,7 +846,7 @@ class TestEnsureSegmentZones:
         segments = [self._segment()]
 
         asyncio.run(gen._ensure_segment_zones(segments))
-        asyncio.run(gen._ensure_segment_zones([self._segment(security_zone={"name": "PROD-ZONE"})]))
+        asyncio.run(gen._ensure_segment_zones([self._segment(security_zone={"name": "PROD"})]))
 
         assert gen.client.create.await_count == 1
 

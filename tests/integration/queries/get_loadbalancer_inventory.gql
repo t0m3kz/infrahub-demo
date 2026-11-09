@@ -3,26 +3,41 @@ query GetLoadbalancerInventory {
     edges {
       node {
         id
-        name { value }
-        vlan_id { value }
+        name {
+          value
+        }
+        vlan_id {
+          value
+        }
         tenant {
           node {
             id
-            ... on TopologyCustomerDC { name { value } }
+            ... on TopologyCustomerDC {
+              name {
+                value
+              }
+            }
           }
         }
         cluster {
           node {
             id
-            name { value }
-            # Members: the DC the shared cluster's physical load balancers are
-            # deployed in (empty for a dedicated pair of virtual members).
+            name {
+              value
+            }
             capabilities {
               edges {
                 node {
                   id
                   ... on DcimPhysicalDevice {
-                    deployment { node { __typename name { value } } }
+                    deployment {
+                      node {
+                        __typename
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -33,26 +48,72 @@ query GetLoadbalancerInventory {
           edges {
             node {
               id
-              ... on TopologyCustomer { name { value } }
+              ... on TopologyCustomer {
+                name {
+                  value
+                }
+              }
             }
           }
         }
-        vip_prefix { node { prefix { value } ip_namespace { node { name { value } } } } }
-        # The one leg (each member's VLAN sub-interface) and the border-leaf
-        # load-balancer ports tagged with the context, told apart by __typename.
+        vip_prefix {
+          node {
+            prefix {
+              value
+            }
+            ip_namespace {
+              node {
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
         capabilities {
           edges {
             node {
               __typename
               id
-              name { value }
-              device { node { id name { value } ... on DcimDeviceManaged { role { value } } } }
-              ... on DcimPhysicalInterface { role { value } }
+              name {
+                value
+              }
+              device {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                  ... on DcimDeviceManaged {
+                    role {
+                      value
+                    }
+                  }
+                }
+              }
+              ... on DcimPhysicalInterface {
+                role {
+                  value
+                }
+              }
               ... on DcimVirtualInterface {
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
+                }
                 ip_address {
                   node {
-                    address { value }
-                    ip_namespace { node { name { value } namespace_type { value } } }
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -62,21 +123,68 @@ query GetLoadbalancerInventory {
         vips {
           edges {
             node {
-              hostname { value }
-              protocol { value }
-              port { value }
-              vip_ip { node { address { value } } }
+              hostname {
+                value
+              }
+              protocol {
+                value
+              }
+              port {
+                value
+              }
+              vip_ip {
+                node {
+                  address {
+                    value
+                  }
+                }
+              }
               pool_members {
                 edges {
                   node {
                     __typename
-                    name { value }
-                    ... on DcimPhysicalDevice { primary_address { node { address { value } } } }
-                    ... on DcimVirtualDevice { primary_address { node { address { value } } } }
+                    name {
+                      value
+                    }
+                    ... on DcimPhysicalDevice {
+                      primary_address {
+                        node {
+                          address {
+                            value
+                          }
+                        }
+                      }
+                    }
+                    ... on DcimVirtualDevice {
+                      primary_address {
+                        node {
+                          address {
+                            value
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
-              health_checks { edges { node { check { value } rise { value } fall { value } timeout { value } } } }
+              health_checks {
+                edges {
+                  node {
+                    check {
+                      value
+                    }
+                    rise {
+                      value
+                    }
+                    fall {
+                      value
+                    }
+                    timeout {
+                      value
+                    }
+                  }
+                }
+              }
             }
           }
         }

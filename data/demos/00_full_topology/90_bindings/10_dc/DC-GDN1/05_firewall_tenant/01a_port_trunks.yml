@@ -1,0 +1,10 @@
+# The vSwitch's physical uplink and facing leaf port, plus both border-to-firewall L2 service trunks.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - {device: gdn1-srv-02, name: eno1, segments: [c900-db-p, c900-internal-fw-gdn1-p]}
+    - {device: gdn1-leaf-01, name: Ethernet1/5, segments: [c900-internal-fw-gdn1-p]}
+    - {device: gdn1-bl-01, name: Ethernet1/25, segments: [c900-internal-fw-gdn1-p]}
+    - {device: gdn1-bl-02, name: Ethernet1/25, segments: [c900-internal-fw-gdn1-p]}

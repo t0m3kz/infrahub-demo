@@ -1,0 +1,14 @@
+# DcimVirtualInterface declarations in recursive dependency order.
+# The SVI of the segment on leaf-02 (VLAN 100, in the PROD VRF of DC-KTW1). Its VLAN-domain row, with the SAME vlan_id
+# as leaf-01's (both peers of an MLAG pair carry a segment under one id), is nested with leaf-01's under the deployment
+# of the segment (03_tenant/01_segment.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Vlan100"
+      device: "ktw1-leaf-02"
+      role: svi
+      status: active
+      vrf: ["DC-KTW1", "PROD"]

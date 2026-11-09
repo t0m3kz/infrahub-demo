@@ -550,6 +550,7 @@ class CablingMixin:
         capability_obj: Any | None = None,
         extra_capability_objs: Sequence[Any] = (),
         ip_address_id: str | None = None,
+        vrf_id: str | None = None,
         track: bool = True,
         role: str = "service",
     ) -> Any | None:
@@ -580,6 +581,7 @@ class CablingMixin:
             "status": "active",
             "role": role,
             **({"ip_address": {"id": ip_address_id}} if ip_address_id else {}),
+            **({"vrf": {"id": vrf_id}} if vrf_id else {}),
         }
 
         try:

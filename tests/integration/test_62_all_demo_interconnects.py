@@ -362,7 +362,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         Every circuit has two distinct ports, and the locations the data authors are exactly the ones on the branch
         (add_sdwan_edge writes a tunnel's own). Then the rules of its kind (_tunnel_errors, _interconnect_errors,
         _handoff_errors): the same ones checks/circuit_placement.py enforces, asserted here on the live data. Across
-        circuits: one port, one session (_session_port_errors), and prod never meets non-prod at a device
+        circuits: one port, one session (_session_port_errors), and prod never meets nonprod at a device
         (_environment_errors).
         """
         errors: list[str] = []

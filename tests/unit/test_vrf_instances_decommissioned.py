@@ -105,22 +105,22 @@ def test_rule_c_a_membership_of_another_deployment_is_an_error_end_to_end() -> N
 
 
 def test_rule_d_a_realizable_namespace_passes() -> None:
-    """(d) an l3_vni, a namespace_type and a non-default name raise nothing."""
+    """(d) an l3_vni, a vrf_type and a non-default name raise nothing."""
     assert namespace_errors(facts_of(raw_device("d1", "leaf-1", vrfs=[raw_instance("v1", "leaf-1", "PROD")]))) == []
 
 
 def test_rule_f_an_instance_referenced_only_by_a_non_svi_virtual_interface_is_empty() -> None:
     """(f) needs only an empty ``devices``: a sub-interface pointing its ``vrf`` at it does not make a member."""
-    instance = raw_instance("v2", "x", "NON-PROD", 200, "non_prod")
+    instance = raw_instance("v2", "x", "NONPROD", 200, "non_prod")
     sub = raw_interface("i9", "Ethernet1.200", "leaf", typename="DcimVirtualInterface")
     sub["vrf"] = {
         "node": {
             "id": "v2",
             "deployment": {"node": {"id": "dc-1"}},
-            "namespace": {"node": {"name": {"value": "NON-PROD"}}},
+            "security_zone": {"node": {"name": {"value": "NONPROD"}}},
         }
     }
     device = raw_device("d1", "leaf-1", interfaces=[sub])
     response = clean_data(raw_response(device, instances=(raw_root_instance(instance),)))
     warnings = empty_instance_warnings(all_instances(response))
-    assert len(warnings) == 1 and "dc1-vrf-non-prod" in warnings[0]
+    assert len(warnings) == 1 and "dc1-vrf-nonprod" in warnings[0]

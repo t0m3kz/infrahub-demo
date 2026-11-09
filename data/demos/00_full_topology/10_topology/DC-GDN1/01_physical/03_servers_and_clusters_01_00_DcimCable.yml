@@ -1,0 +1,30 @@
+# DcimCable declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-GDN1-SRV02-ENO1-LEAF01"
+      type: copper
+      deployment: "DC-GDN1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "gdn1-srv-02"
+            name: "eno1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "gdn1-leaf-01"
+            name: "Ethernet1/5"
+    - name: "CBL-GDN1-SRV02-ENO2-LEAF02"
+      type: copper
+      deployment: "DC-GDN1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "gdn1-srv-02"
+            name: "eno2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "gdn1-leaf-02"
+            name: "Ethernet1/5"

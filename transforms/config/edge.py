@@ -42,7 +42,7 @@ class Edge(BaseDeviceTransform):
         roots = extra_roots or {}
         tags = customer_tags(roots.get("OrganizationCustomer"))
         # The public space an upstream transit session may announce.
-        config["internet_prefixes"] = get_internet_prefixes(roots.get("IpamPrefix"))
+        config["internet_prefixes"] = get_internet_prefixes(roots.get("public_origins"))
         # External tenant-VRF peers (session.external): per handoff sub-interface, the owners behind
         # it, what it may send in and what it is announced out: the same owners' on-prem prefixes and
         # what they registered behind another external session, never another owner's, never back

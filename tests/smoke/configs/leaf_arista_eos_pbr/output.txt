@@ -27,13 +27,13 @@ vlan 200
    name Customer-A
 
 vlan 3000
-   name XCHG-dc1-fw-shared-VRF_A
+   name XCHG-dc1-fw-shared-PROD
 
 !
 ! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
 !
 ip access-list ACL-VLAN100-IN
-   remark Zone: PROD-ZONE -> PROD-ZONE
+   remark Zone: PROD -> PROD
    10 permit tcp 10.100.0.0/24 10.200.0.0/24 eq 22 ! allow-seg-200-ssh
    6000 deny ip 10.100.0.0/24 0.0.0.0/8 ! allow-internet-https-not-internet
    6010 deny ip 10.100.0.0/24 10.0.0.0/8 ! allow-internet-https-not-internet
@@ -46,7 +46,7 @@ ip access-list ACL-VLAN100-IN
    6080 deny ip 10.100.0.0/24 198.18.0.0/15 ! allow-internet-https-not-internet
    6090 deny ip 10.100.0.0/24 224.0.0.0/4 ! allow-internet-https-not-internet
    6100 deny ip 10.100.0.0/24 240.0.0.0/4 ! allow-internet-https-not-internet
-   remark Zone: PROD-ZONE -> INTERNET-ZONE
+   remark Zone: PROD -> INTERNET
    6110 permit tcp 10.100.0.0/24 any eq 443 ! allow-internet-https
    9990 deny ip any any log ! implicit-deny-all
 !
@@ -147,16 +147,16 @@ interface Vxlan1
    vxlan vlan 3000 vni 64000
    !
    ! L3 VNI Mappings (VRF segments for microsegmentation)
-   vxlan vrf VRF_A vni 50001
+   vxlan vrf PROD vni 60000
 !
 !
 ! VRF Definitions (Microsegmentation)
 !
-vrf instance VRF_A
+vrf instance PROD
    description Tenant VRF for microsegmentation
-   rd 10.0.0.1:50001
+   rd 10.0.0.1:60000
 !
-ip routing vrf VRF_A
+ip routing vrf PROD
 !
 !
 ! EVPN Configuration (L2 + L3 VNI)
@@ -181,10 +181,10 @@ router bgp 65000
       arp proxy
    !
    ! L3 EVPN (VRF-based for microsegmentation)
-   vrf VRF_A
-      rd 10.0.0.1:50001
-      route-target import evpn 65000:50001
-      route-target export evpn 65000:50001
+   vrf PROD
+      rd 10.0.0.1:60000
+      route-target import evpn 65000:60000
+      route-target export evpn 65000:60000
       redistribute connected route-map RM-VRF-CONN-2-EVPN
 
 !
@@ -192,14 +192,15 @@ router bgp 65000
 !
 ip virtual-router mac-address 00:1c:73:00:dc:01
 interface Vlan100
-   vrf VRF_A
+   vrf PROD
    ip address virtual 10.100.0.1/24
    ip access-group ACL-VLAN100-IN in
 interface Vlan200
+   vrf PROD
    ip address virtual 10.200.0.1/24
    ip access-group ACL-VLAN200-IN in
 interface Vlan3000
-   vrf VRF_A
+   vrf PROD
    ip address virtual 100.66.0.1/29
 !
 ! Leaf PBR — permitted firewall bypass first (the LB is SNAT automap, so no return-path PBR: the firewall PBR is the only one),
@@ -230,6 +231,26 @@ policy-map type pbr PM-LEAF-PBR-VLAN100
 !
 interface Vlan100
    service-policy type pbr input PM-LEAF-PBR-VLAN100
+!
+! Customer: Customer-A/any
+ip access-list PBR-BYPASS-VLAN200
+!
+class-map type pbr match-any CM-PBR-BYPASS-VLAN200
+   match ip access-group PBR-BYPASS-VLAN200
+!
+ip access-list PBR-ALL-VLAN200
+   permit ip any any
+!
+class-map type pbr match-any CM-PBR-ALL-VLAN200
+   match ip access-group PBR-ALL-VLAN200
+!
+policy-map type pbr PM-LEAF-PBR-VLAN200
+   class CM-PBR-BYPASS-VLAN200
+   class CM-PBR-ALL-VLAN200
+      set nexthop 100.66.0.4
+!
+interface Vlan200
+   service-policy type pbr input PM-LEAF-PBR-VLAN200
 !
 
 

@@ -18,14 +18,15 @@ import jinja2
 import pytest
 
 from checks.common import validate_transit_vlans
+from tests.unit.routing_helpers import make_vrf
 from transforms.common import BaseDeviceTransform
 from transforms.config.leaf import Leaf
 from transforms.helpers.firewall import get_exchange_transits, get_leaf_firewall_transits
 from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from utils.exchange_transit import service_context_caps
 
-_PROD_NS = {"name": "PROD", "namespace_type": "prod", "l3_vni": 50001}
-_NONPROD_NS = {"name": "NON-PROD", "namespace_type": "non_prod", "l3_vni": 50002}
+_PROD_NS = {"name": "PROD", "vrf_type": "prod", "l3_vni": 50001}
+_NONPROD_NS = {"name": "NONPROD", "vrf_type": "non_prod", "l3_vni": 50002}
 
 
 def _context(
@@ -44,9 +45,13 @@ def _context(
         for member, host in (("fw-01", 5), ("fw-02", 6)):
             iface_caps.append(
                 {
+                    "vrf": make_vrf(namespace),
                     "name": "eth1.3000",
                     "device": {"role": "internal-firewall"},
-                    "ip_address": {"address": f"{network}.{host}/29", "ip_namespace": namespace},
+                    "ip_address": {
+                        "address": f"{network}.{host}/29",
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
+                    },
                 }
             )
     return {
@@ -66,6 +71,7 @@ def _activation(vlan: int = 100, *, dep: str = "dep-a", namespace: dict | None =
         "vlan_id": vlan,
         "vni": 10000 + vlan,
         "segment": {
+            "security_zone": namespace,
             "id": f"seg-{vlan}",
             "name": f"seg-{vlan}",
             "customer_name": f"seg-{vlan}",
@@ -73,7 +79,10 @@ def _activation(vlan: int = 100, *, dep: str = "dep-a", namespace: dict | None =
             "security_policy": None,
             "gateway": {
                 "address": f"10.{vlan}.0.1/24",
-                "ip_prefix": {"prefix": f"10.{vlan}.0.0/24", "ip_namespace": namespace},
+                "ip_prefix": {
+                    "prefix": f"10.{vlan}.0.0/24",
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
+                },
             },
             "arp_suppression": True,
         },
@@ -127,7 +136,7 @@ class TestGetExchangeTransitsLegs:
     def test_legs_filter_keeps_only_the_wanted_namespace_and_vip(self) -> None:
         """The leaf asks for the (namespace, VIP) it redirects to."""
         ctx = _context(legs=(("100.66.0.5/29", _PROD_NS), ("100.66.32.5/29", _NONPROD_NS)))
-        transits = get_exchange_transits([ctx], legs={("NON-PROD", "100.66.32.4")})
+        transits = get_exchange_transits([ctx], legs={("NONPROD", "100.66.32.4")})
         assert [(t["vlan_id"], t["vni"]) for t in transits] == [(3200, 64200)]
 
     def test_legs_filter_with_other_vip_returns_nothing(self) -> None:
@@ -158,7 +167,7 @@ class TestGetLeafFirewallTransits:
     def test_non_prod_leg_uses_its_slot(self) -> None:
         """The band VLAN follows the namespace type of the segment's own VRF."""
         ctx = _context(legs=(("100.66.32.5/29", _NONPROD_NS),))
-        transits = get_leaf_firewall_transits([_rule("100.66.32.4", "NON-PROD")], [ctx], device_name="leaf-01")
+        transits = get_leaf_firewall_transits([_rule("100.66.32.4", "NONPROD")], [ctx], device_name="leaf-01")
         assert [t["vlan_id"] for t in transits] == [3200]
 
     def test_only_the_redirected_context_is_rendered(self) -> None:

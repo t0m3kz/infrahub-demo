@@ -1,0 +1,16 @@
+# Our side: the sub-interface of the cage port that carries the virtual connection, with our end of the /31.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/13.1000"
+      device: "eg-fr201"
+      role: cloud
+      status: active
+      description: "PROD handoff to the AWS Direct Connect VIF (C001)"
+      parent_interface: ["eg-fr201", "Ethernet1/13"]
+      ip_address:
+        data:
+          address: "10.255.143.254/31"
+          ip_namespace: "default"

@@ -1,0 +1,88 @@
+---
+# The attachments. The target is exactly one of `virtual_network` and `peer_gateway` (checks/cloud_connection.py R1).
+# `allowed_prefixes` is the direction cloud -> us: what the association lets through towards on-prem (the Direct
+# Connect gateway association announces the VPC block). The direction us -> cloud is `advertised_prefixes` of a public
+# peering.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGatewayAttachment
+  data:
+    - name: "tgwa-c900-vpc"
+      description: "VPC attachment of the transit gateway"
+      status: active
+      gateway: "tgw-c900-euc1"
+      virtual_network: "vpc-c900-prod"
+      owner_account: "c900-aws-prod"
+      associated_route_table: "rt-c900-prod"
+      propagates_to_route_tables:
+        - "rt-c900-prod"
+    - name: "tgwa-c900-dxgw"
+      description: "Association of the Direct Connect gateway with the transit gateway"
+      status: active
+      gateway: "tgw-c900-euc1"
+      peer_gateway: "dxgw-c900"
+      owner_account: "c900-aws-prod"
+      associated_route_table: "rt-c900-prod"
+      # The Direct Connect gateway announces on-prem only what the association allows: the VPC of this account and
+      # the VPCs of the spoke accounts.
+      allowed_prefixes:
+        - ["10.200.0.0/16", "default"]
+        - ["10.205.0.0/16", "default"]
+        - ["10.206.0.0/16", "default"]
+        - ["10.207.0.0/16", "default"]
+    - name: "vgwa-c900-vpc"
+      description: "Virtual private gateway attached to the VPC"
+      status: active
+      gateway: "vgw-c900-euc1"
+      virtual_network: "vpc-c900-prod"
+      owner_account: "c900-aws-prod"
+    - name: "ergwa-c900-weu"
+      description: "ExpressRoute gateway in the hub VNet"
+      status: active
+      gateway: "ergw-c900-weu"
+      virtual_network: "vnet-c900-weu"
+      owner_account: "c900-azure-prod"
+      # Gateway transit: the gateway announces the hub VNet and every VNet peered with it, the spokes of other
+      # subscriptions included.
+      allowed_prefixes:
+        - ["10.201.0.0/16", "default"]
+        - ["10.203.0.0/16", "default"]
+        - ["10.208.0.0/16", "default"]
+        - ["10.209.0.0/16", "default"]
+        - ["10.210.0.0/16", "default"]
+    - name: "cra-c900-euw3"
+      description: "Cloud Router in the VPC"
+      status: active
+      gateway: "cr-c900-euw3"
+      virtual_network: "vpc-c900-gcp"
+      owner_account: "c900-gcp-prod"
+    # The VPCs of the spoke accounts on the transit gateway (shared with them): each attachment lives in its spoke
+    # account, joins the default route table and propagates its block into it, so on-prem and the other VPCs reach it.
+    - name: "tgwa-c900-payments"
+      description: "Cross-account VPC attachment of the transit gateway (c900-aws-payments)"
+      status: active
+      gateway: "tgw-c900-euc1"
+      virtual_network: "vpc-c900-payments"
+      owner_account: "c900-aws-payments"
+      associated_route_table: "rt-c900-prod"
+      propagates_to_route_tables:
+        - "rt-c900-prod"
+    - name: "tgwa-c900-analytics"
+      description: "Cross-account VPC attachment of the transit gateway (c900-aws-analytics)"
+      status: active
+      gateway: "tgw-c900-euc1"
+      virtual_network: "vpc-c900-analytics"
+      owner_account: "c900-aws-analytics"
+      associated_route_table: "rt-c900-prod"
+      propagates_to_route_tables:
+        - "rt-c900-prod"
+    - name: "tgwa-c900-shared"
+      description: "Cross-account VPC attachment of the transit gateway (c900-aws-shared)"
+      status: active
+      gateway: "tgw-c900-euc1"
+      virtual_network: "vpc-c900-shared"
+      owner_account: "c900-aws-shared"
+      associated_route_table: "rt-c900-prod"
+      propagates_to_route_tables:
+        - "rt-c900-prod"

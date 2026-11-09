@@ -32,7 +32,7 @@ def _context_name(dc_name: str, dc_index: int, environment: str) -> str:
         ).lower()
         for role_index in (1, 2)
     )
-    scope = "prod" if namespace_type_for_environment(environment) == "prod" else "non-prod"
+    scope = "prod" if namespace_type_for_environment(environment) == "prod" else "nonprod"
     return f"shared-{members[0]}-{members[1]}-{scope}"
 
 

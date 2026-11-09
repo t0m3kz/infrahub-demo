@@ -10,59 +10,104 @@ nodes in the RAW GraphQL shape, as the config queries return them. Idempotent: a
 from __future__ import annotations
 
 import copy
-from typing import Any
+from typing import Any, TypedDict
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.vrf import VrfRequirements, vrf_requirements
 from utils.vrf_demand import SVI_ROLE, VRF_KIND, svi_name
 
-# A fixture namespace dict does not always carry its namespace_type (the segment gateway's does not): the type of the
-# four environment namespaces by name, the tenant default for any other name (a fixture's own VRF_A, ...).
-_TYPE_BY_NAME = {
-    "PROD": "prod",
-    "NON-PROD": "non_prod",
-    "NONPROD": "non_prod",
-    "INTERNET": "internet",
-    "MANAGEMENT": "management",
+# Standard routing metadata belongs to the explicit SecurityZone owner, not
+# to an address's IPAM namespace or the gateway prefix.
+ZONE_CATALOG: dict[str, tuple[str, int]] = {
+    "PROD": ("prod", 60000),
+    "NONPROD": ("non_prod", 60001),
+    "INTERNET": ("internet", 60002),
+    "MANAGEMENT": ("management", 60003),
 }
-_DEFAULT_TYPE = "prod"
+# The old fixtures modelled VRFs and firewall labels separately. The new
+# fixtures use the zone's catalog name for both routing and policy.
+LEGACY_ZONE_NAMES = {
+    "VRF_A": "PROD",
+    "VRF-INTERNAL": "PROD",
+    "internal": "PROD",
+    "VRF-DMZ": "NONPROD",
+    "dmz": "NONPROD",
+    "VRF-EXTERNAL": "INTERNET",
+    "external": "INTERNET",
+    "web": "PROD",
+    "prod": "PROD",
+}
+
+
+class ZoneMetadata(TypedDict):
+    """The complete routing metadata selected on a SecurityZone."""
+
+    name: str
+    vrf_type: str
+    l3_vni: int
+
+
+def routing_zone(name: str, *, l3_vni: int | None = None, vrf_type: str | None = None) -> dict[str, Any]:
+    """Build an explicit zone, using the fixed catalog for its four standard names."""
+    name = LEGACY_ZONE_NAMES.get(name, name)
+    if name in ZONE_CATALOG:
+        vrf_type, l3_vni = ZONE_CATALOG[name]
+    if l3_vni is None or vrf_type is None:
+        raise ValueError(f"Fixture zone {name}: explicit vrf_type and l3_vni required")
+    return {
+        "id": f"fixture-zone-{name}",
+        "name": _value(name),
+        "vrf_type": _value(vrf_type),
+        "l3_vni": _value(l3_vni),
+    }
+
+
+def routing_vrf(name: str, deployment: str = "fixture-deployment") -> dict[str, Any]:
+    """A raw deployment-scoped routing owner, separate from the neutral IPAM objects it references."""
+    zone = routing_zone(name)
+    return {
+        "__typename": VRF_KIND,
+        "id": f"fixture-vrf-{deployment}-{zone['name']['value']}",
+        "deployment": {"node": {"id": deployment, "name": _value(deployment)}},
+        "security_zone": {"node": zone},
+    }
 
 
 def _value(value: Any) -> dict[str, Any]:
     return {"value": value}
 
 
-def _namespace_dicts(data: Any) -> dict[str, dict[str, Any]]:
-    """Every namespace dict of the cleaned fixture (a name with an ``l3_vni`` or a ``namespace_type``), by name."""
-    found: dict[str, dict[str, Any]] = {}
+def _namespace_dicts(data: Any) -> dict[str, ZoneMetadata]:
+    """Complete metadata of explicit security-zone owners in the cleaned fixture."""
+    found: dict[str, ZoneMetadata] = {}
     pending = [data]
     while pending:
         item = pending.pop()
         if isinstance(item, dict):
-            if item.get("name") and ("l3_vni" in item or "namespace_type" in item):
-                merged = found.setdefault(item["name"], {"name": item["name"]})
-                merged.update({key: item[key] for key in ("l3_vni", "namespace_type") if item.get(key) is not None})
+            zone = item.get("security_zone")
+            if isinstance(zone, dict) and isinstance(zone.get("name"), str):
+                name = zone["name"]
+                if name in ZONE_CATALOG:
+                    vrf_type, l3_vni = ZONE_CATALOG[name]
+                else:
+                    vrf_type, l3_vni = zone.get("vrf_type"), zone.get("l3_vni")
+                if isinstance(vrf_type, str) and isinstance(l3_vni, int):
+                    metadata: ZoneMetadata = {"name": name, "vrf_type": vrf_type, "l3_vni": l3_vni}
+                    if name in found and found[name] != metadata:
+                        raise ValueError(f"Fixture zone {name}: conflicting routing metadata")
+                    found[name] = metadata
             pending.extend(item.values())
         elif isinstance(item, list):
             pending.extend(item)
     return found
 
 
-def _vrf_node(namespace: dict[str, Any]) -> dict[str, Any]:
+def _vrf_node(namespace: ZoneMetadata) -> dict[str, Any]:
     name = namespace["name"]
-    return {
-        "__typename": VRF_KIND,
-        "namespace": {
-            "node": {
-                "name": _value(name),
-                "l3_vni": _value(namespace.get("l3_vni")),
-                "namespace_type": _value(namespace.get("namespace_type") or _TYPE_BY_NAME.get(name, _DEFAULT_TYPE)),
-            }
-        },
-    }
+    return routing_vrf(name)
 
 
-def _svi_node(vlan_id: int, namespace_name: str | None) -> dict[str, Any]:
+def _svi_node(vlan_id: int, namespace: ZoneMetadata) -> dict[str, Any]:
     return {
         "__typename": "DcimVirtualInterface",
         "name": _value(svi_name(vlan_id)),
@@ -70,9 +115,7 @@ def _svi_node(vlan_id: int, namespace_name: str | None) -> dict[str, Any]:
         "status": _value("active"),
         "role": _value(SVI_ROLE),
         "ip_address": {"node": None},
-        "vrf": {"node": {"namespace": {"node": {"name": _value(namespace_name)}}}}
-        if namespace_name
-        else {"node": None},
+        "vrf": {"node": routing_vrf(namespace["name"])},
         # The pbr policy the VRF pass of the device attaches to every steered SVI (generators/helpers/pbr_sync.py): the
         # fixture steers all of them, the transform still applies its own conditions (policies, a context with a leg).
         "capabilities": {
@@ -103,31 +146,34 @@ def _raw_names(container: dict[str, Any], key: str) -> set[str]:
 
 
 def add_requirements(
-    device: dict[str, Any], requirements: VrfRequirements, namespaces: dict[str, dict[str, Any]]
+    device: dict[str, Any], requirements: VrfRequirements, namespaces: dict[str, ZoneMetadata]
 ) -> None:
     """Append to the raw ``device`` node the memberships (``shared_capabilities``) and SVIs it does not have yet.
 
-    ``namespaces`` holds the l3_vni / namespace_type of each namespace the fixture names (``_namespace_dicts``).
+    ``namespaces`` holds each explicitly owned zone's complete L3 VNI and purpose.
     """
     have = {
-        edge["node"]["namespace"]["node"]["name"]["value"]
+        edge["node"]["security_zone"]["node"]["name"]["value"]
         for edge in (device.get("shared_capabilities") or {}).get("edges") or []
-        if edge["node"].get("__typename") == VRF_KIND and (edge["node"].get("namespace") or {}).get("node")
+        if edge["node"].get("__typename") == VRF_KIND and (edge["node"].get("security_zone") or {}).get("node")
     }
     _append(
         device,
         "shared_capabilities",
-        [_vrf_node(namespaces.get(name) or {"name": name}) for name in sorted(requirements.namespaces - have)],
+        [_vrf_node(namespaces[name]) for name in sorted(requirements.namespaces - have)],
     )
     present = _raw_names(device, "interfaces")
+    missing_svis = []
+    for vlan_id, namespace_name in sorted(requirements.svis.items()):
+        if svi_name(vlan_id) in present:
+            continue
+        if namespace_name is None:
+            raise ValueError(f"Fixture SVI {svi_name(vlan_id)}: an explicit routing zone is required")
+        missing_svis.append(_svi_node(vlan_id, namespaces[namespace_name]))
     _append(
         device,
         "interfaces",
-        [
-            _svi_node(vlan_id, namespace_name)
-            for vlan_id, namespace_name in sorted(requirements.svis.items())
-            if svi_name(vlan_id) not in present
-        ],
+        missing_svis,
     )
 
 

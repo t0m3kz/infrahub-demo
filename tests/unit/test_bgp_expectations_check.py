@@ -8,12 +8,29 @@ from typing import Any, cast
 from checks import bgp_expectations
 from checks.bgp_closure import Finding, analyse
 from checks.bgp_expectations import CheckBgpExpectations
+from tests.unit.routing_helpers import make_vrf
 
 POOL = "10.250.0.0/24"
 
 
+def _zone(name: str, *prefixes: str, vrf_type: str = "prod") -> dict[str, Any]:
+    """An ``environment_zones`` entry: the security zone and the gateway prefixes of the segments routed in it."""
+    return {
+        "name": name,
+        "vrf_type": vrf_type,
+        "network_segments": [
+            {"gateway": {"ip_prefix": {"prefix": prefix, "ip_namespace": {"name": "default"}}}} for prefix in prefixes
+        ],
+    }
+
+
 def _interface(name: str, role: str, address: str, namespace: str = "default") -> dict[str, Any]:
-    return {"name": name, "role": role, "ip_address": {"address": address, "ip_namespace": {"name": namespace}}}
+    return {
+        "vrf": make_vrf({"name": namespace}),
+        "name": name,
+        "role": role,
+        "ip_address": {"address": address, "ip_namespace": {"node": {"name": {"value": "default"}}}},
+    }
 
 
 def _device(
@@ -37,7 +54,7 @@ def _device(
         "role": role,
         "platform": {"name": platform},
         "deployment": deployment,
-        "shared_capabilities": [{"typename": "ManagedVRF", "namespace": {"name": ns}} for ns in namespaces],
+        "shared_capabilities": [{"typename": "ManagedVRF", "security_zone": {"name": ns}} for ns in namespaces],
         "interfaces": [_interface("loopback0", "loopback", loopback), *interfaces],
     }
 
@@ -54,8 +71,9 @@ def _peering(
         "ttl": ttl,
         "capabilities": [
             {
+                "vrf": make_vrf({"name": "default"}),
                 "name": "Ethernet1",
-                "ip_address": {"address": address, "ip_namespace": {"name": "default"}},
+                "ip_address": {"address": address, "ip_namespace": {"node": {"name": {"value": "default"}}}},
                 "device": {"typename": "DcimPhysicalDevice", "name": device},
             }
             for (device, address), _ in ends
@@ -109,7 +127,7 @@ def test_e2_a_loopback_outside_the_pool_reaches_no_further_than_its_first_hop() 
 
 
 def test_e3_a_connected_prefix_that_is_no_prefix_of_its_namespace_is_reported() -> None:
-    """A VRF address whose network is not an IpamPrefix of the namespace: its type-5 route would be filtered."""
+    """A VRF address whose network is not a segment prefix of the zone: its type-5 route would be filtered."""
     overlay = _peering("o1", ("leaf1", "10.250.0.11/32"), ("spine1", "10.250.0.1/32"), ttl=255, role="overlay")
     leaf = _device(
         "leaf1",
@@ -119,7 +137,7 @@ def test_e3_a_connected_prefix_that_is_no_prefix_of_its_namespace_is_reported() 
         interfaces=(_interface("Ethernet1.100", "customer", "10.77.0.1/30", "PROD"),),
     )
     spine = _device("spine1", "spine", "10.250.0.1/32")
-    roots = {"environment_prefixes_prod": [{"prefix": "10.100.0.0/24", "ip_namespace": {"name": "PROD"}}]}
+    roots = {"environment_zones": [_zone("PROD", "10.100.0.0/24")]}
     findings = analyse(_cleaned([leaf, spine], [overlay], **roots))
     e3 = [f for f in findings if f.rule == "E3"]
     assert len(e3) == 1
@@ -128,7 +146,7 @@ def test_e3_a_connected_prefix_that_is_no_prefix_of_its_namespace_is_reported() 
         _cleaned(
             [leaf, spine],
             [overlay],
-            environment_prefixes_prod=[{"prefix": "10.77.0.0/30", "ip_namespace": {"name": "PROD"}}],
+            environment_zones=[_zone("PROD", "10.77.0.0/30")],
         )
     )
     assert [f for f in known if f.rule == "E3"] == []
@@ -138,7 +156,7 @@ def test_e4_a_transit_session_on_a_device_that_is_no_default_exit() -> None:
     """The ISP session is in INTERNET but the device is no border gateway of an INTERNET instance."""
     transit = _peering("t1", ("edge1", "10.255.9.0/31"), ("isp1", "10.255.9.1/31"))
     for end in transit["capabilities"]:
-        end["ip_address"]["ip_namespace"] = {"name": "INTERNET", "namespace_type": "internet"}
+        end["vrf"] = make_vrf({"name": "INTERNET", "vrf_type": "internet", "l3_vni": 60002})
     edge = _device("edge1", "edge", "10.250.0.21/32")
     isp = _device("isp1", "edge", "10.250.0.99/32")
     findings = analyse(_cleaned([edge, isp], [transit]))
@@ -158,7 +176,7 @@ def test_e5_an_evpn_session_on_a_platform_without_an_evpn_filter() -> None:
     overlay = _peering("o1", ("leaf1", "10.250.0.11/32"), ("spine1", "10.250.0.1/32"), ttl=255, role="overlay")
     leaf = _device("leaf1", "leaf", "10.250.0.11/32", platform="arista_eos", namespaces=("PROD",))
     spine = _device("spine1", "spine", "10.250.0.1/32", platform="arista_eos")
-    roots = {"environment_prefixes_prod": [{"prefix": "10.100.0.0/24", "ip_namespace": {"name": "PROD"}}]}
+    roots = {"environment_zones": [_zone("PROD", "10.100.0.0/24")]}
     findings = analyse(_cleaned([leaf, spine], [overlay], **roots))
     assert any(f.rule == "E5" and "arista_eos renders no EVPN filter" in f.message for f in findings)
 
@@ -187,17 +205,16 @@ def test_the_check_logs_errors_as_errors_and_warnings_as_warning_info_lines(monk
 
 def test_the_query_selects_what_the_closure_reads(root_dir: Path) -> None:
     """Peerings with both ends and processes, device facts, and the shared roots the transforms use."""
-    query = (root_dir / "queries/validation/bgp_expectations.gql").read_text()
+    query = " ".join((root_dir / "queries/validation/bgp_expectations.gql").read_text().split())
     for needed in (
         "ManagedBGPPeering",
         "bgp_processes",
         "...EvpnRtAsOnDeploymentFields",
         "shared_capabilities",
         'DcimVirtualInterface(role__value: "multisite-vip")',
-        "environment_prefixes_prod",
-        "environment_prefixes_internet",
+        "environment_zones: SecurityZone",
         "ManagedVRF",
         "ManagedVxlanSegment",
         "platform { node { name { value } } }",
     ):
-        assert needed in query
+        assert " ".join(needed.split()) in query

@@ -21,6 +21,8 @@ from checks.internet_egress import (
     internet_rules,
     virtual_pair_gaps,
 )
+from tests.smoke.fixture_builders.vrf import routing_vrf
+from tests.unit.routing_helpers import make_vrf
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, transit_vlan
 
@@ -49,7 +51,7 @@ def _leg(
         {
             "id": f"ip-{device}-{vlan}",
             "address": "192.0.2.5/29",
-            "ip_namespace": {"name": namespace[0], "namespace_type": namespace[1]},
+            "ip_namespace": {"node": {"name": {"value": "default"}}},
         }
         if namespace
         else None
@@ -61,6 +63,7 @@ def _leg(
         "role": "firewall",
         "device": {"id": device, "name": device, "role": "internal-firewall"},
         "ip_address": address,
+        "vrf": make_vrf({"name": namespace[0], "vrf_type": namespace[1]}) if namespace else None,
         "capabilities": [{"typename": "TopologyRoutedExchange", "id": exchange, "name": "ex"}] if exchange else [],
     }
 
@@ -102,8 +105,8 @@ def _exchange(prefix: str = "dc") -> dict[str, Any]:
         "id": f"ex-{prefix}",
         "name": f"shared-{prefix}-prod-PROD-INTERNET",
         "gateway": {"id": f"ctx-{prefix}", "name": f"shared-{prefix}-prod"},
-        "namespace_a": {"id": "ns-prod", "name": "PROD", "namespace_type": "prod"},
-        "namespace_z": {"id": "ns-inet", "name": "INTERNET", "namespace_type": INTERNET_TYPE},
+        "vrf_a": make_vrf({"id": "ns-prod", "name": "PROD", "vrf_type": "prod"}),
+        "vrf_z": make_vrf({"id": "ns-inet", "name": "INTERNET", "vrf_type": INTERNET_TYPE}),
     }
 
 
@@ -288,7 +291,7 @@ class TestDataCenter:
     def test_exchange_between_two_tenant_vrfs_does_not_count(self) -> None:
         """An exchange that does not reach INTERNET does not count."""
         exchange = _exchange()
-        exchange["namespace_z"] = {"id": "ns-mgmt", "name": "MANAGEMENT", "namespace_type": "management"}
+        exchange["vrf_z"] = make_vrf({"id": "ns-mgmt", "name": "MANAGEMENT", "vrf_type": "management"})
         (finding,) = egress_findings(_cleaned([_dc()], exchanges=[exchange]))
         assert "no TopologyRoutedExchange" in finding
 
@@ -455,7 +458,7 @@ class TestWhichRulesAndFootprints:
 
     def test_non_internet_rule_is_ignored(self) -> None:
         """A rule to a segment, or to another zone, is not internet egress."""
-        rules = [_rule(zone=None), _rule(name="to-prod", zone="PROD-ZONE")]
+        rules = [_rule(zone=None), _rule(name="to-prod", zone="PROD")]
         assert egress_findings(_cleaned([_dc([])], rules=rules)) == []
 
     @pytest.mark.parametrize("kind", ["TopologyCustomerCloud", "TopologyCustomerOffice"])
@@ -485,7 +488,7 @@ class TestWhichRulesAndFootprints:
         rules = [
             _rule("keep"),
             _rule("off", disabled=True),
-            _rule("other", zone="PROD-ZONE"),
+            _rule("other", zone="PROD"),
             _rule("none", segment=None),
         ]
         assert [rule["name"] for rule in internet_rules(rules)] == ["keep"]
@@ -513,6 +516,7 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
     ]
     legs = [
         {
+            "vrf": {"node": routing_vrf("INTERNET")},
             "id": f"leg-{n}",
             "__typename": "DcimVirtualInterface",
             "name": value(f"eth1.{INTERNET_VLAN}"),
@@ -522,7 +526,7 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
                 "node": {
                     "id": f"ip-{n}",
                     "address": value("192.0.2.5/29"),
-                    "ip_namespace": {"node": {"name": value("INTERNET"), "namespace_type": value(INTERNET_TYPE)}},
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
                 }
             },
             "capabilities": _edges([{"__typename": "TopologyRoutedExchange", "id": "ex-1", "name": value("ex")}]),
@@ -577,10 +581,8 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
                     "id": "ex-1",
                     "name": value("ex"),
                     "gateway": {"node": {"id": "ctx-1", "name": value("shared-dc10-prod")}},
-                    "namespace_a": {"node": {"id": "a", "name": value("PROD"), "namespace_type": value("prod")}},
-                    "namespace_z": {
-                        "node": {"id": "z", "name": value("INTERNET"), "namespace_type": value(INTERNET_TYPE)}
-                    },
+                    "vrf_a": {"node": routing_vrf("PROD")},
+                    "vrf_z": {"node": routing_vrf("INTERNET")},
                 }
             ]
         ),
@@ -677,9 +679,9 @@ class TestEgressAssignment:
         assert len(findings) == 1 and "2 Internet egress contexts for prod" in findings[0]
 
     def test_a_context_for_another_environment_leaves_the_footprint_on_its_serving_context(self) -> None:
-        """The DC names only a NON-PROD egress: a PROD footprint keeps the elements on its own serving context."""
+        """The DC names only a NONPROD egress: a PROD footprint keeps the elements on its own serving context."""
         non_prod = _exchange("eg")
-        non_prod["namespace_a"] = {"id": "ns-np", "name": "NON-PROD", "namespace_type": "non_prod"}
+        non_prod["vrf_a"] = make_vrf({"id": "ns-np", "name": "NONPROD", "vrf_type": "non_prod"})
         findings = egress_findings(
             _cleaned(
                 [_assigned_dc([_context("eg", role="external-firewall")], _context())],

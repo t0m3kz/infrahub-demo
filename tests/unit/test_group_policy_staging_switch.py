@@ -14,6 +14,8 @@ from typing import Any
 import pytest
 import yaml
 
+from tests.unit.test_circuit_query_shapes import _selected_paths
+
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMAS = ROOT / "schemas"
 DESCRIPTION_LIMIT = 128
@@ -95,7 +97,8 @@ class TestStagingSwitchAcrossLayers:
 
     @pytest.mark.parametrize("query", QUERIES_READING_THE_SWITCH)
     def test_every_config_query_reads_the_switch(self, query: str) -> None:
-        assert f"{SWITCH} {{ value }}" in (ROOT / query).read_text()
+        """The compiled fleet selection exposes the switch irrespective of formatting or fragments."""
+        assert SWITCH in _selected_paths(ROOT / query, "TopologyDataCenter")
 
 
 class TestSchemaDescriptionLimit:

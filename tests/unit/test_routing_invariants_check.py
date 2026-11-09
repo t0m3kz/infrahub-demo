@@ -4,10 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from tests.integration.demo_data import relationship_names
+from tests.unit.cloud_leg_helpers import attachment, peering
+from tests.unit.external_vrf_peers_helpers import _raw_gateway, _raw_vrf
 from tests.unit.routing_invariants_helpers import (
+    _CUSTOMER,
     _PROVIDER,
     _block,
+    _gateway_office,
     _ns,
     _office,
     _onprem,
@@ -18,16 +24,20 @@ from tests.unit.routing_invariants_helpers import (
 )
 from tests.unit.test_circuit_query_shapes import _QUERIES, _selected_paths
 from utils.data_cleaning import clean_data
+from utils.routing_domain import RoutingDomainError
 
 
 def _interface(device_role: str, role: str | None, ns_type: str = "internet") -> dict[str, Any]:
     return {
+        "vrf": {"node": {"id": "vrf-1", "security_zone": {"node": _ns("INTERNET", ns_type)}}},
         "__typename": "DcimPhysicalInterface",
         "id": "if-1",
         "name": _v("Ethernet1/14"),
         "role": _v(role),
         "device": {"node": {"id": "d1", "name": _v("dev-1"), "role": _v(device_role)}},
-        "ip_address": {"node": {"address": _v("203.0.113.1/31"), "ip_namespace": {"node": _ns("INTERNET", ns_type)}}},
+        "ip_address": {
+            "node": {"address": _v("203.0.113.1/31"), "ip_namespace": {"node": {"name": {"value": "default"}}}}
+        },
     }
 
 
@@ -52,18 +62,43 @@ def _attachment(
     }
 
 
+def _lan_office(name: str, lan: dict[str, Any]) -> dict[str, Any]:
+    """An office behind an SD-WAN gateway registering one PROD LAN (an office with no gateway registers nothing)."""
+    return _gateway_office(name, "GW1", _CUSTOMER, lan)
+
+
+def _routed_vpc(name: str, env: str | None, *blocks: dict[str, Any], zone: str = "PROD") -> dict[str, list[Any]]:
+    """A VPC whose blocks are registered behind a cloud session of the VRF of ``zone``: the zone of a block is its
+    registrant's, so the check only sees a block through the leg that registers it."""
+    gateway = f"gw-{name}"
+    return {
+        "CloudVirtualNetwork": [_vpc(name, env, *blocks)],
+        "CloudPeeringInterface": [peering(f"vif-{name}", f"dx-{name}", on=gateway, zone=zone)],
+        "CloudGatewayAttachment": [attachment(f"att-{name}", gateway, network=name, blocks=blocks)],
+    }
+
+
+def _sections(*parts: dict[str, list[Any]], **extra: list[Any]) -> dict[str, list[Any]]:
+    """Merge query sections by key (lists concatenated)."""
+    merged: dict[str, list[Any]] = {}
+    for part in (*parts, extra):
+        for key, nodes in part.items():
+            merged.setdefault(key, []).extend(nodes)
+    return merged
+
+
 class TestL3VniSharing:
     """Namespaces of different types never share an l3_vni."""
 
     def test_shared_l3_vni_across_types_fails(self) -> None:
         """Namespaces of different types sharing an l3_vni share a route-target."""
-        check = _run(IpamNamespace=[_ns("PROD", "prod", 5), _ns("NON-PROD", "non_prod", 5)])
+        check = _run(SecurityZone=[_ns("PROD", "prod", 5), _ns("NONPROD", "non_prod", 5)])
         assert len(check._captured_errors) == 1
         assert "L3 VNI 5" in check._captured_errors[0]
 
     def test_distinct_vnis_pass(self) -> None:
         """Distinct l3_vni values raise nothing."""
-        check = _run(IpamNamespace=[_ns("PROD", "prod", 5), _ns("NON-PROD", "non_prod", 6), _ns("default", None)])
+        check = _run(SecurityZone=[_ns("PROD", "prod", 5), _ns("NONPROD", "non_prod", 6)])
         assert check._captured_errors == []
 
 
@@ -103,13 +138,18 @@ class TestInternetVrf:
 
         def segment(ns_type: str) -> dict[str, Any]:
             return {
+                "security_zone": {"node": _ns("N", ns_type)},
                 "__typename": "ManagedVxlanSegment",
                 "id": "s",
                 "name": _v("seg"),
                 "gateway": {
                     "node": {
                         "ip_prefix": {
-                            "node": {"prefix": _v("10.0.0.0/24"), "ip_namespace": {"node": _ns("N", ns_type)}}
+                            "node": {
+                                "security_zone": {"node": _ns("N", ns_type)},
+                                "prefix": _v("10.0.0.0/24"),
+                                "ip_namespace": {"node": {"name": {"value": "default"}}},
+                            }
                         }
                     }
                 },
@@ -122,7 +162,13 @@ class TestInternetVrf:
         """A segment with no gateway (L2-only) passes."""
         check = _run(
             ManagedNetworkSegment=[
-                {"__typename": "ManagedVxlanSegment", "id": "s", "name": _v("i"), "gateway": {"node": None}}
+                {
+                    "__typename": "ManagedVxlanSegment",
+                    "id": "s",
+                    "name": _v("i"),
+                    "security_zone": {"node": _ns("PROD", "prod", 60000)},
+                    "gateway": {"node": None},
+                }
             ]
         )
         assert check._captured_errors == []
@@ -154,7 +200,7 @@ class TestTgwRouteTables:
         assert "shared" in check._captured_errors[0]
 
     def test_mixed_propagation_fails(self) -> None:
-        """Propagating a prod and a non-prod attachment into one table is an error."""
+        """Propagating a prod and a nonprod attachment into one table is an error."""
         check = _run(
             CloudGatewayAttachment=[
                 _attachment("a", "vpc", "p", "ra", ["shared"]),
@@ -195,22 +241,22 @@ class TestVpcNamespaces:
 
     def test_prod_account_in_prod_passes(self) -> None:
         """Environment p with a PROD block passes."""
-        assert _run(CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))])._captured_errors == []
+        assert _run(**_routed_vpc("a", "p", _block("10.30.0.0/16")))._captured_errors == []
 
     def test_non_prod_account_in_non_prod_passes(self) -> None:
-        """Any non-p environment maps to the NON-PROD namespace."""
-        block = _block("10.31.0.0/16", "NON-PROD", "non_prod")
-        assert _run(CloudVirtualNetwork=[_vpc("a", "d", block)])._captured_errors == []
+        """Any non-p environment maps to the NONPROD namespace."""
+        block = _block("10.31.0.0/16", "NONPROD", "non_prod")
+        assert _run(**_routed_vpc("a", "d", block, zone="NONPROD"))._captured_errors == []
 
     def test_block_in_wrong_namespace_type_fails(self) -> None:
-        """A prod account whose block sits in the default (or NON-PROD) namespace is an error."""
-        check = _run(CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16", "NON-PROD", "non_prod"))])
+        """A prod account whose block is registered behind a NONPROD session is an error."""
+        check = _run(**_routed_vpc("a", "p", _block("10.30.0.0/16", "NONPROD", "non_prod"), zone="NONPROD"))
         assert len(check._captured_errors) == 1
         assert "prod network" in check._captured_errors[0]
 
     def test_account_without_environment_is_not_judged(self) -> None:
         """No environment, nothing to compare against."""
-        assert _run(CloudVirtualNetwork=[_vpc("a", None, _block("10.30.0.0/16"))])._captured_errors == []
+        assert _run(**_routed_vpc("a", None, _block("10.30.0.0/16")))._captured_errors == []
 
 
 class TestSubnetsInVpc:
@@ -262,40 +308,41 @@ class TestVpcOverlaps:
     def test_disjoint_vpcs_and_onprem_pass(self) -> None:
         """Disjoint blocks and on-prem prefixes in one namespace pass."""
         check = _run(
-            CloudVirtualNetwork=[
-                _vpc("a", "p", _block("10.30.0.0/16")),
-                _vpc("b", "p", _block("10.40.0.0/16")),
-            ],
-            ManagedNetworkSegment=[_onprem("web", "10.0.5.0/24")],
+            **_sections(
+                _routed_vpc("a", "p", _block("10.30.0.0/16")),
+                _routed_vpc("b", "p", _block("10.40.0.0/16")),
+                ManagedNetworkSegment=[_onprem("web", "10.0.5.0/24")],
+            )
         )
         assert check._captured_errors == []
 
     def test_vpc_vs_vpc_overlap_fails(self) -> None:
         """A /24 inside another VPC's /16 in the same namespace is an error."""
         check = _run(
-            CloudVirtualNetwork=[
-                _vpc("a", "p", _block("10.30.0.0/16")),
-                _vpc("b", "p", _block("10.30.4.0/24")),
-            ]
+            **_sections(
+                _routed_vpc("a", "p", _block("10.30.0.0/16")),
+                _routed_vpc("b", "p", _block("10.30.4.0/24")),
+            )
         )
         assert len(check._captured_errors) == 1
         assert "overlaps VPC" in check._captured_errors[0]
 
     def test_vpc_overlap_in_different_namespaces_passes(self) -> None:
-        """The same CIDR in PROD and NON-PROD is two VRFs, not an overlap."""
+        """The same CIDR in PROD and NONPROD is two VRFs, not an overlap."""
         check = _run(
-            CloudVirtualNetwork=[
-                _vpc("a", "p", _block("10.30.0.0/16")),
-                _vpc("b", "d", _block("10.30.0.0/16", "NON-PROD", "non_prod")),
-            ]
+            **_sections(
+                _routed_vpc("a", "p", _block("10.30.0.0/16")),
+                _routed_vpc("b", "d", _block("10.30.0.0/16", "NONPROD", "non_prod"), zone="NONPROD"),
+            )
         )
         assert check._captured_errors == []
 
     def test_vpc_vs_onprem_overlap_fails(self) -> None:
         """A VPC block covering an on-prem segment prefix in the same namespace is an error."""
         check = _run(
-            CloudVirtualNetwork=[_vpc("a", "p", _block("10.0.0.0/16"))],
-            ManagedNetworkSegment=[_onprem("web", "10.0.5.0/24")],
+            **_sections(
+                _routed_vpc("a", "p", _block("10.0.0.0/16")), ManagedNetworkSegment=[_onprem("web", "10.0.5.0/24")]
+            )
         )
         assert len(check._captured_errors) == 1
         assert "on-prem prefix" in check._captured_errors[0]
@@ -303,24 +350,30 @@ class TestVpcOverlaps:
     def test_vpc_vs_onprem_in_other_namespace_passes(self) -> None:
         """An on-prem prefix in another VRF does not overlap."""
         check = _run(
-            CloudVirtualNetwork=[_vpc("a", "p", _block("10.0.0.0/16"))],
-            ManagedNetworkSegment=[_onprem("web", "10.0.5.0/24", "NON-PROD", "non_prod")],
+            **_sections(
+                _routed_vpc("a", "p", _block("10.0.0.0/16")),
+                ManagedNetworkSegment=[_onprem("web", "10.0.5.0/24", "NONPROD", "non_prod")],
+            )
         )
         assert check._captured_errors == []
 
     def test_container_prefix_is_ignored(self) -> None:
         """A container prefix behind a gateway is a supernet, not a routed subnet."""
         check = _run(
-            CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))],
-            ManagedNetworkSegment=[_onprem("web", "10.0.0.0/8", member_type="prefix")],
+            **_sections(
+                _routed_vpc("a", "p", _block("10.30.0.0/16")),
+                ManagedNetworkSegment=[_onprem("web", "10.0.0.0/8", member_type="prefix")],
+            )
         )
         assert check._captured_errors == []
 
     def test_shared_prefix_object_fails(self) -> None:
         """One prefix object referenced by a VPC and an on-prem segment is flagged once."""
         check = _run(
-            CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16", block_id="shared"))],
-            ManagedNetworkSegment=[_onprem("web", "10.30.0.0/16", pid="shared")],
+            **_sections(
+                _routed_vpc("a", "p", _block("10.30.0.0/16", block_id="shared")),
+                ManagedNetworkSegment=[_onprem("web", "10.30.0.0/16", pid="shared")],
+            )
         )
         assert len(check._captured_errors) == 1
         assert "adopted an on-prem prefix" in check._captured_errors[0]
@@ -329,7 +382,7 @@ class TestVpcOverlaps:
         """CloudNetworkSegment inherits the managed segment query but is not an on-prem prefix."""
         cloud = _onprem("sub", "10.30.1.0/24")
         cloud["__typename"] = "CloudNetworkSegment"
-        check = _run(CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))], ManagedNetworkSegment=[cloud])
+        check = _run(**_sections(_routed_vpc("a", "p", _block("10.30.0.0/16")), ManagedNetworkSegment=[cloud]))
         assert check._captured_errors == []
 
 
@@ -339,24 +392,24 @@ class TestOfficeLanPrefixes:
     def test_prod_office_in_prod_disjoint_passes(self) -> None:
         """A prod office LAN in PROD next to disjoint VPC and on-prem prefixes passes."""
         check = _run(
-            TopologyCustomerOffice=[_office("C005-OFFICE", _block("10.210.5.0/24"))],
-            CloudVirtualNetwork=[_vpc("a", "p", _block("10.150.0.0/16"))],
+            TopologyCustomerOffice=[_lan_office("C005-OFFICE", _block("10.210.5.0/24"))],
+            **_routed_vpc("a", "p", _block("10.150.0.0/16")),
             ManagedNetworkSegment=[_onprem("web", "10.5.10.0/24")],
         )
         assert check._captured_errors == []
 
     def test_office_lan_in_wrong_namespace_type_fails(self) -> None:
-        """A prod office LAN registered in NON-PROD is an error naming the office."""
-        office = _office("C005-OFFICE", _block("10.210.5.0/24", "NON-PROD", "non_prod"))
-        check = _run(TopologyCustomerOffice=[office])
-        assert len(check._captured_errors) == 1
-        assert "office 'C005-OFFICE' LAN prefix" in check._captured_errors[0]
-        assert "prod network" in check._captured_errors[0]
+        """A prod office LAN registered in NONPROD is an error naming the office."""
+        office = _gateway_office("C005-OFFICE", "GW1", _CUSTOMER, _block("10.210.5.0/24", "NONPROD", "non_prod"))
+        office["vrfs"] = {"edges": [{"node": _raw_vrf("NONPROD", "C005-OFFICE")}]}
+        office["sdwan_gateway"] = {"node": _raw_gateway("GW1", "NONPROD")}
+        with pytest.raises(RoutingDomainError, match="missing PROD gateway handoff VRF"):
+            _run(TopologyCustomerOffice=[office])
 
     def test_office_lan_overlapping_onprem_fails(self) -> None:
         """An office LAN covering an on-prem segment prefix in one namespace is an error."""
         check = _run(
-            TopologyCustomerOffice=[_office("C005-OFFICE", _block("10.5.0.0/16"))],
+            TopologyCustomerOffice=[_lan_office("C005-OFFICE", _block("10.5.0.0/16"))],
             ManagedNetworkSegment=[_onprem("web", "10.5.10.0/24")],
         )
         assert len(check._captured_errors) == 1
@@ -365,8 +418,8 @@ class TestOfficeLanPrefixes:
     def test_office_lan_overlapping_vpc_fails(self) -> None:
         """An office LAN inside a VPC block in one namespace is an error."""
         check = _run(
-            TopologyCustomerOffice=[_office("C005-OFFICE", _block("10.150.5.0/24"))],
-            CloudVirtualNetwork=[_vpc("a", "p", _block("10.150.0.0/16"))],
+            TopologyCustomerOffice=[_lan_office("C005-OFFICE", _block("10.150.5.0/24"))],
+            **_routed_vpc("a", "p", _block("10.150.0.0/16")),
         )
         assert len(check._captured_errors) == 1
         assert "overlaps office 'C005-OFFICE' LAN prefix 10.150.5.0/24" in check._captured_errors[0]
@@ -375,25 +428,25 @@ class TestOfficeLanPrefixes:
         """Two offices announcing overlapping LANs into one namespace is an error."""
         check = _run(
             TopologyCustomerOffice=[
-                _office("C002-OFFICE", _block("10.210.0.0/16")),
-                _office("C005-OFFICE", _block("10.210.5.0/24")),
+                _lan_office("C002-OFFICE", _block("10.210.0.0/16")),
+                _lan_office("C005-OFFICE", _block("10.210.5.0/24")),
             ]
         )
         assert len(check._captured_errors) == 1
         assert "office 'C002-OFFICE'" in check._captured_errors[0]
 
     def test_office_lan_overlap_in_other_namespace_passes(self) -> None:
-        """The same CIDR on a prod office and a non-prod segment sits in two VRFs."""
+        """The same CIDR on a prod office and a nonprod segment sits in two VRFs."""
         check = _run(
-            TopologyCustomerOffice=[_office("C005-OFFICE", _block("10.5.10.0/24"))],
-            ManagedNetworkSegment=[_onprem("web", "10.5.10.0/24", "NON-PROD", "non_prod")],
+            TopologyCustomerOffice=[_lan_office("C005-OFFICE", _block("10.5.10.0/24"))],
+            ManagedNetworkSegment=[_onprem("web", "10.5.10.0/24", "NONPROD", "non_prod")],
         )
         assert check._captured_errors == []
 
     def test_office_lan_adopting_onprem_prefix_object_fails(self) -> None:
         """One prefix object referenced as an office LAN and by an on-prem segment is flagged once."""
         check = _run(
-            TopologyCustomerOffice=[_office("C005-OFFICE", _block("10.5.10.0/24", block_id="shared"))],
+            TopologyCustomerOffice=[_lan_office("C005-OFFICE", _block("10.5.10.0/24", block_id="shared"))],
             ManagedNetworkSegment=[_onprem("web", "10.5.10.0/24", pid="shared")],
         )
         assert len(check._captured_errors) == 1

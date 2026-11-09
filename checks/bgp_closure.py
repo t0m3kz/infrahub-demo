@@ -45,6 +45,7 @@ from utils.bgp_expectation import (
     session_class,
 )
 from utils.limits import DEFAULT_NAMESPACE
+from utils.routing_domain import interface_security_zone
 
 PAIR_CLASSES = (UNDERLAY, FABRIC, DCI_UNDERLAY)
 
@@ -196,7 +197,7 @@ def connected_prefix_findings(cleaned: dict[str, Any], ends: list[End]) -> list[
             continue
         for interface in node.get("interfaces") or []:
             address = (interface.get("ip_address") or {}).get("address")
-            namespace = ((interface.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
+            namespace = interface_security_zone(interface).get("name")
             if not address or not namespace or namespace == DEFAULT_NAMESPACE:
                 continue
             known = end.fabric.namespace_prefixes.get(namespace)

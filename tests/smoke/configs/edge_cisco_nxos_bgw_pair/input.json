@@ -1958,7 +1958,18 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": null
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           },
                           "gateway": {
                             "node": null
@@ -2351,7 +2362,18 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": null
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           },
                           "gateway": {
                             "node": null
@@ -2423,16 +2445,26 @@
               {
                 "node": {
                   "__typename": "ManagedVRF",
-                  "namespace": {
+                  "id": "fixture-vrf-fixture-deployment-PROD",
+                  "deployment": {
                     "node": {
+                      "id": "fixture-deployment",
                       "name": {
-                        "value": "VRF_A"
+                        "value": "fixture-deployment"
+                      }
+                    }
+                  },
+                  "security_zone": {
+                    "node": {
+                      "id": "fixture-zone-PROD",
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "vrf_type": {
+                        "value": "prod"
                       },
                       "l3_vni": {
-                        "value": 50001
-                      },
-                      "namespace_type": {
-                        "value": "prod"
+                        "value": 60000
                       }
                     }
                   }
@@ -2441,16 +2473,26 @@
               {
                 "node": {
                   "__typename": "ManagedVRF",
-                  "namespace": {
+                  "id": "fixture-vrf-fixture-deployment-INTERNET",
+                  "deployment": {
                     "node": {
+                      "id": "fixture-deployment",
+                      "name": {
+                        "value": "fixture-deployment"
+                      }
+                    }
+                  },
+                  "security_zone": {
+                    "node": {
+                      "id": "fixture-zone-INTERNET",
                       "name": {
                         "value": "INTERNET"
                       },
+                      "vrf_type": {
+                        "value": "internet"
+                      },
                       "l3_vni": {
                         "value": 60002
-                      },
-                      "namespace_type": {
-                        "value": "internet"
                       }
                     }
                   }
@@ -2462,82 +2504,245 @@
       }
     ]
   },
-  "environment_prefixes_prod": {
+  "environment_zones": {
     "edges": [
       {
         "node": {
-          "prefix": {
-            "value": "10.100.0.0/24"
+          "id": "fixture-zone-PROD",
+          "name": {
+            "value": "PROD"
           },
-          "ip_namespace": {
-            "node": {
-              "name": {
-                "value": "VRF_A"
-              },
-              "namespace_type": {
-                "value": "prod"
+          "vrf_type": {
+            "value": "prod"
+          },
+          "l3_vni": {
+            "value": 60000
+          },
+          "vrfs": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "id": "fixture-vrf-fixture-deployment-PROD",
+                  "deployment": {
+                    "node": {
+                      "id": "fixture-deployment",
+                      "name": {
+                        "value": "fixture-deployment"
+                      }
+                    }
+                  },
+                  "security_zone": {
+                    "node": {
+                      "id": "fixture-zone-PROD",
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "vrf_type": {
+                        "value": "prod"
+                      },
+                      "l3_vni": {
+                        "value": 60000
+                      }
+                    }
+                  },
+                  "session_circuits": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "fixture-registration-PROD"
+                          },
+                          "vrf": {
+                            "node": {
+                              "__typename": "ManagedVRF",
+                              "id": "fixture-vrf-fixture-deployment-PROD",
+                              "deployment": {
+                                "node": {
+                                  "id": "fixture-deployment",
+                                  "name": {
+                                    "value": "fixture-deployment"
+                                  }
+                                }
+                              },
+                              "security_zone": {
+                                "node": {
+                                  "id": "fixture-zone-PROD",
+                                  "name": {
+                                    "value": "PROD"
+                                  },
+                                  "vrf_type": {
+                                    "value": "prod"
+                                  },
+                                  "l3_vni": {
+                                    "value": 60000
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "registered_prefixes": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": "10.100.0.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": "10.100.8.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
               }
-            }
+            ]
           }
         }
       },
       {
         "node": {
-          "prefix": {
-            "value": "10.100.8.0/24"
+          "id": "fixture-zone-INTERNET",
+          "name": {
+            "value": "INTERNET"
           },
-          "ip_namespace": {
-            "node": {
-              "name": {
-                "value": "VRF_A"
-              },
-              "namespace_type": {
-                "value": "prod"
+          "vrf_type": {
+            "value": "internet"
+          },
+          "l3_vni": {
+            "value": 60002
+          },
+          "vrfs": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedVRF",
+                  "id": "fixture-vrf-fixture-deployment-INTERNET",
+                  "deployment": {
+                    "node": {
+                      "id": "fixture-deployment",
+                      "name": {
+                        "value": "fixture-deployment"
+                      }
+                    }
+                  },
+                  "security_zone": {
+                    "node": {
+                      "id": "fixture-zone-INTERNET",
+                      "name": {
+                        "value": "INTERNET"
+                      },
+                      "vrf_type": {
+                        "value": "internet"
+                      },
+                      "l3_vni": {
+                        "value": 60002
+                      }
+                    }
+                  },
+                  "session_circuits": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "fixture-registration-INTERNET"
+                          },
+                          "vrf": {
+                            "node": {
+                              "__typename": "ManagedVRF",
+                              "id": "fixture-vrf-fixture-deployment-INTERNET",
+                              "deployment": {
+                                "node": {
+                                  "id": "fixture-deployment",
+                                  "name": {
+                                    "value": "fixture-deployment"
+                                  }
+                                }
+                              },
+                              "security_zone": {
+                                "node": {
+                                  "id": "fixture-zone-INTERNET",
+                                  "name": {
+                                    "value": "INTERNET"
+                                  },
+                                  "vrf_type": {
+                                    "value": "internet"
+                                  },
+                                  "l3_vni": {
+                                    "value": 60002
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "registered_prefixes": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": "203.0.113.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
               }
-            }
+            ]
           }
         }
       }
     ]
-  },
-  "environment_prefixes_non_prod": {
-    "edges": []
-  },
-  "environment_prefixes_internet": {
-    "edges": [
-      {
-        "node": {
-          "prefix": {
-            "value": "203.0.113.0/24"
-          },
-          "ip_namespace": {
-            "node": {
-              "name": {
-                "value": "INTERNET"
-              },
-              "namespace_type": {
-                "value": "internet"
-              }
-            }
-          }
-        }
-      }
-    ]
-  },
-  "environment_prefixes_management": {
-    "edges": []
   },
   "ManagedVRF": {
     "edges": [
       {
         "node": {
-          "namespace": {
+          "security_zone": {
             "node": {
+              "id": "fixture-zone-PROD",
               "name": {
-                "value": "VRF_A"
+                "value": "PROD"
               },
-              "namespace_type": {
+              "vrf_type": {
                 "value": "prod"
+              },
+              "l3_vni": {
+                "value": 60000
               }
             }
           },
@@ -2559,13 +2764,17 @@
       },
       {
         "node": {
-          "namespace": {
+          "security_zone": {
             "node": {
+              "id": "fixture-zone-INTERNET",
               "name": {
                 "value": "INTERNET"
               },
-              "namespace_type": {
+              "vrf_type": {
                 "value": "internet"
+              },
+              "l3_vni": {
+                "value": 60002
               }
             }
           },

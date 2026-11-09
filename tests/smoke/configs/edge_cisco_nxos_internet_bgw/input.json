@@ -800,19 +800,6 @@
                                     "node": {
                                       "address": {
                                         "value": "203.0.113.0/31"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "INTERNET"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60002
-                                          },
-                                          "namespace_type": {
-                                            "value": "internet"
-                                          }
-                                        }
                                       }
                                     }
                                   },
@@ -820,6 +807,34 @@
                                     "node": {
                                       "name": {
                                         "value": "dc1-edge-01"
+                                      }
+                                    }
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-INTERNET",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-INTERNET",
+                                          "name": {
+                                            "value": "INTERNET"
+                                          },
+                                          "vrf_type": {
+                                            "value": "internet"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60002
+                                          }
+                                        }
                                       }
                                     }
                                   }
@@ -835,19 +850,6 @@
                                     "node": {
                                       "address": {
                                         "value": "203.0.113.1/31"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "INTERNET"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60002
-                                          },
-                                          "namespace_type": {
-                                            "value": "internet"
-                                          }
-                                        }
                                       }
                                     }
                                   },
@@ -855,6 +857,34 @@
                                     "node": {
                                       "name": {
                                         "value": "EXT-LUMEN-FRA1"
+                                      }
+                                    }
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-INTERNET",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-INTERNET",
+                                          "name": {
+                                            "value": "INTERNET"
+                                          },
+                                          "vrf_type": {
+                                            "value": "internet"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60002
+                                          }
+                                        }
                                       }
                                     }
                                   }
@@ -1443,13 +1473,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "INTERNET"
-                          },
-                          "l3_vni": {
-                            "value": 60002
-                          },
-                          "namespace_type": {
-                            "value": "internet"
+                            "value": "default"
                           }
                         }
                       }
@@ -1463,6 +1487,34 @@
                   },
                   "capabilities": {
                     "edges": []
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-INTERNET",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "id": "fixture-zone-INTERNET",
+                          "name": {
+                            "value": "INTERNET"
+                          },
+                          "vrf_type": {
+                            "value": "internet"
+                          },
+                          "l3_vni": {
+                            "value": 60002
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -1491,16 +1543,26 @@
               {
                 "node": {
                   "__typename": "ManagedVRF",
-                  "namespace": {
+                  "id": "fixture-vrf-fixture-deployment-INTERNET",
+                  "deployment": {
                     "node": {
+                      "id": "fixture-deployment",
+                      "name": {
+                        "value": "fixture-deployment"
+                      }
+                    }
+                  },
+                  "security_zone": {
+                    "node": {
+                      "id": "fixture-zone-INTERNET",
                       "name": {
                         "value": "INTERNET"
                       },
+                      "vrf_type": {
+                        "value": "internet"
+                      },
                       "l3_vni": {
                         "value": 60002
-                      },
-                      "namespace_type": {
-                        "value": "internet"
                       }
                     }
                   }
@@ -1521,8 +1583,8 @@
           },
           "ip_namespace": {
             "node": {
-              "namespace_type": {
-                "value": "internet"
+              "name": {
+                "value": "default"
               }
             }
           }

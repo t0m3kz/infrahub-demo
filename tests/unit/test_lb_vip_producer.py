@@ -412,7 +412,12 @@ def _segment_read(seg_id: str, *, prefix: bool) -> dict[str, Any]:
     """A lb_segment_gateways.gql response for one segment, with or without its gateway prefix yet."""
     gateway = None
     if prefix:
-        ip_prefix = {"id": f"pfx-{seg_id}", "prefix": {"value": "10.60.0.0/24"}, "ip_namespace": {"node": {"id": "ns"}}}
+        ip_prefix = {
+            "security_zone": {"node": {"id": "ns"}},
+            "id": f"pfx-{seg_id}",
+            "prefix": {"value": "10.60.0.0/24"},
+            "ip_namespace": {"node": {"name": {"value": "default"}}},
+        }
         gateway = {"node": {"ip_prefix": {"node": ip_prefix}}}
     return {"ManagedVxlanSegment": {"edges": [{"node": {"id": seg_id, "gateway": gateway}}]}}
 

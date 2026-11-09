@@ -475,7 +475,7 @@ def build_device_data(
         "primary_address": _node(
             {
                 "address": _v(router_id),
-                "ip_namespace": _node({"name": _v("default")}),
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         ),
         "tags": _edges([]),

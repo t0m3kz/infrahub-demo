@@ -13,7 +13,7 @@ spec:
         data:
           address: "10.2.10.1/24"
           description: "Anycast GW — C002 prod web-frontend (DC6)"
-          ip_namespace: "C002-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -21,7 +21,7 @@ spec:
               description: "C002 prod web-frontend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C002-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -34,7 +34,7 @@ spec:
         data:
           address: "10.2.20.1/24"
           description: "Anycast GW — C002 prod app-backend (DC6)"
-          ip_namespace: "C002-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -42,7 +42,7 @@ spec:
               description: "C002 prod app-backend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C002-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -55,7 +55,7 @@ spec:
         data:
           address: "10.2.30.1/24"
           description: "Anycast GW — C002 prod database (DC6)"
-          ip_namespace: "C002-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -63,7 +63,7 @@ spec:
               description: "C002 prod database subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C002-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -78,7 +78,7 @@ spec:
         data:
           address: "10.2.110.1/24"
           description: "Anycast GW — C002 dev web-frontend (DC6)"
-          ip_namespace: "C002-D"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -86,7 +86,7 @@ spec:
               description: "C002 dev web-frontend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C002-D"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -99,7 +99,7 @@ spec:
         data:
           address: "10.2.120.1/24"
           description: "Anycast GW — C002 dev app-backend (DC6)"
-          ip_namespace: "C002-D"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -107,7 +107,7 @@ spec:
               description: "C002 dev app-backend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C002-D"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -120,7 +120,7 @@ spec:
         data:
           address: "10.2.130.1/24"
           description: "Anycast GW — C002 dev database (DC6)"
-          ip_namespace: "C002-D"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -128,6 +128,6 @@ spec:
               description: "C002 dev database subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C002-D"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments

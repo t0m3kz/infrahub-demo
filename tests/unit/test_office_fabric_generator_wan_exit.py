@@ -54,12 +54,21 @@ class _WanExit:
             self._loopback("ds-id-1", "lo-ip-1"),
             self._loopback("ds-id-2", "lo-ip-2"),
         ]
+        self.instances = [
+            MagicMock(
+                id=f"vrf-{device}",
+                shared_devices=MagicMock(peers=[MagicMock(id=device)]),
+                security_zone=MagicMock(peer=self.namespace),
+            )
+            for device in ("ds-id-1", "ds-id-2", "edge-id")
+        ]
         self.kinds: dict[Any, Any] = {
             DcimPhysicalDevice: [self.edge] if edge_present else [],
             DcimPhysicalInterface: self.edge_ports,
-            "IpamNamespace": [self.namespace],
+            "SecurityZone": [self.namespace],
             "CoreIPPrefixPool": [MagicMock(id="transit-pool")],
             DcimVirtualInterface: self.loopbacks,
+            "ManagedVRF": self.instances,
         }
         client = MagicMock()
         client.filters = AsyncMock(side_effect=self._filters)
@@ -97,7 +106,12 @@ class _WanExit:
         return loopback
 
     async def _filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
-        return self.kinds[kind if kind in self.kinds else getattr(kind, "__name__", kind)]
+        nodes = self.kinds[kind if kind in self.kinds else getattr(kind, "__name__", kind)]
+        if getattr(kind, "__name__", kind) == "ManagedVRF":
+            assert self.gen.vrfs_events[-1] in ("held", "sub")
+            assert kwargs["include"] == ["shared_devices", "security_zone"]
+            return [node for node in nodes if node.shared_devices.peers[0].id in kwargs["shared_devices__ids"]]
+        return nodes
 
     async def _create(self, *, kind: Any, data: dict[str, Any]) -> MagicMock:
         self.created.append({"kind": kind, **data})
@@ -180,6 +194,7 @@ class TestWanExit:
         # the switch takes the lower address, the edge the upper
         assert calls[0]["ip_address_id"] == "sw-prefix-wan-exit__e-1__s-1"
         assert calls[1]["ip_address_id"] == "eg-prefix-wan-exit__e-1__s-1"
+        assert [c["vrf_id"] for c in calls] == ["vrf-ds-id-1", "vrf-edge-id", "vrf-ds-id-2", "vrf-edge-id"]
         assert calls[0]["trunk_iface"].id == "s-1" and calls[1]["trunk_iface"].id == "e-1"
         # nothing to link: the peering names the sub-interfaces as its interfaces
         assert all("capability_obj" not in c for c in calls)
@@ -205,7 +220,7 @@ class TestWanExit:
 
     @pytest.mark.asyncio
     async def test_an_office_always_exits_in_the_prod_vrf_with_the_prod_tag(self) -> None:
-        """An office has no environment: its exit is the PROD namespace's, never a NON-PROD one."""
+        """An office has no environment: its exit is the PROD namespace's, never a NONPROD one."""
         exit_ = _WanExit()
 
         await exit_.run()
@@ -213,7 +228,7 @@ class TestWanExit:
         assert wan_exit_vlan("prod") == 3800
         assert {c.kwargs["vlan_id_value"] for c in exit_.gen.ensure_vlan_subinterface.await_args_list} == {3800}
         assert exit_.filter_calls("CoreIPPrefixPool") == [{"name__value": "FW-Transit-PROD-IPv4"}]
-        assert exit_.filter_calls("IpamNamespace") == [{"namespace_type__value": "prod"}]
+        assert exit_.filter_calls("SecurityZone") == [{"vrf_type__value": "prod"}]
 
     @pytest.mark.asyncio
     async def test_one_process_per_switch_and_one_on_the_edge_all_regular_and_tracked(self) -> None:
@@ -390,7 +405,7 @@ class TestWanExitSkips:
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimPhysicalDevice:
                 return next(answers)
-            return exit_.kinds[kind if kind in exit_.kinds else getattr(kind, "__name__", kind)]
+            return await exit_._filters(kind=kind, **kwargs)
 
         exit_.gen.client.filters = AsyncMock(side_effect=_filters)
 
@@ -415,7 +430,7 @@ class TestWanExitSkips:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("kind", "expected"), [("IpamNamespace", "IpamNamespace of type prod"), ("CoreIPPrefixPool", "transit pool")]
+        ("kind", "expected"), [("SecurityZone", "SecurityZone of type prod"), ("CoreIPPrefixPool", "transit pool")]
     )
     async def test_a_missing_namespace_or_transit_pool_fails_the_run_before_any_write(
         self, kind: str, expected: str

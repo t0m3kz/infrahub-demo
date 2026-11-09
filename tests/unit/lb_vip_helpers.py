@@ -90,11 +90,16 @@ def _segment(seg_id: str, *, prefix: bool = True) -> dict[str, Any]:
         "typename": "ManagedVxlanSegment",
         "isolation_mode": "normal",
         "environment": "p",
-        "security_zone": {"name": "PROD-ZONE"},
+        "security_zone": {"name": "PROD"},
     }
     if prefix:
         segment["gateway"] = {
-            "ip_prefix": {"id": f"pfx-{seg_id}", "prefix": "10.60.0.0/24", "ip_namespace": {"id": "ns-prod"}}
+            "ip_prefix": {
+                "security_zone": {"id": "ns-prod"},
+                "id": f"pfx-{seg_id}",
+                "prefix": "10.60.0.0/24",
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
         }
     return segment
 
@@ -205,7 +210,13 @@ def _vpc(vpc_id: str = "vpc-1") -> dict[str, Any]:
     return {
         "id": vpc_id,
         "name": f"{vpc_id}-name",
-        "cidr_blocks": [{"prefix": "10.30.0.0/16", "ip_namespace": {"id": "ns-prod"}}],
+        "cidr_blocks": [
+            {
+                "security_zone": {"id": "ns-prod"},
+                "prefix": "10.30.0.0/16",
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
+        ],
     }
 
 

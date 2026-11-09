@@ -40,6 +40,7 @@ from utils.segment_addressing import is_terminated, routed_segment_namespace, se
 def _segment(name: str, *, terminated: bool, gateway: str, vrf: str = "VRF_A", l3_vni: int = 50001) -> dict:
     """A ManagedVxlanSegment with a gateway in `vrf`."""
     return {
+        "security_zone": {"name": vrf, "l3_vni": l3_vni},
         "id": f"seg-{name}",
         "typename": "ManagedVxlanSegment",
         "name": name,
@@ -47,7 +48,11 @@ def _segment(name: str, *, terminated: bool, gateway: str, vrf: str = "VRF_A", l
         "terminated_on": {"id": "ctx-1"} if terminated else None,
         "gateway": {
             "address": gateway,
-            "ip_prefix": {"prefix": "unused", "ip_namespace": {"name": vrf, "l3_vni": l3_vni}},
+            "ip_prefix": {
+                "security_zone": {"name": vrf, "l3_vni": l3_vni},
+                "prefix": "unused",
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            },
         },
     }
 
@@ -155,8 +160,8 @@ class TestEveryFabricConsumerAgrees:
             return {
                 "typename": "ManagedVxlanSegment",
                 "terminated_on": {"id": "ctx-1"} if terminated else None,
-                "gateway": {"ip_prefix": {"ip_namespace": {"name": "PROD", "namespace_type": "prod"}}},
-                "security_zone": {"name": "PROD-ZONE"},
+                "gateway": {"ip_prefix": {"ip_namespace": {"name": "default"}}},
+                "security_zone": {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
             }
 
         assert is_routed_tenant_segment(tenant(False)) is True
@@ -202,7 +207,7 @@ def _device_data(deployment: dict | None = None) -> dict:
         "role": "leaf",
         "interfaces": [{"name": "Vlan100", "role": "svi", "vrf": {"namespace": {"name": "VRF_A"}}}],
         "shared_capabilities": [
-            {"typename": "ManagedVRF", "namespace": {"name": "VRF_A", "l3_vni": 50001, "namespace_type": "prod"}}
+            {"typename": "ManagedVRF", "security_zone": {"name": "VRF_A", "l3_vni": 50001, "vrf_type": "prod"}}
         ],
         "segment_deployments": _activations(),
         "deployment": deployment,

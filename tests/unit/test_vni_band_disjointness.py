@@ -45,7 +45,7 @@ def _load_objects(path: Path, kind: str) -> list[dict[str, Any]]:
 @pytest.fixture(scope="module")
 def fixed_namespace_l3_vnis(root_dir: Path) -> dict[str, int]:
     """The hand-assigned L3 VNI of each of the 4 fixed global VRF namespaces."""
-    namespaces = _load_objects(root_dir / "data" / "bootstrap" / "22_namespaces.yml", "IpamNamespace")
+    namespaces = _load_objects(root_dir / "data" / "bootstrap" / "24_security_zones.yml", "SecurityZone")
     return {ns["name"]: ns["l3_vni"] for ns in namespaces if ns.get("l3_vni") is not None}
 
 
@@ -89,8 +89,8 @@ class TestFixedNamespaceL3Vnis:
     """The four hand-set L3 VNIs are the only L3 VNIs in the data model."""
 
     def test_all_four_namespaces_have_an_l3_vni(self, fixed_namespace_l3_vnis: dict[str, int]) -> None:
-        """PROD, NON-PROD, INTERNET and MANAGEMENT each carry an l3_vni."""
-        assert set(fixed_namespace_l3_vnis) == {"PROD", "NON-PROD", "INTERNET", "MANAGEMENT"}
+        """PROD, NONPROD, INTERNET and MANAGEMENT each carry an l3_vni."""
+        assert set(fixed_namespace_l3_vnis) == {"PROD", "NONPROD", "INTERNET", "MANAGEMENT"}
 
     def test_they_are_unique(self, fixed_namespace_l3_vnis: dict[str, int]) -> None:
         """Two VRFs sharing an L3 VNI route into each other."""

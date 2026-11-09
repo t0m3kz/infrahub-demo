@@ -143,28 +143,28 @@ interface Vxlan1
    vxlan vlan 3601 vni 64601
    !
    ! L3 VNI Mappings (VRF segments for microsegmentation)
-   vxlan vrf INTERNET vni 50003
-   vxlan vrf MANAGEMENT vni 50004
-   vxlan vrf PROD vni 50001
+   vxlan vrf INTERNET vni 60002
+   vxlan vrf MANAGEMENT vni 60003
+   vxlan vrf PROD vni 60000
 !
 !
 ! VRF Definitions (Microsegmentation)
 !
 vrf instance INTERNET
    description Tenant VRF for microsegmentation
-   rd 10.0.0.1:50003
+   rd 10.0.0.1:60002
 !
 ip routing vrf INTERNET
 !
 vrf instance MANAGEMENT
    description Tenant VRF for microsegmentation
-   rd 10.0.0.1:50004
+   rd 10.0.0.1:60003
 !
 ip routing vrf MANAGEMENT
 !
 vrf instance PROD
    description Tenant VRF for microsegmentation
-   rd 10.0.0.1:50001
+   rd 10.0.0.1:60000
 !
 ip routing vrf PROD
 !
@@ -205,20 +205,20 @@ router bgp 65000
    !
    ! L3 EVPN (VRF-based for microsegmentation)
    vrf INTERNET
-      rd 10.0.0.1:50003
-      route-target import evpn 50003:50003
-      route-target export evpn 50003:50003
+      rd 10.0.0.1:60002
+      route-target import evpn 60002:60002
+      route-target export evpn 60002:60002
       redistribute connected
       redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET
    vrf MANAGEMENT
-      rd 10.0.0.1:50004
-      route-target import evpn 65000:50004
-      route-target export evpn 65000:50004
+      rd 10.0.0.1:60003
+      route-target import evpn 65000:60003
+      route-target export evpn 65000:60003
       redistribute connected
    vrf PROD
-      rd 10.0.0.1:50001
-      route-target import evpn 65000:50001
-      route-target export evpn 65000:50001
+      rd 10.0.0.1:60000
+      route-target import evpn 65000:60000
+      route-target export evpn 65000:60000
       redistribute connected
       redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD
 

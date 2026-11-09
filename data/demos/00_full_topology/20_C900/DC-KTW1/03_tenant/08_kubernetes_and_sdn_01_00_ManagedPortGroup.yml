@@ -1,0 +1,16 @@
+# ManagedPortGroup declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedPortGroup
+  data:
+    - name: c900-web
+      virtual_switch: ktw1-dvs-01
+      vlan_id: 100
+      segment: c900-web-p
+      nics:
+        - ["ktw1-k8s-cp-01", "eth0"]
+        - ["ktw1-k8s-cp-02", "eth0"]
+        - ["ktw1-k8s-cp-03", "eth0"]
+        - ["ktw1-k8s-wk-01", "eth0"]
+        - ["ktw1-k8s-wk-02", "eth0"]

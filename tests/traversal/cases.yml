@@ -162,6 +162,8 @@ cases:
             - DcimPhysicalDevice:par-colo1-xfw-01
       l3:
         - DcimVirtualDevice:ktw1-vm-01
+        - DcimPhysicalDevice:par-colo1-srv-01
+        - CloudInstance:c900-app-euc1-1
         - DcimVirtualDevice:waw1-vm-01
         - DcimVirtualDevice:gdn1-vm-01
         - DcimPhysicalDevice:bcn-office-edge-01
@@ -172,6 +174,16 @@ cases:
         - CloudNetworkSegment:c900-spoke-p
         - CloudNetworkSegment:c900-payments-azure-p
       l1:
+        # Actual C900 workload ends, not a cage router or an AWS segment substituted for the workload.
+        - src: DcimVirtualDevice:ktw1-vm-01
+          dst: DcimPhysicalDevice:par-colo1-srv-01
+          via: DcimPhysicalDevice:par-colo1-edge-01
+        - src: DcimPhysicalDevice:par-colo1-srv-01
+          dst: CloudInstance:c900-app-euc1-1
+          via: DcimPhysicalDevice:par-colo1-edge-01
+        - src: DcimVirtualDevice:ktw1-vm-01
+          dst: CloudInstance:c900-app-euc1-1
+          via: DcimPhysicalDevice:par-colo1-edge-01
         # access point, server and cloud segment to THE INTERNET
         - {src: "DcimPhysicalDevice:bcn-office-ap-01", dst: "TopologyInternet:INTERNET"}
         - {src: "DcimPhysicalDevice:lis-office-ap-03", dst: "TopologyInternet:INTERNET"}

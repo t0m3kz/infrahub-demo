@@ -1,0 +1,18 @@
+# ManagedHypervisorCluster declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedHypervisorCluster
+  data:
+    - name: gdn1-nutanix-cl01
+      description: "C900 production compute of DC-GDN1: Nutanix AHV (Prism), 2 hosts"
+      status: active
+      software_image: nutanix-6.8
+      manager: "https://prism.gdn1.demo.local:9440"
+      inventory_path: GDN1
+      ha_enabled: true
+      load_balancing: true
+      deployment: DC-GDN1-8-POD-1
+      hosts:
+        - gdn1-srv-01
+        - gdn1-srv-02

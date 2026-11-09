@@ -66,6 +66,8 @@ class TestEnsureHaPairs:
             "acquire:ha-domain-fw-01-fw-02",
             "query:ManagedFirewallHA",
             f"query:{DcimPhysicalDevice}",
+            "acquire:firewall-ha-group-pool",
+            "release:firewall-ha-group-pool",
             "create-save",
             "release:ha-domain-fw-01-fw-02",
         ]
@@ -120,7 +122,12 @@ class TestEnsureHaPairs:
         )
 
         assert gen.client.create.call_args.kwargs["data"]["name"] == "c005-fw-prod"
-        assert gen.lock_events == ["acquire:ha-domain-c005-fw-prod", "release:ha-domain-c005-fw-prod"]
+        assert gen.lock_events == [
+            "acquire:ha-domain-c005-fw-prod",
+            "acquire:firewall-ha-group-pool",
+            "release:firewall-ha-group-pool",
+            "release:ha-domain-c005-fw-prod",
+        ]
         assert gen._ensure_ha_interfaces.await_args.args[1] == "c005-fw-prod"
 
     @pytest.mark.asyncio

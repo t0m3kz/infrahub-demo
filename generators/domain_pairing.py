@@ -5,13 +5,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 from infrahub_sdk.exceptions import NodeNotFoundError
-from infrahub_sdk.protocols import CoreStandardGroup
+from infrahub_sdk.protocols import CoreNumberPool, CoreStandardGroup
 
 if TYPE_CHECKING:
     import logging
     from .pools import PoolMixin
 
-from utils.limits import GROUP_HA_DOMAINS, GROUP_MLAG_DOMAINS
+from utils.limits import (
+    FIREWALL_HA_GROUP_MAX,
+    FIREWALL_HA_GROUP_MIN,
+    FIREWALL_HA_GROUP_POOL,
+    GROUP_HA_DOMAINS,
+    GROUP_MLAG_DOMAINS,
+)
 from utils.segment_vlan import mlag_peer_devices
 
 from .helpers.cable_attributes import cable_attributes, endpoint_label
@@ -118,6 +124,14 @@ class DomainPairingMixin(MLAGWiringMixin):
                 if existing:
                     ha_obj = existing[0]
                     self.client.group_context.related_node_ids.append(ha_obj.id)
+                    if (
+                        ha_kind == "ManagedFirewallHA"
+                        and getattr(getattr(ha_obj, "group_id", None), "value", None) is None
+                    ):
+                        ref = await self.client.create(
+                            kind=ha_kind, data={"id": ha_obj.id, **await self._firewall_ha_group_data()}
+                        )
+                        await ref.save(allow_upsert=True)
                 else:
                     devices = await self.client.filters(kind=device_kind, name__values=[first, second])
                     if len(devices) != 2:
@@ -132,6 +146,7 @@ class DomainPairingMixin(MLAGWiringMixin):
                             "status": "active",
                             "capabilities": [{"id": dev.id} for dev in devices],
                             "member_of_groups": [{"id": ha_group.id}],
+                            **(await self._firewall_ha_group_data() if ha_kind == "ManagedFirewallHA" else {}),
                         },
                     )
                     await ha_obj.save(allow_upsert=True)
@@ -140,6 +155,29 @@ class DomainPairingMixin(MLAGWiringMixin):
 
             if device_kind is not CloudNetworkAppliance:
                 await self._ensure_ha_interfaces(ha_obj, name, device_kind=device_kind, members=members)
+
+    async def _firewall_ha_group_data(self) -> dict[str, Any]:
+        """Allocate missing firewall HA IDs natively; existing authored IDs are never rewritten.
+
+        The pool indexes authored values too, so a new virtual pair cannot reuse
+        a shared physical pair's ID. The lazy fallback supports older bootstraps.
+        """
+        async with self.resource_lock("firewall-ha-group-pool"):
+            try:
+                pool = await self.client.get(kind=CoreNumberPool, name__value=FIREWALL_HA_GROUP_POOL)
+            except NodeNotFoundError:
+                pool = await self.client.create(
+                    kind=CoreNumberPool,
+                    data={
+                        "name": FIREWALL_HA_GROUP_POOL,
+                        "node": "ManagedFirewallHA",
+                        "node_attribute": "group_id",
+                        "start_range": FIREWALL_HA_GROUP_MIN,
+                        "end_range": FIREWALL_HA_GROUP_MAX,
+                    },
+                )
+                await pool.save(allow_upsert=True, update_group_context=False)
+        return {"group_id": {"from_pool": {"id": pool.id}}}
 
     async def _ensure_ha_interfaces(
         self,

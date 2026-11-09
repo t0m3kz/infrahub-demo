@@ -1,0 +1,30 @@
+# Standard-group-side bindings leave each authored object's SDK cleanup-ownership groups intact on reload.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreStandardGroup
+  data:
+    - name: firewalls
+      members:
+        - kind: DcimVirtualDevice
+          data:
+            name: c900-waw1-fw-01-prod
+            owner: P027
+        - kind: DcimVirtualDevice
+          data:
+            name: c900-waw1-fw-02-prod
+            owner: P027
+    - name: ha_domains
+      members:
+        - kind: ManagedFirewallHA
+          data:
+            name: c900-waw1-fw-01-waw1-fw-02-ha-prod
+            capabilities:
+              - c900-waw1-fw-01-prod
+              - c900-waw1-fw-02-prod
+    - name: service_contexts
+      members:
+        - kind: ManagedFirewallContext
+          data:
+            name: c900-waw1-fw-01-waw1-fw-02-prod
+            cluster: c900-waw1-fw-01-waw1-fw-02-ha-prod

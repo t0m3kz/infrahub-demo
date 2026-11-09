@@ -1,0 +1,79 @@
+fragment RoutingZoneFields on SecurityZone {
+  id
+  name { value }
+  vrf_type { value }
+  l3_vni { value }
+}
+
+fragment RoutingVrfFields on ManagedVRF {
+  id
+  deployment { node { id name { value } } }
+  security_zone { node { ...RoutingZoneFields } }
+}
+
+fragment CircuitRoutingVrfFields on TopologySessionCircuit {
+  vrf { node { ...RoutingVrfFields } }
+  capabilities {
+    edges {
+      node {
+        vrf { node { ...RoutingVrfFields } }
+      }
+    }
+  }
+}
+
+fragment SegmentRoutingPrefixFields on ManagedNetworkSegment {
+  security_zone { node { ...RoutingZoneFields } }
+  gateway { node { ip_prefix { node { id prefix { value } } } } }
+}
+
+fragment InterfaceRoutingZoneFields on DcimInterface {
+  vrf { node { ...RoutingVrfFields } }
+  capabilities {
+    edges {
+      node {
+        __typename
+        ... on TopologySessionCircuit {
+          circuit_type { value }
+          vrf { node { ...RoutingVrfFields } }
+        }
+      }
+    }
+  }
+}
+
+fragment EnvironmentRoutingZoneFields on SecurityZone {
+  ...RoutingZoneFields
+  network_segments { edges { node { ...SegmentRoutingPrefixFields } } }
+  vrfs {
+    edges {
+      node {
+        ...RoutingVrfFields
+        session_circuits {
+          edges {
+            node {
+              name { value }
+              vrf { node { ...RoutingVrfFields } }
+              link_prefix { node { id prefix { value } } }
+              registered_prefixes { edges { node { id prefix { value } } } }
+              originated_prefixes { edges { node { id prefix { value } } } }
+            }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              ...InterfaceRoutingZoneFields
+              ... on DcimHasIPAddress {
+                ip_address { node { ip_prefix { node { id prefix { value } } } } }
+              }
+              ... on CloudPeeringInterface {
+                advertised_prefixes { edges { node { id prefix { value } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

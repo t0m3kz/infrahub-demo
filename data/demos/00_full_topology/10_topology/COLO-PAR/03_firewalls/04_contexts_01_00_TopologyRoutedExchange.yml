@@ -1,0 +1,21 @@
+# TopologyRoutedExchange declarations in recursive dependency order.
+# The routed exchange of the context between the PROD VRF and INTERNET; both members' legs are linked to it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyRoutedExchange
+  data:
+    - name: shared-par-xfw-ha-prod-PROD-INTERNET
+      gateway: shared-par-xfw-ha-prod
+      security_zone_a: PROD
+      security_zone_z: INTERNET
+      status: active
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-01, name: "ethernet1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-02, name: "ethernet1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-01, name: "ethernet1/1.3401"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-02, name: "ethernet1/1.3401"}

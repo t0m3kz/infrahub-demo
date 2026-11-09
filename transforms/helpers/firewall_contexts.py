@@ -21,7 +21,18 @@ from utils.exchange_transit import (
     transit_addresses,
     transit_vlan,
 )
+from utils.routing_domain import interface_security_zone
 from utils.segment_addressing import segment_hosting_candidates, segment_prefix
+
+
+def firewall_ha_contexts(capabilities: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Full contexts owned by this device's firewall HA domains."""
+    return [
+        context
+        for capability in capabilities or []
+        if capability.get("typename") == "ManagedFirewallHA"
+        for context in capability.get("contexts") or []
+    ]
 
 
 def _new_context(cap: dict[str, Any], legs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -80,6 +91,9 @@ def get_firewall_contexts(
     """
     contexts: dict[str, dict[str, Any]] = {}
     legs_by_context: dict[str, list[dict[str, Any]]] = {}
+    for cap in cluster_contexts or []:
+        if cap.get("id"):
+            contexts[cap["id"]] = _new_context(cap, legs_by_context.setdefault(cap["id"], []))
     for iface in interfaces or []:
         ip_obj = iface.get("ip_address") or {}
         parent_iface = sub_interface_parent(iface) or {}
@@ -92,10 +106,10 @@ def get_firewall_contexts(
             context = contexts.get(context_id)
             if context is None:
                 context = contexts[context_id] = _new_context(cap, legs_by_context.setdefault(context_id, []))
-            namespace = ip_obj.get("ip_namespace") or {}
-            ns_type = namespace.get("namespace_type")
+            namespace = interface_security_zone(iface)
+            ns_type = namespace.get("vrf_type")
             address = ip_obj.get("address")
-            if ns_type not in ZONE_BY_NS_TYPE or not address or not cap.get("vlan_id"):
+            if ns_type not in ZONE_BY_NS_TYPE or not address or not context.get("vlan_id"):
                 continue
             network = ip_interface(address).network
             if network.version != 4:
@@ -106,7 +120,7 @@ def get_firewall_contexts(
                 {
                     "interface": iface.get("name"),
                     "parent_interface": parent_iface,
-                    "vlan": transit_vlan(cap["vlan_id"], ns_type),
+                    "vlan": transit_vlan(context["vlan_id"], ns_type),
                     "own_ip": address,
                     **leg_virtual_ip(ha, address),
                     "anycast": addresses["anycast"],
@@ -117,15 +131,53 @@ def get_firewall_contexts(
                     "nameif": zone.removesuffix("-ZONE").lower(),
                 }
             )
-    for cap in cluster_contexts or []:
-        if cap.get("id") and cap["id"] not in contexts:
-            contexts[cap["id"]] = _new_context(cap, [])
     for legs in legs_by_context.values():
         legs.sort(key=lambda leg: TRANSIT_SLOT[leg["ns_type"]])
     for context in contexts.values():
         if context["edge_hostings"]:
             _attach_edge_customers(context)
     return sorted(contexts.values(), key=lambda c: c.get("name") or "")
+
+
+def firewall_context_zone_data(
+    contexts: list[dict[str, Any]], management_zones: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
+    """Context/endpoint zones, plus the explicitly queried infrastructure management zone."""
+    zones: dict[str, dict[str, Any]] = {}
+
+    def add_zone(zone: dict[str, Any]) -> dict[str, Any] | None:
+        zone_name = zone.get("name")
+        if not zone_name:
+            return None
+        found = zones.setdefault(zone_name, {"name": zone_name, "network_segments": []})
+        for field in ("trust_level", "description"):
+            if zone.get(field) is not None:
+                found[field] = zone[field]
+        return found
+
+    def add_segment(segment: dict[str, Any]) -> None:
+        zone = add_zone(segment.get("security_zone") or {})
+        if zone is not None:
+            members = (segment.get("security_zone") or {}).get("network_segments")
+            for member in members if members is not None else [segment]:
+                if member not in zone["network_segments"]:
+                    zone["network_segments"].append(member)
+
+    for context in contexts:
+        for segment in context.get("segments") or []:
+            add_segment(segment)
+        for segment in context.get("terminated_segments") or []:
+            add_segment(segment)
+        for policy in _context_policies(context):
+            for rule in policy["rules"]:
+                for end in ("source", "destination"):
+                    add_segment(rule.get(f"{end}_segment") or {})
+    for management in management_zones or []:
+        if management.get("name") == ZONE_BY_NS_TYPE[MANAGEMENT_TYPE]:
+            zone = add_zone(management)
+            if zone is not None:
+                zone["network_segments"].extend(management.get("network_segments") or [])
+    return list(zones.values())
 
 
 def _attach_edge_customers(context: dict[str, Any]) -> None:

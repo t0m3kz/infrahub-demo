@@ -1394,8 +1394,15 @@
           "security_zone": {
             "node": {
               "name": {
-                "value": "NONPROD-ZONE"
-              }
+                "value": "NONPROD"
+              },
+              "vrf_type": {
+                "value": "non_prod"
+              },
+              "l3_vni": {
+                "value": 60001
+              },
+              "id": "fixture-zone-NONPROD"
             }
           },
           "security_tag": {
@@ -1419,10 +1426,7 @@
                   "ip_namespace": {
                     "node": {
                       "name": {
-                        "value": "NONPROD"
-                      },
-                      "namespace_type": {
-                        "value": "non_prod"
+                        "value": "default"
                       }
                     }
                   }
@@ -1618,8 +1622,15 @@
           "security_zone": {
             "node": {
               "name": {
-                "value": "NONPROD-ZONE"
-              }
+                "value": "NONPROD"
+              },
+              "vrf_type": {
+                "value": "non_prod"
+              },
+              "l3_vni": {
+                "value": 60001
+              },
+              "id": "fixture-zone-NONPROD"
             }
           },
           "security_tag": {
@@ -1643,10 +1654,7 @@
                   "ip_namespace": {
                     "node": {
                       "name": {
-                        "value": "NONPROD"
-                      },
-                      "namespace_type": {
-                        "value": "non_prod"
+                        "value": "default"
                       }
                     }
                   }
@@ -1801,8 +1809,15 @@
           "security_zone": {
             "node": {
               "name": {
-                "value": "NONPROD-ZONE"
-              }
+                "value": "NONPROD"
+              },
+              "vrf_type": {
+                "value": "non_prod"
+              },
+              "l3_vni": {
+                "value": 60001
+              },
+              "id": "fixture-zone-NONPROD"
             }
           },
           "security_tag": {
@@ -1826,10 +1841,7 @@
                   "ip_namespace": {
                     "node": {
                       "name": {
-                        "value": "NONPROD"
-                      },
-                      "namespace_type": {
-                        "value": "non_prod"
+                        "value": "default"
                       }
                     }
                   }
@@ -1999,8 +2011,15 @@
           "security_zone": {
             "node": {
               "name": {
-                "value": "PROD-ZONE"
-              }
+                "value": "PROD"
+              },
+              "vrf_type": {
+                "value": "prod"
+              },
+              "l3_vni": {
+                "value": 60000
+              },
+              "id": "fixture-zone-PROD"
             }
           },
           "security_tag": {
@@ -2024,10 +2043,7 @@
                   "ip_namespace": {
                     "node": {
                       "name": {
-                        "value": "PROD"
-                      },
-                      "namespace_type": {
-                        "value": "prod"
+                        "value": "default"
                       }
                     }
                   }
@@ -2143,8 +2159,15 @@
           "security_zone": {
             "node": {
               "name": {
-                "value": "PROD-ZONE"
-              }
+                "value": "PROD"
+              },
+              "vrf_type": {
+                "value": "prod"
+              },
+              "l3_vni": {
+                "value": 60000
+              },
+              "id": "fixture-zone-PROD"
             }
           },
           "security_tag": {
@@ -2168,10 +2191,7 @@
                   "ip_namespace": {
                     "node": {
                       "name": {
-                        "value": "PROD"
-                      },
-                      "namespace_type": {
-                        "value": "prod"
+                        "value": "default"
                       }
                     }
                   }

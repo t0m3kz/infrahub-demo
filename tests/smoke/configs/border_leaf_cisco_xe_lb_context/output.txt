@@ -11,7 +11,7 @@ vlan 3100
  name LB-dc1-lb-01-dc1-lb-02-ha-PROD
 !
 vlan 3301
- name LB-dc1-lb-01-dc1-lb-02-ha-N-7de0
+ name LB-dc1-lb-01-dc1-lb-02-ha-N-3f91
 !
 !
 ! Interfaces
@@ -86,7 +86,7 @@ route-map RM-CONN-2-BGP permit 10
 !
 ! Tenant VRFs (symmetric IRB — one L3 VNI per tenant)
 ! unverified-no-lab: `route-target ... stitching` is how the guide imports and exports a VRF into L2VPN EVPN
-vrf definition NON-PROD
+vrf definition NONPROD
  rd 10.0.0.1:60001
  address-family ipv4
   route-target export 65000:60001
@@ -138,14 +138,14 @@ vlan configuration 3301
 ! unverified-no-lab: `vlan configuration <vlan>` / `member vni <l3vni>` binds the L3 VNI to its SVI VLAN
 ! unverified-no-lab: `ip unnumbered Loopback0` and `no autostate` on the L3 VNI SVI
 vlan 3901
- name L3VNI_NON-PROD
+ name L3VNI_NONPROD
 !
 vlan configuration 3901
  member vni 60001
 !
 interface Vlan3901
- description L3VNI transit SVI for VRF NON-PROD
- vrf forwarding NON-PROD
+ description L3VNI transit SVI for VRF NONPROD
+ vrf forwarding NONPROD
  ip unnumbered Loopback0
  no autostate
  no shutdown
@@ -173,7 +173,7 @@ interface nve1
  host-reachability protocol bgp
  member vni 64100 ingress-replication
  member vni 64301 ingress-replication
- member vni 60001 vrf NON-PROD
+ member vni 60001 vrf NONPROD
  member vni 60000 vrf PROD
  no shutdown
 !
@@ -186,10 +186,10 @@ router bgp 65000
  address-family l2vpn evpn
   neighbor EVPN-PEERS send-community both
  exit-address-family
- address-family ipv4 vrf NON-PROD
+ address-family ipv4 vrf NONPROD
   advertise l2vpn evpn
   redistribute connected
-  redistribute static route-map RM-VRF-STATIC-2-EVPN-NON-PROD
+  redistribute static route-map RM-VRF-STATIC-2-EVPN-NONPROD
  exit-address-family
  address-family ipv4 vrf PROD
   advertise l2vpn evpn
@@ -210,8 +210,8 @@ interface Vlan3100
  no shutdown
 !
 interface Vlan3301
- description LB-dc1-lb-01-dc1-lb-02-ha-NON-PROD
- vrf forwarding NON-PROD
+ description LB-dc1-lb-01-dc1-lb-02-ha-NONPROD
+ vrf forwarding NONPROD
  ip address 100.66.80.1 255.255.255.248
  mac-address 001c.7300.dc01
  no autostate
@@ -220,12 +220,12 @@ interface Vlan3301
 !
 ! Inter-VRF exchange routes (TopologyRoutedExchange, via the firewall context)
 ! unverified-no-lab: `ip route vrf <vrf> <network> <mask> <next hop>` with the next hop on the transit SVI of that VRF
-ip route vrf NON-PROD 100.66.112.0 255.255.255.192 100.66.80.4
+ip route vrf NONPROD 100.66.112.0 255.255.255.192 100.66.80.4
 ip route vrf PROD 100.66.96.0 255.255.255.192 100.66.64.4
 ! unverified-no-lab: exact-match prefix-list and route-map for `redistribute static route-map` in the VRF address family
-ip prefix-list PL-VRF-STATIC-NON-PROD seq 10 permit 100.66.112.0/26
-route-map RM-VRF-STATIC-2-EVPN-NON-PROD permit 10
- match ip address prefix-list PL-VRF-STATIC-NON-PROD
+ip prefix-list PL-VRF-STATIC-NONPROD seq 10 permit 100.66.112.0/26
+route-map RM-VRF-STATIC-2-EVPN-NONPROD permit 10
+ match ip address prefix-list PL-VRF-STATIC-NONPROD
 ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 100.66.96.0/26
 route-map RM-VRF-STATIC-2-EVPN-PROD permit 10
  match ip address prefix-list PL-VRF-STATIC-PROD

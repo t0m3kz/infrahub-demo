@@ -987,7 +987,18 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": null
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           },
                           "gateway": {
                             "node": {
@@ -1002,10 +1013,7 @@
                                   "ip_namespace": {
                                     "node": {
                                       "name": {
-                                        "value": "VRF_A"
-                                      },
-                                      "l3_vni": {
-                                        "value": 50001
+                                        "value": "default"
                                       }
                                     }
                                   }
@@ -1150,7 +1158,18 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": null
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           },
                           "gateway": {
                             "node": {
@@ -1166,9 +1185,6 @@
                                     "node": {
                                       "name": {
                                         "value": "default"
-                                      },
-                                      "l3_vni": {
-                                        "value": null
                                       }
                                     }
                                   }
@@ -1292,10 +1308,27 @@
                   },
                   "vrf": {
                     "node": {
-                      "namespace": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-PROD",
+                      "deployment": {
                         "node": {
+                          "id": "fixture-deployment",
                           "name": {
-                            "value": "VRF_A"
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "id": "fixture-zone-PROD",
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "vrf_type": {
+                            "value": "prod"
+                          },
+                          "l3_vni": {
+                            "value": 60000
                           }
                         }
                       }
@@ -1342,7 +1375,32 @@
                     "node": null
                   },
                   "vrf": {
-                    "node": null
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-fixture-deployment-PROD",
+                      "deployment": {
+                        "node": {
+                          "id": "fixture-deployment",
+                          "name": {
+                            "value": "fixture-deployment"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "id": "fixture-zone-PROD",
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "vrf_type": {
+                            "value": "prod"
+                          },
+                          "l3_vni": {
+                            "value": 60000
+                          }
+                        }
+                      }
+                    }
                   },
                   "capabilities": {
                     "edges": [
@@ -1424,7 +1482,18 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": null
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           },
                           "gateway": {
                             "node": {
@@ -1439,10 +1508,7 @@
                                   "ip_namespace": {
                                     "node": {
                                       "name": {
-                                        "value": "VRF_A"
-                                      },
-                                      "l3_vni": {
-                                        "value": 50001
+                                        "value": "default"
                                       }
                                     }
                                   }
@@ -1616,7 +1682,18 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": null
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           },
                           "gateway": {
                             "node": {
@@ -1632,9 +1709,6 @@
                                     "node": {
                                       "name": {
                                         "value": "default"
-                                      },
-                                      "l3_vni": {
-                                        "value": null
                                       }
                                     }
                                   }
@@ -1742,16 +1816,26 @@
               {
                 "node": {
                   "__typename": "ManagedVRF",
-                  "namespace": {
+                  "id": "fixture-vrf-fixture-deployment-PROD",
+                  "deployment": {
                     "node": {
+                      "id": "fixture-deployment",
                       "name": {
-                        "value": "VRF_A"
+                        "value": "fixture-deployment"
+                      }
+                    }
+                  },
+                  "security_zone": {
+                    "node": {
+                      "id": "fixture-zone-PROD",
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "vrf_type": {
+                        "value": "prod"
                       },
                       "l3_vni": {
-                        "value": 50001
-                      },
-                      "namespace_type": {
-                        "value": "prod"
+                        "value": 60000
                       }
                     }
                   }

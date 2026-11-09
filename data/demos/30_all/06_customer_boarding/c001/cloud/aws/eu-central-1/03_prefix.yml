@@ -1,6 +1,6 @@
 ---
 # VPC aggregate (CIDR block) of the virtual network below, registered in the PROD
-# VRF of its account (environment p). The PROD namespace is never per-customer.
+# VRF of its account (environment p). The PROD routing zone is never per-customer.
 # The same prefix object is the destination of rule 10 of seg-c001-nordix-prod-p-egress
 # (../../../../../08_interconnects/07_zone_policies/05_security_policy.yml).
 apiVersion: infrahub.app/v1
@@ -8,18 +8,13 @@ kind: Object
 spec:
   kind: IpamPrefix
   data:
-    - prefix: "10.10.0.0/16"
-      ip_namespace: "PROD"
+    - security_zone: "PROD"
+      prefix: "10.10.0.0/16"
+      ip_namespace: "default"
       status: active
----
-# VPC aggregate of the second Nordix VPC, nordix-vpc-vpn (04_virtual_network.yml): reachable only behind the AWS
-# Site-to-Site VPN connection, so its owner C001 is registered behind that one session.
-# Registered in the PROD namespace like the first block.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: IpamPrefix
-  data:
-    - prefix: "10.20.0.0/16"
-      ip_namespace: "PROD"
+    # nordix-vpc-vpn is reachable only behind the AWS Site-to-Site VPN;
+    # C001 registers this second aggregate behind that session, also in PROD.
+    - security_zone: "PROD"
+      prefix: "10.20.0.0/16"
+      ip_namespace: "default"
       status: active

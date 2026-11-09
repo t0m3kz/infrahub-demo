@@ -4,6 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from utils.limits import TENANT_POOL_TEMPLATE
+from utils.routing_domain import resolve_security_zone
+
+
+def tenant_pool_name(zone_name: str) -> str:
+    """The semantic bootstrap pool name; its IPAM namespace remains default."""
+    return TENANT_POOL_TEMPLATE.format(namespace=zone_name)
+
+
 HOSTING_KINDS = frozenset({"TopologyDataCenter", "TopologyColocationMetro", "TopologyCustomerOffice"})
 """The kinds that inherit TopologySegmentHosting: a segment's realization and a VRF instance sit on one of them."""
 
@@ -38,8 +47,8 @@ def _in_family(prefix: str, family: str) -> bool:
 
 
 def segment_namespace(seg: dict[str, Any]) -> dict[str, Any]:
-    """The ip_namespace of the segment's gateway prefix, or {} when it has none."""
-    return ((seg.get("gateway") or {}).get("ip_prefix") or {}).get("ip_namespace") or {}
+    """The segment's routing zone, independent of its gateway's IPAM identity."""
+    return resolve_security_zone([seg], required=True, label=str(seg.get("name") or "segment"))
 
 
 def is_terminated(seg: dict[str, Any]) -> bool:
@@ -62,7 +71,7 @@ def routed_segment_namespace(seg: dict[str, Any]) -> dict[str, Any]:
     VRF instance (utils/vrf_demand.py), no SVI and no L3 VNI. ``segment_namespace`` stays the namespace of the
     gateway prefix for the readers that are not the fabric (the firewall, its policies and PBR next hops).
     """
-    if is_terminated(seg):
+    if is_terminated(seg) or not seg.get("gateway"):
         return {}
     return segment_namespace(seg)
 

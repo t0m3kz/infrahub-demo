@@ -5,84 +5,88 @@ set deviceconfig system hostname dc1-fw-01
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.10 tag 10
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.10 ipv4 addr 10.0.1.1/30
 set network interface ethernet ethernet1/1.10 comment "Internal LAN link"
-set zone internal network layer3 ethernet1/1.10
+set vsys shared-dc1-fw-01-policy zone PROD network layer3 ethernet1/1.10
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.20 tag 20
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.20 ipv4 addr 10.0.2.1/30
 set network interface ethernet ethernet1/1.20 comment "DMZ link"
-set zone dmz network layer3 ethernet1/1.20
+set vsys shared-dc1-fw-01-policy zone NONPROD network layer3 ethernet1/1.20
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.30 tag 30
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.30 ipv4 addr 10.0.3.1/30
 set network interface ethernet ethernet1/1.30 comment "External link"
-set zone external network layer3 ethernet1/1.30
+set vsys shared-dc1-fw-01-policy zone INTERNET network layer3 ethernet1/1.30
 #
 #
 # --- Address Objects (one per zone member CIDR) ---
 set address addr-10-0-1-0-24 ip-netmask 10.0.1.0/24
-set address addr-10-0-1-0-24 description "Zone: internal"
+set address addr-10-0-1-0-24 description "Zone: PROD"
 set address addr-10-0-10-0-24 ip-netmask 10.0.10.0/24
-set address addr-10-0-10-0-24 description "Zone: internal"
+set address addr-10-0-10-0-24 description "Zone: PROD"
 set address addr-10-0-2-0-24 ip-netmask 10.0.2.0/24
-set address addr-10-0-2-0-24 description "Zone: dmz"
+set address addr-10-0-2-0-24 description "Zone: NONPROD"
 #
 # --- Address Groups (one per zone) ---
-set address-group ag-internal static [ addr-10-0-1-0-24 addr-10-0-10-0-24 ]
-set address-group ag-dmz static [ addr-10-0-2-0-24 ]
-set address-group ag-external static [ any ]
-#
-# --- Virtual router interfaces ---
-set network virtual-router default interface ethernet1/1.10
-set network virtual-router default interface ethernet1/1.20
-set network virtual-router default interface ethernet1/1.30
-#
-# --- Static Routes (return path to leaf per zone) ---
-set network virtual-router default routing-table ip static-route VRF-DMZ-1 destination 10.0.2.0/24
-set network virtual-router default routing-table ip static-route VRF-DMZ-1 nexthop ip-address 10.0.2.2
-set network virtual-router default routing-table ip static-route VRF-DMZ-1 interface ethernet1/1.20
-set network virtual-router default routing-table ip static-route VRF-INTERNAL-2 destination 10.0.1.0/24
-set network virtual-router default routing-table ip static-route VRF-INTERNAL-2 nexthop ip-address 10.0.1.2
-set network virtual-router default routing-table ip static-route VRF-INTERNAL-2 interface ethernet1/1.10
-set network virtual-router default routing-table ip static-route VRF-INTERNAL-3 destination 10.0.10.0/24
-set network virtual-router default routing-table ip static-route VRF-INTERNAL-3 nexthop ip-address 10.0.1.2
-set network virtual-router default routing-table ip static-route VRF-INTERNAL-3 interface ethernet1/1.10
+set address-group ag-PROD static [ addr-10-0-1-0-24 addr-10-0-10-0-24 ]
+set address-group ag-NONPROD static [ addr-10-0-2-0-24 ]
 #
 #
-# --- Security Policies ---
-set rulebase security rules allow-https from dmz
-set rulebase security rules allow-https to internal
-set rulebase security rules allow-https source 10.0.2.0/24
-set rulebase security rules allow-https destination 10.0.1.0/24
-set rulebase security rules allow-https application any
-set service svc-tcp-443 protocol tcp port 443
-set rulebase security rules allow-https service svc-tcp-443
-set rulebase security rules allow-https action allow
-set rulebase security rules allow-https profile-setting group strict-av
-set rulebase security rules allow-https log-end yes
-set rulebase security rules allow-https description "Allow HTTPS from DMZ to Internal"
-set rulebase security rules allow-ssh from dmz
-set rulebase security rules allow-ssh to internal
-set rulebase security rules allow-ssh source 10.0.2.0/24
-set rulebase security rules allow-ssh destination 10.0.1.0/24
-set rulebase security rules allow-ssh application any
-set service svc-tcp-22 protocol tcp port 22
-set rulebase security rules allow-ssh service svc-tcp-22
-set rulebase security rules allow-ssh action allow
-set rulebase security rules allow-ssh log-end yes
-set rulebase security rules allow-ssh description "Allow SSH from DMZ to Internal"
-set rulebase security rules allow-any from internal
-set rulebase security rules allow-any to dmz
-set rulebase security rules allow-any source 10.0.1.0/24
-set rulebase security rules allow-any destination 10.0.2.0/24
-set rulebase security rules allow-any application any
-set rulebase security rules allow-any service any
-set rulebase security rules allow-any action allow
-set rulebase security rules allow-any description "Allow all from Internal to DMZ"
-set rulebase security rules implicit-deny-all from any
-set rulebase security rules implicit-deny-all to any
-set rulebase security rules implicit-deny-all source any
-set rulebase security rules implicit-deny-all destination any
-set rulebase security rules implicit-deny-all application any
-set rulebase security rules implicit-deny-all service any
-set rulebase security rules implicit-deny-all action deny
-set rulebase security rules implicit-deny-all log-end yes
-set rulebase security rules implicit-deny-all description "Implicit deny all"
+# --- Firewall Contexts (VDOM/vsys) — one per tenant, per ManagedFirewallContext ---
+#
+set vsys shared-dc1-fw-01-policy
+set vsys shared-dc1-fw-01-policy import network interface ethernet1/1.10
+set network virtual-router vr-shared-dc1-fw-01-policy interface ethernet1/1.10
+set vsys shared-dc1-fw-01-policy import network interface ethernet1/1.20
+set network virtual-router vr-shared-dc1-fw-01-policy interface ethernet1/1.20
+set vsys shared-dc1-fw-01-policy import network interface ethernet1/1.30
+set network virtual-router vr-shared-dc1-fw-01-policy interface ethernet1/1.30
+set vsys shared-dc1-fw-01-policy import network virtual-router vr-shared-dc1-fw-01-policy
+set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-1 destination 10.0.2.0/24
+set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-1 nexthop ip-address 10.0.2.2
+set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-1 interface ethernet1/1.20
+set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-2 destination 10.0.1.0/24
+set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-2 nexthop ip-address 10.0.1.2
+set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-2 interface ethernet1/1.10
+set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-3 destination 10.0.10.0/24
+set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-3 nexthop ip-address 10.0.1.2
+set network virtual-router vr-shared-dc1-fw-01-policy routing-table ip static-route rt-3 interface ethernet1/1.10
+#
+# --- Security Policies in vsys shared-dc1-fw-01-policy ---
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-https from NONPROD
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-https to PROD
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-https source 10.0.2.0/24
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-https destination 10.0.1.0/24
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-https application any
+set vsys shared-dc1-fw-01-policy service svc-tcp-443 protocol tcp port 443
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-https service svc-tcp-443
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-https action allow
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-https profile-setting group strict-av
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-https log-end yes
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-https description "Allow HTTPS from DMZ to Internal"
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-ssh from NONPROD
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-ssh to PROD
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-ssh source 10.0.2.0/24
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-ssh destination 10.0.1.0/24
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-ssh application any
+set vsys shared-dc1-fw-01-policy service svc-tcp-22 protocol tcp port 22
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-ssh service svc-tcp-22
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-ssh action allow
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-ssh log-end yes
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-ssh description "Allow SSH from DMZ to Internal"
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-any from PROD
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-any to NONPROD
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-any source 10.0.1.0/24
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-any destination 10.0.2.0/24
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-any application any
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-any service any
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-any action allow
+set vsys shared-dc1-fw-01-policy rulebase security rules allow-any description "Allow all from Internal to DMZ"
+set vsys shared-dc1-fw-01-policy rulebase security rules implicit-deny-all from any
+set vsys shared-dc1-fw-01-policy rulebase security rules implicit-deny-all to any
+set vsys shared-dc1-fw-01-policy rulebase security rules implicit-deny-all source any
+set vsys shared-dc1-fw-01-policy rulebase security rules implicit-deny-all destination any
+set vsys shared-dc1-fw-01-policy rulebase security rules implicit-deny-all application any
+set vsys shared-dc1-fw-01-policy rulebase security rules implicit-deny-all service any
+set vsys shared-dc1-fw-01-policy rulebase security rules implicit-deny-all action deny
+set vsys shared-dc1-fw-01-policy rulebase security rules implicit-deny-all log-end yes
+set vsys shared-dc1-fw-01-policy rulebase security rules implicit-deny-all description "Implicit deny all"
+#
 #

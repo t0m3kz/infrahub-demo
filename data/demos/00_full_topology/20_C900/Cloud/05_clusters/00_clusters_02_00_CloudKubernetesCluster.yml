@@ -1,0 +1,30 @@
+# CloudKubernetesCluster declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudKubernetesCluster
+  data:
+    - name: eks-c900-euc1
+      description: "C900 EKS cluster on the VPC of the AWS account, nodes in the segment subnet"
+      status: active
+      software_image: eks-1.31
+      account: c900-aws-prod
+      region: eu-central-1
+      virtual_network: vpc-c900-prod
+      api_access: private
+      node_count: 6
+      sdn: eks-c900-vpc-cni
+      node_segments:
+        - c900-subnet-p
+    - name: aks-c900-weu
+      description: "C900 AKS cluster in the payments subscription, Azure CNI overlay, nodes in the payments subnet"
+      status: active
+      software_image: aks-1.30
+      account: c900-azure-payments
+      region: westeurope
+      virtual_network: vnet-c900-payments-weu
+      api_access: private
+      node_count: 4
+      sdn: aks-c900-azure-cni
+      node_segments:
+        - c900-payments-azure-p

@@ -28,7 +28,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
                       "location_nodes": [location], "end_devices": [device],
                       "ends": [(device, interface)], "end_nodes": [end],
                       "carrier": [str], "carriers": [carrier],
-                      "ip_namespace", "password"}]}
+                      "security_zone", "password"}]}
 
         A circuit has no owner of its own: "owner" (the customer's name), "owner_id" and "owner_org" (its org_id) are
         derived by utils.ownership.circuit_owner from the offices among its locations; None for shared platform
@@ -47,7 +47,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
         sub-interface, the carriers found on the port or on its parent (utils.circuit_underlay.port_underlay) and
         whether a cable terminates there (port_cabled). The "carrier" of the circuit is derived, never declared:
         the circuit_ids of the carrier circuits on its ends (derived_underlay), deduped and sorted, "carriers" the
-        same circuits as {"id", "circuit_id", "status"}. A Handoff or a VPN also carries "ip_namespace" and "password" (its
+        same circuits as {"id", "circuit_id", "status"}. A Handoff or a VPN also carries "security_zone" and "password" (its
         key's name); the other kinds have None for those.
     """
     client.default_branch = branch
@@ -104,7 +104,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
             circuit["locations"],
             circuit["ends"],
             circuit["carrier"],
-            circuit["ip_namespace"],
+            circuit["security_zone"],
         )
     return {"physical": physical, "virtual": virtual}
 
@@ -133,7 +133,7 @@ def _virtual_circuit(circuit: dict[str, Any]) -> dict[str, Any]:
         "end_nodes": end_nodes,
         "carrier": sorted({carrier["circuit_id"] for carrier in carriers}),
         "carriers": carriers,
-        "ip_namespace": (circuit.get("ip_namespace") or {}).get("name"),
+        "security_zone": ((circuit.get("vrf") or {}).get("security_zone") or {}).get("name"),
         "password": (circuit.get("password") or {}).get("name"),
     }
 

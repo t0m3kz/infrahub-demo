@@ -17,7 +17,7 @@ nv overlay evpn
 vrf context PROD
   address-family ipv4 unicast
 !
-vrf context NON-PROD
+vrf context NONPROD
   address-family ipv4 unicast
 !
 !
@@ -51,7 +51,7 @@ interface Ethernet1/13.1000
 interface Ethernet1/13.1001
   encapsulation dot1q 1001
   no shutdown
-  vrf member NON-PROD
+  vrf member NONPROD
   ip address 10.255.6.5/30
 
 !
@@ -225,7 +225,7 @@ router bgp 65001
         route-map RM-HANDOFF-FR2-AMNE-PROD-IN in
         route-map RM-HANDOFF-FR2-AMNE-PROD-OUT out
   !
-  vrf NON-PROD
+  vrf NONPROD
     address-family ipv4 unicast
     neighbor 10.255.6.6
       remote-as 64512

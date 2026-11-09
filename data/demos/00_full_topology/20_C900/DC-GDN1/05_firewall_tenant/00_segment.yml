@@ -1,0 +1,26 @@
+# C900's local firewall-gatewayed segment: the VIP belongs to the internal pair, never to a fabric SVI.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: C900
+      customer_name: internal-fw-gdn1
+      environment: p
+      stretch_scope: local
+      vlan_scope: local
+      customer_deployments: ["C900-P-DC-GDN1"]
+      terminated_on: shared-gdn1-fw-ha-prod
+      security_zone: PROD
+      gateway:
+        data:
+          address: "10.93.2.1/24"
+          description: Floating gateway of c900-internal-fw-gdn1-p
+          ip_namespace: "default"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.93.2.0/24"
+              ip_namespace: "default"
+              status: active
+              description: Local firewall-terminated C900 segment in DC-GDN1

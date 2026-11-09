@@ -17,6 +17,7 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from pathlib import Path
@@ -37,6 +38,7 @@ from tests.smoke.fixture_builders.office import (
     build_office_wan_exit_data,
 )
 from tests.smoke.fixture_builders.vrf import with_vrf_objects
+from tests.smoke.fixture_builders.zone_migration import migrate_zone_owners
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.distribution_switch import DistributionSwitch
@@ -83,13 +85,13 @@ def _inputs(**overrides: Any) -> LispInputs:
     return LispInputs(**values)
 
 
-_VRF_A = {"name": "VRF_A", "l3_vni": 50001, "namespace_type": "prod"}
-_PROD = {"name": "PROD", "l3_vni": 60000, "namespace_type": "prod"}
+_VRF_A = {"name": "VRF_A", "l3_vni": 50001, "vrf_type": "prod"}
+_PROD = {"name": "PROD", "l3_vni": 60000, "vrf_type": "prod"}
 
 
 def _vrf(namespace: dict[str, Any]) -> dict[str, Any]:
     """A ManagedVRF membership of the device (``device.shared_capabilities``), as the cleaned config query returns it."""
-    return {"typename": "ManagedVRF", "namespace": namespace}
+    return {"typename": "ManagedVRF", "security_zone": namespace}
 
 
 def _device(*, loopback: str | None = "10.250.5.1/32", vrfs: tuple[dict[str, Any], ...] = (_VRF_A,)) -> dict[str, Any]:
@@ -104,7 +106,7 @@ def _device(*, loopback: str | None = "10.250.5.1/32", vrfs: tuple[dict[str, Any
 def _no_l3_vni(data: dict[str, Any], vrf: str) -> None:
     """Strip the L3 VNI from the device's instance of namespace ``vrf`` (raw query shape)."""
     for edge in data["DcimDevice"]["edges"][0]["node"]["shared_capabilities"]["edges"]:
-        namespace = (edge["node"].get("namespace") or {}).get("node")
+        namespace = (edge["node"].get("security_zone") or {}).get("node")
         if namespace and namespace["name"]["value"] == vrf:
             namespace["l3_vni"]["value"] = None
 
@@ -170,6 +172,7 @@ class TestLispContext:
             "vni": 10100,
             "status": "active",
             "segment": {
+                "security_zone": {"name": "VRF_A", "l3_vni": 50001},
                 "name": "seg-100",
                 "customer_name": "seg-100",
                 "gateway": {
@@ -251,7 +254,7 @@ class TestRenderedDistributionSwitch:
         assert not any(re.search(r"proxy-(etr|itr)", line) for line in _block(text, " service ethernet"))
 
     def test_the_site_registrations_are_exported_into_the_vrf_rib(self) -> None:
-        instance = _block(_golden(DISTRIBUTION_EXIT)[1], " instance-id 50001")
+        instance = _block(_golden(DISTRIBUTION_EXIT)[1], " instance-id 60000")
 
         assert "   route-export site-registrations" in instance
         assert "   distance site-registrations 250" in instance
@@ -261,7 +264,7 @@ class TestRenderedDistributionSwitch:
         text = _golden(DISTRIBUTION_EXIT)[1]
 
         assert f"vrf definition {OFFICE_EXIT_VRF}\n" in text
-        assert f" rd {OFFICE_EXIT_LOOPBACK.split('/')[0]}:50001\n" in text
+        assert f" rd {OFFICE_EXIT_LOOPBACK.split('/')[0]}:60000\n" in text
 
     def test_the_session_is_ebgp_in_the_vrf_redistributing_lisp_toward_the_edge(self) -> None:
         text = _golden(DISTRIBUTION_EXIT)[1]
@@ -310,7 +313,8 @@ class TestRenderedDistributionSwitch:
             (AccessSwitch, "access-switch", ACCESS_EXIT, "as-c005-office01"),
             (DistributionSwitch, "distribution-switch", DISTRIBUTION_EXIT, "ds-c005-office01"),
         ):
-            data = build_office_wan_exit_data(device_name=name, role=role)
+            # the writer (common._write_data_fixture) migrates the builder's zone owners to VRF instances first
+            data = migrate_zone_owners(build_office_wan_exit_data(device_name=name, role=role))
 
             assert with_vrf_objects(make_transform(cls), data) == _raw(directory)
             assert run_transform(cls, data).rstrip("\n") + "\n" == _golden(directory)[1]
@@ -354,7 +358,7 @@ class TestRefusals:
         with pytest.raises(
             ValueError, match=rf"a BGP session in VRF {OFFICE_EXIT_VRF}, which is no L3 instance of the LISP site"
         ):
-            run_transform(DistributionSwitch, data)
+            asyncio.run(make_transform(DistributionSwitch).transform(data))
 
     def test_the_refusal_names_the_role_and_asks_for_no_partial_config(self) -> None:
         data = _raw(DISTRIBUTION_EXIT)
@@ -363,7 +367,7 @@ class TestRefusals:
         with pytest.raises(
             ValueError, match=r"^cisco_xe distribution-switch cannot render: .*refusing incomplete config$"
         ):
-            run_transform(DistributionSwitch, data)
+            asyncio.run(make_transform(DistributionSwitch).transform(data))
 
     def test_a_border_with_no_address_on_its_locator_is_refused(self) -> None:
         data = _raw(DISTRIBUTION_EXIT)

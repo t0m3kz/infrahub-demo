@@ -7,18 +7,22 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from infrahub_sdk.query_groups import InfrahubGroupContextBase
+
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
+from tests.unit.vrf_instances_helpers import edges, raw_device, raw_instance, raw_interface
+from tests.unit.vrf_reconcile_helpers import VrfHost
 
 _UNTRACKED = {"allow_upsert": True, "update_group_context": False}
 _TRACKED = {"allow_upsert": True}
 _SHARED = "shared-DC10-FW1-FW2-prod"
-_SHARED_NON_PROD = "shared-DC10-FW1-FW2-non-prod"
+_SHARED_NON_PROD = "shared-DC10-FW1-FW2-nonprod"
 _LB_PROD = "shared-DC10-LB1-LB2-prod"
-_LB_NON_PROD = "shared-DC10-LB1-LB2-non-prod"
+_LB_NON_PROD = "shared-DC10-LB1-LB2-nonprod"
 
 _NAMESPACES = {
     "prod": ("PROD", "ns-prod", "100.66.0.0"),
-    "non_prod": ("NON-PROD", "ns-nonprod", "100.66.16.0"),
+    "non_prod": ("NONPROD", "ns-nonprod", "100.66.16.0"),
     "internet": ("INTERNET", "ns-internet", "100.66.32.0"),
     "management": ("MANAGEMENT", "ns-management", "100.66.48.0"),
 }
@@ -27,9 +31,9 @@ _NAMESPACES = {
 _PREFIX_POOLS = {
     **{f"FW-Transit-{ns[0]}-IPv4": (ns[1], ns[2], 29) for ns in _NAMESPACES.values()},
     "LB-Leg-PROD-IPv4": ("ns-prod", "100.66.64.0", 29),
-    "LB-Leg-NON-PROD-IPv4": ("ns-nonprod", "100.66.80.0", 29),
+    "LB-Leg-NONPROD-IPv4": ("ns-nonprod", "100.66.80.0", 29),
     "LB-VIP-PROD-IPv4": ("ns-prod", "100.66.96.0", 26),
-    "LB-VIP-NON-PROD-IPv4": ("ns-nonprod", "100.66.112.0", 26),
+    "LB-VIP-NONPROD-IPv4": ("ns-nonprod", "100.66.112.0", 26),
 }
 _CONTEXT_KINDS = ("ManagedFirewallContext", "ManagedLoadbalancerContext")
 # VLAN pool name -> first VLAN it hands out (the two halves of the context band).
@@ -61,6 +65,7 @@ class _World:
         missing_pools: tuple[str, ...] = (),
         vlan_pools: tuple[str, ...] = tuple(_VLAN_POOLS),
     ) -> None:
+        self.group_context = InfrahubGroupContextBase()
         self.snat_pool = snat_pool
         self.vlan_pools = {name: _VLAN_POOLS[name] for name in vlan_pools}
         self.snat_allocations: dict[str, Any] = {}
@@ -68,7 +73,7 @@ class _World:
             ns_type: SimpleNamespace(
                 id=_NAMESPACES[ns_type][1],
                 name=SimpleNamespace(value=_NAMESPACES[ns_type][0]),
-                namespace_type=SimpleNamespace(value=ns_type),
+                vrf_type=SimpleNamespace(value=ns_type),
                 l3_vni=SimpleNamespace(value=3900),
             )
             for ns_type in namespaces
@@ -82,6 +87,15 @@ class _World:
             if pools
             else {}
         )
+        self.pool_resources = {
+            name: SimpleNamespace(
+                id=f"resource-{name}",
+                prefix=SimpleNamespace(value=f"{_PREFIX_POOLS[name][1]}/20"),
+            )
+            for name in self.pools
+        }
+        for name, pool in self.pools.items():
+            pool.resources = _Many([self.pool_resources[name].id])
         self.cluster = SimpleNamespace(
             id="cluster-1",
             name=SimpleNamespace(value="DC10-FW1-FW2"),
@@ -123,6 +137,108 @@ class _World:
         self.executed_filters: list[str] = []
         self.uplink_lookups: list[list[str]] = []
         self.gets: list[str] = []
+        self.routing = VrfHost()
+        self.border_svis: dict[tuple[str, str], dict[str, Any]] = {}
+        self.lock_events: list[tuple[str, str]] = []
+
+    async def execute_graphql(self, *, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+        """Return the current border-device graph, including scoped memberships and context legs."""
+        assert "query vrf_instances" in query
+        devices = []
+        for device_id in variables["device_ids"]:
+            memberships = [
+                raw_instance(vrf.id, device_id, vrf.security_zone.peer.name.value, deployment_id="dc10-id")
+                for vrf in self.routing.store.vrfs.values()
+                if device_id in vrf.members
+            ]
+            ports = []
+            for port in self.bl_ports.values():
+                if port.device.id != device_id:
+                    continue
+                contexts = []
+                for peer in port.capabilities.peers:
+                    context = next((ctx for ctx in self.contexts.values() if ctx.id == peer.id), None)
+                    if context is None:
+                        continue
+                    legs = []
+                    for sub in self.sub_interfaces.values():
+                        if context.id not in {cap.id for cap in sub.capabilities.peers}:
+                            continue
+                        ip = next(ip for ip in self.addresses.values() if ip.id == sub.ip_address.id)
+                        legs.append(
+                            {
+                                "name": {"value": sub.name.value},
+                                "device": {
+                                    "node": {
+                                        "role": {
+                                            "value": "internal-firewall"
+                                            if "Firewall" in context.kind
+                                            else "load-balancer"
+                                        }
+                                    }
+                                },
+                                "ip_address": {"node": {"address": {"value": ip.address.value}}},
+                                "vrf": {"node": self._raw_vrf(sub.vrf.peer)},
+                            }
+                        )
+                    contexts.append(
+                        {
+                            "__typename": context.kind,
+                            "id": context.id,
+                            "vlan_id": {"value": context.vlan_id.value},
+                            "capabilities": edges(*legs),
+                        }
+                    )
+                ports.append(raw_interface(port.id, role=port.role.value, capabilities=contexts))
+            for (owner, _), data in self.border_svis.items():
+                if owner == device_id:
+                    ports.append(
+                        {
+                            **raw_interface(data["id"], data["name"], "l3vni", typename="DcimVirtualInterface"),
+                            "vrf": {"node": self._raw_vrf(self.routing.store.vrfs[data["vrf"]["id"]])},
+                        }
+                    )
+            device = raw_device(
+                device_id,
+                device_id,
+                role="border-leaf",
+                deployment_kind="TopologyDataCenter",
+                hosting_id="dc10-id",
+                interfaces=ports,
+                vrfs=memberships,
+            )
+            device["deployment"]["node"]["name"] = {"value": "DC10"}
+            devices.append(device)
+        return {
+            "DcimDevice": edges(*devices),
+            "ManagedVRF": edges(),
+            "SecurityZone": edges(
+                *(
+                    {
+                        "id": zone.id,
+                        "name": {"value": zone.name.value},
+                        "vrf_type": {"value": zone.vrf_type.value},
+                        "l3_vni": {"value": zone.l3_vni.value},
+                    }
+                    for zone in self.namespaces.values()
+                )
+            ),
+        }
+
+    def _raw_vrf(self, vrf: Any) -> dict[str, Any]:
+        zone = next(zone for zone in self.namespaces.values() if zone.name.value == vrf.security_zone.peer.name.value)
+        return {
+            "id": vrf.id,
+            "deployment": {"node": {"id": vrf.deployment.id}},
+            "security_zone": {
+                "node": {
+                    "id": zone.id,
+                    "name": {"value": zone.name.value},
+                    "vrf_type": {"value": zone.vrf_type.value},
+                    "l3_vni": {"value": zone.l3_vni.value},
+                }
+            },
+        }
 
     @staticmethod
     def uplink(device_id: str, *, cabled_to: str | None = None) -> Any:
@@ -137,8 +253,19 @@ class _World:
     # --- reads -----------------------------------------------------------
     async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
         name = kind.__name__
+        if name == "ManagedVRF":
+            found = list(self.routing.store.vrfs.values())
+            for key, accessor in (
+                ("ids", lambda node: {node.id}),
+                ("deployment__ids", lambda node: {node.deployment.id}),
+                ("security_zone__ids", lambda node: {node.security_zone.id}),
+                ("shared_devices__ids", lambda node: node.members),
+            ):
+                if key in kwargs:
+                    found = [node for node in found if accessor(node).intersection(kwargs[key])]
+            return found
         self.executed_filters.append(name)
-        if name in ("DcimPhysicalInterface", "DcimVirtualInterface") and "device__ids" in kwargs:
+        if name in ("DcimPhysicalInterface", "DcimVirtualInterface") and "role__value" in kwargs:
             assert kwargs["role__value"] == "uplink"
             if name == "DcimPhysicalInterface":  # the first read of every member; a virtual one adds a second
                 self.uplink_lookups.append(list(kwargs["device__ids"]))
@@ -161,16 +288,16 @@ class _World:
                     peers = [uplink.id, *([port.id] if port else [])]
                     cables.append(SimpleNamespace(id=cable_id, endpoints=_Many(peers)))
             return cables
-        if name == "IpamNamespace":
-            return [
-                ns for ns in self.namespaces.values() if ns.namespace_type.value in kwargs["namespace_type__values"]
-            ]
+        if name == "SecurityZone":
+            return [ns for ns in self.namespaces.values() if ns.vrf_type.value in kwargs["vrf_type__values"]]
         if name == "CoreIPPrefixPool":
             return [pool for pool_name, pool in self.pools.items() if pool_name in kwargs["name__values"]]
         if name == "ManagedFirewallHA":
             return [self.cluster]
         if name == "ManagedLoadbalancerHA":
             return [self.lb_cluster]
+        if name == "ManagedVxlanSegment":
+            return []
         if name in _CONTEXT_KINDS:
             if "ids" in kwargs:
                 return [ctx for ctx in self.contexts.values() if ctx.id in kwargs["ids"] and ctx.kind == name]
@@ -182,6 +309,14 @@ class _World:
         if name == "TopologyRoutedExchange":
             return [ex for ex_name, ex in self.exchanges.items() if ex_name in kwargs["name__values"]]
         if name == "DcimVirtualInterface":
+            if "name__values" in kwargs:
+                return [
+                    sub
+                    for sub in self.sub_interfaces.values()
+                    if sub.name.value in kwargs["name__values"]
+                    and sub.device.id in kwargs["device__ids"]
+                    and set(kwargs["capabilities__ids"]).intersection(peer.id for peer in sub.capabilities.peers)
+                ]
             ids = set(kwargs["capabilities__ids"])
             return [sub for sub in self.sub_interfaces.values() if ids & {peer.id for peer in sub.capabilities.peers}]
         if name == "IpamIPAddress":
@@ -195,6 +330,12 @@ class _World:
                 )
                 for ip in [*self.addresses.values(), *self.snat_allocations.values()]
                 if ip.id in kwargs["ids"]
+            ]
+        if name == "IpamPrefix":
+            return [
+                prefix
+                for prefix in [*self.allocated.values(), *self.pool_resources.values()]
+                if prefix.id in kwargs["ids"]
             ]
         raise AssertionError(f"unexpected filters({name})")
 
@@ -219,11 +360,26 @@ class _World:
             return self.addresses.get((kwargs["address__value"], kwargs["ip_namespace__ids"][0]))
         if name == "DcimVirtualInterface":  # ensure_vlan_subinterface: the stored sub-interface, with its capabilities
             return next(sub for sub in self.sub_interfaces.values() if sub.id == kwargs["id"])
+        if name == "IpamPrefix":
+            return next(prefix for prefix in self.allocated.values() if prefix.id == kwargs["id"])
+        if name == "ManagedVRF":
+            instance_id = kwargs["id"]
+            self.routing.store.external_refs[instance_id] = {
+                "interfaces": {sub.id for sub in self.sub_interfaces.values() if sub.vrf.id == instance_id},
+                **{
+                    reverse: {
+                        exchange.id for exchange in self.exchanges.values() if exchange.data[end]["id"] == instance_id
+                    }
+                    for reverse, end in (("exchanges_a", "vrf_a"), ("exchanges_z", "vrf_z"))
+                },
+            }
+            return await self.routing._get(kind, instance_id, kwargs["include"])
         raise AssertionError(f"unexpected get({name})")
 
     async def allocate_next_ip_prefix(
         self, *, resource_pool: Any, identifier: str, prefix_length: int, **_: Any
     ) -> Any:
+        assert "security_zone" not in (_.get("data") or {})
         self.allocate_calls += 1
         namespace_id, base, length = _PREFIX_POOLS[resource_pool.name.value]
         assert prefix_length == length
@@ -233,7 +389,8 @@ class _World:
                 id=f"prefix-{len(self.allocated)}",
                 pool=resource_pool.id,
                 prefix=SimpleNamespace(value=f"{ipaddress.ip_address(base) + 2 ** (32 - length) * count}/{length}"),
-                ip_namespace=SimpleNamespace(id=namespace_id),
+                ip_namespace=SimpleNamespace(id="default", peer=SimpleNamespace(name=SimpleNamespace(value="default"))),
+                member_type=SimpleNamespace(value="address"),
             )
         return self.allocated[identifier]
 
@@ -253,6 +410,15 @@ class _World:
     # --- writes ----------------------------------------------------------
     async def create(self, *, kind: Any, data: dict[str, Any]) -> Any:
         name = kind.__name__
+        if name == "ManagedVRF":
+            node = await self.routing._create(kind, data)
+            zone = next(zone for zone in self.namespaces.values() if zone.id == data["security_zone"]["id"])
+            node.security_zone = SimpleNamespace(id=zone.id, peer=zone)
+            return node
+        if name == "DcimVirtualInterface" and data.get("role") == "l3vni":
+            node = await self.routing._create(kind, data)
+            self.border_svis[(data["device"]["id"], data["name"])] = {**data, "id": node.id}
+            return node
         if name in _CONTEXT_KINDS:
             for ref in ("snat_address", "vip_prefix"):  # a relationship write on an existing context
                 if ref in data:
@@ -282,17 +448,27 @@ class _World:
             )
             return self._node(name, data["name"], backing=exchange)
         if name == "IpamIPAddress":
-            key = (data["address"], data["ip_namespace"].id)
+            assert "security_zone" not in data
+            namespace_id = data["ip_namespace"].id if "ip_namespace" in data else "default"
+            key = (data["address"], namespace_id)
             ip = self.addresses.setdefault(
                 key,
                 SimpleNamespace(
                     id=f"ip-{len(self.addresses)}",
                     address=SimpleNamespace(value=data["address"]),
-                    ip_namespace=SimpleNamespace(id=data["ip_namespace"].id),
+                    ip_namespace=SimpleNamespace(
+                        id=namespace_id, peer=SimpleNamespace(name=SimpleNamespace(value="default"))
+                    ),
+                    ip_prefix=next(
+                        p
+                        for p in self.allocated.values()
+                        if ipaddress.ip_interface(data["address"]).ip in ipaddress.ip_network(p.prefix.value)
+                    ),
                 ),
             )
             return self._node(name, data["address"], backing=ip)
         if name == "DcimVirtualInterface":
+            assert "security_zone" not in data
             key = (data["device"]["id"], data["name"])
             sub = self.sub_interfaces.setdefault(
                 key,
@@ -305,6 +481,17 @@ class _World:
                 ),
             )
             sub.ip_address = SimpleNamespace(id=(data.get("ip_address") or {}).get("id") or sub.ip_address.id)
+            vrf_id = (data.get("vrf") or {}).get("id")
+            assert vrf_id in self.routing.store.vrfs
+            active: set[str] = set()
+            for operation, key in self.lock_events:
+                if operation == "acquire":
+                    active.add(key)
+                else:
+                    active.remove(key)
+            assert active.intersection(f"vrf-device-{member}" for member in self.routing.store.vrfs[vrf_id].members)
+            assert any(key.startswith(("fw-context-", "lb-context-")) for key in active)
+            sub.vrf = SimpleNamespace(id=vrf_id, peer=self.routing.store.vrfs[vrf_id])
             return self._node(name, data["name"], backing=sub)
         raise AssertionError(f"unexpected create({name})")
 
@@ -364,6 +551,16 @@ class _World:
     def saved(self, kind: str) -> list[str]:
         return [label for saved_kind, label, _ in self.saves if saved_kind == kind]
 
+    def leg_zone(self, prefix: Any) -> str:
+        """Infer the transit zone from its pool, never from an IPAM routing field."""
+        pool = next(pool for pool in self.pools.values() if pool.id == prefix.pool)
+        return _PREFIX_POOLS[pool.name.value][0]
+
+    async def delete(self, *, kind: Any, id: str) -> None:  # noqa: A002
+        """Apply scoped routing cleanup to the same graph subsequent reads use."""
+        await self.routing._delete(kind, id)
+        self.border_svis = {key: data for key, data in self.border_svis.items() if data["id"] != id}
+
 
 _LB_DEVICES = [
     {"id": "lb-1", "name": "DC10-LB1", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}},
@@ -417,12 +614,33 @@ def _make_gen(world: _World) -> tuple[Any, list[str]]:
     gen.client = world
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     events: list[str] = []
-    gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: events.append(f"acquire:{key}") or "lock-id")
-    gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: events.append("release"))
+
+    async def acquire(key: str) -> str:
+        world.lock_events.append(("acquire", key))
+        if not key.startswith("vrf-"):
+            events.append(f"acquire:{key}")
+        return key
+
+    async def release(key: str) -> None:
+        world.lock_events.append(("release", key))
+        if not key.startswith("vrf-"):
+            events.append("release")
+
+    gen.acquire_resource_lock = AsyncMock(side_effect=acquire)
+    gen.release_resource_lock = AsyncMock(side_effect=release)
     gen.link_serving_context = AsyncMock()
     gen.set_controllers_from = MagicMock()
-    # The border devices' VRF instances follow the legs (tests/unit/test_customer_border_vrfs.py): not these tests'.
-    gen._reconcile_border_vrfs = AsyncMock()
+
+    async def reconcile_border(context_id: str) -> None:
+        await gen.reconcile_vrfs(
+            {
+                port.device.id
+                for port in world.bl_ports.values()
+                if context_id in {peer.id for peer in port.capabilities.peers}
+            }
+        )
+
+    gen._reconcile_border_vrfs = AsyncMock(side_effect=reconcile_border)
     return gen, events
 
 

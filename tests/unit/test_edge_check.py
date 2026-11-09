@@ -8,7 +8,7 @@ import pytest
 
 from checks.edge import CheckEdge, warn_transit_without_internet_bgw
 
-_INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "namespace_type": "internet"}
+_INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "vrf_type": "internet"}
 
 
 def _edge(
@@ -21,7 +21,7 @@ def _edge(
     if bgw:
         interfaces.append({"name": "Loopback1", "role": "multisite-vip", "ip_address": {"address": "10.0.0.50/32"}})
     # the edge's VRF memberships (device.shared_capabilities): the upstream transit is its instance of an internet namespace
-    vrfs = [{"typename": "ManagedVRF", "namespace": namespace}] if namespace else []
+    vrfs = [{"typename": "ManagedVRF", "security_zone": namespace}] if namespace else []
     return {
         "name": "eg-fr201",
         "interfaces": interfaces,
@@ -47,13 +47,13 @@ def test_transit_on_non_bgw_edge_warns(kwargs: dict[str, Any]) -> None:
 
 def test_transit_namespace_without_l3_vni_warns() -> None:
     """The INTERNET namespace must carry an L3 VNI."""
-    warnings = warn_transit_without_internet_bgw(_edge(namespace={"name": "INTERNET", "namespace_type": "internet"}))
+    warnings = warn_transit_without_internet_bgw(_edge(namespace={"name": "INTERNET", "vrf_type": "internet"}))
     assert len(warnings) == 1
     assert "no L3 VNI" in warnings[0]
 
 
 @pytest.mark.parametrize(
-    "namespace", [None, {"name": "PROD", "l3_vni": 60001, "namespace_type": "prod"}], ids=["no-vrf", "tenant-vrf"]
+    "namespace", [None, {"name": "PROD", "l3_vni": 60001, "vrf_type": "prod"}], ids=["no-vrf", "tenant-vrf"]
 )
 def test_edge_without_transit_session_is_not_checked(namespace: dict[str, Any] | None) -> None:
     """An edge without an internet VRF instance is not a transit edge, BGW or not."""

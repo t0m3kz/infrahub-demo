@@ -21,7 +21,7 @@ vlan 150
 !
 !
 ! VRF Contexts (BGP handoffs without an L3 VNI)
-vrf context VRF_A
+vrf context PROD
   address-family ipv4 unicast
 !
 !

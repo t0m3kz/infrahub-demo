@@ -2,7 +2,7 @@
 # yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
-# Inter-namespace (inter-VRF) traffic exchange. Full design writeup,
+# Inter-zone (inter-VRF) traffic exchange. Full design writeup,
 # data-flow diagram, and demo walkthrough: docs/exchange_gateway.md.
 #
 # Inter-VRF traffic is exchanged by an inspected hop through a firewall
@@ -12,7 +12,7 @@ version: "1.0"
 #                              (`gateway`, a ManagedFirewallContext) between
 #                              two VRFs. Its legs are the context's firewall
 #                              VLAN sub-interfaces, one per VRF, each with an
-#                              address in that VRF's namespace (carried in
+#                              address in the default IPAM namespace (carried in
 #                              capabilities). No leak: each VRF keeps
 #                              its own routing table and statics point at the
 #                              context's leg VIP in that VRF. Created per
@@ -25,48 +25,48 @@ version: "1.0"
 # by RoutingOSPFInterface and ManagedVxlanSegment (see
 # queries/fragments/interface_capability_fields.gql). This is what lets a
 # device config query (e.g. border_leaf_config) discover "what is this
-# port doing" without a second, namespace-rooted query.
+# port doing" without a second, zone-rooted query.
 #
 # Which side of the exchange an interface belongs to is read off
-# interface.ip_address.ip_namespace at render time — not duplicated here
+# interface.security_zone at render time — not duplicated here
 # as separate interface_a/interface_z fields, so the two can't disagree.
 #
 # TopologyRoutedExchange's interfaces (the legs) are unconstrained at the schema level
 # (no min_count/max_count). A node may re-declare an inherited relationship to add a
 # count, but only under the SAME name and the same peer (the node declaration then
 # replaces the generic's wholesale); a DIFFERENTLY named relationship carrying the
-# same identifier collides. The "one leg per namespace on the gateway context's
+# same identifier collides. The "one leg per zone on the gateway context's
 # devices" invariant is enforced by validate_exchange_gateways() in
 # checks/common.py, not by the schema.
 
 generics:
   - name: ExchangeGateway
     namespace: Topology
-    description: "How traffic is exchanged between two IP namespaces (VRFs)"
+    description: "How traffic is exchanged between two security-zone routing domains (VRFs)"
     label: "Exchange Gateway"
     icon: "mdi:swap-horizontal"
     include_in_menu: false
     relationships:
-      - name: namespace_a
-        label: "Namespace A"
-        peer: IpamNamespace
+      - name: vrf_a
+        label: "VRF A"
+        peer: ManagedVRF
         cardinality: one
         kind: Attribute
         optional: false
         on_delete: no-action
-        identifier: "exchange_gateway__namespace_a"
+        identifier: "exchange_gateway__vrf_a"
         order_weight: 1000
-        description: "First VRF/namespace participating in the exchange"
-      - name: namespace_z
-        label: "Namespace Z"
-        peer: IpamNamespace
+        description: "First deployment-scoped routing instance participating in the exchange"
+      - name: vrf_z
+        label: "VRF Z"
+        peer: ManagedVRF
         cardinality: one
         kind: Attribute
         optional: false
         on_delete: no-action
-        identifier: "exchange_gateway__namespace_z"
+        identifier: "exchange_gateway__vrf_z"
         order_weight: 1100
-        description: "Second VRF/namespace participating in the exchange"
+        description: "Second deployment-scoped routing instance participating in the exchange"
 
 nodes:
   - name: RoutedExchange
@@ -85,7 +85,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - [namespace_a, namespace_z, gateway]
+      - [vrf_a, vrf_z, gateway]
     relationships:
       - name: gateway
         label: "Gateway context"
@@ -96,7 +96,7 @@ nodes:
         on_delete: no-action
         identifier: "routed_exchange__gateway"
         order_weight: 1300
-        description: "Firewall context whose legs (one VLAN sub-interface per namespace) form this exchange"
+        description: "Firewall context whose legs (one VLAN sub-interface per zone) form this exchange"
       # interfaces (many, via ManagedGenericInterfaces) — the context's leg
-      # sub-interfaces, one per namespace per member. Enforced by
+      # sub-interfaces, one per zone per member. Enforced by
       # validate_exchange_gateways() in checks/common.py.

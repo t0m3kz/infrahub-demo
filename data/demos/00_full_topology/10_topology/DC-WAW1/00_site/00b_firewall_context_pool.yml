@@ -1,0 +1,13 @@
+# WAW's authored shared context keeps 3000; dedicated contexts use the remaining firewall band.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreNumberPool
+  data:
+    - name: dc-waw1-fw-context-vlan-pool
+      description: "Dedicated WAW firewall context VLAN bases; 3000 belongs to the existing shared context"
+      node: ManagedFirewallContext
+      node_attribute: vlan_id
+      start_range: 3001
+      end_range: 3099
+      pool_type: number

@@ -76,6 +76,11 @@ query ($names: [String]) {
             node {
               name { value }
               device { node { name { value } } }
+              security_zone { node { name { value } vrf_type { value } l3_vni { value } } }
+              capabilities { edges { node { __typename ... on TopologySessionCircuit {
+                circuit_type { value }
+                security_zone { node { name { value } } }
+              } } } }
               ... on DcimPhysicalInterface {
                 description { value }
                 status { value }
@@ -239,7 +244,7 @@ query ($names: [String]) {
               name { value }
               device { node { name { value } } }
               ... on DcimPhysicalInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } vrf_type { value } } } } }
               }
             }
           }

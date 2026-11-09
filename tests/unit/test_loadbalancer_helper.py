@@ -6,23 +6,25 @@ from typing import Any
 
 import pytest
 
+from tests.unit.routing_helpers import make_vrf
 from transforms.helpers.loadbalancer import get_loadbalancer_contexts, member_address, pool_member_ips
 
 _NAMESPACES = {
-    "PROD": {"name": "PROD", "namespace_type": "prod", "l3_vni": 60000},
-    "NON-PROD": {"name": "NON-PROD", "namespace_type": "non_prod", "l3_vni": 60001},
-    "INTERNET": {"name": "INTERNET", "namespace_type": "internet", "l3_vni": 60002},
+    "PROD": {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
+    "NONPROD": {"name": "NONPROD", "vrf_type": "non_prod", "l3_vni": 60001},
+    "INTERNET": {"name": "INTERNET", "vrf_type": "internet", "l3_vni": 60002},
 }
 _HA = {"name": "LB-01-LB-02-ha", "members": ["LB-01", "LB-02"]}
 
 
 def _leg(device: str, name: str, address: str, namespace: str) -> dict[str, Any]:
     return {
+        "vrf": make_vrf(_NAMESPACES[namespace]),
         "typename": "DcimVirtualInterface",
         "name": name,
         "device": {"name": device, "role": "load-balancer"},
         "parent_interface": {"name": name.split(".")[0]},
-        "ip_address": {"address": address, "ip_namespace": _NAMESPACES[namespace]},
+        "ip_address": {"address": address, "ip_namespace": {"node": {"name": {"value": "default"}}}},
     }
 
 
@@ -54,7 +56,7 @@ def _context(
     vips: list[dict[str, Any]] | None = None,
     device: str = "LB-01",
 ) -> dict[str, Any]:
-    leg_vlan = (vlan_id or 0) + (200 if namespace == "NON-PROD" else 0)
+    leg_vlan = (vlan_id or 0) + (200 if namespace == "NONPROD" else 0)
     return {
         "id": f"ctx-{namespace}",
         "name": f"LB-01-LB-02-ha-{namespace}",
@@ -104,8 +106,8 @@ class TestLeg:
         assert _contexts(context) == []
 
     def test_non_prod_leg_takes_the_non_prod_slot(self) -> None:
-        """A NON-PROD context's leg is its VLAN + 200, like the firewall legs."""
-        leg = _contexts(_context("NON-PROD", vlan_id=3101, base="100.66.80"))[0]["leg"]
+        """A NONPROD context's leg is its VLAN + 200, like the firewall legs."""
+        leg = _contexts(_context("NONPROD", vlan_id=3101, base="100.66.80"))[0]["leg"]
         assert (leg["vlan"], leg["vni"], leg["anycast"]) == (3301, 64301, "100.66.80.1")
 
     def test_the_second_member_by_name_holds_dot_six(self) -> None:
@@ -123,7 +125,7 @@ class TestLeg:
     def test_a_leg_outside_a_tenant_vrf_raises(self) -> None:
         """An LB never leaves its tenant VRF: a leg in INTERNET is a modelling error."""
         context = _context()
-        context["capabilities"][0]["ip_address"]["ip_namespace"] = _NAMESPACES["INTERNET"]
+        context["capabilities"][0]["vrf"] = make_vrf(_NAMESPACES["INTERNET"])
         with pytest.raises(ValueError, match="not in a tenant VRF"):
             _contexts(context)
 
@@ -171,9 +173,9 @@ class TestContexts:
             _contexts(_context(tenant="t1"))
 
     def test_contexts_are_ordered_prod_first(self) -> None:
-        """PROD before NON-PROD whatever the cluster's order."""
-        rendered = _contexts(_context("NON-PROD", vlan_id=3101, base="100.66.80"), _context())
-        assert [c["vrf"] for c in rendered] == ["PROD", "NON-PROD"]
+        """PROD before NONPROD whatever the cluster's order."""
+        rendered = _contexts(_context("NONPROD", vlan_id=3101, base="100.66.80"), _context())
+        assert [c["vrf"] for c in rendered] == ["PROD", "NONPROD"]
 
     def test_two_contexts_in_one_vrf_raise(self) -> None:
         """They would share one route domain id on the device."""

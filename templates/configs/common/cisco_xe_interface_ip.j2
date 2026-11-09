@@ -1,7 +1,7 @@
 {#- IOS-XE interface addressing, `interface` in scope. IOS-XE takes dotted masks (no prefix notation), and a
     non-default namespace is a `vrf forwarding`, which must precede the address. -#}
 {%- if interface.ip_addresses %}
-{%- set ns_name = interface.ip_addresses[0].get('ip_namespace', {}).get('name', 'default') %}
+{%- set ns_name = interface.get('vrf') or 'default' %}
 {%- if ns_name != 'default' %}
  vrf forwarding {{ ns_name }}
 {%- endif %}

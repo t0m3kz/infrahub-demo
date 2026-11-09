@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from tests.unit.vrf_instances_helpers import (
     address,
     facts_of,
@@ -13,6 +15,7 @@ from tests.unit.vrf_instances_helpers import (
     raw_row,
     raw_svi,
 )
+from utils.routing_domain import RoutingDomainError
 from utils.vrf_demand import (
     VrfDemandInputs,
     carries_vrfs,
@@ -71,8 +74,8 @@ def test_default_namespace_is_never_demanded() -> None:
 
 def test_svi_vrf_counts_as_demand() -> None:
     """An instance is never dropped while an SVI still routes in it."""
-    svi = raw_svi("s1", 100, "r1", vrf_id="v1", vrf_namespace="NON-PROD")
-    assert facts_of(raw_device("d1", "leaf-1", interfaces=[svi])).demand == frozenset({"NON-PROD"})
+    svi = raw_svi("s1", 100, "r1", vrf_id="v1", vrf_namespace="NONPROD")
+    assert facts_of(raw_device("d1", "leaf-1", interfaces=[svi])).demand == frozenset({"NONPROD"})
 
 
 def test_leg_namespace_of_context_on_service_port_is_included() -> None:
@@ -89,20 +92,26 @@ def test_leg_namespace_from_port_of_another_role_is_ignored() -> None:
     assert facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port])).demand == frozenset()
 
 
-def test_leg_of_a_non_member_role_or_default_namespace_is_ignored() -> None:
-    """Only legs held by the HA members (firewall / load-balancer role) in a slotted namespace count."""
-    context = raw_context(
-        "ManagedFirewallContext", 3000, ("leaf", "PROD", "prod"), ("internal-firewall", "default", "prod")
-    )
+def test_leg_of_a_non_member_role_is_ignored() -> None:
+    """Only legs held by the HA members (firewall / load-balancer role) count."""
+    context = raw_context("ManagedFirewallContext", 3000, ("leaf", "PROD", "prod"))
     port = raw_interface("i1", "Ethernet5", "firewall", capabilities=[context])
     assert facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port])).demand == frozenset()
 
 
+def test_an_addressed_leg_with_no_vrf_fails_closed() -> None:
+    """A member leg with an address on a context with a VLAN but no VRF instance has no routing authority: refused."""
+    context = raw_context("ManagedFirewallContext", 3000, ("internal-firewall", "default", "prod"))
+    port = raw_interface("i1", "Ethernet5", "firewall", capabilities=[context])
+    with pytest.raises(RoutingDomainError, match="missing VRF instance"):
+        facts_of(raw_device("d1", "bl-1", role="border-leaf", interfaces=[port]))
+
+
 def test_a_paired_device_reads_only_its_own_rows() -> None:
     """The MLAG carries no rows; a paired device's facts come from the rows on the device itself."""
-    device = raw_device("d1", "leaf-1", rows=[raw_row("r-own", 100, "NON-PROD")], capabilities=[raw_mlag("m1")])
+    device = raw_device("d1", "leaf-1", rows=[raw_row("r-own", 100, "NONPROD")], capabilities=[raw_mlag("m1")])
     facts = facts_of(device)
-    assert facts.demand == frozenset({"NON-PROD"})
+    assert facts.demand == frozenset({"NONPROD"})
     assert facts.row_ids == frozenset({"r-own"})
 
 
@@ -176,12 +185,12 @@ def test_vrf_demand_pure_function_unions_sources_and_drops_default() -> None:
         row_namespaces=frozenset({"PROD"}),
         svi_namespaces=frozenset({"default"}),
         address_namespaces=frozenset({"INTERNET", ""}),
-        leg_namespaces=frozenset({"NON-PROD"}),
+        leg_namespaces=frozenset({"NONPROD"}),
     )
-    assert vrf_demand(inputs) == frozenset({"PROD", "INTERNET", "NON-PROD"})
+    assert vrf_demand(inputs) == frozenset({"PROD", "INTERNET", "NONPROD"})
 
 
 def test_instance_and_svi_names() -> None:
     """The derived names."""
-    assert instance_name("DC10", "NON-PROD") == "dc10-vrf-non-prod"
+    assert instance_name("DC10", "NONPROD") == "dc10-vrf-nonprod"
     assert svi_name(321) == "Vlan321"

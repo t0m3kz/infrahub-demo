@@ -3,7 +3,7 @@ fragment SegmentSecurityZoneFields on ManagedNetworkSegment {
     node {
       name { value }
       trust_level { value }
-    }
+     id l3_vni { value } vrf_type { value } }
   }
 }
 
@@ -42,6 +42,8 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
   ...SegmentSecurityZoneFields
   ...SegmentSecurityPolicyFields
   ... on ManagedVxlanSegment {
+ security_zone { node { ...RoutingZoneFields } }
+
     id
     name { value }
     description { value }
@@ -80,12 +82,13 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
         address { value }
         ip_prefix {
           node {
+
             prefix { value }
             ip_namespace {
               node {
                 name { value }
-                l3_vni { value }
-                namespace_type { value }
+
+
               }
             }
           }
@@ -136,6 +139,8 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
             routing_tag { value }
             owner { node { routing_tag { value } } }
             ... on ManagedVxlanSegment {
+ security_zone { node { ...RoutingZoneFields } }
+
               name { value }
               customer_name { value }
               environment { value }
@@ -161,8 +166,9 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                   address { value }
                   ip_prefix {
                     node {
+
                       prefix { value }
-                      ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } }
+                      ip_namespace { node { name { value }   } }
                     }
                   }
                 }
@@ -180,6 +186,8 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                           node {
                             id
                             ... on ManagedVxlanSegment {
+ security_zone { node { ...RoutingZoneFields } }
+
                               gateway { node { ip_prefix { node { prefix { value } } } } }
                             }
                           }

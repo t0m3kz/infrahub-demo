@@ -21,6 +21,7 @@ from utils.group_policy import (
     tags_by_segment,
     vteps_by_data_center,
 )
+from utils.segment_addressing import segment_namespace
 
 UNCLASSIFIED = "unclassified"
 """Pseudo-group of every endpoint no selector classifies (service and transit legs, outside the VRF's segments)."""
@@ -63,8 +64,7 @@ class Group:
 
 def segment_vrf(segment: dict[str, Any]) -> str | None:
     """The VRF (IPAM namespace name) of a segment's gateway."""
-    prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
-    return (prefix.get("ip_namespace") or {}).get("name")
+    return segment_namespace(segment).get("name")
 
 
 def segment_groups(

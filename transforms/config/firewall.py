@@ -3,11 +3,23 @@ from typing import Any
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.addressing import sub_interface_parent
 from transforms.helpers.firewall import get_firewall_static_routes, get_firewall_zones, get_zone_policies
-from transforms.helpers.firewall_contexts import get_firewall_contexts, place_policies_in_contexts
+from transforms.helpers.firewall_contexts import (
+    firewall_context_zone_data,
+    firewall_ha_contexts,
+    get_firewall_contexts,
+    place_policies_in_contexts,
+)
 from transforms.helpers.firewall_terminated import terminated_interfaces
 from transforms.helpers.ha import get_ha
 from transforms.helpers.segments import interface_segments, segment_vlan_ids
-from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE, MANAGEMENT_TYPE, ZONE_BY_NS_TYPE
+from utils.exchange_transit import (
+    EXCHANGE_PEERS,
+    FIREWALL_CONTEXT_KIND,
+    INTERNET_TYPE,
+    MANAGEMENT_TYPE,
+    ZONE_BY_NS_TYPE,
+)
+from utils.routing_domain import interface_security_zone
 from utils.segment_addressing import segment_prefix
 
 DEFAULT_ROUTE = "0.0.0.0/0"
@@ -15,24 +27,14 @@ DEFAULT_ROUTE = "0.0.0.0/0"
 
 def _default_vr_interfaces(fw_interfaces: list[dict[str, Any]]) -> list[str]:
     """Names of the L3 interfaces (those with a namespace) that belong to the single ``default`` virtual router."""
-    return sorted(
-        {
-            i["name"]
-            for i in fw_interfaces
-            if i.get("name") and ((i.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
-        }
-    )
+    return sorted({i["name"] for i in fw_interfaces if i.get("name") and interface_security_zone(i).get("name")})
 
 
 def _build_fw_interfaces(
     interfaces: list[dict[str, Any]],
     activations: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Build firewall interface list enriched with security_zone from segment activations.
-
-    The firewall has physical interfaces and virtual (sub-)interfaces.  Zone assignment
-    lives on the segment, not the interface.  For each interface we look up the
-    segment deployed on it (via activations, by segment id) and attach its security_zone.
+    """Build firewall interfaces with explicit interface or segment routing ownership.
 
     Only interfaces that have an ip_address are included — transit/management
     interfaces without an IP are skipped for zone rendering purposes.
@@ -50,14 +52,27 @@ def _build_fw_interfaces(
         if not ip_obj.get("address"):
             continue
 
-        zone: dict | None = None
+        zone: dict | None = interface_security_zone(iface) or None
         vlan_id: int | None = None
+        parent = sub_interface_parent(iface)
         segments = interface_segments(iface)
         for seg in segments:
             if seg.get("id") in seg_zone and zone is None:
                 zone = seg_zone[seg["id"]]
             if seg.get("name") in seg_vlan and vlan_id is None:
                 vlan_id = seg_vlan[seg["name"]]
+        if vlan_id is None and parent:
+            vlan_id = int(str(iface["name"]).rsplit(".", 1)[1])
+        context_caps = {
+            cap.get("id"): cap
+            for cap in iface.get("capabilities") or []
+            if cap.get("typename") == FIREWALL_CONTEXT_KIND
+        }
+        if len(context_caps) > 1:
+            raise ValueError(f"firewall interface {iface.get('name')!r} belongs to multiple contexts")
+        context = next(iter(context_caps.values()), None)
+        if context and (not context.get("id") or not context.get("name")):
+            raise ValueError(f"firewall interface {iface.get('name')!r} has an incomplete context owner")
 
         fw_ifaces.append(
             {
@@ -65,19 +80,21 @@ def _build_fw_interfaces(
                 "description": iface.get("description"),
                 "status": iface.get("status"),
                 "vlan_id": vlan_id,
-                "parent_interface": sub_interface_parent(iface),
+                "parent_interface": parent,
                 "ip_address": ip_obj,
+                "vrf": iface.get("vrf"),
                 "security_zone": zone,
+                "context_name": context.get("name") if context else None,
             }
         )
     return fw_ifaces
 
 
 def _segment_prefixes(zones_data: list[dict[str, Any]] | None) -> dict[str, tuple[str | None, str]]:
-    """Segment id -> (security zone name, IPv4 gateway prefix) from the
-    SecurityZone root: where a context's served segments get their prefix and
-    their side (PROD-ZONE / NONPROD-ZONE) of a context holding both."""
-    prefixes: dict[str, tuple[str | None, str]] = {}
+    """Context-local segment and endpoint prefixes, keyed by CIDR and segment id."""
+    prefixes: dict[str, tuple[str | None, str]] = {
+        prefix: (zone["name"], prefix) for zone in get_firewall_zones(zones_data) for prefix in zone["member_cidrs"]
+    }
     for zone in zones_data or []:
         for segment in zone.get("network_segments") or []:
             prefix = segment_prefix(segment)
@@ -97,7 +114,7 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
     MANAGEMENT leg, and 0.0.0.0/0 to the anycast of the INTERNET leg. A
     context holding both PROD and NON-PROD also gets an explicit PROD<->NONPROD
     deny (``isolation``), since the two VRFs must never be bridged through it;
-    one with a MANAGEMENT leg also denies MANAGEMENT-ZONE towards each tenant
+    one with a MANAGEMENT leg also denies MANAGEMENT towards each tenant
     zone it holds (the services answer, they never initiate).
 
     Sets ``routes`` ([{destination, nexthop, interface, vrf}], tenant
@@ -119,8 +136,7 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
         if segment.get("id") in terminated:
             continue
         root_zone, root_prefix = segment_prefixes.get(segment.get("id"), (None, None))
-        # The segment's own gateway prefix and zone win; the SecurityZone root
-        # only fills what the segment did not carry.
+        # A referenced policy endpoint can supply the same segment's prefix.
         prefix = segment_prefix(segment) or root_prefix
         zone = (segment.get("security_zone") or {}).get("name") or root_zone
         if not prefix:
@@ -133,7 +149,7 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
 
     # An exchange peer (INTERNET, MANAGEMENT) is reached through its own leg:
     # INTERNET by the default route, any other peer by the CIDRs of the
-    # segments in its zone (the SecurityZone root, plus the served segments).
+    # segments and policy endpoints reached through this context.
     peer_legs = [leg for leg in legs if leg["ns_type"] not in EXCHANGE_PEERS and leg["ns_type"] != INTERNET_TYPE]
     for leg in peer_legs:
         zone_prefixes = {prefix for zone, prefix in segment_prefixes.values() if zone == leg["zone"]}
@@ -239,12 +255,7 @@ class Firewall(BaseDeviceTransform):
         interfaces = device.get("interfaces") or []
         activations = self._collect_activations_from_interfaces(interfaces)
         ha = get_ha(device.get("capabilities"), interfaces, device.get("name"))
-        cluster_contexts = [
-            ctx
-            for cap in device.get("capabilities") or []
-            if cap.get("typename") == "ManagedFirewallHA"
-            for ctx in cap.get("contexts") or []
-        ]
+        cluster_contexts = firewall_ha_contexts(device.get("capabilities"))
         contexts = get_firewall_contexts(interfaces, ha, cluster_contexts)
         root, by_context = place_policies_in_contexts(contexts, [act.get("segment") or {} for act in activations])
         return activations, contexts, root, by_context
@@ -262,23 +273,40 @@ class Firewall(BaseDeviceTransform):
         fw_interfaces = _build_fw_interfaces(
             [i for i in device.get("interfaces") or [] if i.get("name") not in leg_interfaces], activations
         )
-        fw_interfaces += terminated_interfaces(
-            contexts, device.get("interfaces") or [], ha, device.get("id"), device.get("name") or ""
-        )
-        segment_prefixes = _segment_prefixes(roots.get("SecurityZone"))
         for context in contexts:
-            apply_context_routes(context, segment_prefixes)
+            for interface in terminated_interfaces(
+                [context], device.get("interfaces") or [], ha, device.get("id"), device.get("name") or ""
+            ):
+                interface["context_name"] = context["name"]
+                fw_interfaces.append(interface)
+        for context in contexts:
+            context_zones = firewall_context_zone_data([context], roots.get("SecurityZone"))
+            apply_context_routes(context, _segment_prefixes(context_zones))
+            authored_interfaces = [iface for iface in fw_interfaces if iface.get("context_name") == context["name"]]
+            context["authored_interfaces"] = [iface["name"] for iface in authored_interfaces]
+            authored_routes = get_firewall_static_routes(authored_interfaces, get_firewall_zones(context_zones))
+            context.setdefault("routes", []).extend(authored_routes)
             context["policies"] = get_zone_policies(context_policies_data.get(context["id"]))
 
-        zones = get_firewall_zones(roots.get("SecurityZone"))
+        zone_data = firewall_context_zone_data(
+            [*contexts, {"segments": [act.get("segment") or {} for act in activations]}],
+            roots.get("SecurityZone"),
+        )
+        zones = get_firewall_zones(zone_data)
+        for zone in zones:
+            zone["member_cidrs"] = sorted(set(zone["member_cidrs"]))
+        # Contexts are visited by name; retain the environment order for equal-trust zones.
+        zone_order = {name: rank for rank, name in enumerate(ZONE_BY_NS_TYPE.values())}
+        zones.sort(key=lambda zone: (-zone["trust_level"], zone_order.get(zone["name"], 0)))
         config = self._build_config(device, platform_name)
+        root_interfaces = [iface for iface in fw_interfaces if not iface.get("context_name")]
         config.update(
             {
                 "fw_interfaces": fw_interfaces,
                 "zones": zones,
                 "zone_policies": get_zone_policies(root_policies_data),
-                "static_routes": get_firewall_static_routes(fw_interfaces, zones),
-                "default_vr_interfaces": [] if contexts else _default_vr_interfaces(fw_interfaces),
+                "static_routes": get_firewall_static_routes(root_interfaces, zones),
+                "default_vr_interfaces": _default_vr_interfaces(root_interfaces),
                 "ha": ha,
                 "contexts": contexts,
             }

@@ -31,6 +31,7 @@ from tests.unit.simulators.circuit_fakes import (
     interconnect_payload,
     tunnel_payload,
 )
+from utils.graphql_queries import load_query
 
 _QUERIES = Path(__file__).parents[2] / "queries"
 _WRAPPERS = frozenset({"edges", "node"})
@@ -41,7 +42,7 @@ def _selected_paths(path: Path, root: str) -> set[str]:
 
     A field selecting only ``value`` is a leaf (``status { value }`` is ``status``); ``edges``/``node`` are dropped.
     """
-    document = parse(path.read_text())
+    document = parse(load_query(path))
     fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
     operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
     paths: set[str] = set()
@@ -68,7 +69,9 @@ def _selected_paths(path: Path, root: str) -> set[str]:
                     paths.add(".".join(here))
                     walk(children, here)
 
-    top = next(s for s in operation.selection_set.selections if isinstance(s, FieldNode) and s.name.value == root)
+    top = next(
+        s for s in operation.selection_set.selections if isinstance(s, FieldNode) and (s.alias or s.name).value == root
+    )
     assert top.selection_set is not None
     walk(top.selection_set.selections, ())
     return paths
@@ -143,7 +146,10 @@ _GENERATOR_READS = [
     "capabilities.cable.id",
     "capabilities.parent_interface.cable.id",
     # a handoff
-    "ip_namespace.name",
+    "vrf.id",
+    "vrf.deployment.id",
+    "vrf.deployment.name",
+    *(f"vrf.security_zone.{field}" for field in ("id", "name", "vrf_type", "l3_vni")),
     "password.id",
 ]
 
@@ -160,6 +166,8 @@ _REMOVED_FIELDS = [
     # read by no session generator: the ends' addresses are allocated, the cloud side is data
     "cloud_endpoint",
     "owner",
+    "ip_namespace",
+    "vrf_name",
 ]
 
 
@@ -171,6 +179,34 @@ def _cabled_handoff() -> dict[str, Any]:
 def _cabled_interconnect() -> dict[str, Any]:
     """A DCI whose ends are cabled physical ports."""
     return interconnect_payload(ends=[dc_border_port(cabled=True), colo_edge_port(cabled=True)])
+
+
+def _vrf_owned_handoff() -> dict[str, Any]:
+    """The handoff owns a local VRF; its loopback projects only the address SessionEnd.parse reads."""
+    zone = {
+        "id": "zone-prod",
+        "name": {"value": "PROD"},
+        "vrf_type": {"value": "prod"},
+        "l3_vni": {"value": 60000},
+    }
+    loopback = {
+        "id": "tenant-loopback",
+        "__typename": "DcimVirtualInterface",
+        "name": {"value": "loopback10"},
+        "role": {"value": "loopback"},
+        "ip_address": {"node": {"address": {"value": "10.255.0.1/32"}}},
+    }
+    payload = handoff_payload(ends=[handoff_edge_port(loopbacks=[loopback]), handoff_party_port()])
+    node = payload["TopologySessionCircuit"]["edges"][0]["node"]
+    node.pop("security_zone", None)
+    node["vrf"] = {
+        "node": {
+            "id": "vrf-fr-prod",
+            "deployment": {"node": {"id": "fr", "name": {"value": "FR"}}},
+            "security_zone": {"node": zone},
+        }
+    }
+    return payload
 
 
 @pytest.mark.parametrize("path", _GENERATOR_READS)
@@ -205,6 +241,7 @@ def _fake_paths(payload: dict[str, Any]) -> set[str]:
         pytest.param(tunnel_payload(), id="tunnel"),
         pytest.param(_cabled_handoff(), id="handoff-cabled-parent"),
         pytest.param(_cabled_interconnect(), id="interconnect-cabled-port"),
+        pytest.param(_vrf_owned_handoff(), id="handoff-vrf-owned"),
     ],
 )
 def test_the_fakes_return_only_selected_fields(payload: dict[str, Any], generator_paths: set[str]) -> None:
@@ -220,6 +257,7 @@ def test_the_fakes_carry_every_field_the_generator_reads() -> None:
         | _fake_paths(handoff_payload(password="pw-1"))
         | _fake_paths(_cabled_handoff())
         | _fake_paths(_cabled_interconnect())
+        | _fake_paths(_vrf_owned_handoff())
     )
     assert not set(_GENERATOR_READS) - carried, f"read but never faked: {sorted(set(_GENERATOR_READS) - carried)}"
 
@@ -233,3 +271,19 @@ def test_the_decommissioned_filter_has_a_status_to_read(generator_paths: set[str
     """The generator drops decommissioned carriers, so the query selects the carrier's status, on a port and its parent."""
     assert "capabilities.capabilities.status" in generator_paths
     assert "capabilities.parent_interface.capabilities.status" in generator_paths
+
+
+def test_the_circuit_projects_only_vrf_owned_routing(generator_paths: set[str]) -> None:
+    """Global zone fields are visible through the local owner, never directly on the circuit or IPAM."""
+    assert {path for path in generator_paths if path.startswith("vrf.")} == {
+        "vrf.id",
+        "vrf.deployment",
+        "vrf.deployment.id",
+        "vrf.deployment.name",
+        "vrf.security_zone",
+        *(f"vrf.security_zone.{field}" for field in ("id", "name", "vrf_type", "l3_vni")),
+    }
+    assert "security_zone" not in generator_paths
+    assert not any(
+        ".ip_address.security_zone" in path or ".ip_prefix.security_zone" in path for path in generator_paths
+    )

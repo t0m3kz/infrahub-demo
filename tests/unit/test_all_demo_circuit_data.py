@@ -92,6 +92,9 @@ def test_a_tunnel_circuit_is_in_the_virtual_circuits_group_and_has_no_session_fi
     assert [_circuit_name(entry) for entry in rows] == ["C001-PARTNER-ACME-FR2"]
     assert all("virtual_circuits" in entry["member_of_groups"] for entry in rows)
     assert not [e["name"] for e in rows if {"ip_namespace", "password", "owner"} & set(e)]
+    assert {row["security_zone"] for row in rows} == {"PROD"}
+    offices = {name(office): office.item["owner"] for office in declared("TopologyCustomerOffice", _ALL)}
+    assert [{offices[location] for location in row["locations"] if location in offices} for row in rows] == [{"C001"}]
 
 
 def test_no_circuit_is_declared_as_a_removed_kind() -> None:
@@ -153,6 +156,8 @@ def test_the_dark_fibres_are_the_six_dci_carriers() -> None:
         assert len(set(interconnects[interconnect]["locations"])) == 2
         assert interconnects[interconnect]["provider"] == fibres[fibre_id]["provider"]
         assert "owner" not in interconnects[interconnect]
+        assert "security_zone" not in interconnects[interconnect]
+        assert "ip_namespace" not in interconnects[interconnect]
 
 
 @pytest.mark.parametrize("circuit_id", sorted(_DCI_CIRCUITS))
@@ -323,7 +328,7 @@ def test_the_orange_isp_topology_is_the_foundation_isp_of_its_access_pe() -> Non
 
 _SUBINTERFACE = re.compile(r"^(?P<parent>.+)\.(?P<vlan>\d+)$")
 _HANDOFF_POOLS = BOOTSTRAP / "26_handoff_pools.yml"
-_NAMESPACES = BOOTSTRAP / "22_namespaces.yml"
+_ZONES = BOOTSTRAP / "24_security_zones.yml"
 _STUB_LOOPBACKS = "10.255.64."
 
 
@@ -344,14 +349,15 @@ def _declared_devices() -> set[str]:
     return {e["name"] for e in _rows("DcimPhysicalDevice", _ALL)}
 
 
-def test_every_handoff_names_a_namespace_with_a_pool() -> None:
-    """The /31 comes from `Handoff-<namespace>-IPv4` (virtual_circuit.handoff_pool_name): both must exist."""
-    namespaces = {e["name"] for e in _rows("IpamNamespace", _NAMESPACES)}
-    pools = {e["name"] for e in _rows("CoreIPPrefixPool", _HANDOFF_POOLS)}
+def test_every_handoff_names_a_security_zone_with_a_default_ipam_pool() -> None:
+    """The zone names the Handoff pool; the pool itself allocates in default IPAM."""
+    zones = {e["name"] for e in _rows("SecurityZone", _ZONES)}
+    pools = {e["name"]: e for e in _rows("CoreIPPrefixPool", _HANDOFF_POOLS)}
     assert _handoffs()
     for handoff in _handoffs():
-        assert handoff["ip_namespace"] in namespaces, handoff["name"]
-        assert f"Handoff-{handoff['ip_namespace']}-IPv4" in pools, handoff["name"]
+        assert handoff["security_zone"] in zones, handoff["name"]
+        assert "ip_namespace" not in handoff, handoff["name"]
+        assert pools[f"Handoff-{handoff['security_zone']}-IPv4"]["ip_namespace"] == "default", handoff["name"]
 
 
 def test_every_handoff_end_is_a_declared_sub_interface_of_one_vlan_and_carries_no_address() -> None:
@@ -392,7 +398,10 @@ def test_a_cloud_handoff_is_authored_end_to_end() -> None:
         match = _SUBINTERFACE.match(near[0][1])
         assert match and sub_interfaces[near[0]]["parent_interface"] == [near[0][0], match["parent"]], handoff["name"]
         address = sub_interfaces[near[0]]["ip_address"]["data"]
-        assert address["ip_namespace"] == handoff["ip_namespace"], handoff["name"]
+        assert address["ip_namespace"] == "default", handoff["name"]
+        assert "security_zone" not in sub_interfaces[near[0]], handoff["name"]
+        assert handoff["security_zone"] == "PROD", handoff["name"]
+        assert "security_zone" not in address, handoff["name"]
         vif = peerings[far[0]]
         assert vif["vlan_id"] == int(match["vlan"]) and far[0][1].endswith(f".{match['vlan']}"), handoff["name"]
         assert tuple(vif["parent_interface"]) in ports, handoff["name"]
@@ -401,6 +410,7 @@ def test_a_cloud_handoff_is_authored_end_to_end() -> None:
             "name"
         ]
         assert tuple(vif["peer_ip"]) in addresses, handoff["name"]
+        assert vif["peer_ip"][1] == handoff["link_prefix"][1] == "default", handoff["name"]
         link = ipaddress.ip_network(handoff["link_prefix"][0])
         assert tuple(handoff["link_prefix"]) in prefixes, handoff["name"]
         assert ipaddress.ip_interface(address["address"]).ip in link, handoff["name"]
@@ -441,7 +451,20 @@ def _assert_party_processes(parties: set[str]) -> None:
         assert own[0]["local_as"] in asns, device
         address, namespace = own[0]["router_id"]
         assert (device, address, namespace) in loopbacks, device
+        assert namespace == "default", device
         assert address.startswith(_STUB_LOOPBACKS) and address.endswith("/32"), device
+
+
+@pytest.mark.parametrize("kind", ["IpamPrefix", "IpamIPAddress", "CoreIPPrefixPool", "CoreIPAddressPool"])
+def test_ipam_identity_never_encodes_a_routing_zone(kind: str) -> None:
+    """Every authored IPAM identity stays default; only standalone prefixes may carry a zone."""
+    objects = [*declared(kind, _ALL), *declared(kind, BOOTSTRAP)]
+    assert objects
+    for obj in objects:
+        assert obj.item.get("ip_namespace", "default") == "default", f"{obj.path}: {obj.item}"
+        assert not {"namespace_type", "vrf_type", "l3_vni", "vrf_name"} & obj.item.keys()
+        if kind != "IpamPrefix":
+            assert "security_zone" not in obj.item, f"{obj.path}: {obj.item}"
 
 
 def test_provider_stubs_deployed_to_a_zone_are_in_the_provider_stubs_group() -> None:

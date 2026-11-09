@@ -23,8 +23,6 @@ def _internal(*, enforce: bool) -> dict[str, Any]:
     node = data["DcimDevice"]["edges"][0]["node"]
     node["deployment"]["node"]["routing_filter_enforce"] = {"value": enforce}
     add_environment_roots(data, tenant_members=["eg-fr201"], internet_members=[])
-    for edge in data["environment_prefixes_prod"]["edges"]:
-        edge["node"]["ip_namespace"]["node"]["name"] = {"value": "PROD"}
     return data
 
 
@@ -100,11 +98,17 @@ def _profile(*, enforce: bool) -> list[dict[str, Any]]:
         "role": "leaf",
         "interfaces": [{"role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}],
         "deployment": {"routing_filter_enforce": enforce, "loopback_pool": {"resources": [{"prefix": "10.0.0.0/24"}]}},
-        "shared_capabilities": [{"typename": "ManagedVRF", "namespace": {"name": "PROD"}}],
+        "shared_capabilities": [{"typename": "ManagedVRF", "security_zone": {"name": "PROD"}}],
     }
     roots = {
-        "environment_prefixes_prod": [
-            {"prefix": "10.100.0.0/24", "ip_namespace": {"name": "PROD", "namespace_type": "prod"}}
+        "environment_zones": [
+            {
+                "name": "PROD",
+                "vrf_type": "prod",
+                "network_segments": [
+                    {"gateway": {"ip_prefix": {"prefix": "10.100.0.0/24", "ip_namespace": {"name": "default"}}}}
+                ],
+            }
         ]
     }
     annotate_bgp_policy({"bgp": [config]}, device, roots)

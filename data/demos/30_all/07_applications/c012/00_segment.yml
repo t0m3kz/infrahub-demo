@@ -27,7 +27,7 @@ spec:
               data:
                 address: "10.12.105.1/24"
                 description: "c012-nordix-prod-p anycast gateway"
-                ip_namespace: "PROD"
+                ip_namespace: "default"
                 ip_prefix:
                   kind: IpamPrefix
                   data:
@@ -35,7 +35,7 @@ spec:
                     description: "c012-nordix-prod-p (C012, VA)"
                     status: active
                     role: customer
-                    ip_namespace: "PROD"
+                    ip_namespace: "default"
             customer_deployments:
               - "C012-P-VA"
             member_of_groups:

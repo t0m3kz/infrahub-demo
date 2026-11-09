@@ -13,6 +13,7 @@ from tests.smoke.fixture_builders.common import (
 from tests.smoke.fixture_builders.fabric import SCENARIOS, _write_fixture, build_device_data
 from tests.smoke.fixture_builders.firewall import _make_rule_segment, _make_segment_rule
 from tests.smoke.fixture_builders.transit import build_exchange_transit_bl_data
+from tests.smoke.fixture_builders.vrf import routing_zone
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
@@ -67,7 +68,15 @@ def _add_cisco_xe_acl_rules(segments: list[dict]) -> None:
         {
             "node": {
                 **_make_policy_rule(index=50, name="allow-db-logged", protocol="tcp", port_start=5432, log=True),
-                "destination_ip_addresses": _edges([{"address": _v("10.9.9.9/32")}]),
+                "destination_zone": _node(routing_zone("PROD")),
+                "destination_ip_addresses": _edges(
+                    [
+                        {
+                            "address": _v("10.9.9.9/32"),
+                            "ip_prefix": _node(None),
+                        }
+                    ]
+                ),
             }
         }
     )

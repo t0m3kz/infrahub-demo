@@ -1,95 +1,173 @@
-# A firewall is a physical appliance or a dedicated virtual instance of a
-# customer (DcimVirtualDevice, hosted on the shared pair): both are members of
-# the `firewalls` group and carry the same contexts, legs and HA pair, so the
-# root is the DcimDevice generic.
-query firewall_config(
-  $device: String!
-) {
+query firewall_config($device: String!) {
   DcimDevice(name__value: $device) {
     edges {
       node {
         id
-        name { value }
-        ... on DcimDeviceManaged { platform { node { name { value } } } }
-        ... on DcimCapabilities {
-        capabilities {
-          edges {
+        name {
+          value
+        }
+        ... on DcimDeviceManaged {
+          platform {
             node {
-              __typename
-              ... on ManagedGeneric {
-                name { value }
-                status { value }
-              }
-              ... on ManagedFirewallHA {
-                group_id { value }
-                mode { value }
-                priority { value }
-                preempt { value }
-                ha_protocol { value }
-                ha_timer { value }
-                capabilities { edges { node { name { value } } } }
-                # Hosted contexts: a context without data-plane legs (colocation)
-                # has no interface on a member, only this link to its cluster.
-                contexts { edges { node { ...FirewallContextConfigFields } } }
+              name {
+                value
               }
             }
           }
         }
-        }
-        interfaces {
-          edges {
-            node {
-              __typename
-              name { value }
-              description { value }
-              status { value }
-              role { value }
-              ... on DcimPhysicalInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
-                # The far end of the uplink trunk: the border leaf whose VLAN row a terminated segment's
-                # sub-interface takes (transforms/helpers/firewall_terminated.py). A patch panel port comes back
-                # as an empty node.
-                cable { node { endpoints { edges { node { ... on DcimPhysicalInterface { device { node { id } } } } } } } }
-              }
-              ... on DcimVirtualInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
-                parent_interface { node { name { value } } }
-              }
-              ... on DcimLAGInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
-              }
-              capabilities {
-                edges {
-                  node {
-                    __typename
-                    ...ExchangeGatewayInterfaceCapabilityFields
-                    ...FirewallContextConfigFields
+        ...DeviceSharedCapabilitiesOnDeviceFields
+        ... on DcimCapabilities {
+          capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedFirewallHA {
+                  name {
+                    value
+                  }
+                  status {
+                    value
+                  }
+                  group_id {
+                    value
+                  }
+                  mode {
+                    value
+                  }
+                  priority {
+                    value
+                  }
+                  preempt {
+                    value
+                  }
+                  ha_protocol {
+                    value
+                  }
+                  ha_timer {
+                    value
+                  }
+                  capabilities {
+                    edges {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                  contexts {
+                    edges {
+                      node {
+                        ...FirewallContextConfigFields
+                      }
+                    }
                   }
                 }
               }
             }
           }
         }
-      }
-    }
-  }
-
-  # Every zone with its member CIDRs: the address objects and the static
-  # routes behind each zone leg (get_firewall_zones / get_firewall_static_routes).
-  SecurityZone {
-    edges {
-      node {
-        name { value }
-        trust_level { value }
-        description { value }
-        network_segments {
+        interfaces {
           edges {
             node {
-              id
-              ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+              __typename
+              name {
+                value
+              }
+              description {
+                value
+              }
+              status {
+                value
+              }
+              role {
+                value
+              }
+              ...FirewallFacingCableFields
+              ...InterfaceRoutingZoneFields
+              ... on DcimPhysicalInterface {
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
+                }
+                ip_address {
+                  node {
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on DcimVirtualInterface {
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
+                }
+                ip_address {
+                  node {
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+                parent_interface {
+                  node {
+                    name {
+                      value
+                    }
+                    ...FirewallFacingCableFields
+                  }
+                }
+              }
+              ... on DcimLAGInterface {
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
+                }
+                ip_address {
+                  node {
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
+              ...FirewallInterfaceZoneFields
             }
           }
         }
+      }
+    }
+  }
+  SecurityZone(name__value: "MANAGEMENT") {
+    edges {
+      node {
+        ...FirewallZoneFields
       }
     }
   }

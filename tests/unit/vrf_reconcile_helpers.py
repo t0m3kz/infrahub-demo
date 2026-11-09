@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 from generators.helpers.vrf import VrfMixin
 from tests.unit.vrf_instances_helpers import edges, raw_response
 
-NAMESPACES = ("default", "PROD", "NON-PROD", "INTERNET")
+NAMESPACES = ("PROD", "NONPROD", "INTERNET", "MANAGEMENT")
 
 
 def raw_namespaces() -> dict[str, Any]:
@@ -31,7 +31,7 @@ def response(*devices: dict[str, Any], instances: tuple[dict[str, Any], ...] = (
     ``instances`` are extra ``ManagedVRF`` root nodes (``raw_root_instance``), for instances the devices are not
     members of.
     """
-    return {**raw_response(*devices, instances=instances), "IpamNamespace": raw_namespaces()}
+    return {**raw_response(*devices, instances=instances), "SecurityZone": raw_namespaces()}
 
 
 class FakeVrf:
@@ -44,7 +44,7 @@ class FakeVrf:
         self.id = vrf_id
         self.name = SimpleNamespace(value=name)
         self.deployment = SimpleNamespace(id=deployment_id)
-        self.namespace = SimpleNamespace(peer=SimpleNamespace(name=SimpleNamespace(value=namespace)))
+        self.security_zone = SimpleNamespace(peer=SimpleNamespace(name=SimpleNamespace(value=namespace)))
         self.members = members or set()
         self.store: VrfStore | None = None
         self.save: Any = None
@@ -73,6 +73,7 @@ class VrfStore:
 
     vrfs: dict[str, FakeVrf] = field(default_factory=dict)
     svi_refs: dict[str, set[str]] = field(default_factory=dict)
+    external_refs: dict[str, dict[str, set[str]]] = field(default_factory=dict)
     edge_ops: list[tuple[str, str, str, list[str]]] = field(default_factory=list)
     deleted: list[tuple[str, str]] = field(default_factory=list)
 
@@ -87,7 +88,7 @@ class VrfStore:
                     node["id"],
                     node["name"]["value"],
                     ((node.get("deployment") or {}).get("node") or {}).get("id") or "",
-                    node["namespace"]["node"]["name"]["value"],
+                    node["security_zone"]["node"]["name"]["value"],
                     {member["node"]["id"] for member in node["shared_devices"]["edges"]},
                 )
             )
@@ -123,6 +124,7 @@ class VrfHost(VrfMixin):
         self.client.create = AsyncMock(side_effect=self._create)
         self.client.delete = AsyncMock(side_effect=self._delete)
         self.client.filters = AsyncMock(side_effect=self._filters)
+        self.client.get = AsyncMock(side_effect=self._get)
 
     @property
     def edge_ops(self) -> list[tuple[str, str, str, list[str]]]:
@@ -146,9 +148,31 @@ class VrfHost(VrfMixin):
             found = [vrf for vrf in found if vrf.id in kwargs["ids"]]
         if "deployment__ids" in kwargs:
             found = [vrf for vrf in found if vrf.deployment.id in kwargs["deployment__ids"]]
-        if "namespace__ids" in kwargs:
-            found = [vrf for vrf in found if f"ns-{vrf.namespace.peer.name.value}" in kwargs["namespace__ids"]]
+        if "security_zone__ids" in kwargs:
+            found = [vrf for vrf in found if f"ns-{vrf.security_zone.peer.name.value}" in kwargs["security_zone__ids"]]
+        if "shared_devices__ids" in kwargs:
+            found = [vrf for vrf in found if vrf.members.intersection(kwargs["shared_devices__ids"])]
         return found
+
+    async def _get(self, kind: type, id: str, include: list[str]) -> Any:  # noqa: A002
+        """Read the scoped instance's reverse references, including non-SVI interfaces."""
+        assert kind.__name__ == "ManagedVRF"
+        assert id in self.store.vrfs
+        refs = self.store.external_refs.get(id, {})
+        return SimpleNamespace(
+            **{
+                name: SimpleNamespace(
+                    peers=[
+                        SimpleNamespace(id=peer)
+                        for peer in sorted(
+                            refs.get(name, set())
+                            | (self.store.svi_refs.get(id, set()) if name == "interfaces" else set())
+                        )
+                    ]
+                )
+                for name in include
+            }
+        )
 
     async def _create(self, kind: type, data: dict[str, Any]) -> Any:
         self.created.append((kind.__name__, data))
@@ -169,7 +193,7 @@ class VrfHost(VrfMixin):
         # The created instance is the same object a later read returns, with the SDK's empty member list.
         members = {member["id"] for member in data.get("shared_devices") or []}
         vrf = FakeVrf(
-            node_id, data["name"], data["deployment"]["id"], data["namespace"]["id"].removeprefix("ns-"), members
+            node_id, data["name"], data["deployment"]["id"], data["security_zone"]["id"].removeprefix("ns-"), members
         )
         vrf.store = self.store
         vrf.save = _save

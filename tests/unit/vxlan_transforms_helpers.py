@@ -18,13 +18,13 @@ def _make_activation(
     owner_name: str | None = None,
 ) -> dict:
     """Build a cleaned SegmentDeployment dict as returned by clean_data()."""
-    ns: dict = {"name": ns_name}
+    ns: dict = {"name": "PROD" if ns_name == "default" else ns_name}
     if l3_vni is not None:
         ns["l3_vni"] = l3_vni
     if owner_name is not None:
         ns["owner"] = {"name": owner_name}
 
-    gateway: dict = {"ip_prefix": {"ip_namespace": ns}}
+    gateway: dict = {"ip_prefix": {"ip_namespace": {"name": "default"}}}
     if gateway_ip is not None:
         gateway["address"] = gateway_ip
 
@@ -33,6 +33,7 @@ def _make_activation(
         "customer_name": customer_name,
         "arp_suppression": arp_suppression,
         "gateway": gateway,
+        "security_zone": ns,
     }
 
     return {

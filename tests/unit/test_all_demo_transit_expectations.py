@@ -42,7 +42,7 @@ from tests.integration.all_demo_loadbalancer_constants import (
 
 
 def test_transit_totals_match_the_planning_estimate() -> None:
-    """DC10 3+3, DC11 3+3, DC12 3 (PROD) + 3 (NON-PROD) + 3, FR2 3 legs (one tenant VRF + INTERNET + MANAGEMENT per
+    """DC10 3+3, DC11 3+3, DC12 3 (PROD) + 3 (NONPROD) + 3, FR2 3 legs (one tenant VRF + INTERNET + MANAGEMENT per
     context); 16 exchanges; 48 sub-interfaces; 8 SNAT /32s; 8 tagged ports (6 border-leaf + the FR2 edges' 2)."""
     legs = {
         (c["site"], c["namespace"], c["tenant"] is None): len(c["namespaces"])
@@ -54,14 +54,14 @@ def test_transit_totals_match_the_planning_estimate() -> None:
         ("DC11", "PROD", True): 3,
         ("DC11", "PROD", False): 3,
         ("DC12", "PROD", True): 3,
-        ("DC12", "NON-PROD", True): 3,
+        ("DC12", "NONPROD", True): 3,
         ("DC12", "PROD", False): 3,
         ("FR2", "PROD", True): 3,
     }
     assert ALL_DEMO_TRANSIT_LEGS == 24
     assert ALL_DEMO_TRANSIT_EXCHANGES == 16
     assert ALL_DEMO_TRANSIT_SUBINTERFACES == 48
-    assert ALL_DEMO_TRANSIT_PREFIXES == {"PROD": 7, "NON-PROD": 1, "INTERNET": 8, "MANAGEMENT": 8}
+    assert ALL_DEMO_TRANSIT_PREFIXES == {"PROD": 7, "NONPROD": 1, "INTERNET": 8, "MANAGEMENT": 8}
     assert ALL_DEMO_SNAT_ADDRESSES == 8
     assert ALL_DEMO_BORDER_FIREWALL_PORTS == 8
     assert ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] == 16
@@ -78,7 +78,7 @@ def test_serving_colocation_zone_has_one_shared_context_with_prod_legs() -> None
     assert colocation[0]["namespaces"] == ("PROD", "INTERNET", "MANAGEMENT")
     assert colocation[0]["exchanges"] == ("PROD-INTERNET", "PROD-MANAGEMENT")
     # The colocation context is a cluster's shared context like the DC ones: one per (cluster, tenant namespace),
-    # so DC12, which has both PROD and NON-PROD footprints, has two.
+    # so DC12, which has both PROD and NONPROD footprints, has two.
     assert ALL_DEMO_SHARED_FIREWALL_CONTEXTS == 5
 
 
@@ -123,30 +123,30 @@ def test_dci_circuits_land_on_zone_named_edges() -> None:
 
 
 def test_environment_maps_to_vrf_namespace() -> None:
-    """`p` is PROD, any other environment NON-PROD."""
+    """`p` is PROD, any other environment NONPROD."""
     assert deployment_namespace("C008-P-DC12") == "PROD"
-    assert deployment_namespace("C008-D-DC12") == "NON-PROD"
+    assert deployment_namespace("C008-D-DC12") == "NONPROD"
 
 
 def test_no_context_pairs_prod_with_non_prod() -> None:
     """Every exchange of every context ends in INTERNET or MANAGEMENT, never in a tenant VRF, and no context has
-    a leg in both PROD and NON-PROD."""
+    a leg in both PROD and NONPROD."""
     assert all(
         x.endswith(("-INTERNET", "-MANAGEMENT")) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS for x in c["exchanges"]
     )
-    assert not any({"PROD", "NON-PROD"} <= set(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
+    assert not any({"PROD", "NONPROD"} <= set(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 
 
 def test_loadbalancer_contexts_match_the_boarded_footprints() -> None:
     """One shared context per (DC, tenant namespace) with a non-dedicated footprint (DC12 has both
-    PROD and NON-PROD), one dedicated per L_DC/XL_DC footprint; 7 in all."""
+    PROD and NONPROD), one dedicated per L_DC/XL_DC footprint; 7 in all."""
     assert ALL_DEMO_LOADBALANCER_CONTEXTS == {
         ("DC10", "PROD", None): ("C005-P-DC10", "C008-P-DC10"),
         ("DC10", "PROD", "C007-P-DC10"): ("C007-P-DC10",),
         ("DC11", "PROD", None): ("C006-P-DC11",),
         ("DC11", "PROD", "C009-P-DC11"): ("C009-P-DC11",),
         ("DC12", "PROD", None): ("C008-P-DC12", "C010-P-DC12"),
-        ("DC12", "NON-PROD", None): ("C008-D-DC12", "C010-D-DC12"),
+        ("DC12", "NONPROD", None): ("C008-D-DC12", "C010-D-DC12"),
         ("DC12", "PROD", "C005-P-DC12"): ("C005-P-DC12",),
     }
     assert ALL_DEMO_SHARED_LOADBALANCER_CONTEXTS == 4
@@ -154,15 +154,20 @@ def test_loadbalancer_contexts_match_the_boarded_footprints() -> None:
 
 
 def test_loadbalancer_pools_and_route_domains_come_from_bootstrap() -> None:
-    """LB-Leg-* and LB-VIP-* resources (23_transit_pools.yml) and the namespaces' l3_vni (the F5 route domain)."""
-    assert ALL_DEMO_LB_LEG_RESOURCES == {"PROD": "100.66.64.0/20", "NON-PROD": "100.66.80.0/20"}
-    assert ALL_DEMO_LB_VIP_RESOURCES == {"PROD": "100.66.96.0/20", "NON-PROD": "100.66.112.0/20"}
-    assert (ALL_DEMO_NAMESPACE_L3_VNI["PROD"], ALL_DEMO_NAMESPACE_L3_VNI["NON-PROD"]) == (60000, 60001)
+    """LB resources come from pools; route-domain identities come from SecurityZone, never IpamNamespace."""
+    assert ALL_DEMO_LB_LEG_RESOURCES == {"PROD": "100.66.64.0/20", "NONPROD": "100.66.80.0/20"}
+    assert ALL_DEMO_LB_VIP_RESOURCES == {"PROD": "100.66.96.0/20", "NONPROD": "100.66.112.0/20"}
+    assert ALL_DEMO_NAMESPACE_L3_VNI == {
+        "PROD": 60000,
+        "NONPROD": 60001,
+        "INTERNET": 60002,
+        "MANAGEMENT": 60003,
+    }
     assert ALL_DEMO_DC_LOADBALANCER_PLATFORMS == {"DC10": "f5_tmos", "DC11": "netscaler", "DC12": "f5_tmos"}
 
 
 def test_load_balanced_components_and_their_clients() -> None:
-    """c005 web-frontend on DC10's shared PROD context, c010 portal-ui on DC12's shared NON-PROD one;
+    """c005 web-frontend on DC10's shared PROD context, c010 portal-ui on DC12's shared NONPROD one;
     the c008 trade portal is the one client, through tcp/443."""
     assert ALL_DEMO_LOAD_BALANCED_COMPONENTS == {
         "api.payment-core.c005.demo.local": {
@@ -175,7 +180,7 @@ def test_load_balanced_components_and_their_clients() -> None:
         "ui.reporting-portal.c010.demo.local": {
             "segment": "c010-zindra-dev-d",
             "ports": (("tcp", 443),),
-            "contexts": (("DC12", "NON-PROD", None),),
+            "contexts": (("DC12", "NONPROD", None),),
             "health_checks": (("http", "3", "3", "2000"),),
             "servers": ("c010-portal-ui-dc12-1", "c010-portal-ui-dc12-2"),
         },
@@ -215,5 +220,5 @@ def test_loadbalancer_context_names_follow_the_naming_scheme() -> None:
     from tests.integration.test_62b_all_demo_tenant_services import _expected_loadbalancer_context_name
 
     assert _expected_loadbalancer_context_name("lb-a-lb-b", "PROD", None) == "shared-lb-a-lb-b-prod"
-    assert _expected_loadbalancer_context_name("lb-a-lb-b", "NON-PROD", None) == "shared-lb-a-lb-b-non-prod"
+    assert _expected_loadbalancer_context_name("lb-a-lb-b", "NONPROD", None) == "shared-lb-a-lb-b-nonprod"
     assert _expected_loadbalancer_context_name("c005-lb-a-lb-b-ha-prod", "PROD", "C005-P-DC12") == "c005-lb-a-lb-b-prod"

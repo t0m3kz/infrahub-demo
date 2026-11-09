@@ -157,19 +157,6 @@
                                     "node": {
                                       "address": {
                                         "value": "100.66.0.0/31"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "VRF_A"
-                                          },
-                                          "l3_vni": {
-                                            "value": 50001
-                                          },
-                                          "namespace_type": {
-                                            "value": "prod"
-                                          }
-                                        }
                                       }
                                     }
                                   },
@@ -177,6 +164,34 @@
                                     "node": {
                                       "name": {
                                         "value": "ds-c005-office01"
+                                      }
+                                    }
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-C005-OFFICE-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "C005-OFFICE",
+                                          "name": {
+                                            "value": "C005-OFFICE"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
                                       }
                                     }
                                   }
@@ -192,19 +207,6 @@
                                     "node": {
                                       "address": {
                                         "value": "100.66.0.1/31"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "VRF_A"
-                                          },
-                                          "l3_vni": {
-                                            "value": 50001
-                                          },
-                                          "namespace_type": {
-                                            "value": "prod"
-                                          }
-                                        }
                                       }
                                     }
                                   },
@@ -212,6 +214,34 @@
                                     "node": {
                                       "name": {
                                         "value": "C005-OFFICE-EDGE1"
+                                      }
+                                    }
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-C005-OFFICE-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "C005-OFFICE",
+                                          "name": {
+                                            "value": "C005-OFFICE"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
                                       }
                                     }
                                   }
@@ -734,13 +764,7 @@
                       "ip_namespace": {
                         "node": {
                           "name": {
-                            "value": "VRF_A"
-                          },
-                          "l3_vni": {
-                            "value": 50001
-                          },
-                          "namespace_type": {
-                            "value": "prod"
+                            "value": "default"
                           }
                         }
                       }
@@ -753,6 +777,34 @@
                     "node": {
                       "name": {
                         "value": "GigabitEthernet1/0/26"
+                      }
+                    }
+                  },
+                  "vrf": {
+                    "node": {
+                      "__typename": "ManagedVRF",
+                      "id": "fixture-vrf-C005-OFFICE-PROD",
+                      "deployment": {
+                        "node": {
+                          "id": "C005-OFFICE",
+                          "name": {
+                            "value": "C005-OFFICE"
+                          }
+                        }
+                      },
+                      "security_zone": {
+                        "node": {
+                          "id": "fixture-zone-PROD",
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "vrf_type": {
+                            "value": "prod"
+                          },
+                          "l3_vni": {
+                            "value": 60000
+                          }
+                        }
                       }
                     }
                   }
@@ -809,7 +861,18 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": null
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           },
                           "gateway": {
                             "node": {
@@ -824,10 +887,7 @@
                                   "ip_namespace": {
                                     "node": {
                                       "name": {
-                                        "value": "VRF_A"
-                                      },
-                                      "l3_vni": {
-                                        "value": 50001
+                                        "value": "default"
                                       }
                                     }
                                   }
@@ -916,7 +976,18 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": null
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           },
                           "gateway": {
                             "node": {
@@ -931,10 +1002,7 @@
                                   "ip_namespace": {
                                     "node": {
                                       "name": {
-                                        "value": "VRF_A"
-                                      },
-                                      "l3_vni": {
-                                        "value": 50001
+                                        "value": "default"
                                       }
                                     }
                                   }
@@ -1057,16 +1125,26 @@
               {
                 "node": {
                   "__typename": "ManagedVRF",
-                  "namespace": {
+                  "id": "fixture-vrf-fixture-deployment-PROD",
+                  "deployment": {
                     "node": {
+                      "id": "fixture-deployment",
                       "name": {
-                        "value": "VRF_A"
+                        "value": "fixture-deployment"
+                      }
+                    }
+                  },
+                  "security_zone": {
+                    "node": {
+                      "id": "fixture-zone-PROD",
+                      "name": {
+                        "value": "PROD"
+                      },
+                      "vrf_type": {
+                        "value": "prod"
                       },
                       "l3_vni": {
-                        "value": 50001
-                      },
-                      "namespace_type": {
-                        "value": "prod"
+                        "value": 60000
                       }
                     }
                   }

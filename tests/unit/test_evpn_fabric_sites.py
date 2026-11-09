@@ -18,7 +18,7 @@ from utils.limits import DEFAULT_NAMESPACE
 
 _ENVIRONMENTS = (
     ("PROD", "prod"),
-    ("NON-PROD", "non_prod"),
+    ("NONPROD", "non_prod"),
     ("INTERNET", "internet"),
     ("MANAGEMENT", "management"),
 )
@@ -36,15 +36,25 @@ def _site(name: str, asn: int | None) -> dict[str, Any]:
 
 def _segment(name: str, scope: str | None, ns_type: str | None) -> dict[str, Any]:
     """A raw ManagedVxlanSegment node."""
-    namespace = {"node": {"name": {"value": "NS"}, "namespace_type": {"value": ns_type}}}
-    gateway = {"node": {"ip_prefix": {"node": {"ip_namespace": namespace}}}} if ns_type else None
-    return {"id": f"seg-{name}", "name": {"value": name}, "stretch_scope": {"value": scope}, "gateway": gateway}
+    namespace = {"node": {"name": {"value": "NS"}, "vrf_type": {"value": ns_type}}}
+    gateway = (
+        {"node": {"ip_prefix": {"node": {"ip_namespace": {"node": {"name": {"value": "default"}}}}}}}
+        if ns_type
+        else None
+    )
+    return {
+        "id": f"seg-{name}",
+        "name": {"value": name},
+        "stretch_scope": {"value": scope},
+        "security_zone": namespace if ns_type else None,
+        "gateway": gateway,
+    }
 
 
 def _vrf(namespace: str, l3_vni: int | None = 5000, ns_type: str | None = "prod") -> dict[str, Any]:
     """A raw ManagedVRF membership (``device.shared_capabilities``)."""
-    ns = {"name": {"value": namespace}, "l3_vni": {"value": l3_vni}, "namespace_type": {"value": ns_type}}
-    return {"__typename": "ManagedVRF", "namespace": {"node": ns}}
+    ns = {"name": {"value": namespace}, "l3_vni": {"value": l3_vni}, "vrf_type": {"value": ns_type}}
+    return {"__typename": "ManagedVRF", "security_zone": {"node": ns}}
 
 
 def _overlay(router_id: str | None) -> dict[str, Any]:
@@ -66,18 +76,24 @@ def _iface(role: str, vrf_namespace: str | None = None, contexts: list[dict[str,
         "capabilities": edges(*(contexts or [])),
     }
     if vrf_namespace:
-        node["vrf"] = {"node": {"namespace": {"node": {"name": {"value": vrf_namespace}}}}}
+        node["vrf"] = {"node": {"security_zone": {"node": {"name": {"value": vrf_namespace}}}}}
     return node
 
 
 def _leg_context(namespace: str, ns_type: str) -> dict[str, Any]:
     """A raw firewall context with one transit leg on a firewall member."""
     leg = {
+        "vrf": {
+            "node": {
+                "id": f"vrf-{namespace}",
+                "security_zone": {"node": {"name": {"value": namespace}, "vrf_type": {"value": ns_type}}},
+            }
+        },
         "device": {"node": {"role": {"value": "internal-firewall"}}},
         "ip_address": {
             "node": {
                 "address": {"value": "10.1.0.1/29"},
-                "ip_namespace": {"node": {"name": {"value": namespace}, "namespace_type": {"value": ns_type}}},
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         },
     }

@@ -221,24 +221,24 @@ def test_match_transit_contexts_keys_a_served_colocation_context_by_its_metro() 
 
 
 def test_match_transit_contexts_keys_a_shared_context_per_tenant_namespace() -> None:
-    """A DC's PROD and NON-PROD shared contexts are two keys, a dedicated one a third."""
+    """A DC's PROD and NONPROD shared contexts are two keys, a dedicated one a third."""
     prod = _context("shared-fw-dc12-prod", dcs=("DC12",))
-    non_prod = _context("shared-fw-dc12-non-prod", dcs=("DC12",), namespaces=("NON-PROD", "INTERNET", "MANAGEMENT"))
+    non_prod = _context("shared-fw-dc12-nonprod", dcs=("DC12",), namespaces=("NONPROD", "INTERNET", "MANAGEMENT"))
     dedicated = _context("c005-fw-dc12-prod", tenant="C005-P-DC12")
 
     by_key, unmatched = match_transit_contexts([prod, non_prod, dedicated], ("DC12",), ("C005-P-DC12",))
 
     assert by_key == {
         ("DC12", "PROD", None): prod,
-        ("DC12", "NON-PROD", None): non_prod,
+        ("DC12", "NONPROD", None): non_prod,
         ("DC12", "PROD", "C005-P-DC12"): dedicated,
     }
     assert unmatched == []
 
 
 def test_match_transit_contexts_leaves_a_context_in_no_single_tenant_namespace_unmatched() -> None:
-    """A context with a leg in both PROD and NON-PROD, or a second one for a key, is not keyed."""
-    mixed = _context("fw-dc12-mixed", dcs=("DC12",), namespaces=("PROD", "NON-PROD", "INTERNET"))
+    """A context with a leg in both PROD and NONPROD, or a second one for a key, is not keyed."""
+    mixed = _context("fw-dc12-mixed", dcs=("DC12",), namespaces=("PROD", "NONPROD", "INTERNET"))
     first = _context("shared-fw-dc12-prod", dcs=("DC12",))
     second = _context("shared-fw-dc12-prod-again", dcs=("DC12",))
 
@@ -305,16 +305,16 @@ def test_shared_contexts_of_a_site_are_listed_in_namespace_order_whatever_the_de
     contexts: dict[tuple[str, str, str | None], dict[str, Any]] = {
         ("DC12", "PROD", None): {"name": "shared-prod"},
         ("DC12", "PROD", "C005-P-DC12"): {"name": "dedicated"},
-        ("DC12", "NON-PROD", None): {"name": "shared-non-prod"},
+        ("DC12", "NONPROD", None): {"name": "shared-nonprod"},
         ("DC10", "PROD", None): {"name": "other-site"},
     }
 
-    assert [c["name"] for c in _shared_contexts(contexts, "DC12")] == ["shared-non-prod", "shared-prod"]
+    assert [c["name"] for c in _shared_contexts(contexts, "DC12")] == ["shared-nonprod", "shared-prod"]
 
 
 _CHECKPOINT_TWO_CONTEXTS = """!
 add virtual-system name ctx-np
-set interface eth1.1 security-zone NONPROD-ZONE
+set interface eth1.1 security-zone NONPROD
 set virtual-system ctx-np interface eth1.1
 set virtual-system ctx-np
 mgmt_cli add host name "SNAT-ctx-np" ip-address "192.0.2.3"
@@ -324,10 +324,10 @@ set virtual-system ctx-p
 !
 ! --- Zone isolation ---
 set virtual-system ctx-np
-add access-rule layer "Network" position top name "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE"
+add access-rule layer "Network" position top name "deny-MANAGEMENT-to-NONPROD"
 !
 set virtual-system ctx-p
-add access-rule layer "Network" position top name "deny-MANAGEMENT-ZONE-to-PROD-ZONE"
+add access-rule layer "Network" position top name "deny-MANAGEMENT-to-PROD"
 !
 set cluster mode HighAvailability
 """
@@ -340,10 +340,10 @@ def test_context_lines_of_a_check_point_member_hold_only_that_virtual_systems_ru
     non_prod = _context_lines(_CHECKPOINT_TWO_CONTEXTS, "checkpoint_gaia", "ctx-np")
     prod = _context_lines(_CHECKPOINT_TWO_CONTEXTS, "checkpoint_gaia", "ctx-p")
 
-    assert "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE" in non_prod
-    assert "deny-MANAGEMENT-ZONE-to-PROD-ZONE" not in non_prod
-    assert "deny-MANAGEMENT-ZONE-to-PROD-ZONE" in prod
-    assert "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE" not in prod
+    assert "deny-MANAGEMENT-to-NONPROD" in non_prod
+    assert "deny-MANAGEMENT-to-PROD" not in non_prod
+    assert "deny-MANAGEMENT-to-PROD" in prod
+    assert "deny-MANAGEMENT-to-NONPROD" not in prod
     assert "set cluster mode HighAvailability" not in prod
 
 

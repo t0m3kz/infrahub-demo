@@ -118,7 +118,7 @@ def test_the_scan_finds_generator_zoned_segments() -> None:
 
 
 def test_generator_zoned_segments_declare_no_tenant_zone() -> None:
-    """ensure_security_zone derives PROD-ZONE/NONPROD-ZONE from the environment: typing it is a second source.
+    """ensure_security_zone derives PROD/NONPROD from the environment: typing it is a second source.
     An exchange zone (MANAGEMENT services) is authored data the generator keeps."""
     zoned = _generator_zoned_segments()
     offenders = [

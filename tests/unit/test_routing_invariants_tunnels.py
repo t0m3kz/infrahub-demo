@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from tests.integration.demo_data import relationship, relationship_names
+from tests.unit.cloud_leg_helpers import attachment, peering
+from tests.unit.external_vrf_peers_helpers import _raw_vrf
 from tests.unit.routing_invariants_helpers import (
     _CUSTOMER,
     _PROVIDER,
@@ -29,12 +31,14 @@ def _tunnel(
     owner: tuple[str, str, str] | None,
     *prefixes: dict[str, Any],
     ends: tuple[str, ...] = (_GW1, "EXT-ACME-EDGE1"),
+    namespace: str = "PROD",
 ) -> dict[str, Any]:
     """A TopologySessionCircuit in the routing_invariants shape: the office of ``owner`` in its locations (the tunnel
     stores no owner; a second location is no office), end-port devices, registered prefixes."""
     return {
         "id": f"tunnel-{name}",
         "name": _v(name),
+        "vrf": {"node": _raw_vrf(namespace)},
         "locations": {"edges": [{"node": {"owner": _owner(owner)}}, {"node": {}}]},
         "capabilities": {"edges": [{"node": {"device": {"node": {"name": _v(device)}}}} for device in ends]},
         "registered_prefixes": {"edges": [{"node": prefix} for prefix in prefixes]},
@@ -63,11 +67,11 @@ class TestTunnelPrefixesAreProd:
         assert check._captured_errors == []
 
     def test_a_non_prod_prefix_is_an_error(self) -> None:
-        """A tunnel registers PROD space; a NON-PROD prefix would never be accepted by the PROD session."""
-        check = _run(TopologySessionCircuit=[_tunnel("T", _CUSTOMER, _block(_ACME, "NON-PROD", "non_prod"))])
+        """A tunnel registers PROD space; a NONPROD prefix would never be accepted by the PROD session."""
+        check = _run(TopologySessionCircuit=[_tunnel("T", _CUSTOMER, _block(_ACME), namespace="NONPROD")])
         errors = _errors_with(check, "tunnel 'T' registered prefix")
         assert len(errors) == 1
-        assert "NON-PROD" in errors[0]
+        assert "NONPROD" in errors[0]
         assert "always production" in errors[0]
 
     def test_a_prefix_overlapping_a_vpc_block_is_an_error(self) -> None:
@@ -81,6 +85,8 @@ class TestTunnelPrefixesAreProd:
         check = _run(
             TopologySessionCircuit=[_tunnel("T", _CUSTOMER, _block(_ACME))],
             CloudVirtualNetwork=[vpc],
+            CloudPeeringInterface=[peering("vif", "dx", on="vgw")],
+            CloudGatewayAttachment=[attachment("a", "vgw", network="v", blocks=(_block("198.18.0.0/16"),))],
         )
         assert len(_errors_with(check, "overlaps")) == 1
 
@@ -232,7 +238,7 @@ def test_the_query_selects_what_the_tunnel_rules_read() -> None:
         "capabilities.device.name",
         "registered_prefixes.prefix",
         "registered_prefixes.ip_namespace.name",
-        "registered_prefixes.ip_namespace.namespace_type",
+        "vrf.security_zone.vrf_type",
     ]
     assert not [item for item in reads if item not in selected]
     assert {"locations", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")

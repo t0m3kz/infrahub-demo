@@ -66,12 +66,12 @@ def _inputs(**overrides: Any) -> LispInputs:
     return LispInputs(**values)
 
 
-_PROD = {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}
+_PROD = {"name": "PROD", "l3_vni": 50001, "vrf_type": "prod"}
 
 
 def _vrf(namespace: dict[str, Any]) -> dict[str, Any]:
     """A ManagedVRF membership of the device (``device.shared_capabilities``), as the cleaned config query returns it."""
-    return {"typename": "ManagedVRF", "namespace": namespace}
+    return {"typename": "ManagedVRF", "security_zone": namespace}
 
 
 def _activation(
@@ -80,11 +80,16 @@ def _activation(
     gateway: str | None = "10.1.0.1/24",
     namespace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    segment: dict[str, Any] = {"name": f"seg-{vlan_id}", "customer_name": f"seg-{vlan_id}", "arp_suppression": True}
+    segment: dict[str, Any] = {
+        "name": f"seg-{vlan_id}",
+        "customer_name": f"seg-{vlan_id}",
+        "arp_suppression": True,
+        "security_zone": namespace or _PROD,
+    }
     if gateway:
         segment["gateway"] = {
             "address": gateway,
-            "ip_prefix": {"ip_namespace": namespace or {"name": "PROD", "l3_vni": 50001}},
+            "ip_prefix": {"ip_namespace": {"name": "default"}},
         }
     return {"vlan_id": vlan_id, "vni": vni, "status": "active", "segment": segment}
 
@@ -159,9 +164,9 @@ class TestRenderedEdge:
         text = run_transform(AccessSwitch, _raw(ACCESS_INPUT))
 
         assert (
-            " instance-id 50001\n  dynamic-eid VRF_A-IPV4\n   database-mapping 10.100.0.0/24 locator-set RLOC\n" in text
+            " instance-id 60000\n  dynamic-eid PROD-IPV4\n   database-mapping 10.100.0.0/24 locator-set RLOC\n" in text
         )
-        assert "   eid-table vrf VRF_A\n   map-cache 0.0.0.0/0 map-request\n" in text
+        assert "   eid-table vrf PROD\n   map-cache 0.0.0.0/0 map-request\n" in text
         assert (
             " instance-id 10100\n  service ethernet\n   eid-table vlan 100\n   database-mapping mac locator-set RLOC\n"
             in text
@@ -171,8 +176,8 @@ class TestRenderedEdge:
         text = run_transform(AccessSwitch, _raw(ACCESS_INPUT))
 
         assert (
-            "interface Vlan100\n description Customer-A\n vrf forwarding VRF_A\n ip address 10.100.0.1 255.255.255.0\n"
-            " lisp mobility VRF_A-IPV4\n mac-address 001c.7300.dc01\n"
+            "interface Vlan100\n description Customer-A\n vrf forwarding PROD\n ip address 10.100.0.1 255.255.255.0\n"
+            " lisp mobility PROD-IPV4\n mac-address 001c.7300.dc01\n"
         ) in text
 
     def test_no_evpn_vxlan_or_bgp_leftovers(self) -> None:
@@ -184,7 +189,7 @@ class TestRenderedEdge:
 
     def test_every_unverified_vrf_and_router_lisp_line_has_a_marker_above_the_block(self) -> None:
         lines = run_transform(AccessSwitch, _raw(ACCESS_INPUT)).splitlines()
-        vrf = lines.index("vrf definition VRF_A")
+        vrf = lines.index("vrf definition PROD")
         assert MARKER in lines[vrf - 1]
         router = lines.index("router lisp")
         assert MARKER in lines[router + 1]
@@ -260,7 +265,7 @@ class TestLispContext:
         assert config["site"] is None
 
     def test_prefixes_are_grouped_per_vrf_deduplicated_and_sorted(self) -> None:
-        other = {"name": "DEV", "l3_vni": 50002, "namespace_type": "non_prod"}
+        other = {"name": "DEV", "l3_vni": 50002, "vrf_type": "non_prod"}
         activations = [
             _activation(100, 10100, "10.1.1.1/24"),
             _activation(101, 10101, "10.1.0.1/24"),
@@ -358,23 +363,40 @@ class TestBuildLispInputs:
                 {
                     "vni": 10100,
                     "segment": {
+                        "security_zone": {"name": "PROD", "l3_vni": 50001},
                         "gateway": {
-                            "ip_prefix": {"prefix": "10.1.0.0/24", "ip_namespace": {"name": "PROD", "l3_vni": 50001}}
-                        }
+                            "ip_prefix": {
+                                "security_zone": {"name": "PROD", "l3_vni": 50001},
+                                "prefix": "10.1.0.0/24",
+                                "ip_namespace": {"node": {"name": {"value": "default"}}},
+                            }
+                        },
                     },
                 },
                 {
                     "vni": 10300,
                     "segment": {
-                        "gateway": {"ip_prefix": {"prefix": "10.3.0.0/24", "ip_namespace": {"name": "default"}}}
+                        "security_zone": {"name": "default"},
+                        "gateway": {
+                            "ip_prefix": {
+                                "security_zone": {"name": "default"},
+                                "prefix": "10.3.0.0/24",
+                                "ip_namespace": {"node": {"name": {"value": "default"}}},
+                            }
+                        },
                     },
                 },
                 {
                     "vni": None,
                     "segment": {
+                        "security_zone": {"name": "PROD", "l3_vni": 50001},
                         "gateway": {
-                            "ip_prefix": {"prefix": "10.4.0.0/24", "ip_namespace": {"name": "PROD", "l3_vni": 50001}}
-                        }
+                            "ip_prefix": {
+                                "security_zone": {"name": "PROD", "l3_vni": 50001},
+                                "prefix": "10.4.0.0/24",
+                                "ip_namespace": {"node": {"name": {"value": "default"}}},
+                            }
+                        },
                     },
                 },
             ],
@@ -475,7 +497,14 @@ class TestPurityAndShape:
                 {
                     "vni": 1,
                     "segment": {
-                        "gateway": {"ip_prefix": {"prefix": "10.1.0.0/24", "ip_namespace": {"name": "P", "l3_vni": 5}}}
+                        "security_zone": {"name": "P", "l3_vni": 5},
+                        "gateway": {
+                            "ip_prefix": {
+                                "security_zone": {"name": "P", "l3_vni": 5},
+                                "prefix": "10.1.0.0/24",
+                                "ip_namespace": {"node": {"name": {"value": "default"}}},
+                            }
+                        },
                     },
                 }
             ],

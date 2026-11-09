@@ -7,7 +7,7 @@ is reachable only when it is one of:
 - a VPC block of an account owned by the source segment's owner, whose attachment propagates into the route table the
   hybrid (transit VIF) attachment is associated with (what ``vif_registered_blocks`` reads off the AWS handoff session),
 - a prefix in the ``registered_prefixes`` of a tunnel circuit owned by that owner (the Acme extranet), or
-- the internet zone, ``destination_zone: INTERNET-ZONE`` (a SaaS PoP is public space and registers nothing).
+- the internet zone, ``destination_zone: INTERNET`` (a SaaS PoP is public space and registers nothing).
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ _POLICY = "seg-c001-nordix-prod-p-egress"
 _SOURCE_SEGMENT = "c001-nordix-prod-p"
 _OWNER = "C001"
 _VPC = "nordix-vpc-prod"
-_VPC_BLOCK = ["10.10.0.0/16", "PROD"]
-_ACME_RANGE = ["198.18.0.0/24", "PROD"]
+_VPC_BLOCK = ["10.10.0.0/16", "default"]
+_ACME_RANGE = ["198.18.0.0/24", "default"]
 
 
 def _rules(policy_name: str = _POLICY) -> list[dict[str, Any]]:
@@ -103,6 +103,8 @@ def test_nordix_is_boarded_into_aws_like_the_other_hub_tenants() -> None:
     assert network["account"] == "nordix-aws-prod" and network["region"] == "eu-central-1"
     assert network["cidr_blocks"] == [_VPC_BLOCK]
     assert tuple(_VPC_BLOCK) in _declared_prefixes()
+    (block,) = [p.item for p in declared("IpamPrefix", _ALL) if p.item["prefix"] == _VPC_BLOCK[0]]
+    assert block["security_zone"] == "PROD" and block["ip_namespace"] == "default"
 
 
 def test_the_nordix_vpc_attachment_is_a_cross_account_attachment_onto_the_hub() -> None:
@@ -189,7 +191,10 @@ def test_a_destination_registered_behind_nothing_is_rejected_by_the_derivation()
 
 
 def test_the_unreachable_destinations_are_gone_from_the_demo() -> None:
-    """No prefix object stands for the C004 Azure range (aimed at without a session) or the Zscaler PoP (internet space)."""
+    """Neither the unrelated C004 Azure block nor the public Zscaler PoP is a destination of C001's policy."""
     prefixes = {prefix for prefix, _ in _declared_prefixes()}
     assert "198.51.100.0/24" not in prefixes
-    assert ("10.40.0.0/16", "default") not in _declared_prefixes()
+    assert ("10.40.0.0/16", "default") in _declared_prefixes()
+    destinations = {tuple(prefix) for rule in _rules() for prefix in rule.get("destination_prefixes") or []}
+    assert ("10.40.0.0/16", "default") not in destinations
+    assert ("198.51.100.0/24", "default") not in destinations

@@ -1,54 +1,56 @@
-# The rows of checks/circuit_placement.py, one root per circuit kind (the role of a session circuit is its
-# `circuit_type`: dci, handoff, tunnel or vpn). A circuit has no owner of its own: it is derived from the offices
-# among its locations (each office carries its owner).
-#
-# - TopologyCarrierCircuit: the places it terminates on (locations, an office location with its owner) and the
-#   device each end port sits on with where that device is deployed.
-# - TopologySessionCircuit: circuit_type, status (a decommissioned dci, handoff or vpn is exempt: nothing is built for
-#   it), locations (an office location carries its owner), end ports; each port's device carries its BGP
-#   processes (a dci needs exactly one overlay process on it). What only one type may carry is selected for all:
-#   ip_namespace (with its namespace_type) for a handoff or a vpn, password and registered_prefixes (their ids only).
-#   A handoff's locations are exactly where its two end devices are deployed, so every end port's device carries
-#   its deployment.
-#
-# A session circuit's end port (VirtualPort) carries the carrier circuits terminating on it (its own
-# `capabilities`, which also hold peerings and contexts: only TopologyCarrierCircuit is selected) and, for a
-# sub-interface, the same on its parent interface: a handoff VLAN rides the circuit that terminates on the parent.
-# A hop inside one facility is a DcimCable, not a circuit, so the port (a physical interface has the relationship)
-# and its parent carry their `cable` too: a handoff is carried by a cable (the dci and tunnel rules read
-# circuits only). The check derives the carrier per port from utils/circuit_underlay.py (a decommissioned circuit is
-# no carrier; a cable has no status).
-# Every circuit_type shares the one port fragment, so a type that does not read a path of it (a tunnel and the
-# BGP processes) still selects it. One global query.
-#
-# A cloud transport (the device of a cloud port or peering interface) has no deployment: its facility is its `region`
-# or `saas_region`; the provider's port (a Fabric port, the public side of a region) has none either: its facility is its
-# own `location`.
-# A handoff end is a `<port>.<vlan>` sub-interface, a routed physical port (it has an address) or a
-# cloud peering interface (its `vlan_id` is optional).
-#
-# Concrete inline fragments only for the deployment of a physical end, so the query is valid whether the deployment
-# peer is a generic or a concrete kind. Both kinds' `locations` peer TopologyFacility (an office is one, which is
-# why only the office carries an owner here).
 query circuit_placement {
-  # THE INTERNET: one passive device that is also a facility, with one interface; the carriers that end on that
-  # interface are judged in utils/internet_object.py.
-  TopologyInternet { edges { node { id name { value } interfaces { edges { node { id __typename name { value } } } } } } }
-
+  TopologyInternet {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        interfaces {
+          edges {
+            node {
+              id
+              __typename
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   TopologyCarrierCircuit {
     edges {
       node {
         id
-        name { value }
-        status { value }
-        circuit_type { value }
+        name {
+          value
+        }
+        status {
+          value
+        }
+        circuit_type {
+          value
+        }
         locations {
           edges {
             node {
               id
               __typename
-              name { value }
-              ... on TopologyCustomerOffice { owner { node { id org_id { value } } } }
+              name {
+                value
+              }
+              ... on TopologyCustomerOffice {
+                owner {
+                  node {
+                    id
+                    org_id {
+                      value
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -57,27 +59,79 @@ query circuit_placement {
             node {
               id
               __typename
-              name { value }
+              name {
+                value
+              }
               device {
                 node {
                   id
                   __typename
-                  name { value }
+                  name {
+                    value
+                  }
                   ... on DcimPhysicalDevice {
-                    deployment { node { id __typename name { value } } }
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                   ... on DcimVirtualDevice {
-                    deployment { node { id __typename name { value } } }
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                   ... on CloudNetworkAppliance {
-                    deployment { node { id __typename name { value } } }
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                   ... on CloudTransport {
-                    region { node { id __typename name { value } } }
-                    saas_region { node { id __typename name { value } } }
+                    region {
+                      node {
+                        id
+                        __typename
+                        name {
+                          value
+                        }
+                      }
+                    }
+                    saas_region {
+                      node {
+                        id
+                        __typename
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                   ... on TopologyProviderConnect {
-                    location { node { id __typename name { value } } }
+                    location {
+                      node {
+                        id
+                        __typename
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -87,28 +141,64 @@ query circuit_placement {
       }
     }
   }
-
   TopologySessionCircuit {
     edges {
       node {
         id
-        name { value }
-        status { value }
-        circuit_type { value }
+        name {
+          value
+        }
+        status {
+          value
+        }
+        circuit_type {
+          value
+        }
         locations {
           edges {
             node {
               id
               __typename
-              name { value }
-              ... on TopologyCustomerOffice { owner { node { id org_id { value } } } }
+              name {
+                value
+              }
+              ... on TopologyCustomerOffice {
+                owner {
+                  node {
+                    id
+                    org_id {
+                      value
+                    }
+                  }
+                }
+              }
             }
           }
         }
-        ip_namespace { node { name { value } namespace_type { value } } }
-        password { node { id } }
-        registered_prefixes { edges { node { id } } }
-        capabilities { edges { node { ...VirtualPort } } }
+        vrf {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        password {
+          node {
+            id
+          }
+        }
+        registered_prefixes {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              ...VirtualPort
+            }
+          }
+        }
       }
     }
   }
@@ -117,33 +207,53 @@ query circuit_placement {
 fragment VirtualPort on DcimInterface {
   id
   __typename
-  name { value }
+  name {
+    value
+  }
   capabilities {
     edges {
       node {
         __typename
-        ... on TopologyCarrierCircuit { ...Carrier }
+        ... on TopologyCarrierCircuit {
+          ...Carrier
+        }
       }
     }
   }
   ... on DcimPhysicalInterface {
-    cable { node { id } }
-    ip_address { node { id } }
+    cable {
+      node {
+        id
+      }
+    }
+    ip_address {
+      node {
+        id
+      }
+    }
   }
   ... on CloudPeeringInterface {
-    vlan_id { value }
+    vlan_id {
+      value
+    }
   }
   ... on DcimVirtualInterface {
     parent_interface {
       node {
         ... on DcimPhysicalInterface {
-          cable { node { id } }
+          cable {
+            node {
+              id
+            }
+          }
         }
         capabilities {
           edges {
             node {
               __typename
-              ... on TopologyCarrierCircuit { ...Carrier }
+              ... on TopologyCarrierCircuit {
+                ...Carrier
+              }
             }
           }
         }
@@ -154,26 +264,72 @@ fragment VirtualPort on DcimInterface {
     node {
       id
       __typename
-      name { value }
+      name {
+        value
+      }
       ... on DcimPhysicalDevice {
-        deployment { node { id __typename name { value } } }
+        deployment {
+          node {
+            id
+            __typename
+            name {
+              value
+            }
+          }
+        }
       }
       ... on DcimVirtualDevice {
-        deployment { node { id __typename name { value } } }
+        deployment {
+          node {
+            id
+            __typename
+            name {
+              value
+            }
+          }
+        }
       }
       ... on CloudNetworkAppliance {
-        deployment { node { id __typename name { value } } }
+        deployment {
+          node {
+            id
+            __typename
+            name {
+              value
+            }
+          }
+        }
       }
       ... on CloudTransport {
-        region { node { id __typename name { value } } }
-        saas_region { node { id __typename name { value } } }
+        region {
+          node {
+            id
+            __typename
+            name {
+              value
+            }
+          }
+        }
+        saas_region {
+          node {
+            id
+            __typename
+            name {
+              value
+            }
+          }
+        }
       }
       ... on DcimCapabilities {
         capabilities {
           edges {
             node {
               __typename
-              ... on ManagedBGP { process_role { value } }
+              ... on ManagedBGP {
+                process_role {
+                  value
+                }
+              }
             }
           }
         }
@@ -182,12 +338,40 @@ fragment VirtualPort on DcimInterface {
   }
 }
 
-# A carrier circuit found on a port: its status (a decommissioned one is no carrier), where it terminates and
-# the ports it terminates on (a carrier of exactly the circuit's two ports is pure fibre).
 fragment Carrier on TopologyCarrierCircuit {
   id
-  name { value }
-  status { value }
-  locations { edges { node { id __typename name { value } } } }
-  capabilities { edges { node { id name { value } device { node { name { value } } } } } }
+  name {
+    value
+  }
+  status {
+    value
+  }
+  locations {
+    edges {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+      }
+    }
+  }
+  capabilities {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        device {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
 }

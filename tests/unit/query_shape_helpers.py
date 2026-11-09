@@ -13,7 +13,10 @@ from graphql import (
     OperationDefinitionNode,
     SelectionSetNode,
     parse,
+    print_ast,
 )
+
+from utils.graphql_queries import load_query
 
 Tree = dict[str, "Tree"]
 
@@ -39,10 +42,17 @@ def _selection_tree(selection_set: SelectionSetNode | None, fragments: dict[str,
 
 def query_tree(path: Path) -> Tree:
     """The tree of fields the query file selects, from its operation."""
-    document = parse(path.read_text())
+    document = parse(load_query(path))
     fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
     operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
     return _selection_tree(operation.selection_set, fragments)
+
+
+def fragment_tree(path: Path, name: str) -> Tree:
+    """The response fields of a fragment, including all transitively shared selections."""
+    document = parse(load_query(path))
+    fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
+    return _selection_tree(fragments[name].selection_set, fragments)
 
 
 def unselected(emitted: Any, tree: Tree, path: str = "") -> list[str]:
@@ -58,3 +68,10 @@ def unselected(emitted: Any, tree: Tree, path: str = "") -> list[str]:
         else:
             missing.extend(unselected(value, tree[key], f"{path}.{key}"))
     return missing
+
+
+def compact(text: str) -> str:
+    """A query as one whitespace-normalized line, so a reformatting (one-line vs multi-line selections) cannot matter.
+
+    ``terminated_on { node { id } }`` is found in the result however the file lays the selection out."""
+    return " ".join(print_ast(parse(text)).split())

@@ -38,6 +38,7 @@ from utils.exchange_transit import (
 )
 from utils.fabric_roles import BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE, GROUP_PROVIDER_STUBS
+from utils.routing_domain import interface_security_zone
 from utils.segment_addressing import hosting_deployment, routed_segment_namespace
 
 VRF_KIND = "ManagedVRF"
@@ -112,7 +113,8 @@ def address_namespaces(interfaces: Iterable[dict[str, Any]]) -> frozenset[str]:
     return frozenset(
         name
         for iface in interfaces
-        if (name := ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name"))
+        if (iface.get("ip_address") or {}).get("address")
+        if (name := interface_security_zone(iface).get("name"))
     )
 
 
@@ -144,7 +146,7 @@ def internet_exits(namespaces: Iterable[Mapping[str, Any]], *, border_gateway: b
     """The VXLAN default exits: an EVPN Multi-Site border gateway's internet-type instances (none elsewhere)."""
     if not border_gateway:
         return frozenset()
-    return frozenset(ns["name"] for ns in namespaces if ns.get("namespace_type") == INTERNET_TYPE and ns.get("name"))
+    return frozenset(ns["name"] for ns in namespaces if ns.get("vrf_type") == INTERNET_TYPE and ns.get("name"))
 
 
 @dataclass(frozen=True)
@@ -278,7 +280,7 @@ class DeviceVrfFacts:
         desired: dict[str, str] = {}
         for name in sorted((self.inputs.row_namespaces | self.inputs.leg_namespaces) - {DEFAULT_NAMESPACE}):
             namespace = namespaces.get(name) or {}
-            vlan = l3vni_svi_vlan(namespace.get("namespace_type"))
+            vlan = l3vni_svi_vlan(namespace.get("vrf_type"))
             if namespace.get("l3_vni") and vlan is not None:
                 desired[svi_name(vlan)] = name
         return desired
@@ -375,7 +377,7 @@ def _svi(iface: dict[str, Any]) -> SviFacts:
         id=iface.get("id") or "",
         name=iface.get("name") or "",
         vrf_id=vrf.get("id"),
-        vrf_namespace=(vrf.get("namespace") or {}).get("name"),
+        vrf_namespace=(vrf.get("security_zone") or {}).get("name"),
         vrf_deployment_id=(vrf.get("deployment") or {}).get("id"),
         row_id=(iface.get("segment_vlan") or {}).get("id"),
         has_address=bool((iface.get("ip_address") or {}).get("address")),
@@ -396,13 +398,13 @@ def device_memberships(node: dict[str, Any]) -> list[dict[str, Any]]:
 
 def instance_facts(vrf: dict[str, Any]) -> InstanceFacts:
     """One cleaned ManagedVRF node (a ``shared_capabilities`` entry of a device, or the ``ManagedVRF`` root of vrf_instances.gql)."""
-    namespace = vrf.get("namespace") or {}
+    namespace = vrf.get("security_zone") or {}
     return InstanceFacts(
         id=vrf.get("id") or "",
         name=vrf.get("name"),
         namespace=namespace.get("name"),
         l3_vni=namespace.get("l3_vni"),
-        namespace_type=namespace.get("namespace_type"),
+        namespace_type=namespace.get("vrf_type"),
         deployment_id=(vrf.get("deployment") or {}).get("id"),
         member_ids=frozenset(device["id"] for device in vrf.get("shared_devices") or [] if device.get("id")),
     )
@@ -422,8 +424,8 @@ def _service_footprints(interfaces: list[dict[str, Any]]) -> tuple[tuple[str, st
             footprints.add(ctx["tenant"]["id"])
         for leg in ctx.get("capabilities") or []:
             namespace = transit_leg_namespace(ctx.get("vlan_id"), leg)
-            if namespace and namespace.get("namespace_type") in TENANT_NAMESPACE_TYPES:
-                kind, merged = found.get(namespace["name"], (namespace["namespace_type"], frozenset()))
+            if namespace and namespace.get("vrf_type") in TENANT_NAMESPACE_TYPES:
+                kind, merged = found.get(namespace["name"], (namespace["vrf_type"], frozenset()))
                 found[namespace["name"]] = (kind, merged | frozenset(footprints))
     return tuple((name, kind, footprints) for name, (kind, footprints) in sorted(found.items()))
 
@@ -475,5 +477,5 @@ def all_instances(cleaned: dict[str, Any]) -> tuple[InstanceFacts, ...]:
 
 
 def namespaces_by_name(cleaned: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """The ``IpamNamespace`` root of the query, by name."""
-    return {ns["name"]: ns for ns in cleaned.get("IpamNamespace") or [] if ns.get("name")}
+    """The authoritative ``SecurityZone`` root of the query, by name."""
+    return {ns["name"]: ns for ns in cleaned.get("SecurityZone") or [] if ns.get("name")}

@@ -17,18 +17,19 @@ def _value(value: Any) -> dict[str, Any]:
 
 
 def _namespace(name: str, ns_type: str, vni: int) -> dict[str, Any]:
-    return {
-        "node": {"id": f"ns-{name}", "name": _value(name), "namespace_type": _value(ns_type), "l3_vni": _value(vni)}
-    }
+    return {"node": {"id": f"ns-{name}", "name": _value(name), "vrf_type": _value(ns_type), "l3_vni": _value(vni)}}
 
 
 def _leg(address: str, namespace: dict[str, Any]) -> dict[str, Any]:
     return {
         "node": {
+            "vrf": {"node": {"id": f"vrf-{namespace['node']['id']}", "security_zone": namespace}},
             "__typename": "DcimVirtualInterface",
             "id": f"leg-{address}",
             "device": {"node": {"id": "fw-1", "name": _value("fw-1"), "role": _value("internal-firewall")}},
-            "ip_address": {"node": {"address": _value(address), "ip_namespace": namespace}},
+            "ip_address": {
+                "node": {"address": _value(address), "ip_namespace": {"node": {"name": {"value": "default"}}}}
+            },
         }
     }
 
@@ -43,8 +44,8 @@ def _port(device_id: str) -> dict[str, Any]:
     }
 
 
-PROD = _namespace("PROD", "prod", 50001)
-INTERNET = _namespace("INTERNET", "internet", 50003)
+PROD = _namespace("PROD", "prod", 60000)
+INTERNET = _namespace("INTERNET", "internet", 60002)
 
 
 def _firewall(
@@ -118,7 +119,7 @@ class _Gen(ContextRoutesGenerator):
                 SimpleNamespace(
                     id=f"vrf-{d.id}-{ns}",
                     shared_devices=SimpleNamespace(peers=[SimpleNamespace(id=d.id)]),
-                    namespace=SimpleNamespace(peer=SimpleNamespace(name=SimpleNamespace(value=ns))),
+                    security_zone=SimpleNamespace(peer=SimpleNamespace(name=SimpleNamespace(value=ns))),
                 )
                 for d in self.devices
                 for ns in self.vrf_namespaces

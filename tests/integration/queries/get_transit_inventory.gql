@@ -3,26 +3,53 @@ query GetTransitInventory {
     edges {
       node {
         id
-        name { value }
-        vlan_id { value }
-        snat_address { node { address { value } ip_namespace { node { name { value } } } } }
+        name {
+          value
+        }
+        vlan_id {
+          value
+        }
+        snat_address {
+          node {
+            address {
+              value
+            }
+            ip_namespace {
+              node {
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
         tenant {
           node {
             id
-            ... on TopologyCustomerDC { name { value } }
+            ... on TopologyCustomerDC {
+              name {
+                value
+              }
+            }
           }
         }
         cluster {
           node {
-            name { value }
-            # Member firewalls' deployment: the DC the cluster sits in (empty
-            # for a colocation metro's cluster and for a dedicated cluster of
-            # virtual members).
+            name {
+              value
+            }
             capabilities {
               edges {
                 node {
                   ... on DcimPhysicalDevice {
-                    deployment { node { __typename name { value } } }
+                    deployment {
+                      node {
+                        __typename
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -34,36 +61,69 @@ query GetTransitInventory {
             node {
               id
               ... on TopologyCustomer {
-                name { value }
+                name {
+                  value
+                }
               }
-              # Only DC and colocation footprints state an environment (TopologyEnvironmentScoped).
               ... on TopologyEnvironmentScoped {
-                environment { value }
+                environment {
+                  value
+                }
               }
             }
           }
         }
-        # Legs (the members' VLAN sub-interfaces) and the border-leaf service
-        # ports tagged with the context, told apart by __typename.
         capabilities {
           edges {
             node {
               __typename
               id
-              name { value }
-              device { node { id name { value } ... on DcimDeviceManaged { role { value } } } }
+              name {
+                value
+              }
+              device {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                  ... on DcimDeviceManaged {
+                    role {
+                      value
+                    }
+                  }
+                }
+              }
               ... on DcimVirtualInterface {
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
+                }
                 ip_address {
                   node {
-                    address { value }
-                    ip_namespace { node { name { value } namespace_type { value } } }
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
                 capabilities {
                   edges {
                     node {
                       __typename
-                      ... on TopologyRoutedExchange { id name { value } }
+                      ... on TopologyRoutedExchange {
+                        id
+                        name {
+                          value
+                        }
+                      }
                     }
                   }
                 }
@@ -78,10 +138,27 @@ query GetTransitInventory {
     edges {
       node {
         id
-        name { value }
-        namespace_a { node { name { value } namespace_type { value } } }
-        namespace_z { node { name { value } namespace_type { value } } }
-        gateway { node { id name { value } } }
+        name {
+          value
+        }
+        vrf_a {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        vrf_z {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
       }
     }
   }

@@ -772,6 +772,7 @@ class TestOfficeLan:
         assert kwargs["resource_pool"].id == "pool-1"
         assert kwargs["identifier"] == "office-lan__C001-OFFICE"
         assert kwargs["data"]["status"] == "active"
+        assert "security_zone" not in kwargs["data"]  # a neutral prefix: the office's VRF is its routing owner
         assert "C001-OFFICE" in kwargs["data"]["description"]
         attach = gen.client.create.await_args_list[-1].kwargs
         assert attach["kind"].__name__ == "TopologyCustomerOffice"
@@ -879,8 +880,8 @@ class TestOfficeLan:
         assert "lan_prefixes" in query
         assert "fabric_templates" in query
 
-    def test_tenant_prod_pool_allocates_a_24_in_the_prod_namespace(self) -> None:
-        """Tenant-PROD-IPv4 (bootstrap) hands out /24s inside the PROD namespace, what a LAN is."""
+    def test_tenant_prod_pool_allocates_a_24_in_default_ipam(self) -> None:
+        """The PROD LAN's routing owner is independent of its default IPAM pool identity."""
         path = Path(__file__).parents[2] / "data" / "bootstrap" / "23b_tenant_pools.yml"
         pools = {
             entry["name"]: entry
@@ -890,7 +891,7 @@ class TestOfficeLan:
         }
 
         assert pools["Tenant-PROD-IPv4"]["default_prefix_length"] == 24
-        assert pools["Tenant-PROD-IPv4"]["ip_namespace"] == "PROD"
+        assert pools["Tenant-PROD-IPv4"]["ip_namespace"] == "default"
 
 
 class TestHardCodedProviderIds:

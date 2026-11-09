@@ -1,0 +1,54 @@
+# Complete leg subinterfaces, with verified HA member offsets and explicit routing zones in default IPAM.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - security_zone: "PROD"
+      device: c900-waw1-fw-01-prod
+      name: eth1/1.3001
+      parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
+      role: service
+      status: active
+      mtu: 9000
+      ip_address: ["100.66.0.45/29", "default"]
+    - security_zone: "PROD"
+      device: c900-waw1-fw-02-prod
+      name: eth1/1.3001
+      parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
+      role: service
+      status: active
+      mtu: 9000
+      ip_address: ["100.66.0.46/29", "default"]
+    - security_zone: "INTERNET"
+      device: c900-waw1-fw-01-prod
+      name: eth1/1.3401
+      parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
+      role: service
+      status: active
+      mtu: 9000
+      ip_address: ["100.66.32.13/29", "default"]
+    - security_zone: "INTERNET"
+      device: c900-waw1-fw-02-prod
+      name: eth1/1.3401
+      parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
+      role: service
+      status: active
+      mtu: 9000
+      ip_address: ["100.66.32.14/29", "default"]
+    - security_zone: "MANAGEMENT"
+      device: c900-waw1-fw-01-prod
+      name: eth1/1.3601
+      parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
+      role: service
+      status: active
+      mtu: 9000
+      ip_address: ["100.66.48.5/29", "default"]
+    - security_zone: "MANAGEMENT"
+      device: c900-waw1-fw-02-prod
+      name: eth1/1.3601
+      parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
+      role: service
+      status: active
+      mtu: 9000
+      ip_address: ["100.66.48.6/29", "default"]

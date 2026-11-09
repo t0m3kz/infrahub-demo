@@ -1,0 +1,18 @@
+# DcimPhysicalInterface declarations in recursive dependency order.
+# The gateway of the workload's directly connected subnet; no existing cable or cloud/DCI port is changed.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - security_zone: "PROD"
+      device: par-colo1-xfw-01
+      name: ethernet1/2
+      role: uplink
+      status: active
+      description: Routed C900 workload attachment, par-colo1-srv-01 eno1
+      ip_address:
+        data:
+          address: "10.90.4.1/24"
+          ip_namespace: "default"
+          ip_prefix: ["10.90.4.0/24", "default"]

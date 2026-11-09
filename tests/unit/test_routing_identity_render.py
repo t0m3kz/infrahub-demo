@@ -188,14 +188,14 @@ class TestSonicOrigination:
 
     def test_the_vrf_redistributes_connected_through_the_route_map(self) -> None:
         """Without the reference the route map would be defined and never applied."""
-        af = json.loads(_leaf("sonic"))["BGP_GLOBALS_AF"]["VRF_A|ipv4_unicast"]
+        af = json.loads(_leaf("sonic"))["BGP_GLOBALS_AF"]["PROD|ipv4_unicast"]
         assert af["route_map_redistribute_connected"] == "RM-VRF-CONN-2-EVPN"
 
     def test_untagged_renders_no_route_map_tables(self) -> None:
         """No tag, no leaf transit: no ROUTE_MAP / PREFIX_SET / PREFIX and a bare redistribute."""
         db = json.loads(_leaf("sonic", tagged=False))
         assert not {"ROUTE_MAP", "PREFIX_SET", "PREFIX"} & set(db)
-        assert "route_map_redistribute_connected" not in db["BGP_GLOBALS_AF"]["VRF_A|ipv4_unicast"]
+        assert "route_map_redistribute_connected" not in db["BGP_GLOBALS_AF"]["PROD|ipv4_unicast"]
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +300,13 @@ class TestExternalSessionPolicyData:
     _PEERS = {
         "Ethernet1/13.1900": {"C003": ["10.210.3.0/24", "10.30.0.0/16"], "C001": ["198.18.0.0/24"], "C002": []},
     }
-    _IFACES = [{"name": "Ethernet1/13.1900", "ip_address": {"ip_namespace": {"name": "PROD"}}}]
+    _IFACES = [
+        {
+            "security_zone": {"name": "PROD"},
+            "name": "Ethernet1/13.1900",
+            "ip_address": {"ip_namespace": {"name": "PROD"}},
+        }
+    ]
 
     def _policies(self, **kwargs: Any) -> dict[str, dict[str, Any]]:
         return get_external_session_policies(copy.deepcopy(self._IFACES), copy.deepcopy(self._PEERS), {}, **kwargs)

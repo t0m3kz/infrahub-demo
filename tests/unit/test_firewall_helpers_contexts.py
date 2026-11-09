@@ -1,5 +1,6 @@
 """Unit tests for get_firewall_contexts() and place_policies_in_contexts() in transforms/helpers/firewall_contexts.py."""
 
+from tests.unit.routing_helpers import make_vrf
 from transforms.helpers.firewall_contexts import get_firewall_contexts, place_policies_in_contexts
 
 # ===========================================================================
@@ -92,9 +93,9 @@ class TestGetFirewallContexts:
 
     def test_cluster_context_is_not_duplicated_by_its_interface(self) -> None:
         iface = _make_fw_context_interface(context_id="ctx-1")
-        result = get_firewall_contexts([iface], None, [{"id": "ctx-1", "name": "dup"}])
+        result = get_firewall_contexts([iface], None, [{"id": "ctx-1", "name": "complete-ha-context"}])
         assert len(result) == 1
-        assert result[0]["name"] == "dc10-shared"
+        assert result[0]["name"] == "complete-ha-context"
 
     def test_duplicate_context_id_deduplicated(self) -> None:
         ifaces = [
@@ -125,9 +126,10 @@ class TestGetFirewallContexts:
 
 
 def _leg_iface(ns_type: str, address: str, *, vlan: int = 3000, ns_name: str | None = None) -> dict:
-    """A context sub-interface in a VRF namespace (an exchange transit leg)."""
+    """A context sub-interface explicitly assigned to its routing instance."""
     iface = _make_fw_context_interface(iface_name=f"eth1.{vlan}", ip_addr=address, parent_name="eth1", vlan_id=vlan)
-    iface["ip_address"]["ip_namespace"] = {"name": ns_name or ns_type.upper(), "namespace_type": ns_type}
+    iface["vrf"] = make_vrf({"name": ns_name or ns_type.upper().replace("_", ""), "vrf_type": ns_type})
+    iface["ip_address"]["ip_namespace"] = {"name": "default"}
     return iface
 
 
@@ -150,10 +152,10 @@ class TestGetFirewallContextsLegs:
         assert [leg["vlan"] for leg in legs] == [3000, 3200, 3400]
 
     def test_leg_carries_zone_nameif_vrf_and_anycast(self) -> None:
-        leg = get_firewall_contexts([_leg_iface("non_prod", "100.66.16.5/29", ns_name="NON-PROD")])[0]["legs"][0]
-        assert leg["zone"] == "NONPROD-ZONE"
+        leg = get_firewall_contexts([_leg_iface("non_prod", "100.66.16.5/29", ns_name="NONPROD")])[0]["legs"][0]
+        assert leg["zone"] == "NONPROD"
         assert leg["nameif"] == "nonprod"
-        assert leg["vrf"] == "NON-PROD"
+        assert leg["vrf"] == "NONPROD"
         assert leg["anycast"] == "100.66.16.1"
         assert leg["own_ip"] == "100.66.16.5/29"
         assert leg["interface"] == "eth1.3000"

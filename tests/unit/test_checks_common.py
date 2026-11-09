@@ -10,6 +10,7 @@ from checks.border_spine import CheckBorderSpine
 from checks.common import validate_exchange_gateways, validate_routing_password, validate_snat_addresses
 from checks.common import validate_transit_vlans as _validate_transit_vlans
 from checks.edge import CheckEdge
+from tests.unit.routing_helpers import make_vrf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.border_spine import BorderSpine
 from transforms.config.edge import Edge
@@ -138,7 +139,7 @@ def _context(context_id: str = GATEWAY_ID, vlan: int | None = CONTEXT_VLAN) -> d
     return {"typename": "ManagedFirewallContext", "id": context_id, "name": "ctx-1", "vlan_id": vlan}
 
 
-_NS_TYPE = {"PROD": "prod", "NON-PROD": "non_prod", "INTERNET": "internet"}
+_NS_TYPE = {"PROD": "prod", "NONPROD": "non_prod", "INTERNET": "internet"}
 
 
 def _fw_leg(
@@ -153,11 +154,12 @@ def _fw_leg(
     if address and namespace:
         ip_address = {
             "address": address,
-            "ip_namespace": {"name": namespace, "namespace_type": ns_type or _NS_TYPE.get(namespace, "prod")},
+            "ip_namespace": {"node": {"name": {"value": "default"}}},
         }
     return {
         "name": name,
         "ip_address": ip_address,
+        "vrf": make_vrf({"name": namespace, "vrf_type": ns_type or _NS_TYPE.get(namespace)}) if namespace else None,
         "capabilities": [_context(), _exchange()] if caps is None else caps,
     }
 
@@ -201,11 +203,11 @@ class TestValidateExchangeGateways:
         assert any("no IP address / namespace" in e for e in errors)
 
     def test_prod_and_non_prod_are_never_exchanged(self):
-        errors = _validate([*_good_legs()[:1], _fw_leg("eth1.3205", "100.66.16.6/29", "NON-PROD")])
+        errors = _validate([*_good_legs()[:1], _fw_leg("eth1.3205", "100.66.16.6/29", "NONPROD")])
         assert any("not an allowed pair" in e for e in errors)
 
     def test_three_namespaces_in_one_exchange_report_error(self):
-        errors = _validate([*_good_legs(), _fw_leg("eth1.3205", "100.66.16.6/29", "NON-PROD")])
+        errors = _validate([*_good_legs(), _fw_leg("eth1.3205", "100.66.16.6/29", "NONPROD")])
         assert any("exactly 2" in e for e in errors)
 
     def test_address_not_a_slash_29_reports_error(self):
@@ -253,15 +255,15 @@ class TestValidateExchangeGateways:
 
     def test_two_exchanges_validated_independently(self):
         other = _exchange("xchg-2")
-        other["name"] = "ctx-1-NON-PROD-INTERNET"
+        other["name"] = "ctx-1-NONPROD-INTERNET"
         legs = [
             *_good_legs(),
-            _fw_leg("eth1.3205", "100.66.16.5/29", "NON-PROD", caps=[_context(), other]),
+            _fw_leg("eth1.3205", "100.66.16.5/29", "NONPROD", caps=[_context(), other]),
         ]
         errors = _validate(legs)
         assert len(errors) == 1
-        assert "ctx-1-NON-PROD-INTERNET" in errors[0]
-        assert "legs in 1 namespace(s) ['NON-PROD']" in errors[0]
+        assert "ctx-1-NONPROD-INTERNET" in errors[0]
+        assert "legs in 1 namespace(s) ['NONPROD']" in errors[0]
 
     def test_device_name_included_in_error_message(self):
         assert "dc1-fw-01" in _validate(_good_legs()[:1])[0]
@@ -291,10 +293,11 @@ def _service_port() -> dict:
         **_context(),
         "capabilities": [
             {
+                "vrf": make_vrf({"name": "PROD", "vrf_type": "prod", "l3_vni": 50001}),
                 "device": {"role": "internal-firewall"},
                 "ip_address": {
                     "address": "100.66.0.5/29",
-                    "ip_namespace": {"name": "PROD", "namespace_type": "prod", "l3_vni": 50001},
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
                 },
             }
         ],

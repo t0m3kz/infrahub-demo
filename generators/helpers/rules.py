@@ -78,7 +78,7 @@ class RulesPlanner:
 
     @staticmethod
     def _is_exchange_segment(segment: dict[str, Any]) -> bool:
-        """Whether the segment sits in an exchange zone (INTERNET-ZONE, MANAGEMENT-ZONE)."""
+        """Whether the segment sits in an exchange zone (INTERNET, MANAGEMENT)."""
         return is_exchange_zone((segment.get("security_zone") or {}).get("name"))
 
     @classmethod

@@ -3,7 +3,7 @@ version: "1.0"
 
 nodes:
   # VXLAN overlay segment with EVPN multi-tenancy.
-  # Zero trust: prefix → ip_namespace (VRF+l3_vni+owner) → tenant isolation.
+  # Routing authority: segment.security_zone (VRF name/type/L3 VNI); IPAM identity stays in default.
   # For stretched segments, generator behavior is local-pool-first: first
   # SegmentDeployment allocates VNI from deployment vni_pool, then reuses the
   # same value in other deployments.

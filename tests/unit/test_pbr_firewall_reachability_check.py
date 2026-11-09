@@ -17,8 +17,16 @@ def _leg(namespace: str = "PROD", ns_type: str | None = "prod", role: str = "int
     """One leg (a firewall member's VLAN sub-interface) in the raw query shape."""
     ip_address: dict[str, Any] = {"node": None}
     if ns_type:
-        ip_address = {"node": {"ip_namespace": {"node": {"name": _v(namespace), "namespace_type": _v(ns_type)}}}}
-    return {"node": {"device": {"node": {"role": _v(role)}}, "ip_address": ip_address}}
+        ip_address = {"node": {"ip_namespace": {"node": {"name": _v("default")}}}}
+    return {
+        "node": {
+            "device": {"node": {"role": _v(role)}},
+            "ip_address": ip_address,
+            "vrf": {"node": {"security_zone": {"node": {"name": _v(namespace), "vrf_type": _v(ns_type)}}}}
+            if ns_type
+            else {"node": None},
+        }
+    }
 
 
 def _context(
@@ -106,11 +114,11 @@ class TestNotCarried:
         assert "dep-a" in errors[0]
 
     def test_dedicated_context_without_a_port_names_the_tenant(self) -> None:
-        """A dedicated context reports its tenant and the non-prod VRF."""
-        legs = [_leg("NON-PROD", "non_prod")]
+        """A dedicated context reports its tenant and the nonprod VRF."""
+        legs = [_leg("NONPROD", "non_prod")]
         errors = _run([_context(legs=legs, tenant="dep-t")])
         assert len(errors) == 1
-        assert "NON-PROD" in errors[0]
+        assert "NONPROD" in errors[0]
         assert "dep-t" in errors[0]
 
     def test_port_on_a_leaf_does_not_carry_the_context(self) -> None:
@@ -139,7 +147,7 @@ class TestSkipped:
         ids=["internet-only", "management-only", "no-address", "non-firewall-member", "no-legs"],
     )
     def test_context_without_a_tenant_vrf_leg_is_skipped(self, legs: list[dict[str, Any]]) -> None:
-        """Only PROD and NON-PROD legs need a carrier."""
+        """Only PROD and NONPROD legs need a carrier."""
         assert _run([_context(legs=legs, served=["dep-a"])]) == []
 
     def test_context_serving_nothing_is_skipped(self) -> None:

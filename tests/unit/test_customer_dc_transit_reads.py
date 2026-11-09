@@ -36,10 +36,11 @@ def _create_nodes_that_know_only_what_they_wrote(world: _World) -> None:
 
 
 class TestTrackedContextSkipsTheCompletenessReads:
-    """A dedicated context re-saves every leg whatever it finds: it only needs the context and its ports."""
+    """Dedicated contexts skip full completeness checks but preflight each leg's existing addressing."""
 
     @pytest.mark.asyncio
-    async def test_dedicated_rerun_reads_no_exchange_sub_interface_or_address(self) -> None:
+    async def test_dedicated_rerun_reads_leg_addressing_but_no_exchange_completeness(self) -> None:
+        """One subinterface preflight per leg prevents reallocating an authored prefix."""
         world = _World()
         gen, _ = _make_gen(world)
         _dedicated(gen)
@@ -50,7 +51,8 @@ class TestTrackedContextSkipsTheCompletenessReads:
         await _run(gen, world, _payload(dedicated=True))
 
         assert world.saved("ManagedFirewallContext") == ["DC10-ded-prod"]
-        assert not set(_COMPLETENESS_KINDS) & set(world.executed_filters)
+        assert "TopologyRoutedExchange" not in world.executed_filters
+        assert world.executed_filters.count("DcimVirtualInterface") == 3
         assert "ManagedFirewallContext" in world.executed_filters  # the context itself is still read
 
     @pytest.mark.asyncio
@@ -106,10 +108,13 @@ class TestBorderPortsAreReadOncePerCheck:
 
         world.filters = filters  # ty: ignore[invalid-assignment]
 
+        original_acquire = gen.acquire_resource_lock
+
         async def another_run_tags_the_port(key: str) -> str:
-            events.append(f"acquire:{key}")
-            live_peers.extend(tagged)  # ... and tagged by a concurrent run while this one waits for the lock
-            return "lock-id"
+            lock_id = await original_acquire(key)
+            if key == f"fw-context-{_SHARED}":
+                live_peers.extend(tagged)  # ... and tagged by a concurrent run while this one waits for the lock
+            return lock_id
 
         gen.acquire_resource_lock = AsyncMock(side_effect=another_run_tags_the_port)
         events.clear()
@@ -156,8 +161,8 @@ class TestContextReadUnderTheLockIsReused:
         assert "ManagedFirewallContext" not in world.gets
         assert context.vlan_id.value == vlan
         assert context.snat_address.id == snat
-        # The legs' /29 allocations are keyed per context and repeat; the SNAT one is not asked again.
-        assert world.allocate_calls == allocations + 3
+        # Addressed legs reuse their actual /29s; neither transit nor SNAT needs a fresh allocator mutation.
+        assert world.allocate_calls == allocations
         assert world.saved("ManagedFirewallContext")[-1] == _SHARED
         gen.logger.error.assert_not_called()
 

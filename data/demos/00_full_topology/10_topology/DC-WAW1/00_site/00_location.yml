@@ -1,0 +1,34 @@
+---
+# The data center WAW1 in Warsaw, laid out like DC-KTW1 (10_topology/DC-KTW1): one suite (2 rows x 9 slots, the
+# S_MIDDLE envelope of the pod), the border and edge rack here, the pod racks in 03_racks.yml. The metro is not in
+# the bootstrap data, so this sample creates it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Warsaw"
+      shortname: "waw"
+      parent: pl
+      children:
+        kind: LocationFacility
+        data:
+          - name: "WAW1"
+            shortname: "waw1"
+            children:
+              kind: LocationSuite
+              data:
+                - name: WAW1-SUITE-1
+                  index: 1
+                  shortname: "waw1-suite-1"
+                  parent: waw1
+                  rows: 2
+                  racks_per_row: 9
+                  children:
+                    kind: LocationRack
+                    data:
+                      - name: WAW1-RACK-01
+                        shortname: waw1-rack-01
+                        index: 1
+                        row_index: 1
+                        rack_type: network

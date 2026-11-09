@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import VTEP_ROLES
+from utils.graphql_queries import load_query
 from utils.limits import (
     CUSTOMER_VLAN_ID_MIN,
     GROUP_PROVIDER_STUBS,
@@ -256,7 +257,7 @@ class SegmentVlanMixin:
         "rows": {device id: {"id", "vlan_id"}}}]}, one entry per ManagedSegmentDeployment; None when ``segment_id`` is not a
         ManagedVxlanSegment."""
         result = await self.client.execute_graphql(
-            query=_SEGMENT_VLAN_DOMAINS_QUERY_PATH.read_text(), variables={"segment_id": segment_id}
+            query=load_query(_SEGMENT_VLAN_DOMAINS_QUERY_PATH), variables={"segment_id": segment_id}
         )
         cleaned = clean_data(result)
         segments = cleaned.get("ManagedVxlanSegment") or []

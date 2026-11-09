@@ -4,6 +4,7 @@ from typing import Any
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.firewall import get_exchange_transits
+from transforms.helpers.firewall_contexts import firewall_ha_contexts
 from transforms.helpers.segments import routed_activations
 from utils.data_cleaning import get_data
 from utils.exchange_transit import (
@@ -16,6 +17,7 @@ from utils.exchange_transit import (
     transit_vlan,
 )
 from utils.limits import OFFSET_MEMBER_A, OFFSET_MEMBER_B, TRANSIT_PREFIXLEN
+from utils.routing_domain import interface_security_zone
 
 from .base import WarningCheck
 
@@ -231,14 +233,14 @@ def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
             iface_name = interface.get("name", "unknown")
             ip_address = interface.get("ip_address") or {}
             address = ip_address.get("address")
-            namespace = ip_address.get("ip_namespace") or {}
+            namespace = interface_security_zone(interface)
             namespace_name = namespace.get("name")
             if not address or not namespace_name:
                 errors.append(f"{label}: leg '{iface_name}' has no IP address / namespace assigned.")
                 continue
             by_namespace.setdefault(namespace_name, []).append(iface_name)
-            types[namespace_name] = namespace.get("namespace_type")
-            errors.extend(_validate_leg(label, iface_name, address, namespace.get("namespace_type"), context, exchange))
+            types[namespace_name] = namespace.get("vrf_type")
+            errors.extend(_validate_leg(label, iface_name, address, namespace.get("vrf_type"), context, exchange))
 
         for namespace_name, iface_names in by_namespace.items():
             if len(iface_names) != 1:
@@ -264,7 +266,8 @@ def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
     """A firewall context with an INTERNET leg on this device must have a public SNAT address.
 
     The leg is a sub-interface tagged with the context whose address sits in a
-    namespace of type internet. The context's snat_address (one per context,
+    namespace of type internet. Full HA-owned context data takes precedence over
+    interface-local references. The context's snat_address (one per context,
     shared by all its tenant VRFs) must be set and lie outside the non-internet
     space (utils/internet_space.py NON_INTERNET_PREFIXES): a private SNAT
     address would be filtered by the edge's RM-TRANSIT-OUT and never return.
@@ -272,13 +275,18 @@ def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     device_name = data.get("name", "unknown")
     contexts: dict[str, dict[str, Any]] = {}
+    cluster_contexts = {
+        context.get("id") or context.get("name", "unknown"): context
+        for context in firewall_ha_contexts(data.get("capabilities"))
+    }
     for interface in data.get("interfaces") or []:
-        namespace = (interface.get("ip_address") or {}).get("ip_namespace") or {}
-        if namespace.get("namespace_type") != INTERNET_TYPE:
+        namespace = interface_security_zone(interface)
+        if namespace.get("vrf_type") != INTERNET_TYPE:
             continue
         for cap in interface.get("capabilities") or []:
             if cap.get("typename") == "ManagedFirewallContext":
-                contexts.setdefault(cap.get("id") or cap.get("name", "unknown"), cap)
+                context_id = cap.get("id") or cap.get("name", "unknown")
+                contexts.setdefault(context_id, cluster_contexts.get(context_id, cap))
 
     for context in contexts.values():
         label = f"FirewallContext '{context.get('name', 'unknown')}' on '{device_name}'"

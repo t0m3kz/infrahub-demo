@@ -27,14 +27,14 @@ bind lb vserver vs_web_c001_example_com_tcp_443 sg_web_c001_example_com_tcp_443
 enable lb vserver vs_web_c001_example_com_tcp_443
 switch ns partition default
 #
-# --- LB context DC3-LB-01-DC3-LB-02-ha-NON-PROD (shared): admin partition SHARED-NON-PROD, VRF NON-PROD ---
+# --- LB context DC3-LB-01-DC3-LB-02-ha-NONPROD (shared): admin partition SHARED-NONPROD, VRF NONPROD ---
 # documented-not-lab-verified: admin partition per context with its VLAN bound, partition-local SNIP bound to the VLAN and route
 # leg eth1.3301: VLAN 3301 (border VNI 64301), gateway 100.66.80.1; VIP range 100.66.112.0/26 routed to 100.66.80.4
-add ns partition SHARED-NON-PROD
+add ns partition SHARED-NONPROD
 add vlan 3301
 bind vlan 3301 -ifnum eth1 -tagged
-bind ns partition SHARED-NON-PROD -vlan 3301
-switch ns partition SHARED-NON-PROD
+bind ns partition SHARED-NONPROD -vlan 3301
+switch ns partition SHARED-NONPROD
 add ns ip 100.66.80.4 255.255.255.248 -type SNIP
 bind vlan 3301 -IPAddress 100.66.80.4 255.255.255.248
 add route 0.0.0.0 0.0.0.0 100.66.80.1

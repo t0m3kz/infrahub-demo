@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from graphql import FieldNode, FragmentDefinitionNode, parse
 
 from checks.routing_tags import CheckRoutingTags
+from utils.graphql_queries import load_query
 
 
 def _v(value: Any) -> dict[str, Any]:
@@ -25,13 +27,13 @@ def _segment(
     *,
     owner: str = "c-1",
     kind: str = "ManagedVxlanSegment",
-    namespace_type: str | None = "prod",
-    zone: str = "PROD-ZONE",
+    vrf_type: str | None = "prod",
+    zone: str = "PROD",
 ) -> dict[str, Any]:
     """One ManagedNetworkSegment edge (a routed PROD tenant segment by default)."""
     gateway: dict[str, Any] = {"node": None}
-    if namespace_type:
-        namespace = {"node": {"name": _v("NS"), "namespace_type": _v(namespace_type)}}
+    if vrf_type:
+        namespace = {"node": {"name": _v("default")}}
         gateway = {"node": {"ip_prefix": {"node": {"ip_namespace": namespace}}}}
     return {
         "node": {
@@ -40,7 +42,7 @@ def _segment(
             "name": _v(name),
             "routing_tag": _v(tag),
             "owner": {"node": {"id": owner}},
-            "security_zone": {"node": {"name": _v(zone)}},
+            "security_zone": {"node": {"name": _v(zone), "vrf_type": _v(vrf_type)}},
             "gateway": gateway,
         }
     }
@@ -77,18 +79,18 @@ class TestComplete:
         assert errors == []
 
     @pytest.mark.parametrize(
-        ("kind", "namespace_type", "zone"),
+        ("kind", "vrf_type", "zone"),
         [
-            pytest.param("CloudNetworkSegment", "prod", "PROD-ZONE", id="cloud"),
-            pytest.param("ManagedVxlanSegment", "management", "PROD-ZONE", id="management-namespace"),
-            pytest.param("ManagedVxlanSegment", "prod", "MANAGEMENT-ZONE", id="exchange-zone"),
-            pytest.param("ManagedVxlanSegment", None, "PROD-ZONE", id="no-gateway"),
+            pytest.param("CloudNetworkSegment", "prod", "PROD", id="cloud"),
+            pytest.param("ManagedVxlanSegment", "management", "PROD", id="management-namespace"),
+            pytest.param("ManagedVxlanSegment", "prod", "MANAGEMENT", id="exchange-zone"),
+            pytest.param("ManagedVxlanSegment", None, "PROD", id="no-gateway"),
         ],
     )
     def test_segment_that_is_not_a_routed_tenant_segment_needs_no_tag_and_neither_does_its_owner(
-        self, kind: str, namespace_type: str | None, zone: str
+        self, kind: str, vrf_type: str | None, zone: str
     ) -> None:
-        segment = _segment("s", None, kind=kind, namespace_type=namespace_type, zone=zone)
+        segment = _segment("s", None, kind=kind, vrf_type=vrf_type, zone=zone)
 
         errors, _ = _run([_customer("c-1", "C005", None)], [segment])
 
@@ -147,15 +149,22 @@ class TestViolations:
 
 
 def test_query_selects_what_the_check_reads(root_dir: Path) -> None:
-    """The routed-segment test (kind, namespace type, zone), owner and both tags come from the query."""
-    query = (root_dir / "queries/validation/routing_tags.gql").read_text()
+    """The routed-segment test (kind, zone type), owner and both tags come from the compiled query."""
+    query = load_query(root_dir / "queries/validation/routing_tags.gql")
     for needed in (
         "OrganizationCustomer",
         "ManagedNetworkSegment",
         "routing_tag { value }",
         "owner { node { id } }",
-        "namespace_type { value }",
         "security_zone",
         "__typename",
     ):
         assert needed in query
+    zone_fragment = next(
+        definition
+        for definition in parse(query).definitions
+        if isinstance(definition, FragmentDefinitionNode) and definition.name.value == "RoutingZoneFields"
+    )
+    assert {
+        selection.name.value for selection in zone_fragment.selection_set.selections if isinstance(selection, FieldNode)
+    } == {"id", "name", "vrf_type", "l3_vni"}

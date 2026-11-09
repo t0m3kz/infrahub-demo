@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from tests.smoke.fixture_builders.vrf import with_vrf_objects
+from tests.smoke.fixture_builders.vrf import routing_vrf, routing_zone, with_vrf_objects
+from tests.smoke.fixture_builders.zone_migration import migrate_zone_owners
 from transforms.common import BaseDeviceTransform
 
 # ============================================================================
@@ -141,6 +142,8 @@ def _make_interface(
         "status": _v("active"),
         "role": _v(role),
     }
+    if ns_name != "default":
+        iface["vrf"] = _node(routing_vrf(ns_name))
 
     if typename == "DcimPhysicalInterface":
         iface["interface_type"] = _v("10gbase-x-sfpp")
@@ -150,7 +153,7 @@ def _make_interface(
             iface["ip_address"] = _node(
                 {
                     "address": _v(ip_address),
-                    "ip_namespace": _node({"name": _v(ns_name)}),
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
                 }
             )
         else:
@@ -185,7 +188,7 @@ def _make_interface(
             iface["ip_address"] = _node(
                 {
                     "address": _v(ip_address),
-                    "ip_namespace": _node({"name": _v(ns_name)}),
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
                 }
             )
         else:
@@ -288,7 +291,7 @@ def _make_segment_node(
     ``routing_identity`` is the (segment routing_tag, owner routing_tag) the fragment selects
     (queries/fragments/network_segment.gql); without it the node carries neither field, as before.
 
-    This is the shape that hangs off ``interfaces[].capabilities`` —
+    This is the shape that hangs off ``interfaces[].segments`` —
     the ONLY place BaseDeviceTransform._collect_activations_from_interfaces
     looks for segments, and therefore the only path that produces VXLAN/EVPN
     output for leaf/tor/access-leaf roles.
@@ -299,22 +302,21 @@ def _make_segment_node(
     A segment with no row for the device is skipped entirely
     by the transform, so ``row_device_id`` must match or no VXLAN is rendered.
 
-    The VRF and its L3 VNI are reached ONLY via
-    ``gateway.ip_prefix.ip_namespace`` (see utils.segment_addressing.segment_namespace and
-    _get_segment_gateways in transforms/helpers/segments.py). A flat
-    ``segment.prefix`` key — which this generator used to emit — is read by
-    nothing, which is why no fixture ever rendered a VRF or an L3 VNI.
-    See queries/fragments/network_segment.gql's NetworkSegmentFields.
+    The routing authority is the segment's explicit ``security_zone``.
+    ``gateway.ip_prefix`` supplies its subnet, whose IPAM identity is always
+    ``default`` and does not select the VRF.
     """
+    if ns_name == "default":
+        ns_name = "PROD"
+        l3_vni = 60000
     seg: dict[str, Any] = {"id": f"seg-{seg_name}"}
 
     if isolation_mode is not None:
         seg["isolation_mode"] = _v(isolation_mode)
 
-    security_zone_node = _node(None)
+    security_zone_node = _node(routing_zone(ns_name, l3_vni=l3_vni, vrf_type="prod"))
 
-    # gateway.ip_prefix carries the segment's subnet and its IpamNamespace (the
-    # VRF). Derive the prefix from the gateway address so the two stay coherent.
+    # Derive the subnet from its gateway; IPAM identity is not routing authority.
     gateway_node: dict[str, Any] | None = None
     if gateway_ip:
         iface = ipaddress.ip_interface(gateway_ip)
@@ -323,7 +325,7 @@ def _make_segment_node(
             "ip_prefix": _node(
                 {
                     "prefix": _v(str(iface.network)),
-                    "ip_namespace": _node({"name": _v(ns_name), "l3_vni": _v(l3_vni)}),
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
                 }
             ),
         }
@@ -413,6 +415,7 @@ def run_transform(transform_cls: type, data: dict) -> str:
 
     The unit tests that build their own device data go through here too (the hook is idempotent).
     """
+    data = migrate_zone_owners(data)
     instance = make_transform(transform_cls)
     if isinstance(instance, BaseDeviceTransform):
         data = with_vrf_objects(instance, data)
@@ -428,6 +431,7 @@ def _write_data_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple
     """
     test_dir = SMOKE_DIR / dir_name
     test_dir.mkdir(parents=True, exist_ok=True)
+    data = migrate_zone_owners(data)
 
     try:
         instance = make_transform(transform_cls)

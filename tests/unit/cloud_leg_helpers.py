@@ -36,8 +36,28 @@ def owner(org_id: str | None, typename: str = "OrganizationCustomer") -> dict[st
 
 
 def prefix(cidr: str, ns_name: str = "PROD", ns_type: str = "prod") -> dict[str, Any]:
-    """An IpamPrefix node with its namespace."""
-    return {"prefix": v(cidr), "ip_namespace": node({"name": v(ns_name), "namespace_type": v(ns_type)})}
+    """A neutral IpamPrefix node; routing authority is supplied by its registrant."""
+    return {
+        "prefix": v(cidr),
+        "ip_namespace": {"node": {"name": {"value": "default"}}},
+    }
+
+
+def routing_vrf(zone: str = "PROD", deployment: str = "FR") -> dict[str, Any]:
+    """An explicit ManagedVRF in the raw GraphQL selection shape."""
+    return {
+        "id": f"vrf-{deployment}-{zone}",
+        "name": v(f"{deployment.lower()}-vrf-{zone.lower()}"),
+        "deployment": node({"id": f"dep-{deployment}", "name": v(deployment)}),
+        "security_zone": node(
+            {
+                "id": f"zone-{zone}",
+                "name": v(zone),
+                "vrf_type": v("prod" if zone == "PROD" else "non_prod"),
+                "l3_vni": v(10001 if zone == "PROD" else 10002),
+            }
+        ),
+    }
 
 
 def gateway(name: str) -> dict[str, Any]:
@@ -88,13 +108,16 @@ def peering(
     circuit_type: str = "handoff",
     kind: str = "CloudDirectConnect",
     transport_gateway: str | None = None,
+    zone: str = "PROD",
+    deployment: str = "FR",
 ) -> dict[str, Any]:
     """A CloudPeeringInterface of ``transport`` ending one session circuit whose other ends are ``ends`` (device, port).
 
     ``account_owner`` None: the transport has no account (a SaaS), its own ``saas_owner`` applies. ``on`` is the
     gateway it lands on; ``transport_gateway`` the one a CloudVPNConnection holds.
     """
-    circuit_ends = [{"name": v(port), "device": node({"name": v(device)})} for device, port in ends]
+    vrf = routing_vrf(zone, deployment)
+    circuit_ends = [{"name": v(port), "device": node({"name": v(device)}), "vrf": node(vrf)} for device, port in ends]
     circuit_ends.append({"name": v(name), "device": node({"name": v(transport)})})
     transport_node: dict[str, Any] = {
         "__typename": kind,
@@ -120,6 +143,7 @@ def peering(
                 "__typename": "TopologySessionCircuit",
                 "name": v(f"SC-{name}"),
                 "circuit_type": v(circuit_type),
+                "vrf": node(vrf),
                 "capabilities": edges(*circuit_ends),
             },
         ),

@@ -1,0 +1,29 @@
+# Preserve existing allowed segments on the host bond and both host-facing vPCs, adding the firewall segment.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - device: waw1-srv-01
+      name: bond0
+      status: active
+      lag_id: 1
+      lacp_mode: active
+      minimum_links: 1
+      segments: [c900-app-p, c900-internal-fw-waw1-p]
+    - device: waw1-leaf-01
+      name: Port-Channel10
+      status: active
+      lag_id: 10
+      lacp_mode: active
+      minimum_links: 1
+      member_interfaces: [["waw1-leaf-01", "Ethernet1/2"]]
+      segments: [c900-app-p, c900-internal-fw-waw1-p]
+    - device: waw1-leaf-02
+      name: Port-Channel10
+      status: active
+      lag_id: 10
+      lacp_mode: active
+      minimum_links: 1
+      member_interfaces: [["waw1-leaf-02", "Ethernet1/2"]]
+      segments: [c900-app-p, c900-internal-fw-waw1-p]

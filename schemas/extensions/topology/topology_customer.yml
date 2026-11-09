@@ -97,7 +97,7 @@ generics:
           an operator's own hub PoP has a Provider owner)."
 
   # Carried by the footprints whose environment decides where they live: the
-  # shared namespace, PROD-ZONE and the PROD firewall leg (CustomerDC,
+  # shared namespace, PROD and the PROD firewall leg (CustomerDC,
   # CustomerColocation). CustomerCloud (environment comes from its
   # CloudAccount) and CustomerOffice (always PROD) must not have it. Readers
   # reach it with `... on TopologyEnvironmentScoped { environment { value } }`.
@@ -110,7 +110,7 @@ generics:
     include_in_menu: false
     attributes:
       # Required with no default: `p` silently means the PROD namespace,
-      # PROD-ZONE and the PROD firewall leg, so every footprint states it.
+      # PROD and the PROD firewall leg, so every footprint states it.
       - name: environment
         kind: Dropdown
         description: "Environment this customer deployment footprint represents"
@@ -352,7 +352,7 @@ nodes:
       - name: lan_prefixes
         peer: IpamPrefix
         label: "LAN Prefixes"
-        description: "Office LAN prefixes this footprint owns, registered in the PROD namespace"
+        description: "Office LAN prefixes this footprint owns, registered in the PROD security zone"
         cardinality: many
         kind: Attribute
         optional: true

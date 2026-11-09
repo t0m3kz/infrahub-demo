@@ -1,0 +1,38 @@
+# Each member's uplink faces its own border leaf; template HA1 and HA2 carry control and state back-to-back.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: CBL-GDN1-FW01-BL01
+      type: smf
+      deployment: DC-GDN1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-fw-01, name: ethernet1/1}
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-bl-01, name: Ethernet1/25}
+    - name: CBL-GDN1-FW02-BL02
+      type: smf
+      deployment: DC-GDN1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-fw-02, name: ethernet1/1}
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-bl-02, name: Ethernet1/25}
+    - name: CBL-GDN1-FW-HA1
+      type: copper
+      deployment: DC-GDN1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-fw-01, name: HA1}
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-fw-02, name: HA1}
+    - name: CBL-GDN1-FW-HA2
+      type: smf
+      deployment: DC-GDN1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-fw-01, name: HA2}
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-fw-02, name: HA2}

@@ -190,7 +190,7 @@ class TestVniUniqueness:
 
         check.validate(
             {
-                "IpamNamespace": [
+                "SecurityZone": [
                     {"name": "production", "l3_vni": 50001},
                     {"name": "development", "l3_vni": 50001},
                 ]
@@ -206,7 +206,7 @@ class TestVniUniqueness:
 
         check.validate(
             {
-                "IpamNamespace": [
+                "SecurityZone": [
                     {"name": "default", "l3_vni": None},
                     {"name": "underlay", "l3_vni": None},
                 ]
@@ -222,7 +222,7 @@ class TestVniUniqueness:
         check.validate(
             {
                 "ManagedVxlanSegment": [_l2("tenant-a-web", "DC11", 50001)],
-                "IpamNamespace": [{"name": "production", "l3_vni": 50001}],
+                "SecurityZone": [{"name": "production", "l3_vni": 50001}],
             }
         )
 
@@ -238,7 +238,7 @@ class TestVniUniqueness:
         check.validate(
             {
                 "ManagedVxlanSegment": [_l2("tenant-a-web", "DC11", 10100)],
-                "IpamNamespace": [{"name": "production", "l3_vni": 50001}],
+                "SecurityZone": [{"name": "production", "l3_vni": 50001}],
             }
         )
 
@@ -258,7 +258,7 @@ class TestVniEncodability:
     def test_l3_vni_above_16_bits_is_rejected(self) -> None:
         check = _check()
 
-        check.validate({"IpamNamespace": [{"name": "production", "l3_vni": 70000}]})
+        check.validate({"SecurityZone": [{"name": "production", "l3_vni": 70000}]})
 
         assert len(check._captured_errors) == 1
         assert "70000" in check._captured_errors[0]
@@ -288,17 +288,17 @@ class TestTransitVniBand:
 
     def test_l2_vni_inside_transit_band_is_an_error(self) -> None:
         check = _check()
-        check.validate({"ManagedVxlanSegment": [_l2("seg", "dc1", 64100)], "IpamNamespace": []})
+        check.validate({"ManagedVxlanSegment": [_l2("seg", "dc1", 64100)], "SecurityZone": []})
         assert any("transit VNI band" in e for e in check._captured_errors)
 
     def test_l3_vni_inside_transit_band_is_an_error(self) -> None:
         check = _check()
-        check.validate({"IpamNamespace": [{"name": "X", "l3_vni": 64000}]})
+        check.validate({"SecurityZone": [{"name": "X", "l3_vni": 64000}]})
         assert any("transit VNI band" in e for e in check._captured_errors)
 
     def test_vnis_outside_band_are_fine(self) -> None:
         check = _check()
         check.validate(
-            {"ManagedVxlanSegment": [_l2("seg", "dc1", 10001)], "IpamNamespace": [{"name": "X", "l3_vni": 60000}]}
+            {"ManagedVxlanSegment": [_l2("seg", "dc1", 10001)], "SecurityZone": [{"name": "X", "l3_vni": 60000}]}
         )
         assert not check._captured_errors

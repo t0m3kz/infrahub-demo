@@ -1,0 +1,11 @@
+# CloudAccount declarations in recursive dependency order.
+# One account per cloud, the spoke accounts, and the partner's account of the Google Partner Interconnect.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "partner-fabric-gcp"
+      account_id: "partner-fabric-project"
+      environment: "p"
+      provider: "P016"

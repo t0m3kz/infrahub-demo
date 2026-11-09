@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
 
-from ..firewall_context import FirewallContextMixin
+from ..firewall_context import FIREWALL_CONTEXT, FirewallContextMixin
 from ..helpers.vrf import VrfMixin
 from ..protocols import DcimInterface
 
@@ -81,6 +81,7 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
             self.logger.error("Deployment missing id — cannot proceed")
             return
 
+        self.client.group_context.related_node_ids.append(customer_id)
         self.logger.info(f"Processing {kind} deployment {customer.get('name', customer_id)}")
 
         # This reads facility-level data (firewall_devices, loadbalancer_devices)
@@ -132,6 +133,8 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
                     complete = False
                 else:
                     served.append(context_id)
+                    if spec == FIREWALL_CONTEXT and not self._serving_many:
+                        await self._relink_terminated_segments(customer_id, context_id)
                     await self._reconcile_border_vrfs(context_id)
             # A single serving link is replaced by link_serving_context; a many one is converged here. Only a run
             # that built every context it set out to may drop a link (a failed one raises under the generator

@@ -16,6 +16,7 @@ from graphql import (
     FragmentDefinitionNode,
     FragmentSpreadNode,
     InlineFragmentNode,
+    OperationDefinitionNode,
     SelectionSetNode,
     parse,
 )
@@ -28,10 +29,10 @@ QUERIES = Path(__file__).resolve().parents[2] / "queries"
 EDGE = "shared_capabilities"
 CAPABILITIES = "DcimCapabilities"
 #: parents that may still select a field named ``vrfs`` (a deployment's or a namespace's own instances)
-VRFS_ALLOWED_PARENTS = {"TopologySegmentHosting", "IpamNamespace"}
+VRFS_ALLOWED_PARENTS = {"TopologySegmentHosting", "SecurityZone", "TopologyCustomerOffice"}
 
-PROD = {"name": "PROD", "l3_vni": 50000, "namespace_type": "prod"}
-VRF = {"typename": "ManagedVRF", "namespace": PROD}
+PROD = {"name": "PROD", "l3_vni": 60000, "vrf_type": "prod"}
+VRF = {"typename": "ManagedVRF", "security_zone": PROD}
 FOREIGN = {"typename": "ManagedSNMP"}
 
 
@@ -78,6 +79,41 @@ def _fields(path: Path) -> list[tuple[str, tuple[str, ...]]]:
         else:
             types = ()
         found.extend(_walk(getattr(definition, "selection_set", None), fragments, types, ()))
+    return found
+
+
+def _vrfs_owners(path: Path) -> list[tuple[str, ...]]:
+    """For each ``vrfs`` field: the type conditions and root kinds that enclose it (field chain, spreads expanded).
+
+    An offline parse cannot type a nested field, so the owner is the root field (``TopologyCustomerOffice``,
+    ``SecurityZone``) or the fragment's own type condition."""
+    document = _parse(path)
+    fragments = _fragments(document)
+    found: list[tuple[str, ...]] = []
+
+    def visit(
+        selection_set: SelectionSetNode | None, owners: tuple[str, ...], depth: int, seen: tuple[str, ...]
+    ) -> None:
+        for selection in selection_set.selections if selection_set else ():
+            if isinstance(selection, FieldNode):
+                if selection.name.value == "vrfs":
+                    found.append(owners)
+                root = (selection.name.value,) if depth == 0 else ()
+                visit(selection.selection_set, (*owners, *root), depth + 1, seen)
+            elif isinstance(selection, InlineFragmentNode):
+                condition = [selection.type_condition.name.value] if selection.type_condition else []
+                visit(selection.selection_set, (*owners, *condition), depth, seen)
+            elif isinstance(selection, FragmentSpreadNode) and selection.name.value in fragments:
+                name = selection.name.value
+                if name not in seen:
+                    fragment = fragments[name]
+                    visit(fragment.selection_set, (*owners, fragment.type_condition.name.value), depth, (*seen, name))
+
+    for definition in document.definitions:
+        if isinstance(definition, FragmentDefinitionNode):
+            visit(definition.selection_set, (definition.type_condition.name.value,), 1, (definition.name.value,))
+        elif isinstance(definition, OperationDefinitionNode):
+            visit(definition.selection_set, (), 0, ())
     return found
 
 
@@ -142,7 +178,7 @@ def test_device_vrfs_ignores_a_foreign_shared_kind() -> None:
 
 def test_device_vrfs_skips_a_vrf_without_a_namespace() -> None:
     """A membership with no namespace has nothing to render."""
-    assert device_vrfs({EDGE: [{"typename": "ManagedVRF", "namespace": None}]}) == []
+    assert device_vrfs({EDGE: [{"typename": "ManagedVRF", "security_zone": None}]}) == []
 
 
 def test_device_vrf_facts_ignores_a_foreign_shared_kind() -> None:
@@ -190,12 +226,12 @@ def test_the_three_membership_queries_select_the_edge_with_a_typename(relative: 
 
 
 def test_no_query_selects_a_device_level_vrfs_field() -> None:
-    """``DcimDevice.vrfs`` is gone; the remaining ``vrfs`` live on a deployment or a namespace."""
+    """``DcimDevice.vrfs`` is gone; the remaining ``vrfs`` live on a deployment or a security zone."""
     offenders = []
     for path in _all_queries():
-        for name, types in _fields(path):
-            if name == "vrfs" and not (set(types) & VRFS_ALLOWED_PARENTS):
-                offenders.append((_rel(path), types))
+        for owners in _vrfs_owners(path):
+            if not set(owners) & VRFS_ALLOWED_PARENTS:
+                offenders.append((_rel(path), owners))
     assert offenders == []
 
 

@@ -6,14 +6,17 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from graphql import FragmentDefinitionNode, OperationDefinitionNode, parse
 
 from tests.unit.cloud_leg_helpers import attachment, peering, prefix
+from tests.unit.query_shape_helpers import _selection_tree
 from tests.unit.routing_invariants_helpers import _rule_eight
 from tests.unit.routing_invariants_helpers import _run as _run_invariants
 from tests.unit.test_circuit_query_shapes import _QUERIES, _selected_paths
 from tests.unit.test_segment_destination_prefixes import _dest_rule
 from tests.unit.test_segment_destination_prefixes import _run as _run_security
 from tests.unit.test_segment_destination_prefixes import _unreachable
+from utils.graphql_queries import load_query
 
 _EDGE_PORT = ("eg-fr201", "Ethernet1/13.1000")
 
@@ -21,7 +24,9 @@ _EDGE_PORT = ("eg-fr201", "Ethernet1/13.1000")
 def _aws(owner: str | None = "C001", block: str = "10.10.0.0/16", ns: tuple[str, str] = ("PROD", "prod")) -> dict:
     """The roots of one AWS leg: the VIF on ``dxgw``, the hub hop and the VPC attachment holding ``block``."""
     return {
-        "CloudPeeringInterface": [peering("vif-nordix", "dx-nordix", ends=(_EDGE_PORT,), account_owner=owner)],
+        "CloudPeeringInterface": [
+            peering("vif-nordix", "dx-nordix", ends=(_EDGE_PORT,), account_owner=owner, zone=ns[0])
+        ],
         "CloudGatewayAttachment": [
             attachment("tgwa-dxgw", "tgw", peer="dxgw", table="shared"),
             attachment(
@@ -50,8 +55,8 @@ class TestSegmentSecurityReachability:
         assert [m.split()[1] for m in _unreachable(check)] == ["10.40.0.0/16"]
 
     def test_a_block_registered_in_another_environment_is_unreachable(self) -> None:
-        """A PROD rule never reaches a NON-PROD registration."""
-        roots = _aws(block="10.50.0.0/16", ns=("NON-PROD", "non_prod"))
+        """A PROD rule never reaches a NONPROD registration."""
+        roots = _aws(block="10.50.0.0/16", ns=("NONPROD", "non_prod"))
         check = _run_security([_dest_rule("r", "10.50.0.0/16")], src_owner="C001", **roots)
         assert len(_unreachable(check)) == 1
 
@@ -139,6 +144,10 @@ _PEERING_READS = [
     "capabilities.circuit_type",
     "capabilities.capabilities.name",
     "capabilities.capabilities.device.name",
+    "capabilities.vrf.id",
+    "capabilities.vrf.security_zone.name",
+    "capabilities.capabilities.vrf.id",
+    "capabilities.capabilities.vrf.security_zone.name",
 ]
 _ATTACHMENT_READS = [
     "gateway.id",
@@ -148,10 +157,8 @@ _ATTACHMENT_READS = [
     "virtual_network.id",
     "virtual_network.cidr_blocks.prefix",
     "virtual_network.cidr_blocks.ip_namespace.name",
-    "virtual_network.cidr_blocks.ip_namespace.namespace_type",
     "allowed_prefixes.prefix",
     "allowed_prefixes.ip_namespace.name",
-    "allowed_prefixes.ip_namespace.namespace_type",
     "associated_route_table.id",
     "propagates_to_route_tables.id",
 ]
@@ -166,3 +173,20 @@ def test_the_queries_select_what_the_cloud_legs_read(query: str) -> None:
     attachment_paths = _selected_paths(_QUERIES / query, "CloudGatewayAttachment")
     assert not [item for item in _PEERING_READS if item not in peering_paths]
     assert not [item for item in _ATTACHMENT_READS if item not in attachment_paths]
+    for paths in (peering_paths, attachment_paths):
+        assert not {p for p in paths if p.endswith(("ip_namespace.vrf_type", "ip_namespace.l3_vni", "vrf_name"))}
+    assert "peer_ip.security_zone" not in peering_paths
+
+
+def test_the_edge_selects_exchange_gateway_zone_owners_without_registry_fallbacks() -> None:
+    """The exchange's two routing domains come from its zone edges, not address namespaces."""
+    document = parse(load_query(_QUERIES / "config/edge.gql"))
+    fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
+    operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
+    tree = _selection_tree(operation.selection_set, fragments)
+    capability = tree["DcimDevice"]["edges"]["node"]["interfaces"]["edges"]["node"]["capabilities"]["edges"]["node"]
+    for side in ("a", "z"):
+        assert f"vrf_{side}" in capability, f"ExchangeGateway.vrf_{side} is not selected"
+        vrf = capability[f"vrf_{side}"]["node"]
+        assert "id" in vrf
+        assert set(vrf["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}

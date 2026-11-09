@@ -1,0 +1,22 @@
+# ManagedVRF declarations in recursive dependency order.
+# The Wi-Fi of the office: two segments on the access switches, the guests (internet only) and the staff (the intranet
+# and the internet). Both are VXLAN segments hosted by the office (`customer_deployments: C900-OFFICE`), routed on the
+# access switches (the fabric edge of the office), in the PROD VRF of the office. What each may reach is its policy, not
+# its zone: the office is PROD, so both are in PROD, and the guest segment has no permit rule but the one to the
+# internet. The policies are enforced by the stateful firewall of the SD-WAN edge (the artifact office_firewall_policy,
+# transforms/topology/office_firewall_policy.py).
+#
+# Loads after the access switches (05_switches_and_aps.yml) and the DC segments (01_dc): first the VRF and the SVIs,
+# then the segments, their policies, their realization (the VNI and the VLAN row of each access switch, with its SVI)
+# and the AP-facing ports of both access switches, which trunk the two SSIDs.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "c900-office-vrf-prod"
+      security_zone: "PROD"
+      deployment: "C900-OFFICE"
+      shared_devices:
+        - "bcn-office-as-01"
+        - "bcn-office-as-02"

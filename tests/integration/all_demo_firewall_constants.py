@@ -11,8 +11,8 @@ from .demo_data import ROOT, declared, name
 
 # One shared (tenant-less) firewall context per (firewall cluster, tenant namespace): per DC and per serving
 # colocation zone with a firewall pair, which every footprint of the zone's metro shares (a colocation has no design, so
-# never a dedicated context), one for each of PROD and NON-PROD that has a footprint. PROD and NON-PROD never meet
-# on one context (`shared-{cluster}-prod`, `shared-{cluster}-non-prod`). The colocation context carries transit
+# never a dedicated context), one for each of PROD and NONPROD that has a footprint. PROD and NONPROD never meet
+# on one context (`shared-{cluster}-prod`, `shared-{cluster}-nonprod`). The colocation context carries transit
 # legs like a DC one (its legs face the zone's two edges, whose firewall ports are tagged with the context) ...
 # The count, ALL_DEMO_SHARED_FIREWALL_CONTEXTS, is derived below from ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS.
 
@@ -40,8 +40,8 @@ ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = _dedicated_tenants("dedica
 # 30_all — internet egress rules (07_zone_policies/05_security_policy.yml)
 #
 # A hand-written permit from a tenant segment to the internet: a rule whose
-# destination_zone is INTERNET-ZONE (no segment, no prefix). The
-# firewall renders it to INTERNET-ZONE with destination any; the source leaf's
+# destination_zone is INTERNET (no segment, no prefix). The
+# firewall renders it to INTERNET with destination any; the source leaf's
 # ACL denies every NON_INTERNET_PREFIXES range before the permit to any.
 # ---------------------------------------------------------------------------
 
@@ -61,7 +61,7 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
     "nordix-prod-to-internet-https": {
         "dc": "DC11",
         "source_segment": "c006-nordix-prod-p",
-        "destination_zone": "INTERNET-ZONE",
+        "destination_zone": "INTERNET",
         "protocol": "tcp",
         "port": 443,
     },
@@ -77,13 +77,13 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
 # no dedicated context. A serving colocation zone
 # (ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS, FR) has one shared context serving
 # all its deployments, on the same rules. A deployment's VRF follows its
-# environment (`p` is PROD, every other value NON-PROD); an office has no
+# environment (`p` is PROD, every other value NONPROD); an office has no
 # environment and is always PROD (OFFICE_NAMESPACE). The deployments are
 # the TopologyCustomerDC footprints 30_all declares (06_customer_boarding,
 # <customer>/dc/01_deployments.yml).
 # ---------------------------------------------------------------------------
 
-ALL_DEMO_TRANSIT_NAMESPACES = ("PROD", "NON-PROD", "INTERNET", "MANAGEMENT")
+ALL_DEMO_TRANSIT_NAMESPACES = ("PROD", "NONPROD", "INTERNET", "MANAGEMENT")
 
 _TRANSIT_NAMESPACE_BY_TYPE: dict[str, str] = dict(
     zip(("prod", "non_prod", "internet", "management"), ALL_DEMO_TRANSIT_NAMESPACES)
@@ -99,7 +99,7 @@ ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
 # Resource prefixes of the FW-Transit-<VRF>-IPv4 pools (data/bootstrap/20_dci_pools.yml).
 ALL_DEMO_TRANSIT_RESOURCES: dict[str, str] = {
     "PROD": "100.66.0.0/20",
-    "NON-PROD": "100.66.16.0/20",
+    "NONPROD": "100.66.16.0/20",
     "INTERNET": "100.66.32.0/20",
     "MANAGEMENT": "100.66.48.0/20",
 }
@@ -118,7 +118,7 @@ MANAGEMENT_SERVICES_SEGMENT = "infra-core-dns-ntp-p"
 
 MANAGEMENT_SERVICES_DC = "DC11"
 
-# rule name -> (protocol, port), the DC11 permits PROD-ZONE -> MANAGEMENT-ZONE.
+# rule name -> (protocol, port), the DC11 permits PROD -> MANAGEMENT.
 ALL_DEMO_MANAGEMENT_RULES: dict[str, tuple[str, int]] = {
     "nordix-prod-to-core-dns": ("udp", 53),
     "nordix-prod-to-core-ntp": ("udp", 123),
@@ -149,7 +149,7 @@ class ExpectedTransitContext(TypedDict):
     site: str
     #: Tenant deployment of a dedicated context, None for the site's shared one.
     tenant: str | None
-    #: The tenant namespace (PROD or NON-PROD) the context's tenant leg is in: a shared context is one per namespace.
+    #: The tenant namespace (PROD or NONPROD) the context's tenant leg is in: a shared context is one per namespace.
     namespace: str
     #: Deployments the context serves.
     deployments: tuple[str, ...]
@@ -170,12 +170,12 @@ def deployment_environment(deployment: str) -> str:
 
 
 def deployment_namespace(deployment: str) -> str:
-    """The tenant VRF namespace name of a deployment (`p` -> PROD, anything else NON-PROD)."""
+    """The tenant VRF namespace name of a deployment (`p` -> PROD, anything else NONPROD)."""
     return _TRANSIT_NAMESPACE_BY_TYPE[namespace_type_for_environment(deployment_environment(deployment))]
 
 
 def transit_namespace_type(namespace_name: str) -> str:
-    """`NON-PROD` -> `non_prod`."""
+    """`NONPROD` -> `non_prod`."""
     return next(ns_type for ns_type, name in _TRANSIT_NAMESPACE_BY_TYPE.items() if name == namespace_name)
 
 
@@ -183,7 +183,7 @@ def _by_namespace(deployments: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
     """The deployments grouped by their tenant namespace, in ALL_DEMO_TRANSIT_NAMESPACES order."""
     return {
         namespace: tuple(d for d in deployments if deployment_namespace(d) == namespace)
-        for namespace in ("PROD", "NON-PROD")
+        for namespace in ("PROD", "NONPROD")
         if any(deployment_namespace(d) == namespace for d in deployments)
     }
 

@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from tests.integration.demo_data import relationship_names
-from tests.unit.external_vrf_peers_helpers import _bgp_facing, _subif
+from tests.unit.external_vrf_peers_helpers import _bgp_facing, _raw_gateway, _raw_vrf, _subif
 from tests.unit.test_circuit_query_shapes import _QUERIES, _selected_paths
 from transforms.helpers.bgp_external import (
     get_external_peer_prefixes,
@@ -33,7 +33,12 @@ def _raw_owner(org_id: str, typename: str = "OrganizationCustomer") -> dict[str,
 
 def _raw_prefix(prefix: str, namespace: str = "PROD") -> dict[str, Any]:
     """A registered IpamPrefix node as the edge query selects it."""
-    return {"node": {"prefix": {"value": prefix}, "ip_namespace": {"node": {"name": {"value": namespace}}}}}
+    return {
+        "node": {
+            "prefix": {"value": prefix},
+            "ip_namespace": {"node": {"name": {"value": "default"}}},
+        }
+    }
 
 
 def _tunnels(*raw: dict[str, Any]) -> list[dict[str, Any]]:
@@ -51,10 +56,12 @@ def _tunnel(
     *prefixes: tuple[str, str],
     ends: tuple[str, ...] = (_GW1, "EXT-ACME-EDGE1"),
     owner_type: str = "OrganizationCustomer",
+    namespace: str = "PROD",
 ) -> dict[str, Any]:
     """A raw tunnel node: the office of ``owner`` in its locations (the tunnel stores no owner), the device of
     each end port, registered (prefix, namespace) pairs. A second location that is no office selects nothing."""
     return {
+        "vrf": {"node": _raw_vrf(namespace)},
         "locations": {"edges": [_office_location(owner, owner_type), {"node": {}}]},
         "registered_prefixes": {"edges": [_raw_prefix(prefix, namespace) for prefix, namespace in prefixes]},
         "capabilities": {"edges": [{"node": {"device": {"node": {"name": {"value": device}}}}} for device in ends]},
@@ -66,7 +73,7 @@ def _offices(*offices: tuple[str | None, str, tuple[str, ...]]) -> list[dict[str
     raw = [
         {
             "owner": _raw_owner(owner),
-            "sdwan_gateway": {"node": {"name": {"value": gateway}}} if gateway else {"node": None},
+            "sdwan_gateway": {"node": _raw_gateway(gateway)} if gateway else {"node": None},
             "lan_prefixes": {"edges": [_raw_prefix(lan) for lan in lans]},
             "segment_deployments": {"edges": []},
         }
@@ -95,7 +102,7 @@ class TestRegisteredByGateway:
             _offices((_GW1, "C002", ("10.210.2.0/24",))), _tunnels(_tunnel("C001", (_ACME, "PROD")))
         )
         assert set(found) == {_GW1}
-        assert [(owner, prefix["prefix"]) for owner, prefix in found[_GW1]] == [
+        assert [(registration.customer, registration.prefix["prefix"]) for registration in found[_GW1]] == [
             ("C002", "10.210.2.0/24"),
             ("C001", _ACME),
         ]
@@ -133,8 +140,8 @@ class TestGatewayHandoffAcceptsTunnelPrefixes:
         assert found == {_HANDOFF: {"C001": [_ACME]}}
 
     def test_a_range_in_another_namespace_is_not_accepted_by_a_prod_session(self) -> None:
-        """A PROD handoff never accepts a NON-PROD (or default-namespace) registration."""
-        tunnels = _tunnels(_tunnel("C001", (_ACME, "NON-PROD"), ("198.19.0.0/24", "default")))
+        """A PROD handoff never accepts a NONPROD (or default-namespace) registration."""
+        tunnels = _tunnels(_tunnel("C001", (_ACME, "NONPROD"), ("198.19.0.0/24", "default"), namespace="NONPROD"))
         assert _peers(_offices((_GW1, "C002", ())), tunnels) == {_HANDOFF: {}}
 
     def test_a_tunnel_without_a_customer_owner_registers_nothing_acceptable(self) -> None:
@@ -229,6 +236,8 @@ class TestEdgeQueryAndData:
             "registered_prefixes.prefix",
             "registered_prefixes.ip_namespace.name",
             "capabilities.device.name",
+            "vrf.id",
+            "vrf.security_zone.name",
         ]
         assert not [item for item in reads if item not in selected]
         assert {"locations", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
@@ -242,18 +251,29 @@ class TestEdgeQueryAndData:
             "display_label": "C001 label",
         }
         assert tunnel["locations"][1] == {}
-        assert tunnel["registered_prefixes"] == [{"prefix": _ACME, "ip_namespace": {"name": "PROD"}}]
+        assert tunnel["registered_prefixes"] == [
+            {
+                "prefix": _ACME,
+                "ip_namespace": {"name": "default"},
+            }
+        ]
+        assert tunnel["vrf"]["security_zone"]["name"] == "PROD"
         assert [port["device"]["name"] for port in tunnel["capabilities"]] == [_GW1, "EXT-ACME-EDGE1"]
 
     def test_the_partner_tunnel_registers_the_acme_range_in_prod(self) -> None:
         """01_partner_tunnel.yml creates the PROD prefix and lists it on the tunnel, owned by C001 through its office."""
-        path = _ROOT / "data/demos/30_all/08_interconnects/07_zone_policies/01_partner_tunnel.yml"
-        documents = [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
+        folder = _ROOT / "data/demos/30_all/08_interconnects/07_zone_policies"
+        documents = [
+            doc
+            for filename in ("01_partner_tunnel_03_IpamPrefix.yml", "01_partner_tunnel_04_TopologySessionCircuit.yml")
+            for doc in yaml.safe_load_all((folder / filename).read_text())
+            if doc
+        ]
         by_kind = {doc["spec"]["kind"]: doc["spec"]["data"] for doc in documents}
-        assert {"prefix": _ACME, "ip_namespace": "PROD"} == {
-            key: by_kind["IpamPrefix"][0][key] for key in ("prefix", "ip_namespace")
+        assert {"security_zone": "PROD", "prefix": _ACME, "ip_namespace": "default"} == {
+            key: by_kind["IpamPrefix"][0][key] for key in ("prefix", "ip_namespace", "security_zone")
         }
         (tunnel,) = by_kind["TopologySessionCircuit"]
         assert "owner" not in tunnel
         assert "C001-OFFICE" in tunnel["locations"]
-        assert tunnel["registered_prefixes"] == [[_ACME, "PROD"]]
+        assert tunnel["registered_prefixes"] == [[_ACME, "default"]]

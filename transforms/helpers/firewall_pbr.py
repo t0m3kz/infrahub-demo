@@ -229,7 +229,7 @@ def get_customer_pbr_rules(
 
         # A segment living in the MANAGEMENT VRF is a service network: tenants reach
         # it through their context, it is never itself redirected to one.
-        if segment_namespace(seg).get("namespace_type") == MANAGEMENT_TYPE:
+        if segment_namespace(seg).get("vrf_type") == MANAGEMENT_TYPE:
             continue
 
         deployment_ids = _segment_deployment_ids(seg)
@@ -331,7 +331,7 @@ def get_overlay_pbr_rules(
     rules: list[dict[str, Any]] = []
     for iface in interfaces or []:
         vlan_id = svi_vlan_id(iface.get("name"))
-        vrf = ((iface.get("vrf") or {}).get("namespace") or {}).get("name")
+        vrf = ((iface.get("vrf") or {}).get("security_zone") or {}).get("name")
         if iface.get("role") != L3VNI_ROLE or vlan_id is None or not vrf:
             continue
         footprints = sorted(

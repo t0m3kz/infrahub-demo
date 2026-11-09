@@ -1,0 +1,40 @@
+# TopologyProviderConnect declarations in recursive dependency order.
+# AWS's port of the cage (the Direct Connect location): a TopologyProviderConnect with the two dedicated 10G ports
+# and the LAG that bundles them. The ports are cabled to par-colo1-edge-01 Ethernet1/3-4 (02_cables.yml); the virtual
+# interfaces of the customer account ride on the LAG (20_C900/Cloud/03_transport/00_direct_connects.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnect
+  data:
+    - name: EXT-AWS-DX-PAR
+      description: AWS Direct Connect location in the PAR-COLO1 cage (two dedicated 10G ports, one LAG)
+      status: active
+      provider: P004
+      location: PAR-COLO1
+      bandwidth: 20000
+      external_id: dxcon-fh1a2b3c
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: dxcon-1a
+            description: "AWS Direct Connect dedicated 10G port dxcon-fh1a2b3c, member of lag1"
+            status: active
+            interface_type: "10gbase-x-sfpp"
+        - kind: DcimPhysicalInterface
+          data:
+            name: dxcon-1b
+            description: "AWS Direct Connect dedicated 10G port dxcon-fh4d5e6f, member of lag1"
+            status: active
+            interface_type: "10gbase-x-sfpp"
+        - kind: DcimLAGInterface
+          data:
+            name: lag1
+            description: "AWS Direct Connect LAG: dxcon-1a and dxcon-1b"
+            status: active
+            lag_id: 1
+            lacp_mode: active
+            minimum_links: 1
+            member_interfaces:
+              - ["EXT-AWS-DX-PAR", "dxcon-1a"]
+              - ["EXT-AWS-DX-PAR", "dxcon-1b"]

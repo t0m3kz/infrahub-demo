@@ -1,0 +1,49 @@
+---
+# The legs of the context: each member's VLAN sub-interface of its uplink ethernet1/1, addressed from the leg's /29 in
+# the VRF of the leg (members take .29 and .30, the pair's floating VIP is .28, the cage edge's anycast gateway .25).
+# PROD 100.66.0.24/29 on VLAN 3001, INTERNET 100.66.32.24/29 on VLAN 3401 (the context's VLAN plus the slot of the VRF).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - security_zone: "PROD"
+      name: "ethernet1/1.3001"
+      device: par-colo1-xfw-01
+      parent_interface: ["par-colo1-xfw-01", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.0.29/29"
+          ip_namespace: "default"
+    - security_zone: "PROD"
+      name: "ethernet1/1.3001"
+      device: par-colo1-xfw-02
+      parent_interface: ["par-colo1-xfw-02", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.0.30/29"
+          ip_namespace: "default"
+    - security_zone: "INTERNET"
+      name: "ethernet1/1.3401"
+      device: par-colo1-xfw-01
+      parent_interface: ["par-colo1-xfw-01", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.32.29/29"
+          ip_namespace: "default"
+    - security_zone: "INTERNET"
+      name: "ethernet1/1.3401"
+      device: par-colo1-xfw-02
+      parent_interface: ["par-colo1-xfw-02", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.32.30/29"
+          ip_namespace: "default"

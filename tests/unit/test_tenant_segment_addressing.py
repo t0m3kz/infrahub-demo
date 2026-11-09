@@ -23,18 +23,20 @@ from infrahub_sdk.protocols import CoreIPPrefixPool, IpamNamespace
 from generators.logger import GeneratorError
 from generators.protocols import IpamPrefix
 from generators.topology.application_security import AppApplicationGenerator
-from generators.topology.segment import VxlanSegmentGenerator, tenant_pool_name
+from generators.topology.segment import VxlanSegmentGenerator
 from tests.integration.demo_data import ROOT, declared, name
 from utils.exchange_transit import is_exchange_zone, namespace_type_for_environment
 from utils.limits import OFFSET_ANYCAST
+from utils.routing_domain import RoutingDomainError
+from utils.segment_addressing import tenant_pool_name
 
-_NAMESPACES = {"prod": ("ns-prod", "PROD"), "non_prod": ("ns-nonprod", "NON-PROD")}
-_PREFIXES = {"PROD": "10.176.0.0/24", "NON-PROD": "10.184.0.0/24"}
+_NAMESPACES = {"prod": ("ns-prod", "PROD"), "non_prod": ("ns-nonprod", "NONPROD")}
+_PREFIXES = {"PROD": "10.176.0.0/24", "NONPROD": "10.184.0.0/24"}
 
 
-def _namespace(namespace_type: str) -> MagicMock:
-    """An IpamNamespace node of ``namespace_type``."""
-    namespace_id, namespace_name = _NAMESPACES[namespace_type]
+def _namespace(vrf_type: str) -> MagicMock:
+    """An IpamNamespace node of ``vrf_type``."""
+    namespace_id, namespace_name = _NAMESPACES[vrf_type]
     node = MagicMock(id=namespace_id)
     node.name.value = namespace_name
     return node
@@ -60,7 +62,7 @@ class _Client:
         self.saves: list[dict[str, Any]] = []
 
     async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
-        """IpamNamespace by namespace_type, CoreIPPrefixPool by name."""
+        """IpamNamespace by vrf_type, CoreIPPrefixPool by name."""
         self.filter_calls.append((kind, kwargs))
         if kind is IpamNamespace:
             return [_namespace(kwargs["namespace_type__value"]) for _ in range(self.namespaces)]
@@ -125,6 +127,7 @@ def _segment(environment: str | None = "p", gateway: dict[str, Any] | None = Non
         "typename": "ManagedVxlanSegment",
         "name": "c008-krafven-dev-d" if environment == "d" else "c008-trade-portal-local-dc10-p",
         "environment": environment,
+        "security_zone": {"name": "PROD" if environment == "p" else "NONPROD"} if environment else None,
         "gateway": gateway,
     }
 
@@ -141,7 +144,6 @@ class TestEnsureSegmentAddressing:
         asyncio.run(gen.ensure_segment_addressing(segment))
 
         assert client.filter_calls == [
-            (IpamNamespace, {"namespace_type__value": "prod"}),
             (CoreIPPrefixPool, {"name__value": "Tenant-PROD-IPv4"}),
         ]
         (allocation,) = client.allocations
@@ -156,14 +158,13 @@ class TestEnsureSegmentAddressing:
         ]
 
     def test_non_prod_segment_is_addressed_from_the_non_prod_pool(self) -> None:
-        """Every environment but p is non-prod: Tenant-NON-PROD-IPv4."""
+        """Every environment but p is nonprod: Tenant-NONPROD-IPv4."""
         client = _Client()
         gen = _make_gen(client)
 
         asyncio.run(gen.ensure_segment_addressing(_segment("d")))
 
-        assert client.filter_calls[0] == (IpamNamespace, {"namespace_type__value": "non_prod"})
-        assert client.filter_calls[1] == (CoreIPPrefixPool, {"name__value": "Tenant-NON-PROD-IPv4"})
+        assert client.filter_calls == [(CoreIPPrefixPool, {"name__value": "Tenant-NONPROD-IPv4"})]
 
     def test_gateway_is_written_untracked_on_the_segment_and_into_the_run_dict(self) -> None:
         """The segment (the run's own target) is saved with update_group_context=False; the zone and tag
@@ -182,7 +183,7 @@ class TestEnsureSegmentAddressing:
             "ip_prefix": {
                 "id": "prefix-PROD",
                 "prefix": "10.176.0.0/24",
-                "ip_namespace": {"id": "ns-prod", "name": "PROD", "namespace_type": "prod"},
+                "ip_namespace": {"name": "default"},
             },
         }
         assert gen.locks == ["segment-addressing-seg-1"]
@@ -225,8 +226,6 @@ class TestEnsureSegmentAddressing:
         [
             (_Client(pool_exists=False), "tenant pool Tenant-PROD-IPv4 not found"),
             (_Client(prefix_returned=False), "returned no prefix"),
-            (_Client(namespaces=0), "expected one IpamNamespace of type prod, found 0"),
-            (_Client(namespaces=2), "expected one IpamNamespace of type prod, found 2"),
         ],
     )
     def test_missing_or_exhausted_pool_fails_the_run(self, client: _Client, message: str) -> None:
@@ -245,7 +244,7 @@ class TestEnsureSegmentAddressing:
         client = _Client()
         gen = _make_gen(client)
 
-        with pytest.raises(GeneratorError, match="no environment"):
+        with pytest.raises(RoutingDomainError, match="missing security zone"):
             asyncio.run(gen.ensure_segment_addressing(_segment(None)))
 
         assert client.filter_calls == []
@@ -260,15 +259,15 @@ class TestGenerateOrder:
         order: list[str] = []
         seen: list[Any] = []
 
-        async def zone(client: Any, **kwargs: Any) -> str:
+        async def zone(client: Any, segment: dict[str, Any]) -> None:
             order.append("zone")
-            return "PROD-ZONE"
+            segment["security_zone"] = {"name": "PROD", "vrf_type": "prod"}
 
         async def tag(client: Any, lock: Any, *, segment: dict[str, Any]) -> None:
             order.append("tag")
             seen.append(segment.get("gateway"))
 
-        monkeypatch.setattr("generators.topology.segment.ensure_security_zone", zone)
+        monkeypatch.setattr("generators.topology.segment.ensure_segment_security_zone", zone)
         monkeypatch.setattr("generators.topology.segment.ensure_segment_tag", tag)
         gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
         gen.client = AsyncMock()
@@ -298,7 +297,7 @@ class TestGenerateOrder:
 
         asyncio.run(gen.generate(data))
 
-        assert order == ["address", "zone", "tag"]
+        assert order == ["zone", "address", "tag"]
         assert seen == [{"id": "gw-1"}]
 
 
@@ -314,23 +313,23 @@ class TestTenantPoolData:
     def test_every_environment_has_a_pool_in_its_own_namespace(self, environment: str) -> None:
         """The pool of each environment's namespace allocates inside that namespace, a /24 by default."""
         namespaces = {
-            namespace.item["namespace_type"]: namespace.item["name"]
-            for namespace in declared("IpamNamespace", ROOT / "data" / "bootstrap")
+            namespace.item["vrf_type"]: namespace.item["name"]
+            for namespace in declared("SecurityZone", ROOT / "data" / "bootstrap")
         }
         namespace = namespaces[namespace_type_for_environment(environment)]
         pool = self._pools()[tenant_pool_name(namespace)]
 
-        assert pool["ip_namespace"] == namespace
+        assert pool["ip_namespace"] == "default"
         assert pool["default_prefix_length"] == 24
         (resource,) = pool["resources"]["data"]
-        assert resource["ip_namespace"] == namespace
+        assert resource["ip_namespace"] == "default"
         assert resource["is_pool"] is True
 
     def test_tenant_supernets_are_disjoint(self) -> None:
-        """PROD and NON-PROD tenant space never overlap, so a tenant prefix is unique across both VRFs."""
+        """PROD and NONPROD tenant space never overlap, so a tenant prefix is unique across both VRFs."""
         supernets = [
             ipaddress.ip_network(self._pools()[tenant_pool_name(namespace)]["resources"]["data"][0]["prefix"])
-            for namespace in ("PROD", "NON-PROD")
+            for namespace in ("PROD", "NONPROD")
         ]
         assert [str(net) for net in supernets] == ["10.176.0.0/13", "10.184.0.0/13"]
         assert not supernets[0].overlaps(supernets[1])

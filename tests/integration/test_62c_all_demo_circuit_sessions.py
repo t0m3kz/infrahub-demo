@@ -386,7 +386,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             )
         )
         pools: dict[str, list[ipaddress.IPv4Network]] = {}
-        for namespace in sorted({c["ip_namespace"] for c in handoffs.values() if c["ip_namespace"]}):
+        for namespace in sorted({c["security_zone"] for c in handoffs.values() if c["security_zone"]}):
             pool = await client.execute_graphql(
                 query=EDGE_PAIR_POOL_QUERY, variables={"name": f"Handoff-{namespace}-IPv4"}, branch_name=scenario_branch
             )
@@ -405,7 +405,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     name,
                     circuit,
                     sessions.get(f"{name}-bgp"),
-                    pools=pools.get(circuit["ip_namespace"] or "", []),
+                    pools=pools.get(circuit["security_zone"] or "", []),
                     prefixes=prefixes.get(f"{LABEL_HANDOFF} {name}"),
                     party=ALL_DEMO_HANDOFF_PARTY_ASNS.get(name),
                 )
@@ -513,8 +513,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             ) or {}
             if namespace.get("name", {}).get("value") != "INTERNET":
                 errors.append(f"{name}: local address of {edge_device} is not in namespace INTERNET")
-            elif namespace["namespace_type"]["value"] != "internet":
-                errors.append(f"{name}: namespace INTERNET has type {namespace['namespace_type']['value']}")
+            elif namespace["vrf_type"]["value"] != "internet":
+                errors.append(f"{name}: namespace INTERNET has type {namespace['vrf_type']['value']}")
 
         transit_edges = set(ALL_DEMO_INTERNET_TRANSIT_PEERINGS.values())
         if transit_edges != ALL_DEMO_INTERNET_BGWS:

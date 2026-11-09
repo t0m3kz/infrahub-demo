@@ -195,12 +195,12 @@ class TestSegmentQuota:
 
     def test_exchange_zone_segment_is_not_counted(self) -> None:
         """The operator's shared DC-local service segment is no part of the customer's quota."""
-        segments = [_segment("s1", ["C005-P-DC10"]), _segment("infra", ["C005-P-DC10"], zone="MANAGEMENT-ZONE")]
+        segments = [_segment("s1", ["C005-P-DC10"]), _segment("infra", ["C005-P-DC10"], zone="MANAGEMENT")]
         assert _run([_footprint(max_segments=1)], segments) == []
 
     def test_tenant_zone_segment_is_counted(self) -> None:
-        """Only an exchange zone exempts: a PROD-ZONE segment counts."""
-        segments = [_segment("s1", ["C005-P-DC10"]), _segment("s2", ["C005-P-DC10"], zone="PROD-ZONE")]
+        """Only an exchange zone exempts: a PROD segment counts."""
+        segments = [_segment("s1", ["C005-P-DC10"]), _segment("s2", ["C005-P-DC10"], zone="PROD")]
         assert len(_run([_footprint(max_segments=1)], segments)) == 1
 
 
@@ -303,7 +303,7 @@ class TestPortQuota:
 
     def test_exchange_zone_segment_ports_are_not_counted(self) -> None:
         """The operator's infra servers' ports are not the customer's."""
-        segments = [_segment("infra", ["C005-P-DC10"], _port("a"), _port("b"), zone="MANAGEMENT-ZONE")]
+        segments = [_segment("infra", ["C005-P-DC10"], _port("a"), _port("b"), zone="MANAGEMENT")]
         assert _run([_footprint(ports_25g=0)], segments) == []
 
     def test_segment_and_port_errors_are_both_reported(self) -> None:

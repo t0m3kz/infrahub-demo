@@ -300,8 +300,8 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "TopologyRoutedExchange": {
             n["id"]: (
                 _value(n, "name"),
-                _peer_id(n, "namespace_a"),
-                _peer_id(n, "namespace_z"),
+                _peer_id(n, "security_zone_a"),
+                _peer_id(n, "security_zone_z"),
                 _peer_id(n, "gateway"),
             )
             for n in _nodes(result, "TopologyRoutedExchange")

@@ -58,7 +58,7 @@ def test_a_routed_row_creates_the_instance_and_its_svi() -> None:
         {
             "name": "dc1-vrf-prod",
             "deployment": {"id": "dc-1"},
-            "namespace": {"id": "ns-PROD"},
+            "security_zone": {"id": "ns-PROD"},
             "shared_devices": [{"id": "d1"}],
             "status": "active",
         }
@@ -136,13 +136,17 @@ def test_an_instance_with_demand_left_is_kept() -> None:
     """An address in the namespace on the device's own interface keeps the instance after its SVI is gone."""
     from tests.unit.vrf_instances_helpers import address, raw_interface
 
+    interface = raw_interface("eth1", "Ethernet1.1900", addr=address("100.66.0.1/31", "PROD"))
+    interface.pop("security_zone", None)
+    interface["ip_address"]["node"].pop("ip_prefix", None)
+    interface["vrf"] = {"node": raw_instance("vrf-1", "leaf-1", "PROD")}
     host = VrfHost(
         response(
             _leaf(
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
                 interfaces=[
                     raw_svi("svi-1", 100, "r-gone", "vrf-1", "PROD"),
-                    raw_interface("eth1", "Ethernet1.1900", addr=address("100.66.0.1/31", "PROD")),
+                    interface,
                 ],
             )
         )
@@ -155,7 +159,7 @@ def test_an_instance_with_demand_left_is_kept() -> None:
 
 def test_ensure_never_deletes_and_creates_what_the_caller_is_about_to_need() -> None:
     """The extra demand (an address not written yet) gets its instance; an instance with no demand stays."""
-    host = VrfHost(response(_leaf(capabilities=[raw_instance("vrf-2", "leaf-1", "NON-PROD")])))
+    host = VrfHost(response(_leaf(capabilities=[raw_instance("vrf-2", "leaf-1", "NONPROD")])))
 
     _ensure(host, {"d1": {"PROD", "default"}})
 
@@ -351,7 +355,7 @@ def test_the_instance_is_looked_up_by_deployment_and_namespace_with_its_members(
 
     first = host.client.filters.await_args_list[0]
     assert first.kwargs["deployment__ids"] == ["dc-1"]
-    assert first.kwargs["namespace__ids"] == ["ns-PROD"]
+    assert first.kwargs["security_zone__ids"] == ["ns-PROD"]
     assert first.kwargs["include"] == ["shared_devices"]
 
 
@@ -428,21 +432,47 @@ def test_an_instance_still_used_by_an_svi_is_not_deleted() -> None:
     assert host.deleted == []
 
 
+@pytest.mark.parametrize("reference", ["interfaces", "session_circuits", "exchanges_a", "exchanges_z"])
+def test_external_reference_retains_instance_until_truly_unused(reference: str) -> None:
+    """The last member can leave, but a routed interface, circuit or exchange keeps its scoped VRF."""
+    instance = raw_instance("vrf-1", "leaf-1", "PROD")
+    host = VrfHost(response(_leaf(vrfs=[instance])))
+    host.store.external_refs["vrf-1"] = {reference: {"external-1"}}
+
+    _reconcile(host, ["d1"])
+
+    assert host.store.vrfs["vrf-1"].members == set()
+    assert host.edge_ops == [("remove", "vrf-1", "shared_devices", ["d1"])]
+    assert host.deleted == []
+    assert host.client.get.await_args.kwargs["include"] == [
+        "interfaces",
+        "session_circuits",
+        "exchanges_a",
+        "exchanges_z",
+    ]
+    host.store.external_refs["vrf-1"][reference].clear()
+
+    asyncio.run(host.prune_empty_vrfs(["dc-1"]))
+
+    assert host.deleted == [("ManagedVRF", "vrf-1")]
+    assert "vrf-1" not in host.store.vrfs
+
+
 def test_the_sweep_deletes_the_empty_instances_of_the_deployments_it_touched() -> None:
     """A reconcile also removes an empty instance of its hosting DC (under its lock), not another DC's."""
-    here = raw_root_instance(raw_instance("vrf-empty", "x", "NON-PROD"))
+    here = raw_root_instance(raw_instance("vrf-empty", "x", "NONPROD"))
     elsewhere = raw_root_instance(raw_instance("vrf-far", "x", "PROD", deployment_id="dc-9"))
     host = VrfHost(response(_settled(), instances=(here, elsewhere)))
 
     _reconcile(host, ["d1"])
 
     assert host.deleted == [("ManagedVRF", "vrf-empty")]
-    assert host.lock_keys == ["vrf-device-d1", "vrf-dc-1-NON-PROD"]
+    assert host.lock_keys == ["vrf-device-d1", "vrf-dc-1-NONPROD"]
 
 
 def test_vrfs_held_does_not_sweep() -> None:
     """Holding never deletes, an empty instance included."""
-    empty = raw_root_instance(raw_instance("vrf-empty", "x", "NON-PROD"))
+    empty = raw_root_instance(raw_instance("vrf-empty", "x", "NONPROD"))
     host = VrfHost(response(_settled(), instances=(empty,)))
 
     _ensure(host, {"d1": {"PROD"}})

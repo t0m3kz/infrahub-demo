@@ -100,9 +100,14 @@ def port_underlay(port: dict[str, Any]) -> list[dict[str, Any]]:
     return list(circuits.values())
 
 
+def cabled_port(port: dict[str, Any]) -> dict[str, Any] | None:
+    """The port carrying a cable, directly or through its parent (a sub-interface or a hosted VM NIC)."""
+    return next((interface for interface in _port_and_parent(port) if interface.get("cable")), None)
+
+
 def port_cabled(port: dict[str, Any]) -> bool:
-    """A DcimCable terminates on the port, or on its parent interface when it is a sub-interface (one level)."""
-    return any(interface.get("cable") for interface in _port_and_parent(port))
+    """A DcimCable terminates on the port, or on its parent interface (one level)."""
+    return cabled_port(port) is not None
 
 
 def has_carrier(port: dict[str, Any]) -> bool:

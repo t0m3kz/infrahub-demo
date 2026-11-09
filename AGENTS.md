@@ -459,7 +459,7 @@ class MyCheck(InfrahubCheck):
   edge each external session's `RM-<session>-IN` deletes our two routing communities and then sets the owner's customer
   community (the owner of a prefix, above), and `RM-<session>-OUT` strips ours, so an internal tag never leaves and an
   outside party cannot forge one (see **Routing identity**).
-- **Internet egress**: an enabled rule to `INTERNET-ZONE` must be enforced by hardware on every DC and colocation
+- **Internet egress**: an enabled rule to `INTERNET` must be enforced by hardware on every DC and colocation
   footprint of its source segment: `checks/internet_egress.py` requires a complete firewall pair, an INTERNET leg with
   an address per member, the exchange to INTERNET, the tagged border service ports and a `snat_address` per serving
   context (a colocation metro: each zone with firewalls, or a complete provider-hosted pair of its virtual colocation).
@@ -471,7 +471,7 @@ class MyCheck(InfrahubCheck):
   `office_firewall_policy`, `transforms/topology/office_firewall_policy.py`) is built from the segments the office hosts with
   the SAME functions as a firewall rule table (`segment_rule_policies`, `get_zone_policies`): zones, one flat ordered rule
   table closed by one implicit deny, and each segment's `default_action`. A guest Wi-Fi segment is a segment whose only
-  permit rule is to `INTERNET-ZONE`; a corporate one adds the segments and prefixes it may reach. A dedicated guest zone is
+  permit rule is to `INTERNET`; a corporate one adds the segments and prefixes it may reach. A dedicated guest zone is
   not modelled: the office is PROD, and the exchange zones are tied to the namespaces.
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
@@ -514,8 +514,11 @@ class MyCheck(InfrahubCheck):
     `<uplink trunk>.<vlan>` (the trunk is the `parent_interface` of the context's legs; the VLAN is the segment's row on
     the device at the far end of the trunk's cable, the tag both ends use), gives it the gateway as `virtual_ip` and the
     segment's zone, and `Firewall.transform` renders it through the same interface path as any other. A segment with no
-    row on the facing leaf yet, no gateway, or a trunk with no facing device (a hosted firewall's NIC, a colocation
-    context with no legs) is left out with a warning. The context never routes a terminated prefix to the border leaves
+    row on the facing leaf yet, no gateway, or a trunk with no facing device (an unpinned hosted firewall NIC, a colocation
+    context with no legs) is left out with a warning. A hosted NIC follows its `parent_interface` to the physical
+    chassis port's cable, never an invented direct cable. The derived gateway interface is attached to its serving
+    context's policy and routing table, not the appliance's root table. The context never routes a terminated prefix to
+    the border leaves
     (`apply_context_routes`), and `get_firewall_static_routes` skips an interface with a `virtual_ip`.
   - **Check**: `checks/segment_placement.py` holds a termination to a gateway inside the segment prefix, DC footprints
     only, each served by the context (`served_deployments`). Demo: C005's `firewalled-dc10` in
@@ -699,7 +702,9 @@ class MyCheck(InfrahubCheck):
 - **Virtual NICs**: the base NICs of a hosted virtual device (a dedicated firewall or load balancer, built from a
   `*_CUSTOMER_*` template) are `DcimVirtualInterface`, never `DcimPhysicalInterface`. Only the physical host is cabled:
   `generators/virtual_nics.py` pins each NIC through its `parent_interface` to the host port of its role (`management`,
-  `uplink`, `ha`; n-th by interface order; a NIC with no host port left stays unpinned), and a context sub-interface
+  `uplink`, `ha`; n-th by interface order; only cabled host ports qualify for an uplink, and a NIC with no host port
+  left stays unpinned). A stale generated pin is removed with RelationshipRemove (SDK save omits a None single
+  relationship), and a context sub-interface
   rides on the NIC through `parent_interface` too, so border leaf -> host port -> NIC -> sub-interface is a path in the
   graph. `_resolve_transit_members` follows `parent_interface`, not a name. A controller keeps physical ports;
   a provider-hosted `CloudNetworkAppliance` has no hardware, so its ports are virtual NICs with no host (and no cable).
@@ -778,16 +783,22 @@ class MyCheck(InfrahubCheck):
   the transform renders `vrf member` from it. The L3 VNI SVI (`ip forward`, `3900 + TRANSIT_SLOT[namespace_type]`,
   `utils/exchange_transit.py` `l3vni_svi_vlan`) and the transit-leg SVIs of the firewall and load-balancer contexts stay
   derived, not objects.
-- **VRF instances (`ManagedVRF`)**: one per (topology, namespace): its `deployment` is a `Parent` to the hosting
+- **Routing authority**: IPAM objects and allocations use the builtin `default` namespace; that identity never chooses
+  a routing table. `SecurityZone.name` is the CLI VRF name (`PROD`, `NONPROD`, `INTERNET`, `MANAGEMENT`), and its
+  `vrf_type` and `l3_vni` are authoritative. `utils/routing_domain.py` resolves native interface, SVI, circuit, segment
+  and standalone prefix owners, rejects conflicts, and requires missing tenant ownership to fail closed. Genuine
+  underlay and loopback objects have no zone and create no managed VRF demand. Direct query execution uses
+  `utils/graphql_queries.py` to assemble referenced shared fragments.
+- **VRF instances (`ManagedVRF`)**: one per (topology, security zone): its `deployment` is a `Parent` to the hosting
   deployment (a DC, a colocation metro or an office, `TopologySegmentHosting`; a pod's or a zone's devices are hosted
   by its DC or metro, `utils/segment_addressing.py` `hosting_deployment`), deleted with it (`vrfs`, `on_delete:
-  cascade`); unique on [deployment, namespace], HFID [deployment name, namespace name], named
-  `{deployment lower}-vrf-{namespace lower}` (`dc10-vrf-prod`), the scope of its route-target. Its members are the
+  cascade`); unique on [deployment, security_zone], HFID [deployment name, zone name], named
+  `{deployment lower}-vrf-{zone lower}` (`dc10-vrf-prod`), the scope of its route-target. Its members are the
   devices of that topology that route in the namespace: `shared_devices` (the shared device edge, reverse
   `DcimCapabilities.shared_capabilities`, no cascade), written edge by edge with RelationshipAdd/RelationshipRemove,
-  never as a list (a new instance is created with its first member in the create data); the namespace lists its instances through
-  `IpamNamespace.vrfs`. `l3_vni` stays on the namespace (one value: a stretched VRF and the global INTERNET RT need it)
-  and the instance only shows it (a read-only computed attribute nothing reads); RD, RT, SVI VLAN and EVPN vs VRF-lite
+  never as a list (a new instance is created with its first member in the create data); the zone lists its instances through
+  `SecurityZone.vrfs`. `l3_vni` stays on the zone (one value: a stretched VRF and the global INTERNET RT need it);
+  the instance has no duplicate VNI field; RD, RT, SVI VLAN and EVPN vs VRF-lite
   are derived. Membership is demand-driven, never pre-provisioned: a device is a member for exactly the non-`default`
   namespaces it routes in (`utils/vrf_demand.py`, the one derivation): the gateway namespace of each
   routed row of its own, its SVIs' VRFs, the namespaces of the addresses on its own interfaces (handoff /31s, WAN
@@ -862,10 +873,10 @@ class MyCheck(InfrahubCheck):
   `http`, and only tcp can be layer 7. A cloud VIP has no `vip_ip` (the provider assigns the endpoint, `dns_names` of the load
   balancer) and its targets are the instances themselves. `ManagedLoadBalancer.vips` lists the VIPs of every implementation.
 - **Rule destinations**: a `SecurityPolicyRule` targets a segment (`destination_segment`, narrowed by prefixes or
-  addresses), prefixes, addresses, a group tag or a zone (`destination_zone`). The internet is the `INTERNET-ZONE`, not a
-  segment: a rule to it has `destination_zone: INTERNET-ZONE` and nothing else (the firewall renders `to INTERNET-ZONE`,
+  addresses), prefixes, addresses, a group tag or a zone (`destination_zone`). The internet is the `INTERNET`, not a
+  segment: a rule to it has `destination_zone: INTERNET` and nothing else (the firewall renders `to INTERNET`,
   destination any; the leaf ACL denies `NON_INTERNET_PREFIXES` before the permit to any). Only that zone is accepted,
-  and `checks/segment_security.py` refuses a zone next to any other destination.
+  and `checks/segment_security.py` refuses a zone next to a segment or group tag (a zone qualifies a prefix or address selector).
 - **Capability edges**: a capability reaches devices through ONE of two device-edge generics (a kind inherits exactly
   one, `tests/unit/test_capability_edge_names.py`) and interfaces via `ManagedGenericInterfaces` (inherit it only when
   something reads the interface edge). Both device edges sit on `DcimCapabilities`:

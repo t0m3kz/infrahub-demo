@@ -1,0 +1,26 @@
+# ManagedClusterSdn declarations in recursive dependency order.
+# The software network layers. NSX of the vSphere cluster carries its overlay between the hosts (Geneve) and its
+# gateways run on the two Edge nodes; the CNI of the RKE2 cluster is Cilium over VXLAN with the RKE2 default pod and
+# service ranges. Both are one kind, ManagedClusterSdn (schemas/extensions/service/cluster.yml), and a cluster names
+# its own.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedClusterSdn
+  data:
+    - name: ktw1-nsx
+      description: "NSX overlay of ktw1-vsphere-cl01, Tier-0 on the two Edge nodes"
+      status: active
+      provider: nsx
+      encapsulation: geneve
+      overlay_cidr: "10.90.250.0/24"
+      gateway_nodes:
+        - ktw1-nsx-edge-01
+        - ktw1-nsx-edge-02
+    - name: ktw1-cilium
+      description: "Cilium CNI of ktw1-rke2-cl01, VXLAN"
+      status: active
+      provider: cilium
+      encapsulation: vxlan
+      overlay_cidr: "10.42.0.0/16"
+      service_cidr: "10.43.0.0/16"

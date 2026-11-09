@@ -1,0 +1,19 @@
+# ManagedHypervisorCluster declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedHypervisorCluster
+  data:
+    - name: ktw1-vsphere-cl01
+      description: "C900 production compute of DC-KTW1: vSphere (vCenter), 3 hosts"
+      status: active
+      software_image: vsphere-8.0U3
+      manager: "vcenter.ktw1.demo.local"
+      inventory_path: KTW1
+      ha_enabled: true
+      load_balancing: true
+      deployment: DC-KTW1-9-POD-1
+      hosts:
+        - ktw1-srv-01
+        - ktw1-srv-02
+        - ktw1-srv-03

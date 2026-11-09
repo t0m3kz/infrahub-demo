@@ -1,0 +1,38 @@
+# DcimPhysicalDevice declarations in recursive dependency order.
+# The cage edge of FRA-COLO1 (template N9K-C9316D-GX_EDGE), deployed to the zone. Its ports are DCI only:
+# 1/9-14 two per DC (one per border leaf), 1/15-16 one per other cage; the ports outside the template's dci range
+# (1/9-12) are nested with role dci. Ethernet1/1 (partner) is cabled to the Fabric port of the cage FRA, the Internet
+# Access service of the cage (02_cables.yml, 03_fabric_interfaces.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: fra-colo1-edge-01
+      object_template: N9K-C9316D-GX_EDGE
+      description: "Cage edge of FRA-COLO1: DCI fibres to every DC and every other cage"
+      deployment: FRA-COLO1
+      rack: fra-colo1-rack-01
+      position: 40
+      rack_face: front
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: Ethernet1/13
+            role: dci
+            description: "DCI: dark fibre to GDN1"
+        - kind: DcimPhysicalInterface
+          data:
+            name: Ethernet1/14
+            role: dci
+            description: "DCI: dark fibre to GDN1"
+        - kind: DcimPhysicalInterface
+          data:
+            name: Ethernet1/15
+            role: dci
+            description: "DCI: dark fibre to PAR1"
+        - kind: DcimPhysicalInterface
+          data:
+            name: Ethernet1/16
+            role: dci
+            description: "DCI: dark fibre to AMS1"

@@ -1,6 +1,5 @@
----
 # L3 handoff between the SD-WAN gateway and the cage's EVPN Multi-Site border
-# gateway, in namespace PROD. This is how the C005 office (Amsterdam Branch) reaches
+# gateway, in routing zone PROD. This is how the C005 office (Amsterdam Branch) reaches
 # colo-services-stretch: office -> SD-WAN overlay -> GW1 -> eBGP in PROD ->
 # eg-fr201 -> EVPN type-5 -> DC10. The segment itself is never extended to the
 # office at L2; only its PROD prefix is.
@@ -43,7 +42,8 @@ spec:
     # GW1's router-id: a loopback, not a handoff address (those are generated at circuit
     # creation). 10.255.64.0/24 holds the loopbacks of the party devices modelled as stubs,
     # clear of the handoff pools.
-    - name: "Loopback0"
+    - security_zone: "PROD"
+      name: "Loopback0"
       device: "EQX-FR2-SDWAN-GW1"
       role: loopback
       status: active
@@ -51,82 +51,4 @@ spec:
       ip_address:
         data:
           address: "10.255.64.2/32"
-          ip_namespace: "PROD"
----
-# 2-byte private ASN: every fabric/cage ASN here is 4-byte (42xxxxxxxx), so
-# this can't collide with a generated one.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: RoutingAutonomousSystem
-  data:
-    - asn: 65028
-      description: "EQX-FR2-SDWAN-GW1 AS (PROD handoff)"
----
-# GW1's own BGP process. Its config is pushed by the Orchestrator, not by a
-# transform here — this exists so the generated session has a remote AS (the party
-# ASN of a handoff is this process's local_as) and a second endpoint, and so
-# eg-fr201's transform can render its side. It is GW1's only ManagedBGP process,
-# which is how the generator picks it.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: ManagedBGP
-  data:
-    - name: "EQX-FR2-SDWAN-GW1-bgp"
-      status: active
-      local_as: "AS65028"
-      router_id: ["10.255.64.2/32", "PROD"]
-      capabilities:
-        - "EQX-FR2-SDWAN-GW1"
----
-# Shared key for the PROD handoff below. Neither side is a DC fabric, so there
-# is no generated {fabric}-overlay-key to reuse. Demo-only secret, like the API
-# token in the README.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: RoutingPassword
-  data:
-    - name: "eqx-fr2-sdwan-handoff-key"
-      description: "BGP auth key for the eg-fr201 <-> EQX-FR2-SDWAN-GW1 PROD handoff"
-      password: "demo-eqx-fr2-sdwan-handoff"
----
-# The handoff circuit, in PROD. Unowned shared on-ramp: both ends are in the FR2 cage (the
-# gateway and the cage router), so the one location is the cage, and the carrier is the cable
-# of ../01_colo_onramp/05_cage_cabling.yml. Provider: VeloCloud (P035), the SD-WAN
-# service provider, who operates the gateway.
-#
-# The session is the generated HANDOFF-FR2-SDWAN-GW1-PROD-bgp, peering_role regular on a
-# PROD address: the local interface's address being in PROD (not `default`) is what makes
-# transforms/helpers/bgp.py render it under `vrf PROD` on eg-fr201, outside every peer
-# group. peering_role regular there makes it an external tenant-VRF peer, filtered by
-# RM-<session>-IN, which accepts only the
-# far end's registered prefixes, and RM-<session>-OUT announces only the PROD on-prem segment
-# prefixes of the customers who registered them. The far end here is EQX-FR2-SDWAN-GW1, so the
-# registered prefixes are the PROD lan_prefixes (owner: the office's owner) and the PROD
-# segments hosted by every TopologyCustomerOffice whose sdwan_gateway is GW1 (owner: the
-# segment's owner): C002's hand-authored lan_prefixes 10.210.2.0/24, the /24 add_sdwan_edge allocates from
-# Tenant-PROD-IPv4 for every office with neither lan_prefixes nor fabric_templates (C001, C003, C015), and
-# C005's hosted office-lan segment (get_external_peer_prefixes in transforms/helpers/bgp_external.py), plus the
-# prefixes registered on a tunnel behind the gateway. The session's owners are those customers, so each
-# owner's PROD segments are announced.
-# This is no cloud service.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySessionCircuit
-  data:
-    - name: "HANDOFF-FR2-SDWAN-GW1-PROD"
-      circuit_type: handoff
-      member_of_groups: [virtual_circuits]
-      status: active
-      provider: "P035"
-      description: "PROD handoff eg-fr201 <-> EQX-FR2-SDWAN-GW1 (office routes into the stretched segments)"
-      ip_namespace: "PROD"
-      password: "eqx-fr2-sdwan-handoff-key"
-      locations:
-        - "FR2"
-      capabilities:
-        - ["eg-fr201", "Ethernet1/12.1900"]
-        - ["EQX-FR2-SDWAN-GW1", "eth0.1900"]
+          ip_namespace: "default"

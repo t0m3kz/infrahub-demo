@@ -1,0 +1,11 @@
+# TopologyColocationMetro declarations in recursive dependency order.
+# The colocation metro uses its already-authored edge ASN for the same shared RT contract as the DC.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocationMetro
+  data:
+    - name: PAR
+      parent: COLO-PAR
+      location: ["par"]
+      evpn_rt_as: AS4200091001

@@ -184,16 +184,28 @@ class TestAclRuleEndpointResolver:
     first prefix/IP selector, else any."""
 
     def test_destination_prefix_selector_without_segment(self) -> None:
-        rule = {**_rule(src=_seg_ref("10.1.0.0/24")), "destination_prefixes": [{"prefix": "10.40.0.0/16"}]}
+        rule = {
+            **_rule(src=_seg_ref("10.1.0.0/24")),
+            "destination_zone": {"name": "PROD"},
+            "destination_prefixes": [{"prefix": "10.40.0.0/16"}],
+        }
         acl_rule = _build_acl_rule(rule)
         assert (acl_rule["src"], acl_rule["dst"]) == ("10.1.0.0/24", "10.40.0.0/16")
 
     def test_destination_ip_selector_without_segment(self) -> None:
-        rule = {**_rule(src=_seg_ref("10.1.0.0/24")), "destination_ip_addresses": [{"address": "198.51.100.7/32"}]}
+        rule = {
+            **_rule(src=_seg_ref("10.1.0.0/24")),
+            "destination_zone": {"name": "PROD"},
+            "destination_ip_addresses": [{"address": "198.51.100.7/32"}],
+        }
         assert _build_acl_rule(rule)["dst"] == "198.51.100.7/32"
 
     def test_segment_prefix_wins_over_selectors(self) -> None:
-        rule = {**_rule(dst=_seg_ref("10.2.0.0/24")), "destination_prefixes": [{"prefix": "10.40.0.0/16"}]}
+        rule = {
+            **_rule(dst=_seg_ref("10.2.0.0/24")),
+            "destination_zone": {"name": "PROD"},
+            "destination_prefixes": [{"prefix": "10.40.0.0/16"}],
+        }
         assert _build_acl_rule(rule)["dst"] == "10.2.0.0/24"
 
     def test_no_segment_and_no_selector_is_any(self) -> None:
@@ -204,6 +216,7 @@ class TestAclRuleEndpointResolver:
         inbound = {
             **_rule(port_start=5432),
             "source_segment": {"id": "seg-a", "name": "a"},
+            "source_zone": {"name": "PROD"},
             "source_prefixes": [{"prefix": "10.9.0.0/24"}],
             "destination_segment": {"id": "seg-b"},
             "policy": {"enabled": True},
@@ -215,7 +228,7 @@ class TestAclRuleEndpointResolver:
 
 def _internet_rule(**kwargs) -> dict:
     """A rule whose destination is the internet zone: no destination segment."""
-    return _rule(destination_zone="INTERNET-ZONE", **kwargs)
+    return _rule(destination_zone="INTERNET", **kwargs)
 
 
 class TestGetAclsInternetBand:
@@ -245,7 +258,7 @@ class TestGetAclsInternetBand:
             "any",
             "eq 443",
         )
-        assert permit["dst_zone"] == "INTERNET-ZONE"
+        assert permit["dst_zone"] == "INTERNET"
         assert rules[-1]["name"] == "implicit-deny-all"
 
     def test_no_unconditional_permit_any_at_the_rules_own_index(self) -> None:

@@ -30,4 +30,6 @@ def make_generator(cls: type[_T]) -> Any:
     setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
     # The border devices' VRF instances follow the legs (tests/unit/test_vrf_callers.py): not these tests'.
     setattr(gen, "_reconcile_border_vrfs", AsyncMock())  # noqa: B010
+    # Termination moves have their own real-mixin tests, not target-resolution mocks.
+    setattr(gen, "_relink_terminated_segments", AsyncMock())  # noqa: B010
     return gen

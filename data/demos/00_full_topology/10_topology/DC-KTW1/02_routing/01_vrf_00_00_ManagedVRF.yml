@@ -1,0 +1,18 @@
+# ManagedVRF declarations in recursive dependency order.
+# L3 of the DC side, authored by hand (no generator): the VRF of the topology (PROD) with the first two routing
+# devices. The cloud and SaaS legs are NOT here: a Direct Connect, an ExpressRoute or a Webex cross-connect lands in a
+# colocation cage, so their sub-interfaces and sessions belong to the cage edge
+# (10_topology/COLO-PAR/02_routing/01_virtual_interfaces.yml,
+# 90_bindings/50_connections/Cloud/01_sessions/02_bgp_sessions.yml,
+# 90_bindings/50_connections/SaaS/05_bgp_sessions.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc-ktw1-vrf-prod"
+      security_zone: "PROD"
+      deployment: "DC-KTW1"
+      shared_devices:
+        - "ktw1-leaf-01"
+        - "ktw1-edge-01"

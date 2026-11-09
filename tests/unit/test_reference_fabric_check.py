@@ -293,9 +293,9 @@ def _tenant_segment(
     *,
     sites: tuple[str, ...] = ("dc10",),
     tag: str | None = None,
-    namespace_type: str = "prod",
+    vrf_type: str = "prod",
 ) -> dict[str, Any]:
-    """One routed tenant segment edge (gateway in a ``namespace_type`` namespace), tagged or not.
+    """One routed tenant segment edge with explicit zone metadata, tagged or not.
 
     A VXLAN segment is active in ``sites`` through its segment deployments.
     """
@@ -304,14 +304,8 @@ def _tenant_segment(
         "id": seg_id,
         "name": _v(seg_id),
         "isolation_mode": _v("normal"),
-        "security_zone": {"node": {"name": _v("PROD-ZONE")}},
-        "gateway": {
-            "node": {
-                "ip_prefix": {
-                    "node": {"ip_namespace": {"node": {"name": _v("PROD"), "namespace_type": _v(namespace_type)}}}
-                }
-            }
-        },
+        "security_zone": {"node": {"name": _v("PROD"), "vrf_type": _v(vrf_type), "l3_vni": _v(60000)}},
+        "gateway": {"node": {"ip_prefix": {"node": {"ip_namespace": {"node": {"name": _v("default")}}}}}},
         "security_tag": {"node": {"id": tag, "name": _v(tag), "group_id": _v(100)}} if tag else {"node": None},
     }
     if kind == "ManagedVxlanSegment":
@@ -345,7 +339,7 @@ class TestSegmentTags:
 
     def test_untagged_management_segment_on_a_reference_fabric_is_never_required(self) -> None:
         """The INFRA services segment (MANAGEMENT VRF) is not a tenant segment: no tag, no error."""
-        segment = _tenant_segment("infra-core-dns-ntp-p", namespace_type="management")
+        segment = _tenant_segment("infra-core-dns-ntp-p", vrf_type="management")
         check = _run({"dc10": ([], REFERENCE)}, segments=[segment])
         assert check._captured_errors == []
 

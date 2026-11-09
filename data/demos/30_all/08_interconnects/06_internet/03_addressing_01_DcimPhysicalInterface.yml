@@ -1,0 +1,82 @@
+# Ethernet1/14 is the second `uplink` port on each cage edge; Ethernet1/13 is
+# already the cloud cross-connect on eg-fr201 (AWS) and eg-pa401 (Azure), so 1/14
+# is the one that is free on all four. The ISP side is the first customer port
+# on its provider edge.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - security_zone: "INTERNET"
+      name: "Ethernet1/14"
+      device: "eg-fr201"
+      status: active
+      description: "Internet transit to Lumen (EXT-LUMEN-FRA1)"
+      ip_address:
+        data:
+          address: "203.0.113.1/31"
+          ip_namespace: "default"
+    - security_zone: "INTERNET"
+      name: "Ethernet1/14"
+      device: "eg-fr202"
+      status: active
+      description: "Internet transit to Cogent (EXT-COGENT-FRA1)"
+      ip_address:
+        data:
+          address: "203.0.113.3/31"
+          ip_namespace: "default"
+    - security_zone: "INTERNET"
+      name: "Ethernet1/14"
+      device: "eg-pa401"
+      status: active
+      description: "Internet transit to Lumen (EXT-LUMEN-PAR1)"
+      ip_address:
+        data:
+          address: "203.0.113.5/31"
+          ip_namespace: "default"
+    - security_zone: "INTERNET"
+      name: "Ethernet1/14"
+      device: "eg-pa402"
+      status: active
+      description: "Internet transit to Cogent (EXT-COGENT-PAR1)"
+      ip_address:
+        data:
+          address: "203.0.113.7/31"
+          ip_namespace: "default"
+
+    - security_zone: "INTERNET"
+      name: "et-0/0/0"
+      device: "EXT-LUMEN-FRA1"
+      status: active
+      description: "Transit customer: Equinix FR cage (eg-fr201)"
+      ip_address:
+        data:
+          address: "203.0.113.0/31"
+          ip_namespace: "default"
+    - security_zone: "INTERNET"
+      name: "et-0/0/0"
+      device: "EXT-COGENT-FRA1"
+      status: active
+      description: "Transit customer: Equinix FR cage (eg-fr202)"
+      ip_address:
+        data:
+          address: "203.0.113.2/31"
+          ip_namespace: "default"
+    - security_zone: "INTERNET"
+      name: "et-0/0/0"
+      device: "EXT-LUMEN-PAR1"
+      status: active
+      description: "Transit customer: Equinix PA cage (eg-pa401)"
+      ip_address:
+        data:
+          address: "203.0.113.4/31"
+          ip_namespace: "default"
+    - security_zone: "INTERNET"
+      name: "et-0/0/0"
+      device: "EXT-COGENT-PAR1"
+      status: active
+      description: "Transit customer: Equinix PA cage (eg-pa402)"
+      ip_address:
+        data:
+          address: "203.0.113.6/31"
+          ip_namespace: "default"

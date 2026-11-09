@@ -1,0 +1,35 @@
+# DcimPhysicalDevice declarations in recursive dependency order.
+# A routed, single-homed C900 workload, not a transit router or a generated tenant segment.
+# The cage edge has no free data ports: this workload uses the firewall's unused ethernet1/2 instead.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: par-colo1-srv-01
+      object_template: PowerEdge-R640_SERVER
+      owner: C900
+      description: "C900-P-PAR workload in PAR-COLO1, directly attached to the external firewall"
+      deployment: PAR-COLO1
+      rack: par-colo1-rack-01
+      position: 20
+      rack_face: front
+      primary_address:
+        data:
+          address: "10.90.4.11/24"
+          ip_namespace: "default"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.90.4.0/24"
+              ip_namespace: "default"
+              status: active
+              description: C900 routed workload network in PAR-COLO1
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            security_zone: "PROD"
+            name: eno1
+            role: uplink
+            status: active
+            ip_address: ["10.90.4.11/24", "default"]

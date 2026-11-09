@@ -53,13 +53,15 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, cast
 
-from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool, IpamNamespace
+from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool
 from typing_extensions import TypedDict
 
+from generators.protocols import SecurityZone
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, transit_pool_name, wan_exit_vlan
 from utils.fabric_roles import CAMPUS_FABRIC_ROLES, LISP_BORDER_ROLES
 from utils.limits import (
+    DEFAULT_NAMESPACE,
     LOOPBACK_IPV4_POOL,
     MANAGEMENT_IPV4_POOL,
     OFFICE_EDGE_WAIT,
@@ -297,7 +299,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
                 prefix_length=_OFFICE_MANAGEMENT_PREFIX_LENGTH,
                 role="management",
                 kind="address",
-                namespace="MANAGEMENT",
+                namespace=DEFAULT_NAMESPACE,
             )
             technical_pool = await self.ensure_sliced_pool(
                 pool_name=f"{office}-technical-pool",
@@ -471,11 +473,11 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
             return
 
         # An office is always PROD: its exit lives in the PROD tenant VRF.
-        namespaces = await self.client.filters(kind=IpamNamespace, namespace_type__value=PROD_TYPE)
+        namespaces = await self.client.filters(kind=SecurityZone, vrf_type__value=PROD_TYPE)
         if len(namespaces) != 1:
             self.fail(
-                f"Office {office_name}: expected one IpamNamespace of type {PROD_TYPE}, found {len(namespaces)} "
-                "— load data/bootstrap/22_namespaces.yml"
+                f"Office {office_name}: expected one SecurityZone of type {PROD_TYPE}, found {len(namespaces)} "
+                "— load data/bootstrap/24_security_zones.yml"
             )
         pool_name = transit_pool_name(namespaces[0].name.value)
         transit_pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name)
@@ -494,7 +496,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
                 distribution_names=distribution_names,
                 switch_ports=switch_ports,
                 transit_pool=transit_pools[0],
-                namespace=namespaces[0].name.value,
+                security_zone=namespaces[0],
                 vlan=wan_exit_vlan(PROD_TYPE),
             )
 
@@ -507,7 +509,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         distribution_names: list[str],
         switch_ports: list[str],
         transit_pool: Any,
-        namespace: str,
+        security_zone: SecurityZone,
         vlan: int,
     ) -> None:
         """Cable, address and peer every link of the exit; every precondition has held by now."""
@@ -525,7 +527,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
 
         # Both ends of every link get an instance of the namespace first (generators/helpers/vrf.py), and keep their
         # device locks until the addresses are saved: a pruning pass must not see an instance without its demand.
-        needs = {port.device.id: {namespace} for pair in pairs for port in pair}
+        needs = {port.device.id: {security_zone.name.value} for pair in pairs for port in pair}
         links: list[_ExitLink] = []
         async with self.vrfs_held(needs):
             for edge_port, switch_port in sorted(pairs, key=lambda pair: pair[1].device.display_label):
@@ -534,7 +536,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
                     edge_name=edge_name,
                     switch_port=switch_port,
                     transit_pool=transit_pool,
-                    namespace=namespace,
+                    security_zone=security_zone,
                     vlan=vlan,
                 )
                 if link is not None:
@@ -545,7 +547,14 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         await self._peer_exit_links(links=links, edge=edge, edge_name=edge_name)
 
     async def _address_exit_link(
-        self, *, edge_port: Any, edge_name: str, switch_port: Any, transit_pool: Any, namespace: str, vlan: int
+        self,
+        *,
+        edge_port: Any,
+        edge_name: str,
+        switch_port: Any,
+        transit_pool: Any,
+        security_zone: SecurityZone,
+        vlan: int,
     ) -> _ExitLink | None:
         """Address one cabled link in the tenant VRF: a /31 from its transit pool, a dot1q sub-interface per end.
 
@@ -574,6 +583,9 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
             trunk_iface=switch_port,
             vlan_id_value=vlan,
             ip_address_id=switch_address.id,
+            vrf_id=(await self.local_vrf_ids([switch_port.device.id], [security_zone.name.value]))[
+                (switch_port.device.id, security_zone.name.value)
+            ],
             role=switch_port.role.value,
         )
         edge_sub = await self.ensure_vlan_subinterface(
@@ -582,6 +594,9 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
             trunk_iface=edge_port,
             vlan_id_value=vlan,
             ip_address_id=edge_address.id,
+            vrf_id=(await self.local_vrf_ids([edge_port.device.id], [security_zone.name.value]))[
+                (edge_port.device.id, security_zone.name.value)
+            ],
             role=edge_port.role.value,
         )
         if switch_sub is None or edge_sub is None:

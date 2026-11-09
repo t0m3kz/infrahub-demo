@@ -125,10 +125,10 @@ def test_a_virtual_circuit_declares_both_ends_and_up_to_two_places() -> None:
 
 
 def test_expected_kinds_and_environments_follow_the_role_of_each_kind() -> None:
-    """Every Handoff is PROD and only a Handoff has a namespace; no circuit names an owner (it is derived)."""
+    """Every Handoff explicitly names PROD as its routing zone; no circuit names an owner (it is derived)."""
     for circuit_name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items():
         assert "owner" not in expected and "cloud_endpoint" not in expected, circuit_name
-        assert (expected["ip_namespace"] == "PROD") == (expected["circuit_type"] == HANDOFF_TYPE), circuit_name
+        assert (expected["security_zone"] == "PROD") == (expected["circuit_type"] == HANDOFF_TYPE), circuit_name
         assert len(set(expected["carrier"])) == len(expected["carrier"]), circuit_name
 
 

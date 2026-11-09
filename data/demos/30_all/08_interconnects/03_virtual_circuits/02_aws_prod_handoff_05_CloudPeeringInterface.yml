@@ -1,0 +1,19 @@
+# The provider side: the private virtual interface on the dedicated port, landing on the Direct Connect gateway.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudPeeringInterface
+  data:
+    - name: "dxcon-fr2.1000"
+      device: "dx-30all-euc1-fr2"
+      description: "AWS private virtual interface of the Nordix PROD connection (lands on dxgw-30all)"
+      status: active
+      scope: private
+      routing: bgp
+      vlan_id: 1000
+      bfd: true
+      parent_interface: ["EXT-AWS-DX-FR2", "dxcon-fr2"]
+      gateway: "dxgw-30all"
+      auth: "eqx-fr2-aws-euc1-key"
+      peer_ip: ["10.255.143.255/31", "default"]
+      peer_asn: "AS64512"

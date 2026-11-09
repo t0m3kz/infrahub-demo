@@ -1,7 +1,7 @@
 ---
 # Three production VXLAN segments of one tenant: web, app and db. Names are computed
 # ({org_id}-{customer_name}-{environment}): mssg1-web-p, mssg1-app-p, mssg1-db-p. add_vxlan_segment
-# allocates each one's prefix and anycast gateway (.1) from the tenant pool of the PROD namespace, the
+# allocates each one's prefix and anycast gateway (.1) from the tenant pool of the PROD routing zone, the
 # VNI from DC14's pool, its security zone and its group tag (ensure_segment_addressing, ensure_segment_tag).
 # The gateway prefix is what MSS-G classifies the segment by, so the test reads it from the stack
 # instead of pinning an address. isolation_mode stays `normal` (hosts of one segment talk freely):

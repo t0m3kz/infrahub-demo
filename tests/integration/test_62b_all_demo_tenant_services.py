@@ -270,8 +270,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         )
                     elif address.ip not in (address.network[o] for o in TRANSIT_OFFSETS[2:]):
                         errors.append(f"{leg_id}: {leg['address']} is not a member offset (.5/.6) of its /29")
-                    if leg["namespace_type"] != ns_type:
-                        errors.append(f"{leg_id}: namespace_type '{leg['namespace_type']}', expected '{ns_type}'")
+                    if leg["vrf_type"] != ns_type:
+                        errors.append(f"{leg_id}: vrf_type '{leg['vrf_type']}', expected '{ns_type}'")
                     sub_vlan = str(leg["interface"]).rsplit(".", 1)[-1]
                     if sub_vlan != str(transit_vlan(int(context_vlan), ns_type)):
                         errors.append(
@@ -287,7 +287,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     errors.append(f"{label}/{namespace}: members are in {sorted(map(str, networks))}, one /29 expected")
                 prefixes.setdefault(namespace, set()).update(networks)
 
-            # Exchanges: `{context}-{A}-{Z}`, gateway = this context, never PROD <-> NON-PROD.
+            # Exchanges: `{context}-{A}-{Z}`, gateway = this context, never PROD <-> NONPROD.
             actual_exchanges = exchanges_by_gateway.get(str(context["id"]), [])
             exchange_count += len(actual_exchanges)
             if sorted(str(e["name"]) for e in actual_exchanges) != sorted(expected_exchange_names):
@@ -533,10 +533,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                             f"is {expected_ip}"
                         )
             for leg in legs:
-                if leg["namespace_type"] != ns_type:
-                    errors.append(
-                        f"{label}: {leg['device']}:{leg['interface']} in namespace type {leg['namespace_type']}"
-                    )
+                if leg["vrf_type"] != ns_type:
+                    errors.append(f"{label}: {leg['device']}:{leg['interface']} in namespace type {leg['vrf_type']}")
                 if vlan and str(leg["interface"]).rsplit(".", 1)[-1] != str(transit_vlan(int(vlan), ns_type)):
                     errors.append(
                         f"{label}: {leg['device']}:{leg['interface']}, expected the leg VLAN "

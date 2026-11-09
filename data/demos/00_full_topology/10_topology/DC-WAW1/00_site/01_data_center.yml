@@ -1,0 +1,12 @@
+---
+# The data center DC-WAW1 (design S) under the label "Data Center".
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC-WAW1
+      parent: "Data Center"
+      index: 7
+      design: S
+      management_pool: dc-waw1-management-pool

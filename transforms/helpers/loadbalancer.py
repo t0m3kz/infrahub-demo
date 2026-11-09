@@ -33,6 +33,7 @@ from typing import Any
 from transforms.helpers.addressing import host_ip, sub_interface_parent
 from transforms.helpers.firewall import transit_legs
 from utils.exchange_transit import TENANT_NAMESPACE_TYPES, TRANSIT_SLOT
+from utils.routing_domain import interface_security_zone
 
 HC_INTERVAL_S = 5
 """Probe interval of every health check (the model has none); stretched when a probe's own timeout needs more."""
@@ -267,8 +268,8 @@ def _leg(context: dict[str, Any], device_name: str, ha: dict[str, Any] | None) -
         address = ip_obj.get("address")
         if not address or ipaddress.ip_interface(address).version != 4:
             return None
-        namespace = ip_obj.get("ip_namespace") or {}
-        if namespace.get("namespace_type") not in TENANT_NAMESPACE_TYPES or not namespace.get("l3_vni"):
+        namespace = interface_security_zone(iface)
+        if namespace.get("vrf_type") not in TENANT_NAMESPACE_TYPES or not namespace.get("l3_vni"):
             raise ValueError(
                 f"LB context {context.get('name')}: leg {iface.get('name')} on {device_name} is not in a tenant VRF "
                 f"with an l3_vni (namespace {namespace.get('name')})"
@@ -334,7 +335,7 @@ def get_loadbalancer_contexts(
         )
         rendered.append(
             (
-                TRANSIT_SLOT[namespace["namespace_type"]],
+                TRANSIT_SLOT[namespace["vrf_type"]],
                 {
                     "name": context.get("name"),
                     "partition": partition,

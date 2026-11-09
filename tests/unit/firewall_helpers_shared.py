@@ -3,7 +3,7 @@
 
 def _make_segment_with_prefix(prefix: str) -> dict:
     """Build a minimal segment dict that segment_prefix() can parse."""
-    return {"gateway": {"ip_prefix": {"prefix": prefix}}}
+    return {"security_zone": {"name": "PROD", "vrf_type": "prod"}, "gateway": {"ip_prefix": {"prefix": prefix}}}
 
 
 # ===========================================================================
@@ -26,6 +26,7 @@ def _make_pbr_activation(
         "id": "seg-1",
         "name": "seg-1",
         "customer_name": "web",
+        "security_zone": {"name": "PROD", "vrf_type": "prod"},
         "customer_deployments": [{"id": deployment_id}] if deployment_id else [],
     }
     if environment is not None:
@@ -33,5 +34,10 @@ def _make_pbr_activation(
     # The segment's own policy, as a 0/1-item list; None leaves it unqueried.
     if security_policies is not None:
         seg["security_policy"] = security_policies[0] if security_policies else None
-    seg["gateway"] = {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "PROD"}}}
+    seg["gateway"] = {
+        "ip_prefix": {
+            "prefix": "10.0.1.0/24",
+            "ip_namespace": {"node": {"name": {"value": "default"}}},
+        }
+    }
     return {"vlan_id": vlan_id, "segment": seg}

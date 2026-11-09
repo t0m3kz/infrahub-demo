@@ -1,0 +1,135 @@
+# TopologyCarrierCircuit declarations in recursive dependency order.
+# THE INTERNET (one passive object with one shared interface, bootstrap data: data/bootstrap/03b_internet.yml) and the
+# L1 that meets on it. Our edge port -> internet carrier -> ISP router; the ISP router's uplink -> internet carrier ->
+# the interface of INTERNET; the public side of a SaaS region and of a cloud region -> internet carrier -> the same
+# interface. So from ktw1-edge-01 the public side of Webex and of the object store is reachable at L1 through either
+# ISP. INTERNET has no routing: the addresses and prefixes of this scenario live in default IPAM
+# (00_common/04_internet/01_prefixes.yml).
+#
+#   ktw1-edge-01 Ethernet1/2 -- ktw1-ispa-48211-isp-a   -- EXT-ISP-A-PE1   et-0/0/0   (base sample, ISP-A)
+#                               EXT-ISP-A-PE1    xe-0/1/0 -- isp-a-upl-48001-internet   -+
+#   ktw1-edge-01 Ethernet1/1 -- ktw1-ispb-77301-isp-b -- EXT-ISP-B-PE1 et-0/0/0   (a second ISP)    |
+#                               EXT-ISP-B-PE1  xe-0/1/0 -- isp-b-upl-77001-internet -+                      |
+#   EXT-WEBEX-FRA pub-1 -- webex-fra-pub-13445-internet (Webex Frankfurt, public side) ----+--> INTERNET:bus
+#   EXT-AWS-EUC1   pub-1 -- aws-euc1-pub-16509-internet (object store eu-central-1, public side) -+
+#   vpn-c900-aws-euc1  pub-1 -- aws-euc1-vpn-26501-internet (AWS VPN endpoint, leads on to the virtual network) -+
+#   EXT-AZURE-WEU  pub-1 -- azure-weu-pub-20113-internet (blob storage westeurope, public side) --+
+#   EXT-GCP-EUW3  pub-1 -- gcp-euw3-pub-22407-internet (object storage europe-west3, public side) -+
+#
+# INTERNET has ONE interface, `bus`, of its own kind (TopologyInternetInterface), and every attachment keeps a carrier
+# circuit of its own that ends on it: the kind is what lets many carriers share it (checks/carrier_circuit_ports.py).
+# The carriers are `internet` circuits; the five ends that are not the bus are the ports of ISP routers and of the
+# transports that stand for the public sides.
+#
+# The carriers. Locations are authored (no generator runs in this sample): a carrier has exactly two, one per end, and
+# INTERNET is the location of its own end. ktw1-ispb-77301-isp-b is an access carrier like the base sample's; the four
+# others are attachments: their second end is the bus.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - name: ktw1-ispb-77301-isp-b
+      circuit_id: ISPB-77301
+      description: Second internet access of ktw1-edge-01
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - DC-KTW1
+        - ISP-B
+      capabilities:
+        - ["ktw1-edge-01", "Ethernet1/1"]
+        - ["EXT-ISP-B-PE1", "et-0/0/0"]
+    - name: isp-a-upl-48001-internet
+      circuit_id: UPL-48001
+      description: Uplink of the ISP-A router to the internet
+      provider: P014
+      circuit_type: internet
+      status: active
+      bandwidth: 100000
+      locations:
+        - ISP-A
+        - INTERNET
+      capabilities:
+        - ["EXT-ISP-A-PE1", "xe-0/1/0"]
+        - ["INTERNET", "bus"]
+    - name: isp-b-upl-77001-internet
+      circuit_id: UPL-77001
+      description: Uplink of the ISP-B router to the internet
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 100000
+      locations:
+        - ISP-B
+        - INTERNET
+      capabilities:
+        - ["EXT-ISP-B-PE1", "xe-0/1/0"]
+        - ["INTERNET", "bus"]
+    - name: webex-fra-pub-13445-internet
+      circuit_id: PUB-13445
+      description: Public side of Webex Frankfurt to the internet
+      provider: P901
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - WEBEX-FRANKFURT
+        - INTERNET
+      capabilities:
+        - ["EXT-WEBEX-FRA", "pub-1"]
+        - ["INTERNET", "bus"]
+    - name: aws-euc1-pub-16509-internet
+      circuit_id: PUB-16509
+      description: Public side of the object store API of eu-central-1 to the internet
+      provider: P004
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - eu-central-1
+        - INTERNET
+      capabilities:
+        - ["EXT-AWS-EUC1", "pub-1"]
+        - ["INTERNET", "bus"]
+    - name: aws-euc1-vpn-26501-internet
+      circuit_id: PUB-26501
+      description: Public endpoint of the AWS site-to-site VPN of eu-central-1 to the internet
+      provider: P004
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - eu-central-1
+        - INTERNET
+      capabilities:
+        - ["vpn-c900-aws-euc1", "pub-1"]
+        - ["INTERNET", "bus"]
+    - name: azure-weu-pub-20113-internet
+      circuit_id: PUB-20113
+      description: Public side of the blob storage API of westeurope to the internet
+      provider: P005
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - westeurope
+        - INTERNET
+      capabilities:
+        - ["EXT-AZURE-WEU", "pub-1"]
+        - ["INTERNET", "bus"]
+    - name: gcp-euw3-pub-22407-internet
+      circuit_id: PUB-22407
+      description: Public side of the object storage API of europe-west3 to the internet
+      provider: P006
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - europe-west3
+        - INTERNET
+      capabilities:
+        - ["EXT-GCP-EUW3", "pub-1"]
+        - ["INTERNET", "bus"]

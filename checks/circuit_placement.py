@@ -142,7 +142,7 @@ VPN = VPN_TYPE
 CIRCUIT_TYPES = (TUNNEL, INTERCONNECT, HANDOFF, VPN)
 NOUNS = {TUNNEL: "Tunnel", INTERCONNECT: "Interconnect", HANDOFF: "Handoff", VPN: "Vpn"}
 # The fields a handoff (and a vpn, for the namespace) carries; the schema leaves them optional on the one session kind.
-HANDOFF_ONLY_FIELDS = ("ip_namespace", "password")
+HANDOFF_ONLY_FIELDS = ("vrf", "password")
 
 INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"
@@ -299,9 +299,9 @@ def _environment_class(circuit_type: str, circuit: dict[str, Any]) -> tuple[str,
         office = next((location for location in _locations(circuit) if location.get("typename") == OFFICE), None)
         return (PROD_TYPE, f"office '{office.get('name')}'") if office else None
     if circuit_type in (HANDOFF, VPN):
-        namespace = circuit.get("ip_namespace") or {}
-        if namespace.get("namespace_type") in TENANT_NAMESPACE_TYPES:
-            return namespace["namespace_type"], f"namespace '{namespace.get('name')}'"
+        namespace = (circuit.get("vrf") or {}).get("security_zone") or {}
+        if namespace.get("vrf_type") in TENANT_NAMESPACE_TYPES:
+            return namespace["vrf_type"], f"namespace '{namespace.get('name')}'"
     return None
 
 
@@ -439,7 +439,13 @@ class CheckCircuitPlacement(InfrahubCheck):
         locations = _locations(circuit)
         ports = _ports(circuit)
         self._validate_shape(circuit, TUNNEL, locations, ports, CIRCUIT_ENDS)
-        self._validate_fields(circuit, TUNNEL, HANDOFF_ONLY_FIELDS)
+        self._validate_fields(circuit, TUNNEL, ("password",))
+        if circuit.get("registered_prefixes") and not (circuit.get("vrf") or {}).get("id"):
+            self._error(
+                circuit,
+                TUNNEL,
+                f"Tunnel circuit '{name}' registers prefixes but has no routing VRF.",
+            )
 
         self._validate_owner(circuit, TUNNEL, locations)
 
@@ -537,11 +543,11 @@ class CheckCircuitPlacement(InfrahubCheck):
         self._validate_shape(circuit, HANDOFF, locations, ports, 1)
         self._validate_fields(circuit, HANDOFF, ("registered_prefixes",))
         self._validate_owner(circuit, HANDOFF, locations)
-        if not (circuit.get("ip_namespace") or {}).get("name"):
+        if not ((circuit.get("vrf") or {}).get("security_zone") or {}).get("name"):
             self._error(
                 circuit,
                 HANDOFF,
-                f"Handoff circuit '{name}' has no ip_namespace: its /31 is allocated and its session runs in an "
+                f"Handoff circuit '{name}' has no vrf: its /31 is allocated and its session runs in an "
                 "environment namespace.",
             )
         self._validate_handoff_placement(circuit, name, locations)
@@ -627,11 +633,11 @@ class CheckCircuitPlacement(InfrahubCheck):
         self._validate_shape(circuit, VPN, locations, ports, 1)
         self._validate_fields(circuit, VPN, ("registered_prefixes",))
         self._validate_owner(circuit, VPN, locations)
-        if not (circuit.get("ip_namespace") or {}).get("name"):
+        if not ((circuit.get("vrf") or {}).get("security_zone") or {}).get("name"):
             self._error(
                 circuit,
                 VPN,
-                f"Vpn circuit '{name}' has no ip_namespace: its session runs in an environment namespace.",
+                f"Vpn circuit '{name}' has no vrf: its session runs in an environment routing domain.",
             )
 
     # ------------------------------------------------------------------

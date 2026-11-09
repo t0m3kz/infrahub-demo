@@ -614,7 +614,7 @@ spec:
     # One set of rules for the one kind, none on a generic: a rule on a generic node_kind is unprobed here, a
     # per-kind rule is the shape every rule in this file uses.
     # Each `updated` rule watches what the generator reads and nothing it writes: `capabilities` (the ends, hence
-    # the carrier), `status`, and for a handoff its `ip_namespace` (the pool) and `password`
+    # the carrier), `status`, and for a handoff its `vrf` (the routing instance) and `password`
     # (those two fire for a dci or a tunnel too, which never sets them: harmless).
     # A carrier's change reaches the circuits through add_circuit, which fans out here (generators/topology/circuit.py).
 
@@ -640,7 +640,7 @@ spec:
           - attribute_name: status
             value_match: any
 
-    - name: trigger-session-circuit-on-namespace-updated
+    - name: trigger-session-circuit-on-vrf-updated
       branch_scope: "other_branches"
       node_kind: TopologySessionCircuit
       mutation_action: "updated"
@@ -648,7 +648,7 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: ip_namespace
+          - relationship_name: vrf
             modification_type: updated
 
     - name: trigger-session-circuit-on-password-updated

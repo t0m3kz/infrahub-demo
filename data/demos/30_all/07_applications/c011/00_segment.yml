@@ -27,7 +27,7 @@ spec:
               data:
                 address: "10.11.104.1/24"
                 description: "c011-nordix-prod-p anycast gateway"
-                ip_namespace: "PROD"
+                ip_namespace: "default"
                 ip_prefix:
                   kind: IpamPrefix
                   data:
@@ -35,7 +35,7 @@ spec:
                     description: "c011-nordix-prod-p (C011, NY)"
                     status: active
                     role: customer
-                    ip_namespace: "PROD"
+                    ip_namespace: "default"
             customer_deployments:
               - "C011-P-NY"
             member_of_groups:

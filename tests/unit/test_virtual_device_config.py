@@ -50,13 +50,48 @@ def test_virtual_firewall_payload_renders_its_contexts() -> None:
     assert 'mgmt_cli set simple-cluster name "fw-C007-p-dedicated-ha"' in output
 
 
+def _checkable_virtual_firewall_data() -> dict:
+    """The builder's payload with each interface's zone moved onto an explicit VRF instance, as the query returns it."""
+    data = build_virtual_firewall_data()
+    device = data["DcimDevice"]["edges"][0]["node"]
+    for edge in device["interfaces"]["edges"]:
+        interface = edge["node"]
+        zone = interface.pop("security_zone", None)
+        if zone and zone.get("node") and not interface.get("vrf"):
+            name = zone["node"]["name"]["value"]
+            interface["vrf"] = {"node": {"id": f"vrf-{name.lower()}", "security_zone": zone}}
+    return data
+
+
 def test_virtual_firewall_payload_is_validated_like_a_physical_one() -> None:
     """The firewall check reads the same query shape: a complete dedicated instance raises nothing."""
     errors: list[str] = []
     check = cast(Any, CheckFirewall.__new__(CheckFirewall))
     check.log_error = lambda message: errors.append(message)
-    check.validate(build_virtual_firewall_data())
+    check.validate(_checkable_virtual_firewall_data())
     assert errors == []
+
+
+@pytest.mark.parametrize(
+    ("address", "message"),
+    [(None, "no snat_address"), ("10.0.0.5/32", "not a public address")],
+)
+def test_ha_owned_snat_overrides_stale_interface_references(address: str | None, message: str) -> None:
+    """A stale public SNAT on an interface cannot hide an invalid HA-owned context."""
+    data = _checkable_virtual_firewall_data()
+    device = data["DcimDevice"]["edges"][0]["node"]
+    context = device["capabilities"]["edges"][0]["node"]["contexts"]["edges"][0]["node"]
+    context["snat_address"] = {"node": {"address": {"value": address}}} if address else {"node": None}
+    for edge in device["interfaces"]["edges"]:
+        for capability in edge["node"]["capabilities"]["edges"]:
+            if capability["node"]["__typename"] == "ManagedFirewallContext":
+                capability["node"]["snat_address"] = {"node": {"address": {"value": "192.0.2.99/32"}}}
+    errors: list[str] = []
+    check = cast(Any, CheckFirewall.__new__(CheckFirewall))
+    check.log_error = lambda message: errors.append(message)
+    check.validate(data)
+    assert len(errors) == 1
+    assert message in errors[0]
 
 
 @pytest.mark.parametrize("data", [EMPTY_ROOTS, {"DcimDevice": {"edges": [{"node": {"name": {"value": "fw-x"}}}]}}])

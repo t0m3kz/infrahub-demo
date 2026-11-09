@@ -1,0 +1,15 @@
+# RoutingPrefixList declarations in recursive dependency order.
+# The transit policies, authored as plain objects: the demo's peering is not in `transit_peerings`, so no generator
+# writes them, and tests/unit/test_transit_policy.py holds them equal to the spec of utils/transit_policy.py
+# (origin generated, as the generator writes them). No range of the INTERNET routing zone has the role `public` here, so
+# the export announces nothing: its only term denies what carries the transit tag.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPrefixList
+  data:
+    - name: "TRANSIT-DEFAULT-IN"
+      family: ipv4
+      entries:
+        data:
+          - {seq: 10, action: permit, prefix: "0.0.0.0/0"}

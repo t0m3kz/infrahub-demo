@@ -1,8 +1,8 @@
 """CheckCircuitPlacement: what the one session kind may carry per ``circuit_type``.
 
-The schema leaves ip_namespace, password and registered_prefixes optional on
-TopologySessionCircuit, so the check holds them per circuit_type (handoff and vpn require ip_namespace;
-dci and tunnel refuse the handoff-only fields; only a tunnel has registered_prefixes). Payload builders:
+The schema leaves vrf, password and registered_prefixes optional on
+TopologySessionCircuit, so the check holds them per circuit_type (handoff and vpn require vrf;
+dci refuses the handoff fields, tunnels refuse passwords and require vrf for registered prefixes). Payload builders:
 tests/unit/circuit_placement_check_helpers.py.
 """
 
@@ -13,19 +13,22 @@ from typing import Any, cast
 import pytest
 
 from checks.circuit_placement import CheckCircuitPlacement
-from tests.unit.circuit_placement_check_helpers import DCI, HANDOFF, TUNNEL, _edges, _run
+from tests.unit.circuit_placement_check_helpers import DCI, HANDOFF, TUNNEL, _edges, _routing_vrf, _run
 
 HANDOFF_ONLY: dict[str, Any] = {
-    "ip_namespace": {"node": {"name": {"value": "PROD"}, "namespace_type": {"value": "prod"}}},
+    "vrf": _routing_vrf(("PROD", "prod")),
     "password": {"node": {"id": "key-1"}},
 }
 
 
 class TestHandoffOnlyFields:
-    """A dci and a tunnel set none of the handoff fields."""
+    """A DCI has neither handoff field; an inventory tunnel never carries a password."""
 
-    @pytest.mark.parametrize("circuit", [DCI, TUNNEL], ids=["dci", "tunnel"])
-    @pytest.mark.parametrize("field", sorted(HANDOFF_ONLY))
+    @pytest.mark.parametrize(
+        ("circuit", "field"),
+        [(DCI, "vrf"), (DCI, "password"), (TUNNEL, "password")],
+        ids=["dci-vrf", "dci-password", "tunnel-password"],
+    )
     def test_a_handoff_field_on_another_type_fails(self, circuit: dict[str, Any], field: str) -> None:
         """Each of the fields is refused on its own, naming the field."""
         noun = "Interconnect" if circuit is DCI else "Tunnel"
@@ -41,7 +44,7 @@ class TestHandoffOnlyFields:
         """The reference circuits carry none of them (a null relationship is not set)."""
         clean = {
             **circuit,
-            "ip_namespace": {"node": None},
+            "vrf": {"node": None},
             "password": {"node": None},
         }
         assert (
@@ -54,8 +57,30 @@ class TestTunnelOnlyFields:
     """registered_prefixes belong to a tunnel."""
 
     def test_a_tunnel_may_register_prefixes(self) -> None:
-        """A tunnel carries registered_prefixes."""
-        assert _run(tunnels=[{**TUNNEL, "registered_prefixes": _edges([{"id": "pfx-1"}])}]) == []
+        """A tunnel's explicit export VRF supplies the routing authority for neutral registrations."""
+        assert (
+            _run(
+                tunnels=[
+                    {
+                        **TUNNEL,
+                        "vrf": _routing_vrf(("PROD", "prod")),
+                        "registered_prefixes": _edges([{"id": "pfx-1"}]),
+                    }
+                ]
+            )
+            == []
+        )
+
+    def test_a_tunnel_registering_prefixes_requires_a_vrf(self) -> None:
+        """A neutral prefix cannot infer the missing session export context."""
+        messages = _run(tunnels=[{**TUNNEL, "registered_prefixes": _edges([{"id": "pfx-1"}])}])
+        assert len(messages) == 1
+        assert "vrf" in messages[0].lower()
+        assert "registers" in messages[0].lower()
+
+    def test_a_tunnel_with_an_explicit_vrf_and_no_prefixes_passes(self) -> None:
+        """An authored context is allowed even while the inventory tunnel registers nothing."""
+        assert _run(tunnels=[{**TUNNEL, "vrf": _routing_vrf(("PROD", "prod"))}]) == []
 
     def test_a_dci_with_registered_prefixes_fails(self) -> None:
         """A DCI is underlay: it registers no prefix."""

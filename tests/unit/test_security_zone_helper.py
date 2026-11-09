@@ -40,9 +40,9 @@ class TestEnsureSecurityZone:
         """Every kind is written under its own typename, outside the run's group."""
         client = _client()
 
-        assert _run(client, kind=kind) == "PROD-ZONE"
+        assert _run(client, kind=kind) == "PROD"
 
-        client.filters.assert_awaited_once_with(kind=SecurityZone, name__value="PROD-ZONE")
+        client.filters.assert_awaited_once_with(kind=SecurityZone, name__value="PROD")
         client.create.assert_awaited_once_with(kind=kind, data={"id": "seg-1", "security_zone": {"id": "zone-1"}})
         client.segment_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
@@ -50,9 +50,9 @@ class TestEnsureSecurityZone:
     def test_non_production_environments_map_to_the_nonprod_zone(self, environment: str) -> None:
         client = _client()
 
-        assert _run(client, environment=environment) == "NONPROD-ZONE"
+        assert _run(client, environment=environment) == "NONPROD"
 
-        client.filters.assert_awaited_once_with(kind=SecurityZone, name__value="NONPROD-ZONE")
+        client.filters.assert_awaited_once_with(kind=SecurityZone, name__value="NONPROD")
 
     def test_second_pass_writes_nothing(self) -> None:
         """Same segment, same run: no lookup and no write the second time."""
@@ -68,7 +68,7 @@ class TestEnsureSecurityZone:
         """A segment read back with its zone already right causes neither lookup nor write."""
         client = _client()
 
-        assert _run(client, current_zone="PROD-ZONE") == "PROD-ZONE"
+        assert _run(client, current_zone="PROD") == "PROD"
 
         client.filters.assert_not_awaited()
         client.create.assert_not_awaited()
@@ -76,7 +76,7 @@ class TestEnsureSecurityZone:
     def test_wrong_current_zone_is_corrected(self) -> None:
         client = _client()
 
-        _run(client, current_zone="NONPROD-ZONE")
+        _run(client, current_zone="NONPROD")
 
         client.create.assert_awaited_once()
 
@@ -99,13 +99,13 @@ class TestEnsureSecurityZone:
         second.filters.assert_awaited_once()
         second.create.assert_awaited_once()
 
-    @pytest.mark.parametrize("zone", ["MANAGEMENT-ZONE", "INTERNET-ZONE"])
+    @pytest.mark.parametrize("zone", ["MANAGEMENT", "INTERNET"])
     @pytest.mark.parametrize("environment", ["p", "d", None])
     def test_segment_in_an_exchange_zone_keeps_it(self, zone: str, environment: str | None) -> None:
         """A shared service segment (MANAGEMENT services) is not re-zoned to its environment's zone.
 
         The same exemption the segment_security check makes: an app with a
-        component on the infra segment used to move it to PROD-ZONE.
+        component on the infra segment used to move it to PROD.
         """
         client = _client()
 
@@ -158,7 +158,7 @@ class TestEnsureSecurityZone:
         client = _client()
         client.filters = AsyncMock(return_value=[])
 
-        with pytest.raises(LookupError, match="PROD-ZONE"):
+        with pytest.raises(LookupError, match="PROD"):
             _run(client)
 
         client.create.assert_not_awaited()
@@ -170,7 +170,7 @@ class TestEnsureSecurityZone:
 
         with pytest.raises(RuntimeError, match="boom"):
             _run(client)
-        assert _run(client) == "PROD-ZONE"
+        assert _run(client) == "PROD"
 
         assert client.segment_obj.save.await_count == 2
 

@@ -297,7 +297,7 @@ RENAMES = (
     ("web-np", scenario.SEG_WEB),
     ("app-np", scenario.SEG_APP),
     ("db-np", scenario.SEG_DB),
-    ("NONPROD-ZONE", "PROD-ZONE"),
+    ("NONPROD", "PROD"),
     ("NONPROD", "PROD"),
     ("non_prod", "prod"),
     ("C010", scenario.MSSG_ORG),

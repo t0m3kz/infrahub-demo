@@ -107,15 +107,15 @@ class TestGetZonePoliciesInternetZone:
         rule = _make_rule(
             index=10,
             name="to-internet",
-            src_zone="PROD-ZONE",
-            destination_zone="INTERNET-ZONE",
+            src_zone="PROD",
+            destination_zone="INTERNET",
             src_segment={"gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}}},
         )
         result = get_zone_policies([_make_policy(rules=[rule])])
         out = result[0]["rules"][0]
         assert (out["src_zone"], out["dst_zone"], out["dst"], out["src"]) == (
-            "PROD-ZONE",
-            "INTERNET-ZONE",
+            "PROD",
+            "INTERNET",
             None,
             "10.1.0.0/24",
         )
@@ -292,12 +292,20 @@ class TestGetZonePolicies:
         """No destination_segment (e.g. a cloud/partner/SaaS CIDR reached over
         an interconnect, not a customer segment) — destination_prefixes is
         the selector instead."""
-        rule = _make_rule(dst_segment=None, dst_prefixes=[{"id": "p1", "prefix": "172.31.0.0/16"}])
+        rule = _make_rule(
+            dst_segment=None,
+            dst_prefixes=[{"id": "p1", "prefix": "172.31.0.0/16"}],
+            destination_zone="PROD",
+        )
         result = get_zone_policies([_make_policy(rules=[rule])])
         assert result[0]["rules"][0]["dst"] == "172.31.0.0/16"
 
     def test_rule_src_falls_back_to_source_prefix(self) -> None:
-        rule = _make_rule(src_segment=None, src_prefixes=[{"id": "p1", "prefix": "10.50.0.0/16"}])
+        rule = _make_rule(
+            src_segment=None,
+            src_prefixes=[{"id": "p1", "prefix": "10.50.0.0/16"}],
+        )
+        rule["source_zone"] = {"name": "PROD"}
         result = get_zone_policies([_make_policy(rules=[rule])])
         assert result[0]["rules"][0]["src"] == "10.50.0.0/16"
 
@@ -305,7 +313,14 @@ class TestGetZonePolicies:
         rule = _make_rule(
             dst_segment=None,
             dst_prefixes=[],
-            dst_ip_addresses=[{"id": "ip1", "address": "203.0.113.5/32"}],
+            dst_ip_addresses=[
+                {
+                    "id": "ip1",
+                    "address": "203.0.113.5/32",
+                    "ip_prefix": {"prefix": "203.0.113.0/24"},
+                }
+            ],
+            destination_zone="INTERNET",
         )
         result = get_zone_policies([_make_policy(rules=[rule])])
         assert result[0]["rules"][0]["dst"] == "203.0.113.5/32"
@@ -315,6 +330,7 @@ class TestGetZonePolicies:
             dst_segment=None,
             dst_prefixes=[{"id": "p1", "prefix": "172.31.0.0/16"}],
             dst_ip_addresses=[{"id": "ip1", "address": "203.0.113.5/32"}],
+            destination_zone="PROD",
         )
         result = get_zone_policies([_make_policy(rules=[rule])])
         assert result[0]["rules"][0]["dst"] == "172.31.0.0/16"

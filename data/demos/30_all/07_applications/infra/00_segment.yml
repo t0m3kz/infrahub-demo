@@ -8,7 +8,7 @@
 #
 # customer_deployments is C006-P-DC11: a segment needs a deployment, and INFRA has no footprint of its own. Reusing
 # DC11's existing one adds no context and no leg; the footprint only says which DC's fabric carries the segment. It gets
-# no tenant PBR redirect: its gateway namespace is of type management (get_customer_pbr_rules).
+# no tenant PBR redirect: its security zone is of type management (get_customer_pbr_rules).
 #
 # Like every segment its VLAN is generated per switch and its ports come from the instances of its components
 # (01_application.yml: two virtual machines hosted on the dc11-pod1 servers). The gateway is authored: the address
@@ -33,7 +33,7 @@ spec:
               data:
                 address: "10.250.0.1/24"
                 description: "infra-core-dns-ntp-p anycast gateway"
-                ip_namespace: "MANAGEMENT"
+                ip_namespace: "default"
                 ip_prefix:
                   kind: IpamPrefix
                   data:
@@ -41,9 +41,9 @@ spec:
                     description: "infra-core-dns-ntp-p (INFRA, DC11)"
                     status: active
                     role: customer
-                    ip_namespace: "MANAGEMENT"
+                    ip_namespace: "default"
             customer_deployments:
               - "C006-P-DC11"
             member_of_groups:
               - vxlan_segments
-            security_zone: "MANAGEMENT-ZONE"
+            security_zone: "MANAGEMENT"

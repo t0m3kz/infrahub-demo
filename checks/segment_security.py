@@ -37,17 +37,17 @@ class CheckSegmentSecurity(WarningCheck):
     cannot refuse a rule to an address-less segment; this check does):
 
     - every segment has a security_zone;
-    - a tenant segment's zone follows its environment (p -> PROD-ZONE, else
-      NONPROD-ZONE), an exchange-zone segment is exempt;
-    - a routed (VLAN/VXLAN) tenant segment's gateway prefix sits in a
-      namespace of its environment's type (p -> prod, else non_prod);
+    - a tenant segment's zone follows its environment (p -> PROD, else
+      NONPROD), an exchange-zone segment is exempt;
+    - a routed tenant segment's owner zone has the VRF type of its
+      environment (p -> prod, else non_prod), independently of IPAM identity;
       exchange-zone segments are exempt from both environment rules;
     - computed segment names are unique across kinds;
     - a rule endpoint segment resolves to a prefix (or the rule has an explicit
       selector): otherwise it would render as any (a warning: L2-only segments
       have no gateway by design);
     - a rule has one kind of destination: ``destination_zone`` (the internet,
-      INTERNET-ZONE and no other zone) excludes a destination segment, prefix,
+      INTERNET and no other zone) excludes a destination segment, prefix,
       address and group tag;
     - an app component's environment should match its segment's (warning);
     - every component of a microsegmented segment has a group tag; a tag groups
@@ -83,7 +83,7 @@ class CheckSegmentSecurity(WarningCheck):
         tags = cleaned.get("SecurityTag") or []
         for segment in segments:
             self._validate_zone(segment)
-            self._validate_gateway_namespace(segment)
+            self._validate_gateway_zone(segment)
         self._validate_unique_names(segments)
         self._validate_rule_endpoints(segments, rules)
         self._validate_rule_destinations(rules)
@@ -117,31 +117,25 @@ class CheckSegmentSecurity(WarningCheck):
                 )
             )
 
-    def _validate_gateway_namespace(self, segment: dict[str, Any]) -> None:
-        """A routed tenant segment's gateway prefix is in a namespace of its environment's type.
-
-        The zone rule above reads the environment; this one reads where the
-        address actually lives, so a production segment addressed in NON-PROD
-        (or in a namespace with no type, such as ``default``) cannot pass as
-        PROD-ZONE. An L2-only segment (no gateway) has nothing to check.
-        """
+    def _validate_gateway_zone(self, segment: dict[str, Any]) -> None:
+        """A routed tenant segment's owner zone has the VRF type of its environment."""
         if segment.get("typename") not in ROUTED_SEGMENT_KINDS:
             return
-        if is_exchange_zone((segment.get("security_zone") or {}).get("name")):
+        zone = segment.get("security_zone") or {}
+        if not zone.get("name") or is_exchange_zone(zone["name"]):
             return
         prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
         if not prefix:
             return
         environment = segment["environment"]
-        namespace = prefix.get("ip_namespace") or {}
         expected = namespace_type_for_environment(environment)
-        if namespace.get("namespace_type") != expected:
+        if zone.get("vrf_type") != expected:
             self.log_error(
                 message=(
                     f"{segment.get('typename')} '{segment.get('name', '<unnamed-segment>')}' "
-                    f"(environment '{environment}') has its gateway prefix {prefix.get('prefix')} in namespace "
-                    f"'{namespace.get('name')}' (type '{namespace.get('namespace_type')}'), "
-                    f"expected a '{expected}' namespace"
+                    f"(environment '{environment}') has its gateway prefix {prefix.get('prefix')} in security zone "
+                    f"'{zone.get('name')}' (type '{zone.get('vrf_type')}'), "
+                    f"expected a '{expected}' VRF type"
                 )
             )
 
@@ -187,6 +181,16 @@ class CheckSegmentSecurity(WarningCheck):
             if not zone or not rule_enabled(rule):
                 continue
             name = rule.get("name", rule.get("id"))
+            if rule.get("destination_prefixes") or rule.get("destination_ip_addresses"):
+                # An explicit zone qualifies a selector rather than denoting a bare destination.
+                from transforms.helpers.policy import rule_zone  # noqa: PLC0415
+                from utils.routing_domain import RoutingDomainError  # noqa: PLC0415
+
+                try:
+                    rule_zone(rule, "destination")
+                except RoutingDomainError as exc:
+                    self.log_error(message=str(exc))
+                continue
             if zone != INTERNET_ZONE:
                 self.log_error(
                     message=(
@@ -428,9 +432,9 @@ def _reachable_space(
     for segment in segments:
         prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
         if network := _network(prefix.get("prefix")):
-            space.append((network, (prefix.get("ip_namespace") or {}).get("namespace_type"), None))
+            space.append((network, (segment.get("security_zone") or {}).get("vrf_type"), None))
     for registered in registered_by_attachment(offices, tunnels, legs).values():
-        for owner, prefix in registered:
-            if owner and (network := _network(prefix.get("prefix"))):
-                space.append((network, (prefix.get("ip_namespace") or {}).get("namespace_type"), owner))
+        for registration in registered:
+            if registration.customer and (network := _network(registration.prefix.get("prefix"))):
+                space.append((network, registration.zone.get("vrf_type"), registration.customer))
     return space

@@ -124,21 +124,21 @@ interface Vxlan1
    vxlan vlan 220 vni 10220
    !
    ! L3 VNI Mappings (VRF segments for microsegmentation)
-   vxlan vrf NONPROD vni 50011
-   vxlan vrf PROD vni 50012
+   vxlan vrf NONPROD vni 60001
+   vxlan vrf PROD vni 60000
 !
 !
 ! VRF Definitions (Microsegmentation)
 !
 vrf instance NONPROD
    description Tenant VRF for microsegmentation
-   rd 10.0.0.1:50011
+   rd 10.0.0.1:60001
 !
 ip routing vrf NONPROD
 !
 vrf instance PROD
    description Tenant VRF for microsegmentation
-   rd 10.0.0.1:50012
+   rd 10.0.0.1:60000
 !
 ip routing vrf PROD
 !
@@ -171,14 +171,14 @@ router bgp 65000
    !
    ! L3 EVPN (VRF-based for microsegmentation)
    vrf NONPROD
-      rd 10.0.0.1:50011
-      route-target import evpn 65000:50011
-      route-target export evpn 65000:50011
+      rd 10.0.0.1:60001
+      route-target import evpn 65000:60001
+      route-target export evpn 65000:60001
       redistribute connected
    vrf PROD
-      rd 10.0.0.1:50012
-      route-target import evpn 65000:50012
-      route-target export evpn 65000:50012
+      rd 10.0.0.1:60000
+      route-target import evpn 65000:60000
+      route-target export evpn 65000:60000
       redistribute connected
 
 !

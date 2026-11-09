@@ -16,6 +16,7 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from pathlib import Path
@@ -28,12 +29,13 @@ from graphql import parse
 from graphql.language import FieldNode, FragmentDefinitionNode, FragmentSpreadNode
 
 from tests.integration.demo_data import attribute_names, relationship_names
-from tests.smoke.fixture_builders.common import run_transform
+from tests.smoke.fixture_builders.common import make_transform, run_transform
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.distribution_switch import DistributionSwitch
 from transforms.helpers.lisp import EidRecord, LispInputs, build_lisp_inputs, get_lisp_config
 from transforms.helpers.overlay import build_overlay_node
+from transforms.helpers.vrf import VrfRealizationError
 from utils.fabric_roles import (
     BORDER_ROLES,
     CAMPUS_FABRIC_ROLES,
@@ -77,16 +79,12 @@ def _deployment(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _seg200_namespaces(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """The ip_namespace nodes of seg-200 everywhere it appears in the input (host port and activations)."""
+    """The owner zones of seg-200 everywhere it appears in the input (host port and activations)."""
     segments: list[dict[str, Any]] = []
     for iface in _node(data)["interfaces"]["edges"]:
         segments += [edge["node"] for edge in iface["node"].get("segments", {"edges": []})["edges"]]
     segments += [act["node"]["segment"]["node"] for act in _deployment(data)["segment_deployments"]["edges"]]
-    return [
-        seg["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"]["node"]
-        for seg in segments
-        if seg["name"]["value"] == "seg-200"
-    ]
+    return [seg["security_zone"]["node"] for seg in segments if seg["name"]["value"] == "seg-200"]
 
 
 def _drop_svi(data: dict[str, Any], name: str) -> None:
@@ -119,6 +117,7 @@ def _activation(
     vlan_id: int = 100, vni: int | None = 10100, gateway: str = "10.100.0.1/24", namespace: dict | None = None
 ) -> dict[str, Any]:
     segment: dict[str, Any] = {
+        "security_zone": namespace if namespace is not None else {"name": "VRF_A", "l3_vni": 50001},
         "name": f"seg-{vlan_id}",
         "customer_name": f"seg-{vlan_id}",
         "gateway": {
@@ -129,14 +128,14 @@ def _activation(
     return {"vlan_id": vlan_id, "vni": vni, "status": "active", "segment": segment}
 
 
-_VRF_A = {"name": "VRF_A", "l3_vni": 50001, "namespace_type": "prod"}
+_VRF_A = {"name": "VRF_A", "l3_vni": 50001, "vrf_type": "prod"}
 
 
 def _device() -> dict[str, Any]:
     return {
         "name": "as-c005-office01",
         "interfaces": [{"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}],
-        "shared_capabilities": [{"typename": "ManagedVRF", "namespace": _VRF_A}],
+        "shared_capabilities": [{"typename": "ManagedVRF", "security_zone": _VRF_A}],
     }
 
 
@@ -237,9 +236,14 @@ class TestBuildLispInputs:
                 {
                     "vni": 10100,
                     "segment": {
+                        "security_zone": {"name": "VRF_A", "l3_vni": 50001},
                         "gateway": {
-                            "ip_prefix": {"prefix": "10.100.0.0/24", "ip_namespace": {"name": "VRF_A", "l3_vni": 50001}}
-                        }
+                            "ip_prefix": {
+                                "security_zone": {"name": "VRF_A", "l3_vni": 50001},
+                                "prefix": "10.100.0.0/24",
+                                "ip_namespace": {"node": {"name": {"value": "default"}}},
+                            }
+                        },
                     },
                 }
             ],
@@ -312,8 +316,8 @@ class TestRenderedAccessSwitch:
 
         for vlan in (100, 200):
             svi = text.split(f"interface Vlan{vlan}\n")[1].split("\n!\n")[0]
-            assert " vrf forwarding VRF_A" in svi
-            assert " lisp mobility VRF_A-IPV4" in svi
+            assert " vrf forwarding PROD" in svi
+            assert " lisp mobility PROD-IPV4" in svi
 
     def test_the_mobility_bindings_follow_the_section_marker(self) -> None:
         lines = run_transform(AccessSwitch, _raw(ACCESS_INPUT)).splitlines()
@@ -345,8 +349,8 @@ class TestRenderedDistributionSwitch:
 
         assert (
             f" site {_OFFICE}\n  authentication-key 0ff1c3-k3y\n"
-            "  eid-record instance-id 50001 10.100.0.0/24 accept-more-specifics\n"
-            "  eid-record instance-id 50001 10.200.0.0/24 accept-more-specifics\n"
+            "  eid-record instance-id 60000 10.100.0.0/24 accept-more-specifics\n"
+            "  eid-record instance-id 60000 10.200.0.0/24 accept-more-specifics\n"
             "  eid-record instance-id 10100 any-mac\n"
             "  eid-record instance-id 10200 any-mac\n  exit-site\n"
         ) in text
@@ -435,8 +439,8 @@ class TestSegmentsOutsideAVrf:
             namespace["l3_vni"]["value"] = None
         _drop_svi(data, "Vlan200")  # its VRF followed the old namespace; the default one has none
 
-        with pytest.raises(ValueError, match=r"the gateway of VLAN 200 is in no VRF with an L3 instance-id"):
-            run_transform(AccessSwitch, data)
+        with pytest.raises(VrfRealizationError, match=r"no SVI Vlan200 for a routed segment"):
+            asyncio.run(make_transform(AccessSwitch).transform(data))
 
     def test_a_segment_in_a_vrf_without_an_l3_vni_is_refused(self) -> None:
         data = _raw(ACCESS_INPUT)
@@ -444,7 +448,7 @@ class TestSegmentsOutsideAVrf:
             namespace["l3_vni"]["value"] = None
 
         with pytest.raises(ValueError, match=r"the gateway of VLAN 200 is in no VRF with an L3 instance-id"):
-            run_transform(AccessSwitch, data)
+            asyncio.run(make_transform(AccessSwitch).transform(data))
 
     def test_a_vni_segment_in_the_default_namespace_is_refused(self) -> None:
         activation = _activation(namespace={"name": "default"})
@@ -613,9 +617,10 @@ class TestQueries:
             "devices",
             "capabilities",
             "segment_deployments",
-            "l3_vni",
+            "security_zone",
         ):
             assert selection in office
+        assert "...RoutingZoneFields" in office
         assert "overlay_control_plane" not in text and "TopologyDataCenter" not in text
 
     def test_the_office_schema_has_every_field_the_check_and_the_config_queries_read(self) -> None:

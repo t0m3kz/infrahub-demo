@@ -7,7 +7,7 @@ from typing import Any, cast
 import pytest
 
 from checks.segment_security import CheckSegmentSecurity
-from utils.exchange_transit import namespace_type_for_environment
+from utils.exchange_transit import namespace_type_for_environment, zone_name_for_namespace_type
 
 _UNSET = object()
 
@@ -32,22 +32,31 @@ def _segment(
     seg_id: str,
     kind: str = "ManagedVxlanSegment",
     env: str | None = "p",
-    zone: str | None = "PROD-ZONE",
+    zone: str | None = "PROD",
     prefix: str | None = "10.0.0.0/24",
     name: str | None = None,
-    namespace_type: Any = _UNSET,
+    vrf_type: Any = _UNSET,
     **extra: Any,
 ) -> dict[str, Any]:
     """One ManagedNetworkSegment edge in the raw query shape.
 
     The gateway prefix sits in a namespace of the environment's type unless
-    ``namespace_type`` says otherwise (None: a namespace without a type).
+    ``vrf_type`` says otherwise (None: a namespace without a type).
     """
-    if namespace_type is _UNSET:
-        namespace_type = namespace_type_for_environment(env) if env else None
-    namespace = {"node": {"name": _v(f"ns-{namespace_type}"), "namespace_type": _v(namespace_type)}}
+    if vrf_type is _UNSET:
+        vrf_type = namespace_type_for_environment(env) if env else None
     gateway = (
-        {"node": {"ip_prefix": {"node": {"id": f"pfx-{seg_id}", "prefix": _v(prefix), "ip_namespace": namespace}}}}
+        {
+            "node": {
+                "ip_prefix": {
+                    "node": {
+                        "id": f"pfx-{seg_id}",
+                        "prefix": _v(prefix),
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
+                    }
+                }
+            }
+        }
         if prefix
         else {"node": None}
     )
@@ -57,7 +66,9 @@ def _segment(
             "id": seg_id,
             "name": _v(name or seg_id),
             "environment": _v(env),
-            "security_zone": {"node": {"id": f"zone-{zone}", "name": _v(zone)}} if zone else {"node": None},
+            "security_zone": {"node": {"id": f"zone-{zone}", "name": _v(zone), "vrf_type": _v(vrf_type)}}
+            if zone
+            else {"node": None},
             "gateway": gateway,
             **extra,
         }
@@ -107,8 +118,8 @@ class TestZone:
 
     @pytest.mark.parametrize("env", ["n", "s", "d", "t"])
     def test_non_prod_environments_map_to_nonprod_zone(self, env: str) -> None:
-        """Any environment but p belongs in NONPROD-ZONE."""
-        assert _run([_segment("a", env=env, zone="NONPROD-ZONE")])._captured_errors == []
+        """Any environment but p belongs in NONPROD."""
+        assert _run([_segment("a", env=env, zone="NONPROD")])._captured_errors == []
 
     @pytest.mark.parametrize("kind", ["ManagedVxlanSegment", "CloudNetworkSegment"])
     def test_missing_zone_is_an_error_for_every_kind(self, kind: str) -> None:
@@ -118,50 +129,50 @@ class TestZone:
         assert "has no security_zone" in check._captured_errors[0]
 
     def test_zone_contradicting_environment_is_an_error(self) -> None:
-        """A prod segment in NONPROD-ZONE is flagged."""
-        check = _run([_segment("a", env="p", zone="NONPROD-ZONE")])
+        """A prod segment in NONPROD is flagged."""
+        check = _run([_segment("a", env="p", zone="NONPROD")])
         assert len(check._captured_errors) == 1
-        assert "expected 'PROD-ZONE'" in check._captured_errors[0]
+        assert "expected 'PROD'" in check._captured_errors[0]
 
     def test_non_prod_segment_in_prod_zone_is_an_error(self) -> None:
-        """A dev segment in PROD-ZONE is flagged."""
-        check = _run([_segment("a", env="d", zone="PROD-ZONE")])
-        assert "expected 'NONPROD-ZONE'" in check._captured_errors[0]
+        """A dev segment in PROD is flagged."""
+        check = _run([_segment("a", env="d", zone="PROD")])
+        assert "expected 'NONPROD'" in check._captured_errors[0]
 
     def test_tenant_segment_in_exchange_zone_is_exempt(self) -> None:
-        """A shared service segment sits in MANAGEMENT-ZONE by design, whatever its environment."""
-        check = _run([_segment("svc", env="p", zone="MANAGEMENT-ZONE")])
+        """A shared service segment sits in MANAGEMENT by design, whatever its environment."""
+        check = _run([_segment("svc", env="p", zone="MANAGEMENT")])
         assert check._captured_errors == []
 
 
 class TestGatewayNamespace:
     """A routed tenant segment's gateway prefix is in a namespace of its environment's type."""
 
-    @pytest.mark.parametrize(("env", "zone"), [("p", "PROD-ZONE"), ("d", "NONPROD-ZONE"), ("n", "NONPROD-ZONE")])
+    @pytest.mark.parametrize(("env", "zone"), [("p", "PROD"), ("d", "NONPROD"), ("n", "NONPROD")])
     def test_gateway_in_the_environments_namespace_passes(self, env: str, zone: str) -> None:
-        """PROD for p, NON-PROD for every other environment."""
+        """PROD for p, NONPROD for every other environment."""
         assert _run([_segment("a", env=env, zone=zone)])._captured_errors == []
 
     def test_prod_segment_addressed_in_non_prod_is_an_error(self) -> None:
-        """A p segment with a NON-PROD gateway is flagged, though its zone is right."""
-        check = _run([_segment("a", env="p", namespace_type="non_prod")])
+        """A p segment with a NONPROD gateway is flagged, though its zone is right."""
+        check = _run([_segment("a", env="p", vrf_type="non_prod")])
         assert len(check._captured_errors) == 1
-        assert "gateway prefix 10.0.0.0/24 in namespace 'ns-non_prod'" in check._captured_errors[0]
-        assert "expected a 'prod' namespace" in check._captured_errors[0]
+        assert "gateway prefix 10.0.0.0/24 in security zone 'PROD'" in check._captured_errors[0]
+        assert "expected a 'prod' VRF type" in check._captured_errors[0]
 
     def test_non_prod_segment_addressed_in_prod_is_an_error(self) -> None:
         """A dev segment with a PROD gateway is flagged."""
-        check = _run([_segment("a", env="d", zone="NONPROD-ZONE", namespace_type="prod")])
-        assert "expected a 'non_prod' namespace" in check._captured_errors[0]
+        check = _run([_segment("a", env="d", zone="NONPROD", vrf_type="prod")])
+        assert "expected a 'non_prod' VRF type" in check._captured_errors[0]
 
     def test_gateway_in_an_untyped_namespace_is_an_error(self) -> None:
-        """A tenant gateway in a namespace with no namespace_type (e.g. default) is flagged."""
-        check = _run([_segment("a", namespace_type=None)])
+        """A tenant gateway in a namespace with no vrf_type (e.g. default) is flagged."""
+        check = _run([_segment("a", vrf_type=None)])
         assert "(type 'None')" in check._captured_errors[0]
 
     def test_exchange_zone_segment_is_exempt(self) -> None:
         """The MANAGEMENT services segment is environment p and addressed in MANAGEMENT, by design."""
-        check = _run([_segment("svc", env="p", zone="MANAGEMENT-ZONE", namespace_type="management")])
+        check = _run([_segment("svc", env="p", zone="MANAGEMENT", vrf_type="management")])
         assert check._captured_errors == []
 
     def test_l2_only_segment_has_nothing_to_check(self) -> None:
@@ -170,7 +181,7 @@ class TestGatewayNamespace:
 
     def test_cloud_segment_is_not_checked(self) -> None:
         """A cloud segment is addressed by its cidr_block, not a fabric gateway."""
-        assert _run([_segment("c", "CloudNetworkSegment", namespace_type="non_prod")])._captured_errors == []
+        assert _run([_segment("c", "CloudNetworkSegment", vrf_type="non_prod")])._captured_errors == []
 
 
 class TestUniqueNames:
@@ -220,7 +231,7 @@ class TestRuleEndpoints:
 
     def test_prefixless_segment_in_the_internet_zone_warns_too(self) -> None:
         """The internet is a zone, not a segment: a prefix-less segment is never taken for it."""
-        net = _segment("net", env=None, zone="INTERNET-ZONE", prefix=None)
+        net = _segment("net", env=None, zone="INTERNET", prefix=None)
         check = _run([_segment("a"), net], [_rule("r", "a", "net")])
         assert "destination segment 'net' resolves to no prefix" in check._captured_infos[0]
 
@@ -246,13 +257,13 @@ class TestRuleEndpoints:
         assert _run([_segment("a")], [_rule("r", "a", None)])._captured_errors == []
 
 
-def _internet_rule(rule_id: str = "r", zone: str = "INTERNET-ZONE", **extra: Any) -> dict[str, Any]:
+def _internet_rule(rule_id: str = "r", zone: str = "INTERNET", **extra: Any) -> dict[str, Any]:
     """A rule from segment a to a zone (the internet): no destination segment."""
     return _rule(rule_id, "a", None, destination_zone={"node": {"name": _v(zone)}}, **extra)
 
 
 class TestRuleDestinations:
-    """A rule to the internet names INTERNET-ZONE, needs no prefix and no other destination."""
+    """A rule to the internet names INTERNET, needs no prefix and no other destination."""
 
     def test_rule_to_the_internet_zone_is_clean(self) -> None:
         """No destination segment to resolve, no prefix to reach: neither a warning nor an error."""
@@ -262,18 +273,14 @@ class TestRuleDestinations:
 
     def test_a_zone_other_than_the_internet_is_an_error(self) -> None:
         """Any other zone is made of segments: the leaf ACL and a security group would render it as any."""
-        check = _run([_segment("a")], [_internet_rule(zone="PROD-ZONE")])
+        check = _run([_segment("a")], [_internet_rule(zone="PROD")])
         assert len(check._captured_errors) == 1
-        assert "'PROD-ZONE' is not INTERNET-ZONE" in check._captured_errors[0]
+        assert "'PROD' is not INTERNET" in check._captured_errors[0]
 
     @pytest.mark.parametrize(
         "extra",
         [
             pytest.param({"destination_segment": {"node": {"id": "b", "name": _v("b")}}}, id="segment"),
-            pytest.param(
-                {"destination_prefixes": {"edges": [{"node": {"id": "p", "prefix": _v("8.8.8.0/24")}}]}}, id="prefix"
-            ),
-            pytest.param({"destination_ip_addresses": {"edges": [{"node": {"id": "i"}}]}}, id="address"),
             pytest.param({"destination_security_tag": {"node": {"id": "t", "name": _v("t")}}}, id="tag"),
         ],
     )
@@ -282,9 +289,23 @@ class TestRuleDestinations:
         check = _run([_segment("a"), _segment("b")], [_internet_rule(**extra)])
         assert any("excludes every other destination" in error for error in check._captured_errors)
 
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            pytest.param(
+                {"destination_prefixes": {"edges": [{"node": {"id": "p", "prefix": _v("8.8.8.0/24")}}]}}, id="prefix"
+            ),
+            pytest.param({"destination_ip_addresses": {"edges": [{"node": {"id": "i"}}]}}, id="address"),
+        ],
+    )
+    def test_a_zone_qualifies_a_selector_instead_of_excluding_it(self, extra: dict[str, Any]) -> None:
+        """An explicit zone next to a prefix or address names the routing domain of the selector: not an error."""
+        check = _run([_segment("a"), _segment("b")], [_internet_rule(**extra)])
+        assert not any("excludes every other destination" in error for error in check._captured_errors)
+
     def test_a_disabled_rule_is_not_checked(self) -> None:
         """A rule that is not rendered cannot be misread."""
-        check = _run([_segment("a")], [_internet_rule(zone="PROD-ZONE", disabled=_v(True))])
+        check = _run([_segment("a")], [_internet_rule(zone="PROD", disabled=_v(True))])
         assert check._captured_errors == []
 
 
@@ -551,7 +572,7 @@ def _tenant(seg_id: str, tag_id: str | None, *rules: dict[str, Any], isolation: 
     """A routed PROD tenant segment with its group tag and its own rules (SegmentGroupPolicyFields)."""
     edge = _segment(seg_id, isolation_mode=_v(isolation))
     edge["node"]["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"] = {
-        "node": {"name": _v("PROD"), "namespace_type": _v("prod")}
+        "node": {"name": _v("PROD"), "vrf_type": _v("prod")}
     }
     edge["node"]["owner"] = {"node": {"org_id": _v(seg_id.split("-")[0].upper())}}
     edge["node"]["security_tag"] = (
@@ -696,16 +717,17 @@ class TestContracts:
         ]
 
 
-def test_all_demo_gateways_sit_in_their_environment_namespace() -> None:
-    """The gateway-namespace rule run on the 30_all segments with an authored gateway (zones as declared; a
-    missing one is derived from the environment by the generators, so only a declared exchange zone exempts a
-    segment). A VXLAN tenant segment usually declares none: add_vxlan_segment allocates it from the pool of its
-    environment's namespace (tests/unit/test_tenant_segment_addressing.py holds that pool choice)."""
+def test_all_demo_gateways_use_default_ipam_and_their_owner_zone() -> None:
+    """Authored gateways keep default IPAM; their segment's declared or generator-derived zone owns routing."""
     from tests.integration.demo_data import ROOT, declared, declared_in, name
 
-    namespace_types = {
-        namespace.item["name"]: namespace.item.get("namespace_type")
-        for namespace in declared("IpamNamespace", ROOT / "data" / "bootstrap")
+    zones = {
+        zone.item["name"]: {
+            "name": zone.item["name"],
+            "vrf_type": zone.item["vrf_type"],
+            "l3_vni": zone.item["l3_vni"],
+        }
+        for zone in declared("SecurityZone", ROOT / "data" / "bootstrap")
     }
     check = _check()
     checked = 0
@@ -716,20 +738,21 @@ def test_all_demo_gateways_sit_in_their_environment_namespace() -> None:
         if not gateway:
             continue
         prefix = (gateway.get("ip_prefix") or {}).get("data") or {}
+        assert prefix.get("ip_namespace") == "default", name(obj)
+        zone_name = obj.item.get("security_zone") or zone_name_for_namespace_type(
+            namespace_type_for_environment(obj.value("environment"))
+        )
         checked += 1
-        check._validate_gateway_namespace(
+        check._validate_gateway_zone(
             {
                 "typename": obj.kind,
                 "name": name(obj),
                 "environment": obj.value("environment"),
-                "security_zone": {"name": obj.item.get("security_zone")},
+                "security_zone": zones[zone_name],
                 "gateway": {
                     "ip_prefix": {
                         "prefix": prefix.get("prefix"),
-                        "ip_namespace": {
-                            "name": prefix.get("ip_namespace"),
-                            "namespace_type": namespace_types.get(prefix.get("ip_namespace")),
-                        },
+                        "ip_namespace": {"name": "default"},
                     }
                 },
             }

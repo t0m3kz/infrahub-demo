@@ -15,6 +15,7 @@ from netutils.interface import sort_interface_list
 
 from utils.limits import WAIT_FOR_PEER_GENERATOR
 
+from .helpers.edge_source import remove_edge
 from .protocols import DcimPhysicalInterface, DcimVirtualInterface
 
 if TYPE_CHECKING:
@@ -60,8 +61,9 @@ class VirtualNicMixin:
         """Set parent_interface of every base NIC of devices to a port of the device host_id.
 
         The server instantiates the template's NICs after the device is saved, so the read is retried
-        until every device has some. Idempotent; the NICs belong to the template, not to this run, so
-        they are saved untracked and never become a delete_unused_nodes candidate.
+        until every device has some. Uplinks only ride cabled host ports. A NIC with no
+        available port is unpinned, including a stale generated pin from an earlier run.
+        The NICs belong to the template, not to this run, so they are saved untracked.
         """
         device_ids = [device.id for device in devices]
         nics: list[Any] = []
@@ -80,10 +82,28 @@ class VirtualNicMixin:
         host_ports = await self.client.filters(
             kind=DcimPhysicalInterface, device__ids=[host_id], role__values=list(PINNED_ROLES)
         )
+        host_ports = [
+            port
+            for port in host_ports
+            if port.role.value != "uplink" or getattr(getattr(port, "cable", None), "id", None)
+        ]
         for device in devices:
             device_nics = [nic for nic in nics if nic.device.id == device.id]
-            for nic, host_port in pair_nics_with_host_ports(device_nics, host_ports):
-                if getattr(nic.parent_interface, "id", None) == host_port.id:
+            parents = {nic.id: host_port for nic, host_port in pair_nics_with_host_ports(device_nics, host_ports)}
+            for nic in device_nics:
+                host_port = parents.get(nic.id)
+                parent_id = host_port.id if host_port is not None else None
+                if getattr(nic.parent_interface, "id", None) == parent_id:
+                    continue
+                if host_port is None:
+                    # SDK save() omits a None single relationship; remove the stale edge explicitly.
+                    await remove_edge(
+                        self.client,
+                        node_id=nic.id,
+                        relation="parent_interface",
+                        peer_id=nic.parent_interface.id,
+                    )
+                    self.logger.info(f"  - Unpinned {device.name.value} {nic.name.value}: no available host port")
                     continue
                 pinned = await self.client.create(
                     kind=DcimVirtualInterface,
@@ -91,7 +111,7 @@ class VirtualNicMixin:
                         "id": nic.id,
                         "name": nic.name.value,
                         "device": {"id": device.id},
-                        "parent_interface": {"id": host_port.id},
+                        "parent_interface": {"id": parent_id},
                     },
                 )
                 await pinned.save(allow_upsert=True, update_group_context=False)

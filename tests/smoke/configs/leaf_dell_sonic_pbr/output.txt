@@ -3,7 +3,7 @@
 {
   "ACL_RULE": {
     "ACL-VLAN100-IN|SEQ_10": {
-      "DESCRIPTION": "Zone: PROD-ZONE -\u003e PROD-ZONE",
+      "DESCRIPTION": "Zone: PROD -\u003e PROD",
       "DST_IP": "10.200.0.0/24",
       "IP_PROTOCOL": "6",
       "IP_TYPE": "IPV4ANY",
@@ -90,7 +90,7 @@
       "SRC_IP": "10.100.0.0/24"
     },
     "ACL-VLAN100-IN|SEQ_6110": {
-      "DESCRIPTION": "Zone: PROD-ZONE -\u003e INTERNET-ZONE",
+      "DESCRIPTION": "Zone: PROD -\u003e INTERNET",
       "IP_PROTOCOL": "6",
       "IP_TYPE": "IPV4ANY",
       "L4_DST_PORT": "443",
@@ -127,6 +127,11 @@
       "IP_TYPE": "IPV4ANY",
       "PACKET_ACTION": "REDIRECT:100.66.0.4",
       "PRIORITY": "1000"
+    },
+    "PBR-VLAN200|FW_REDIRECT": {
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "REDIRECT:100.66.0.4",
+      "PRIORITY": "1000"
     }
   },
   "ACL_TABLE": {
@@ -153,10 +158,18 @@
       ],
       "stage": "ingress",
       "type": "PBR"
+    },
+    "PBR-VLAN200": {
+      "policy_desc": "Leaf PBR for Customer-A/any",
+      "ports": [
+        "Vlan200"
+      ],
+      "stage": "ingress",
+      "type": "PBR"
     }
   },
   "BGP_GLOBALS": {
-    "VRF_A": {
+    "PROD": {
       "local_asn": 65000,
       "router_id": "10.0.0.1"
     },
@@ -168,15 +181,15 @@
     }
   },
   "BGP_GLOBALS_AF": {
-    "VRF_A|ipv4_unicast": {
+    "PROD|ipv4_unicast": {
       "admin_status": "true",
       "redistribute_connected": "true",
       "route_map_redistribute_connected": "RM-VRF-CONN-2-EVPN"
     },
-    "VRF_A|l2vpn_evpn": {
+    "PROD|l2vpn_evpn": {
       "admin_status": "true",
       "advertise-ipv4-unicast": "true",
-      "route-distinguisher": "10.0.0.1:50001"
+      "route-distinguisher": "10.0.0.1:60000"
     },
     "default|ipv4_unicast": {
       "admin_status": "true",
@@ -194,7 +207,7 @@
     }
   },
   "BGP_GLOBALS_EVPN_RT": {
-    "VRF_A|l2vpn_evpn|65000:50001": {
+    "PROD|l2vpn_evpn|65000:60000": {
       "route-target-type": "both"
     }
   },
@@ -332,20 +345,21 @@
   "VLAN_INTERFACE": {
     "Vlan100": {
       "static_anycast_gateway": "true",
-      "vrf_name": "VRF_A"
+      "vrf_name": "PROD"
     },
     "Vlan100|10.100.0.1/24": {},
     "Vlan200": {
-      "static_anycast_gateway": "true"
+      "static_anycast_gateway": "true",
+      "vrf_name": "PROD"
     },
     "Vlan200|10.200.0.1/24": {},
     "Vlan3000": {
       "static_anycast_gateway": "true",
-      "vrf_name": "VRF_A"
+      "vrf_name": "PROD"
     },
     "Vlan3000|100.66.0.1/29": {},
     "Vlan3900": {
-      "vrf_name": "VRF_A"
+      "vrf_name": "PROD"
     }
   },
   "VLAN_MEMBER": {
@@ -357,8 +371,8 @@
     }
   },
   "VRF": {
-    "VRF_A": {
-      "vni": "50001"
+    "PROD": {
+      "vni": "60000"
     }
   },
   "VXLAN_TUNNEL": {
@@ -375,9 +389,9 @@
       "vlan": "Vlan200",
       "vni": "10200"
     },
-    "vtep|map_50001_Vlan3900": {
+    "vtep|map_60000_Vlan3900": {
       "vlan": "Vlan3900",
-      "vni": "50001"
+      "vni": "60000"
     },
     "vtep|map_64000_Vlan3000": {
       "vlan": "Vlan3000",

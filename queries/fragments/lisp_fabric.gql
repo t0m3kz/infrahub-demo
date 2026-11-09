@@ -1,44 +1,38 @@
-# LISP site inputs of an office, read by its access-switch and distribution-switch configs (the office is the
-# site, its distribution-switches the map-servers). Spread right after EvpnRtAsOnDeploymentFields, in the
-# direct shape: the office hosts its devices itself (no `parent` hop), see evpn_fabric.gql.
-#
-# CLEANED SHAPE (after utils/data_cleaning.clean_data), the contract transforms/helpers/lisp.py codes against.
-# `D` is the device's `deployment`, the office:
-#
-#   D["name"]                                   -> str, the office name (the LISP site name; border)
-#   D["lisp_site_key"]["password"]              -> str secret (None/absent when unset)
-#   D["lisp_map_servers"]                       -> list of the office's distribution-switch devices
-#   D["lisp_map_servers"][i]["name"]            -> str
-#   D["lisp_map_servers"][i]["interfaces"][j]["ip_address"]["address"]
-#                                               -> CIDR str ("10.0.0.1/32"), loopback-role
-#                                                  interfaces only (strip the mask in code)
-#   D["lisp_wan_edges"]                         -> list of the office's role=edge devices (its SD-WAN edge,
-#                                                  <office>-EDGE1; the presence of one is the office's WAN exit)
-#
-# Segment EIDs are NOT selected here: distribution_switch.gql spreads SegmentDeploymentsOnDeploymentFields
-# (network_segment.gql), whose D["segment_deployments"][i] carries vni, segment.gateway.address,
-# segment.gateway.ip_prefix.prefix and segment.gateway.ip_prefix.ip_namespace.{name,l3_vni}. One selection
-# per flow, so LISP reads that one.
-#
-# Typed on the office, not on TopologySegmentHosting: lisp_site_key lives on TopologyCustomerOffice, and a second
-# SegmentHosting-typed fragment would join the null-on-sibling-fragment quirk (test_fabric_query_order.py).
-# The device lists are aliased: FirewallContextsOnDeviceHostingFields selects `devices` on the same
-# deployment with a different role__value argument, and GraphQL rejects two same-named fields with differing
-# arguments at one selection set.
 fragment LispSiteOnOfficeFields on TopologyCustomerOffice {
-  name { value }
-  lisp_site_key { node { password { value } } }
-  # Each map-server is reached through its loopback so the ETR/ITR can address it.
+  name {
+    value
+  }
+  lisp_site_key {
+    node {
+      password {
+        value
+      }
+    }
+  }
   lisp_map_servers: devices(role__value: "distribution-switch") {
     edges {
       node {
-        name { value }
+        name {
+          value
+        }
         ... on DcimDevice {
           interfaces(role__value: "loopback") {
             edges {
               node {
+                ...InterfaceRoutingZoneFields
                 ... on DcimVirtualInterface {
-                  ip_address { node { address { value } } }
+                  vrf {
+                    node {
+                      ...RoutingVrfFields
+                    }
+                  }
+                  ip_address {
+                    node {
+                      address {
+                        value
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -47,12 +41,12 @@ fragment LispSiteOnOfficeFields on TopologyCustomerOffice {
       }
     }
   }
-  # An office's SD-WAN edge (add_sdwan_edge): its presence makes the distribution-switches the exit
-  # (proxy-ETR/ITR, redistribute lisp) and the access-switches use them (use-petr).
   lisp_wan_edges: devices(role__value: "edge") {
     edges {
       node {
-        name { value }
+        name {
+          value
+        }
       }
     }
   }

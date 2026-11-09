@@ -95,9 +95,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
     ) -> None:
         """Every member of each DC's shared context renders the MANAGEMENT exchange.
 
-        The MANAGEMENT-ZONE leg, tenant zones source-NATed to the MANAGEMENT leg VIP (PAN-OS
+        The MANAGEMENT leg, tenant zones source-NATed to the MANAGEMENT leg VIP (PAN-OS
         `snat-<zone>-MANAGEMENT`, Check Point `SNAT-<context>-MANAGEMENT`; the VIP already is the
-        interface address, so no secondary IP) and a logged MANAGEMENT-ZONE -> tenant-zone deny per
+        interface address, so no secondary IP) and a logged MANAGEMENT -> tenant-zone deny per
         tenant zone held. Only DC11 holds the services segment, so only its context routes
         10.250.0.0/24 via the MANAGEMENT leg anycast (.1); the other DCs have the leg but no such route.
         """
@@ -203,7 +203,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     )
                     if route not in rendered:
                         errors.append(f"{dc}/{device}: '{route}' missing")
-                # A member renders every context of its cluster (DC12's PROD and NON-PROD ones), so the zones this
+                # A member renders every context of its cluster (DC12's PROD and NONPROD ones), so the zones this
                 # context does not hold are looked for in its own vsys / virtual system only.
                 own = _context_lines(rendered, platform, name)
                 for zone in other_zones:
@@ -226,7 +226,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """DC11 (PAN-OS) permits PROD-ZONE -> MANAGEMENT-ZONE udp/53 and udp/123 from the c006 segment.
+        """DC11 (PAN-OS) permits PROD -> MANAGEMENT udp/53 and udp/123 from the c006 segment.
 
         Rules `nordix-prod-to-core-dns` / `nordix-prod-to-core-ntp` (05_security_policy.yml) render in the
         shared context's vsys on every member: source the client segment's prefix (allocated by
@@ -456,7 +456,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         """Every member of a context holding VIPs renders the context (F5 TMOS, the DC10 and DC12 pairs).
 
         The context's partition (`SHARED-<NS>` for a shared one) defaults to a strict route
-        domain whose id is the tenant namespace's l3_vni (PROD 60000, NON-PROD 60001, parent
+        domain whose id is the tenant namespace's l3_vni (PROD 60000, NONPROD 60001, parent
         none); the leg VLAN tagged on the uplink, the member's own self IP (.5/.6), the floating
         .4 and the default route to the border anycast .1; per VIP a virtual server
         `destination /<partition>/<vip>:<port>` with SNAT automap and a pool of its members.

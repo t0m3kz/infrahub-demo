@@ -81,9 +81,9 @@ def test_an_address_in_a_namespace_demands_an_instance() -> None:
 
 def test_an_unneeded_instance_is_a_warning() -> None:
     """(b) an instance without demand."""
-    extra = raw_instance("v2", "leaf-1", "NON-PROD", 200, "non_prod")
+    extra = raw_instance("v2", "leaf-1", "NONPROD", 200, "non_prod")
     warnings = unneeded_instance_warnings(facts_of(_leaf(capabilities=[raw_instance("v1", "leaf-1", "PROD"), extra])))
-    assert len(warnings) == 1 and "NON-PROD" in warnings[0]
+    assert len(warnings) == 1 and "NONPROD" in warnings[0]
 
 
 def test_unneeded_instance_on_a_non_carrying_device_is_left_to_rule_e() -> None:
@@ -101,7 +101,7 @@ def test_a_demand_without_a_membership_in_the_hosting_instance_is_an_error() -> 
 
 def test_a_member_of_another_deployments_instance_is_an_error() -> None:
     """(c) a moved device or a hand edit: the instance belongs to another deployment."""
-    elsewhere = raw_instance("v9", "leaf-1", "NON-PROD", 200, "non_prod", deployment_id="dc-2")
+    elsewhere = raw_instance("v9", "leaf-1", "NONPROD", 200, "non_prod", deployment_id="dc-2")
     errors = membership_errors(facts_of(_leaf(capabilities=[raw_instance("v1", "leaf-1", "PROD"), elsewhere])))
     assert len(errors) == 1 and "another deployment" in errors[0]
 
@@ -123,10 +123,10 @@ def test_demand_without_a_hosting_deployment_is_an_error_g() -> None:
 
 def test_an_instance_with_no_member_is_a_warning() -> None:
     """(f) read from the ManagedVRF root, which lists members; a populated instance is silent."""
-    empty = raw_root_instance(raw_instance("v2", "x", "NON-PROD", 200, "non_prod"))
+    empty = raw_root_instance(raw_instance("v2", "x", "NONPROD", 200, "non_prod"))
     response = clean_data(raw_response(_leaf(), instances=(empty,)))
     warnings = empty_instance_warnings(all_instances(response))
-    assert len(warnings) == 1 and "dc1-vrf-non-prod" in warnings[0]
+    assert len(warnings) == 1 and "dc1-vrf-nonprod" in warnings[0]
 
 
 def test_instance_namespace_without_l3_vni_type_or_default_is_an_error() -> None:
@@ -188,8 +188,8 @@ def test_s3_vrf_must_be_the_hosting_instance_of_the_rows_namespace() -> None:
     """S3 unset, not a member, wrong namespace, other deployment; default rows may leave it unset."""
     assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "r1")])))) == 1
     assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "r1", "foreign", "PROD")])))) == 1
-    wrong = raw_instance("v2", "leaf-1", "NON-PROD", 200, "non_prod")
-    leaf = _leaf(capabilities=[wrong], interfaces=[raw_svi("s1", 100, "r1", "v2", "NON-PROD")])
+    wrong = raw_instance("v2", "leaf-1", "NONPROD", 200, "non_prod")
+    leaf = _leaf(capabilities=[wrong], interfaces=[raw_svi("s1", 100, "r1", "v2", "NONPROD")])
     assert len(svi_vrf_errors(facts_of(leaf))) == 1
     other = raw_svi("s1", 100, "r1", "v5", "PROD", vrf_deployment_id="dc-2")
     assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[other])))) == 1

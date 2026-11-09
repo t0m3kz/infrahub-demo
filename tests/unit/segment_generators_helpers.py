@@ -41,8 +41,8 @@ def ensure_zone(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
 
     Keeps generate()-level tests focused on SegmentDeployment behavior; returned so tests can assert the call.
     """
-    mock = AsyncMock(return_value="PROD-ZONE")
-    monkeypatch.setattr("generators.topology.segment.ensure_security_zone", mock)
+    mock = AsyncMock(return_value=None)
+    monkeypatch.setattr("generators.topology.segment.ensure_segment_security_zone", mock)
     return mock
 
 

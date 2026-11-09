@@ -4,9 +4,11 @@ the lower host address, a directly connected eBGP session with BFD."""
 import ipaddress
 from typing import Any
 
+from utils.routing_domain import RoutingDomainError
+
 from .interconnect_rules import (
     _address,
-    _address_namespace,
+    _interface_zone,
     _interfaces,
     _p2p_errors,
     _process_nodes,
@@ -60,10 +62,14 @@ def routed_session_errors(
         return [*errors, f"{session_label}: on interfaces {sorted(ports)}, expected {circuit['ends']}"]
     by_end = {(end["device"], end["interface"]): end for end in circuit["end_nodes"]}
     for end, node in sorted(ports.items()):
-        namespace = _address_namespace(node)
-        if namespace != circuit["ip_namespace"]:
+        try:
+            namespace = _interface_zone(node)
+        except RoutingDomainError as exc:
+            errors.append(f"{session_label}: {end[0]}:{end[1]} {exc}")
+            continue
+        if namespace != circuit["security_zone"]:
             errors.append(
-                f"{session_label}: {end[0]}:{end[1]} is addressed in '{namespace}', expected '{circuit['ip_namespace']}'"
+                f"{session_label}: {end[0]}:{end[1]} is addressed in '{namespace}', expected '{circuit['security_zone']}'"
             )
         if _address(node) != by_end[end]["address"]:
             errors.append(

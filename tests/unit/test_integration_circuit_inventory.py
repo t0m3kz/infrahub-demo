@@ -65,7 +65,7 @@ def _circuit(data: dict[str, list[dict[str, Any]]], circuit_name: str) -> dict[s
 
 
 async def test_the_shipped_data_matches_the_virtual_circuit_expectations(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Kind, derived owner, locations, ends, derived carrier and namespace of all 30_all circuits."""
+    """Kind, derived owner, locations, ends, derived carrier and security zone of all 30_all circuits."""
     data = await inventory(monkeypatch)
     assert {c["name"] for c in data["virtual"]} == set(ALL_DEMO_VIRTUAL_CIRCUITS)
     assert interconnect_rules._expectation_errors(data["virtual"]) == []
@@ -77,18 +77,18 @@ async def test_the_shipped_data_passes_every_per_kind_placement_rule(monkeypatch
 
 
 async def test_every_kind_is_in_the_inventory_with_its_own_fields(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The parser keeps what only one kind has: a handoff's namespace and key."""
+    """The parser keeps what only one kind has: a handoff's security zone and key."""
     data = await inventory(monkeypatch)
     kinds = {c["circuit_type"] for c in data["virtual"]}
     assert kinds == {TUNNEL_TYPE, INTERCONNECT_TYPE, HANDOFF_TYPE}
     sdwan = _circuit(data, SDWAN_HANDOFF)
-    assert (sdwan["ip_namespace"], sdwan["owner_org"]) == ("PROD", None)
+    assert (sdwan["security_zone"], sdwan["owner_org"]) == ("PROD", None)
     assert sdwan["password"] == "eqx-fr2-sdwan-handoff-key"
     assert [end["parent_name"] for end in sdwan["end_nodes"]] == ["Ethernet1/12", "eth0"]
     # a cable-carried handoff has no carrier circuit but a cable
     assert sdwan["carrier"] == [] and all(end["cabled"] for end in sdwan["end_nodes"])
     for tunnel in (c for c in data["virtual"] if c["circuit_type"] == TUNNEL_TYPE):
-        assert tunnel["ip_namespace"] is None and tunnel["password"] is None
+        assert tunnel["security_zone"] is None and tunnel["password"] is None
         assert tunnel["owner_org"]
 
 
@@ -185,14 +185,14 @@ async def test_a_dci_that_is_not_pure_fibre_or_not_contiguous_is_reported(monkey
 async def test_two_session_circuits_on_one_port_and_prod_meeting_non_prod_are_reported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A shared port and a PROD handoff moved into NON-PROD on a device that has prod circuits are both reported."""
+    """A shared port and a PROD handoff moved into NONPROD on a device that has prod circuits are both reported."""
     data = await inventory(monkeypatch)
     first = _circuit(data, "ICX-DC10-EQXFR2")
     second = _circuit(data, "ICX-DC11-EQXFR2")
     second["end_nodes"][1] = dict(second["end_nodes"][1], id=first["end_nodes"][1]["id"])
     assert any("one port carries one interconnect or handoff session" in e for e in _placement(data))
     handoff = _circuit(data, SDWAN_HANDOFF)
-    handoff["ip_namespace"] = "NON-PROD"
+    handoff["security_zone"] = "NONPROD"
     assert any("different environments" in e for e in _placement(data))
 
 
@@ -351,8 +351,9 @@ def test_the_snapshot_covers_the_addresses_sessions_and_keys_the_generator_write
         assert field in cable
     circuits = TOPOLOGY_SNAPSHOT_KINDS["TopologySessionCircuit"]
     assert "tunnel_id" not in circuits and "carrier_circuits" not in circuits
-    for field in ("circuit_type { value }", "locations {", "ip_namespace", "registered_prefixes"):
+    for field in ("circuit_type { value }", "locations {", "security_zone", "registered_prefixes"):
         assert field in circuits
+    assert "ip_namespace" not in circuits
 
 
 def test_the_payload_builder_does_not_share_state_between_calls() -> None:

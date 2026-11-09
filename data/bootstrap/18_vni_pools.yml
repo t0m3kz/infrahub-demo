@@ -8,8 +8,8 @@ spec:
     # pools ({fabric}-vni-pool, {metro}-vni-pool: 10001-39999) all hand out
     # the same band, so a stretched VNI drawn from one of them and reused in
     # another site collides with that site's own local segments. This band
-    # sits above them, so it can meet neither those nor the fixed namespace
-    # L3 VNIs (60000-60003, set by hand in 22_namespaces.yml). No pool
+    # sits above them, so it can meet neither those nor the fixed zone
+    # L3 VNIs (60000-60003, set by hand in 24_security_zones.yml). No pool
     # allocates L3 VNIs.
     - name: GLOBAL-L2VNI
       description: Global L2 VNI pool for stretched segments (one VNI per segment, every site)

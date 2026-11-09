@@ -78,14 +78,14 @@ class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGen
         for cap in context.get("capabilities") or []:
             if cap.get("typename") == _LEG_KIND:
                 address = (cap.get("ip_address") or {}).get("address")
-                namespace = (cap.get("ip_address") or {}).get("ip_namespace") or {}
-                if address and namespace.get("namespace_type"):
+                namespace = (cap.get("vrf") or {}).get("security_zone") or {}
+                if address and namespace.get("vrf_type"):
                     legs.setdefault(
-                        namespace["namespace_type"],
+                        namespace["vrf_type"],
                         {
                             "namespace": namespace["name"],
                             "l3_vni": namespace.get("l3_vni"),
-                            "ns_type": namespace["namespace_type"],
+                            "ns_type": namespace["vrf_type"],
                             "vip": transit_addresses(address)["vip"],
                         },
                     )

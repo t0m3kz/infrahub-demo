@@ -1,6 +1,6 @@
 """Traffic to the internet always goes through a firewall of ours, and the hardware is there to enforce it.
 
-A ``SecurityPolicyRule`` whose ``destination_zone`` is INTERNET-ZONE names the internet (checks/segment_security.py
+A ``SecurityPolicyRule`` whose ``destination_zone`` is INTERNET names the internet (checks/segment_security.py
 keeps the zone the only one a rule may name). A permit rule is only an intent: nothing enforces it unless the
 firewall pair, its legs, the exchange to the INTERNET VRF, the border ports and the SNAT address are in place. So the
 check fails closed: every ENABLED internet rule is followed from its source segment to each on-prem footprint of that
@@ -49,6 +49,7 @@ from transforms.helpers.policy import rule_enabled
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, namespace_type_for_environment, transit_vlan
 from utils.fabric_roles import CARRIER_ROLES, EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
+from utils.routing_domain import interface_security_zone
 
 DC_KIND = "TopologyCustomerDC"
 COLOCATION_KIND = "TopologyCustomerColocation"
@@ -111,8 +112,8 @@ def _internet_exchange(context: dict[str, Any], exchanges: list[dict[str, Any]])
     for exchange in sorted(exchanges, key=_name):
         if _id(exchange.get("gateway")) != context.get("id"):
             continue
-        sides = (exchange.get("namespace_a"), exchange.get("namespace_z"))
-        if any(isinstance(side, dict) and side.get("namespace_type") == INTERNET_TYPE for side in sides):
+        sides = tuple((exchange.get(f"vrf_{side}") or {}).get("security_zone") for side in ("a", "z"))
+        if any(isinstance(side, dict) and side.get("vrf_type") == INTERNET_TYPE for side in sides):
             return exchange
     return None
 
@@ -134,7 +135,7 @@ def _leg_gaps(
             if _id(leg.get("device")) == member.get("id")
             and (
                 (suffix is not None and str(leg.get("name")).endswith(suffix))
-                or ((leg.get("ip_address") or {}).get("ip_namespace") or {}).get("namespace_type") == INTERNET_TYPE
+                or interface_security_zone(leg).get("vrf_type") == INTERNET_TYPE
             )
         ),
         key=_name,
@@ -147,8 +148,8 @@ def _leg_gaps(
     address = leg.get("ip_address")
     if not isinstance(address, dict) or not address.get("address"):
         return [f"INTERNET leg '{leg_name}' has no address"]
-    namespace = address.get("ip_namespace") or {}
-    if namespace.get("namespace_type") != INTERNET_TYPE:
+    namespace = interface_security_zone(leg)
+    if namespace.get("vrf_type") != INTERNET_TYPE:
         return [
             f"INTERNET leg '{leg_name}' is addressed in namespace '{namespace.get('name')}', not in the INTERNET namespace"
         ]
@@ -309,9 +310,9 @@ def colocation_gaps(footprint: dict[str, Any], cleaned: dict[str, Any]) -> list[
 def _tenant_type(context: dict[str, Any], exchanges: list[dict[str, Any]]) -> str | None:
     """The tenant namespace type of a context: the side of its INTERNET exchange that is not INTERNET."""
     exchange = _internet_exchange(context, exchanges)
-    for side in (exchange or {}).get("namespace_a"), (exchange or {}).get("namespace_z"):
-        if isinstance(side, dict) and side.get("namespace_type") not in (None, INTERNET_TYPE):
-            return str(side["namespace_type"])
+    for side in (((exchange or {}).get(f"vrf_{end}") or {}).get("security_zone") for end in ("a", "z")):
+        if isinstance(side, dict) and side.get("vrf_type") not in (None, INTERNET_TYPE):
+            return str(side["vrf_type"])
     return None
 
 

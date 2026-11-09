@@ -109,6 +109,8 @@ class ExchangeRoutesMixin:
     async def _vrf_instances(self, device_ids: list[str]) -> dict[tuple[str, str], str]:
         """(device id, namespace name) -> id of the VRF instance the device is a member of, one read."""
         found = await self.client.filters(
-            kind=ManagedVRF, shared_devices__ids=device_ids, include=["shared_devices", "namespace"]
+            kind=ManagedVRF, shared_devices__ids=device_ids, include=["shared_devices", "security_zone"]
         )
-        return {(peer.id, vrf.namespace.peer.name.value): vrf.id for vrf in found for peer in vrf.shared_devices.peers}
+        return {
+            (peer.id, vrf.security_zone.peer.name.value): vrf.id for vrf in found for peer in vrf.shared_devices.peers
+        }

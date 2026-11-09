@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
+from utils.graphql_queries import load_query
 from utils.limits import DEFAULT_NAMESPACE
 from utils.vrf_demand import (
     DeviceVrfFacts,
@@ -60,7 +61,7 @@ from utils.vrf_demand import (
     vrf_demand,
 )
 
-from ..protocols import DcimVirtualInterface, ManagedVRF
+from ..protocols import ManagedVRF
 from .pbr_sync import PbrMixin
 from .svi import SviMixin
 
@@ -120,11 +121,13 @@ class VrfMixin(PbrMixin, SviMixin):
         ids = sorted(set(deployment_ids))
         if not ids:
             return
-        nodes = await self.client.filters(kind=ManagedVRF, deployment__ids=ids, include=["shared_devices", "namespace"])
+        nodes = await self.client.filters(
+            kind=ManagedVRF, deployment__ids=ids, include=["shared_devices", "security_zone"]
+        )
         for node in nodes:
             if node.shared_devices.peers:
                 continue
-            await self._delete_if_unused(node.deployment.id, node.namespace.peer.name.value, node.id)
+            await self._delete_if_unused(node.deployment.id, node.security_zone.peer.name.value, node.id)
 
     @asynccontextmanager
     async def _locked(self, device_ids: Iterable[str]) -> AsyncGenerator[list[str]]:
@@ -140,7 +143,7 @@ class VrfMixin(PbrMixin, SviMixin):
         if not ids:
             return
         result = await self.client.execute_graphql(
-            query=_VRF_INSTANCES_QUERY_PATH.read_text(), variables={"device_ids": ids, "with_instances": False}
+            query=load_query(_VRF_INSTANCES_QUERY_PATH), variables={"device_ids": ids, "with_instances": False}
         )
         cleaned = clean_data(result)
         namespaces = namespaces_by_name(cleaned)
@@ -208,7 +211,7 @@ class VrfMixin(PbrMixin, SviMixin):
         found = await self.client.filters(
             kind=ManagedVRF,
             deployment__ids=[deployment_id],
-            namespace__ids=[namespace["id"]],
+            security_zone__ids=[namespace["id"]],
             include=["shared_devices"],
         )
         if found:
@@ -222,7 +225,7 @@ class VrfMixin(PbrMixin, SviMixin):
             data={
                 "name": name,
                 "deployment": {"id": deployment_id},
-                "namespace": {"id": namespace["id"]},
+                "security_zone": {"id": namespace["id"]},
                 "shared_devices": [{"id": facts.id}],
                 "status": "active",
             },
@@ -246,7 +249,34 @@ class VrfMixin(PbrMixin, SviMixin):
                 await instance.remove_relationships("shared_devices", [leaving.id])
                 members.discard(leaving.id)
                 self.logger.info(f"  {leaving.name}: left VRF instance {instance.name.value}")
-            if members or await self.client.filters(kind=DcimVirtualInterface, vrf__ids=[instance_id]):
+            references = await self.client.get(
+                kind=ManagedVRF,
+                id=instance_id,
+                include=["interfaces", "session_circuits", "exchanges_a", "exchanges_z"],
+            )
+            if members or any(
+                getattr(references, name).peers
+                for name in ("interfaces", "session_circuits", "exchanges_a", "exchanges_z")
+            ):
                 return
             await self.client.delete(kind=ManagedVRF, id=instance_id)
             self.logger.info(f"  removed VRF instance {instance.name.value} (no member left)")
+
+    async def local_vrf_ids(self, device_ids: Iterable[str], names: Iterable[str]) -> dict[tuple[str, str], str]:
+        """Read scoped instances already provisioned under ``vrfs_held``; never assign a remote instance."""
+        devices = sorted(set(device_ids))
+        zones = set(names)
+        found = await self.client.filters(
+            kind=ManagedVRF, shared_devices__ids=devices, include=["shared_devices", "security_zone"]
+        )
+        result: dict[tuple[str, str], str] = {}
+        for instance in found:
+            name = instance.security_zone.peer.name.value
+            if name not in zones:
+                continue
+            for peer in instance.shared_devices.peers:
+                key = (peer.id, name)
+                if key in result and result[key] != instance.id:
+                    self.fail(f"{peer.id}: ambiguous VRF instance for {name}")
+                result[key] = instance.id
+        return result

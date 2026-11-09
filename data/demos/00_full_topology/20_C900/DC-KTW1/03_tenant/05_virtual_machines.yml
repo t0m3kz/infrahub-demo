@@ -1,0 +1,55 @@
+---
+# Two virtual machines of C900, one on each host of the cluster ktw1-vsphere-cl01 (hosting_device; the cluster is the
+# host's), run
+# for the tenant footprint
+# C900-P-DC-KTW1. They come from the bootstrap template LINUX-SVC, which gives each one NIC, eth0 (role uplink). A VM
+# has no cable: eth0 rides on the host port of its role through parent_interface (the n-th uplink NIC on the n-th
+# uplink port, the rule of generators/virtual_nics.py). ktw1-vm-01 is on eno1 of ktw1-srv-01, a member of the bond to
+# the
+# vPC pair, so L1 is VM -> eth0 -> eno1 -> bond0 -> both leaves; ktw1-vm-02 is on eno1 of ktw1-srv-02, which is cabled
+# straight to the leaves without a bond (01_physical/03_servers_and_clusters.yml). The address of eth0 is in the
+# segment c900-web-p
+# (10.90.1.0/24); the segment itself is the components' (90_bindings/40_applications/C900/00_application.yml), which
+# is how L3
+# reaches a VM: VM -> component -> segment -> its SVI on the leaf.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: ktw1-vm-01
+      object_template: LINUX-SVC
+      description: "C900 web-shop frontend (first instance) on ktw1-srv-01"
+      hosting_device: ktw1-srv-01
+      deployment: C900-P-DC-KTW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: eth0
+            role: uplink
+            status: active
+            description: Rides on the host port eno1 of ktw1-srv-01
+            parent_interface: ["ktw1-srv-01", "eno1"]
+            ip_address:
+              data:
+                address: "10.90.1.11/24"
+                description: ktw1-vm-01 in c900-web-p
+                ip_namespace: "default"
+    - name: ktw1-vm-02
+      object_template: LINUX-SVC
+      description: "C900 web-shop frontend (second instance) on ktw1-srv-02, the other host of the cluster"
+      hosting_device: ktw1-srv-02
+      deployment: C900-P-DC-KTW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: eth0
+            role: uplink
+            status: active
+            description: Rides on the host port eno1 of ktw1-srv-02
+            parent_interface: ["ktw1-srv-02", "eno1"]
+            ip_address:
+              data:
+                address: "10.90.1.12/24"
+                description: ktw1-vm-02 in c900-web-p
+                ip_namespace: "default"

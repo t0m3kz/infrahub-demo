@@ -242,7 +242,7 @@ nodes:
   #            generator builds an underlay eBGP session on a /31 or /127 (peering_role dci-underlay) and a
   #            loopback-to-loopback EVPN session (peering_role dci) over it. Unowned.
   #   handoff  Our edge sub-interface <-> a party-owned device sub-interface (cloud on-ramp, SD-WAN gateway
-  #            LAN handoff, Equinix or Megaport provider) inside ONE environment namespace; an eBGP session is
+  #            LAN handoff, Equinix or Megaport provider) inside ONE security zone; an eBGP session is
   #            generated. Unowned. An Equinix Fabric or Megaport service is a handoff whose provider is Equinix
   #            or Megaport. Cloud and provider side addresses come from OUR per-environment /31 pool only; for
   #            AWS Direct Connect the customer specifies the peer IPs and the provider assigns none. The
@@ -279,7 +279,7 @@ nodes:
           - name: handoff
             label: "Handoff"
             description: >-
-              Edge to party-owned handoff in one namespace, unowned; peer IPs from our /31 pool only; routing
+              Edge to party-owned handoff in one security zone, unowned; peer IPs from our /31 pool only; routing
               generated
             color: "#27ae60"
           - name: tunnel
@@ -326,15 +326,26 @@ nodes:
         order_weight: 1150
         description: "PROD prefixes reachable behind the tunnel's far end, owned by the tunnel's owner (tunnel only)"
 
-      - name: ip_namespace
-        label: "IP Namespace"
-        peer: IpamNamespace
+      - name: vrf
+        label: "Routing VRF"
+        peer: ManagedVRF
         cardinality: one
         kind: Attribute
         optional: true
-        identifier: "handoff_circuit__ip_namespace"
+        on_delete: no-action
+        identifier: "session_circuit__vrf"
         order_weight: 1200
-        description: "Namespace of the session; our link /31 is from pool Handoff-<namespace>-IPv4, our private AS from PRIVATE-ASN32"  # yamllint disable-line rule:line-length
+        description: "Our-side routing/export instance; provider endpoints retain their native routing context"
+
+      - name: originated_prefixes
+        label: "Originated Prefixes"
+        peer: IpamPrefix
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "session_circuit__originated_prefixes"
+        order_weight: 1250
+        description: "Explicit locally originated public space for upstream export; not public-service reachability"
 
       - name: password
         label: "Password"

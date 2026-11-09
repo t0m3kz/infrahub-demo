@@ -101,8 +101,12 @@ def test_the_session_circuit_type_is_required_with_four_choices() -> None:
 def test_the_session_fields_of_one_type_are_optional_in_the_schema() -> None:
     """The rules per type live in checks/circuit_placement.py, so the schema requires none of them."""
     session = _node("SessionCircuit")
-    for name in ("ip_namespace", "password", "registered_prefixes", "link_prefix"):
+    for name in ("vrf", "password", "registered_prefixes", "link_prefix"):
         assert _field(session["relationships"], name)["optional"] is True, name
+    vrf = _field(session["relationships"], "vrf")
+    assert vrf["peer"] == "ManagedVRF" and vrf["cardinality"] == "one"
+    names = {r["name"] for r in session["relationships"]}
+    assert not {"ip_namespace", "security_zone"} & names
 
 
 def test_no_cloud_endpoint_and_no_owner_on_a_circuit() -> None:

@@ -15,10 +15,13 @@ from transforms.config.firewall import _default_vr_interfaces
 
 
 def _iface(name: str, namespace: str | None) -> dict[str, Any]:
-    ip_obj: dict[str, Any] = {"address": "10.0.0.1/30"}
-    if namespace:
-        ip_obj["ip_namespace"] = {"name": namespace}
-    return {"name": name, "ip_address": ip_obj}
+    return {
+        "name": name,
+        "ip_address": {"address": "10.0.0.1/30", "ip_namespace": {"name": "default"}},
+        "vrf": {"id": f"vrf-{namespace}", "security_zone": {"id": f"zone-{namespace}", "name": namespace}}
+        if namespace
+        else None,
+    }
 
 
 def _render(interfaces: list[str], routes: list[dict[str, str]]) -> list[str]:

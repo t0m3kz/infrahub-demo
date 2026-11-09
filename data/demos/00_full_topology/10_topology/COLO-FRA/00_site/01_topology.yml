@@ -1,0 +1,20 @@
+---
+# One colocation, one metro, one zone (the cage FRA-COLO1), like PAR-COLO1 but with no cloud or SaaS leg:
+# the cage is DCI transit only (its fibres are 90_bindings/20_dci/01_colo_mesh). Nothing generated (no
+# fabric_templates).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocation
+  data:
+    - name: COLO-FRA
+      parent: "Colocation"
+      children:
+        kind: TopologyColocationMetro
+        data:
+          - name: FRA
+            location: ["fra"]
+            children:
+              kind: TopologyColocationZone
+              data:
+                - name: FRA-COLO1

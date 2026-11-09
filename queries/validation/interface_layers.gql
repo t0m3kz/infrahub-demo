@@ -1,32 +1,88 @@
-# validate_interface_layers: the layer of a port is its content. Per switch port (physical, LAG): its LAG, the VLAN
-# segments it is a member of (`segments`), its address, its sub-interfaces and the kind of each capability on it (a
-# firewall / load-balancer context is an L2 tag, a routing session or circuit session an L3 signal). Small on
-# purpose: it covers every switch port.
 query interface_layers {
   DcimPhysicalInterface {
     edges {
       node {
+        ...InterfaceRoutingZoneFields
+        vrf {
+          node {
+            ...RoutingVrfFields
+          }
+        }
         id
-        name { value }
-        device { node { name { value } } }
-        lag { node { id } }
-        ip_address { node { id } }
-        segments { count }
-        sub_interfaces { count }
-        capabilities { edges { node { __typename } } }
+        name {
+          value
+        }
+        device {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        lag {
+          node {
+            id
+          }
+        }
+        ip_address {
+          node {
+            id
+          }
+        }
+        segments {
+          count
+        }
+        sub_interfaces {
+          count
+        }
+        capabilities {
+          edges {
+            node {
+              __typename
+            }
+          }
+        }
       }
     }
   }
   DcimLAGInterface {
     edges {
       node {
+        ...InterfaceRoutingZoneFields
+        vrf {
+          node {
+            ...RoutingVrfFields
+          }
+        }
         id
-        name { value }
-        device { node { name { value } } }
-        ip_address { node { id } }
-        segments { count }
-        sub_interfaces { count }
-        capabilities { edges { node { __typename } } }
+        name {
+          value
+        }
+        device {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        ip_address {
+          node {
+            id
+          }
+        }
+        segments {
+          count
+        }
+        sub_interfaces {
+          count
+        }
+        capabilities {
+          edges {
+            node {
+              __typename
+            }
+          }
+        }
       }
     }
   }

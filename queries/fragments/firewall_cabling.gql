@@ -1,0 +1,17 @@
+# A hosted firewall NIC rides on the physical chassis port, never a direct cable.
+# Read the host id too, so the host itself cannot be mistaken for the facing switch.
+# Patch panel endpoints do not match this interface fragment.
+fragment FirewallFacingCableFields on DcimPhysicalInterface {
+  device { node { id } }
+  cable {
+    node {
+      endpoints {
+        edges {
+          node {
+            ... on DcimPhysicalInterface { device { node { id } } }
+          }
+        }
+      }
+    }
+  }
+}

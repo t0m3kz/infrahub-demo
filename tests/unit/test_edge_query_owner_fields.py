@@ -19,6 +19,7 @@ import pytest
 from graphql import FieldNode, FragmentDefinitionNode, OperationDefinitionNode, parse
 
 from tests.integration import demo_data
+from tests.unit.query_shape_helpers import compact
 from utils.data_cleaning import clean_data
 
 _QUERIES = Path(__file__).parents[2] / "queries"
@@ -106,8 +107,8 @@ class TestChangedFilesParse:
         assert parse(path.read_text()).definitions
 
     def test_the_edge_operation_keeps_its_three_extra_roots(self) -> None:
-        """The roots the owner filter reads are all still selected."""
-        for root in ("IpamPrefix", "ManagedNetworkSegment", "TopologyCustomerOffice"):
+        """The roots the owner filter reads are all still selected (``public_origins`` is the aliased public-origin circuits)."""
+        for root in ("public_origins", "ManagedNetworkSegment", "TopologyCustomerOffice"):
             assert _root(root) is not None
 
 
@@ -146,10 +147,9 @@ class TestTunnelRoot:
 
         assert {"locations", "registered_prefixes", "capabilities"} <= names
         assert "owner" not in names
-        text = _EDGE.read_text()
         assert (
             "locations { edges { node { ... on TopologyCustomerOffice { owner { node { __typename org_id { value } display_label } } } } } }"
-            in text
+            in compact(_EDGE.read_text())
         )
 
     def test_the_schema_has_no_owner_on_the_circuit(self) -> None:

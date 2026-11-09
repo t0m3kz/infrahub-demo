@@ -36,6 +36,7 @@ from utils.limits import (
     TRANSIT_VLAN_BAND,
     TRANSIT_VNI_BASE,
 )
+from utils.routing_domain import interface_security_zone
 from utils.segment_addressing import routed_segment_namespace
 
 PROD_TYPE = "prod"
@@ -90,10 +91,10 @@ ROUTED_SEGMENT_KINDS = frozenset({"ManagedVxlanSegment"})
 """Segment kinds the fabric routes with an anycast SVI (a Cloud segment never is)."""
 
 ZONE_BY_NS_TYPE: dict[str, str] = {
-    PROD_TYPE: "PROD-ZONE",
-    "non_prod": "NONPROD-ZONE",
-    INTERNET_TYPE: "INTERNET-ZONE",
-    MANAGEMENT_TYPE: "MANAGEMENT-ZONE",
+    PROD_TYPE: "PROD",
+    "non_prod": "NONPROD",
+    INTERNET_TYPE: "INTERNET",
+    MANAGEMENT_TYPE: "MANAGEMENT",
 }
 
 INTERNET_ZONE = ZONE_BY_NS_TYPE[INTERNET_TYPE]
@@ -165,12 +166,12 @@ def zone_name_for_namespace_type(ns_type: str) -> str:
 
 
 def exchange_peer_zones() -> frozenset[str]:
-    """Zone names of every namespace type a tenant VRF exchanges with (INTERNET-ZONE, MANAGEMENT-ZONE, ...)."""
+    """Zone names of every namespace type a tenant VRF exchanges with (INTERNET, MANAGEMENT, ...)."""
     return frozenset(ZONE_BY_NS_TYPE[ns_type] for peers in EXCHANGE_PEERS.values() for ns_type in peers)
 
 
 def is_exchange_zone(zone: str | None) -> bool:
-    """Whether ``zone`` is an exchange zone (INTERNET-ZONE, MANAGEMENT-ZONE).
+    """Whether ``zone`` is an exchange zone (INTERNET, MANAGEMENT).
 
     The one exchange-zone predicate. A segment in an exchange zone is a shared
     service by design (e.g. the DC-local MANAGEMENT services), so its zone is
@@ -182,18 +183,17 @@ def is_exchange_zone(zone: str | None) -> bool:
 
 
 def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
-    """A VLAN/VXLAN segment the fabric routes with a gateway in a PROD/NON-PROD namespace, outside the exchange zones.
+    """A VLAN/VXLAN segment the fabric routes in a tenant SecurityZone, outside the exchange zones.
 
     A segment a firewall context terminates (``terminated_on``) has no SVI and is not one.
     The one definition of a tenant SVI in a shared VRF: the L0 SVI protection
     check and the segment group tags (generators/helpers/security_tag.py,
     transforms/helpers/group_policy/) read it. ``segment`` is cleaned query
-    data with ``typename``, ``gateway.ip_prefix.ip_namespace.namespace_type``
-    and ``security_zone.name``.
+    data with ``typename``, ``gateway``, ``security_zone.vrf_type`` and ``security_zone.name``.
     """
     if segment.get("typename") not in ROUTED_SEGMENT_KINDS:
         return False
-    namespace_type = routed_segment_namespace(segment).get("namespace_type")
+    namespace_type = routed_segment_namespace(segment).get("vrf_type")
     zone = (segment.get("security_zone") or {}).get("name")
     return namespace_type in TENANT_NAMESPACE_TYPES and not is_exchange_zone(zone)
 
@@ -229,8 +229,8 @@ def transit_leg_namespace(context_vlan: int | None, leg: dict[str, Any]) -> dict
     if (leg.get("device") or {}).get("role") not in SERVICE_MEMBER_ROLES:
         return None
     ip_address = leg.get("ip_address") or {}
-    namespace = ip_address.get("ip_namespace") or {}
-    name, ns_type = namespace.get("name"), namespace.get("namespace_type")
+    namespace = interface_security_zone(leg, required=bool(ip_address.get("address") and context_vlan))
+    name, ns_type = namespace.get("name"), namespace.get("vrf_type")
     if (
         not ip_address.get("address")
         or not context_vlan

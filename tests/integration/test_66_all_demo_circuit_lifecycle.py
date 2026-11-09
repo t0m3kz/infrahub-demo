@@ -211,8 +211,8 @@ class Subject:
 
     @property
     def namespace(self) -> str | None:
-        """The IPAM namespace the circuit's /31 lives in (None for an Interconnect: ``default``, no instance)."""
-        return ALL_DEMO_VIRTUAL_CIRCUITS[self.circuit]["ip_namespace"]
+        """The circuit's logical routing zone (None for an unscoped Interconnect)."""
+        return ALL_DEMO_VIRTUAL_CIRCUITS[self.circuit]["security_zone"]
 
     @property
     def end_devices(self) -> tuple[str, ...]:
@@ -585,7 +585,7 @@ async def decommission_and_restore(
 
 # The segment under test: the MANAGEMENT-gateway segment of the Infrastructure Services pseudo-customer
 # (data/demos/30_all/07_applications/infra/00_segment.yml). Nothing else of 30_all routes in the MANAGEMENT namespace on
-# an access leaf (the tenant segments are PROD / NON-PROD, and the firewall MANAGEMENT legs sit on border leaves), so on
+# an access leaf (the tenant segments are PROD / NONPROD, and the firewall MANAGEMENT legs sit on border leaves), so on
 # the leaves of one host it is the ONLY demand of the MANAGEMENT instance. Its two components (dns, ntp) have the same
 # two VMs (07_applications/infra/01_application.yml) on two hosts racked in different rows, hence on different
 # access-leaf pairs (06_customer_boarding/c006/dc/dc11/02_instances.yml). Taking the second VM off both components

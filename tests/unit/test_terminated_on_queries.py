@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit.query_shape_helpers import compact
+
 _FEEDS_THE_GATE = {
     # The fabric configs (leaf, border leaf, edge, ... spread these) and the VRF demand.
     "queries/fragments/network_segment.gql": 2,
@@ -30,5 +32,5 @@ _FEEDS_THE_GATE = {
 @pytest.mark.parametrize(("path", "selections"), sorted(_FEEDS_THE_GATE.items()))
 def test_the_query_selects_terminated_on(root_dir: Path, path: str, selections: int) -> None:
     """Each selection of a segment's gateway for the gate sits next to a ``terminated_on { node { id } }``."""
-    text = (root_dir / path).read_text()
+    text = compact((root_dir / path).read_text())
     assert text.count("terminated_on { node { id } }") == selections

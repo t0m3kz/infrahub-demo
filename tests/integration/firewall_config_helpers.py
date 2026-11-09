@@ -228,7 +228,7 @@ def _management_border_leaf_errors(device: str, rendered: str, contexts: list[di
 
 def _site_contexts(inventory: dict[str, list[dict[str, Any]]]) -> dict[tuple[str, str, str | None], dict[str, Any]]:
     """The 30_all firewall contexts keyed (site, namespace, tenant): a DC or a serving colocation zone (FR2), the
-    tenant namespace (PROD / NON-PROD), tenant None for a shared one."""
+    tenant namespace (PROD / NONPROD), tenant None for a shared one."""
     by_key, _ = match_transit_contexts(
         inventory["contexts"],
         ALL_DEMO_DC_NAMES,
@@ -281,9 +281,9 @@ def _panos_context_leg_errors(
 
     Per leg of this member: the sub-interface with its VLAN tag and the HA VIP, its import into the
     vsys, its zone and its place in the context's own virtual router. Then the vr's default route via
-    the INTERNET leg anycast, a SNAT rule per tenant zone (to INTERNET-ZONE translating to the SNAT
-    /32, to MANAGEMENT-ZONE translating to the MANAGEMENT VIP) and a logged MANAGEMENT-ZONE -> tenant
-    deny per tenant zone. PROD<->NON-PROD isolation only when the context holds both.
+    the INTERNET leg anycast, a SNAT rule per tenant zone (to INTERNET translating to the SNAT
+    /32, to MANAGEMENT translating to the MANAGEMENT VIP) and a logged MANAGEMENT -> tenant
+    deny per tenant zone. PROD<->NONPROD isolation only when the context holds both.
     """
     errors: list[str] = []
     name = str(context["name"])
@@ -326,7 +326,7 @@ def _panos_context_leg_errors(
     ]
     for zone in tenant_zones:
         for line in (
-            f"set vsys {name} rulebase nat rules snat-{zone} to INTERNET-ZONE",
+            f"set vsys {name} rulebase nat rules snat-{zone} to INTERNET",
             f"set vsys {name} rulebase nat rules snat-{zone} source-translation dynamic-ip-and-port translated-address {snat}",
             f"set vsys {name} rulebase nat rules snat-{zone}-{MANAGEMENT_NAMESPACE} to {management_zone}",
             f"set vsys {name} rulebase nat rules snat-{zone}-{MANAGEMENT_NAMESPACE} source-translation "
@@ -335,7 +335,7 @@ def _panos_context_leg_errors(
         ):
             if line not in rendered:
                 errors.append(f"{device}: no '{line}'")
-    isolated = {"PROD", "NON-PROD"} <= set(expected["namespaces"])
+    isolated = {"PROD", "NONPROD"} <= set(expected["namespaces"])
     for src, dst in (("prod", "non_prod"), ("non_prod", "prod")):
         deny = f"deny-{zone_name_for_namespace_type(src)}-to-{zone_name_for_namespace_type(dst)}"
         if (deny in rendered) != isolated:

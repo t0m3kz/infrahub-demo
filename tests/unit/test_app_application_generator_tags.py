@@ -14,6 +14,7 @@ import pytest
 
 from generators.protocols import AppComponent
 from tests.unit.app_application_generator_helpers import _app, _backend, _dep, _frontend, _make_gen, _segment
+from tests.unit.query_shape_helpers import compact
 
 # ===========================================================================
 # TestComponentTags
@@ -150,11 +151,11 @@ class TestComponentTags:
 
     def test_application_query_reads_the_tag_of_components_edge_targets_and_segments(self, root_dir: Path) -> None:
         """The fast path needs the tag of every child, every dependency target and every segment."""
-        query = (root_dir / "queries/topology/add/application.gql").read_text()
+        query = compact((root_dir / "queries/topology/add/application.gql").read_text())
         assert query.count("security_tag { node { id } }") == 3
         fragment = query.split("fragment AppComponentSecurityFields")[0]
         assert fragment.count("security_tag { node { id } }") == 1
-        assert "namespace_type { value }" in fragment
+        assert "vrf_type { value }" in fragment
 
 
 # ===========================================================================
@@ -167,8 +168,13 @@ def _tenant(segment: dict[str, Any], tag_id: str | None = None) -> dict[str, Any
     tag) or not."""
     return {
         **segment,
+        "security_zone": {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
         "gateway": {
-            "ip_prefix": {"prefix": "10.60.0.0/24", "ip_namespace": {"name": "PROD", "namespace_type": "prod"}}
+            "ip_prefix": {
+                "security_zone": {"name": "PROD", "vrf_type": "prod"},
+                "prefix": "10.60.0.0/24",
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
         },
         "security_tag": {"id": tag_id} if tag_id else None,
         "routing_tag": 7 if tag_id else None,
@@ -336,7 +342,7 @@ class TestCrossSegmentComponentTags:
 
     def test_application_query_reads_the_calling_application_of_a_component(self, root_dir: Path) -> None:
         """The fan-out reads dependents' source application (AppApplicationGenerator._calling_application_ids)."""
-        query = (root_dir / "queries/topology/add/application.gql").read_text()
+        query = compact((root_dir / "queries/topology/add/application.gql").read_text())
         dependents = query.split("dependents {", 1)[1].split("depends_on {", 1)[0]
         # `__typename` is required: the live server cannot resolve a hierarchical parent without it
         # ("Unable to identify the type of the instance"), which failed every add_app_application run.

@@ -130,6 +130,7 @@ def test_the_interconnect_subject_is_the_dci_and_its_ports() -> None:
     assert DCI.description == "DCI ICX-DC12-EQXPA4-B"
     assert DCI.ports == (("bl-dc1212101", "Ethernet1/36"), ("eg-pa402", "Ethernet1/10"))
     assert DCI.port_kind == "DcimPhysicalInterface"
+    assert DCI.namespace is None
     assert ALL_DEMO_VIRTUAL_CIRCUITS[INTERCONNECT_CIRCUIT]["carrier"] == ("DF-DC12-EQXPA4-B",)
 
 
@@ -140,6 +141,7 @@ def test_the_handoff_subject_is_the_sdwan_gateway_handoff_and_its_subinterfaces(
     assert HANDOFF.description == "Handoff HANDOFF-FR2-SDWAN-GW1-PROD"
     assert set(HANDOFF.ports) == {("eg-fr201", "Ethernet1/12.1900"), ("EQX-FR2-SDWAN-GW1", "eth0.1900")}
     assert HANDOFF.port_kind == "DcimVirtualInterface"
+    assert HANDOFF.namespace == "PROD"
 
 
 def test_the_bystanders_are_every_other_session_of_the_branch() -> None:
@@ -587,6 +589,7 @@ def _vrf_result(
             "edges": [
                 {
                     "node": {
+                        "security_zone": {"node": {"name": {"value": subject.namespace}}},
                         "name": {"value": "Ethernet1/9"},
                         "device": {"node": {"name": {"value": device}}},
                         "ip_address": {"node": {"ip_namespace": {"node": {"name": {"value": subject.namespace}}}}},
@@ -600,6 +603,7 @@ def _vrf_result(
                 # The circuit's own sub-interface never counts as other demand.
                 {
                     "node": {
+                        "security_zone": {"node": {"name": {"value": subject.namespace}}},
                         "name": {"value": port},
                         "role": {"value": "customer"},
                         "device": {"node": {"name": {"value": device}}},

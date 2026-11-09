@@ -1,0 +1,17 @@
+# DcimPhysicalDevice declarations in recursive dependency order.
+# Three devices from bootstrap templates (their interfaces come with the template): a leaf (in the pod), the edge that
+# carries the DC's internet access and the office tunnel, and the ISP router at the far end of the internet carrier.
+# Nothing generated. The edge nests the tunnel interfaces that exist only for it: the two AWS VPN tunnels (they ride
+# the internet access port Ethernet1/2) and the hub end of the C900 office tunnel
+# (90_bindings/60_offices/C900/Office/04_tunnels.yml); the
+# cloud and SaaS legs are NOT on this edge, they land in the colocation cage (02_colo).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: EXT-ISP-A-PE1
+      object_template: MX204_ISP_PE
+      owner: P014
+      description: "ISP router: far end of the internet carrier (VPN and Zscaler legs)"
+      deployment: ISP-A

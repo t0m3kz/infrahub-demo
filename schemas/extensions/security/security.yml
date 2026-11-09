@@ -1,8 +1,9 @@
 ---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 # DC Fabric Security — Zero-Trust Micro-Segmentation
 #
 # 4-node model for segment-to-segment policy enforcement:
-#   SecurityZone          — macro trust classification
+#   SecurityZone          — global routing domain and independent trust classification
 #   SecuritySecurityProfile — threat prevention inspection flags
 #   SecurityPolicy        — segment contract (default deny)
 #   SecurityPolicyRule    — per-flow rules with inline protocol/port
@@ -16,13 +17,15 @@ nodes:
   # ==========================================
   - name: Zone
     namespace: Security
-    description: "Security zone — macro trust classification for network segments"
+    description: "Global routing domain (one logical VRF), with an independent trust classification"
     label: Security Zone
     icon: "mdi:shield-lock"
     include_in_menu: false
     order_by:
       - name__value
     display_label: "{{ name__value }}"
+    human_friendly_id:
+      - name__value
     attributes:
       - name: name
         kind: Text
@@ -30,6 +33,7 @@ nodes:
         optional: false
         unique: true
         order_weight: 1000
+        description: "Canonical zone and CLI VRF name (PROD, NONPROD, INTERNET or MANAGEMENT)"
       - name: description
         kind: Text
         label: Description
@@ -41,6 +45,32 @@ nodes:
         description: "Trust level (0-100), higher is more trusted"
         optional: false
         order_weight: 1200
+      - name: vrf_type
+        kind: Dropdown
+        label: VRF Type
+        description: "Routing purpose; independent of the zone's trust level"
+        optional: false
+        unique: true
+        order_weight: 1300
+        choices:
+          - name: prod
+            label: Production
+          - name: non_prod
+            label: Non-Production
+          - name: internet
+            label: Internet
+          - name: management
+            label: Management
+      - name: l3_vni
+        kind: Number
+        label: L3 VNI
+        description: "Fixed EVPN L3 VNI; reserved outside L2/transit pools and encodable in type-1 RD/type-2 RT"
+        optional: false
+        unique: true
+        order_weight: 1400
+        parameters:
+          min_value: 60000
+          max_value: 60003
     relationships:
       - name: network_segments
         peer: ManagedNetworkSegment
@@ -51,6 +81,16 @@ nodes:
         order_weight: 2100
         identifier: network_segment__security_zone
         description: "Network segments assigned to this security zone"
+      - name: vrfs
+        peer: ManagedVRF
+        label: VRF Instances
+        cardinality: many
+        kind: Generic
+        optional: true
+        on_delete: no-action
+        identifier: vrf__security_zone
+        order_weight: 2200
+        description: "Deployment-scoped instances of this routing domain"
 
   # ==========================================
   # Security Profiles — Threat Prevention
@@ -336,8 +376,16 @@ nodes:
         order_weight: 2440
         identifier: policyrule_destination_prefixes
         description: "Destination prefix selectors for prefix- and hybrid-intent rules"
-      # The internet is a zone, not a segment: it has no prefix, gateway or owner. A rule to it names the zone
-      # (INTERNET-ZONE) and nothing else: checks/segment_security.py refuses a second destination.
+      - name: source_zone
+        peer: SecurityZone
+        label: Source Zone
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2445
+        identifier: policyrule_source_zone
+        description: "Explicit source routing context for a selector without a source segment"
+      # A bare INTERNET destination means outside; with a selector a zone qualifies its routing context.
       - name: destination_zone
         peer: SecurityZone
         label: Destination Zone
@@ -346,7 +394,7 @@ nodes:
         optional: true
         order_weight: 2450
         identifier: policyrule_destination_zone
-        description: "Destination zone with no address space of its own (the internet: INTERNET-ZONE); excludes every other destination"  # yamllint disable-line rule:line-length
+        description: "Destination routing context; bare INTERNET means outside, selectors narrow the destination"
       # Inspection profile
       - name: security_profile
         peer: SecuritySecurityProfile
@@ -413,5 +461,5 @@ extensions:
           kind: Attribute
           optional: true
           order_weight: 902
-          description: "Security zone assignment (macro trust classification)"
+          description: "Authoritative routing domain and independent trust classification for this segment"
           identifier: network_segment__security_zone

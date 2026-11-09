@@ -1,0 +1,10 @@
+# DcimVirtualInterface declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - {name: Vlan110, device: bcn-office-as-01, role: svi, status: active, vrf: ["C900-OFFICE", "PROD"]}
+    - {name: Vlan110, device: bcn-office-as-02, role: svi, status: active, vrf: ["C900-OFFICE", "PROD"]}
+    - {name: Vlan120, device: bcn-office-as-01, role: svi, status: active, vrf: ["C900-OFFICE", "PROD"]}
+    - {name: Vlan120, device: bcn-office-as-02, role: svi, status: active, vrf: ["C900-OFFICE", "PROD"]}

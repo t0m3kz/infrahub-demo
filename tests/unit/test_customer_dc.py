@@ -107,6 +107,17 @@ class TestDCDeployment:
 
         gen.client.filters.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_target_is_related_before_a_zero_output_return(self) -> None:
+        """Even a footprint with no hosting facility leaves a nonempty tracking context for SDK cleanup."""
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen.client.group_context.related_node_ids = []
+
+        await gen.generate(_dc_payload())
+
+        assert gen.client.group_context.related_node_ids == ["cust-1"]
+        gen.client.create.assert_not_called()
+
 
 class TestWaitsForParentDcGenerator:
     """A customer can board concurrently with (or immediately after) its
@@ -272,7 +283,7 @@ class TestFirewallContextProvisioning:
         target = kwargs["target"]
         assert target.spec is FIREWALL_CONTEXT
         assert target.context_name("PROD") == f"shared-{cluster.name.value}-prod"
-        assert target.context_name("NON-PROD") == f"shared-{cluster.name.value}-non-prod"
+        assert target.context_name("NONPROD") == f"shared-{cluster.name.value}-nonprod"
         assert (target.cluster_id, target.tenant_id, target.track) == (cluster.id, None, False)
         assert kwargs["customer"]["environment"] == "p"
 
@@ -658,7 +669,7 @@ class TestEnsureDedicatedDevicePair:
         gen.client.filters = AsyncMock(
             side_effect=[[MagicMock(id="tmpl-1")], [virt1, virt2], [MagicMock(id="dedicated-cluster-1")]]
         )
-        gen.create_devices = AsyncMock(side_effect=[["c005-DC10-FW1-non-prod"], ["c005-DC10-FW2-non-prod"]])
+        gen.create_devices = AsyncMock(side_effect=[["c005-DC10-FW1-nonprod"], ["c005-DC10-FW2-nonprod"]])
 
         await gen._ensure_dedicated_device_pair(
             role="internal-firewall",
@@ -667,14 +678,14 @@ class TestEnsureDedicatedDevicePair:
             parent_id="dc-1",
             parent_name="DC10",
             dc_design="M",
-            name_parts=("c005", "non-prod"),
+            name_parts=("c005", "nonprod"),
         )
 
         assert [call.kwargs["options"]["name_override"] for call in gen.create_devices.await_args_list] == [
-            "c005-DC10-FW1-non-prod",
-            "c005-DC10-FW2-non-prod",
+            "c005-DC10-FW1-nonprod",
+            "c005-DC10-FW2-nonprod",
         ]
-        assert gen._ensure_ha_pairs.call_args.kwargs["ha_name"] == "c005-DC10-FW1-DC10-FW2-ha-non-prod"
+        assert gen._ensure_ha_pairs.call_args.kwargs["ha_name"] == "c005-DC10-FW1-DC10-FW2-ha-nonprod"
 
     @pytest.mark.asyncio
     async def test_load_balancer_pair_uses_the_lb_template_and_ha_kind(self) -> None:
@@ -749,7 +760,7 @@ class TestLoadbalancerContextTarget:
         (target,) = self._lb_targets(gen)
         assert (target.cluster_id, target.tenant_id, target.track) == ("lb-cluster-1", None, False)
         assert target.context_name("PROD") == "shared-DC10-LB1-LB2-prod"
-        assert target.context_name("NON-PROD") == "shared-DC10-LB1-LB2-non-prod"
+        assert target.context_name("NONPROD") == "shared-DC10-LB1-LB2-nonprod"
         assert gen.client.filters.call_args.kwargs["capabilities__ids"] == ["lb-1"]
         assert gen.client.filters.call_args.kwargs["kind"].__name__ == "ManagedLoadbalancerHA"
 

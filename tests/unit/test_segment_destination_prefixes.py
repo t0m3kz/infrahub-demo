@@ -21,10 +21,21 @@ def _owner(org_id: str | None, typename: str = "OrganizationCustomer") -> dict[s
     return {"node": {"__typename": typename, "org_id": _v(org_id), "display_label": _v(f"{org_id} label")}}
 
 
-def _prefix(prefix: str, ns_type: str = "prod") -> dict[str, Any]:
-    """A registered IpamPrefix node with its namespace and namespace_type."""
-    name = "PROD" if ns_type == "prod" else "NON-PROD"
-    return {"prefix": _v(prefix), "ip_namespace": {"node": {"name": _v(name), "namespace_type": _v(ns_type)}}}
+def _prefix(prefix: str) -> dict[str, Any]:
+    """A registered IpamPrefix node: neutral IPAM identity only, the routing zone belongs to its owner."""
+    return {"prefix": _v(prefix), "ip_namespace": {"node": {"name": {"value": "default"}}}}
+
+
+def _zone(ns_type: str) -> dict[str, Any]:
+    """A SecurityZone selection (RoutingZoneFields) of the environment type."""
+    name = "PROD" if ns_type == "prod" else "NONPROD"
+    return {"node": {"id": f"zone-{name}", "name": _v(name), "vrf_type": _v(ns_type)}}
+
+
+def _vrf(ns_type: str = "prod") -> dict[str, Any]:
+    """A ManagedVRF selection (RoutingVrfFields) realizing the zone of ``ns_type``."""
+    zone = _zone(ns_type)
+    return {"node": {"id": f"vrf-{zone['node']['name']['value']}", "security_zone": zone}}
 
 
 def _edges(*nodes: dict[str, Any]) -> dict[str, Any]:
@@ -42,12 +53,25 @@ def _office(
     gateway: str | None, owner: str | None = "C001", *lans: dict[str, Any], hosted: tuple[dict[str, Any], ...] = ()
 ) -> dict[str, Any]:
     """A TopologyCustomerOffice as segment_security.gql selects it: gateway, LANs, hosted segment prefixes."""
+    handoff = {
+        "__typename": "TopologySessionCircuit",
+        "circuit_type": _v("handoff"),
+        "vrf": _vrf(),
+    }
     return {
         "owner": _owner(owner),
-        "sdwan_gateway": {"node": {"name": _v(gateway)} if gateway else None},
+        "sdwan_gateway": {
+            "node": {"name": _v(gateway), "interfaces": _edges({"vrf": _vrf(), "capabilities": _edges(handoff)})}
+            if gateway
+            else None
+        },
+        "vrfs": _edges(_vrf()["node"]),
         "lan_prefixes": _edges(*lans),
         "segment_deployments": _edges(
-            *({"segment": {"node": {"owner": _owner(owner), "gateway": _gw(p)}}} for p in hosted)
+            *(
+                {"segment": {"node": {"owner": _owner(owner), "security_zone": _zone("prod"), "gateway": _gw(p)}}}
+                for p in hosted
+            )
         ),
     }
 
@@ -58,11 +82,15 @@ def _gw(prefix: dict[str, Any]) -> dict[str, Any]:
 
 
 def _tunnel(
-    owner: str | None, *prefixes: dict[str, Any], ends: tuple[str, ...] = (_GW1, "EXT-ACME-EDGE1")
+    owner: str | None,
+    *prefixes: dict[str, Any],
+    ends: tuple[str, ...] = (_GW1, "EXT-ACME-EDGE1"),
+    ns_type: str = "prod",
 ) -> dict[str, Any]:
     """A TopologySessionCircuit as segment_security.gql selects it: no stored owner, the office of ``owner`` in its
     locations (and a second location that is no office)."""
     return {
+        "vrf": _vrf(ns_type),
         "locations": _edges({"owner": _owner(owner)}, {}),
         "registered_prefixes": _edges(*prefixes),
         "capabilities": _edges(*({"device": {"node": {"name": _v(device)}}} for device in ends)),
@@ -158,8 +186,8 @@ class TestOnPremDestinations:
         assert _unreachable(check) == []
 
     def test_a_segment_of_another_environment_is_not_reachable(self) -> None:
-        """A PROD rule never reaches a NON-PROD segment's range."""
-        segment = _segment("dev", env="d", zone="NONPROD-ZONE", prefix="10.9.0.0/24")
+        """A PROD rule never reaches a NONPROD segment's range."""
+        segment = _segment("dev", env="d", zone="NONPROD", prefix="10.9.0.0/24")
         assert len(_unreachable(_run([_dest_rule("r", "10.9.0.0/24")], [segment]))) == 1
 
 
@@ -264,17 +292,17 @@ class TestEnvironmentOfTheSource:
     """A rule reaches the registrations of its source segment's environment, never the other one."""
 
     def test_a_prod_rule_does_not_reach_a_non_prod_registration(self) -> None:
-        """The partner range registered only in NON-PROD is unreachable from a PROD segment."""
+        """The partner range registered only in NONPROD is unreachable from a PROD segment."""
         check = _run(
             [_dest_rule("r", _ACME)],
             TopologyCustomerOffice=[_office(_GW1, "C001")],
-            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME, "non_prod"))],
+            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME), ns_type="non_prod")],
         )
         assert len(_unreachable(check)) == 1
 
     def test_a_non_prod_rule_does_not_reach_a_prod_registration(self) -> None:
         """And the other way round."""
-        dev = _segment("dev", env="d", zone="NONPROD-ZONE", prefix="10.8.0.0/24")
+        dev = _segment("dev", env="d", zone="NONPROD", prefix="10.8.0.0/24")
         check = _run(
             [_dest_rule("r", _ACME, src="dev")],
             [dev],
@@ -288,7 +316,7 @@ class TestEnvironmentOfTheSource:
         check = _run(
             [_dest_rule("r", _ACME, src=None)],
             TopologyCustomerOffice=[_office(_GW1, "C001")],
-            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME, "non_prod"))],
+            TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME), ns_type="non_prod")],
         )
         assert _unreachable(check) == []
 
@@ -302,24 +330,23 @@ def test_the_query_selects_what_the_destination_rule_reads() -> None:
             "owner.org_id",
             "sdwan_gateway.name",
             "lan_prefixes.prefix",
-            "lan_prefixes.ip_namespace.namespace_type",
+            "sdwan_gateway.interfaces.vrf.security_zone.vrf_type",
+            "sdwan_gateway.interfaces.capabilities.vrf.security_zone.vrf_type",
+            "vrfs.security_zone.id",
             "segment_deployments.segment.owner.org_id",
             "segment_deployments.segment.gateway.ip_prefix.prefix",
-            "segment_deployments.segment.gateway.ip_prefix.ip_namespace.namespace_type",
+            "segment_deployments.segment.security_zone.vrf_type",
         ],
         "TopologySessionCircuit": [
             "locations.owner.org_id",
             "registered_prefixes.prefix",
-            "registered_prefixes.ip_namespace.namespace_type",
+            "vrf.security_zone.vrf_type",
             "capabilities.device.name",
         ],
     }
     # The segment root spreads a fragment from another file (not resolvable here): environment is selected beside it.
-    assert "        ...SegmentGroupPolicyFields\n        environment { value }" in path.read_text()
-    assert (
-        "        owner { node { __typename org_id { value } display_label } }\n        security_zone"
-        in path.read_text()
-    )
+    selected_segments = _selected_paths(path, "ManagedNetworkSegment")
+    assert {"environment", "owner.org_id", "security_zone.vrf_type"} <= selected_segments
     assert "environment" in attribute_names("ManagedNetworkSegment")
     assert "owner" in relationship_names("ManagedNetworkSegment")
     for root, paths in reads.items():

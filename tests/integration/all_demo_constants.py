@@ -140,7 +140,7 @@ ALL_DEMO_DC_OVERLAY_ROLES = ("super-spine", "spine", "border-leaf")
 
 # Application hosts in row pairs, one host of a pair per compute-rack row
 # (DC10 has three pairs: C005's payment-core, its session store, C008; DC12
-# two: the shared P027 non-prod pair and C005's own prod pair). The
+# two: the shared P027 nonprod pair and C005's own prod pair). The
 # row matters: add_endpoint
 # cables a host to the access-leaf pair of the network rack sharing its row,
 # so row-1 and row-2 hosts must land on *disjoint* access-leaf pairs. That

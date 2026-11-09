@@ -1,108 +1,369 @@
-# What the routing invariants read, across topologies: namespaces and their
-# type, interfaces/segments living in the INTERNET namespace, and the cloud
-# gateway attachments and route tables, plus the cloud VPC aggregates
-# (cidr_blocks) with the namespace each is registered in, the cloud subnets
-# that must lie inside them, and the office footprints' LAN prefixes with their
-# namespace and environment, and the owner of each registrant (an account or
-# an office) with the segments an office hosts: only customer-owned prefixes
-# cross the colocation edge. Rule 8 groups the registrations by attachment
-# point (an office's sdwan_gateway, the same selection as queries/config/edge.gql) and reads each segment's owner. The *Interface queries read every interface of the
-# fleet (a relationship cannot be filtered by a nested namespace type); the
-# check keeps the ones in the INTERNET namespace. A tunnel's registered_prefixes
-# (PROD, owned by the tunnel's derived owner: the owner of the TopologyCustomerOffice among
-# its locations) are the other registration behind an SD-WAN gateway: the device of each
-# end port tells which gateway.
 query routing_invariants {
-  IpamNamespace {
+  SecurityZone {
     edges {
       node {
-        id name { value } l3_vni { value } namespace_type { value }
+        id
+        name {
+          value
+        }
+        l3_vni {
+          value
+        }
+        vrf_type {
+          value
+        }
       }
     }
   }
-
-  # Host-facing check: every interface holding an address in an INTERNET
-  # namespace (ip_address is declared per concrete interface kind).
   InternetPhysicalInterfaces: DcimPhysicalInterface {
     edges {
       node {
-        __typename
-        id name { value } role { value } device { node { id name { value } ... on DcimDeviceManaged { role { value } } } }
-        ip_address { node { address { value } ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } }
-      }
-    }
-  }
-
-  InternetVirtualInterfaces: DcimVirtualInterface {
-    edges {
-      node {
-        __typename
-        id name { value } role { value } device { node { id name { value } ... on DcimDeviceManaged { role { value } } } }
-        ip_address { node { address { value } ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } }
-      }
-    }
-  }
-
-  InternetLagInterfaces: DcimLAGInterface {
-    edges {
-      node {
-        __typename
-        id name { value } role { value } device { node { id name { value } ... on DcimDeviceManaged { role { value } } } }
-        ip_address { node { address { value } ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } }
-      }
-    }
-  }
-
-  ManagedNetworkSegment {
-    edges {
-      node {
+        ...InterfaceRoutingZoneFields
+        vrf {
+          node {
+            ...RoutingVrfFields
+          }
+        }
         __typename
         id
-        name { value }
-        owner { node { __typename org_id { value } display_label } }
-        gateway { node { ip_prefix { node { id prefix { value } member_type { value } ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } } } }
-      }
-    }
-  }
-
-  # VPC aggregates: each block is an IpamPrefix registered in the namespace of
-  # the account's environment; the subnets (Text cidr_block) must sit inside.
-  CloudVirtualNetwork {
-    edges {
-      node {
-        id
-        name { value }
-        account { node { id name { value } environment { value } owner { node { __typename org_id { value } display_label } } } }
-        cidr_blocks {
-          edges {
-            node {
-              id
-              prefix { value }
-              ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } }
+        name {
+          value
+        }
+        role {
+          value
+        }
+        device {
+          node {
+            id
+            name {
+              value
+            }
+            ... on DcimDeviceManaged {
+              role {
+                value
+              }
+            }
+          }
+        }
+        ip_address {
+          node {
+            address {
+              value
+            }
+            ip_namespace {
+              node {
+                id
+                name {
+                  value
+                }
+              }
             }
           }
         }
       }
     }
   }
-
-  # Office LANs: held to the VPC aggregate rules (the PROD namespace, an office
-  # has no environment; no overlap inside one namespace).
-  TopologyCustomerOffice {
+  InternetVirtualInterfaces: DcimVirtualInterface {
+    edges {
+      node {
+        ...InterfaceRoutingZoneFields
+        vrf {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        __typename
+        id
+        name {
+          value
+        }
+        role {
+          value
+        }
+        device {
+          node {
+            id
+            name {
+              value
+            }
+            ... on DcimDeviceManaged {
+              role {
+                value
+              }
+            }
+          }
+        }
+        ip_address {
+          node {
+            address {
+              value
+            }
+            ip_namespace {
+              node {
+                id
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  InternetLagInterfaces: DcimLAGInterface {
+    edges {
+      node {
+        ...InterfaceRoutingZoneFields
+        vrf {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        __typename
+        id
+        name {
+          value
+        }
+        role {
+          value
+        }
+        device {
+          node {
+            id
+            name {
+              value
+            }
+            ... on DcimDeviceManaged {
+              role {
+                value
+              }
+            }
+          }
+        }
+        ip_address {
+          node {
+            address {
+              value
+            }
+            ip_namespace {
+              node {
+                id
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ManagedNetworkSegment {
+    edges {
+      node {
+        security_zone {
+          node {
+            ...RoutingZoneFields
+          }
+        }
+        __typename
+        id
+        name {
+          value
+        }
+        owner {
+          node {
+            __typename
+            org_id {
+              value
+            }
+            display_label
+          }
+        }
+        gateway {
+          node {
+            ip_prefix {
+              node {
+                id
+                prefix {
+                  value
+                }
+                member_type {
+                  value
+                }
+                ip_namespace {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudVirtualNetwork {
     edges {
       node {
         id
-        name { value }
-        owner { node { __typename org_id { value } display_label } }
-        sdwan_gateway { node { name { value } } }
-        network_segments { edges { node { id } } }
+        name {
+          value
+        }
+        account {
+          node {
+            id
+            name {
+              value
+            }
+            environment {
+              value
+            }
+            owner {
+              node {
+                __typename
+                org_id {
+                  value
+                }
+                display_label
+              }
+            }
+          }
+        }
+        cidr_blocks {
+          edges {
+            node {
+              id
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  TopologyCustomerOffice {
+    edges {
+      node {
+        sdwan_gateway {
+          node {
+            name {
+              value
+            }
+            interfaces {
+              edges {
+                node {
+                  vrf {
+                    node {
+                      ...RoutingVrfFields
+                    }
+                  }
+                  capabilities {
+                    edges {
+                      node {
+                        __typename
+                        ... on TopologySessionCircuit {
+                          circuit_type {
+                            value
+                          }
+                          vrf {
+                            node {
+                              ...RoutingVrfFields
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        vrfs {
+          edges {
+            node {
+              ...RoutingVrfFields
+            }
+          }
+        }
+        id
+        name {
+          value
+        }
+        owner {
+          node {
+            __typename
+            org_id {
+              value
+            }
+            display_label
+          }
+        }
+        sdwan_gateway {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        network_segments {
+          edges {
+            node {
+              id
+            }
+          }
+        }
         segment_deployments {
           edges {
             node {
               segment {
                 node {
-                  owner { node { __typename org_id { value } display_label } }
-                  gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } } } } } } }
+                  security_zone {
+                    node {
+                      ...RoutingZoneFields
+                    }
+                  }
+                  owner {
+                    node {
+                      __typename
+                      org_id {
+                        value
+                      }
+                      display_label
+                    }
+                  }
+                  gateway {
+                    node {
+                      ip_prefix {
+                        node {
+                          prefix {
+                            value
+                          }
+                          ip_namespace {
+                            node {
+                              name {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -112,78 +373,16 @@ query routing_invariants {
           edges {
             node {
               id
-              prefix { value }
-              ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  TopologySessionCircuit(circuit_type__value: "tunnel") {
-    edges {
-      node {
-        id
-        name { value }
-        locations { edges { node { ... on TopologyCustomerOffice { owner { node { __typename org_id { value } display_label } } } } } }
-        capabilities { edges { node { device { node { name { value } } } } } }
-        registered_prefixes {
-          edges {
-            node {
-              id
-              prefix { value }
-              ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  CloudNetworkSegment {
-    edges {
-      node {
-        id
-        name { value }
-        cidr_block { value }
-        virtual_network { node { id name { value } } }
-      }
-    }
-  }
-
-  # The cloud side of an external session (transforms/helpers/bgp_cloud.py cloud_legs, shared with the checks): our
-  # sub-interface (or routed port) and the CloudPeeringInterface end the same handoff or vpn session circuit
-  # (capabilities of the peering -> circuit -> its other ends). The peering gives the neighbor (peer_ip, peer_asn), the
-  # BGP key (auth) and what we announce to the cloud (advertised_prefixes); its transport (device) gives the owner (the
-  # account's, else its own for a SaaS) and, for a VPN tunnel, the gateway. One root rather than a field per kind.
-  CloudPeeringInterface {
-    edges {
-      node {
-        name { value }
-        scope { value }
-        routing { value }
-        peer_ip { node { address { value } } }
-        peer_asn { node { asn { value } } }
-        auth { node { password { value } } }
-        gateway { node { id name { value } } }
-        advertised_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
-        device {
-          node {
-            __typename
-            name { value }
-            ... on CloudTransport { account { node { owner { node { __typename org_id { value } display_label } } } } owner { node { __typename org_id { value } display_label } } }
-            ... on CloudVPNConnection { gateway { node { id name { value } } } }
-          }
-        }
-        capabilities {
-          edges {
-            node {
-              __typename
-              ... on TopologySessionCircuit {
-                name { value }
-                circuit_type { value }
-                capabilities { edges { node { name { value } device { node { name { value } } } } } }
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
               }
             }
           }
@@ -191,29 +390,327 @@ query routing_invariants {
       }
     }
   }
-
-  # What a cloud gateway lets through, cloud to us (bgp_cloud.py reachable_prefixes): an attachment joins its gateway
-  # to a virtual network (its allowed_prefixes, else its CIDR blocks) or to a peer gateway (a hop to a hub, with the
-  # route table the hub receives it in).
+  TopologySessionCircuit(circuit_type__value: "tunnel") {
+    edges {
+      node {
+        vrf {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        id
+        name {
+          value
+        }
+        locations {
+          edges {
+            node {
+              ... on TopologyCustomerOffice {
+                owner {
+                  node {
+                    __typename
+                    org_id {
+                      value
+                    }
+                    display_label
+                  }
+                }
+              }
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              device {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        registered_prefixes {
+          edges {
+            node {
+              id
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudNetworkSegment {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        cidr_block {
+          value
+        }
+        virtual_network {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudPeeringInterface {
+    edges {
+      node {
+        name {
+          value
+        }
+        scope {
+          value
+        }
+        routing {
+          value
+        }
+        peer_ip {
+          node {
+            address {
+              value
+            }
+          }
+        }
+        peer_asn {
+          node {
+            asn {
+              value
+            }
+          }
+        }
+        auth {
+          node {
+            password {
+              value
+            }
+          }
+        }
+        gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        advertised_prefixes {
+          edges {
+            node {
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        device {
+          node {
+            __typename
+            name {
+              value
+            }
+            ... on CloudTransport {
+              account {
+                node {
+                  owner {
+                    node {
+                      __typename
+                      org_id {
+                        value
+                      }
+                      display_label
+                    }
+                  }
+                }
+              }
+              owner {
+                node {
+                  __typename
+                  org_id {
+                    value
+                  }
+                  display_label
+                }
+              }
+            }
+            ... on CloudVPNConnection {
+              gateway {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              __typename
+              ...CircuitRoutingVrfFields
+              ... on TopologySessionCircuit {
+                name {
+                  value
+                }
+                circuit_type {
+                  value
+                }
+                capabilities {
+                  edges {
+                    node {
+                      name {
+                        value
+                      }
+                      device {
+                        node {
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   CloudGatewayAttachment {
     edges {
       node {
         id
-        name { value }
-        owner_account { node { id name { value } environment { value } } }
+        name {
+          value
+        }
+        owner_account {
+          node {
+            id
+            name {
+              value
+            }
+            environment {
+              value
+            }
+          }
+        }
         virtual_network {
           node {
             id
-            name { value }
-            account { node { id name { value } environment { value } } }
-            cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+            name {
+              value
+            }
+            account {
+              node {
+                id
+                name {
+                  value
+                }
+                environment {
+                  value
+                }
+              }
+            }
+            cidr_blocks {
+              edges {
+                node {
+                  prefix {
+                    value
+                  }
+                  ip_namespace {
+                    node {
+                      name {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
-        gateway { node { id name { value } } }
-        peer_gateway { node { id name { value } } }
-        allowed_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
-        associated_route_table { node { id name { value } } }
-        propagates_to_route_tables { edges { node { id name { value } } } }
+        gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        peer_gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        allowed_prefixes {
+          edges {
+            node {
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        associated_route_table {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        propagates_to_route_tables {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -4,7 +4,7 @@
 # AWS transit connection session (nordix-vpc-prod, 06_customer_boarding/c001/cloud), the Acme rule
 # the prefix C001 registers behind the partner tunnel (01_partner_tunnel.yml), and the Zscaler rule
 # the internet zone (a SaaS PoP is public space: nothing registers it). Both prefix objects
-# live in PROD, declared where they are registered; no prefix is declared for the policy alone.
+# use default IPAM and PROD routing, declared where registered; no prefix is declared for the policy alone.
 # These are rules of C001's "nordix-prod" segment
 # (data/demos/30_all/07_applications/c001/00_segment.yml), so they live in that
 # segment's own policy — every rule does: seg-<segment>-egress is the one
@@ -40,7 +40,7 @@ spec:
             source_segment: "c001-nordix-prod-p"
             # The VPC block of nordix-vpc-prod (a PROD prefix object, not a copy in `default`).
             destination_prefixes:
-              - ["10.10.0.0/16", "PROD"]
+              - ["10.10.0.0/16", "default"]
             log: false
             description: "Nordix web/app tier to its AWS VPC over Direct Connect"
 
@@ -51,7 +51,7 @@ spec:
             port_start: 8080
             source_segment: "c001-nordix-prod-p"
             destination_prefixes:
-              - ["198.18.0.0/24", "PROD"]
+              - ["198.18.0.0/24", "default"]
             log: true
             description: "Nordix to Acme Logistics B2B extranet over C001-PARTNER-ACME-FR2"
 
@@ -62,25 +62,14 @@ spec:
             port_start: 443
             source_segment: "c001-nordix-prod-p"
             # A SaaS security PoP is internet space: the internet zone, not a registered prefix.
-            destination_zone: "INTERNET-ZONE"
+            destination_zone: "INTERNET"
             apply_on_switch: false
             log: false
             description: "Nordix web tier to the Zscaler cloud security PoP, an internet destination"
----
-# Internet egress of DC11. C006's "nordix-prod" segment (a VXLAN segment in
-# DC11's shared PAN-OS firewall context) may open https to the internet: a rule
-# whose destination is the zone INTERNET-ZONE (destination_zone), not a segment
-# (the internet has no prefix). The firewall renders it as zone INTERNET-ZONE,
-# destination any. The leaf ACL cannot say "anything but internal", so it denies every
-# NON_INTERNET_PREFIXES range first and only then permits any
-# (transforms/helpers/acl.py). apply_on_switch stays false: a switch-enforced
-# rule would pull the segment's whole ACL onto the leaf (_leaf_enforces).
-# Index below 100 like the hand-written rules above.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: SecurityPolicy
-  data:
+    # C006's nordix-prod segment in DC11 may open HTTPS to INTERNET, not a
+    # destination prefix. The firewall renders destination any; the leaf ACL
+    # first denies NON_INTERNET_PREFIXES, then permits any. Switch enforcement
+    # stays off, with the authored rule index below the generated band at 100.
     - name: seg-c006-nordix-prod-p-egress
       description: "Egress contract of c006-nordix-prod-p, incl. its internet egress"
       segment: "c006-nordix-prod-p"
@@ -94,15 +83,15 @@ spec:
             protocol: tcp
             port_start: 443
             source_segment: "c006-nordix-prod-p"
-            destination_zone: "INTERNET-ZONE"
+            destination_zone: "INTERNET"
             apply_on_switch: false
             log: false
             description: "Lumivex ERP tier to the internet over https, through the DC11 firewall"
 
           # Core services (DNS, NTP) of DC11: the infra segment sits in
-          # MANAGEMENT-ZONE (../../07_applications/infra/00_segment.yml). The
+          # MANAGEMENT (../../07_applications/infra/00_segment.yml). The
           # firewall source-NATs these flows behind its MANAGEMENT leg VIP and
-          # nothing in MANAGEMENT-ZONE may initiate towards a tenant.
+          # nothing in MANAGEMENT may initiate towards a tenant.
           - index: 20
             name: nordix-prod-to-core-dns
             action: permit
