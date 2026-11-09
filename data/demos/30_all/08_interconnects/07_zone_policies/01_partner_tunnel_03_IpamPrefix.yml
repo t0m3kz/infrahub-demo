@@ -9,6 +9,5 @@ spec:
   data:
     - prefix: "198.18.0.0/24"
       ip_namespace: "default"
-      security_zone: "PROD"
       status: active
       description: "Acme Logistics B2B extranet range, reachable over the IPsec tunnel C001-PARTNER-ACME-FR2"

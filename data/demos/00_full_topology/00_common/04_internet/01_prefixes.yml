@@ -16,10 +16,10 @@ spec:
     # yamllint disable-line rule:line-length
     - {prefix: "198.51.100.18/31", ip_namespace: "default", status: active, description: "Transit: lis-office-edge-02 to EXT-ISP-B-PE1"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
-    - {prefix: "192.0.2.0/24", ip_namespace: "default", status: active, description: "Public range of the object store API in eu-central-1 (cloud public endpoint s3-public)", security_zone: "INTERNET"}  # yamllint disable-line rule:line-length
+    - {prefix: "192.0.2.0/24", ip_namespace: "default", status: active, description: "Public range of the object store API in eu-central-1 (cloud public endpoint s3-public)"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
-    - {prefix: "203.0.113.0/24", ip_namespace: "default", status: active, description: "Public range of Webex Frankfurt (SaaS public service webex-public)", security_zone: "INTERNET"}  # yamllint disable-line rule:line-length
+    - {prefix: "203.0.113.0/24", ip_namespace: "default", status: active, description: "Public range of Webex Frankfurt (SaaS public service webex-public)"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
-    - {prefix: "198.18.0.0/24", ip_namespace: "default", status: active, description: "Public range of the blob storage API in westeurope (cloud public endpoint blob-public)", security_zone: "INTERNET"}  # yamllint disable-line rule:line-length
+    - {prefix: "198.18.0.0/24", ip_namespace: "default", status: active, description: "Public range of the blob storage API in westeurope (cloud public endpoint blob-public)"}  # yamllint disable-line rule:line-length
     # yamllint disable-line rule:line-length
-    - {prefix: "198.18.1.0/24", ip_namespace: "default", status: active, description: "Public range of the object storage API in europe-west3 (cloud public endpoint gcs-public)", security_zone: "INTERNET"}  # yamllint disable-line rule:line-length
+    - {prefix: "198.18.1.0/24", ip_namespace: "default", status: active, description: "Public range of the object storage API in europe-west3 (cloud public endpoint gcs-public)"}  # yamllint disable-line rule:line-length

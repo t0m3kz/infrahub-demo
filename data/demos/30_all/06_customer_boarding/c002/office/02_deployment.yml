@@ -6,8 +6,7 @@ kind: Object
 spec:
   kind: IpamPrefix
   data:
-    - security_zone: "PROD"
-      prefix: "10.210.2.0/24"
+    - prefix: "10.210.2.0/24"
       ip_namespace: "default"
       status: active
       description: "C002 Marseille Branch office LAN"

@@ -8,13 +8,11 @@ kind: Object
 spec:
   kind: IpamPrefix
   data:
-    - security_zone: "PROD"
-      prefix: "10.10.0.0/16"
+    - prefix: "10.10.0.0/16"
       ip_namespace: "default"
       status: active
     # nordix-vpc-vpn is reachable only behind the AWS Site-to-Site VPN;
     # C001 registers this second aggregate behind that session, also in PROD.
-    - security_zone: "PROD"
-      prefix: "10.20.0.0/16"
+    - prefix: "10.20.0.0/16"
       ip_namespace: "default"
       status: active
