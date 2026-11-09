@@ -13,7 +13,7 @@ segment, a BGP process). What exists only for that object is nested under it: th
 device or transport (`interfaces:`), the front ports of a patch panel (`front_ports:`), the gateway address and prefix of
 a segment, the loopback that is a BGP process's router id, the provider's `peer_ip` of a peering. What cannot be nested
 stays in a flat file of its own kind, because it names something created later (a VRF lists its interfaces, so each
-VRF's interface list sits in `90_bindings/95_vrf_interfaces/`, after every interface it names; a port-channel names the segment, which needs the leaf's SVI first) or because two parents
+VRF's interface list sits in `90_bindings/95_vrf_interfaces/`, after every interface it names; a segment's SVIs carry its gateway address, so they follow the segment) or because two parents
 use it (a link prefix, an AS number). Definitions precede consumers; cross-facility relationships and late keyed
 upserts go under `90_bindings/`. Splitting a mixed file retains each complete nested subtree and its parent bindings.
 

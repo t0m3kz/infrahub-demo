@@ -1556,7 +1556,12 @@
                     "value": "svi"
                   },
                   "ip_address": {
-                    "node": null
+                    "node": {
+                      "id": "fixture-gateway-110",
+                      "address": {
+                        "value": "10.110.0.1/24"
+                      }
+                    }
                   },
                   "zone_capabilities": {
                     "edges": [
@@ -1608,7 +1613,12 @@
                     "value": "svi"
                   },
                   "ip_address": {
-                    "node": null
+                    "node": {
+                      "id": "fixture-gateway-120",
+                      "address": {
+                        "value": "10.120.0.1/24"
+                      }
+                    }
                   },
                   "zone_capabilities": {
                     "edges": [
@@ -2005,6 +2015,7 @@
                           },
                           "gateway": {
                             "node": {
+                              "id": "gw-seg-web",
                               "address": {
                                 "value": "10.0.0.1/24"
                               },
@@ -2085,6 +2096,7 @@
                           },
                           "gateway": {
                             "node": {
+                              "id": "gw-seg-app",
                               "address": {
                                 "value": "10.0.0.1/24"
                               },

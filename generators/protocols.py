@@ -1007,7 +1007,6 @@ class ManagedSegmentVlan(ManagedGenericInterfaces):
     vlan_id: Integer
     segment_deployment: RelationshipAttribute[ManagedSegmentDeployment]
     device: RelationshipAttribute[DcimPhysicalDevice]
-    svi: RelationshipAttribute[DcimVirtualInterface]
 
 
 class DcimSoftwareImage(CoreNode):
@@ -1092,7 +1091,7 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppIn
 
 
 class DcimVirtualInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress, DcimSubInterface):
-    segment_vlan: RelationshipAttribute[ManagedSegmentVlan]
+    pass
 
 
 class CloudVirtualNetwork(CloudResource):

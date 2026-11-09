@@ -30,7 +30,6 @@ def test_l2_only_segment_needs_no_instance() -> None:
     facts = facts_of(raw_device("d1", "leaf-1", rows=[raw_row("r1", 100, namespace=None)]))
     assert facts.demand == frozenset()
     assert facts.routed_rows == ()
-    assert facts.unrouted_row_ids == frozenset({"r1"})
 
 
 def test_terminated_segment_needs_no_instance_nor_svi() -> None:
@@ -40,7 +39,6 @@ def test_terminated_segment_needs_no_instance_nor_svi() -> None:
     assert facts.demand == frozenset()
     assert facts.routed_rows == ()
     assert facts.desired_svis() == {}
-    assert facts.unrouted_row_ids == frozenset({"r1"})
 
 
 def test_terminated_and_routed_segments_on_one_device_demand_only_the_routed_one() -> None:
@@ -57,7 +55,6 @@ def test_a_border_leaf_carries_a_stretched_segment_l2_only() -> None:
     assert facts.demand == frozenset()
     assert facts.routed_rows == ()
     assert facts.desired_svis() == {}
-    assert facts.unrouted_row_ids == frozenset({"r1"})
 
 
 def test_a_leaf_routes_the_same_stretched_segment() -> None:
@@ -77,7 +74,6 @@ def test_a_border_leaf_keeps_a_vrf_another_row_still_demands() -> None:
     facts = facts_of(raw_device("d1", "bl-1", role="border-leaf", deployment_kind="TopologyDataCenter", rows=rows))
     assert facts.demand == frozenset({"PROD"})
     assert list(facts.desired_svis()) == ["Vlan100"]
-    assert facts.unrouted_row_ids == frozenset({"r1"})
 
 
 def test_routed_row_needs_its_gateway_namespace() -> None:
@@ -97,14 +93,14 @@ def test_internet_exit_address_on_border_gateway_edge_is_included() -> None:
 def test_default_namespace_is_never_demanded() -> None:
     """The underlay is the global table: rows, SVIs and addresses in default demand nothing."""
     iface = raw_interface("i1", "Ethernet1", "fabric", address("10.9.0.1/31", "default"))
-    svi = raw_svi("s1", 100, "r1")
+    svi = raw_svi("s1", 100, "seg")
     device = raw_device("d1", "leaf-1", rows=[raw_row("r1", 100, "default")], interfaces=[iface, svi])
     assert facts_of(device).demand == frozenset()
 
 
 def test_svi_vrf_counts_as_demand() -> None:
     """An instance is never dropped while an SVI still routes in it."""
-    svi = raw_svi("s1", 100, "r1", vrf_id="v1", vrf_namespace="NONPROD")
+    svi = raw_svi("s1", 100, "seg", vrf_id="v1", vrf_namespace="NONPROD")
     assert facts_of(raw_device("d1", "leaf-1", interfaces=[svi])).demand == frozenset({"NONPROD"})
 
 
@@ -144,14 +140,14 @@ def test_a_paired_device_reads_only_its_own_rows() -> None:
     device = raw_device("d1", "leaf-1", rows=[raw_row("r-own", 100, "NONPROD")], capabilities=[raw_mlag("m1")])
     facts = facts_of(device)
     assert facts.demand == frozenset({"NONPROD"})
-    assert facts.row_ids == frozenset({"r-own"})
+    assert [row.id for row in facts.routed_rows] == ["r-own"]
 
 
 def test_own_rows_are_used_for_a_standalone_device() -> None:
     """A standalone device reads its own rows."""
     vrf = raw_instance("v1", "leaf-1", "PROD")
     facts = facts_of(raw_device("d1", "leaf-1", rows=[raw_row("r-own", 100, "PROD")], vrfs=[vrf]))
-    assert facts.row_ids == frozenset({"r-own"})
+    assert [row.id for row in facts.routed_rows] == ["r-own"]
     assert [instance.namespace for instance in facts.instances] == ["PROD"]
 
 

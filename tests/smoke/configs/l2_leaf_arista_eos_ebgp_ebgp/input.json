@@ -1353,6 +1353,7 @@
                           },
                           "gateway": {
                             "node": {
+                              "id": "gw-seg-100",
                               "address": {
                                 "value": "10.0.0.1/24"
                               },
@@ -1433,6 +1434,7 @@
                           },
                           "gateway": {
                             "node": {
+                              "id": "gw-seg-200",
                               "address": {
                                 "value": "10.0.0.1/24"
                               },

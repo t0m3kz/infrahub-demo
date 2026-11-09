@@ -1,18 +1,20 @@
 """The segment SVIs of a device: one ``DcimVirtualInterface`` (role ``svi``) per routed row of the device.
 
-The SVI carries no address (the anycast gateway stays ``segment.gateway``); it is the object a row is realized by on a
-switch (``segment_vlan``) and is an interface of the VRF the switch routes it in (the ``ManagedVRF`` among its
-``capabilities``). An SVI's only capability is its VRF (checks/vrf_instances.py S4), so the save of the SVI writes its
+The SVI carries the segment's anycast gateway as its ``ip_address`` (THE ``segment.gateway`` object, the same address on
+the SVI of every switch with a routed row of the segment: ``ip_address`` is a plain edge with no cascade) and is an
+interface of the VRF the switch routes it in (the ``ManagedVRF`` among its ``capabilities``). It has no link to its
+row: the row it realizes is the routed row of its device whose ``Vlan<vlan id>`` it bears. An SVI's only capability is its VRF (checks/vrf_instances.py S4), so the save of the SVI writes its
 ``capabilities`` as the one-instance list (generators/helpers/interface_vrf.py ``vrf_capability``): one write, which is
 safe even right after the instance was created in the same pass, where a RelationshipAdd on the new node can reach the
 other replica first. What a device needs is derived by ``utils.vrf_demand.device_vrf_facts`` (a border leaf has none
 for a stretched segment: it carries it L2 only, utils/segment_addressing.py ``l2_only_on``); this module only turns
 the difference with what exists into writes.
 
-Identity: an SVI is found by its own uniqueness, (device, ``Vlan<vlan id>``), among the device's role-svi interfaces.
-That is not the row link of the design (a row moving between deployments then needs no delete-before-create ordering): a
-row keeps its VLAN id for life, a different row gets a different name or, on the same name, the SVI is moved to the
-new row in place.
+Identity: an SVI is found by its own uniqueness, (device, ``Vlan<vlan id>``), among the device's role-svi interfaces
+(a row moving between deployments needs no delete-before-create ordering): a row keeps its VLAN id for life, a
+different row gets a different name. Nothing deletes an SVI with its row: this pass deletes every role-svi interface
+of the device that no routed row of it wants (the row is gone, it became L2 only, its segment lost its gateway, or the
+device carries no VRF any more); a deleted device takes its interfaces.
 
 Written untracked (``update_group_context=False``), like the rows: an SVI belongs to no single run.
 """
@@ -36,7 +38,7 @@ class SviWrite:
     """One SVI to write: ``existing_id`` is set for an in-place update, None for a create."""
 
     name: str
-    row_id: str
+    address_id: str | None
     vrf_id: str | None
     existing_id: str | None = None
 
@@ -62,9 +64,9 @@ def plan_svis(facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> SviPlan
     """The writes that make the device's role-svi interfaces exactly its desired ones.
 
     ``instance_ids`` maps a namespace name to the id of the instance of it in the device's hosting deployment (every
-    non-default namespace of a desired SVI must be in it). An SVI that differs only in its row, or whose VRF changes
-    to another instance, is updated in place. One that would have to lose its VRF is deleted and created again,
-    because a relationship cannot be cleared through a save of a node read without it.
+    non-default namespace of a desired SVI must be in it). An SVI whose address (the segment's gateway moved) or VRF
+    changes to another one is updated in place. One that would have to lose its VRF or its address is deleted and
+    created again, because a relationship cannot be cleared through a save of a node read without it.
     """
     desired = facts.desired_svis()
     existing = {svi.name: svi for svi in facts.svis}
@@ -74,14 +76,14 @@ def plan_svis(facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> SviPlan
         vrf_id = desired_vrf_id(row, instance_ids)
         current = existing.get(name)
         if current is None:
-            writes.append(SviWrite(name, row.id, vrf_id))
-        elif current.row_id == row.id and current.vrf_id == vrf_id:
+            writes.append(SviWrite(name, row.gateway_id, vrf_id))
+        elif current.address_id == row.gateway_id and current.vrf_id == vrf_id:
             continue
-        elif vrf_id is None and current.vrf_id is not None:
+        elif (vrf_id is None and current.vrf_id is not None) or (row.gateway_id is None and current.address_id):
             recreate.append(current.id)
-            writes.append(SviWrite(name, row.id, vrf_id))
+            writes.append(SviWrite(name, row.gateway_id, vrf_id))
         else:
-            writes.append(SviWrite(name, row.id, vrf_id, existing_id=current.id))
+            writes.append(SviWrite(name, row.gateway_id, vrf_id, existing_id=current.id))
     stale = sorted(svi.id for name, svi in existing.items() if name not in desired)
     return SviPlan(tuple(writes), tuple(sorted(recreate)), tuple(stale))
 
@@ -196,9 +198,10 @@ class SviMixin:
                 "device": {"id": facts.id},
                 "role": SVI_ROLE,
                 "status": "active",
-                "segment_vlan": {"id": write.row_id},
                 **vrf_capability(write.vrf_id),
             }
+            if write.address_id:
+                data["ip_address"] = {"id": write.address_id}
             if write.existing_id:
                 data["id"] = write.existing_id
             svi = await self.client.create(kind=DcimVirtualInterface, data=data)

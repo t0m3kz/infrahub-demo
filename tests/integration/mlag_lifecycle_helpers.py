@@ -56,7 +56,6 @@ query ($devices: [ID]) {
         vlan_id { value }
         device { node { id } }
         segment_deployment { node { id } }
-        svi { node { id } }
       }
     }
   }
@@ -110,7 +109,6 @@ def parse_rows(result: dict[str, Any]) -> tuple[Rows, Svis]:
             rows.setdefault(device, {})[deployment] = {
                 "id": node["id"],
                 "vlan_id": (node.get("vlan_id") or {}).get("value"),
-                "svi_id": _id(node, "svi"),
             }
     svis: Svis = {}
     for edge in (result.get("DcimVirtualInterface") or {}).get("edges", []):
@@ -149,7 +147,7 @@ def pick_candidate(candidates: list[dict[str, Any]], rows: Rows) -> tuple[dict[s
 
 def snapshot_errors(before: tuple[Rows, Svis], after: tuple[Rows, Svis], names: dict[str, str]) -> list[str]:
     """What changed between two (rows, svis) snapshots of the pair's devices: a row added, deleted, re-created (new id),
-    renumbered, or pointing at another SVI; an SVI added, deleted or re-created. ``names``: device id -> name."""
+    renumbered; an SVI (the row has no link to it: found by device and name) added, deleted or re-created. ``names``: device id -> name."""
     errors: list[str] = []
     for device_id, name in sorted(names.items(), key=lambda item: item[1]):
         old_rows, new_rows = before[0].get(device_id, {}), after[0].get(device_id, {})

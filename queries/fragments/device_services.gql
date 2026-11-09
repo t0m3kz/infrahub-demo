@@ -274,6 +274,7 @@ fragment ServiceRowFields on ManagedSegmentVlan {
           }
           gateway {
             node {
+              id
               address {
                 value
               }

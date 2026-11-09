@@ -31,14 +31,13 @@ def _mlag(name: str, *members: dict[str, Any]) -> dict[str, Any]:
     return {"node": {"id": f"id-{name}", "name": {"value": name}, "capabilities": {"edges": list(members)}}}
 
 
-def _row(row_id: str, device: str, deployment: str, vlan: int, svi: str | None) -> dict[str, Any]:
+def _row(row_id: str, device: str, deployment: str, vlan: int) -> dict[str, Any]:
     return {
         "node": {
             "id": row_id,
             "vlan_id": {"value": vlan},
             "device": {"node": {"id": device}},
             "segment_deployment": {"node": {"id": deployment}},
-            "svi": {"node": {"id": svi}} if svi else {"node": None},
         }
     }
 
@@ -55,8 +54,8 @@ def _healthy_rows() -> Any:
     return parse_rows(
         _result(
             [
-                _row("r1", "dev-a", "dep-1", 100, "svi-a1"),
-                _row("r2", "dev-b", "dep-1", 100, "svi-b1"),
+                _row("r1", "dev-a", "dep-1", 100),
+                _row("r2", "dev-b", "dep-1", 100),
             ],
             [_svi("svi-a1", "dev-a", "Vlan100"), _svi("svi-b1", "dev-b", "Vlan100")],
         )
@@ -80,10 +79,10 @@ def test_candidates_are_parsed_with_role_and_rack_sorted_by_name() -> None:
     assert candidates[1]["members"][1] == {"id": "dev-b", "name": "leaf-b", "role": "access-leaf", "rack_id": None}
 
 
-def test_rows_are_grouped_by_device_and_deployment_with_their_svi() -> None:
+def test_rows_are_grouped_by_device_and_deployment_and_the_svis_by_device_and_name() -> None:
     rows, svis = _healthy_rows()
 
-    assert rows["dev-a"]["dep-1"] == {"id": "r1", "vlan_id": 100, "svi_id": "svi-a1"}
+    assert rows["dev-a"]["dep-1"] == {"id": "r1", "vlan_id": 100}
     assert svis == {"dev-a": {"Vlan100": "svi-a1"}, "dev-b": {"Vlan100": "svi-b1"}}
 
 
@@ -146,9 +145,9 @@ def test_snapshot_errors_name_a_deleted_added_renumbered_and_recreated_row() -> 
     after = parse_rows(
         _result(
             [
-                _row("r1-new", "dev-a", "dep-1", 100, "svi-a1"),
-                _row("r2", "dev-b", "dep-1", 101, "svi-b1"),
-                _row("r3", "dev-b", "dep-2", 102, None),
+                _row("r1-new", "dev-a", "dep-1", 100),
+                _row("r2", "dev-b", "dep-1", 101),
+                _row("r3", "dev-b", "dep-2", 102),
             ],
             [
                 _svi("svi-a1", "dev-a", "Vlan100"),
@@ -169,7 +168,7 @@ def test_snapshot_errors_name_a_deleted_added_renumbered_and_recreated_row() -> 
 
 def test_snapshot_errors_name_a_deleted_row_and_svi() -> None:
     before = _healthy_rows()
-    after = parse_rows(_result([_row("r1", "dev-a", "dep-1", 100, "svi-a1")], [_svi("svi-a1", "dev-a", "Vlan100")]))
+    after = parse_rows(_result([_row("r1", "dev-a", "dep-1", 100)], [_svi("svi-a1", "dev-a", "Vlan100")]))
 
     errors = snapshot_errors(before, after, NAMES)
 
@@ -239,8 +238,8 @@ def test_new_findings_ignore_what_the_stack_already_had() -> None:
 
 def _check_result(vlan_b: int) -> dict[str, Any]:
     members = [{"id": "dev-a", "name": {"value": "leaf-a"}}, {"id": "dev-b", "name": {"value": "leaf-b"}}]
-    row_a = _row("r1", "dev-a", "dep-1", 100, None)
-    row_b = _row("r2", "dev-b", "dep-1", vlan_b, None)
+    row_a = _row("r1", "dev-a", "dep-1", 100)
+    row_b = _row("r2", "dev-b", "dep-1", vlan_b)
     for row in (row_a, row_b):
         row["node"]["segment_deployment"]["node"]["segment"] = {"node": {"name": {"value": "web"}}}
         row["node"]["device"]["node"]["name"] = {"value": "x"}

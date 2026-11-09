@@ -360,3 +360,27 @@ class TestVrfSweep:
         await gen.generate(_payload(devices=[_device("leaf-1", "lf1", "leaf", [svi, loopback])], pools=False))
 
         assert _ids(gen, DcimVirtualInterface) == ["vif-lo"]
+
+    @pytest.mark.asyncio
+    async def test_the_segment_gateway_an_svi_carries_is_not_deleted(self) -> None:
+        """An SVI's address is its segment's anycast gateway, shared by every SVI of the segment: the pod keeps it, a
+        loopback's own address goes."""
+        svi = {
+            "__typename": "DcimVirtualInterface",
+            "id": "vif-svi",
+            "status": {"value": "active"},
+            "role": {"value": "svi"},
+            "ip_address": {"node": {"id": "ip-gateway"}},
+        }
+        loopback = {
+            "__typename": "DcimVirtualInterface",
+            "id": "vif-lo",
+            "status": {"value": "active"},
+            "role": {"value": "loopback"},
+            "ip_address": {"node": {"id": "ip-lo"}},
+        }
+        gen = _gen()
+
+        await gen.generate(_payload(devices=[_device("leaf-1", "lf1", "leaf", [svi, loopback])], pools=False))
+
+        assert _ids(gen, IpamIPAddress) == ["ip-lo"]

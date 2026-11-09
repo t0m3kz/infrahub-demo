@@ -15,7 +15,7 @@ def _device(rows: list[dict[str, Any]], svis: list[dict[str, Any]], *, pbr: bool
 def test_a_routed_svi_is_steered_for_the_footprint_of_its_dc_that_has_a_context() -> None:
     """The footprint in the device's hosting DC with a serving context decides."""
     rows = [raw_row("r1", 100, "PROD", footprints=[raw_footprint("fp-a")])]
-    facts = _device(rows, [raw_svi("svi-1", 100, "r1")])
+    facts = _device(rows, [raw_svi("svi-1", 100, "seg")])
     assert facts.pbr_footprints_by_name() == {"Vlan100": "fp-a"}
     assert facts.steers()
 
@@ -27,7 +27,7 @@ def test_a_footprint_in_another_dc_or_without_a_context_does_not_steer() -> None
         raw_row("r2", 101, "PROD", "b", footprints=[raw_footprint("fp-nocontext", context=False)]),
         raw_row("r3", 102, "PROD", "c"),
     ]
-    svis = [raw_svi("svi-1", 100, "r1"), raw_svi("svi-2", 101, "r2"), raw_svi("svi-3", 102, "r3")]
+    svis = [raw_svi("svi-1", 100, "a"), raw_svi("svi-2", 101, "b"), raw_svi("svi-3", 102, "c")]
     facts = _device(rows, svis)
     assert facts.pbr_footprints_by_name() == {"Vlan100": None, "Vlan101": None, "Vlan102": None}
     assert not facts.steers()
@@ -36,7 +36,7 @@ def test_a_footprint_in_another_dc_or_without_a_context_does_not_steer() -> None
 def test_the_lowest_footprint_id_decides_when_a_segment_has_two_in_the_dc() -> None:
     """The same answer every run."""
     rows = [raw_row("r1", 100, "PROD", footprints=[raw_footprint("fp-b"), raw_footprint("fp-a")])]
-    assert _device(rows, [raw_svi("svi-1", 100, "r1")]).pbr_footprints_by_name() == {"Vlan100": "fp-a"}
+    assert _device(rows, [raw_svi("svi-1", 100, "seg")]).pbr_footprints_by_name() == {"Vlan100": "fp-a"}
 
 
 def test_the_managed_pbr_of_the_device_is_read_from_its_capabilities() -> None:
@@ -61,11 +61,12 @@ def test_rule_s4_accepts_the_vrf_of_an_svi_but_not_another_capability() -> None:
     """Its VRF instance is the one capability an SVI may have."""
     rows = [raw_row("r1", 100, "PROD", footprints=[raw_footprint("fp-a")])]
     in_vrf = _device(
-        rows, [raw_svi("svi-1", 100, "r1", "vrf-1", "PROD", capabilities=[{"__typename": "ManagedVRF", "id": "vrf-1"}])]
+        rows,
+        [raw_svi("svi-1", 100, "seg", "vrf-1", "PROD", capabilities=[{"__typename": "ManagedVRF", "id": "vrf-1"}])],
     )
     assert svi_content_errors(in_vrf) == []
     other = {"__typename": "ManagedBGPPeering", "id": "x"}
-    with_other = _device(rows, [raw_svi("svi-1", 100, "r1", capabilities=[other])])
+    with_other = _device(rows, [raw_svi("svi-1", 100, "seg", capabilities=[other])])
     assert "a capability other than its VRF" in svi_content_errors(with_other)[0]
 
 
@@ -73,8 +74,10 @@ def test_a_border_leaf_steers_nothing_until_its_templates_render_pbr() -> None:
     """The SVI of a stretched segment on a border leaf has a footprint with a context, but the border templates render
     no PBR: it is not steered, so it gets no ManagedPBR."""
     rows = [raw_row("r1", 100, "PROD", footprints=[raw_footprint("fp-a")])]
-    leaf = facts_of(raw_device("d1", "leaf-1", rows=rows, interfaces=[raw_svi("svi-1", 100, "r1")]))
-    border = facts_of(raw_device("d1", "bl-1", role="border-leaf", rows=rows, interfaces=[raw_svi("svi-1", 100, "r1")]))
+    leaf = facts_of(raw_device("d1", "leaf-1", rows=rows, interfaces=[raw_svi("svi-1", 100, "seg")]))
+    border = facts_of(
+        raw_device("d1", "bl-1", role="border-leaf", rows=rows, interfaces=[raw_svi("svi-1", 100, "seg")])
+    )
     assert leaf.pbr_footprints_by_name() == {"Vlan100": "fp-a"}
     assert border.pbr_footprints_by_name() == {"Vlan100": None}
 

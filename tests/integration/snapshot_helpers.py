@@ -53,7 +53,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
         "name { value } capabilities { edges { node { id } } } "
         "... on DcimPhysicalInterface { ip_address { node { id address { value } } } } "
         "... on DcimVirtualInterface { ip_address { node { id address { value } } } "
-        "role { value } segment_vlan { node { id } } } "
+        "role { value } } "
         "... on DcimLAGInterface { ip_address { node { id address { value } } } }"
     ),
     # cable_id, color and length_cm are derived by the cabling, HA and MLAG sites from the endpoints, the type and
@@ -77,10 +77,10 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     ),
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value }",
-    "ManagedSegmentVlan": "vlan_id { value } device { node { id } } svi { node { id } }",
+    "ManagedSegmentVlan": "vlan_id { value } device { node { id } }",
     # The VRF instances (one per hosting deployment and namespace) and the segment SVIs are untracked and converged by
     # generators/helpers/vrf.py: a rerun that rebuilt an instance (new id), moved it to another topology or namespace,
-    # changed its members, or re-pointed an SVI is a diff.
+    # changed its members, or re-pointed an SVI (its address, the segment gateway, is in DcimInterface) is a diff.
     "ManagedVRF": (
         "name { value } deployment { node { id } } namespace { node { id } } shared_devices { edges { node { id } } }"
     ),

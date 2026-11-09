@@ -24,15 +24,18 @@ device, ``hosting_deployment``); every device of that topology that routes in th
 - (i) ERROR: the device steers a tenant SVI to a firewall (``DeviceVrfFacts.steers``) but has no ``ManagedPBR``: its
   config renders no PBR; WARNING: it has one and steers nothing (the next reconcile deletes it).
 
-Segment SVIs (``DcimVirtualInterface`` with role ``svi``, a Component of its row, one per row):
+Segment SVIs (``DcimVirtualInterface`` with role ``svi``, one per routed row of the device). An SVI has no link to its
+row: the row behind it is the routed row of its device whose VLAN its name ``Vlan<vlan_id>`` bears.
 
-- S1 ERROR: each routed row of the domain has exactly one SVI named ``Vlan<vlan_id>`` linked to it;
-- S2 WARNING: an SVI with no row or whose row is not routed, or any SVI left on a decommissioned device (the generator
-  deletes it on its next run; S1, S3, S4 and S5 do not report a decommissioned device);
+- S1 ERROR: each routed row of the device has an SVI named ``Vlan<vlan_id>``;
+- S2 WARNING: an SVI that no routed row of its device is behind (the row is gone or not routed), or any SVI left on a
+  decommissioned device (the VRF pass deletes it on its next run; S1, S3, S4 and S5 do not report a decommissioned
+  device);
 - S3 ERROR: its VRF (the instance that lists it) is the instance of (the device's hosting deployment, the row's
   namespace) and the device is one of its members (it may be in none only for a ``default`` row);
-- S4 ERROR: it has no address (the anycast gateway is ``segment.gateway``) and no capability but its VRF;
-- S5 ERROR: its row is one of the device's own rows (``common_parent`` cannot say so: the row has two parents).
+- S4 ERROR: it has no capability but its VRF;
+- S5 WARNING: its address is its segment's anycast gateway (``segment.gateway``, the one address every SVI of the
+  segment carries; the VRF pass sets it and follows a change of the gateway).
 """
 
 from __future__ import annotations
@@ -182,34 +185,26 @@ def uncarried_instance_errors(facts: DeviceVrfFacts) -> list[str]:
 
 
 def svi_missing_errors(facts: DeviceVrfFacts) -> list[str]:
-    """S1 each routed row of the domain has exactly one role-svi interface ``Vlan<vlan_id>`` linked to it."""
-    errors = []
-    for name, row in facts.desired_svis().items():
-        found = [svi for svi in facts.svis if svi.name == name and svi.row_id == row.id]
-        if len(found) != 1:
-            errors.append(
-                f"SVI (S1): device '{facts.name}' has {len(found)} svi interfaces '{name}' linked to the row of "
-                f"segment '{row.segment_name}' (VLAN {row.vlan_id}), expected exactly 1. Re-run add_vxlan_segment "
-                "for the segment to converge them."
-            )
-    return errors
+    """S1 each routed row of the device has a role-svi interface ``Vlan<vlan_id>``."""
+    present = {svi.name for svi in facts.svis}
+    return [
+        f"SVI (S1): device '{facts.name}' has no svi interface '{name}' for its row of segment "
+        f"'{row.segment_name}' (VLAN {row.vlan_id}). Re-run add_vxlan_segment for the segment to converge it."
+        for name, row in facts.desired_svis().items()
+        if name not in present
+    ]
 
 
 def svi_orphan_warnings(facts: DeviceVrfFacts) -> list[str]:
-    """S2 an SVI with no row, or whose row is not routed."""
+    """S2 an SVI that no routed row of its device is behind, or any SVI of a decommissioned device."""
     decommissioned = _decommissioned(facts)
+    desired = facts.desired_svis()
     return [
         f"SVI (S2): svi interface '{svi.name}' on device '{facts.name}' "
-        + (
-            "is left on a decommissioned device"
-            if decommissioned
-            else "has no VLAN-domain row"
-            if svi.row_id is None
-            else "sits on a row the fabric does not route"
-        )
-        + ". The segment reconcile deletes it on its next run, or delete it."
+        + ("is left on a decommissioned device" if decommissioned else "has no routed VLAN row of its device behind it")
+        + ". The VRF pass deletes it on its next run, or delete it."
         for svi in facts.svis
-        if decommissioned or svi.row_id is None or svi.row_id in facts.unrouted_row_ids
+        if decommissioned or svi.name not in desired
     ]
 
 
@@ -242,10 +237,10 @@ def unneeded_pbr_warnings(facts: DeviceVrfFacts) -> list[str]:
 def svi_vrf_errors(facts: DeviceVrfFacts) -> list[str]:
     """S3 the SVI is in a VRF (unless the row is ``default``), the instance of (the device's hosting deployment, the
     row's namespace), which the device is a member of."""
-    rows = {row.id: row for row in facts.routed_rows}
+    rows = facts.desired_svis()
     errors = []
     for svi in () if _decommissioned(facts) else facts.svis:
-        row = rows.get(svi.row_id or "")
+        row = rows.get(svi.name)
         if row is None:
             continue
         where = f"svi interface '{svi.name}' on device '{facts.name}'"
@@ -274,27 +269,29 @@ def svi_vrf_errors(facts: DeviceVrfFacts) -> list[str]:
 
 
 def svi_content_errors(facts: DeviceVrfFacts) -> list[str]:
-    """S4 an SVI has no address and no capability but its VRF (a decommissioned device's leftovers are S2's warning)."""
+    """S4 an SVI has no capability but its VRF (a decommissioned device's leftovers are S2's warning)."""
     if _decommissioned(facts):
         return []
     return [
-        f"SVI (S4): svi interface '{svi.name}' on device '{facts.name}' has "
-        + ("an address" if svi.has_address else "a capability other than its VRF")
-        + " (the anycast gateway is segment.gateway and a port carries the segment, not its SVI). Remove it."
+        f"SVI (S4): svi interface '{svi.name}' on device '{facts.name}' has a capability other than its VRF "
+        "(a port carries the segment, not its SVI). Remove it."
         for svi in facts.svis
-        if svi.has_address or svi.has_capabilities
+        if svi.has_capabilities
     ]
 
 
-def svi_domain_errors(facts: DeviceVrfFacts) -> list[str]:
-    """S5 the SVI's row is one of the device's own rows (a decommissioned device's leftovers: S2)."""
+def svi_address_warnings(facts: DeviceVrfFacts) -> list[str]:
+    """S5 an SVI carries its segment's anycast gateway (an SVI with no row behind it is S2's warning)."""
     if _decommissioned(facts):
         return []
+    rows = facts.desired_svis()
     return [
-        f"SVI (S5): svi interface '{svi.name}' on device '{facts.name}' is linked to a row of another device. "
-        "Re-run add_vxlan_segment, which deletes it."
+        f"SVI (S5): svi interface '{svi.name}' on device '{facts.name}' "
+        + ("has no address" if svi.address_id is None else "has an address that is not")
+        + f" the anycast gateway of segment '{row.segment_name}'. The VRF pass sets it on its next run "
+        "(re-run add_vxlan_segment for the segment)."
         for svi in facts.svis
-        if svi.row_id is not None and svi.row_id not in facts.row_ids
+        if (row := rows.get(svi.name)) is not None and svi.address_id != row.gateway_id
     ]
 
 
@@ -309,9 +306,13 @@ ERROR_RULES: tuple[_Rule, ...] = (
     svi_missing_errors,
     svi_vrf_errors,
     svi_content_errors,
-    svi_domain_errors,
 )
-WARNING_RULES: tuple[_Rule, ...] = (unneeded_instance_warnings, unneeded_pbr_warnings, svi_orphan_warnings)
+WARNING_RULES: tuple[_Rule, ...] = (
+    unneeded_instance_warnings,
+    unneeded_pbr_warnings,
+    svi_orphan_warnings,
+    svi_address_warnings,
+)
 
 
 class CheckVrfInstances(WarningCheck):

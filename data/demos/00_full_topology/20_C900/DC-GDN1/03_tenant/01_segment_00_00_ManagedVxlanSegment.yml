@@ -1,6 +1,6 @@
 # ManagedVxlanSegment declarations in recursive dependency order.
 # The VXLAN segment of C900 in DC-GDN1: segment -> deployment (VNI 10300) -> VLAN row of leaf-01 (VLAN
-# 300, its SVI in 02_routing/02_virtual_interfaces.yml). The gateway 10.93.1.1/24 and its prefix are nested.
+# 300, its SVI in 01_segment_02_00). The gateway 10.93.1.1/24 and its prefix are nested.
 # The vPC port-channels carry it (02_lag_interfaces.yml).
 apiVersion: infrahub.app/v1
 kind: Object

@@ -51,6 +51,11 @@ def raw_footprint(footprint_id: str, parent_id: str = HOSTING_ID, *, context: bo
     }
 
 
+def gateway_id(segment: str) -> str:
+    """The id of the anycast gateway address of the segment ``segment`` of ``raw_row`` (the address its SVIs carry)."""
+    return f"gw-{segment}"
+
+
 def raw_row(
     row_id: str,
     vlan_id: int,
@@ -79,6 +84,7 @@ def raw_row(
         seg["security_zone"] = namespace_ref(namespace)
         seg["gateway"] = {
             "node": {
+                "id": gateway_id(segment),
                 "address": {"value": "10.0.0.1/24"},
                 "ip_prefix": {"node": {"ip_namespace": namespace_ref("default")}},
             }
@@ -161,7 +167,7 @@ def raw_interface(
 def raw_svi(
     svi_id: str,
     vlan_id: int,
-    row_id: str | None,
+    segment: str | None,
     vrf_id: str | None = None,
     vrf_namespace: str | None = None,
     addr: dict[str, Any] | None = None,
@@ -169,8 +175,11 @@ def raw_svi(
     name: str | None = None,
     vrf_deployment_id: str | None = HOSTING_ID,
 ) -> dict[str, Any]:
-    """A role-svi DcimVirtualInterface."""
+    """A role-svi DcimVirtualInterface carrying the anycast gateway of the ``raw_row`` segment ``segment`` (None: no
+    address), or ``addr``."""
     node = raw_interface(svi_id, name or f"Vlan{vlan_id}", "svi", addr, capabilities, "DcimVirtualInterface")
+    if segment and not addr:
+        node["ip_address"] = {"node": {"id": gateway_id(segment), "address": {"value": "10.0.0.1/24"}}}
     node.update(
         in_raw_vrf(
             {
@@ -182,7 +191,6 @@ def raw_svi(
             else None
         )
     )
-    node["segment_vlan"] = {"node": {"id": row_id}} if row_id else None
     return node
 
 

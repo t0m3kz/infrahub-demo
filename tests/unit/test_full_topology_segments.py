@@ -61,6 +61,31 @@ def _deployment_rows() -> list[dict]:
     return [row for row in _deployment_declarations() if "vlans" in row]
 
 
+def _svis() -> dict[tuple[str, str], Any]:
+    """(device, name) -> the ``ip_address`` of every segment SVI (role svi) the sample declares."""
+    return {
+        (item["device"], item["name"]): item.get("ip_address")
+        for _, doc in _documents()
+        if (doc.get("spec") or {}).get("kind") == "DcimVirtualInterface"
+        for item in doc["spec"]["data"]
+        if item.get("role") == "svi"
+    }
+
+
+def _gateways() -> dict[str, list[str]]:
+    """Segment name -> the HFID [address, namespace] of its anycast gateway (nested under the segment)."""
+    return {
+        f"{item['owner'].lower()}-{item['customer_name']}-{item['environment']}": [
+            item["gateway"]["data"]["address"],
+            item["gateway"]["data"]["ip_namespace"],
+        ]
+        for _, doc in _documents()
+        if (doc.get("spec") or {}).get("kind") == "ManagedVxlanSegment"
+        for item in doc["spec"]["data"]
+        if item.get("gateway")
+    }
+
+
 def _row_bindings() -> list[dict]:
     """The port lists of the VLAN rows (90_bindings/96_segment_ports upserts each row by [device, vlan_id] with its
     ``capabilities``)."""
@@ -71,6 +96,23 @@ def _row_bindings() -> list[dict]:
         for row in doc["spec"]["data"]
         if "capabilities" in row
     ]
+
+
+def test_every_svi_is_a_row_of_its_device_and_carries_its_segment_s_gateway() -> None:
+    """A row names no SVI: the SVI of a row is its device's ``Vlan<vlan_id>``, and it carries the segment's anycast
+    gateway (the existing address object, referenced by [address, namespace])."""
+    segment_of = {
+        (vlan["device"], f"Vlan{vlan['vlan_id']}"): row["segment"]
+        for row in _deployment_rows()
+        for vlan in row["vlans"]["data"]
+    }
+    assert all("svi" not in vlan for row in _deployment_rows() for vlan in row["vlans"]["data"])
+    gateways = _gateways()
+    svis = _svis()
+    assert svis
+    for key, ip_address in svis.items():
+        assert key in segment_of, key
+        assert ip_address == gateways[segment_of[key]], key
 
 
 def test_every_port_of_a_row_is_a_switch_port_of_the_row_s_switch() -> None:
@@ -134,7 +176,10 @@ def test_each_dc_declares_its_deployment_with_the_same_vlan_on_both_leaves() -> 
             expected_devices |= {f"{site}-bl-01", f"{site}-bl-02"}
         assert {vlan["device"] for vlan in vlans} == expected_devices
         assert len(vlans) == len(expected_devices) and len({vlan["vlan_id"] for vlan in vlans}) == 1
-        assert all(("svi" not in vlan) if terminated else ("svi" in vlan) for vlan in vlans)
+        svis, gateway = _svis(), _gateways()[row["segment"]]
+        for vlan in vlans:
+            key = (vlan["device"], f"Vlan{vlan['vlan_id']}")
+            assert (key not in svis) if terminated else (svis.get(key) == gateway), key
         assert {vlan["device"].split("-")[0] for vlan in vlans} == {row["deployment"].split("-")[1].lower()}
 
 
@@ -146,9 +191,11 @@ def test_the_stretched_segment_is_shared_one_vni_and_the_vlan_it_gives_on_every_
     assert len(vnis) == 1 and shared_vlan_id(vnis.pop()) is not None
     assert {vlan["vlan_id"] for row in rows for vlan in row["vlans"]["data"]} == {shared_vlan_id(rows[0]["vni"])}
     assert len([vlan for row in rows for vlan in row["vlans"]["data"]]) == 8
-    # A border leaf carries the stretched segment as VLAN and VNI only: its row has no SVI, a leaf's has one.
+    # A border leaf carries the stretched segment as VLAN and VNI only: it has no SVI, a leaf has one with the gateway.
+    svis, gateway = _svis(), _gateways()[_STRETCHED]
     for vlan in (vlan for row in rows for vlan in row["vlans"]["data"]):
-        assert ("svi" in vlan) == ("-leaf-" in vlan["device"]), vlan["device"]
+        key = (vlan["device"], f"Vlan{vlan['vlan_id']}")
+        assert (svis.get(key) == gateway) if "-leaf-" in vlan["device"] else (key not in svis), key
     segment = next(
         item
         for _, doc in _documents()

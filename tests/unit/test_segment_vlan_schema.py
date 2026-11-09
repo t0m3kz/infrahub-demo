@@ -106,13 +106,16 @@ class TestRowIsAChildOfItsSwitchUnderTheSegmentDeployment:
 
 
 class TestTheRowPointsAtItsDevice:
-    def test_the_row_has_a_mandatory_device_and_one_svi(self, segment_schema: dict[str, Any]) -> None:
+    def test_the_row_has_a_mandatory_device_and_no_svi_link(self, segment_schema: dict[str, Any]) -> None:
+        """The SVI of a row is found by (device, ``Vlan<vlan_id>``): no edge links them in either direction (a Component
+        under a row whose device is its Parent breaks the server's object-template walk)."""
         row = _node(segment_schema, "SegmentVlan")
 
         device = _relationship(row, "device")
         assert (device["peer"], device["optional"]) == ("DcimPhysicalDevice", False)
-        assert _relationship(row, "svi")["cardinality"] == "one"
-        assert "vlan_domain" not in {r["name"] for r in row["relationships"]}
+        assert {"svi", "vlan_domain"}.isdisjoint(r["name"] for r in row["relationships"])
+        extended = {n["kind"] for n in segment_schema["extensions"]["nodes"]}
+        assert "DcimVirtualInterface" not in extended
 
     def test_the_vlan_domain_generic_is_gone(self, root_dir: Path) -> None:
         """No domain object and no marker generic: a device inherits nothing for it, an MLAG neither."""

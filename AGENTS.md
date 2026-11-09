@@ -752,8 +752,9 @@ class MyCheck(InfrahubCheck):
   other "same parent" rule is a check.
 - **Interface addresses and layers**: `ip_address` is declared once, on the marker generic `DcimHasIPAddress`
   (inherited by a physical port, a LAG, a virtual interface and a cloud peering interface, not a console port): an
-  Attribute with no cascade (a multisite VIP is one address on two loopbacks), so an address goes with its run's tracking or with decommission's
-  explicit deletes, never with its port; a hand-deleted device leaves its port addresses behind. A switch port's L2
+  Attribute with no cascade (a multisite VIP is one address on two loopbacks, a segment's anycast gateway one address
+  on the SVI of every switch with a routed row of it), so an address goes with its run's tracking or with decommission's
+  explicit deletes (never an SVI's: the gateway is the segment's), never with its port; a hand-deleted device leaves its port addresses behind. A switch port's L2
   membership is its switch's VLAN ROW: the `ManagedSegmentVlan` (it inherits `ManagedGenericInterfaces`) among the
   port's interface `capabilities`, the realization, written only by the segment reconcile (see **VLAN rows**). The
   port's VLAN is the row's `vlan_id`, its VNI and segment the row's `segment_deployment`; a reader of a port reads
@@ -829,12 +830,20 @@ class MyCheck(InfrahubCheck):
   `utils/segment_addressing.py` `l2_only_on`, the one rule for the generator's SVIs and VRF demand and the transform's
   L2-only view, `is_fabric_l2`). A switch renders every segment it has a row of, with or without a port of it
   (`transforms/common.py` `_collect_row_activations`).
-  A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
-  `svi` named `Vlan<vlan_id>`, a Component of the row (`svi`, `on_delete: cascade`), with no address (the anycast
-  gateway is `segment.gateway`) and in the `ManagedVRF` of its device's topology (the instance lists it in its
-  `capabilities`, the SVI's only capability; its save writes it); the SVI is not a
-  port. `generators/helpers/svi.py` writes it in the VRF pass of the segment reconcile, upserted by (device, `Vlan<id>`), and
-  the transform renders `vrf member` from it. The L3 VNI SVI (`ip forward`, `3900 + TRANSIT_SLOT[namespace_type]`,
+  A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a STORED `DcimVirtualInterface` with role
+  `svi` named `Vlan<vlan_id>` on the row's switch, with NO link to its row (no edge either way: a Component under a row
+  whose `device` is its Parent breaks the server's object-template walk, measured on 1.11.9; a reader of "the SVI of
+  this row" keys it by the row's device and `Vlan<vlan_id>`), carrying the segment's anycast gateway as its
+  `ip_address` (THE `segment.gateway` object, the same address on every SVI of the segment) and in the `ManagedVRF` of
+  its device's topology (the instance lists it in its `capabilities`, the SVI's only capability; its save writes it);
+  the SVI is not a port. `generators/helpers/svi.py` writes it in the VRF pass of the segment reconcile, upserted by
+  (device, `Vlan<id>`), sets its address and follows a change of the gateway, and deletes every role-svi interface of
+  the device that no routed row of it wants (the row is gone, it became L2 only, its segment lost its gateway, the
+  device carries no VRF): nothing deletes an SVI with its row, a deleted device takes its interfaces.
+  `checks/vrf_instances.py` S1-S5 judge it (S2 an SVI with no routed row of its device behind it, S5 one whose address
+  is not its segment's gateway: WARNINGs the next VRF pass fixes). The transform renders `vrf member` from it and the
+  gateway from `segment.gateway`, never from the SVI's address; the VRF demand does not read the SVI's address (its
+  VRF is a source of its own). The L3 VNI SVI (`ip forward`, `3900 + TRANSIT_SLOT[namespace_type]`,
   `utils/exchange_transit.py` `l3vni_svi_vlan`) and the transit-leg SVIs of the firewall and load-balancer contexts stay
   derived, not objects.
 - **Routing authority**: IPAM objects and allocations use the builtin `default` namespace; that identity never chooses
@@ -862,7 +871,7 @@ class MyCheck(InfrahubCheck):
   in the pass, and a RelationshipAdd on a node just created can reach the other replica first); it leaves an old
   instance by RelationshipRemove. A `TopologyExchangeGateway` names its instances one-sidedly (`vrf_a`, `vrf_z`). Membership is demand-driven, never pre-provisioned: a device is a member for exactly the non-`default`
   namespaces it routes in (`utils/vrf_demand.py`, the one derivation): the gateway namespace of each
-  routed row of its own, its SVIs' VRFs, the namespaces of the addresses on its own interfaces (handoff /31s, WAN
+  routed row of its own, its SVIs' VRFs, the namespaces of the addresses on its own interfaces but its SVIs (handoff /31s, WAN
   exit sub-interfaces, an upstream transit address) and the legs of the contexts behind its border service ports.
   Only our routing devices carry one (`carries_vrfs`: leaf, tor, access-leaf, border-leaf, border-spine, edge,
   access-switch, distribution-switch, physical or a `CloudNetworkAppliance`): never a spine, an L2 leaf, a firewall or a
@@ -885,7 +894,8 @@ class MyCheck(InfrahubCheck):
   of another role: a desired `Vlan<id>` whose name is taken (the MLAG `Vlan4094`, a hand-made VlanN) is skipped with a
   WARNING. Accepted gaps, converged by the next `reconcile_vrfs` of the device (any segment, circuit or context run that
   touches it) and meanwhile reported by `checks/vrf_instances.py` as a member without demand (WARNING): a deleted
-  segment is not reconciled (its deployments, rows and SVIs go by the schema cascade), a footprint removed from a
+  segment is not reconciled (its deployments and rows go by the schema cascade, its SVIs stay until the device's next
+  pass deletes them, S2 meanwhile), a footprint removed from a
   segment loses its deployment in the cleanup after the segment's own reconcile, and an edit of a device's
   `deployment` or `role`, or a port taken off a handoff circuit, re-runs nothing. The check also reports demand
   without a membership, a member of another topology's instance, a device with demand and no hosting deployment

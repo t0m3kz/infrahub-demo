@@ -1290,7 +1290,12 @@
                     "value": "svi"
                   },
                   "ip_address": {
-                    "node": null
+                    "node": {
+                      "id": "fixture-gateway-120",
+                      "address": {
+                        "value": "10.10.2.1/24"
+                      }
+                    }
                   },
                   "zone_capabilities": {
                     "edges": [
@@ -1342,7 +1347,12 @@
                     "value": "svi"
                   },
                   "ip_address": {
-                    "node": null
+                    "node": {
+                      "id": "fixture-gateway-130",
+                      "address": {
+                        "value": "10.10.3.1/24"
+                      }
+                    }
                   },
                   "zone_capabilities": {
                     "edges": [
@@ -1394,7 +1404,12 @@
                     "value": "svi"
                   },
                   "ip_address": {
-                    "node": null
+                    "node": {
+                      "id": "fixture-gateway-220",
+                      "address": {
+                        "value": "10.20.2.1/24"
+                      }
+                    }
                   },
                   "zone_capabilities": {
                     "edges": [
@@ -3235,6 +3250,7 @@
                           },
                           "gateway": {
                             "node": {
+                              "id": "gw-app-np",
                               "address": {
                                 "value": "10.0.0.1/24"
                               },
@@ -3315,6 +3331,7 @@
                           },
                           "gateway": {
                             "node": {
+                              "id": "gw-db-np",
                               "address": {
                                 "value": "10.0.0.1/24"
                               },
@@ -3395,6 +3412,7 @@
                           },
                           "gateway": {
                             "node": {
+                              "id": "gw-portal-p",
                               "address": {
                                 "value": "10.0.0.1/24"
                               },

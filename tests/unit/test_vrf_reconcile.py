@@ -30,7 +30,7 @@ def _settled() -> dict[str, Any]:
     return _leaf(
         rows=[raw_row("r1", 100, "PROD")],
         capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
-        interfaces=[raw_svi("svi-1", 100, "r1", "vrf-1", "PROD")],
+        interfaces=[raw_svi("svi-1", 100, "seg", "vrf-1", "PROD")],
     )
 
 
@@ -71,7 +71,8 @@ def test_a_routed_row_creates_the_instance_and_its_svi() -> None:
             "device": {"id": "d1"},
             "role": "svi",
             "status": "active",
-            "segment_vlan": {"id": "r1"},
+            # It carries the segment's anycast gateway (the one address object of the segment).
+            "ip_address": {"id": "gw-seg"},
             # A new SVI is created in its VRF: the instance's interface edge, in the one create.
             "capabilities": [{"id": "new-1"}],
         }
@@ -122,7 +123,7 @@ def test_removing_the_last_demand_deletes_the_svi_before_the_instance() -> None:
         response(
             _leaf(
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
-                interfaces=[raw_svi("svi-1", 100, "r-gone", "vrf-1", "PROD")],
+                interfaces=[raw_svi("svi-1", 100, "seg", "vrf-1", "PROD")],
             )
         )
     )
@@ -147,7 +148,7 @@ def test_an_instance_with_demand_left_is_kept() -> None:
             _leaf(
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
                 interfaces=[
-                    raw_svi("svi-1", 100, "r-gone", "vrf-1", "PROD"),
+                    raw_svi("svi-1", 100, "seg", "vrf-1", "PROD"),
                     interface,
                 ],
             )
@@ -182,14 +183,15 @@ def test_a_device_that_carries_no_vrf_gets_nothing_even_with_extra() -> None:
     assert host.deleted == []
 
 
-def test_a_row_moved_to_another_row_updates_the_svi_in_place() -> None:
-    """Same name, another row: the SVI is written with its own id, not deleted and created, still in its VRF."""
+def test_a_changed_gateway_updates_the_svi_address_in_place() -> None:
+    """The segment's gateway is another address: the SVI is written with its own id and the new address, not deleted
+    and created, still in its VRF."""
     host = VrfHost(
         response(
             _leaf(
                 rows=[raw_row("r2", 100, "PROD")],
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
-                interfaces=[raw_svi("svi-1", 100, "r1", "vrf-1", "PROD")],
+                interfaces=[raw_svi("svi-1", 100, "old-gateway", "vrf-1", "PROD")],
             )
         )
     )
@@ -203,7 +205,7 @@ def test_a_row_moved_to_another_row_updates_the_svi_in_place() -> None:
             "device": {"id": "d1"},
             "role": "svi",
             "status": "active",
-            "segment_vlan": {"id": "r2"},
+            "ip_address": {"id": "gw-seg"},
             "capabilities": [{"id": "vrf-1"}],
         }
     ]
@@ -219,7 +221,7 @@ def test_an_svi_moved_to_another_instance_moves_its_edge() -> None:
             _leaf(
                 rows=[raw_row("r1", 100, "PROD")],
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
-                interfaces=[raw_svi("svi-1", 100, "r1", "vrf-old", "PROD", vrf_deployment_id="dc-9")],
+                interfaces=[raw_svi("svi-1", 100, "seg", "vrf-old", "PROD", vrf_deployment_id="dc-9")],
             )
         )
     )
@@ -240,7 +242,7 @@ def test_an_svi_that_would_lose_its_vrf_is_created_again() -> None:
             _leaf(
                 rows=[raw_row("r1", 100, "default")],
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
-                interfaces=[raw_svi("svi-1", 100, "r1", "vrf-1", "PROD")],
+                interfaces=[raw_svi("svi-1", 100, "seg", "vrf-1", "PROD")],
             )
         )
     )
@@ -261,7 +263,10 @@ def test_an_svi_of_a_row_that_is_no_longer_routed_is_deleted() -> None:
             _leaf(
                 rows=[raw_row("r1", 100, "PROD"), raw_row("r2", 200, None)],
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
-                interfaces=[raw_svi("svi-1", 100, "r1", "vrf-1", "PROD"), raw_svi("svi-2", 200, "r2", "vrf-1", "PROD")],
+                interfaces=[
+                    raw_svi("svi-1", 100, "seg", "vrf-1", "PROD"),
+                    raw_svi("svi-2", 200, "seg", "vrf-1", "PROD"),
+                ],
             )
         )
     )
@@ -417,7 +422,7 @@ def test_a_moved_device_leaves_the_old_topology_and_joins_the_new_one() -> None:
                 hosting_id="dc-2",
                 rows=[raw_row("r1", 100, "PROD")],
                 vrfs=[old],
-                interfaces=[raw_svi("svi-1", 100, "r1", "vrf-old", "PROD")],
+                interfaces=[raw_svi("svi-1", 100, "seg", "vrf-old", "PROD")],
             )
         )
     )
@@ -519,7 +524,7 @@ def test_a_decommissioned_device_loses_its_svi_and_membership_and_the_empty_inst
                 status="decommissioned",
                 rows=[raw_row("r1", 100, "PROD")],
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
-                interfaces=[raw_svi("svi-1", 100, "r1", "vrf-1", "PROD")],
+                interfaces=[raw_svi("svi-1", 100, "seg", "vrf-1", "PROD")],
             )
         )
     )

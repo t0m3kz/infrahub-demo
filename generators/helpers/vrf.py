@@ -39,8 +39,8 @@ Instances and SVIs are untracked (``update_group_context=False``): they belong t
 changed writes nothing. A device that cannot carry instances (a spine, a firewall, a party's router) gets none,
 whatever a caller asks for.
 
-Deviation from the SVI design: the SVI upsert key is (device, ``Vlan<id>``), not its row link, so a row moving
-between rows needs no delete-before-create ordering (generators/helpers/svi.py).
+An SVI has no link to its row: its upsert key is (device, ``Vlan<id>``), it carries the segment's gateway as its
+address, and step 2 deletes the role-svi interfaces no routed row of the device wants (generators/helpers/svi.py).
 """
 
 from __future__ import annotations

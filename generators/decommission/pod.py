@@ -174,6 +174,9 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
             for device in self.data.get("devices", []) or []
             for interface in device.get("interfaces", []) or []
             if interface.get("typename") == "DcimVirtualInterface"
+            # A segment SVI carries the segment's anycast gateway, the one address every SVI of the segment shares:
+            # it is the segment's, never the device's, so it outlives the pod.
+            and interface.get("role") != SVI_ROLE
             for id in [(interface.get("ip_address") or {}).get("id")]
             if isinstance(id, str)
         ]

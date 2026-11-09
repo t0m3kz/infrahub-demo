@@ -109,15 +109,28 @@ def _vrf_node(namespace: ZoneMetadata) -> dict[str, Any]:
     return routing_vrf(name)
 
 
-def _svi_node(vlan_id: int, namespace: ZoneMetadata) -> dict[str, Any]:
+def _svi_node(vlan_id: int, namespace: ZoneMetadata, gateway: dict[str, Any] | None) -> dict[str, Any]:
+    """A segment SVI as the VRF pass writes it: in its VRF, carrying the segment's anycast gateway (a cleaned
+    ``segment.gateway``) as its address, in the raw shape."""
+    address = (gateway or {}).get("address")
+    node = {"id": (gateway or {}).get("id") or f"fixture-gateway-{vlan_id}", "address": _value(address)}
     return {
         "__typename": "DcimVirtualInterface",
         "name": _value(svi_name(vlan_id)),
         "description": _value(""),
         "status": _value("active"),
         "role": _value(SVI_ROLE),
-        "ip_address": {"node": None},
+        "ip_address": {"node": node if address else None},
         **interface_vrf_capability(routing_vrf(namespace["name"])),
+    }
+
+
+def _gateways(device_data: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    """VLAN -> the cleaned anycast gateway of the segment activation of that VLAN (a prepared device)."""
+    return {
+        act["vlan_id"]: gateway
+        for act in device_data.get("segment_deployments") or []
+        if act.get("vlan_id") and (gateway := (act.get("segment") or {}).get("gateway"))
     }
 
 
@@ -187,7 +200,10 @@ def _raw_names(container: dict[str, Any], key: str) -> set[str]:
 
 
 def add_requirements(
-    device: dict[str, Any], requirements: VrfRequirements, namespaces: dict[str, ZoneMetadata]
+    device: dict[str, Any],
+    requirements: VrfRequirements,
+    namespaces: dict[str, ZoneMetadata],
+    gateways: dict[int, dict[str, Any]],
 ) -> None:
     """Append to the raw ``device`` node the memberships (``shared_capabilities``) and SVIs it does not have yet.
 
@@ -210,7 +226,7 @@ def add_requirements(
             continue
         if namespace_name is None:
             raise ValueError(f"Fixture SVI {svi_name(vlan_id)}: an explicit routing zone is required")
-        missing_svis.append(_svi_node(vlan_id, namespaces[namespace_name]))
+        missing_svis.append(_svi_node(vlan_id, namespaces[namespace_name], gateways.get(vlan_id)))
     _append(
         device,
         "interfaces",
@@ -233,7 +249,7 @@ def with_vrf_objects(transform: BaseDeviceTransform, data: dict[str, Any]) -> di
     node = first["edges"][0]["node"] if isinstance(first, dict) and "edges" in first else first
     requirements = vrf_requirements(device_data)
     if requirements.namespaces or requirements.svis:
-        add_requirements(node, requirements, _namespace_dicts(device_data))
+        add_requirements(node, requirements, _namespace_dicts(device_data), _gateways(device_data))
     # A device that steers an SVI to a firewall has its ManagedPBR, the way the VRF pass of the device leaves it.
     if pbr_bindings(device_services(device_data)) and not has_pbr(device_data):
         _append(node, "capabilities", [_pbr_node(str(device_data.get("name") or "device"))])

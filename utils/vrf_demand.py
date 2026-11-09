@@ -108,12 +108,13 @@ def svi_vlan_id(name: str | None) -> int | None:
 def address_namespaces(interfaces: Iterable[dict[str, Any]]) -> frozenset[str]:
     """The namespace names of the addresses on a device's own interfaces (cleaned query data).
 
-    A BGP session's local address is one of them, so a session's VRF needs no source of its own.
+    A BGP session's local address is one of them, so a session's VRF needs no source of its own. A segment SVI is not
+    read: its address is the segment's anycast gateway, and its VRF is a source of its own (``svi_namespaces``).
     """
     return frozenset(
         name
         for iface in interfaces
-        if (iface.get("ip_address") or {}).get("address")
+        if iface.get("role") != SVI_ROLE and (iface.get("ip_address") or {}).get("address")
         if (name := interface_security_zone(iface).get("name"))
     )
 
@@ -194,19 +195,21 @@ class RoutedRow:
     namespace: str
     segment_name: str | None
     footprints: tuple[Footprint, ...] = ()
+    # The segment's anycast gateway (``segment.gateway``, an IpamIPAddress): the address its SVI carries.
+    gateway_id: str | None = None
 
 
 @dataclass(frozen=True)
 class SviFacts:
-    """One role-svi interface of the device."""
+    """One role-svi interface of the device. It has no link to its row: the row it realizes is the routed row of
+    the device whose ``svi_name`` it bears (``DeviceVrfFacts.desired_svis``)."""
 
     id: str
     name: str
     vrf_id: str | None
     vrf_namespace: str | None
     vrf_deployment_id: str | None
-    row_id: str | None
-    has_address: bool
+    address_id: str | None
     has_capabilities: bool
 
 
@@ -230,9 +233,7 @@ class DeviceVrfFacts:
     id: str
     name: str
     inputs: VrfDemandInputs
-    row_ids: frozenset[str]
     routed_rows: tuple[RoutedRow, ...]
-    unrouted_row_ids: frozenset[str]
     svis: tuple[SviFacts, ...]
     # The instances the device is a member of (``device.shared_capabilities``, the shared device edge), of its own topology or, after a move, another one.
     instances: tuple[InstanceFacts, ...] = field(default=())
@@ -340,6 +341,7 @@ def _routed_row(row: dict[str, Any], role: str | None) -> RoutedRow | None:
         vlan_id=row["vlan_id"],
         namespace=namespace,
         segment_name=segment.get("name"),
+        gateway_id=(segment.get("gateway") or {}).get("id"),
         footprints=tuple(
             Footprint(
                 id=fp["id"],
@@ -377,8 +379,7 @@ def _svi(iface: dict[str, Any]) -> SviFacts:
         vrf_id=vrf.get("id"),
         vrf_namespace=(vrf.get("security_zone") or {}).get("name"),
         vrf_deployment_id=(vrf.get("deployment") or {}).get("id"),
-        row_id=(iface.get("segment_vlan") or {}).get("id"),
-        has_address=bool((iface.get("ip_address") or {}).get("address")),
+        address_id=(iface.get("ip_address") or {}).get("id"),
         # Its VRF instance is the only capability an SVI may have (rule S4 judges the rest).
         has_capabilities=any(cap.get("typename") != VRF_KIND for cap in capabilities),
     )
@@ -412,8 +413,7 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
     interfaces = device.get("interfaces") or []
     conflicts = vrf_conflicts(interfaces)
     rows = device.get("vlans") or []
-    row_facts = [(row, _routed_row(row, device.get("role"))) for row in rows]
-    routed = [routed_row for _, routed_row in row_facts if routed_row]
+    routed = [routed_row for row in rows if (routed_row := _routed_row(row, device.get("role")))]
     svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == SVI_ROLE)
     l3vni_svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == L3VNI_ROLE)
     hosting = hosting_deployment(device.get("deployment")) or {}
@@ -433,9 +433,7 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
         id=device.get("id") or "",
         name=device.get("name") or "",
         inputs=inputs,
-        row_ids=frozenset(row["id"] for row in rows if row.get("id")),
         routed_rows=tuple(routed),
-        unrouted_row_ids=frozenset(row["id"] for row, routed_row in row_facts if row.get("id") and routed_row is None),
         svis=svis,
         l3vni_svis=l3vni_svis,
         service_footprints=service_footprints(device),

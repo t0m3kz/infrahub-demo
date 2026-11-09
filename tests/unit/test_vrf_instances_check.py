@@ -11,8 +11,8 @@ from checks.vrf_instances import (
     missing_instance_errors,
     namespace_errors,
     no_hosting_errors,
+    svi_address_warnings,
     svi_content_errors,
-    svi_domain_errors,
     svi_missing_errors,
     svi_orphan_warnings,
     svi_vrf_errors,
@@ -41,7 +41,7 @@ def _leaf(**kwargs: Any) -> dict[str, Any]:
     defaults: dict[str, Any] = {
         "rows": [ROW],
         "capabilities": [raw_instance("v1", "leaf-1", "PROD")],
-        "interfaces": [raw_svi("s1", 100, "r1", "v1", "PROD")],
+        "interfaces": [raw_svi("s1", 100, "web", "v1", "PROD")],
     }
     return raw_device("d1", "leaf-1", **{**defaults, **kwargs})
 
@@ -60,7 +60,7 @@ def test_clean_device_has_no_findings() -> None:
         svi_orphan_warnings,
         svi_vrf_errors,
         svi_content_errors,
-        svi_domain_errors,
+        svi_address_warnings,
     ):
         assert rule(facts) == [], rule.__name__
 
@@ -156,16 +156,14 @@ def test_an_instance_on_a_device_that_never_carries_one_is_an_error() -> None:
     assert uncarried_instance_errors(facts_of(_leaf())) == []
 
 
-def test_s1_a_routed_row_without_exactly_one_svi_is_an_error() -> None:
-    """S1 missing, wrong name, linked to another row, and duplicated."""
+def test_s1_a_routed_row_without_its_svi_is_an_error() -> None:
+    """S1 missing, or under another name: the SVI of a row is its device's ``Vlan<vlan_id>``."""
     assert len(svi_missing_errors(facts_of(_leaf(interfaces=[])))) == 1
     assert (
-        len(svi_missing_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "r1", "v1", "PROD", name="Vlan101")]))))
+        len(svi_missing_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "web", "v1", "PROD", name="Vlan101")]))))
         == 1
     )
-    assert len(svi_missing_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "other", "v1", "PROD")])))) == 1
-    twice = [raw_svi("s1", 100, "r1", "v1", "PROD"), raw_svi("s2", 100, "r1", "v1", "PROD")]
-    assert len(svi_missing_errors(facts_of(_leaf(interfaces=twice)))) == 1
+    assert svi_missing_errors(facts_of(_leaf())) == []
 
 
 def test_s1_ignores_an_unrouted_row() -> None:
@@ -177,41 +175,48 @@ def test_s1_ignores_an_unrouted_row() -> None:
 def test_s2_svi_without_row_or_on_unrouted_row_is_a_warning() -> None:
     """S2 orphan SVIs."""
     no_row = facts_of(
-        _leaf(interfaces=[raw_svi("s1", 100, "r1", "v1", "PROD"), raw_svi("s2", 300, None, "v1", "PROD")])
+        _leaf(interfaces=[raw_svi("s1", 100, "web", "v1", "PROD"), raw_svi("s2", 300, None, "v1", "PROD")])
     )
     assert len(svi_orphan_warnings(no_row)) == 1
-    unrouted = facts_of(_leaf(rows=[raw_row("r2", 200, None)], interfaces=[raw_svi("s2", 200, "r2")]))
+    unrouted = facts_of(_leaf(rows=[raw_row("r2", 200, None)], interfaces=[raw_svi("s2", 200, "web")]))
     assert len(svi_orphan_warnings(unrouted)) == 1
 
 
 def test_s3_vrf_must_be_the_hosting_instance_of_the_rows_namespace() -> None:
     """S3 unset, not a member, wrong namespace, other deployment; default rows may leave it unset."""
-    assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "r1")])))) == 1
-    assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "r1", "foreign", "PROD")])))) == 1
+    assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "web")])))) == 1
+    assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "web", "foreign", "PROD")])))) == 1
     wrong = raw_instance("v2", "leaf-1", "NONPROD", 200, "non_prod")
-    leaf = _leaf(capabilities=[wrong], interfaces=[raw_svi("s1", 100, "r1", "v2", "NONPROD")])
+    leaf = _leaf(capabilities=[wrong], interfaces=[raw_svi("s1", 100, "web", "v2", "NONPROD")])
     assert len(svi_vrf_errors(facts_of(leaf))) == 1
-    other = raw_svi("s1", 100, "r1", "v5", "PROD", vrf_deployment_id="dc-2")
+    other = raw_svi("s1", 100, "web", "v5", "PROD", vrf_deployment_id="dc-2")
     assert len(svi_vrf_errors(facts_of(_leaf(interfaces=[other])))) == 1
-    default = _leaf(rows=[raw_row("r1", 100, "default")], capabilities=[], interfaces=[raw_svi("s1", 100, "r1")])
+    default = _leaf(rows=[raw_row("r1", 100, "default")], capabilities=[], interfaces=[raw_svi("s1", 100, "web")])
     assert svi_vrf_errors(facts_of(default)) == []
 
 
-def test_s4_svi_with_address_or_capabilities_is_an_error() -> None:
-    """S4 an SVI carries neither."""
-    with_address = raw_svi("s1", 100, "r1", "v1", "PROD", addr=address("10.0.0.1/24", "PROD"))
-    with_caps = raw_svi("s1", 100, "r1", "v1", "PROD", capabilities=[{"__typename": "ManagedVxlanSegment", "id": "c"}])
-    assert len(svi_content_errors(facts_of(_leaf(interfaces=[with_address])))) == 1
+def test_s4_svi_with_a_capability_other_than_its_vrf_is_an_error() -> None:
+    """S4 an SVI's only capability is its VRF; its address (the gateway) is no finding of S4."""
+    with_caps = raw_svi("s1", 100, "web", "v1", "PROD", capabilities=[{"__typename": "ManagedVxlanSegment", "id": "c"}])
     assert len(svi_content_errors(facts_of(_leaf(interfaces=[with_caps])))) == 1
+    assert svi_content_errors(facts_of(_leaf())) == []
 
 
-def test_s5_svi_row_must_be_in_the_devices_domain() -> None:
-    """S5 an SVI linked to a row of another device (a peer's row included) is an error; its own row is fine."""
-    foreign = raw_svi("s1", 100, "r-elsewhere", "v1", "PROD")
-    errors = svi_domain_errors(facts_of(_leaf(interfaces=[foreign])))
-    assert len(errors) == 1
-    assert "row of another device" in errors[0]
-    assert svi_domain_errors(facts_of(_leaf(interfaces=[raw_svi("s1", 100, "r1", "v1", "PROD")]))) == []
+def test_s5_svi_without_its_segments_gateway_is_a_warning() -> None:
+    """S5 an SVI with no address, or with another one than its segment's gateway, is a warning; the gateway is fine."""
+    bare = facts_of(_leaf(interfaces=[raw_svi("s1", 100, None, "v1", "PROD")]))
+    other = facts_of(_leaf(interfaces=[raw_svi("s1", 100, "db", "v1", "PROD")]))
+    assert ["has no address" in message for message in svi_address_warnings(bare)] == [True]
+    assert ["not the anycast gateway" in message for message in svi_address_warnings(other)] == [True]
+    assert svi_address_warnings(facts_of(_leaf())) == []
+
+
+def test_s5_ignores_an_svi_with_no_row_behind_it() -> None:
+    """An SVI no routed row wants is S2's warning alone."""
+    svis = [raw_svi("s1", 100, "web", "v1", "PROD"), raw_svi("s2", 300, None, "v1", "PROD")]
+    orphan = facts_of(_leaf(interfaces=svis))
+    assert svi_address_warnings(orphan) == []
+    assert len(svi_orphan_warnings(orphan)) == 1
 
 
 def _run(*devices: dict[str, Any]) -> tuple[list[str], list[str]]:

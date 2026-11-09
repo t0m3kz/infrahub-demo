@@ -432,7 +432,7 @@ generics:
             color: "#FCD34D"
           - name: svi
             label: SVI
-            description: "Routed VLAN interface of a segment on a fabric switch, generated from its VLAN-domain row"
+            description: "Routed VLAN interface of a segment on a switch (Vlan<id> of its row), with its gateway"
             color: "#FBBF24"
           - name: l3vni
             label: L3 VNI SVI

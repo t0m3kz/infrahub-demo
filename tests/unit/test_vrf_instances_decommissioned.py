@@ -9,8 +9,8 @@ from checks.vrf_instances import (
     empty_instance_warnings,
     membership_errors,
     namespace_errors,
+    svi_address_warnings,
     svi_content_errors,
-    svi_domain_errors,
     svi_missing_errors,
     svi_orphan_warnings,
     svi_vrf_errors,
@@ -39,7 +39,7 @@ def _old(**kwargs: Any) -> dict[str, Any]:
     defaults: dict[str, Any] = {
         "rows": [ROW],
         "vrfs": [raw_instance("v1", "old-1", "PROD")],
-        "interfaces": [raw_svi("s1", 100, "r1", "v1", "PROD")],
+        "interfaces": [raw_svi("s1", 100, "web", "v1", "PROD")],
         "status": "decommissioned",
     }
     return raw_device("d1", "old-1", **{**defaults, **kwargs})
@@ -73,11 +73,11 @@ def test_a_decommissioned_member_is_a_b_warning_and_not_an_e_error() -> None:
 
 def test_leftover_svis_of_a_decommissioned_device_are_warnings_never_errors() -> None:
     """S2 warns for every leftover SVI; S3, S4 and S5 stay silent."""
-    foreign = raw_svi("s2", 200, "r-elsewhere", "foreign", "PROD", addr=address("10.0.0.1/24", "PROD"))
-    facts = facts_of(_old(interfaces=[raw_svi("s1", 100, "r1", "v1", "PROD"), foreign]))
+    foreign = raw_svi("s2", 200, None, "foreign", "PROD", addr=address("10.0.0.1/24", "PROD"))
+    facts = facts_of(_old(interfaces=[raw_svi("s1", 100, "web", "v1", "PROD"), foreign]))
     warnings = svi_orphan_warnings(facts)
     assert len(warnings) == 2 and all("decommissioned" in message for message in warnings)
-    assert svi_vrf_errors(facts) == [] and svi_content_errors(facts) == [] and svi_domain_errors(facts) == []
+    assert svi_vrf_errors(facts) == [] and svi_content_errors(facts) == [] and svi_address_warnings(facts) == []
 
 
 def test_the_check_reports_a_decommissioned_device_with_warnings_only() -> None:

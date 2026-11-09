@@ -154,6 +154,7 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                 ... on DcimVirtualInterface {
                   ip_address {
                     node {
+                      id
                       address {
                         value
                       }
@@ -164,11 +165,6 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                           }
                         }
                       }
-                    }
-                  }
-                  segment_vlan {
-                    node {
-                      id
                     }
                   }
                 }

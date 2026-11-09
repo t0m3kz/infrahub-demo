@@ -48,7 +48,7 @@ def _everything() -> dict[str, Any]:
     )
     interfaces = [
         raw_interface("i1", addr=address("10.0.0.1/31", "PROD")),
-        raw_svi("s1", 100, "r1", "v1", "PROD"),
+        raw_svi("s1", 100, "seg", "v1", "PROD"),
     ]
     device = raw_device(
         "d1",
@@ -101,8 +101,11 @@ def test_the_query_selects_memberships_hosting_and_the_vrf_root() -> None:
     zone_capabilities = interface["zone_capabilities"]["edges"]["node"]
     assert set(zone_capabilities["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
     assert set(zone_capabilities["vrf"]["node"]["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
+    # The tree merges the interface kinds: an SVI's address is read by id too (S5 compares it with the gateway's).
     registry_address = interface["ip_address"]["node"]
-    assert set(registry_address) == {"address", "ip_namespace"}
+    assert set(registry_address) == {"id", "address", "ip_namespace"}
+    assert "segment_vlan" not in interface
+    assert "id" in device["vlans"]["edges"]["node"]["segment_deployment"]["node"]["segment"]["node"]["gateway"]["node"]
     assert set(registry_address["ip_namespace"]["node"]) == {"name"}
 
 

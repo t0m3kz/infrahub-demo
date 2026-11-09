@@ -262,18 +262,6 @@ nodes:
         order_weight: 2100
         identifier: "segmentvlan__device"
         description: "The switch this VLAN ID realization is on"
-      # A routed row is realized on its switch as ONE SVI (DcimVirtualInterface role svi, no address: the anycast
-      # gateway is the segment's), written by generators/helpers/svi.py and deleted with the row.
-      - name: svi
-        peer: DcimVirtualInterface
-        label: SVI
-        cardinality: one
-        kind: Component
-        optional: true
-        on_delete: cascade
-        order_weight: 2200
-        identifier: "segmentvlan__svi"
-        description: "The routed SVI of this segment on the row's switch (role svi); deleted with the row"
       # The interface edge of ManagedGenericInterfaces, re-declared to add `common_parent: device`: the server refuses
       # a port of another switch on create and on update (measured on 1.11.9). Physical ports and LAGs only, one row of
       # a segment per port: checks/interface_layers.py.
@@ -290,18 +278,6 @@ nodes:
 
 extensions:
   nodes:
-    - kind: DcimVirtualInterface
-      relationships:
-        - name: segment_vlan
-          peer: ManagedSegmentVlan
-          label: Segment VLAN
-          cardinality: one
-          kind: Attribute
-          optional: true
-          order_weight: 1460
-          identifier: "segmentvlan__svi"
-          description: "The VLAN-domain row this SVI realizes (role svi only)"
-
     - kind: ManagedVxlanSegment
       relationships:
         - name: segment_deployments

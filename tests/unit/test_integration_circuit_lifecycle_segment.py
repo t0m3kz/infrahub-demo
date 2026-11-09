@@ -63,18 +63,18 @@ def _vrf(vrf_id: str, namespace: str, members: list[str], name: str = "vrf") -> 
     }
 
 
+def _gateway(segment: str) -> str:
+    return f"gw-{segment}"
+
+
 def _svi(device: str, name: str, segment: str | None, vrf_id: str | None, role: str = "svi") -> dict[str, Any]:
-    row = (
-        {"node": {"segment_deployment": {"node": {"segment": {"node": {"name": _name(segment)}}}}}}
-        if segment
-        else {"node": None}
-    )
+    """An interface; ``segment`` names the segment whose anycast gateway it carries (None: no address)."""
     return {
         "id": f"id-{device}-{name}",
         "name": _name(name),
         "role": _name(role),
         "device": _device(device),
-        "ip_address": {"node": None},
+        "ip_address": {"node": {"id": _gateway(segment)} if segment else None},
         "zone_capabilities": {
             "edges": [
                 {
@@ -88,7 +88,6 @@ def _svi(device: str, name: str, segment: str | None, vrf_id: str | None, role: 
             if vrf_id
             else []
         },
-        "segment_vlan": row,
     }
 
 
@@ -96,6 +95,7 @@ def _switch_result(
     vrfs: list[dict[str, Any]], virtual: list[dict[str, Any]], physical: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
     return {
+        "ManagedVxlanSegment": {"edges": [{"node": {"gateway": {"node": {"id": _gateway(SEGMENT_NAME)}}}}]},
         "ManagedVRF": {"edges": [{"node": vrf} for vrf in vrfs]},
         "DcimVirtualInterface": {"edges": [{"node": node} for node in virtual]},
         "DcimPhysicalInterface": {"edges": [{"node": node} for node in physical or []]},
@@ -184,8 +184,8 @@ def test_an_svi_of_another_segment_in_the_namespace_is_foreign_demand() -> None:
     assert state["leaf-b"]["foreign"] == []
 
 
-def test_an_svi_without_a_row_is_foreign_not_a_crash() -> None:
-    """A null segment_vlan (an SVI no row backs) cannot belong to the segment."""
+def test_an_svi_without_an_address_is_foreign_not_a_crash() -> None:
+    """An SVI that carries no address (no gateway) cannot belong to the segment."""
     result = _healthy()
     result["DcimVirtualInterface"]["edges"].append({"node": _svi("leaf-b", "Vlan300", None, DC_VRF)})
     assert _state(result)["leaf-b"]["foreign"] == ["Vlan300 (virtual)"]
