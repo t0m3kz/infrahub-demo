@@ -18,7 +18,7 @@ import jinja2
 import pytest
 
 from checks.common import validate_transit_vlans
-from tests.unit.routing_helpers import make_vrf
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from tests.unit.vrf_instances_helpers import raw_device, raw_footprint, raw_row
 from transforms.common import BaseDeviceTransform
 from transforms.config.leaf import Leaf
@@ -26,6 +26,7 @@ from transforms.helpers.firewall import get_exchange_transits, get_leaf_firewall
 from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import transit_vlan
+from utils.routing_domain import interface_vrf
 
 FW = "ManagedFirewallContext"
 _PROD_NS = {"name": "PROD", "vrf_type": "prod", "l3_vni": 50001}
@@ -48,7 +49,7 @@ def _context(
         for member, host in (("fw-01", 5), ("fw-02", 6)):
             iface_caps.append(
                 {
-                    "vrf": make_vrf(namespace),
+                    **in_vrf(make_vrf(namespace)),
                     "name": "eth1.3000",
                     "device": {"role": "internal-firewall"},
                     "ip_address": {
@@ -103,7 +104,7 @@ def _member(index: int, contexts: list[dict]) -> dict[str, Any]:
             address = leg["ip_address"]["address"]
             if not address.endswith(f".{4 + index}/29") or not isinstance(context["vlan_id"], int):
                 continue
-            namespace = leg["vrf"]["security_zone"]
+            namespace = interface_vrf(leg)["security_zone"]
             name = f"eth1.{transit_vlan(context['vlan_id'], namespace['vrf_type'])}"
             vlan = transit_vlan(context["vlan_id"], namespace["vrf_type"])
             interfaces.append(
@@ -155,13 +156,19 @@ def _services(activations: list[dict], steered: set[int] | None) -> dict[str, An
 
 
 def _device(
-    contexts: list[dict], activations: list[dict], *, name: str = "leaf-01", steered: set[int] | None = None
+    contexts: list[dict],
+    activations: list[dict],
+    *,
+    name: str = "leaf-01",
+    steered: set[int] | None = None,
+    pbr: bool = True,
 ) -> dict[str, Any]:
+    """A leaf; ``pbr`` gives it the ManagedPBR capability that makes it steer (utils/device_services.py has_pbr)."""
     return {
         "name": name,
         "role": "leaf",
         "interfaces": [],
-        "capabilities": [],
+        "capabilities": [{"typename": "ManagedPBR", "id": "pbr-1", "name": f"{name}-pbr"}] if pbr else [],
         "deployment": _deployment(contexts),
         "segment_deployments": activations,
         "services": _services(activations, steered),
@@ -304,6 +311,12 @@ class TestPbrRuleNamespace:
 
 
 class TestLeafExtraConfig:
+    def test_a_leaf_without_managed_pbr_steers_nothing(self) -> None:
+        """The steering is derived, but only a device with a ManagedPBR renders it: no rule, no local transit leg."""
+        config = _transform()._extra_config(_device([_context()], [_activation()], pbr=False), "cisco_nxos")
+        assert config["leaf_pbr_rules"] == []
+        assert 3000 not in {v["vlan_id"] for v in config["vlans"]}
+
     def test_leaf_transit_becomes_vlan_and_vxlan_mapping(self) -> None:
         """The PBR next hop's leg is rendered through vlans / vxlan, with the explicit VNI."""
         device = _device([_context()], [_activation()])

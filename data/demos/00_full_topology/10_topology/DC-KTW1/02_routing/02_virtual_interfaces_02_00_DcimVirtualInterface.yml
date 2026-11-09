@@ -10,9 +10,7 @@ spec:
       device: ktw1-bl-01
       role: l3vni
       status: active
-      vrf: ["DC-KTW1", "PROD"]
     - name: Vlan3900
       device: ktw1-bl-02
       role: l3vni
       status: active
-      vrf: ["DC-KTW1", "PROD"]

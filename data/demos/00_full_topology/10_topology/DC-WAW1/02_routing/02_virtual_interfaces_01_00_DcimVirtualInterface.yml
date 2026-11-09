@@ -10,9 +10,7 @@ spec:
       device: waw1-bl-01
       role: l3vni
       status: active
-      vrf: ["DC-WAW1", "PROD"]
     - name: Vlan3900
       device: waw1-bl-02
       role: l3vni
       status: active
-      vrf: ["DC-WAW1", "PROD"]

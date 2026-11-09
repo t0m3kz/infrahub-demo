@@ -39,10 +39,11 @@ def _ip(address: str) -> dict[str, Any]:
 
 
 def _vrf(namespace: str) -> dict[str, Any]:
-    """The ``vrf`` of an interface in the zone ``namespace`` (empty for ``default``: no instance)."""
+    """The VRF capability of an interface in the zone ``namespace`` (empty for ``default``: no instance)."""
     if namespace == "default":
         return {}
-    return {"vrf": {"id": f"vrf-{namespace}", "security_zone": {"name": namespace, "vrf_type": "prod"}}}
+    vrf = {"typename": "ManagedVRF", "id": f"vrf-{namespace}", "security_zone": {"name": namespace, "vrf_type": "prod"}}
+    return {"zone_capabilities": [vrf]}
 
 
 def _handoff_peering(*, remote_ip: dict[str, Any] | None = None, namespace: str = "PROD") -> dict[str, Any]:

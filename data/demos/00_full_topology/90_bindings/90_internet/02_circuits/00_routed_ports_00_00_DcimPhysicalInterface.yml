@@ -7,8 +7,7 @@ kind: Object
 spec:
   kind: DcimPhysicalInterface
   data:
-    - vrf: [DC-KTW1, "INTERNET"]
-      device: ktw1-edge-01
+    - device: ktw1-edge-01
       name: Ethernet1/2
       description: "Internet access (ktw1-ispa-48211-isp-a): transit to the ISP, tunnels ride on it"
       status: active

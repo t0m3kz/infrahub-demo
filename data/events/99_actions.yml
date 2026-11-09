@@ -679,10 +679,11 @@ spec:
           - attribute_name: panel_type
             value_match: any
 
-    # A context is built in steps (VLAN, SNAT or VIP prefix, legs, then its border ports are tagged last): a route needs
-    # the whole of it, so every change of its capabilities re-runs the route generator (an incomplete context writes
-    # nothing). Both kinds are members of service_contexts.
-    - name: trigger-firewall-context-routes-on-capabilities
+    # A context is built in steps (VLAN, SNAT or VIP prefix, then its legs): a route needs the whole of it, so the
+    # context joins service_contexts (the group trigger of add_context_routes) only once its legs are written
+    # (generators/firewall_context.py). Its legs and border ports are derived from its members (a context has no
+    # interface edge), so a change of its members re-runs the route generator (an incomplete context writes nothing).
+    - name: trigger-firewall-context-routes-on-members
       branch_scope: "other_branches"
       node_kind: ManagedFirewallContext
       mutation_action: "updated"
@@ -690,10 +691,10 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: capabilities
+          - relationship_name: shared_devices
             modification_type: updated
 
-    - name: trigger-loadbalancer-context-routes-on-capabilities
+    - name: trigger-loadbalancer-context-routes-on-members
       branch_scope: "other_branches"
       node_kind: ManagedLoadbalancerContext
       mutation_action: "updated"
@@ -701,5 +702,5 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: capabilities
+          - relationship_name: shared_devices
             modification_type: updated

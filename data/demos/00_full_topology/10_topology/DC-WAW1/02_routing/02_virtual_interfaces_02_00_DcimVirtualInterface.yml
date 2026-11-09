@@ -9,22 +9,18 @@ spec:
       role: l3vni
       status: active
       mtu: 9000
-      vrf: ["DC-WAW1", "INTERNET"]
     - device: waw1-bl-02
       name: Vlan3902
       role: l3vni
       status: active
       mtu: 9000
-      vrf: ["DC-WAW1", "INTERNET"]
     - device: waw1-bl-01
       name: Vlan3903
       role: l3vni
       status: active
       mtu: 9000
-      vrf: ["DC-WAW1", "MANAGEMENT"]
     - device: waw1-bl-02
       name: Vlan3903
       role: l3vni
       status: active
       mtu: 9000
-      vrf: ["DC-WAW1", "MANAGEMENT"]

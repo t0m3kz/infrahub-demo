@@ -146,8 +146,9 @@ _PEERING_READS = [
     "capabilities.capabilities.device.name",
     "capabilities.vrf.id",
     "capabilities.vrf.security_zone.name",
-    "capabilities.capabilities.vrf.id",
-    "capabilities.capabilities.vrf.security_zone.name",
+    # The VRF of a circuit end: the ManagedVRF among the interface's capabilities (alias zone_capabilities).
+    "capabilities.capabilities.capabilities.id",
+    "capabilities.capabilities.capabilities.security_zone.name",
 ]
 _ATTACHMENT_READS = [
     "gateway.id",

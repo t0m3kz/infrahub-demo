@@ -161,21 +161,11 @@ query evpn_fabric {
           interfaces {
             edges {
               node {
+                ...InterfaceRoutingZoneFields
                 __typename
                 id
                 role {
                   value
-                }
-                ... on DcimVirtualInterface {
-                  vrf {
-                    node {
-                      security_zone {
-                        node {
-                          ...RoutingZoneFields
-                        }
-                      }
-                    }
-                  }
                 }
               }
             }

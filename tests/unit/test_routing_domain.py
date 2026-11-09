@@ -39,6 +39,11 @@ def zone(name: str = "PROD", kind: str = "prod", vni: int = 60000) -> dict[str, 
     return {"node": {"id": name, "name": {"value": name}, "vrf_type": {"value": kind}, "l3_vni": {"value": vni}}}
 
 
+def in_vrf(**vrf: Any) -> dict[str, Any]:
+    """The raw capability that puts an interface in a VRF: the ManagedVRF among its ``zone_capabilities``."""
+    return {"zone_capabilities": {"edges": [{"node": {"__typename": "ManagedVRF", **vrf}}]}}
+
+
 def iface(**owners: Any) -> dict[str, Any]:
     """A routed interface with a builtin-default IPAM address."""
     return clean_data(
@@ -56,9 +61,9 @@ def iface(**owners: Any) -> dict[str, Any]:
 def test_explicit_owners_demand_prod_with_default_ipam(owner: str) -> None:
     """Each native routing owner creates tenant demand without an IPAM-name dependency."""
     owners = {
-        "direct": {"vrf": {"node": {"security_zone": zone()}}},
+        "direct": in_vrf(security_zone=zone()),
         "circuit": {
-            "vrf": {"node": {"security_zone": zone()}},
+            **in_vrf(security_zone=zone()),
             "capabilities": {
                 "edges": [
                     {
@@ -85,7 +90,7 @@ def test_underlay_address_has_no_managed_vrf_demand() -> None:
 def test_missing_handoff_domain_fails_closed() -> None:
     """A tenant circuit cannot silently become a global-table session."""
     port = iface(
-        vrf={"node": {"id": "vrf-1", "name": {"value": "dc1-vrf-prod"}}},
+        **in_vrf(id="vrf-1", name={"value": "dc1-vrf-prod"}),
         capabilities={
             "edges": [{"node": {"__typename": "TopologySessionCircuit", "circuit_type": {"value": "handoff"}}}]
         },
@@ -101,7 +106,7 @@ def test_conflicting_native_owners_are_rejected() -> None:
         "circuit_type": {"value": "handoff"},
         "vrf": {"node": {"security_zone": zone("NONPROD", "non_prod", 60001)}},
     }
-    port = iface(vrf={"node": {"security_zone": zone()}}, capabilities={"edges": [{"node": circuit}]})
+    port = iface(**in_vrf(security_zone=zone()), capabilities={"edges": [{"node": circuit}]})
     with pytest.raises(RoutingDomainError, match="conflicting security zones"):
         interface_security_zone(port)
 

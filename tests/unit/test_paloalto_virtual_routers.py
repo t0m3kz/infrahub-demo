@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from tests.unit.firewall_transform_helpers import _render_template
+from tests.unit.routing_helpers import in_vrf
 from transforms.config.firewall import _default_vr_interfaces
 
 
@@ -18,9 +19,11 @@ def _iface(name: str, namespace: str | None) -> dict[str, Any]:
     return {
         "name": name,
         "ip_address": {"address": "10.0.0.1/30", "ip_namespace": {"name": "default"}},
-        "vrf": {"id": f"vrf-{namespace}", "security_zone": {"id": f"zone-{namespace}", "name": namespace}}
-        if namespace
-        else None,
+        **(
+            in_vrf({"id": f"vrf-{namespace}", "security_zone": {"id": f"zone-{namespace}", "name": namespace}})
+            if namespace
+            else {}
+        ),
     }
 
 

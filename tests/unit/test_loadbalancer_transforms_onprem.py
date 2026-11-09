@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability
 from transforms.config.loadbalancer import LoadBalancer
 
 # ===========================================================================
@@ -101,14 +102,14 @@ def _onprem_data(
         },
         {
             # the leg: `<uplink>.<transit VLAN>` of the context, addressed in the tenant VRF
-            "vrf": {
-                "node": {
+            **interface_vrf_capability(
+                {
                     "id": "vrf-dc10-prod",
                     "security_zone": {
                         "node": {"id": "zone-prod", "name": _v("PROD"), "vrf_type": _v("prod"), "l3_vni": _v(60000)}
                     },
                 }
-            },
+            ),
             "__typename": "DcimVirtualInterface",
             "name": _v("eth1.3100"),
             "vlan_id": _v(3100),

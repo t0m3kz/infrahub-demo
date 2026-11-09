@@ -499,7 +499,6 @@ class FirewallContextMixin(TransitLegsMixin):
                 namespaces,
                 leg_types,
                 exchange_specs,
-                fresh_ports=False,
                 needs_snat=needs_snat,
             )
             if state.complete and state.context is not None:
@@ -513,10 +512,10 @@ class FirewallContextMixin(TransitLegsMixin):
                 return state.context.id
 
         async with self.resource_lock(f"{spec.key}-{context_name}"):
-            # Re-read under the lock, the ports too: concurrent runs tag the same border ports. A dedicated
-            # (tracked) context re-saves every leg whatever it finds, so it needs only the context and ports.
+            # Re-read under the lock: a concurrent run may have completed it. A dedicated (tracked) context
+            # re-saves every leg whatever it finds, so it needs only the context.
             if track:
-                state = await self._context_ports(spec, context_name, members, fresh_ports=True)
+                state = await self._context_named(spec, context_name)
             else:
                 state = await self._transit_state(
                     spec,
@@ -525,7 +524,6 @@ class FirewallContextMixin(TransitLegsMixin):
                     namespaces,
                     leg_types,
                     exchange_specs,
-                    fresh_ports=True,
                     needs_snat=needs_snat,
                 )
                 if state.complete and state.context is not None:
@@ -649,21 +647,13 @@ class FirewallContextMixin(TransitLegsMixin):
                         device_name=member.name,
                         trunk_iface=member.trunk,
                         vlan_id_value=transit_vlan(vlan_id, leg_type),
-                        capability_obj=context_obj,
-                        extra_capability_objs=leg_exchanges,
+                        capability_objs=leg_exchanges,
                         ip_address_id=addresses[leg_type][member.offset].id,
                         vrf_id=self._context_vrf(members, vrfs, namespaces[leg_type].name.value),
                         track=track,
                     )
 
-            # Additive RelationshipAdd (never assign the list), same as
-            # segment.py's service-port tags: other generators tag the same
-            # ports with their segments, and a bulk load writes them concurrently.
-            if state.untagged_port_ids:
-                await context_obj.add_relationships(
-                    relation_to_update="capabilities", related_nodes=state.untagged_port_ids
-                )
-                self.logger.info(f"{context_name}: tagged {len(state.untagged_port_ids)} border service port(s)")
+            await self._join_service_contexts(context_obj)
             return context_id
 
     @staticmethod
@@ -815,6 +805,14 @@ class FirewallContextMixin(TransitLegsMixin):
 
         return dedicated_clusters[0], virtual_devices
 
+    async def _join_service_contexts(self, context_obj: Any) -> None:
+        """Add the context to the target group of add_context_routes once its legs are written: joining starts that
+        generator, which needs the whole context (a context has no interface edge whose change could re-run it).
+        Additive: a tracked context is also a member of this run's group, which a list written here would drop; a
+        context already in the group fires nothing again."""
+        group = await self._standard_group(GROUP_SERVICE_CONTEXTS)
+        await context_obj.add_relationships(relation_to_update="member_of_groups", related_nodes=[group.id])
+
     async def _get_or_create_context(
         self,
         spec: ContextSpec,
@@ -844,10 +842,6 @@ class FirewallContextMixin(TransitLegsMixin):
                 },
             )
             await context_obj.save(**tracked_save_kwargs(track))
-            # The context joins the target group of add_context_routes (additive: a tracked context is also a member of
-            # this run's group, which a list written here would drop). Joining starts that generator.
-            group = await self._standard_group(GROUP_SERVICE_CONTEXTS)
-            await context_obj.add_relationships(relation_to_update="member_of_groups", related_nodes=[group.id])
             self.logger.info(f"Ensured {spec.label} '{context_name}'")
             return context_obj
         except Exception as exc:

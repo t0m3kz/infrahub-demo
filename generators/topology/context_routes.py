@@ -2,9 +2,10 @@
 
 The target is the context (group ``service_contexts``), so each context owns its routes: they are saved tracked, and the
 run's group deletes the ones the derivation no longer yields, on whatever device they sat. A person's route is not in the
-group and is never touched; the names ``rt:<context>:...`` are the generator's. Starts when a context joins the group and
-whenever its ``capabilities`` change (a leg or a border port added), so a context built in steps is routed once complete.
-A run over an incomplete context (no leg or no tagged port yet) writes nothing.
+group and is never touched; the names ``rt:<context>:...`` are the generator's. Starts when a context joins the group,
+which the context generator adds it to once its legs are written, and whenever its members change. The legs and the
+border devices are derived from the members (utils/service_contexts.py: a context has no interface edge). A run over an
+incomplete context (no leg or no cabled border port yet) writes nothing.
 """
 
 from __future__ import annotations
@@ -12,7 +13,9 @@ from __future__ import annotations
 from typing import Any
 
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import EXCHANGE_PEERS, transit_addresses
+from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES, EXCHANGE_PEERS, transit_addresses
+from utils.routing_domain import interface_vrf
+from utils.service_contexts import PHYSICAL_INTERFACE, leg_interfaces, member_border_ports
 
 from ..common import CommonGenerator
 from ..exchange_routes import ExchangeRoutesMixin
@@ -21,7 +24,6 @@ from ..pools import PoolMixin
 
 FIREWALL_KIND = "ManagedFirewallContext"
 LOADBALANCER_KIND = "ManagedLoadbalancerContext"
-_LEG_KIND = "DcimVirtualInterface"
 
 
 class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGenerator):
@@ -67,18 +69,20 @@ class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGen
     def _legs_and_devices(
         context: dict[str, Any],
     ) -> tuple[dict[str, dict[str, Any]], set[str], dict[str, str]]:
-        """{namespace type: leg}, the ids of the border devices of the other ports, and {VRF name: interface id}.
+        """{namespace type: leg}, the ids of the border devices facing the members, and {VRF name: interface id}.
 
-        The interface is the leg of the first member (by device name) in that VRF: the interface that owns the next hop
-        of a route there (the pair's floating address has no interface of its own), where a path through the
-        firewall enters."""
+        Derived from the members (``shared_devices``): a leg is a member's sub-interface of its first uplink tagged with
+        the context's transit VLAN (``leg_interfaces``), a border device the one whose service port of the member's role
+        that uplink is cabled to (``member_border_ports``). The interface is the leg of the first member (by device
+        name) in that VRF: the interface that owns the next hop of a route there (the pair's floating address has no
+        interface of its own), where a path through the firewall enters."""
         legs: dict[str, dict[str, Any]] = {}
         interfaces: dict[str, tuple[str, str]] = {}
         devices: set[str] = set()
-        for cap in context.get("capabilities") or []:
-            if cap.get("typename") == _LEG_KIND:
-                address = (cap.get("ip_address") or {}).get("address")
-                namespace = (cap.get("vrf") or {}).get("security_zone") or {}
+        for member in context.get("shared_devices") or []:
+            for leg in leg_interfaces(member).get(str(context.get("id")), []):
+                address = (leg.get("ip_address") or {}).get("address")
+                namespace = interface_vrf(leg).get("security_zone") or {}
                 if address and namespace.get("vrf_type"):
                     legs.setdefault(
                         namespace["vrf_type"],
@@ -89,9 +93,15 @@ class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGen
                             "vip": transit_addresses(address)["vip"],
                         },
                     )
-                    member = (cap.get("device") or {}).get("name") or ""
-                    if namespace["name"] not in interfaces or member < interfaces[namespace["name"]][0]:
-                        interfaces[namespace["name"]] = (member, cap["id"])
-            elif (cap.get("device") or {}).get("id"):
-                devices.add(cap["device"]["id"])
+                    name = str(member.get("name") or "")
+                    if namespace["name"] not in interfaces or name < interfaces[namespace["name"]][0]:
+                        interfaces[namespace["name"]] = (name, leg["id"])
+            port_role = BORDER_ROLE_FOR_SERVICES.get(str(member.get("role") or ""))
+            devices |= {
+                far["device"]["id"]
+                for far in member_border_ports(member)
+                if far.get("typename") == PHYSICAL_INTERFACE
+                and far.get("role") == port_role
+                and (far.get("device") or {}).get("id")
+            }
         return legs, devices, {name: leg_id for name, (_, leg_id) in interfaces.items()}

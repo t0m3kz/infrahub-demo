@@ -165,7 +165,7 @@ class TestContextLegs:
         events: list[str] = []
         gen._resolve_context_target = AsyncMock(return_value=MagicMock())
         gen._ensure_transit_legs = AsyncMock(side_effect=lambda **_: events.append("legs") or "ctx-1")
-        gen._reconcile_border_vrfs = AsyncMock(side_effect=lambda ctx: events.append(f"vrfs:{ctx}"))
+        gen._reconcile_border_vrfs = AsyncMock(side_effect=lambda _target, ctx: events.append(f"vrfs:{ctx}"))
         gen.client.filters = AsyncMock(return_value=[MagicMock(id="cluster-1")])
 
         await gen.generate(_dc_payload())
@@ -174,7 +174,7 @@ class TestContextLegs:
 
     @pytest.mark.asyncio
     async def test_a_context_that_was_not_built_reconciles_nothing(self) -> None:
-        """A failed leg run returns no context id: there is nothing tagged to follow."""
+        """A failed leg run returns no context id: there is no leg to follow."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         gen._resolve_context_target = AsyncMock(return_value=MagicMock())
         gen._ensure_transit_legs = AsyncMock(return_value=None)
@@ -185,23 +185,23 @@ class TestContextLegs:
         gen._reconcile_border_vrfs.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_the_devices_are_the_ones_whose_ports_carry_the_context(self) -> None:
-        """One read of the ports (physical or LAG) tagged with the context, then the pass over their devices."""
+    async def test_the_devices_are_the_ones_whose_ports_face_the_members(self) -> None:
+        """The border devices are those of the service ports the context's members are cabled to (a context has no
+        interface edge): resolved like the legs (_resolve_transit_members), then one pass over them."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         # make_generator stubs the hook for the other tests; use the real one here.
         gen._reconcile_border_vrfs = CustomerDeploymentDCExchangeGenerator._reconcile_border_vrfs.__get__(gen)
         gen.reconcile_vrfs = AsyncMock()
-        ports = [
-            SimpleNamespace(device=SimpleNamespace(id="bl-1"), get_kind=lambda: "DcimPhysicalInterface"),
-            SimpleNamespace(device=SimpleNamespace(id="bl-2"), get_kind=lambda: "DcimLAGInterface"),
-            SimpleNamespace(device=SimpleNamespace(id="bl-1"), get_kind=lambda: "DcimPhysicalInterface"),
-            SimpleNamespace(device=SimpleNamespace(id="fw-1"), get_kind=lambda: "DcimVirtualInterface"),
+        members = [
+            SimpleNamespace(bl_port=SimpleNamespace(device=SimpleNamespace(id="bl-1"))),
+            SimpleNamespace(bl_port=SimpleNamespace(device=SimpleNamespace(id="bl-2"))),
         ]
-        gen.client.filters = AsyncMock(return_value=ports)
+        gen._resolve_transit_members = AsyncMock(return_value=members)
+        target = SimpleNamespace(spec="spec", devices=["fw-1", "fw-2"])
 
-        await gen._reconcile_border_vrfs("ctx-1")
+        await gen._reconcile_border_vrfs(target, "ctx-1")  # ty: ignore[invalid-argument-type]
 
-        assert gen.client.filters.call_args.kwargs["capabilities__ids"] == ["ctx-1"]
+        gen._resolve_transit_members.assert_awaited_once_with("spec", ["fw-1", "fw-2"], context_name="ctx-1")
         gen.reconcile_vrfs.assert_awaited_once_with({"bl-1", "bl-2"})
 
 

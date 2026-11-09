@@ -38,11 +38,6 @@ query bgp_expectations {
               }
               ...InterfaceRoutingZoneFields
               ... on DcimPhysicalInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 ip_address {
                   node {
                     address {
@@ -59,11 +54,6 @@ query bgp_expectations {
                 }
               }
               ... on DcimVirtualInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 ip_address {
                   node {
                     address {
@@ -176,11 +166,6 @@ query bgp_expectations {
                 }
                 ...InterfaceRoutingZoneFields
                 ... on DcimPhysicalInterface {
-                  vrf {
-                    node {
-                      ...RoutingVrfFields
-                    }
-                  }
                   ip_address {
                     node {
                       address {
@@ -197,11 +182,6 @@ query bgp_expectations {
                   }
                 }
                 ... on DcimVirtualInterface {
-                  vrf {
-                    node {
-                      ...RoutingVrfFields
-                    }
-                  }
                   ip_address {
                     node {
                       address {
@@ -228,11 +208,6 @@ query bgp_expectations {
     edges {
       node {
         ...InterfaceRoutingZoneFields
-        vrf {
-          node {
-            ...RoutingVrfFields
-          }
-        }
         ip_address {
           node {
             address {
@@ -258,11 +233,6 @@ query bgp_expectations {
                   }
                   ...InterfaceRoutingZoneFields
                   ... on DcimVirtualInterface {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
                     ip_address {
                       node {
                         address {
@@ -272,11 +242,6 @@ query bgp_expectations {
                     }
                   }
                   ... on DcimPhysicalInterface {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
                     ip_address {
                       node {
                         address {

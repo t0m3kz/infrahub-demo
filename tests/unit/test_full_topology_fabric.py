@@ -34,6 +34,8 @@ def _named(kind: str) -> dict[str, dict[str, Any]]:
 _PEERS = _named("ManagedBGPPeering")
 _PROCESSES = _named("ManagedBGP")
 _LOOPBACKS = {row["device"]: row for _, row in _declarations("DcimVirtualInterface") if row.get("name") == "Loopback0"}
+# The interfaces of every VRF instance: an interface is in a VRF as one of the instance's `capabilities`.
+_VRF_INTERFACES = [cap["data"] for _, row in _declarations("ManagedVRF") for cap in row.get("capabilities") or []]
 _ASNS = {f"AS{row['asn']}": row["asn"] for _, row in _declarations("RoutingAutonomousSystem")}
 _EVPN = sorted(name for name, row in _PEERS.items() if row.get("peering_role") in {"overlay", "dci"})
 
@@ -121,7 +123,7 @@ def test_each_overlay_process_has_one_actual_loopback_reusing_its_router_id_in_d
         assert loopback["role"] == "loopback" and loopback["status"] == "active"
         assert loopback["ip_address"] == [address["address"], "default"]
         assert address["ip_namespace"] == "default"
-        assert not loopback.get("vrf")
+        assert {"device": device, "name": "Loopback0"} not in _VRF_INTERFACES
 
 
 @pytest.mark.parametrize("name", _EVPN)
@@ -185,3 +187,20 @@ def test_final_internet_vrf_membership_keeps_the_edge_and_both_external_firewall
     """A later VRF upsert must not remove the existing upstream member while adding the firewall transit demand."""
     vrf = _named("ManagedVRF")["dc-ktw1-vrf-internet"]
     assert set(vrf["shared_devices"]) == {"ktw1-edge-01", "ktw1-bl-01", "ktw1-bl-02"}
+
+
+def test_each_vrf_lists_its_interfaces_once_and_an_interface_is_in_at_most_one_vrf() -> None:
+    """The VRF of an interface is the instance listing it (`capabilities`): one whole list per instance, no `vrf:`."""
+    listings = [row["name"] for _, row in _declarations("ManagedVRF") if "capabilities" in row]
+    assert len(listings) == len(set(listings))
+    assert len(_VRF_INTERFACES) == len({(ref["device"], ref["name"]) for ref in _VRF_INTERFACES})
+    interface_kinds = ("DcimPhysicalInterface", "DcimVirtualInterface", "DcimLAGInterface", "CloudPeeringInterface")
+    assert not [row for kind in interface_kinds for _, row in _declarations(kind) if "vrf" in row]
+
+
+def test_every_dc_leaf_steers_with_a_pbr_capability_and_no_border_leaf_does() -> None:
+    """A ManagedPBR on a device says it steers; the six DC leaves have one, a border leaf none."""
+    pbr = _named("ManagedPBR")
+    assert {name: row["capabilities"] for name, row in pbr.items()} == {
+        f"{site}-leaf-{n}-pbr": [f"{site}-leaf-{n}"] for site in ("ktw1", "waw1", "gdn1") for n in ("01", "02")
+    }

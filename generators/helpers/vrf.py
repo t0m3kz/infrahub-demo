@@ -2,7 +2,7 @@
 
 What a device needs is derived once, by ``utils.vrf_demand`` (the same code the check and the transforms read); this
 mixin runs the query ``queries/validation/vrf_instances.gql`` for the devices it was given and writes the difference.
-It is the ONLY writer of an instance, of its membership and of an SVI.
+It is the ONLY writer of an instance, of its membership, of an SVI and of a device's ``ManagedPBR``.
 
 An instance is a namespace realized in one topology: the device's hosting deployment (a DC, a colocation metro or an
 office). A device is a MEMBER of it (``shared_devices``, the shared device edge: it never cascades), written edge by edge (``add_relationships`` /
@@ -19,9 +19,11 @@ One pass, ``reconcile_vrfs``, per device (its lock held): ``demand`` is {namespa
 1. ``add = want - have``: under the instance locks, find or create the instance (the [deployment, namespace]
    uniqueness turns a lost create race into an upsert) and add the device to it;
 2. upsert the SVIs of its routed rows, then delete the ones it no longer needs (generators/helpers/svi.py). The
-   membership of step 1 always precedes an SVI that points at the instance;
+   membership of step 1 always precedes an SVI that the instance lists. Then the device has a ``ManagedPBR`` exactly
+   when one of its SVIs is steered to a firewall (``sync_pbr``);
 3. unless held: ``drop = have - want`` (also a membership in another topology after a move): under the
-   instance lock remove the device and delete the instance when it has no member and no SVI left. The demand of this
+   instance lock remove the device and delete the instance when it has no member, no interface, no session circuit
+   and no exchange left. The demand of this
    step ignores the SVIs step 2 deleted, so an instance goes in the same pass as the last SVI that used it, after it;
 4. unless held: sweep the instances with no member and no SVI of the hosting deployments the pass touched
    (``prune_empty_vrfs``, which a pod decommission calls for its DC).
@@ -61,13 +63,15 @@ from utils.vrf_demand import (
     vrf_demand,
 )
 
-from ..protocols import ManagedVRF
-from .pbr_sync import PbrMixin
+from ..protocols import ManagedPBR, ManagedVRF, TopologyExchangeGateway
 from .svi import SviMixin
 
 if TYPE_CHECKING:
     from ..common import CommonGenerator
     from ..pools import PoolMixin
+
+_VRF_REFERENCES = ("capabilities", "session_circuits")
+"""The edges of an instance that keep it alive besides its members: its interfaces and its session circuits."""
 
 _VRF_INSTANCES_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/validation/vrf_instances.gql"
 
@@ -82,7 +86,12 @@ def vrf_instance_lock_key(deployment_id: str, namespace: str) -> str:
     return f"vrf-{deployment_id}-{namespace}"
 
 
-class VrfMixin(PbrMixin, SviMixin):
+def pbr_name(device_name: str) -> str:
+    """The name of a device's ``ManagedPBR`` (a device has one when it steers)."""
+    return f"{device_name}-pbr"
+
+
+class VrfMixin(SviMixin):
     """Mixin converging the VRF instances, their members and the SVIs of devices.
 
     Expects the host class to provide ``client``, ``logger``, ``resource_lock`` (PoolMixin) and ``fail``
@@ -192,13 +201,31 @@ class VrfMixin(PbrMixin, SviMixin):
 
         await self.sync_svis(facts, instance_ids)
         await self.sync_l3vni_svis(facts, namespaces, instance_ids)
-        # The SVIs now exist: attach them to the pbr policy of their footprint (and detach the ones no longer steered).
+        # The device steers exactly when one of its SVIs is steered: it has a ManagedPBR then, none otherwise.
         await self.sync_pbr(facts)
 
         if prune:
             for key in drop:
                 await self._delete_if_unused(key[0], key[1], have[key].id, leaving=facts)
         return facts.hosting_id
+
+    async def sync_pbr(self, facts: DeviceVrfFacts) -> None:
+        """Create the device's ``ManagedPBR`` when it steers a tenant SVI and has none, delete it when it steers none.
+
+        The steering itself is derived when the device is rendered (``DeviceVrfFacts.pbr_footprints_by_name``); the
+        capability only says the device does it. Untracked like the instances, and a re-run writes nothing."""
+        steers = facts.steers()
+        if steers and not facts.pbr_ids:
+            pbr = await self.client.create(
+                kind=ManagedPBR,
+                data={"name": pbr_name(facts.name), "status": "active", "capabilities": [{"id": facts.id}]},
+            )
+            await pbr.save(allow_upsert=True, update_group_context=False)
+            self.logger.info(f"  {facts.name}: steers its tenant SVIs - created {pbr_name(facts.name)}")
+        elif not steers:
+            for pbr_id in facts.pbr_ids:
+                await self.client.delete(kind=ManagedPBR, id=pbr_id)
+                self.logger.info(f"  {facts.name}: steers no SVI any more - removed its PBR")
 
     async def _join_instance(
         self, facts: DeviceVrfFacts, deployment_id: str, deployment_name: str, namespace: Mapping[str, Any]
@@ -249,18 +276,22 @@ class VrfMixin(PbrMixin, SviMixin):
                 await instance.remove_relationships("shared_devices", [leaving.id])
                 members.discard(leaving.id)
                 self.logger.info(f"  {leaving.name}: left VRF instance {instance.name.value}")
-            references = await self.client.get(
-                kind=ManagedVRF,
-                id=instance_id,
-                include=["interfaces", "session_circuits", "exchanges_a", "exchanges_z"],
-            )
-            if members or any(
-                getattr(references, name).peers
-                for name in ("interfaces", "session_circuits", "exchanges_a", "exchanges_z")
+            references = await self.client.get(kind=ManagedVRF, id=instance_id, include=list(_VRF_REFERENCES))
+            if (
+                members
+                or any(getattr(references, name).peers for name in _VRF_REFERENCES)
+                or await self._exchanged(instance_id)
             ):
                 return
             await self.client.delete(kind=ManagedVRF, id=instance_id)
             self.logger.info(f"  removed VRF instance {instance.name.value} (no member left)")
+
+    async def _exchanged(self, instance_id: str) -> bool:
+        """Whether a routed exchange joins the instance (``vrf_a`` / ``vrf_z``, one-sided: the VRF lists no exchange)."""
+        for end in ("vrf_a__ids", "vrf_z__ids"):
+            if await self.client.filters(kind=TopologyExchangeGateway, **{end: [instance_id]}):
+                return True
+        return False
 
     async def local_vrf_ids(self, device_ids: Iterable[str], names: Iterable[str]) -> dict[tuple[str, str], str]:
         """Read scoped instances already provisioned under ``vrfs_held``; never assign a remote instance."""

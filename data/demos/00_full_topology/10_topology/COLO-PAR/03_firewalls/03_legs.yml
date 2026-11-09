@@ -6,8 +6,7 @@ kind: Object
 spec:
   kind: DcimVirtualInterface
   data:
-    - vrf: [PAR, "PROD"]
-      name: "ethernet1/1.3001"
+    - name: "ethernet1/1.3001"
       vlan_id: 3001
       device: par-colo1-xfw-01
       parent_interface: ["par-colo1-xfw-01", "ethernet1/1"]
@@ -17,8 +16,7 @@ spec:
         data:
           address: "100.66.0.29/29"
           ip_namespace: "default"
-    - vrf: [PAR, "PROD"]
-      name: "ethernet1/1.3001"
+    - name: "ethernet1/1.3001"
       vlan_id: 3001
       device: par-colo1-xfw-02
       parent_interface: ["par-colo1-xfw-02", "ethernet1/1"]
@@ -28,8 +26,7 @@ spec:
         data:
           address: "100.66.0.30/29"
           ip_namespace: "default"
-    - vrf: [PAR, "INTERNET"]
-      name: "ethernet1/1.3401"
+    - name: "ethernet1/1.3401"
       vlan_id: 3401
       device: par-colo1-xfw-01
       parent_interface: ["par-colo1-xfw-01", "ethernet1/1"]
@@ -39,8 +36,7 @@ spec:
         data:
           address: "100.66.32.29/29"
           ip_namespace: "default"
-    - vrf: [PAR, "INTERNET"]
-      name: "ethernet1/1.3401"
+    - name: "ethernet1/1.3401"
       vlan_id: 3401
       device: par-colo1-xfw-02
       parent_interface: ["par-colo1-xfw-02", "ethernet1/1"]

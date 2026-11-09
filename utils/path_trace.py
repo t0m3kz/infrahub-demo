@@ -52,11 +52,12 @@ CLOUD = ("CloudDirectConnect", "CloudPeeringInterface", "CloudGateway", "CloudGa
 # links lead on to the private transports, so in every trace it would be a shortcut from the internet to a Direct
 # Connect port through the cloud's inside, a route nobody can use.
 OPT_IN_KINDS = ("CloudVPNConnection",)
-# Crossed in layer 3 only when asked for (`--with firewall`): the steering of a segment to its firewall. An SVI carries a
-# pbr policy (a capability), the policy names the customer footprint, and the footprint its serving firewall context,
-# whose tagged border ports and legs lead on. Opt-in because these nodes join every SVI of a footprint to the others'
-# through one object: in a plain trace they would be a shortcut between two leaves that no packet takes.
-FIREWALL_KINDS = ("RoutingPolicy", "TopologyCustomerDC", "TopologyCustomerColocation", "ManagedFirewallContext",
+# Crossed in layer 3 only when asked for (`--with firewall`): the customer footprints and their serving firewall and
+# load-balancer contexts, whose members lead on. The steering itself is derived, not stored (a device's ManagedPBR, the
+# SVIs it steers and the context legs and border ports: utils/service_contexts.py), so the graph has no edge from an SVI
+# to its footprint. Opt-in because these nodes join every device of a footprint to the others' through one object: in a
+# plain trace they would be a shortcut that no packet takes.
+FIREWALL_KINDS = ("TopologyCustomerDC", "TopologyCustomerColocation", "ManagedFirewallContext",
                   "ManagedLoadbalancerContext")  # fmt: skip
 INCLUDE_CHOICES = ("CloudVPNConnection", "firewall")
 # An end of this kind is reached only through these kinds (crossed only when that kind is an end, so a segment's rows
@@ -318,7 +319,7 @@ async def main() -> int:
     ap.add_argument(
         "--with", dest="include", action="append", default=[], choices=INCLUDE_CHOICES,
         help="a kind a path may cross that is not crossed by default (the VPN: the way in over the internet in L1; "
-        "firewall: the pbr policy, footprint and firewall context of a steered segment in L3)",
+        "firewall: the footprint and firewall context of a steered segment in L3)",
     )  # fmt: skip
     ap.add_argument("--branch", default="main")
     a = ap.parse_args()

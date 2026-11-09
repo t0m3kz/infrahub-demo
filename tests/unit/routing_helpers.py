@@ -21,6 +21,15 @@ def make_vrf(zone: Mapping[str, Any], deployment: str = "fixture-deployment") ->
     )
 
 
+def in_vrf(vrf: Mapping[str, Any], *circuits: Mapping[str, Any]) -> dict[str, Any]:
+    """The cleaned capabilities that put an interface in ``vrf`` (a ``make_vrf`` dict), with any session ``circuits``.
+
+    An interface's VRF is the ManagedVRF among its capabilities, selected under the alias ``zone_capabilities``
+    (queries/fragments/routing_zone.gql); utils/routing_domain.py ``interface_vrf`` reads it. Spread it into an
+    interface dict: ``{"name": ..., **in_vrf(make_vrf(zone))}``."""
+    return {"zone_capabilities": [{**vrf, "typename": "ManagedVRF"}, *circuits]}
+
+
 def make_loopback(name: str, device_id: str, role: str, ip: str, lb_id: str | None = None) -> MagicMock:
     """A loopback interface of ``name`` (id ``lb-<device_id>`` unless ``lb_id``) carrying ``<ip>/32``."""
     lb = MagicMock()

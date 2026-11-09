@@ -12,6 +12,7 @@ from transforms.helpers.firewall import _context_leg_ip
 from transforms.helpers.policy import rule_selector, segment_flows
 from utils.exchange_transit import MANAGEMENT_TYPE, exchange_peer_zones
 from utils.fabric_roles import INTERNAL_FIREWALL_ROLE
+from utils.routing_domain import interface_vrf
 from utils.segment_addressing import is_terminated, segment_namespace, segment_prefix
 from utils.vrf_demand import L3VNI_ROLE, svi_name, svi_vlan_id
 
@@ -335,7 +336,7 @@ def get_overlay_pbr_rules(
     rules: list[dict[str, Any]] = []
     for iface in interfaces or []:
         vlan_id = svi_vlan_id(iface.get("name"))
-        vrf = ((iface.get("vrf") or {}).get("security_zone") or {}).get("name")
+        vrf = (interface_vrf(iface).get("security_zone") or {}).get("name")
         if iface.get("role") != L3VNI_ROLE or vlan_id is None or not vrf:
             continue
         footprints = sorted(bindings.get(svi_name(vlan_id), frozenset()))

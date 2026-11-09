@@ -15,7 +15,7 @@ from utils.exchange_transit import (
 )
 from utils.fabric_roles import FIREWALL_ROLES
 from utils.limits import ACL_CLOSING_SEQ, DEFAULT_NAMESPACE, VLAN_NAME_MAX
-from utils.routing_domain import interface_security_zone
+from utils.routing_domain import interface_security_zone, interface_vrf
 from utils.segment_addressing import segment_prefix
 
 
@@ -93,7 +93,7 @@ def get_firewall_static_routes(
 
     routes: list[dict[str, Any]] = []
     for iface in fw_interfaces:
-        zone_ref = (iface.get("vrf") or {}).get("security_zone") or {}
+        zone_ref = interface_vrf(iface).get("security_zone") or {}
         zone_name = zone_ref.get("name")
         ip_obj = iface.get("ip_address") or {}
         ip_addr = ip_obj.get("address")

@@ -87,33 +87,37 @@
                   "role": {
                     "value": "management"
                   },
-                  "vrf": {
-                    "node": {
-                      "__typename": "ManagedVRF",
-                      "id": "fixture-vrf-fixture-deployment-MANAGEMENT",
-                      "deployment": {
+                  "zone_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "fixture-deployment",
-                          "name": {
-                            "value": "fixture-deployment"
-                          }
-                        }
-                      },
-                      "security_zone": {
-                        "node": {
-                          "id": "fixture-zone-MANAGEMENT",
-                          "name": {
-                            "value": "MANAGEMENT"
+                          "__typename": "ManagedVRF",
+                          "id": "fixture-vrf-fixture-deployment-MANAGEMENT",
+                          "deployment": {
+                            "node": {
+                              "id": "fixture-deployment",
+                              "name": {
+                                "value": "fixture-deployment"
+                              }
+                            }
                           },
-                          "vrf_type": {
-                            "value": "management"
-                          },
-                          "l3_vni": {
-                            "value": 60003
+                          "security_zone": {
+                            "node": {
+                              "id": "fixture-zone-MANAGEMENT",
+                              "name": {
+                                "value": "MANAGEMENT"
+                              },
+                              "vrf_type": {
+                                "value": "management"
+                              },
+                              "l3_vni": {
+                                "value": 60003
+                              }
+                            }
                           }
                         }
                       }
-                    }
+                    ]
                   },
                   "ip_address": {
                     "node": {
@@ -159,34 +163,6 @@
               },
               {
                 "node": {
-                  "vrf": {
-                    "node": {
-                      "security_zone": {
-                        "node": {
-                          "name": {
-                            "value": "PROD"
-                          },
-                          "vrf_type": {
-                            "value": "prod"
-                          },
-                          "id": "fixture-zone-PROD",
-                          "l3_vni": {
-                            "value": 60000
-                          }
-                        }
-                      },
-                      "__typename": "ManagedVRF",
-                      "id": "fixture-vrf-fixture-deployment-PROD",
-                      "deployment": {
-                        "node": {
-                          "id": "fixture-deployment",
-                          "name": {
-                            "value": "fixture-deployment"
-                          }
-                        }
-                      }
-                    }
-                  },
                   "__typename": "DcimVirtualInterface",
                   "name": {
                     "value": "eth1.3001"
@@ -239,39 +215,43 @@
                   },
                   "capabilities": {
                     "edges": []
+                  },
+                  "zone_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedVRF",
+                          "security_zone": {
+                            "node": {
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "id": "fixture-zone-PROD",
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
+                          },
+                          "id": "fixture-vrf-fixture-deployment-PROD",
+                          "deployment": {
+                            "node": {
+                              "id": "fixture-deployment",
+                              "name": {
+                                "value": "fixture-deployment"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               },
               {
                 "node": {
-                  "vrf": {
-                    "node": {
-                      "security_zone": {
-                        "node": {
-                          "name": {
-                            "value": "INTERNET"
-                          },
-                          "vrf_type": {
-                            "value": "internet"
-                          },
-                          "id": "fixture-zone-INTERNET",
-                          "l3_vni": {
-                            "value": 60002
-                          }
-                        }
-                      },
-                      "__typename": "ManagedVRF",
-                      "id": "fixture-vrf-fixture-deployment-INTERNET",
-                      "deployment": {
-                        "node": {
-                          "id": "fixture-deployment",
-                          "name": {
-                            "value": "fixture-deployment"
-                          }
-                        }
-                      }
-                    }
-                  },
                   "__typename": "DcimVirtualInterface",
                   "name": {
                     "value": "eth1.3401"
@@ -324,39 +304,43 @@
                   },
                   "capabilities": {
                     "edges": []
+                  },
+                  "zone_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedVRF",
+                          "security_zone": {
+                            "node": {
+                              "name": {
+                                "value": "INTERNET"
+                              },
+                              "vrf_type": {
+                                "value": "internet"
+                              },
+                              "id": "fixture-zone-INTERNET",
+                              "l3_vni": {
+                                "value": 60002
+                              }
+                            }
+                          },
+                          "id": "fixture-vrf-fixture-deployment-INTERNET",
+                          "deployment": {
+                            "node": {
+                              "id": "fixture-deployment",
+                              "name": {
+                                "value": "fixture-deployment"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               },
               {
                 "node": {
-                  "vrf": {
-                    "node": {
-                      "security_zone": {
-                        "node": {
-                          "name": {
-                            "value": "MANAGEMENT"
-                          },
-                          "vrf_type": {
-                            "value": "management"
-                          },
-                          "id": "fixture-zone-MANAGEMENT",
-                          "l3_vni": {
-                            "value": 60003
-                          }
-                        }
-                      },
-                      "__typename": "ManagedVRF",
-                      "id": "fixture-vrf-fixture-deployment-MANAGEMENT",
-                      "deployment": {
-                        "node": {
-                          "id": "fixture-deployment",
-                          "name": {
-                            "value": "fixture-deployment"
-                          }
-                        }
-                      }
-                    }
-                  },
                   "__typename": "DcimVirtualInterface",
                   "name": {
                     "value": "eth1.3601"
@@ -409,6 +393,38 @@
                   },
                   "capabilities": {
                     "edges": []
+                  },
+                  "zone_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedVRF",
+                          "security_zone": {
+                            "node": {
+                              "name": {
+                                "value": "MANAGEMENT"
+                              },
+                              "vrf_type": {
+                                "value": "management"
+                              },
+                              "id": "fixture-zone-MANAGEMENT",
+                              "l3_vni": {
+                                "value": 60003
+                              }
+                            }
+                          },
+                          "id": "fixture-vrf-fixture-deployment-MANAGEMENT",
+                          "deployment": {
+                            "node": {
+                              "id": "fixture-deployment",
+                              "name": {
+                                "value": "fixture-deployment"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               },

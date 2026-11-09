@@ -7,6 +7,7 @@ from typing import Any, cast
 import pytest
 
 from checks.pbr_firewall_reachability import CheckPbrFirewallReachability
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability
 from tests.unit.vrf_instances_helpers import raw_service_port
 from utils.exchange_transit import transit_vlan
 
@@ -56,9 +57,13 @@ def _member(context: dict[str, Any]) -> dict[str, Any]:
             "ip_address": {"node": {"ip_namespace": {"node": {"name": _v("default")}}}}
             if leg["ns_type"]
             else {"node": None},
-            "vrf": {"node": {"security_zone": {"node": {"name": _v(leg["namespace"]), "vrf_type": _v(leg["ns_type"])}}}}
-            if leg["ns_type"]
-            else {"node": None},
+            **(
+                interface_vrf_capability(
+                    {"security_zone": {"node": {"name": _v(leg["namespace"]), "vrf_type": _v(leg["ns_type"])}}}
+                )
+                if leg["ns_type"]
+                else {}
+            ),
         }
         interfaces.append(sub)
     role = context["_legs"][0]["role"] if context["_legs"] else "internal-firewall"

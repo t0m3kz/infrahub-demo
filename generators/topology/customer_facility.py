@@ -18,15 +18,11 @@ from typing import TYPE_CHECKING, Any
 from utils.data_cleaning import clean_data
 
 from ..firewall_context import FIREWALL_CONTEXT, FirewallContextMixin
+from ..firewall_context_spec import _ContextTarget
 from ..helpers.vrf import VrfMixin
-from ..protocols import DcimInterface
 
 if TYPE_CHECKING:
     from ..devices import DeviceMixin
-
-# The two kinds that inherit DcimSwitchedInterface. A filter on the marker generic cannot carry the context's
-# `capabilities` edge (it belongs to DcimInterface), so the ports of a context are read on DcimInterface and cut here.
-_SWITCHED_PORT_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface"})
 
 
 class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
@@ -53,18 +49,17 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
         parent = customer.get("parent")
         return [parent] if isinstance(parent, dict) and parent.get("id") else []
 
-    async def _reconcile_border_vrfs(self, context_id: str) -> None:
-        """Converge the VRF instances of the border devices whose service ports are tagged with the context.
+    async def _reconcile_border_vrfs(self, target: _ContextTarget, label: str) -> None:
+        """Converge the VRF instances of the border devices whose service ports face the context's members.
 
         A leg puts an address on the firewall or load balancer, never on the border leaf or edge: the border's demand
-        is the leg's namespace, read through the context tagged on its service port. The leg writes run under the
-        context's lock (``fw-context-*``/``lb-context-*``), which ``_ensure_transit_legs`` has released by now, and a
-        VRF lock is never taken under it; so the instance follows the leg, it does not precede it.
+        is the leg's namespace, read through the members behind its service port (utils/service_contexts.py: a context
+        has no interface edge, its border ports are the ones cabled to its members' uplinks). The leg writes run under
+        the context's lock (``fw-context-*``/``lb-context-*``), which ``_ensure_transit_legs`` has released by now, and
+        a VRF lock is never taken under it; so the instance follows the leg, it does not precede it.
         """
-        # One read on the generic: a service port is a physical port or a LAG; the context may also be tagged on the
-        # hosted firewall's sub-interfaces, whose devices carry no instance (_SWITCHED_PORT_KINDS leaves them out).
-        ports = await self.client.filters(kind=DcimInterface, capabilities__ids=[context_id], include=["device"])
-        await self.reconcile_vrfs({port.device.id for port in ports if port.get_kind() in _SWITCHED_PORT_KINDS})
+        members = await self._resolve_transit_members(target.spec, target.devices, context_name=label)
+        await self.reconcile_vrfs({member.bl_port.device.id for member in members})
 
     async def generate(self, data: dict[str, Any]) -> None:
         kind = self._customer_kind
@@ -135,7 +130,7 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
                     served.append(context_id)
                     if spec == FIREWALL_CONTEXT and not self._serving_many:
                         await self._relink_terminated_segments(customer_id, context_id)
-                    await self._reconcile_border_vrfs(context_id)
+                    await self._reconcile_border_vrfs(target, context_id)
             # A single serving link is replaced by link_serving_context; a many one is converged here. Only a run
             # that built every context it set out to may drop a link (a failed one raises under the generator
             # logger before this point).

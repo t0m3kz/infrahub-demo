@@ -16,5 +16,5 @@ kind: Object
 spec:
   kind: DcimVirtualInterface
   data:
-    - {name: Vlan2500, device: ktw1-bl-01, role: svi, status: active, vrf: ["DC-KTW1", "PROD"]}
-    - {name: Vlan2500, device: ktw1-bl-02, role: svi, status: active, vrf: ["DC-KTW1", "PROD"]}
+    - {name: Vlan2500, device: ktw1-bl-01, role: svi, status: active}
+    - {name: Vlan2500, device: ktw1-bl-02, role: svi, status: active}

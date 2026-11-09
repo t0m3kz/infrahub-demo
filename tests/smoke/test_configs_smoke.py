@@ -38,6 +38,14 @@ from transforms.config.tor import ToR
 from transforms.helpers.firewall import get_zone_policies
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _raw_vrf(interface: dict) -> dict | None:
+    """The raw ManagedVRF of an interface: the one among its ``zone_capabilities`` (None when it is in none)."""
+    edges = (interface.get("zone_capabilities") or {}).get("edges") or []
+    return next((edge["node"] for edge in edges if edge["node"].get("__typename") == "ManagedVRF"), None)
+
+
 CONFIGS_DIR = Path(__file__).resolve().parent / "configs"
 
 # Sorted longest-first so "super_spine" matches before "spine", "border_leaf" before "leaf",
@@ -153,9 +161,11 @@ def test_standalone_interface_fixture_owns_requested_zone(name: str) -> None:
     interface = _make_interface(name="Ethernet1", device_name="leaf-01", ip_address="192.0.2.0/31", ns_name=name)
     assert interface["ip_address"]["node"]["ip_namespace"]["node"]["name"] == {"value": "default"}
     if name == "default":
-        assert "vrf" not in interface
+        assert _raw_vrf(interface) is None
     else:
-        assert interface["vrf"]["node"]["security_zone"]["node"] == routing_zone(name)
+        vrf = _raw_vrf(interface)
+        assert vrf is not None
+        assert vrf["security_zone"]["node"] == routing_zone(name)
 
 
 @pytest.mark.parametrize("platform", ["paloalto_panos", "checkpoint_gaia"])
@@ -272,7 +282,9 @@ def test_virtual_firewall_management_route_requires_both_native_authorities(monk
     data = json.loads((CONFIGS_DIR / "firewall_checkpoint_gaia_virtual_dedicated" / "input.json").read_text())
     device = data["DcimDevice"]["edges"][0]["node"]
     management = next(edge["node"] for edge in device["interfaces"]["edges"] if edge["node"]["name"]["value"] == "eth0")
-    assert management["vrf"]["node"]["security_zone"]["node"] == routing_zone("MANAGEMENT")
+    vrf = _raw_vrf(management)
+    assert vrf is not None
+    assert vrf["security_zone"]["node"] == routing_zone("MANAGEMENT")
     assert management["ip_address"]["node"]["address"] == {"value": "10.254.1.11/24"}
     assert management["ip_address"]["node"]["ip_namespace"]["node"]["name"] == {"value": "default"}
     assert management["capabilities"] == {"edges": []}
@@ -290,7 +302,9 @@ def test_virtual_firewall_management_route_requires_both_native_authorities(monk
         probe = deepcopy(data)
         if missing_authority == "interface_zone":
             interfaces = probe["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]
-            next(edge["node"] for edge in interfaces if edge["node"]["name"]["value"] == "eth0")["vrf"] = {"node": None}
+            next(edge["node"] for edge in interfaces if edge["node"]["name"]["value"] == "eth0")[
+                "zone_capabilities"
+            ] = {"edges": []}
         elif missing_authority == "queried_cidrs":
             probe["SecurityZone"]["edges"] = []
         instance = make_transform(Firewall)

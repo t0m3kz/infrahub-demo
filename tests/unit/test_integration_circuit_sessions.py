@@ -58,6 +58,11 @@ def _value(value: Any) -> dict[str, Any]:
     return {"value": value}
 
 
+def _in_vrf(vrf: dict[str, Any]) -> dict[str, Any]:
+    """The raw ``zone_capabilities`` of an interface in ``vrf`` (a raw ManagedVRF node)."""
+    return {"edges": [{"node": {"__typename": "ManagedVRF", **copy.deepcopy(vrf)}}]}
+
+
 def _interface(
     device: str,
     name: str,
@@ -72,7 +77,7 @@ def _interface(
 ) -> dict[str, Any]:
     """An interface node of SESSIONS_QUERY: a physical one with an MTU, or a virtual one with a role (and a parent)."""
     node: dict[str, Any] = {
-        "vrf": {"node": None},
+        "zone_capabilities": {"edges": []},
         "name": _value(name),
         "device": {"node": {"name": _value(device)}},
         "description": _value(description),
@@ -218,7 +223,7 @@ class _Devices:
             deployment["underlay_protocol"] = _value(_underlay_protocol())
         selected: dict[str, Any] = {
             key: port[key]
-            for key in ("id", "__typename", "name", "capabilities", "cable", "parent_interface", "vrf")
+            for key in ("id", "__typename", "name", "capabilities", "cable", "parent_interface", "zone_capabilities")
             if key in port
         }
         selected["device"] = {
@@ -401,12 +406,13 @@ class FakeStack:
                             }
                         ]
                     }
-                    if (end["node"].get("vrf") or {}).get("node"):
-                        nodes[interface_id]["vrf"] = copy.deepcopy(end["node"]["vrf"])
+                    # The interface's VRF is the ManagedVRF among its capabilities (alias zone_capabilities).
+                    if (end["node"].get("zone_capabilities") or {}).get("edges"):
+                        nodes[interface_id]["zone_capabilities"] = end["node"]["zone_capabilities"]
                     elif interface_id in devices.interfaces and (circuit.get("vrf") or {}).get("node"):
                         # The generator gives the end it writes its device's instance of the circuit's zone
                         # (local_vrf_ids); the fake VRF provisioning is stubbed, so the circuit's instance stands in.
-                        nodes[interface_id]["vrf"] = copy.deepcopy(circuit["vrf"])
+                        nodes[interface_id]["zone_capabilities"] = _in_vrf(circuit["vrf"]["node"])
         for data, _ in client.created_of("ManagedBGPPeering"):
             self.sessions[data["name"]] = _session(
                 data["name"],
@@ -564,7 +570,9 @@ async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -
         (lambda s: s.prefixes.pop("Handoff HANDOFF-FR2-SDWAN-GW1-PROD"), "0 prefix object(s)"),
         (lambda s: s.pool_resources.update({"Handoff-PROD-IPv4": ["10.0.0.0/20"]}), "is not a /31 from"),
         (
-            lambda s: _addresses(s, "HANDOFF-FR2-SDWAN-GW1-PROD-bgp")[0].update(vrf={"node": _raw_vrf("NONPROD")}),
+            lambda s: _addresses(s, "HANDOFF-FR2-SDWAN-GW1-PROD-bgp")[0].update(
+                zone_capabilities=_in_vrf(_raw_vrf("NONPROD"))
+            ),
             "conflicting security zones",
         ),
     ],

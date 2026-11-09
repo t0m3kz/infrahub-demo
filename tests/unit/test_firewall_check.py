@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from checks.firewall import CheckFirewall
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability
 
 
 def _v(value: Any) -> dict[str, Any]:
@@ -231,7 +232,7 @@ class TestFirewallCheck:
 def _leg_interface(name: str, address: str, namespace: str, ns_type: str, exchange: dict, context: dict) -> dict:
     """A firewall sub-interface in the raw firewall_config shape (leg of one exchange)."""
     return {
-        "vrf": _node(
+        **interface_vrf_capability(
             {
                 "id": f"vrf-{namespace.lower()}",
                 "security_zone": _node(

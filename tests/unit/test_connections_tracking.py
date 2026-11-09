@@ -161,7 +161,7 @@ class TestEnsureVlanSubinterfaceTrack:
             "device_name": "FW1",
             "trunk_iface": _trunk(),
             "vlan_id_value": 3000,
-            "capability_obj": MagicMock(id="ctx-1"),
+            "capability_objs": [MagicMock(id="ex-1")],
             "ip_address_id": "ip-a",
         }
         if track is not None:
@@ -198,7 +198,7 @@ class TestEnsureVlanSubinterfaceTrack:
     async def test_track_false_with_capability_already_linked_saves_once_untracked(self) -> None:
         """Re-run with the capability already linked: one save, still untracked."""
         gen = _make_gen()
-        node = _sub_iface(existing_peer_ids=["ctx-1"], gen=gen)
+        node = _sub_iface(existing_peer_ids=["ex-1"], gen=gen)
 
         await self._run(gen, track=False)
 
@@ -251,7 +251,7 @@ class TestUpsertPrefixAddresses:
 
 
 class TestEnsureVlanSubinterfaceExtraCapabilities:
-    """A firewall-context leg carries its context AND the exchange(s) it belongs to."""
+    """A firewall-context leg carries the exchange(s) it belongs to (a context has no interface edge)."""
 
     async def _run(self, gen: Any, extras: list[Any], **kwargs: Any) -> Any:
         """ensure_vlan_subinterface for a context leg with the given extra capability nodes."""
@@ -260,8 +260,7 @@ class TestEnsureVlanSubinterfaceExtraCapabilities:
             device_name="FW1",
             trunk_iface=_trunk(),
             vlan_id_value=3400,
-            capability_obj=MagicMock(id="ctx-1"),
-            extra_capability_objs=extras,
+            capability_objs=extras,
             **kwargs,
         )
 
@@ -269,9 +268,9 @@ class TestEnsureVlanSubinterfaceExtraCapabilities:
     async def test_only_missing_capabilities_are_added_in_one_resave(self) -> None:
         """The stored capabilities are read once; only the ones not linked yet are added, then one re-save."""
         gen = _make_gen()
-        node = _sub_iface(existing_peer_ids=["ctx-1"], gen=gen)
+        node = _sub_iface(existing_peer_ids=["ex-0"], gen=gen)
 
-        await self._run(gen, [MagicMock(id="ex-1"), MagicMock(id="ex-2")])
+        await self._run(gen, [MagicMock(id="ex-0"), MagicMock(id="ex-1"), MagicMock(id="ex-2")])
 
         assert [c.args[0] for c in node.stored.capabilities.add.call_args_list] == [{"id": "ex-1"}, {"id": "ex-2"}]
         node.stored.save.assert_awaited_once_with(**_TRACKED)
@@ -281,7 +280,7 @@ class TestEnsureVlanSubinterfaceExtraCapabilities:
     async def test_everything_already_linked_saves_once(self) -> None:
         """All wanted capabilities are linked: nothing is added and the stored node is not saved."""
         gen = _make_gen()
-        node = _sub_iface(existing_peer_ids=["ctx-1", "ex-1"], gen=gen)
+        node = _sub_iface(existing_peer_ids=["ex-1"], gen=gen)
 
         await self._run(gen, [MagicMock(id="ex-1")])
 
@@ -296,7 +295,7 @@ class TestEnsureVlanSubinterfaceExtraCapabilities:
         _sub_iface(existing_peer_ids=[], gen=gen)
         gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
 
-        assert await self._run(gen, []) is None
+        assert await self._run(gen, [MagicMock(id="ex-1")]) is None
         gen.logger.error.assert_called_once()
 
 
@@ -379,3 +378,55 @@ class TestFindAddressesBatch:
 
         gen.client.create.assert_not_called()
         assert [node.id for node in result] == ["ip-a", "ip-b"]
+
+
+class TestEnsureVlanSubinterfaceVrf:
+    """A leg is put in its VRF instance by its own capabilities, never a ``vrf`` of the interface."""
+
+    @pytest.mark.asyncio
+    async def test_the_vrf_is_saved_with_the_leg_and_a_stale_one_is_left(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No ``vrf`` in the create data; the new instance is added to the stored capabilities and saved with them
+        (one retrying save, with the missing exchanges), then the leg leaves the instance it was in."""
+        gen = _make_gen()
+        node = _sub_iface(existing_peer_ids=["ex-1"], gen=gen)
+        old = MagicMock(id="vrf-old", typename="ManagedVRF")
+        node.stored.capabilities.peers.append(old)
+        leave = AsyncMock()
+        monkeypatch.setattr("generators.connections.leave_vrfs", leave)
+
+        await gen.ensure_vlan_subinterface(
+            device_id="fw-1",
+            device_name="FW1",
+            trunk_iface=_trunk(),
+            vlan_id_value=3000,
+            capability_objs=[MagicMock(id="ex-1"), MagicMock(id="ex-2")],
+            vrf_id="vrf-new",
+        )
+
+        data = gen.client.create.call_args.kwargs["data"]
+        assert "vrf" not in data and "capabilities" not in data
+        assert [c.args[0] for c in node.stored.capabilities.add.call_args_list] == [{"id": "ex-2"}, {"id": "vrf-new"}]
+        node.stored.save.assert_awaited_once_with(**_TRACKED)
+        leave.assert_awaited_once_with(gen.client, "sub-1", ["vrf-old"])
+
+    @pytest.mark.asyncio
+    async def test_a_leg_already_in_its_vrf_is_not_saved_again(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Re-run: the VRF and the exchange are linked, nothing is added, saved or left."""
+        gen = _make_gen()
+        node = _sub_iface(existing_peer_ids=["ex-1"], gen=gen)
+        node.stored.capabilities.peers.append(MagicMock(id="vrf-new", typename="ManagedVRF"))
+        leave = AsyncMock()
+        monkeypatch.setattr("generators.connections.leave_vrfs", leave)
+
+        await gen.ensure_vlan_subinterface(
+            device_id="fw-1",
+            device_name="FW1",
+            trunk_iface=_trunk(),
+            vlan_id_value=3000,
+            capability_objs=[MagicMock(id="ex-1")],
+            vrf_id="vrf-new",
+        )
+
+        node.stored.capabilities.add.assert_not_called()
+        node.stored.save.assert_not_awaited()
+        assert not leave.await_args or leave.await_args.args[2] == []

@@ -17,7 +17,7 @@ from utils.exchange_transit import (
     MANAGEMENT_TYPE,
     ZONE_BY_NS_TYPE,
 )
-from utils.routing_domain import interface_security_zone
+from utils.routing_domain import interface_security_zone, interface_vrfs
 from utils.segment_addressing import segment_prefix
 from utils.service_contexts import leg_contexts
 
@@ -77,7 +77,8 @@ def _build_fw_interfaces(
                 "vlan_id": vlan_id,
                 "parent_interface": parent,
                 "ip_address": ip_obj,
-                "vrf": iface.get("vrf"),
+                # The interface's VRF instance, where interface_vrf / interface_security_zone read it.
+                "zone_capabilities": interface_vrfs(iface),
                 "security_zone": zone,
                 "context_name": context.get("name") if context else None,
             }

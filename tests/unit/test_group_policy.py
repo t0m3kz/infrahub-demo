@@ -465,8 +465,9 @@ class TestQueries:
             "vrfs.id",
             "vrfs.deployment.id",
             "vrfs.security_zone.id",
-            "vrfs.interfaces.vrf.id",
-            "vrfs.interfaces.capabilities.vrf.id",
+            # The VRF's interfaces are its capabilities, each with its own VRF among its capabilities.
+            "vrfs.capabilities.capabilities.id",
+            "vrfs.capabilities.capabilities.vrf.id",
             "vrfs.session_circuits.vrf.id",
         } <= paths
         assert not {"registered_prefixes", "routed_interfaces", "session_circuits"} & paths

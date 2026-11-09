@@ -26,7 +26,7 @@ from generators.helpers.lb_vip import (
 )
 from generators.lb_vip import load_balanced_components_in
 from generators.protocols import AppComponent, ManagedVxlanSegment
-from tests.unit.lb_vip_helpers import _context, _instance, _with_footprints
+from tests.unit.lb_vip_helpers import _context, _instance, _with_footprints, lb_member
 from tests.unit.query_shape_helpers import fragment_text, fragment_tree, query_tree
 from utils.graphql_queries import load_query
 
@@ -154,7 +154,7 @@ class TestLegPrefix:
 
     def test_two_prefixes_are_ambiguous(self) -> None:
         context = _context(leg="leg-1")
-        context["capabilities"].append({"ip_address": {"ip_prefix": {"id": "leg-2"}}})
+        context["shared_devices"][1] = lb_member("ctx-1", "lb-2", "leg-2")
 
         assert leg_prefix_id(context) is None
 

@@ -13,6 +13,8 @@ version: "1.0"
 # checks/vrf_instances.py. Nothing else is stored: the RD, the RT, the L3 VNI SVI VLAN and whether a member realizes
 # it as EVPN or VRF-lite are derived (transforms/helpers/overlay.py); the L3 VNI stays on SecurityZone.
 # A firewall or a load balancer is never a member: its VRF is the context.
+# Its interfaces (an SVI, a handoff sub-interface, a service leg) are its `capabilities` (ManagedGenericInterfaces, the
+# interface edge); an interface is in at most one VRF (checks/vrf_instances.py).
 # ============================================================================
 
 nodes:
@@ -24,10 +26,11 @@ nodes:
     include_in_menu: false
     # The shared device edge, not ManagedGenericDevice: that one (DcimDeviceManaged.capabilities) cascades, and deleting
     # one member would delete the topology's VRF. Membership is `shared_devices` (reverse
-    # `DcimDeviceManaged.shared_capabilities`), with no cascade.
+    # `DcimDeviceManaged.shared_capabilities`), with no cascade. Its interfaces are its interface `capabilities`.
     inherit_from:
       - ManagedGeneric
       - ManagedGenericSharedDevice
+      - ManagedGenericInterfaces
     human_friendly_id:
       - "deployment__name__value"
       - "security_zone__name__value"
@@ -56,14 +59,6 @@ nodes:
         on_delete: no-action
         identifier: vrf__security_zone
         order_weight: 1050
-      - name: interfaces
-        peer: DcimInterface
-        cardinality: many
-        optional: true
-        kind: Generic
-        on_delete: no-action
-        identifier: vrf__interfaces
-        order_weight: 1100
       - name: session_circuits
         peer: TopologySessionCircuit
         cardinality: many
@@ -72,22 +67,6 @@ nodes:
         on_delete: no-action
         identifier: session_circuit__vrf
         order_weight: 1150
-      - name: exchanges_a
-        peer: TopologyExchangeGateway
-        cardinality: many
-        optional: true
-        kind: Generic
-        on_delete: no-action
-        identifier: exchange_gateway__vrf_a
-        order_weight: 1200
-      - name: exchanges_z
-        peer: TopologyExchangeGateway
-        cardinality: many
-        optional: true
-        kind: Generic
-        on_delete: no-action
-        identifier: exchange_gateway__vrf_z
-        order_weight: 1250
 
 extensions:
   nodes:
@@ -104,15 +83,3 @@ extensions:
           identifier: vrf__deployment
           order_weight: 7900
           description: "The security-zone routing domains realized in this topology"
-    - kind: DcimInterface
-      relationships:
-        - name: vrf
-          peer: ManagedVRF
-          label: "VRF Instance"
-          description: "Local routing instance of this interface, including SVIs and standalone service legs"
-          cardinality: one
-          optional: true
-          kind: Attribute
-          on_delete: no-action
-          identifier: vrf__interfaces
-          order_weight: 1440

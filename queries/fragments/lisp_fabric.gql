@@ -21,11 +21,6 @@ fragment LispSiteOnOfficeFields on TopologyCustomerOffice {
               node {
                 ...InterfaceRoutingZoneFields
                 ... on DcimVirtualInterface {
-                  vrf {
-                    node {
-                      ...RoutingVrfFields
-                    }
-                  }
                   ip_address {
                     node {
                       address {

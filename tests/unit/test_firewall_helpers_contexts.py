@@ -1,7 +1,7 @@
 """Unit tests for fw_contexts() and place_policies_in_contexts() in transforms/helpers/firewall_contexts.py."""
 
 from tests.unit.firewall_helpers_shared import fw_contexts
-from tests.unit.routing_helpers import make_vrf
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.helpers.firewall_contexts import place_policies_in_contexts
 
 # ===========================================================================
@@ -129,7 +129,7 @@ class TestGetFirewallContexts:
 def _leg_iface(ns_type: str, address: str, *, vlan: int = 3000, ns_name: str | None = None) -> dict:
     """A context sub-interface explicitly assigned to its routing instance."""
     iface = _make_fw_context_interface(iface_name=f"eth1.{vlan}", ip_addr=address, parent_name="eth1", vlan_id=vlan)
-    iface["vrf"] = make_vrf({"name": ns_name or ns_type.upper().replace("_", ""), "vrf_type": ns_type})
+    iface.update(in_vrf(make_vrf({"name": ns_name or ns_type.upper().replace("_", ""), "vrf_type": ns_type})))
     iface["ip_address"]["ip_namespace"] = {"name": "default"}
     return iface
 

@@ -85,36 +85,40 @@
                   "capabilities": {
                     "edges": []
                   },
-                  "vrf": {
-                    "node": {
-                      "__typename": "ManagedVRF",
-                      "id": "fixture-vrf-fixture-deployment-PROD",
-                      "deployment": {
+                  "zone_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "fixture-deployment",
-                          "name": {
-                            "value": "fixture-deployment"
-                          }
-                        }
-                      },
-                      "security_zone": {
-                        "node": {
-                          "id": "fixture-zone-PROD",
-                          "name": {
-                            "value": "PROD"
+                          "__typename": "ManagedVRF",
+                          "id": "fixture-vrf-fixture-deployment-PROD",
+                          "deployment": {
+                            "node": {
+                              "id": "fixture-deployment",
+                              "name": {
+                                "value": "fixture-deployment"
+                              }
+                            }
                           },
-                          "vrf_type": {
-                            "value": "prod"
-                          },
-                          "l3_vni": {
-                            "value": 60000
-                          },
-                          "trust_level": {
-                            "value": 100
+                          "security_zone": {
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              },
+                              "trust_level": {
+                                "value": 100
+                              }
+                            }
                           }
                         }
                       }
-                    }
+                    ]
                   }
                 }
               },
@@ -173,36 +177,40 @@
                   "capabilities": {
                     "edges": []
                   },
-                  "vrf": {
-                    "node": {
-                      "__typename": "ManagedVRF",
-                      "id": "fixture-vrf-fixture-deployment-INTERNET",
-                      "deployment": {
+                  "zone_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "fixture-deployment",
-                          "name": {
-                            "value": "fixture-deployment"
-                          }
-                        }
-                      },
-                      "security_zone": {
-                        "node": {
-                          "id": "fixture-zone-INTERNET",
-                          "name": {
-                            "value": "INTERNET"
+                          "__typename": "ManagedVRF",
+                          "id": "fixture-vrf-fixture-deployment-INTERNET",
+                          "deployment": {
+                            "node": {
+                              "id": "fixture-deployment",
+                              "name": {
+                                "value": "fixture-deployment"
+                              }
+                            }
                           },
-                          "vrf_type": {
-                            "value": "internet"
-                          },
-                          "l3_vni": {
-                            "value": 60002
-                          },
-                          "trust_level": {
-                            "value": 0
+                          "security_zone": {
+                            "node": {
+                              "id": "fixture-zone-INTERNET",
+                              "name": {
+                                "value": "INTERNET"
+                              },
+                              "vrf_type": {
+                                "value": "internet"
+                              },
+                              "l3_vni": {
+                                "value": 60002
+                              },
+                              "trust_level": {
+                                "value": 0
+                              }
+                            }
                           }
                         }
                       }
-                    }
+                    ]
                   }
                 }
               }

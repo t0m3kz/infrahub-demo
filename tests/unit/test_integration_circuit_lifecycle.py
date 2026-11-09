@@ -578,7 +578,7 @@ def _vrf_result(
                     "node": {
                         "id": vrf_id,
                         "name": {"value": name},
-                        "namespace": {"node": {"name": {"value": namespace}}},
+                        "security_zone": {"node": {"name": {"value": namespace}}},
                         "shared_devices": {"edges": [{"node": {"name": {"value": member}}} for member in members]},
                     }
                 }

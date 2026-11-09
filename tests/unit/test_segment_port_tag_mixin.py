@@ -187,9 +187,26 @@ class TestTerminatedServicePorts:
     reconcile as the component ports and with the same provenance."""
 
     @staticmethod
-    def _context(*caps: dict[str, Any]) -> dict[str, Any]:
-        """The cleaned ``terminated_on`` of a state segment, its capabilities being ``caps``."""
-        return {"terminated_on": {"id": "ctx-1", "capabilities": list(caps)}}
+    def _context(*far_ends: dict[str, Any]) -> dict[str, Any]:
+        """The cleaned ``terminated_on`` of a state segment: one member per far end, its uplink cabled to it (a context
+        has no interface edge; its border ports are derived from its members' cables)."""
+        members = [
+            {
+                "id": f"fw-{index}",
+                "role": "internal-firewall",
+                "interfaces": [
+                    {
+                        "typename": "DcimPhysicalInterface",
+                        "id": f"up-{index}",
+                        "name": "ethernet1/1",
+                        "role": "uplink",
+                        "cable": {"endpoints": [far]},
+                    }
+                ],
+            }
+            for index, far in enumerate(far_ends)
+        ]
+        return {"terminated_on": {"id": "ctx-1", "shared_devices": members}}
 
     @staticmethod
     def _cap(cap_id: str, *, typename: str = "DcimPhysicalInterface", role: str = "firewall") -> dict[str, Any]:
@@ -209,7 +226,7 @@ class TestTerminatedServicePorts:
         assert SegmentPortTagMixin._terminated_service_port_ids(segment) == {"bl-1", "bl-lag"}
 
     def test_a_segment_not_terminated_derives_none(self) -> None:
-        """No ``terminated_on`` (or one with no capabilities): nothing to tag."""
+        """No ``terminated_on`` (or one with no members): nothing to tag."""
         assert SegmentPortTagMixin._terminated_service_port_ids({}) == set()
         assert SegmentPortTagMixin._terminated_service_port_ids({"terminated_on": None}) == set()
         assert SegmentPortTagMixin._terminated_service_port_ids(self._context()) == set()

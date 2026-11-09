@@ -426,12 +426,38 @@ def _context_read(dep_id: str, *, linked: bool = True) -> dict[str, Any]:
     """A lb_serving_contexts.gql response for one deployment: its complete context, or none linked yet."""
     context = None
     if linked:
-        leg = {"__typename": "DcimVirtualInterface", "ip_address": {"node": {"ip_prefix": {"node": {"id": "leg-1"}}}}}
+        leg = {
+            "__typename": "DcimVirtualInterface",
+            "id": "lb-1-leg",
+            "name": {"value": "1.1.3100"},
+            "role": {"value": "service"},
+            "vlan_id": {"value": 3100},
+            "parent_interface": {"node": {"name": {"value": "1.1"}}},
+            "ip_address": {"node": {"ip_prefix": {"node": {"id": "leg-1"}}}},
+        }
+        uplink = {
+            "__typename": "DcimPhysicalInterface",
+            "id": "lb-1-up",
+            "name": {"value": "1.1"},
+            "role": {"value": "uplink"},
+        }
+        member = {
+            "__typename": "DcimPhysicalDevice",
+            "id": "lb-1",
+            "name": {"value": "lb-1"},
+            "role": {"value": "load-balancer"},
+            "shared_capabilities": {
+                "edges": [
+                    {"node": {"__typename": "ManagedLoadbalancerContext", "id": "ctx-1", "vlan_id": {"value": 3100}}}
+                ]
+            },
+            "interfaces": {"edges": [{"node": uplink}, {"node": leg}]},
+        }
         context = {
             "id": "ctx-1",
             "name": {"value": "dc10-lb-PROD"},
             "vip_prefix": {"node": {"id": "vip-pfx-1", "ip_namespace": {"node": {"id": "ns-prod"}}}},
-            "capabilities": {"edges": [{"node": leg}]},
+            "shared_devices": {"edges": [{"node": member}]},
         }
     node = {"id": dep_id, "serving_loadbalancer_context": {"node": context}}
     return {"TopologyCustomerDC": {"edges": [{"node": node}]}}

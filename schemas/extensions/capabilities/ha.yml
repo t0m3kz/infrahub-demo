@@ -189,7 +189,8 @@ nodes:
   # ── Firewall Context (VDOM/vsys) — tenant-scoped slice of the firewalls that enforce it ─
   # One dedicated context per customer whose design sets dedicated_firewall, plus a shared context (tenant unset)
   # for everyone else. Its members are the firewalls of one HA pair (or one standalone firewall); the legs are the
-  # sub-interfaces of its VLAN on their uplink trunk. The VLAN is allocated from FW-CONTEXT-VLAN-POOL.
+  # sub-interfaces of its VLAN on their uplink trunk. The VLAN is allocated from FW-CONTEXT-VLAN-POOL. A context has no
+  # interface edge: its legs and the border ports facing its members are derived (utils/service_contexts.py).
   - name: FirewallContext
     namespace: Managed
     description: "Tenant-scoped firewall context (VDOM/vsys) enforced by the firewalls that are its members"
@@ -202,7 +203,6 @@ nodes:
       - ManagedGeneric
       - ManagedSecurityContext
       - ManagedGenericSharedDevice
-      - ManagedGenericInterfaces
     uniqueness_constraints:
       - ["name__value"]
     display_label: "{{name__value}}"
@@ -317,7 +317,6 @@ nodes:
       - ManagedGeneric
       - ManagedSecurityContext
       - ManagedGenericSharedDevice
-      - ManagedGenericInterfaces
       - ManagedLoadBalancer
     uniqueness_constraints:
       - ["name__value"]

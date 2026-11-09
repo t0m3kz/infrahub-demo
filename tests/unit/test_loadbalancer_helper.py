@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from tests.unit.routing_helpers import make_vrf
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.helpers.loadbalancer import get_loadbalancer_contexts, member_address, pool_member_ips
 
 _NAMESPACES = {
@@ -19,7 +19,7 @@ _HA = {"name": "LB-01-LB-02-ha", "members": ["LB-01", "LB-02"]}
 
 def _leg(device: str, name: str, address: str, namespace: str) -> dict[str, Any]:
     return {
-        "vrf": make_vrf(_NAMESPACES[namespace]),
+        **in_vrf(make_vrf(_NAMESPACES[namespace])),
         "typename": "DcimVirtualInterface",
         "name": name,
         "vlan_id": int(name.rsplit(".", 1)[-1]),
@@ -140,7 +140,7 @@ class TestLeg:
     def test_a_leg_outside_a_tenant_vrf_raises(self) -> None:
         """An LB never leaves its tenant VRF: a leg in INTERNET is a modelling error."""
         context = _context()
-        context["legs"][0]["vrf"] = make_vrf(_NAMESPACES["INTERNET"])
+        context["legs"][0].update(in_vrf(make_vrf(_NAMESPACES["INTERNET"])))
         with pytest.raises(ValueError, match="not in a tenant VRF"):
             _contexts(context)
 

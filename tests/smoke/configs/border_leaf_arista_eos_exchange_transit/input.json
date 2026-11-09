@@ -1317,33 +1317,37 @@
                   "ip_address": {
                     "node": null
                   },
-                  "vrf": {
-                    "node": {
-                      "__typename": "ManagedVRF",
-                      "id": "fixture-vrf-fixture-deployment-PROD",
-                      "deployment": {
+                  "zone_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "fixture-deployment",
-                          "name": {
-                            "value": "fixture-deployment"
-                          }
-                        }
-                      },
-                      "security_zone": {
-                        "node": {
-                          "id": "fixture-zone-PROD",
-                          "name": {
-                            "value": "PROD"
+                          "__typename": "ManagedVRF",
+                          "id": "fixture-vrf-fixture-deployment-PROD",
+                          "deployment": {
+                            "node": {
+                              "id": "fixture-deployment",
+                              "name": {
+                                "value": "fixture-deployment"
+                              }
+                            }
                           },
-                          "vrf_type": {
-                            "value": "prod"
-                          },
-                          "l3_vni": {
-                            "value": 60000
+                          "security_zone": {
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           }
                         }
                       }
-                    }
+                    ]
                   }
                 }
               }
@@ -1865,34 +1869,6 @@
                                         "node": {
                                           "__typename": "DcimVirtualInterface",
                                           "id": "ethernet1/1.3000-0",
-                                          "vrf": {
-                                            "node": {
-                                              "security_zone": {
-                                                "node": {
-                                                  "id": "fixture-zone-PROD",
-                                                  "name": {
-                                                    "value": "PROD"
-                                                  },
-                                                  "vrf_type": {
-                                                    "value": "prod"
-                                                  },
-                                                  "l3_vni": {
-                                                    "value": 60000
-                                                  }
-                                                }
-                                              },
-                                              "__typename": "ManagedVRF",
-                                              "id": "fixture-vrf-DC-1-PROD",
-                                              "deployment": {
-                                                "node": {
-                                                  "id": "DC-1",
-                                                  "name": {
-                                                    "value": "DC-1"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          },
                                           "ip_address": {
                                             "node": {
                                               "address": {
@@ -1906,6 +1882,38 @@
                                                 }
                                               }
                                             }
+                                          },
+                                          "zone_capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "__typename": "ManagedVRF",
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "id": "fixture-zone-PROD",
+                                                      "name": {
+                                                        "value": "PROD"
+                                                      },
+                                                      "vrf_type": {
+                                                        "value": "prod"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 60000
+                                                      }
+                                                    }
+                                                  },
+                                                  "id": "fixture-vrf-DC-1-PROD",
+                                                  "deployment": {
+                                                    "node": {
+                                                      "id": "DC-1",
+                                                      "name": {
+                                                        "value": "DC-1"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
                                           },
                                           "name": {
                                             "value": "ethernet1/1.3000"
@@ -1934,34 +1942,6 @@
                                         "node": {
                                           "__typename": "DcimVirtualInterface",
                                           "id": "ethernet1/1.3400-1",
-                                          "vrf": {
-                                            "node": {
-                                              "security_zone": {
-                                                "node": {
-                                                  "id": "fixture-zone-INTERNET",
-                                                  "name": {
-                                                    "value": "INTERNET"
-                                                  },
-                                                  "vrf_type": {
-                                                    "value": "internet"
-                                                  },
-                                                  "l3_vni": {
-                                                    "value": 60002
-                                                  }
-                                                }
-                                              },
-                                              "__typename": "ManagedVRF",
-                                              "id": "fixture-vrf-DC-1-INTERNET",
-                                              "deployment": {
-                                                "node": {
-                                                  "id": "DC-1",
-                                                  "name": {
-                                                    "value": "DC-1"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          },
                                           "ip_address": {
                                             "node": {
                                               "address": {
@@ -1975,6 +1955,38 @@
                                                 }
                                               }
                                             }
+                                          },
+                                          "zone_capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "__typename": "ManagedVRF",
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "id": "fixture-zone-INTERNET",
+                                                      "name": {
+                                                        "value": "INTERNET"
+                                                      },
+                                                      "vrf_type": {
+                                                        "value": "internet"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 60002
+                                                      }
+                                                    }
+                                                  },
+                                                  "id": "fixture-vrf-DC-1-INTERNET",
+                                                  "deployment": {
+                                                    "node": {
+                                                      "id": "DC-1",
+                                                      "name": {
+                                                        "value": "DC-1"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
                                           },
                                           "name": {
                                             "value": "ethernet1/1.3400"
@@ -2003,34 +2015,6 @@
                                         "node": {
                                           "__typename": "DcimVirtualInterface",
                                           "id": "ethernet1/1.3600-2",
-                                          "vrf": {
-                                            "node": {
-                                              "security_zone": {
-                                                "node": {
-                                                  "id": "fixture-zone-MANAGEMENT",
-                                                  "name": {
-                                                    "value": "MANAGEMENT"
-                                                  },
-                                                  "vrf_type": {
-                                                    "value": "management"
-                                                  },
-                                                  "l3_vni": {
-                                                    "value": 60003
-                                                  }
-                                                }
-                                              },
-                                              "__typename": "ManagedVRF",
-                                              "id": "fixture-vrf-DC-1-MANAGEMENT",
-                                              "deployment": {
-                                                "node": {
-                                                  "id": "DC-1",
-                                                  "name": {
-                                                    "value": "DC-1"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          },
                                           "ip_address": {
                                             "node": {
                                               "address": {
@@ -2044,6 +2028,38 @@
                                                 }
                                               }
                                             }
+                                          },
+                                          "zone_capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "__typename": "ManagedVRF",
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "id": "fixture-zone-MANAGEMENT",
+                                                      "name": {
+                                                        "value": "MANAGEMENT"
+                                                      },
+                                                      "vrf_type": {
+                                                        "value": "management"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 60003
+                                                      }
+                                                    }
+                                                  },
+                                                  "id": "fixture-vrf-DC-1-MANAGEMENT",
+                                                  "deployment": {
+                                                    "node": {
+                                                      "id": "DC-1",
+                                                      "name": {
+                                                        "value": "DC-1"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
                                           },
                                           "name": {
                                             "value": "ethernet1/1.3600"
@@ -2072,34 +2088,6 @@
                                         "node": {
                                           "__typename": "DcimVirtualInterface",
                                           "id": "ethernet1/1.3001-3",
-                                          "vrf": {
-                                            "node": {
-                                              "security_zone": {
-                                                "node": {
-                                                  "id": "fixture-zone-PROD",
-                                                  "name": {
-                                                    "value": "PROD"
-                                                  },
-                                                  "vrf_type": {
-                                                    "value": "prod"
-                                                  },
-                                                  "l3_vni": {
-                                                    "value": 60000
-                                                  }
-                                                }
-                                              },
-                                              "__typename": "ManagedVRF",
-                                              "id": "fixture-vrf-DC-1-PROD",
-                                              "deployment": {
-                                                "node": {
-                                                  "id": "DC-1",
-                                                  "name": {
-                                                    "value": "DC-1"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          },
                                           "ip_address": {
                                             "node": {
                                               "address": {
@@ -2113,6 +2101,38 @@
                                                 }
                                               }
                                             }
+                                          },
+                                          "zone_capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "__typename": "ManagedVRF",
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "id": "fixture-zone-PROD",
+                                                      "name": {
+                                                        "value": "PROD"
+                                                      },
+                                                      "vrf_type": {
+                                                        "value": "prod"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 60000
+                                                      }
+                                                    }
+                                                  },
+                                                  "id": "fixture-vrf-DC-1-PROD",
+                                                  "deployment": {
+                                                    "node": {
+                                                      "id": "DC-1",
+                                                      "name": {
+                                                        "value": "DC-1"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
                                           },
                                           "name": {
                                             "value": "ethernet1/1.3001"
@@ -2141,34 +2161,6 @@
                                         "node": {
                                           "__typename": "DcimVirtualInterface",
                                           "id": "ethernet1/1.3401-4",
-                                          "vrf": {
-                                            "node": {
-                                              "security_zone": {
-                                                "node": {
-                                                  "id": "fixture-zone-INTERNET",
-                                                  "name": {
-                                                    "value": "INTERNET"
-                                                  },
-                                                  "vrf_type": {
-                                                    "value": "internet"
-                                                  },
-                                                  "l3_vni": {
-                                                    "value": 60002
-                                                  }
-                                                }
-                                              },
-                                              "__typename": "ManagedVRF",
-                                              "id": "fixture-vrf-DC-1-INTERNET",
-                                              "deployment": {
-                                                "node": {
-                                                  "id": "DC-1",
-                                                  "name": {
-                                                    "value": "DC-1"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          },
                                           "ip_address": {
                                             "node": {
                                               "address": {
@@ -2182,6 +2174,38 @@
                                                 }
                                               }
                                             }
+                                          },
+                                          "zone_capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "__typename": "ManagedVRF",
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "id": "fixture-zone-INTERNET",
+                                                      "name": {
+                                                        "value": "INTERNET"
+                                                      },
+                                                      "vrf_type": {
+                                                        "value": "internet"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 60002
+                                                      }
+                                                    }
+                                                  },
+                                                  "id": "fixture-vrf-DC-1-INTERNET",
+                                                  "deployment": {
+                                                    "node": {
+                                                      "id": "DC-1",
+                                                      "name": {
+                                                        "value": "DC-1"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
                                           },
                                           "name": {
                                             "value": "ethernet1/1.3401"
@@ -2210,34 +2234,6 @@
                                         "node": {
                                           "__typename": "DcimVirtualInterface",
                                           "id": "ethernet1/1.3601-5",
-                                          "vrf": {
-                                            "node": {
-                                              "security_zone": {
-                                                "node": {
-                                                  "id": "fixture-zone-MANAGEMENT",
-                                                  "name": {
-                                                    "value": "MANAGEMENT"
-                                                  },
-                                                  "vrf_type": {
-                                                    "value": "management"
-                                                  },
-                                                  "l3_vni": {
-                                                    "value": 60003
-                                                  }
-                                                }
-                                              },
-                                              "__typename": "ManagedVRF",
-                                              "id": "fixture-vrf-DC-1-MANAGEMENT",
-                                              "deployment": {
-                                                "node": {
-                                                  "id": "DC-1",
-                                                  "name": {
-                                                    "value": "DC-1"
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          },
                                           "ip_address": {
                                             "node": {
                                               "address": {
@@ -2251,6 +2247,38 @@
                                                 }
                                               }
                                             }
+                                          },
+                                          "zone_capabilities": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "__typename": "ManagedVRF",
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "id": "fixture-zone-MANAGEMENT",
+                                                      "name": {
+                                                        "value": "MANAGEMENT"
+                                                      },
+                                                      "vrf_type": {
+                                                        "value": "management"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 60003
+                                                      }
+                                                    }
+                                                  },
+                                                  "id": "fixture-vrf-DC-1-MANAGEMENT",
+                                                  "deployment": {
+                                                    "node": {
+                                                      "id": "DC-1",
+                                                      "name": {
+                                                        "value": "DC-1"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
                                           },
                                           "name": {
                                             "value": "ethernet1/1.3601"

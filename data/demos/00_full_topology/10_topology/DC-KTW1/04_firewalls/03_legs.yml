@@ -1,13 +1,14 @@
 # The legs of the contexts: each member's VLAN sub-interface of its uplink ethernet1/1, addressed from the leg's /29 in
 # the VRF of the leg (members take .5 and .6, the pair's floating VIP is .4, the border leaves' anycast gateway .1).
-# The contexts and the exchange (04_contexts.yml) name them as their capabilities.
+# A leg is derived from its member and its vlan_id (utils/service_contexts.py), never listed on its context; the
+# exchange (04_contexts_01) names the edge context's legs as its capabilities, the VRF of each leg lists it
+# (90_bindings/95_vrf_interfaces/DC-KTW1.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimVirtualInterface
   data:
-    - vrf: [DC-KTW1, "PROD"]
-      name: "ethernet1/1.3000"
+    - name: "ethernet1/1.3000"
       vlan_id: 3000
       device: ktw1-fw-01
       parent_interface: ["ktw1-fw-01", "ethernet1/1"]
@@ -17,8 +18,7 @@ spec:
         data:
           address: "100.66.0.5/29"
           ip_namespace: "default"
-    - vrf: [DC-KTW1, "PROD"]
-      name: "ethernet1/1.3000"
+    - name: "ethernet1/1.3000"
       vlan_id: 3000
       device: ktw1-fw-02
       parent_interface: ["ktw1-fw-02", "ethernet1/1"]
@@ -28,8 +28,7 @@ spec:
         data:
           address: "100.66.0.6/29"
           ip_namespace: "default"
-    - vrf: [DC-KTW1, "PROD"]
-      name: "ethernet1/1.3001"
+    - name: "ethernet1/1.3001"
       vlan_id: 3001
       device: ktw1-xfw-01
       parent_interface: ["ktw1-xfw-01", "ethernet1/1"]
@@ -39,8 +38,7 @@ spec:
         data:
           address: "100.66.0.13/29"
           ip_namespace: "default"
-    - vrf: [DC-KTW1, "PROD"]
-      name: "ethernet1/1.3001"
+    - name: "ethernet1/1.3001"
       vlan_id: 3001
       device: ktw1-xfw-02
       parent_interface: ["ktw1-xfw-02", "ethernet1/1"]
@@ -50,8 +48,7 @@ spec:
         data:
           address: "100.66.0.14/29"
           ip_namespace: "default"
-    - vrf: [DC-KTW1, "INTERNET"]
-      name: "ethernet1/1.3401"
+    - name: "ethernet1/1.3401"
       vlan_id: 3401
       device: ktw1-xfw-01
       parent_interface: ["ktw1-xfw-01", "ethernet1/1"]
@@ -61,8 +58,7 @@ spec:
         data:
           address: "100.66.32.5/29"
           ip_namespace: "default"
-    - vrf: [DC-KTW1, "INTERNET"]
-      name: "ethernet1/1.3401"
+    - name: "ethernet1/1.3401"
       vlan_id: 3401
       device: ktw1-xfw-02
       parent_interface: ["ktw1-xfw-02", "ethernet1/1"]

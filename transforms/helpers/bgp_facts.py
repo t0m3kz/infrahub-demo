@@ -141,7 +141,7 @@ def environment_prefixes(extra_roots: Mapping[str, Any]) -> tuple[dict[str, froz
                     ],
                     circuit,
                 )
-            for interface in vrf.get("interfaces") or []:
+            for interface in vrf.get("capabilities") or []:
                 keep(
                     [
                         *(interface.get("advertised_prefixes") or []),

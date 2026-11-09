@@ -167,33 +167,37 @@
                                       }
                                     }
                                   },
-                                  "vrf": {
-                                    "node": {
-                                      "__typename": "ManagedVRF",
-                                      "id": "fixture-vrf-C005-OFFICE-PROD",
-                                      "deployment": {
+                                  "zone_capabilities": {
+                                    "edges": [
+                                      {
                                         "node": {
-                                          "id": "C005-OFFICE",
-                                          "name": {
-                                            "value": "C005-OFFICE"
-                                          }
-                                        }
-                                      },
-                                      "security_zone": {
-                                        "node": {
-                                          "id": "fixture-zone-PROD",
-                                          "name": {
-                                            "value": "PROD"
+                                          "__typename": "ManagedVRF",
+                                          "id": "fixture-vrf-C005-OFFICE-PROD",
+                                          "deployment": {
+                                            "node": {
+                                              "id": "C005-OFFICE",
+                                              "name": {
+                                                "value": "C005-OFFICE"
+                                              }
+                                            }
                                           },
-                                          "vrf_type": {
-                                            "value": "prod"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60000
+                                          "security_zone": {
+                                            "node": {
+                                              "id": "fixture-zone-PROD",
+                                              "name": {
+                                                "value": "PROD"
+                                              },
+                                              "vrf_type": {
+                                                "value": "prod"
+                                              },
+                                              "l3_vni": {
+                                                "value": 60000
+                                              }
+                                            }
                                           }
                                         }
                                       }
-                                    }
+                                    ]
                                   }
                                 }
                               },
@@ -217,33 +221,37 @@
                                       }
                                     }
                                   },
-                                  "vrf": {
-                                    "node": {
-                                      "__typename": "ManagedVRF",
-                                      "id": "fixture-vrf-C005-OFFICE-PROD",
-                                      "deployment": {
+                                  "zone_capabilities": {
+                                    "edges": [
+                                      {
                                         "node": {
-                                          "id": "C005-OFFICE",
-                                          "name": {
-                                            "value": "C005-OFFICE"
-                                          }
-                                        }
-                                      },
-                                      "security_zone": {
-                                        "node": {
-                                          "id": "fixture-zone-PROD",
-                                          "name": {
-                                            "value": "PROD"
+                                          "__typename": "ManagedVRF",
+                                          "id": "fixture-vrf-C005-OFFICE-PROD",
+                                          "deployment": {
+                                            "node": {
+                                              "id": "C005-OFFICE",
+                                              "name": {
+                                                "value": "C005-OFFICE"
+                                              }
+                                            }
                                           },
-                                          "vrf_type": {
-                                            "value": "prod"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60000
+                                          "security_zone": {
+                                            "node": {
+                                              "id": "fixture-zone-PROD",
+                                              "name": {
+                                                "value": "PROD"
+                                              },
+                                              "vrf_type": {
+                                                "value": "prod"
+                                              },
+                                              "l3_vni": {
+                                                "value": 60000
+                                              }
+                                            }
                                           }
                                         }
                                       }
-                                    }
+                                    ]
                                   }
                                 }
                               }
@@ -793,33 +801,37 @@
                       }
                     }
                   },
-                  "vrf": {
-                    "node": {
-                      "__typename": "ManagedVRF",
-                      "id": "fixture-vrf-C005-OFFICE-PROD",
-                      "deployment": {
+                  "zone_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "C005-OFFICE",
-                          "name": {
-                            "value": "C005-OFFICE"
-                          }
-                        }
-                      },
-                      "security_zone": {
-                        "node": {
-                          "id": "fixture-zone-PROD",
-                          "name": {
-                            "value": "PROD"
+                          "__typename": "ManagedVRF",
+                          "id": "fixture-vrf-C005-OFFICE-PROD",
+                          "deployment": {
+                            "node": {
+                              "id": "C005-OFFICE",
+                              "name": {
+                                "value": "C005-OFFICE"
+                              }
+                            }
                           },
-                          "vrf_type": {
-                            "value": "prod"
-                          },
-                          "l3_vni": {
-                            "value": 60000
+                          "security_zone": {
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           }
                         }
                       }
-                    }
+                    ]
                   }
                 }
               }

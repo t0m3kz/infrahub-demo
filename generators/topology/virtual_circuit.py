@@ -113,6 +113,8 @@ from utils.limits import DCI_TECHNICAL_IPV4_POOL, DCI_TECHNICAL_IPV6_POOL, HANDO
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..helpers.common import save_with_node_not_found_retry
+from ..helpers.interface_vrf import add_vrf, leave_vrfs, vrf_ids
 from ..helpers.vrf import VrfMixin
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalInterface, DcimVirtualInterface
@@ -643,7 +645,10 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         status: str = circuit.get("status") or ""
         async with self.resource_lock(f"vc-session-{circuit['id']}"):
             ports = [plan.first.port_id, plan.second.port_id]
-            nodes = {node.id: node for node in await self.client.filters(kind=plan.port_kind, ids=ports)}
+            nodes = {
+                node.id: node
+                for node in await self.client.filters(kind=plan.port_kind, ids=ports, include=["capabilities"])
+            }
             missing = [end.label for end in (plan.first, plan.second) if end.port_id not in nodes]
             if missing:
                 self.fail(f"{name}: interface(s) {', '.join(missing)} not found")
@@ -729,15 +734,19 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
     async def _update_interface(
         self, node: Any, *, address_id: str, description: str, status: str, mtu: int | None, vrf_id: str | None = None
     ) -> None:
-        """Address an end interface, untracked, and only if something changed.
+        """Address an end interface, untracked, and only if something changed; put it in the VRF instance ``vrf_id``.
 
         The interface comes from the device's template, not from this run: tracked, a later run that stopped
-        addressing it would delete the port. A plain save() on the fetched node sends only the modified fields.
+        addressing it would delete the port. A plain save() on the fetched node sends only the modified fields. The
+        VRF is the instance's interface edge: added in the interface's own save, a stale one removed edge by edge
+        (generators/helpers/interface_vrf.py). The node is read with its ``capabilities``.
         """
         changed = False
-        if vrf_id is not None and getattr(getattr(node, "vrf", None), "id", None) != vrf_id:
-            node.vrf = vrf_id
-            changed = True
+        stale_vrfs: list[str] = []
+        if vrf_id is not None:
+            capabilities = getattr(node, "capabilities")
+            stale_vrfs = [old for old in vrf_ids(capabilities.peers) if old != vrf_id]
+            changed = add_vrf(capabilities, vrf_id)
         if getattr(getattr(node, "ip_address", None), "id", None) != address_id:
             node.ip_address = address_id
             changed = True
@@ -751,4 +760,5 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
             node.mtu.value = mtu
             changed = True
         if changed:
-            await node.save(update_group_context=False)
+            await save_with_node_not_found_retry(node, self.logger, allow_upsert=False, update_group_context=False)
+        await leave_vrfs(self.client, node.id, stale_vrfs)

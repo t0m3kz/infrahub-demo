@@ -22,7 +22,7 @@ from transforms.helpers.segments import _get_segment_gateways, routed_activation
 from transforms.helpers.vrf import vrf_requirements
 from transforms.helpers.vxlan import get_vxlan_config
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import is_routed_tenant_segment
+from utils.exchange_transit import PROD_TYPE, is_routed_tenant_segment, transit_vlan
 from utils.segment_addressing import routed_segment_namespace
 
 _DATA = Path(__file__).parents[2] / "data/demos/00_full_topology"
@@ -57,6 +57,21 @@ def _items(kind: str, folder: Path) -> list[dict[str, Any]]:
         if doc and doc["spec"]["kind"] == kind
         for item in doc["spec"]["data"]
     ]
+
+
+def _vrf_zone(device: str, interface: str) -> str:
+    """The security zone of the one VRF instance that lists the interface among its ``capabilities``."""
+    zones = {
+        vrf["security_zone"]
+        for path in sorted(_DATA.rglob("*.yml"))
+        for doc in yaml.safe_load_all(path.read_text())
+        if doc and doc["spec"]["kind"] == "ManagedVRF"
+        for vrf in doc["spec"]["data"]
+        for cap in vrf.get("capabilities") or []
+        if cap["data"] == {"device": device, "name": interface}
+    }
+    (zone,) = zones
+    return zone
 
 
 def _segment(site: str) -> dict[str, Any]:
@@ -171,15 +186,11 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
     )
     assert member in context["shared_devices"]
     ha = next(obj for obj in _items("ManagedFirewallHA", _site(site)) if member in obj["capabilities"])
-    leg_ref = next(
-        cap["data"]
-        for cap in context["capabilities"]
-        if cap["kind"] == "DcimVirtualInterface" and cap["data"]["device"] == member
-    )
+    # The PROD leg is derived, never listed on the context: the member's sub-interface tagged with the transit VLAN.
     leg = next(
         obj
         for obj in _items("DcimVirtualInterface", _site(site))
-        if obj["device"] == member and obj["name"] == leg_ref["name"]
+        if obj["device"] == member and obj.get("vlan_id") == transit_vlan(context["vlan_id"], PROD_TYPE)
     )
     trunk = leg["parent_interface"]
     physical_trunk = trunk
@@ -200,7 +211,7 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
     address = leg["ip_address"]
     if isinstance(address, list):
         address = {"data": {"address": address[0], "ip_namespace": address[1]}}
-    zone_name = leg["vrf"][1]
+    zone_name = _vrf_zone(member, leg["name"])
     cap = {
         "id": context["name"],
         "__typename": "ManagedFirewallContext",
@@ -255,7 +266,7 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
             [
                 uplink,
                 {
-                    "vrf": _one(routing_vrf(zone_name)),
+                    "zone_capabilities": _many([routing_vrf(zone_name)]),
                     "name": {"value": leg["name"]},
                     "vlan_id": {"value": leg["vlan_id"]},
                     "device": _one({"id": member}),
@@ -601,7 +612,7 @@ def test_new_gdn_pair_uses_free_template_ports_rack_units_and_shared_transit_pre
     assert [leg["ip_address"]["data"]["address"] for leg in legs] == ["100.66.0.37/29", "100.66.0.38/29"]
     assert legs[0]["ip_address"]["data"]["ip_prefix"]["data"]["prefix"] == "100.66.0.32/29"
     assert legs[1]["ip_address"]["data"]["ip_prefix"] == ["100.66.0.32/29", "default"]
-    assert {leg["vrf"][1] for leg in legs} == {"PROD"}
+    assert {_vrf_zone(leg["device"], leg["name"]) for leg in legs} == {"PROD"}
     raw = _raw_member("gdn1", "gdn1-fw-01")
     device = cast(dict[str, Any], clean_data(raw))
     contexts = get_firewall_contexts(device, get_ha(device["capabilities"]))

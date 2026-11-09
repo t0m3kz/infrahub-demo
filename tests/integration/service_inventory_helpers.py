@@ -9,7 +9,9 @@ from typing import Any
 from infrahub_sdk import InfrahubClient
 
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
 from utils.routing_domain import interface_security_zone
+from utils.service_contexts import leg_interfaces, member_border_ports
 
 from .circuit_helpers import _deployed_dc_names
 from .query_files import QUERY_GET_LOADBALANCER_INVENTORY, QUERY_GET_TENANT_SERVICES, QUERY_GET_TRANSIT_INVENTORY
@@ -133,47 +135,44 @@ _SERVICE_PORT_DEVICE_ROLES = frozenset({"border-leaf", "edge"})
 
 
 def _context_legs_and_ports(node: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """A service context's legs and the service ports tagged with it, from its raw ``capabilities``.
+    """A service context's legs and the service ports facing it, derived from its raw members (``shared_devices``).
 
-    A leg is a DcimVirtualInterface (a member's VLAN sub-interface): {"interface", "device",
-    "device_id", "address", "namespace", "vrf_type", "exchanges"}, ``exchanges`` the names of
-    the TopologyRoutedExchanges it is linked to (always empty for a load-balancer leg). The legacy
-    ``namespace`` key holds the routing SecurityZone name, not the address's IPAM namespace. A service port
-    is a DcimPhysicalInterface on a border leaf (DC) or an edge (colocation metro): {"id",
-    "interface", "device", "role"}, ``role`` the port's own role where the query selects it.
+    A context has no interface edge (utils/service_contexts.py): a leg is a member's sub-interface of its first uplink
+    tagged with the context's transit VLAN, {"interface", "device", "device_id", "address", "namespace", "vrf_type",
+    "exchanges"}, ``exchanges`` the names of the TopologyRoutedExchanges it is linked to (always empty for a
+    load-balancer leg). The legacy ``namespace`` key holds the routing SecurityZone name, not the address's IPAM
+    namespace. A service port is the port of a border leaf (DC) or an edge (colocation metro) that a member's uplink is
+    cabled to, of the role facing the member: {"id", "interface", "device", "role"}.
     """
     legs: list[dict[str, Any]] = []
-    border_ports: list[dict[str, Any]] = []
-    for cap in _edge_nodes(node.get("capabilities")):
-        device = _rel_node(cap.get("device"))
-        if cap["__typename"] == "DcimVirtualInterface":
-            address = _rel_node(cap.get("ip_address"))
-            zone = interface_security_zone(clean_data(cap))
+    border_ports: dict[str, dict[str, Any]] = {}
+    for member in clean_data(_edge_nodes(node.get("shared_devices"))):
+        for leg in leg_interfaces(member).get(str(node.get("id")), []):
+            zone = interface_security_zone(leg)
             legs.append(
                 {
-                    "interface": _value(cap.get("name")),
-                    "device": _value(device.get("name")),
-                    "device_id": device.get("id"),
-                    "address": _value(address.get("address")),
+                    "interface": leg.get("name"),
+                    "device": member.get("name"),
+                    "device_id": member.get("id"),
+                    "address": (leg.get("ip_address") or {}).get("address"),
                     "namespace": zone.get("name"),
                     "vrf_type": zone.get("vrf_type"),
                     "exchanges": sorted(
-                        _value(exchange.get("name"))
-                        for exchange in _edge_nodes(cap.get("capabilities"))
-                        if exchange.get("__typename") == "TopologyRoutedExchange"
+                        str(exchange.get("name"))
+                        for exchange in leg.get("capabilities") or []
+                        if exchange.get("typename") == "TopologyRoutedExchange"
                     ),
                 }
             )
-        elif cap["__typename"] == "DcimPhysicalInterface" and _value(device.get("role")) in _SERVICE_PORT_DEVICE_ROLES:
-            border_ports.append(
-                {
-                    "id": cap["id"],
-                    "interface": _value(cap.get("name")),
-                    "device": _value(device.get("name")),
-                    "role": _value(cap.get("role")),
-                }
-            )
-    return legs, border_ports
+        port_role = BORDER_ROLE_FOR_SERVICES.get(str(member.get("role") or ""))
+        for far in member_border_ports(member):
+            device = far.get("device") or {}
+            if far.get("role") == port_role and device.get("role") in _SERVICE_PORT_DEVICE_ROLES:
+                border_ports.setdefault(
+                    far["id"],
+                    {"id": far["id"], "interface": far.get("name"), "device": device.get("name"), "role": far["role"]},
+                )
+    return legs, list(border_ports.values())
 
 
 def _cluster_dcs(cluster: dict[str, Any]) -> list[str]:

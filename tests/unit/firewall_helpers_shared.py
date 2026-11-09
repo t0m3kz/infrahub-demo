@@ -4,6 +4,7 @@ from typing import Any
 
 from transforms.helpers.firewall_contexts import get_firewall_contexts
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, TRANSIT_SLOT, transit_vlan
+from utils.routing_domain import interface_vrf
 
 
 def fw_contexts(
@@ -30,7 +31,7 @@ def fw_contexts(
             contexts.setdefault(context["id"], context)
             trunk = (iface.get("parent_interface") or {}).get("name") or "eth1"
             trunks.add(trunk)
-            ns_type = ((iface.get("vrf") or {}).get("security_zone") or {}).get("vrf_type")
+            ns_type = (interface_vrf(iface).get("security_zone") or {}).get("vrf_type")
             if isinstance(context.get("vlan_id"), int):
                 leg["name"] = (
                     f"{trunk}.{transit_vlan(context['vlan_id'], ns_type if ns_type in TRANSIT_SLOT else 'prod')}"

@@ -23,7 +23,7 @@ from graphql.language import FragmentDefinitionNode
 from tests.smoke.fixture_builders.common import run_transform
 from tests.smoke.fixture_builders.firewall import build_leaf_lb_client_data
 from tests.smoke.fixture_builders.transit import build_lb_context_bl_data
-from tests.unit.routing_helpers import make_vrf
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
 from transforms.helpers.firewall import get_exchange_transits
@@ -50,7 +50,7 @@ def _lb_context(
     net = ipaddress.ip_network(leg)
     members = [
         {
-            "vrf": make_vrf(namespace),
+            **in_vrf(make_vrf(namespace)),
             "name": f"1.1.{vlan}",
             "device": {"name": member, "role": "load-balancer"},
             "ip_address": {

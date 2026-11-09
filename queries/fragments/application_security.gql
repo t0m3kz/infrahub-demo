@@ -77,44 +77,7 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
             }
             serving_loadbalancer_context {
               node {
-                id
-                name {
-                  value
-                }
-                vip_prefix {
-                  node {
-                    id
-                    ip_namespace {
-                      node {
-                        id
-                      }
-                    }
-                  }
-                }
-                capabilities {
-                  edges {
-                    node {
-                      __typename
-                      ...InterfaceRoutingZoneFields
-                      ... on DcimVirtualInterface {
-                        vrf {
-                          node {
-                            ...RoutingVrfFields
-                          }
-                        }
-                        ip_address {
-                          node {
-                            ip_prefix {
-                              node {
-                                id
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
+                ...ServingLoadbalancerContextFields
               }
             }
           }
@@ -530,6 +493,92 @@ fragment AppApplicationSecurityFields on AppApplication {
     edges {
       node {
         ...AppComponentSecurityFields
+      }
+    }
+  }
+}
+
+# The load balancer context serving a footprint, as the VIP producer reads it (generators/helpers/lb_vip.py): its VIP
+# range and its members. A context has no interface edge: its leg is a member's sub-interface of its first uplink
+# tagged with the context's transit VLAN (utils/service_contexts.py), whose address gives the leg /29.
+fragment ServingLoadbalancerContextFields on ManagedLoadbalancerContext {
+  id
+  name {
+    value
+  }
+  vip_prefix {
+    node {
+      id
+      ip_namespace {
+        node {
+          id
+        }
+      }
+    }
+  }
+  shared_devices {
+    edges {
+      node {
+        __typename
+        id
+        name {
+          value
+        }
+        ... on DcimDeviceManaged {
+          role {
+            value
+          }
+          shared_capabilities {
+            edges {
+              node {
+                __typename
+                id
+                ... on ManagedSecurityContext {
+                  vlan_id {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on DcimDevice {
+          interfaces {
+            edges {
+              node {
+                __typename
+                id
+                name {
+                  value
+                }
+                role {
+                  value
+                }
+                ... on DcimVirtualInterface {
+                  vlan_id {
+                    value
+                  }
+                  parent_interface {
+                    node {
+                      name {
+                        value
+                      }
+                    }
+                  }
+                  ip_address {
+                    node {
+                      ip_prefix {
+                        node {
+                          id
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

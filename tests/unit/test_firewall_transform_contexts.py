@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from tests.unit.firewall_transform_helpers import _make_context_smoke_data, _make_fw, _render_template
+from tests.unit.routing_helpers import in_vrf
 from transforms.config.firewall import _build_fw_interfaces
 from utils.routing_domain import RoutingDomainError
 
@@ -258,7 +259,7 @@ class TestParentInterfaceOnlyForSubInterfaces:
         """A routed firewall interface keeps its own zone in default IPAM."""
         interfaces = self._interfaces("ethernet1/1.210", "ethernet1/1")
         zone = {"id": "zone-prod", "name": "PROD", "vrf_type": "prod", "l3_vni": 60000}
-        interfaces[0]["vrf"] = {"id": "vrf-dc10-prod", "security_zone": zone}
+        interfaces[0].update(in_vrf({"id": "vrf-dc10-prod", "security_zone": zone}))
         interfaces[0]["ip_address"]["ip_namespace"] = {"name": "default"}
 
         (interface,) = _build_fw_interfaces(interfaces, [], {})
@@ -279,7 +280,7 @@ class TestParentInterfaceOnlyForSubInterfaces:
     def test_conflicting_interface_and_prefix_zones_are_refused(self) -> None:
         """The interface's own VRF zone cannot hide a contradictory handoff circuit VRF."""
         interfaces = self._interfaces("eth0", "Ethernet5")
-        interfaces[0]["vrf"] = {"id": "vrf-prod", "security_zone": {"id": "zone-prod", "name": "PROD"}}
+        interfaces[0].update(in_vrf({"id": "vrf-prod", "security_zone": {"id": "zone-prod", "name": "PROD"}}))
         interfaces[0]["capabilities"] = [
             {
                 "typename": "TopologySessionCircuit",

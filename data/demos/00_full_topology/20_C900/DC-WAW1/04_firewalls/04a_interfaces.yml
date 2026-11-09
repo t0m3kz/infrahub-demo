@@ -1,11 +1,11 @@
-# Complete leg subinterfaces, with verified HA member offsets and explicit routing zones in default IPAM.
+# Complete leg subinterfaces, with verified HA member offsets, in default IPAM; the VRF of each leg lists it
+# (90_bindings/95_vrf_interfaces/DC-WAW1.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimVirtualInterface
   data:
-    - vrf: [DC-WAW1, "PROD"]
-      device: c900-waw1-fw-01-prod
+    - device: c900-waw1-fw-01-prod
       name: eth1/1.3001
       vlan_id: 3001
       parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
@@ -13,8 +13,7 @@ spec:
       status: active
       mtu: 9000
       ip_address: ["100.66.0.45/29", "default"]
-    - vrf: [DC-WAW1, "PROD"]
-      device: c900-waw1-fw-02-prod
+    - device: c900-waw1-fw-02-prod
       name: eth1/1.3001
       vlan_id: 3001
       parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
@@ -22,8 +21,7 @@ spec:
       status: active
       mtu: 9000
       ip_address: ["100.66.0.46/29", "default"]
-    - vrf: [DC-WAW1, "INTERNET"]
-      device: c900-waw1-fw-01-prod
+    - device: c900-waw1-fw-01-prod
       name: eth1/1.3401
       vlan_id: 3401
       parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
@@ -31,8 +29,7 @@ spec:
       status: active
       mtu: 9000
       ip_address: ["100.66.32.13/29", "default"]
-    - vrf: [DC-WAW1, "INTERNET"]
-      device: c900-waw1-fw-02-prod
+    - device: c900-waw1-fw-02-prod
       name: eth1/1.3401
       vlan_id: 3401
       parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
@@ -40,8 +37,7 @@ spec:
       status: active
       mtu: 9000
       ip_address: ["100.66.32.14/29", "default"]
-    - vrf: [DC-WAW1, "MANAGEMENT"]
-      device: c900-waw1-fw-01-prod
+    - device: c900-waw1-fw-01-prod
       name: eth1/1.3601
       vlan_id: 3601
       parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
@@ -49,8 +45,7 @@ spec:
       status: active
       mtu: 9000
       ip_address: ["100.66.48.5/29", "default"]
-    - vrf: [DC-WAW1, "MANAGEMENT"]
-      device: c900-waw1-fw-02-prod
+    - device: c900-waw1-fw-02-prod
       name: eth1/1.3601
       vlan_id: 3601
       parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]

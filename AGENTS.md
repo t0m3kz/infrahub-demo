@@ -504,9 +504,10 @@ class MyCheck(InfrahubCheck):
   tag, no SVI protection to demand). The firewall keeps reading `segment_namespace` and `segment_prefix` (its zone
   members, rules and PBR next hops). A query that returns a segment's gateway for the fabric must select
   `terminated_on { node { id } }` (`tests/unit/test_terminated_on_queries.py`), else the segment reads as routed.
-  - **Ports**: `add_vxlan_segment` and `add_app_component_segment` tag the border service ports of the context (the
-    `capabilities` of the context that are a physical port or a LAG with the firewall service role, read by
-    `queries/topology/add/segment_vlans.gql`) with the segment as generated `segments` edges, in the SAME
+  - **Ports**: `add_vxlan_segment` and `add_app_component_segment` tag the border service ports of the context (derived,
+    a context has no interface edge: the ports with the firewall service role that its members' uplinks are cabled to,
+    `utils/service_contexts.py` `member_border_ports`, read through `queries/topology/add/segment_vlans.gql`) with the
+    segment as generated `segments` edges, in the SAME
     reconcile as the component ports (same provenance: an account as `source`, removed only by that account). The ports
     are not host-facing: `checks/customer_quota.py` does not count them. A change of `terminated_on` re-runs
     `add_vxlan_segment` (`data/events/99_actions.yml`).
@@ -649,20 +650,25 @@ class MyCheck(InfrahubCheck):
   (`UngovernedTransitError`, `BaseDeviceTransform._refuse_ungoverned_transit_sessions`, on every platform). Any
   platform that renders user policies in its VRF address family renders a transit session; the golden is
   `edge_cisco_nxos_internet_bgw`.
-- **PBR (steering to the firewall)**: one vendor-neutral model, one behaviour, a renderer per platform. A `RoutingPolicy`
-  of `kind: pbr` per customer footprint in a DC (`customer_deployment`), applied on interfaces through the interface
-  `capabilities` edge; it has no terms, ACL, bypass or next hop: those are derived when the device is rendered, from the
-  footprint's `serving_firewall_context` and the segment policies (`transforms/helpers/firewall_pbr.py`). The VRF pass of a
-  device writes the attachments (`generators/helpers/pbr_sync.py`, planned by `pbr_attach.py`: an SVI of a segment whose
-  footprint in the device's DC has a context; a manual policy and a border role are never touched) and a leaf steers an
-  SVI only when it carries the policy (`pbr_steered_vlans`). Two uses, one contract: PBR of the segment on the ingress of
+- **PBR (steering to the firewall)**: one vendor-neutral model, one behaviour, a renderer per platform. PBR is a
+  capability of the device, like OSPF: a `ManagedPBR` (individual device edge, cascades, nothing beyond `ManagedGeneric`;
+  presence = the device steers). Nothing is stored per interface: the steered SVIs and their footprint are derived when
+  the device is rendered (`utils/vrf_demand.py` `pbr_footprints_by_name`: an SVI of a segment whose footprint in the
+  device's DC has a `serving_firewall_context`; `utils/device_services.py` `pbr_bindings`), and so are the ACL, bypass
+  and next hop (`transforms/helpers/firewall_pbr.py`). The transform steers only a device with a `ManagedPBR`
+  (`has_pbr`). On 30_all the VRF pass of the device writes it (`generators/helpers/vrf.py` `sync_pbr`: created when the
+  device has a steered SVI, deleted when it has none); on 00_full_topology it is authored next to the routing processes.
+  `checks/vrf_instances.py` rule (i) reports a device that steers without one (ERROR) or has one and steers nothing
+  (WARNING). `RoutingPolicy` is BGP only. Two uses, one contract: PBR of the segment on the ingress of
   its SVI, and PBR 2 at the point where traffic enters the VRF after decapsulation, selecting the prefixes of the
   footprint (the L3VNI SVI on NX-OS; never the underlay port, which sees only the outer header). Same rules on every platform: inspection, allowed bypass, symmetry (both
   directions cross the same firewall) and no re-steering of what returns from the firewall; the attachment and the syntax
   may differ. Each vendor needs its own confirmation of both kinds, the full render of definition and attachment, the
   behaviour with the next hop unavailable, and a documentation or lab proof. A platform that does not meet the contract
   makes the transform refuse the config (`_refuse_unprotected_tenant_svis`), never skip PBR or fall back to plain routing.
-  A border leaf steers no segment SVI until its templates render PBR (`DeviceVrfFacts.pbr_footprints_by_name`).
+  A border leaf steers no segment SVI until its templates render PBR (`DeviceVrfFacts.pbr_footprints_by_name`), so it
+  has no `ManagedPBR`; its PBR 2 on the L3 VNI SVI is derived from the contexts behind its service ports
+  (`pbr_overlay_footprints_by_name`) and needs none.
 - **Firewall roles**: a device is an `internal-firewall` (east-west and the customers' contexts) or an `external-firewall`
   (the Internet edge of one or more topologies, named by `TopologySegmentHosting.internet_edge_contexts`, see
   `checks/internet_egress.py`). `utils/fabric_roles.py` holds the roles once (`INTERNAL_FIREWALL_ROLE`,
@@ -738,10 +744,10 @@ class MyCheck(InfrahubCheck):
   `clean_data` drops, so the reader takes it from the raw response): a person sets an edge from the port with no source,
   the segment reconcile writes the ports its components derive with its own account (the client token's, `AccountProfile`,
   asked once per run) as the source. A segment is on no interface's `capabilities`. The layer of a port is its content, not its kind: a
-  segment or a firewall/load-balancer context means switchport, an address, sub-interfaces or a routed capability
-  (BGP or OSPF peering, routed exchange, interconnect, tunnel or handoff circuit) means routed;
-  `checks/interface_layers.py` refuses both on one port (R1), or on a LAG member (R2); a border service port tagged with a
-  context AND a terminated segment is a switchport on both counts; a segment on a switch port's `capabilities` is
+  segment means switchport, an address, sub-interfaces or a routed capability (BGP or OSPF peering, routed exchange,
+  interconnect, tunnel or handoff circuit) means routed; `checks/interface_layers.py` refuses both on one port (R1), or
+  on a LAG member (R2). A border service port facing a context is a trunk too, but a context has no interface edge (its
+  border ports are derived), so the check does not see it; a segment on a switch port's `capabilities` is
   impossible by schema (`ManagedVxlanSegment` is not on the interface edge).
 - **VLAN rows**: a VLAN ID is local to a switch. There is no VLAN domain object and no marker generic: the row
   points straight at its device. The chain is segment -> `ManagedSegmentDeployment` (the realization in a DC, metro or
@@ -781,7 +787,8 @@ class MyCheck(InfrahubCheck):
   same anycast gateway, so a host keeps its gateway when it moves between the DCs.
   A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a `DcimVirtualInterface` with role
   `svi` named `Vlan<vlan_id>`, a Component of the row (`svi`, `on_delete: cascade`), with no address (the anycast
-  gateway is `segment.gateway`) and with `vrf` pointing at the `ManagedVRF` of its device's topology; the SVI is not a
+  gateway is `segment.gateway`) and in the `ManagedVRF` of its device's topology (the instance lists it in its
+  `capabilities`, the SVI's only capability; its save writes it); the SVI is not a
   port. `generators/helpers/svi.py` writes it in the VRF pass of the segment reconcile, upserted by (device, `Vlan<id>`), and
   the transform renders `vrf member` from it. The L3 VNI SVI (`ip forward`, `3900 + TRANSIT_SLOT[namespace_type]`,
   `utils/exchange_transit.py` `l3vni_svi_vlan`) and the transit-leg SVIs of the firewall and load-balancer contexts stay
@@ -802,10 +809,17 @@ class MyCheck(InfrahubCheck):
   never as a list (a new instance is created with its first member in the create data); the zone lists its instances through
   `SecurityZone.vrfs`. `l3_vni` stays on the zone (one value: a stretched VRF and the global INTERNET RT need it);
   the instance has no duplicate VNI field; RD, RT, SVI VLAN and EVPN vs VRF-lite
-  are derived. Membership is demand-driven, never pre-provisioned: a device is a member for exactly the non-`default`
+  are derived. Its interfaces (SVIs, handoff sub-interfaces, service legs, routed ports) are its interface
+  `capabilities` (`ManagedGenericInterfaces`): an interface has no `vrf` field, its VRF is the `ManagedVRF` among its
+  `capabilities`, selected once as `zone_capabilities` (`queries/fragments/routing_zone.gql`
+  `InterfaceRoutingZoneFields`, never another selection of it) and read by `utils/routing_domain.py` `interface_vrf`.
+  An interface is in at most one VRF (`checks/vrf_instances.py` rule h). A new interface is created with its VRF in its
+  create data, an existing one gets it in its own save (`generators/helpers/interface_vrf.py`: the instance may be new
+  in the pass, and a RelationshipAdd on a node just created can reach the other replica first); it leaves an old
+  instance by RelationshipRemove. A `TopologyExchangeGateway` names its instances one-sidedly (`vrf_a`, `vrf_z`). Membership is demand-driven, never pre-provisioned: a device is a member for exactly the non-`default`
   namespaces it routes in (`utils/vrf_demand.py`, the one derivation): the gateway namespace of each
   routed row of its own, its SVIs' VRFs, the namespaces of the addresses on its own interfaces (handoff /31s, WAN
-  exit sub-interfaces, an upstream transit address) and the legs of the contexts tagged on its border service ports.
+  exit sub-interfaces, an upstream transit address) and the legs of the contexts behind its border service ports.
   Only our routing devices carry one (`carries_vrfs`: leaf, tor, access-leaf, border-leaf, border-spine, edge,
   access-switch, distribution-switch, physical or a `CloudNetworkAppliance`): never a spine, an L2 leaf, a firewall or a
   load balancer (their VRF is the context), a controller, or a party's device (a provider stub, an appliance of a cloud
@@ -814,8 +828,8 @@ class MyCheck(InfrahubCheck):
   `vrf-device-<id>`, then the instance locks `vrf-<deployment>-<namespace>`, the latter only to create or delete; never
   under a context lock): the segment reconcile, the context legs (`customer_facility`), `add_virtual_circuit`, the office
   WAN exit and `add_circuit` (the data-authored internet addresses of the cage edges) call it; it joins before the
-  dependent write and leaves when no demand remains (after the SVIs); an instance is deleted when its last member and
-  its last SVI are gone (every pruning pass sweeps its topologies, and the pod decommission sweeps the DC), because on
+  dependent write and leaves when no demand remains (after the SVIs); an instance is deleted when its last member,
+  interface, session circuit and exchange are gone (every pruning pass sweeps its topologies, and the pod decommission sweeps the DC), because on
   NX-OS `no vrf context` moves the member addresses to the default table. A device's VRF set in the transforms is its
   memberships (`shared_capabilities` of kind `ManagedVRF`, `utils/vrf_demand.py` `device_memberships`, read by the
   renderers through `device_vrfs`); one is realized as an L3 VNI (LISP instance-id) when it has an SVI on the device or is its default exit (a
@@ -918,9 +932,11 @@ class MyCheck(InfrahubCheck):
     `Parent`, like `ManagedVRF.deployment`, or a data file); the transforms and checks read
     `shared_capabilities { __typename ... on <Kind> {...} }` once, inside `... on DcimDeviceManaged` (the field is not on
     `DcimDevice`), in `DeviceCapabilitiesOnDeviceFields`, and filter on the typename (`device_memberships`).
-  - `ManagedVRF`'s SVIs reach it through `DcimVirtualInterface.vrf`. A segment is not on the interface edge: a switch
-    port's membership is `segments` (see **Interface addresses and
-    layers**); the kinds left on `ManagedGenericInterfaces` are contexts, the routed exchange, peerings and OSPF.
+  - `ManagedVRF` is also on the interface edge: its interfaces are its `capabilities` (see **VRF instances**). A
+    segment is not on the interface edge: a switch port's membership is `segments` (see **Interface addresses and
+    layers**), and a service context is not either (its legs and border ports are derived from its members,
+    `utils/service_contexts.py`); the kinds on `ManagedGenericInterfaces` are the VRF, the routed exchange, peerings
+    and OSPF.
     The circuits are on it too: their two ends are their `capabilities` (see **Circuit placement**).
 
 #### Schema Best Practices

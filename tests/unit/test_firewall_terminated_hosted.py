@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from graphql import FragmentDefinitionNode, parse
 
-from tests.smoke.fixture_builders.vrf import routing_vrf
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
 from tests.unit.firewall_transform_helpers import _make_fw
 from transforms.helpers.firewall_contexts import get_firewall_contexts
 from transforms.helpers.firewall_terminated import terminated_interfaces
@@ -96,7 +96,7 @@ def _payload(
                                 },
                                 {
                                     "node": {
-                                        "vrf": {"node": routing_vrf("PROD")},
+                                        **interface_vrf_capability(routing_vrf("PROD")),
                                         "__typename": "DcimVirtualInterface",
                                         "name": {"value": "eth1.3000"},
                                         "vlan_id": {"value": 3000},

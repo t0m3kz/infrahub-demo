@@ -29,7 +29,17 @@ from utils.routing_domain import RoutingDomainError
 
 def _interface(device_role: str, role: str | None, ns_type: str = "internet") -> dict[str, Any]:
     return {
-        "vrf": {"node": {"id": "vrf-1", "security_zone": {"node": _ns("INTERNET", ns_type)}}},
+        "zone_capabilities": {
+            "edges": [
+                {
+                    "node": {
+                        "__typename": "ManagedVRF",
+                        "id": "vrf-1",
+                        "security_zone": {"node": _ns("INTERNET", ns_type)},
+                    }
+                }
+            ]
+        },
         "__typename": "DcimPhysicalInterface",
         "id": "if-1",
         "name": _v("Ethernet1/14"),

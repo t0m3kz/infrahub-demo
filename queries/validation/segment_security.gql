@@ -282,11 +282,7 @@ query segment_security {
               interfaces {
                 edges {
                   node {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
+                    ...InterfaceRoutingZoneFields
                     capabilities {
                       edges {
                         node {
@@ -569,6 +565,7 @@ query segment_security {
                 capabilities {
                   edges {
                     node {
+                      ...InterfaceRoutingZoneFields
                       name {
                         value
                       }
@@ -577,11 +574,6 @@ query segment_security {
                           name {
                             value
                           }
-                        }
-                      }
-                      vrf {
-                        node {
-                          ...RoutingVrfFields
                         }
                       }
                     }

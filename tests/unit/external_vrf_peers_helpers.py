@@ -37,6 +37,11 @@ def _raw_vrf(namespace: str = "PROD", deployment: str = "FR") -> dict[str, Any]:
     }
 
 
+def _raw_in_vrf(vrf: dict[str, Any] | None) -> dict[str, Any]:
+    """The raw capability that puts an interface in ``vrf`` (the ManagedVRF among its ``zone_capabilities``)."""
+    return {"zone_capabilities": {"edges": [{"node": {"__typename": "ManagedVRF", **vrf}}] if vrf else []}}
+
+
 def _raw_gateway(gateway: str, namespace: str = "PROD") -> dict[str, Any]:
     """A gateway's explicit handoff capability supplies the exported office context."""
     vrf = _raw_vrf(namespace)
@@ -47,7 +52,7 @@ def _raw_gateway(gateway: str, namespace: str = "PROD") -> dict[str, Any]:
                 {
                     "node": {
                         "name": {"value": "eth0.1900"},
-                        "vrf": {"node": vrf},
+                        **_raw_in_vrf(vrf),
                         "capabilities": {
                             "edges": [
                                 {
@@ -82,9 +87,9 @@ def _peering(namespace: dict[str, Any] | None, *, peering_role: str | None = "re
             "edges": [
                 {
                     "node": {
-                        "vrf": {"node": _raw_vrf(namespace["name"], deployment)}
-                        if namespace and deployment == "FR"
-                        else {"node": None},
+                        **_raw_in_vrf(
+                            _raw_vrf(namespace["name"], deployment) if namespace and deployment == "FR" else None
+                        ),
                         "name": {"value": port},
                         "device": {"node": {"name": {"value": device}}},
                         "ip_address": {
@@ -114,8 +119,10 @@ def _peering(namespace: dict[str, Any] | None, *, peering_role: str | None = "re
         },
     }
     for edge in raw["capabilities"]["edges"]:
-        vrf: Any = edge["node"]["vrf"]["node"]
-        if vrf is not None and namespace is not None:
+        capabilities: Any = edge["node"]["zone_capabilities"]
+        for vrf in (cap["node"] for cap in capabilities["edges"]):
+            if namespace is None:
+                continue
             vrf["security_zone"]["node"] = {
                 key: value if key == "id" else {"value": value}
                 for key, value in {"id": f"zone-{namespace['name']}", **namespace}.items()
@@ -126,7 +133,7 @@ def _peering(namespace: dict[str, Any] | None, *, peering_role: str | None = "re
 def _subif(name: str, namespace: str | None) -> dict[str, Any]:
     return clean_data(
         {
-            "vrf": {"node": _raw_vrf(namespace)} if namespace else {"node": None},
+            **_raw_in_vrf(_raw_vrf(namespace) if namespace else None),
             "name": {"value": name},
             "ip_address": {
                 "node": {

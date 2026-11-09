@@ -51,11 +51,9 @@ def _run(physical: list[dict[str, Any]] | None = None, lags: list[dict[str, Any]
 
 
 def test_pure_switchports_and_routed_ports_pass() -> None:
-    """A segment member, a context port, an addressed port, a port with circuits only: one layer each."""
+    """A segment member, an addressed port, a port with circuits only: one layer each."""
     ports = [
         _port("E1", segments=2),
-        _port("E2", caps=("ManagedFirewallContext",)),
-        _port("E3", caps=("ManagedLoadbalancerContext",)),
         _port("E4", ip=True, caps=("ManagedBGPPeering",)),
         _port("E5", subs=2),
         _port("E6", ip=True, caps=("TopologyCarrierCircuit",)),
@@ -70,10 +68,16 @@ def test_r1_segment_and_ip_address_fail() -> None:
     assert len(errors) == 1 and "both a switchport (segments)" in errors[0] and "ip_address" in errors[0]
 
 
-def test_r1_context_and_sub_interface_fail() -> None:
-    """R1: a firewall context tag with sub-interfaces."""
-    errors = _run([_port(subs=1, caps=("ManagedFirewallContext",))])
-    assert len(errors) == 1 and "ManagedFirewallContext" in errors[0] and "sub_interfaces" in errors[0]
+def test_r1_segment_and_sub_interface_fail() -> None:
+    """R1: a segment member with sub-interfaces."""
+    errors = _run([_port(segments=1, subs=1)])
+    assert len(errors) == 1 and "segments" in errors[0] and "sub_interfaces" in errors[0]
+
+
+def test_a_context_is_no_interface_capability_and_no_l2_tag() -> None:
+    """A context has no interface edge: a kind of it among a port's capabilities is no tag (the port is judged by the
+    rest)."""
+    assert _run([_port(ip=True, caps=("ManagedFirewallContext",))]) == []
 
 
 def test_r1_segment_and_bgp_peering_fail() -> None:
@@ -107,17 +111,11 @@ def test_r2_lag_member_with_a_segment_or_a_signal_fails() -> None:
     assert _run([_port(lag=True)]) == []
 
 
-def test_r2_lag_member_carrying_a_firewall_context_fails() -> None:
-    """R2: the context tag belongs to the LAG, not to its member; R1 does not repeat it."""
-    errors = _run([_port(lag=True, caps=("ManagedFirewallContext",))])
-    assert len(errors) == 1 and "LAG member" in errors[0] and "ManagedFirewallContext" in errors[0]
-    assert _run([_port(lag=True, caps=("ManagedLoadbalancerContext",), ip=True)])[0].count("ip_address") == 1
-
-
-def test_r1_firewall_context_with_an_address_fails_on_a_non_member() -> None:
-    """R1: a context port (L2 tag) with an address is both layers."""
-    errors = _run([_port(ip=True, caps=("ManagedFirewallContext",))])
-    assert len(errors) == 1 and "both a switchport (ManagedFirewallContext)" in errors[0]
+def test_r2_lag_member_with_a_segment_and_an_address_is_one_error() -> None:
+    """R2: the tag belongs to the LAG, not to its member; R1 does not repeat it."""
+    errors = _run([_port(lag=True, segments=1, ip=True)])
+    assert len(errors) == 1 and "LAG member" in errors[0]
+    assert errors[0].count("ip_address") == 1
 
 
 def test_the_fixtures_emit_only_fields_the_query_selects_and_the_layer_fields_are_selected() -> None:

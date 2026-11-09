@@ -118,14 +118,18 @@ def raw_mlag(mlag_id: str) -> dict[str, Any]:
     return {"__typename": "ManagedMLAG", "id": mlag_id}
 
 
+def in_raw_vrf(vrf: dict[str, Any] | None) -> dict[str, Any]:
+    """The raw ``zone_capabilities`` of an interface in the instance ``vrf`` (a raw ManagedVRF node; None: in none)."""
+    return {"zone_capabilities": edges(*([{"__typename": VRF_KIND, **vrf}] if vrf else []))}
+
+
 def zone_vrf(addr: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """Split an ``address()`` into the real ``ip_address`` and the ``vrf`` the interface carries for its zone."""
+    """Split an ``address()`` into the real ``ip_address`` and the raw ManagedVRF the interface is in for its zone."""
     clean = {key: value for key, value in addr.items() if key != "_zone"}
     zone = addr.get("_zone")
     if not zone or zone["node"]["name"]["value"] == "default":
         return clean, None
-    vrf = {"node": {"id": f"vrf-{zone['node']['name']['value']}", "security_zone": zone}}
-    return clean, vrf
+    return clean, {"id": f"vrf-{zone['node']['name']['value']}", "security_zone": zone}
 
 
 def raw_interface(
@@ -147,7 +151,7 @@ def raw_interface(
     if addr:
         node["ip_address"], vrf = zone_vrf(addr)
         if vrf:
-            node["vrf"] = vrf
+            node.update(in_raw_vrf(vrf))
     return node
 
 
@@ -164,16 +168,16 @@ def raw_svi(
 ) -> dict[str, Any]:
     """A role-svi DcimVirtualInterface."""
     node = raw_interface(svi_id, name or f"Vlan{vlan_id}", "svi", addr, capabilities, "DcimVirtualInterface")
-    node["vrf"] = (
-        {
-            "node": {
+    node.update(
+        in_raw_vrf(
+            {
                 "id": vrf_id,
                 "deployment": {"node": {"id": vrf_deployment_id}},
                 "security_zone": namespace_ref(vrf_namespace or ""),
             }
-        }
-        if vrf_id
-        else None
+            if vrf_id
+            else None
+        )
     )
     node["segment_vlan"] = {"node": {"id": row_id}} if row_id else None
     return node
@@ -193,7 +197,7 @@ def raw_service_port(
 ) -> dict[str, Any]:
     """A border service port whose cable ends on the first uplink of a member of one service context.
 
-    ``raw_legs`` are ready-made leg sub-interfaces (``ip_address``, ``vrf`` and the ``ns_type`` of their VRF named
+    ``raw_legs`` are ready-made leg sub-interfaces (``ip_address``, ``zone_capabilities`` and the ``ns_type`` of their VRF named
     ``_ns_type``) for a caller that holds the real addresses; ``member_role`` is the role of the member.
 
     Each leg is ``(member role, namespace, namespace type)``: a sub-interface ``<uplink>.<transit VLAN>`` of the member
@@ -230,7 +234,7 @@ def raw_service_port(
             "ip_address": ip_address,
         }
         if vrf:
-            sub["vrf"] = vrf
+            sub.update(in_raw_vrf(vrf))
         subs.append(sub)
     for raw in raw_legs if isinstance(vlan_id, int) else ():
         subs.append(
@@ -295,10 +299,12 @@ def raw_device(
     hosting_id: str | None = HOSTING_ID,
     status: str | None = None,
     shared_others: list[str] | None = None,
+    pbr: bool = False,
 ) -> dict[str, Any]:
     """One DcimDevice node of the query. ``vrfs`` are its memberships (``raw_instance``), emitted as
     ``shared_capabilities``; a ManagedVRF passed in ``capabilities`` is taken as a membership too (the pre-r3
-    spelling), any other capability is dropped (the query selects no device ``capabilities``); ``shared_others`` are foreign shared kinds (a ``__typename`` only). The device sits in a pod of the DC
+    spelling), any other capability is dropped; ``shared_others`` are foreign shared kinds (a ``__typename`` only).
+    ``pbr`` gives it a ManagedPBR among its individual ``capabilities`` (it steers). The device sits in a pod of the DC
     ``hosting_id`` (None: a deployment with no hosting parent)."""
     caps = capabilities or []
     members = [*(vrfs or []), *(cap for cap in caps if cap.get("__typename") == VRF_KIND)]
@@ -313,6 +319,7 @@ def raw_device(
         "vlans": edges(*(rows or [])),
         "interfaces": edges(*(interfaces or [])),
         "service_ports": edges(*(service_ports or [])),
+        "capabilities": edges(*([{"__typename": "ManagedPBR", "id": f"pbr-{device_id}"}] if pbr else [])),
     }
     if status:
         node["status"] = {"value": status}

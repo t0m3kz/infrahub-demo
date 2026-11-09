@@ -98,11 +98,6 @@ fragment LoadbalancerDeviceFields on DcimDevice {
         }
         ...InterfaceRoutingZoneFields
         ... on DcimPhysicalInterface {
-          vrf {
-            node {
-              ...RoutingVrfFields
-            }
-          }
           ip_address {
             node {
               address {
@@ -125,11 +120,6 @@ fragment LoadbalancerDeviceFields on DcimDevice {
           device {
             node {
               id
-            }
-          }
-          vrf {
-            node {
-              ...RoutingVrfFields
             }
           }
           ip_address {

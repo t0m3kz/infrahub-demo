@@ -128,7 +128,7 @@ cases:
     # pairs of
     # `l1`; the tracer searches 30 nodes deep, so the longer ones go through a waypoint (`via`, two legs).
     reachability:
-      # PATHS THROUGH A FIREWALL (L3 with the firewall kinds: an SVI's pbr policy, its footprint, context). `via` is
+      # PATHS THROUGH A FIREWALL (L3 with the firewall kinds: the footprint and its context). `via` is
       # the waypoint (two legs), `crosses` the nodes the chain must hold: the model says the traffic goes through them.
       firewall:
         # a server of DC-KTW1 to the first ISP: PROD leaves through the external pair (the default route of the
@@ -136,16 +136,15 @@ cases:
         - src: DcimVirtualDevice:ktw1-vm-01
           dst: DcimPhysicalDevice:EXT-ISP-A-PE1
           via: DcimPhysicalDevice:ktw1-xfw-01
-        # a leaf of C900 to the border leaf, through the internal context that serves the footprint: the SVI carries the
-        # pbr policy, the policy names the footprint, the footprint its context, the context its tagged border port
+        # a leaf of C900 to the border leaf, through the internal context that serves the footprint (the leaf steers,
+        # ManagedPBR; the steering and the context's border port are derived, not edges of the graph)
         - src: DcimPhysicalDevice:ktw1-leaf-01
           dst: DcimPhysicalDevice:ktw1-bl-01
           via: ManagedFirewallContext:shared-ktw1-fw-ha-prod
           crosses:
-            - RoutingPolicy:pbr-c900-p-dc-ktw1
             - TopologyCustomerDC:C900-P-DC-KTW1
         # a server of DC-KTW1 to a server of DC-WAW1 (another segment): each DC steers its segment to its own firewall
-        # (the SVI carries the pbr policy of the footprint, whose context is tagged on the border leaf), so the chain
+        # (the leaf steers the SVI to the context serving the footprint, behind the border leaf), so the chain
         # crosses the context of KTW1 and then the context of WAW1, in that order
         - src: DcimVirtualDevice:ktw1-vm-01
           dst: DcimVirtualDevice:waw1-vm-01

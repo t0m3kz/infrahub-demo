@@ -2,7 +2,10 @@
 
 There is no ``l2_mode`` attribute: the layer of a port is its content.
 
-* An L2 tag on a switch port (physical or LAG) is its ``segments`` edge (switchport membership, one-sided, ManagedVxlanSegment) or a firewall / load-balancer context in its ``capabilities``.
+* An L2 tag on a switch port (physical or LAG) is its ``segments`` edge (switchport membership, one-sided,
+  ManagedVxlanSegment). A border service port that faces a firewall or load-balancer pair is a trunk too, but a
+  context has no interface edge (its border ports are derived from the cables, utils/service_contexts.py), so this
+  check does not see it; a terminated segment it carries is a ``segments`` tag.
 * An L3 signal is an ``ip_address``, any ``sub_interfaces``, or a routing capability (a BGP or OSPF session, an OSPF
   interface, a routed exchange, an interconnect, tunnel or handoff circuit). A carrier circuit is L1 and never a signal.
 
@@ -23,8 +26,6 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
 
-L2_TAG_KINDS = frozenset({"ManagedFirewallContext", "ManagedLoadbalancerContext"})
-"""Capabilities that make a switch port an L2 port besides ``segments``."""
 L3_SIGNAL_KINDS = frozenset(
     {
         "ManagedBGPPeering",
@@ -44,8 +45,7 @@ def capability_kinds(port: dict[str, Any]) -> set[str]:
 
 def l2_tags(port: dict[str, Any]) -> list[str]:
     """What makes a cleaned physical or LAG port a switchport."""
-    tags = ["segments"] if port.get("segments") else []
-    return tags + sorted(capability_kinds(port) & L2_TAG_KINDS)
+    return ["segments"] if port.get("segments") else []
 
 
 def l3_signals(port: dict[str, Any]) -> list[str]:

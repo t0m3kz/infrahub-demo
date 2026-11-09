@@ -6,7 +6,7 @@ import copy
 from pathlib import Path
 from typing import Any
 
-from tests.smoke.fixture_builders.vrf import routing_vrf
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
 from transforms.config.firewall import Firewall
 
 # Project root — needed to point root_directory at the real templates/
@@ -23,7 +23,7 @@ def _leg_interface(ns_type: str) -> dict[str, Any]:
     """A raw addressed transit leg: ``eth1.<transit VLAN>`` of the HA-owned context."""
     ns_name, address, vlan = _LEG_NAMESPACES[ns_type]
     return {
-        "vrf": {"node": routing_vrf(ns_name)},
+        **interface_vrf_capability(routing_vrf(ns_name)),
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": f"eth1.{vlan}"},
         "vlan_id": {"value": vlan},
@@ -212,7 +212,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
 
     # FW interface with IP — zone and policies come from the interface's segments
     fw_iface_node: dict[str, Any] = {
-        "vrf": {"node": routing_vrf(seg_node["security_zone"]["node"]["name"]["value"])},
+        **interface_vrf_capability(routing_vrf(seg_node["security_zone"]["node"]["name"]["value"])),
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth0.100"},
         "vlan_id": {"value": 100},
@@ -322,7 +322,6 @@ def _make_context_smoke_data(platform: str, *, serves_segment: bool) -> dict[str
         "inbound_rules": {"edges": []},
     }
     context_iface: dict[str, Any] = {
-        "vrf": {"node": None},
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth1.3005"},
         "vlan_id": {"value": 3005},

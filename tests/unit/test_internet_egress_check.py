@@ -21,8 +21,8 @@ from checks.internet_egress import (
     internet_rules,
     virtual_pair_gaps,
 )
-from tests.smoke.fixture_builders.vrf import routing_vrf
-from tests.unit.routing_helpers import make_vrf
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, transit_vlan
 
@@ -67,7 +67,7 @@ def _leg(
         "role": "firewall",
         "device": {"id": device, "name": device, "role": "internal-firewall"},
         "ip_address": address,
-        "vrf": make_vrf({"name": namespace[0], "vrf_type": namespace[1]}) if namespace else None,
+        **(in_vrf(make_vrf({"name": namespace[0], "vrf_type": namespace[1]})) if namespace else {}),
         "capabilities": [{"typename": "TopologyRoutedExchange", "id": exchange, "name": "ex"}] if exchange else [],
     }
 
@@ -290,7 +290,7 @@ class TestDataCenter:
         ]
         assert egress_findings(_cleaned([_dc([context])])) == []
         member["interfaces"] = [
-            {**i, "vlan_id": 3999, "ip_address": None, "vrf": None} if i["id"] == leg_id else i
+            {**i, "vlan_id": 3999, "ip_address": None, "zone_capabilities": []} if i["id"] == leg_id else i
             for i in member["interfaces"]
         ]
         (finding,) = egress_findings(_cleaned([_dc([context])]))
@@ -300,7 +300,7 @@ class TestDataCenter:
         """A leg of the INTERNET VLAN with no address is reported, not skipped."""
         context = _context()
         leg = _internet_leg(context, "dc-fw-1")
-        leg["ip_address"], leg["vrf"] = None, None
+        leg["ip_address"], leg["zone_capabilities"] = None, []
         (finding,) = egress_findings(_cleaned([_dc([context])]))
         assert "INTERNET leg 'dc-fw-1:eth1." in finding
         assert "has no address" in finding
@@ -308,7 +308,7 @@ class TestDataCenter:
     def test_leg_addressed_in_another_namespace(self) -> None:
         """An address outside the INTERNET namespace is no INTERNET leg."""
         context = _context()
-        _internet_leg(context, "dc-fw-2")["vrf"] = make_vrf({"name": "PROD", "vrf_type": "prod"})
+        _internet_leg(context, "dc-fw-2").update(in_vrf(make_vrf({"name": "PROD", "vrf_type": "prod"})))
         (finding,) = egress_findings(_cleaned([_dc([context])]))
         assert "addressed in namespace 'PROD', not in the INTERNET namespace" in finding
 
@@ -565,7 +565,7 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
                         },
                     },
                     {
-                        "vrf": {"node": routing_vrf("INTERNET")},
+                        **interface_vrf_capability(routing_vrf("INTERNET")),
                         "id": f"leg-{n}",
                         "__typename": "DcimVirtualInterface",
                         "name": value(f"eth1.{INTERNET_VLAN}"),

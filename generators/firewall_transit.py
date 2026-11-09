@@ -149,7 +149,7 @@ class TransitLegsMixin:
         cabled_uplinks = [
             port for up in uplinks.values() if (port := _host_port(up, host_ports)) is not None and _cable_id(port)
         ]
-        far_ends = await far_end_interfaces(self.client, cabled_uplinks, include=["capabilities"])
+        far_ends = await far_end_interfaces(self.client, cabled_uplinks, include=[])
 
         members: list[_TransitMember] = []
         for device, offset in pairs:
@@ -174,28 +174,29 @@ class TransitLegsMixin:
             )
         return members
 
-    async def _context_ports(
-        self, spec: ContextSpec, context_name: str, members: list[_TransitMember], *, fresh_ports: bool
-    ) -> _TransitState:
-        """The context named context_name (None when absent) and the border ports still to tag with it.
+    async def _context_named(self, spec: ContextSpec, context_name: str) -> _TransitState:
+        """The context named context_name (None when absent), never complete: the part of _transit_state that a
+        dedicated (tracked) context also needs, as it re-saves every leg anyway.
 
-        Never complete: the part of _transit_state that a dedicated (tracked) context also needs, as
-        it re-saves every leg anyway. fresh_ports reads the members' border ports again; without it
-        the capabilities they were fetched with by _resolve_transit_members are used (a pre-lock
-        check, where a stale answer only sends the run into the lock, which re-reads).
-        """
-        every_port = [member.bl_port.id for member in members]
+        Its border ports are not tagged: they are the ports cabled to its members' uplinks (utils/service_contexts.py
+        ``context_border_ports``), derived by every reader."""
         contexts = await self.client.filters(kind=spec.context_kind, name__value=context_name)
-        if not contexts:
-            return _TransitState(context=None, complete=False, untagged_port_ids=every_port)
-        context = contexts[0]
-        if fresh_ports:
-            ports = await self.client.filters(kind=DcimPhysicalInterface, ids=every_port, include=["capabilities"])
-        else:
-            ports = [member.bl_port for member in members]
-        tagged = {port.id for port in ports if any(cap.id == context.id for cap in port.capabilities.peers)}
-        untagged = [port_id for port_id in every_port if port_id not in tagged]
-        return _TransitState(context=context, complete=False, untagged_port_ids=untagged)
+        return _TransitState(context=contexts[0] if contexts else None, complete=False)
+
+    async def _interface_zones(self, interface_ids: list[str]) -> dict[str, str]:
+        """interface id -> the SecurityZone id of the VRF instance it is in (the ManagedVRF listing it in its
+        ``capabilities``), one query; an interface in no instance is absent."""
+        if not interface_ids:
+            return {}
+        wanted = set(interface_ids)
+        zones: dict[str, str] = {}
+        for vrf in await self.client.filters(
+            kind=ManagedVRF, capabilities__ids=sorted(wanted), include=["capabilities", "security_zone"]
+        ):
+            for peer in vrf.capabilities.peers:
+                if peer.id in wanted:
+                    zones[peer.id] = vrf.security_zone.id
+        return zones
 
     async def _transit_state(
         self,
@@ -206,25 +207,23 @@ class TransitLegsMixin:
         leg_types: tuple[str, ...],
         exchange_specs: list[tuple[str, str, str]],
         *,
-        fresh_ports: bool,
         needs_snat: bool | None = None,
     ) -> _TransitState:
         """Read-only completeness check of a context's legs.
 
         Complete means: the context has its VLAN (and its SNAT address / VIP
-        prefix where it takes one); every member's border port carries the
-        context; every exchange exists; every member has a sub-interface per
-        leg with an address in that leg's namespace, linked to the leg's
-        exchanges. Sub-interfaces are written last, so one with its address
-        implies the leg's other addresses exist. Also returns the context and
-        the border ports still to tag with it (_context_ports, see fresh_ports).
+        prefix where it takes one); every exchange exists; every member has a
+        sub-interface per leg with an address in that leg's namespace, linked
+        to the leg's exchanges, in the VRF instance of the leg's namespace.
+        Sub-interfaces are written last, so one with its address implies the
+        leg's other addresses exist. Also returns the context (_context_named).
         """
-        incomplete = await self._context_ports(spec, context_name, members, fresh_ports=fresh_ports)
+        incomplete = await self._context_named(spec, context_name)
         context = incomplete.context
         if context is None:
             return incomplete
         vlan_id = getattr(context.vlan_id, "value", None)
-        if incomplete.untagged_port_ids or not vlan_id:
+        if not vlan_id:
             return incomplete
         if (INTERNET_TYPE in leg_types if needs_snat is None else needs_snat) and not getattr(
             context.snat_address, "id", None
@@ -249,10 +248,12 @@ class TransitLegsMixin:
             (sub.device.id, sub.parent_interface.id, sub.vlan_id.value): sub
             for sub in await self.client.filters(
                 kind=DcimVirtualInterface,
-                capabilities__ids=[context.id],
-                include=["capabilities", "parent_interface", "vrf.security_zone"],
+                device__ids=[member.device_id for member in members],
+                parent_interface__ids=[member.trunk.id for member in members],
+                include=["capabilities", "parent_interface"],
             )
         }
+        zones = await self._interface_zones(sorted(sub.id for sub in sub_interfaces.values()))
         address_namespace: dict[str, str] = {}  # IpamIPAddress id -> namespace id it must be in
         for leg_type in leg_types:
             wanted = {exchange_ids[name] for name, a_type, z_type in exchange_specs if leg_type in (a_type, z_type)}
@@ -262,7 +263,7 @@ class TransitLegsMixin:
                     return incomplete
                 if not wanted <= {cap.id for cap in sub.capabilities.peers}:
                     return incomplete
-                if not sub.vrf.id or sub.vrf.peer.security_zone.id != namespaces[leg_type].id:
+                if zones.get(sub.id) != namespaces[leg_type].id:
                     return incomplete
                 address_namespace[sub.ip_address.id] = sub.ip_address.id
         addresses = await self.client.filters(
@@ -271,7 +272,7 @@ class TransitLegsMixin:
         in_namespace = {address.id for address in addresses if address.ip_namespace.peer.name.value == "default"}
         if in_namespace != set(address_namespace):
             return incomplete
-        return _TransitState(context=context, complete=True, untagged_port_ids=[])
+        return _TransitState(context=context, complete=True)
 
     async def _snat_pool(self) -> Any | None:
         """The FW-SNAT-INTERNET-IPv4 address pool (data/bootstrap); None (logged) when missing."""
@@ -385,7 +386,6 @@ class TransitLegsMixin:
         """
         interfaces = await self.client.filters(
             kind=DcimVirtualInterface,
-            capabilities__ids=[context_id],
             device__ids=[member.device_id for member in members],
             parent_interface__ids=[member.trunk.id for member in members],
             vlan_id__value=transit_vlan(vlan_id, leg_type),
@@ -395,24 +395,20 @@ class TransitLegsMixin:
         }
         if not addressed:
             return None
-        # The legs' VRF instances read with their zone, in one query: a VRF already in the client store from an earlier
-        # read of this run may lack its security_zone, and an `include` on the interface does not refresh it.
-        vrf_ids = sorted({interface.vrf.id for interface in interfaces if interface.ip_address.id and interface.vrf.id})
-        zone_of = {
-            vrf.id: vrf.security_zone.id
-            for vrf in (
-                await self.client.filters(kind=ManagedVRF, ids=vrf_ids, include=["security_zone"]) if vrf_ids else []
-            )
-        }
+        # The legs' VRF instances with their zone, in one query (the instance lists its interfaces).
+        zone_of = await self._interface_zones(
+            sorted(interface.id for interface in interfaces if interface.ip_address.id)
+        )
         for interface in interfaces:
             if not interface.ip_address.id:
                 continue
-            zone_id = zone_of.get(interface.vrf.id) if interface.vrf.id else None
-            if zone_id != namespace.id:
+            zone_id = zone_of.get(interface.id)
+            # A leg in no instance yet is healed by the run (its VRF edge is written after its save); one in the VRF
+            # of another zone is a defect.
+            if zone_id is not None and zone_id != namespace.id:
                 raise ValueError(
-                    f"Existing transit member {interface.name.value} (device {interface.device.id}) has VRF "
-                    f"{interface.vrf.id or 'none'} in security zone {zone_id or 'none'}, expected "
-                    f"{namespace.name.value} ({namespace.id})"
+                    f"Existing transit member {interface.name.value} (device {interface.device.id}) is in security "
+                    f"zone {zone_id}, expected {namespace.name.value} ({namespace.id})"
                 )
         addresses = await self.client.filters(kind=IpamIPAddress, ids=sorted(addressed.values()), include=["ip_prefix"])
         by_id = {address.id: address for address in addresses}
@@ -503,8 +499,7 @@ class TransitLegsMixin:
         uplink given. The far end must be a border service port of
         the spec's role (BORDER_ROLE_FOR_SERVICES) on a border leaf or edge —
         the one port the context's legs face for this member, whatever the
-        number of border devices. Fetched with its capabilities, the context
-        tags read from it.
+        number of border devices.
         """
         service_role = BORDER_ROLE_FOR_SERVICES[spec.role]
         if not _cable_id(uplink):

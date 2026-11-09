@@ -261,23 +261,44 @@ def test_match_transit_contexts_leaves_an_unmatched_colocation_context_in_the_li
 
 
 async def test_fetch_transit_inventory_tags_edge_service_ports_like_border_leaf_ones() -> None:
-    """A context's physical ports on an edge (colocation metro) are border_ports, like a border leaf's."""
+    """The firewall ports on an edge (colocation metro) a member's uplink is cabled to are border_ports, like a border
+    leaf's; a port on a device of another role is not."""
 
-    def port(port_id: str, device: str, role: str) -> dict:
+    def member(member_id: str, port_id: str, device: str, role: str) -> dict:
+        far = {
+            "__typename": "DcimPhysicalInterface",
+            "id": port_id,
+            "name": {"value": "Ethernet1/15"},
+            "role": {"value": "firewall"},
+            "device": {"node": {"id": f"id-{device}", "name": {"value": device}, "role": {"value": role}}},
+        }
+        uplink = {
+            "__typename": "DcimPhysicalInterface",
+            "id": f"up-{member_id}",
+            "name": {"value": "ethernet1/1"},
+            "role": {"value": "uplink"},
+            "cable": {"node": {"id": f"c-{member_id}", "endpoints": {"edges": [{"node": far}]}}},
+        }
         return {
             "node": {
-                "__typename": "DcimPhysicalInterface",
-                "id": port_id,
-                "name": {"value": "Ethernet1/15"},
-                "device": {"node": {"id": f"id-{device}", "name": {"value": device}, "role": {"value": role}}},
+                "__typename": "DcimPhysicalDevice",
+                "id": member_id,
+                "name": {"value": member_id},
+                "role": {"value": "internal-firewall"},
+                "shared_capabilities": {"edges": [{"node": {"__typename": "ManagedFirewallContext", "id": "ctx"}}]},
+                "interfaces": {"edges": [{"node": uplink}]},
             }
         }
 
     context = {
         "id": "ctx",
         "name": {"value": "fw-fr-shared"},
-        "capabilities": {
-            "edges": [port("p1", "eg-fr201", "edge"), port("p2", "eg-fr202", "edge"), port("p3", "server-1", "server")]
+        "shared_devices": {
+            "edges": [
+                member("fw-1", "p1", "eg-fr201", "edge"),
+                member("fw-2", "p2", "eg-fr202", "edge"),
+                member("fw-3", "p3", "server-1", "server"),
+            ]
         },
         "cluster": {"node": {"capabilities": {"edges": []}}},
         "served_deployments": {"edges": []},

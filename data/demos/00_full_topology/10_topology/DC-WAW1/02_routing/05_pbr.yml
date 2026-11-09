@@ -1,0 +1,17 @@
+---
+# The leaves of DC-WAW1 steer to the firewall: each has a ManagedPBR, a capability of the device like its BGP process.
+# It holds nothing else: which SVIs it steers (c900-app-p, whose footprint C900-P-DC-WAW1 is served by the dedicated
+# context c900-waw1-fw-01-waw1-fw-02-prod) and the next hop, ACL and bypass are derived when the device is rendered. A
+# border leaf has none: the PBR of the overlay ingress on its L3 VNI SVI is derived from the contexts on its service
+# ports. On 30_all the VRF pass of the device writes the same object (generators/helpers/vrf.py).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedPBR
+  data:
+    - name: waw1-leaf-01-pbr
+      status: active
+      capabilities: ["waw1-leaf-01"]
+    - name: waw1-leaf-02-pbr
+      status: active
+      capabilities: ["waw1-leaf-02"]

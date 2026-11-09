@@ -12,8 +12,8 @@ One kind per file, because mixing them is how weekends get cancelled: the top-le
 segment, a BGP process). What exists only for that object is nested under it: the interfaces, LAG and peerings of a
 device or transport (`interfaces:`), the front ports of a patch panel (`front_ports:`), the gateway address and prefix of
 a segment, the loopback that is a BGP process's router id, the provider's `peer_ip` of a peering. What cannot be nested
-stays in a flat file of its own kind, because it names something created later (a sub-interface names the VRF, which
-lists the device as a member; a port-channel names the segment, which needs the leaf's SVI first) or because two parents
+stays in a flat file of its own kind, because it names something created later (a VRF lists its interfaces, so each
+VRF's interface list sits in `90_bindings/95_vrf_interfaces/`, after every interface it names; a port-channel names the segment, which needs the leaf's SVI first) or because two parents
 use it (a link prefix, an AS number). Definitions precede consumers; cross-facility relationships and late keyed
 upserts go under `90_bindings/`. Splitting a mixed file retains each complete nested subtree and its parent bindings.
 
@@ -28,7 +28,7 @@ upserts go under `90_bindings/`. Splitting a mixed file retains each complete ne
 | `10_topology/Providers/`, `10_topology/Internet/` | Provider-owned ISP routers |
 | `10_topology/<facility>/06_fabric/` | The 21 preserved global-table Loopback0 interfaces |
 | `20_C900/00_identity/`, `21_C901/00_identity/` | Each existing customer declaration |
-| `20_C900/DC-KTW1/`, `20_C900/DC-WAW1/`, `20_C900/DC-GDN1/` | Customer footprints, routed and firewall-terminated segments/realizations, VMs, virtual switches, port groups, SDNs/Kubernetes and tenant firewall/PBR rules |
+| `20_C900/DC-KTW1/`, `20_C900/DC-WAW1/`, `20_C900/DC-GDN1/` | Customer footprints, routed and firewall-terminated segments/realizations, VMs, virtual switches, port groups, SDNs/Kubernetes and tenant firewall rules (the leaves' `ManagedPBR` sits with their BGP processes in `10_topology/<DC>/02_routing/`) |
 | `20_C900/DCI/` | Stretched segment definition |
 | `20_C900/COLO-PAR/` | Existing owned physical workload, footprint, cable, gateway-port binding and static route; the direct colocation-host experiment is retained unchanged |
 | `20_C900/Cloud/` | Owned accounts, networks, gateways, route tables, attachments, footprints, segments, instance, transports/peerings, service endpoints and hosted clusters |
@@ -40,6 +40,7 @@ upserts go under `90_bindings/`. Splitting a mixed file retains each complete ne
 | `90_bindings/50_connections/`, `90_bindings/60_offices/` | Cloud carriers/session circuits/BGP, SaaS sessions and office tunnels |
 | `90_bindings/70_public_sides/` | Shared public provider ports and service endpoints, after their regions and customer virtual networks |
 | `90_bindings/80_fabric/`, `90_bindings/90_internet/` | 45 preserved EVPN endpoint bindings, six route-target upserts, internet access carriers, routed ports, final VRF membership and routing policies |
+| `90_bindings/95_vrf_interfaces/` | The interfaces of each VRF instance (its `capabilities`), one whole list per instance, after every interface it names |
 
 All object files load once in sorted recursive order, without a manifest or fallback ordering.
 The numbered reorganization preserved the original objects; subsequent WAW service additions are explicit dataset
@@ -120,8 +121,8 @@ SaaS legs stay in PAR-COLO1 (FRA-COLO1 and AMS-COLO1 are DCI transit only). The 
 All addresses, prefixes, pools and resource prefixes use Infrahub's built-in `default` IPAM namespace.
 Routing is separate: the four bootstrap `SecurityZone` names are also the CLI VRF names (`PROD`, `NONPROD`,
 `INTERNET`, `MANAGEMENT`). A deployment realizes its zone as a `ManagedVRF`; segments, session circuits and
-routed exchanges name their zones directly. Standalone routed ports and firewall service legs carry an explicit
-zone, and standalone cloud CIDR/public-prefix registrations carry `IpamPrefix.security_zone`. Segment-owned
+routed exchanges name their zones directly. Standalone routed ports, SVIs and firewall service legs are in a VRF
+instance, which lists them as its `capabilities` (`90_bindings/95_vrf_interfaces/`), and standalone cloud CIDR/public-prefix registrations carry `IpamPrefix.security_zone`. Segment-owned
 addresses and prefixes inherit routing authority from their segment, not from their IPAM namespace.
 
 This sample and `30_all` are separate load scenarios. Loading both together would collide on `198.18.0.0/24`

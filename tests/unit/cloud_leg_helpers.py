@@ -43,6 +43,11 @@ def prefix(cidr: str, ns_name: str = "PROD", ns_type: str = "prod") -> dict[str,
     }
 
 
+def interface_vrf(zone: str = "PROD", deployment: str = "FR") -> dict[str, Any]:
+    """The raw ``zone_capabilities`` of an interface in that VRF: the ManagedVRF among its capabilities."""
+    return edges({"__typename": "ManagedVRF", **routing_vrf(zone, deployment)})
+
+
 def routing_vrf(zone: str = "PROD", deployment: str = "FR") -> dict[str, Any]:
     """An explicit ManagedVRF in the raw GraphQL selection shape."""
     return {
@@ -117,7 +122,10 @@ def peering(
     gateway it lands on; ``transport_gateway`` the one a CloudVPNConnection holds.
     """
     vrf = routing_vrf(zone, deployment)
-    circuit_ends = [{"name": v(port), "device": node({"name": v(device)}), "vrf": node(vrf)} for device, port in ends]
+    circuit_ends = [
+        {"name": v(port), "device": node({"name": v(device)}), "zone_capabilities": interface_vrf(zone, deployment)}
+        for device, port in ends
+    ]
     circuit_ends.append({"name": v(name), "device": node({"name": v(transport)})})
     transport_node: dict[str, Any] = {
         "__typename": kind,

@@ -100,9 +100,6 @@ def test_fixed_l3_vni_band_is_reserved_and_encodable(routing_schema_roots: list[
     [
         ("ManagedVRF", "security_zone", "vrf__security_zone", "vrfs", False),
         ("TopologySessionCircuit", "vrf", "session_circuit__vrf", "session_circuits", True),
-        ("TopologyExchangeGateway", "vrf_a", "exchange_gateway__vrf_a", "exchanges_a", False),
-        ("TopologyExchangeGateway", "vrf_z", "exchange_gateway__vrf_z", "exchanges_z", False),
-        ("DcimInterface", "vrf", "vrf__interfaces", "interfaces", True),
         ("ManagedNetworkSegment", "security_zone", "network_segment__security_zone", "network_segments", True),
     ],
 )
@@ -135,7 +132,8 @@ def test_vrf_instances_keep_parent_lifecycle_and_shared_membership(routing_schem
     """Changing routing ownership must not change instance deletion or device membership."""
     vrf = _definition(routing_schema_roots, "ManagedVRF")
     assert isinstance(vrf, NodeSchema)
-    assert vrf.inherit_from == ["ManagedGeneric", "ManagedGenericSharedDevice"]
+    # Its interfaces are its interface capabilities (ManagedGenericInterfaces), its members its shared devices.
+    assert vrf.inherit_from == ["ManagedGeneric", "ManagedGenericSharedDevice", "ManagedGenericInterfaces"]
     assert vrf.human_friendly_id == ["deployment__name__value", "security_zone__name__value"]
     assert vrf.uniqueness_constraints == [["deployment", "security_zone"]]
     assert "l3_vni" not in _attributes(routing_schema_roots, "ManagedVRF")
@@ -147,7 +145,7 @@ def test_vrf_instances_keep_parent_lifecycle_and_shared_membership(routing_schem
     assert (children.peer, children.kind, children.on_delete) == ("ManagedVRF", "Component", "cascade")
 
 
-def test_exchanges_and_session_circuits_no_longer_use_ipam_routing_metadata(
+def test_exchange_gateways_and_session_circuits_no_longer_use_ipam_routing_metadata(
     routing_schema_roots: list[SchemaRoot],
 ) -> None:
     """Neither a circuit nor an exchange has a namespace-based routing authority."""
@@ -233,9 +231,10 @@ def test_hand_curated_protocols_match_routing_authority_types(root_dir: Path) ->
     }
     for kind in ("ManagedVRF", "ManagedNetworkSegment"):
         assert fields[kind]["security_zone"] == "RelationshipAttribute[SecurityZone]"
-    for kind in ("TopologySessionCircuit", "DcimInterface"):
-        assert fields[kind]["vrf"] == "RelationshipAttribute[ManagedVRF]"
-        assert "security_zone" not in fields[kind]
+    assert fields["TopologySessionCircuit"]["vrf"] == "RelationshipAttribute[ManagedVRF]"
+    assert "security_zone" not in fields["TopologySessionCircuit"]
+    # An interface's VRF is the ManagedVRF among its capabilities: no relationship of the interface.
+    assert not {"vrf", "security_zone"} & fields["DcimInterface"].keys()
     for kind in ("IpamPrefix", "IpamIPAddress"):
         assert not {"security_zone", "vrf"} & fields[kind].keys()
     assert "namespace" not in fields["ManagedVRF"]
@@ -247,20 +246,14 @@ def test_hand_curated_protocols_match_routing_authority_types(root_dir: Path) ->
     }
     assert fields["SecurityZone"]["l3_vni"] == "Integer"
     assert fields["SecurityZone"]["vrf_type"] == "Dropdown"
-    for reverse, peer in {
-        "interfaces": "DcimInterface",
-        "session_circuits": "TopologySessionCircuit",
-        "exchanges_a": "TopologyExchangeGateway",
-        "exchanges_z": "TopologyExchangeGateway",
-    }.items():
-        assert fields["ManagedVRF"][reverse] == f"RelationshipManager[{peer}]"
+    assert fields["ManagedVRF"]["session_circuits"] == "RelationshipManager[TopologySessionCircuit]"
+    # The exchanges name the VRF one-sidedly; the interfaces are the inherited interface capabilities.
+    assert set(fields["ManagedVRF"]) == {"deployment", "security_zone", "session_circuits"}
     assert fields["SecurityZone"]["vrfs"] == "RelationshipManager[ManagedVRF]"
     assert fields["SecurityZone"]["network_segments"] == "RelationshipManager[ManagedNetworkSegment]"
     assert (
         not {
             "session_circuits",
-            "exchanges_a",
-            "exchanges_z",
             "routed_interfaces",
             "registered_prefixes",
             "virtual_networks",
@@ -269,3 +262,4 @@ def test_hand_curated_protocols_match_routing_authority_types(root_dir: Path) ->
         }
         & fields["SecurityZone"].keys()
     )
+    assert not any("TopologyExchangeGateway" in annotation for annotation in fields["SecurityZone"].values())

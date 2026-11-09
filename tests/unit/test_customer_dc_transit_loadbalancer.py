@@ -19,6 +19,7 @@ from tests.unit.customer_dc_transit_helpers import (
     _make_gen,
     _payload,
     _run,
+    _sub_names,
     _World,
 )
 from utils.exchange_transit import transit_vlan
@@ -73,7 +74,9 @@ class TestLoadbalancerSharedContext:
         assert context.tenant_id is None
         assert set(world.sub_interfaces) == {("lb-1", "Ethernet1/25.3100"), ("lb-2", "Ethernet1/25.3100")}
         for sub in world.sub_interfaces.values():
-            assert [peer.id for peer in sub.capabilities.peers] == [context.id]
+            # No exchange; the leg's only capability is its VRF instance (the context is derived, never an edge).
+            assert _sub_names(world)[(sub.device.id, sub.name.value)] == []
+            assert world.vrf_of(sub) is not None
         assert world.exchanges == {}
         assert world.snat_allocations == {}
         assert sorted(address for address, _ in world.addresses) == [
@@ -89,7 +92,7 @@ class TestLoadbalancerSharedContext:
         assert world.sub_interfaces[("lb-2", "Ethernet1/25.3100")].ip_address.id == (
             world.addresses[("100.66.64.6/29", "default")].id
         )
-        assert world.tags == [(context.id, ["bl-port-lb-1", "bl-port-lb-2"])]
+        assert world.group_adds == [(context.id, ["group-service-contexts"])]  # no port tag: derived
         assert events == [f"acquire:lb-context-{_LB_PROD}", "release"]
         gen.link_serving_context.assert_awaited_once_with(
             LOADBALANCER_CONTEXT, customer_id="cust-1", context_id=context.id, current_ids=[], parent_id="dc10-id"

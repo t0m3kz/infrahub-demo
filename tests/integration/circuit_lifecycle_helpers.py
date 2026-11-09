@@ -39,7 +39,7 @@ query ($devices: [String]) {
       node {
         id
         name { value }
-        namespace { node { name { value } } }
+        security_zone { node { name { value } } }
         shared_devices { edges { node { name { value } } } }
       }
     }
@@ -52,7 +52,9 @@ query ($devices: [String]) {
         role { value }
         device { node { name { value } } }
         ip_address { node { ip_namespace { node { name { value } } } } }
-        vrf { node { id namespace { node { name { value } } } } }
+        zone_capabilities: capabilities {
+          edges { node { __typename ... on ManagedVRF { id security_zone { node { name { value } } } } } }
+        }
         segment_vlan {
           node { segment_deployment { node { segment { node { ... on ManagedVxlanSegment { name { value } } } } } } }
         }
@@ -76,6 +78,14 @@ def _value(node: dict[str, Any], attribute: str) -> Any:
 
 def _device_name(node: dict[str, Any]) -> str:
     return str((((node.get("device") or {}).get("node") or {}).get("name") or {}).get("value"))
+
+
+def interface_vrf_node(node: dict[str, Any]) -> dict[str, Any]:
+    """The raw ManagedVRF among an interface's ``zone_capabilities`` (its VRF instance), ``{}`` when it is in none."""
+    for edge in (node.get("zone_capabilities") or {}).get("edges") or []:
+        if edge["node"].get("__typename") == "ManagedVRF":
+            return edge["node"]
+    return {}
 
 
 def _namespace_name(holder: dict[str, Any] | None, key: str) -> str | None:
@@ -106,7 +116,7 @@ def parse_switch_vrf_state(result: dict[str, Any], devices: list[str]) -> dict[s
     address on another interface)}."""
     state: dict[str, dict[str, Any]] = {device: {"vrf": None, "svis": {}, "foreign": []} for device in devices}
     for node in _edges(result, "ManagedVRF"):
-        if _namespace_name(node, "namespace") != SEGMENT_NAMESPACE:
+        if _namespace_name(node, "security_zone") != SEGMENT_NAMESPACE:
             continue
         for edge in (node.get("shared_devices") or {}).get("edges", []):
             device = str(_value(edge["node"], "name"))
@@ -114,7 +124,7 @@ def parse_switch_vrf_state(result: dict[str, Any], devices: list[str]) -> dict[s
                 state[device]["vrf"] = node["id"]
     for node in _edges(result, "DcimVirtualInterface"):
         device, name = _device_name(node), str(_value(node, "name"))
-        vrf = (node.get("vrf") or {}).get("node") or {}
+        vrf = interface_vrf_node(node)
         if _value(node, "role") == SVI_ROLE:
             row = (node.get("segment_vlan") or {}).get("node") or {}
             deployment = (row.get("segment_deployment") or {}).get("node") or {}
@@ -122,7 +132,7 @@ def parse_switch_vrf_state(result: dict[str, Any], devices: list[str]) -> dict[s
             if segment.get("value") == SEGMENT_NAME:
                 state[device]["svis"][name] = {"id": node["id"], "vrf": vrf.get("id")}
                 continue
-        if SEGMENT_NAMESPACE in (_address_namespace(node), _namespace_name(vrf, "namespace")):
+        if SEGMENT_NAMESPACE in (_address_namespace(node), _namespace_name(vrf, "security_zone")):
             state[device]["foreign"].append(f"{name} (virtual)")
     for node in _edges(result, "DcimPhysicalInterface"):
         if _address_namespace(node) == SEGMENT_NAMESPACE:

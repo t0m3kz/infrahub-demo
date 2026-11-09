@@ -1,8 +1,9 @@
 """A generator host and a fake client for the tests of generators/helpers/vrf.py and the callers that use it.
 
-The fake client keeps the instances (``ManagedVRF``) and the SVIs that point at them in a ``VrfStore``: the
-``filters`` reads, the membership mutations (``add_relationships`` / ``remove_relationships``) and the deletes act on
-it, so a pass sees its own writes and several hosts can share one store.
+The fake client keeps the instances (``ManagedVRF``) and the SVIs in them (the instance's interface ``capabilities``) in
+a ``VrfStore``: the ``filters`` reads, the edge mutations (``add_relationships`` / ``remove_relationships`` of
+``shared_devices`` and ``capabilities``) and the deletes act on it, so a pass sees its own writes and several hosts can
+share one store.
 """
 
 from __future__ import annotations
@@ -54,22 +55,33 @@ class FakeVrf:
         """The members as the relationship manager shows them, read when asked."""
         return SimpleNamespace(peers=[SimpleNamespace(id=member) for member in sorted(self.members)])
 
-    async def add_relationships(self, relation: str, ids: list[str]) -> None:
+    def _edges(self, relation: str) -> set[str]:
+        """The peers of ``relation``: the members, or the interfaces in the instance (``capabilities``)."""
+        assert self.store is not None
+        if relation == "capabilities":
+            return self.store.svi_refs.setdefault(self.id, set())
+        assert relation == "shared_devices", relation
+        return self.members
+
+    async def add_relationships(self, relation_to_update: str, related_nodes: list[str]) -> None:
         """The RelationshipAdd mutation: only the listed edges."""
         assert self.store is not None
-        self.store.edge_ops.append(("add", self.id, relation, list(ids)))
-        self.members.update(ids)
+        self.store.edge_ops.append(("add", self.id, relation_to_update, list(related_nodes)))
+        self._edges(relation_to_update).update(related_nodes)
 
-    async def remove_relationships(self, relation: str, ids: list[str]) -> None:
+    async def remove_relationships(self, relation_to_update: str, related_nodes: list[str]) -> None:
         """The RelationshipRemove mutation: only the listed edges."""
         assert self.store is not None
-        self.store.edge_ops.append(("remove", self.id, relation, list(ids)))
-        self.members.difference_update(ids)
+        self.store.edge_ops.append(("remove", self.id, relation_to_update, list(related_nodes)))
+        self._edges(relation_to_update).difference_update(related_nodes)
 
 
 @dataclass
 class VrfStore:
-    """The graph the fake client reads and writes: instances, and the SVIs pointing at them (vrf id -> svi ids)."""
+    """The graph the fake client reads and writes: instances, and the interfaces in them (vrf id -> interface ids).
+
+    ``external_refs`` are other references that keep an instance (``session_circuits``, ``capabilities`` of
+    non-SVI interfaces, ``exchanges``: the routed exchanges naming it as ``vrf_a`` or ``vrf_z``)."""
 
     vrfs: dict[str, FakeVrf] = field(default_factory=dict)
     svi_refs: dict[str, set[str]] = field(default_factory=dict)
@@ -95,9 +107,9 @@ class VrfStore:
         for dev_edge in (data.get("DcimDevice") or {}).get("edges", []):
             for if_edge in dev_edge["node"]["interfaces"]["edges"]:
                 iface = if_edge["node"]
-                vrf = (iface.get("vrf") or {}).get("node")
-                if vrf:
-                    store.svi_refs.setdefault(vrf["id"], set()).add(iface["id"])
+                for cap in (iface.get("zone_capabilities") or {}).get("edges", []):
+                    if cap["node"].get("__typename") == "ManagedVRF":
+                        store.svi_refs.setdefault(cap["node"]["id"], set()).add(iface["id"])
         return store
 
     def add(self, vrf: FakeVrf) -> FakeVrf:
@@ -136,12 +148,13 @@ class VrfHost(VrfMixin):
         return self._responses[min(len(self.queries), len(self._responses)) - 1]
 
     async def _filters(self, kind: type, **kwargs: Any) -> list[Any]:
-        """ManagedVRF by ids, deployment and namespace; DcimVirtualInterface by the vrf it points at."""
-        if kind.__name__ == "DcimVirtualInterface":
+        """ManagedVRF by ids, deployment, namespace, member and interface; the routed exchanges naming an instance."""
+        if kind.__name__ == "TopologyExchangeGateway":
+            wanted = {*kwargs.get("vrf_a__ids", ()), *kwargs.get("vrf_z__ids", ())}
             return [
-                SimpleNamespace(id=svi)
-                for vrf in kwargs["vrf__ids"]
-                for svi in sorted(self.store.svi_refs.get(vrf, ()))
+                SimpleNamespace(id=exchange)
+                for vrf in sorted(wanted)
+                for exchange in sorted(self.store.external_refs.get(vrf, {}).get("exchanges", ()))
             ]
         found = list(self.store.vrfs.values())
         if "ids" in kwargs:
@@ -152,12 +165,19 @@ class VrfHost(VrfMixin):
             found = [vrf for vrf in found if f"ns-{vrf.security_zone.peer.name.value}" in kwargs["security_zone__ids"]]
         if "shared_devices__ids" in kwargs:
             found = [vrf for vrf in found if vrf.members.intersection(kwargs["shared_devices__ids"])]
+        if "capabilities__ids" in kwargs:
+            found = [
+                vrf for vrf in found if self.store.svi_refs.get(vrf.id, set()).intersection(kwargs["capabilities__ids"])
+            ]
         return found
 
-    async def _get(self, kind: type, id: str, include: list[str]) -> Any:  # noqa: A002
-        """Read the scoped instance's reverse references, including non-SVI interfaces."""
+    async def _get(self, kind: type, id: str, include: list[str] | None = None) -> Any:  # noqa: A002
+        """The stored instance (no ``include``: the node whose edges a caller writes), or its reverse references, the
+        interfaces in it with the non-SVI ones."""
         assert kind.__name__ == "ManagedVRF"
         assert id in self.store.vrfs
+        if include is None:
+            return self.store.vrfs[id]
         refs = self.store.external_refs.get(id, {})
         return SimpleNamespace(
             **{
@@ -166,7 +186,7 @@ class VrfHost(VrfMixin):
                         SimpleNamespace(id=peer)
                         for peer in sorted(
                             refs.get(name, set())
-                            | (self.store.svi_refs.get(id, set()) if name == "interfaces" else set())
+                            | (self.store.svi_refs.get(id, set()) if name == "capabilities" else set())
                         )
                     ]
                 )
@@ -182,11 +202,13 @@ class VrfHost(VrfMixin):
             self.saves.append(kwargs)
             if kind.__name__ == "ManagedVRF":
                 self.store.add(vrf)
-            else:
+            elif kind.__name__ == "DcimVirtualInterface" and "capabilities" in data:
+                # The saved list replaces the interface's capabilities (an SVI's only one is its VRF); a save without
+                # it leaves its edges alone.
                 for refs in self.store.svi_refs.values():
                     refs.discard(node_id)
-            if kind.__name__ != "ManagedVRF" and data.get("vrf"):
-                self.store.svi_refs.setdefault(data["vrf"]["id"], set()).add(node_id)
+                for cap in data["capabilities"]:
+                    self.store.svi_refs.setdefault(cap["id"], set()).add(node_id)
 
         if kind.__name__ != "ManagedVRF":
             return SimpleNamespace(id=node_id, save=_save)

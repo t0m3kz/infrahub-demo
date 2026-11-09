@@ -5,44 +5,7 @@ query lb_serving_contexts($ids: [ID!]!) {
         id
         serving_loadbalancer_context {
           node {
-            id
-            name {
-              value
-            }
-            vip_prefix {
-              node {
-                id
-                ip_namespace {
-                  node {
-                    id
-                  }
-                }
-              }
-            }
-            capabilities {
-              edges {
-                node {
-                  __typename
-                  ...InterfaceRoutingZoneFields
-                  ... on DcimVirtualInterface {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
-                    ip_address {
-                      node {
-                        ip_prefix {
-                          node {
-                            id
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            ...ServingLoadbalancerContextFields
           }
         }
       }

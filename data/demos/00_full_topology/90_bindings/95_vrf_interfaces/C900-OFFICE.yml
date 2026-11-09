@@ -1,0 +1,28 @@
+---
+# The interfaces of each VRF instance of C900-OFFICE: an interface is in a VRF as one of the instance's
+# `capabilities` (the interface edge, schemas/extensions/capabilities/vrf.yml). An upsert of that list replaces
+# it, so each instance's whole list is here, once, after every interface it names is loaded (90_bindings loads
+# last). The instances themselves and their members are declared with the topology.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "c900-office-vrf-internet"
+      deployment: "C900-OFFICE"
+      security_zone: "INTERNET"
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data: {device: bcn-office-edge-01, name: "GE1"}
+    - name: "c900-office-vrf-prod"
+      deployment: "C900-OFFICE"
+      security_zone: "PROD"
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: bcn-office-as-01, name: "Vlan110"}
+        - kind: DcimVirtualInterface
+          data: {device: bcn-office-as-01, name: "Vlan120"}
+        - kind: DcimVirtualInterface
+          data: {device: bcn-office-as-02, name: "Vlan110"}
+        - kind: DcimVirtualInterface
+          data: {device: bcn-office-as-02, name: "Vlan120"}

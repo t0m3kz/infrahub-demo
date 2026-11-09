@@ -21,7 +21,7 @@ from tests.unit.simulators.circuit_fakes import (
 )
 from tests.unit.virtual_circuit_session_helpers import (
     HANDOFF,
-    UNTRACKED,
+    INTERFACE_UPDATE,
     _assert_refused,
     _interface_saves,
     _peering,
@@ -69,7 +69,7 @@ class TestHandoffSession:
         assert client.interfaces["if-hs"].status.value == "active"
         assert client.interfaces["if-hs"].mtu.value == 9000
         saves = client.saves()
-        assert saves["if-hs"] == UNTRACKED and saves["if-aws"] == UNTRACKED
+        assert saves["if-hs"] == INTERFACE_UPDATE and saves["if-aws"] == INTERFACE_UPDATE
 
     @pytest.mark.asyncio
     async def test_one_peering_with_these_exact_attributes(self) -> None:

@@ -141,16 +141,8 @@ fragment InterfaceSegmentsFields on DcimInterface {
 }
 
 fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
+  ...InterfaceRoutingZoneFields
   ...InterfaceSegmentsFields
-  # The full instance (RoutingVrfFields), not a subset: this is the first `vrf` selection on an SVI in the switch
-  # queries, and the server answers only the first selection of a field.
-  ... on DcimVirtualInterface {
-    vrf {
-      node {
-        ...RoutingVrfFields
-      }
-    }
-  }
   capabilities {
     edges {
       node {

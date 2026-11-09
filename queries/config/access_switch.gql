@@ -69,11 +69,6 @@ query access_switch_config($device: String!) {
               }
               ...InterfaceRoutingZoneFields
               ... on DcimPhysicalInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 interface_type {
                   value
                 }
@@ -103,11 +98,6 @@ query access_switch_config($device: String!) {
                           __typename
                           ...InterfaceRoutingZoneFields
                           ... on DcimPhysicalInterface {
-                            vrf {
-                              node {
-                                ...RoutingVrfFields
-                              }
-                            }
                             name {
                               value
                             }
@@ -136,11 +126,6 @@ query access_switch_config($device: String!) {
                 vlan_id {
                   value
                 }
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 ip_address {
                   node {
                     address {
@@ -157,11 +142,6 @@ query access_switch_config($device: String!) {
                 }
               }
               ... on DcimLAGInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 lag_id {
                   value
                 }

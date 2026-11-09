@@ -28,7 +28,6 @@ spec:
       interfaces:
         - kind: DcimPhysicalInterface
           data:
-            vrf: [PAR, "PROD"]
             name: eno1
             role: uplink
             status: active

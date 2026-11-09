@@ -67,11 +67,6 @@ query super_spine_config($device: String!) {
               }
               ...InterfaceRoutingZoneFields
               ... on DcimPhysicalInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 interface_type {
                   value
                 }
@@ -101,11 +96,6 @@ query super_spine_config($device: String!) {
                           __typename
                           ...InterfaceRoutingZoneFields
                           ... on DcimPhysicalInterface {
-                            vrf {
-                              node {
-                                ...RoutingVrfFields
-                              }
-                            }
                             name {
                               value
                             }
@@ -134,11 +124,6 @@ query super_spine_config($device: String!) {
                 vlan_id {
                   value
                 }
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 ip_address {
                   node {
                     address {
@@ -155,11 +140,6 @@ query super_spine_config($device: String!) {
                 }
               }
               ... on DcimLAGInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 lag_id {
                   value
                 }
@@ -207,11 +187,6 @@ query super_spine_config($device: String!) {
     edges {
       node {
         ...InterfaceRoutingZoneFields
-        vrf {
-          node {
-            ...RoutingVrfFields
-          }
-        }
         ip_address {
           node {
             address {
@@ -237,11 +212,6 @@ query super_spine_config($device: String!) {
                   }
                   ...InterfaceRoutingZoneFields
                   ... on DcimVirtualInterface {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
                     ip_address {
                       node {
                         address {
@@ -251,11 +221,6 @@ query super_spine_config($device: String!) {
                     }
                   }
                   ... on DcimPhysicalInterface {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
                     ip_address {
                       node {
                         address {

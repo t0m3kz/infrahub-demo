@@ -183,7 +183,7 @@ class _TransitMember:
 
     offset is the member's /29 host offset: members sorted by name take
     .5 / .6, the order transforms/helpers/ha.py uses. bl_port is the border
-    service port its uplink is cabled to, fetched with its capabilities.
+    service port its uplink is cabled to.
     """
 
     name: str
@@ -199,7 +199,6 @@ class _TransitState:
 
     context: Any | None
     complete: bool
-    untagged_port_ids: list[str]
 
 
 # (physical template's platform name, device_role) -> matching virtual

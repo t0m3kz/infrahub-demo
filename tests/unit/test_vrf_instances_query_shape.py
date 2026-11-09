@@ -85,7 +85,9 @@ def test_the_query_selects_memberships_hosting_and_the_vrf_root() -> None:
     assert "parent" in device["deployment"]["node"]
     assert {"deployment", "security_zone", "shared_devices"} <= set(tree["ManagedVRF"]["edges"]["node"])
     assert "devices" not in tree["ManagedVRF"]["edges"]["node"]
-    assert "deployment" in device["interfaces"]["edges"]["node"]["vrf"]["node"]
+    # An interface's VRF is the ManagedVRF among its capabilities (alias zone_capabilities), with its deployment.
+    assert "vrf" not in device["interfaces"]["edges"]["node"]
+    assert "deployment" in device["interfaces"]["edges"]["node"]["zone_capabilities"]["edges"]["node"]
     for instance in (device["shared_capabilities"]["edges"]["node"], tree["ManagedVRF"]["edges"]["node"]):
         assert "namespace" not in instance
         assert set(instance["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
@@ -93,11 +95,12 @@ def test_the_query_selects_memberships_hosting_and_the_vrf_root() -> None:
     assert "IpamNamespace" not in tree
     interface = device["interfaces"]["edges"]["node"]
     assert "security_zone" not in interface
-    assert set(interface["vrf"]["node"]["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
-    # The circuits are read under the alias `zone_capabilities` (queries/fragments/routing_zone.gql): the interface's own
-    # `capabilities` selection must stay the only one of that field.
-    circuit = interface["zone_capabilities"]["edges"]["node"]
-    assert set(circuit["vrf"]["node"]["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
+    # The VRF and the circuits are read under the alias `zone_capabilities` (queries/fragments/routing_zone.gql): the
+    # interface's own `capabilities` selection must stay the only one of that field. The tree merges the inline
+    # fragments: the ManagedVRF's own zone and the circuit's VRF.
+    zone_capabilities = interface["zone_capabilities"]["edges"]["node"]
+    assert set(zone_capabilities["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
+    assert set(zone_capabilities["vrf"]["node"]["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
     registry_address = interface["ip_address"]["node"]
     assert set(registry_address) == {"address", "ip_namespace"}
     assert set(registry_address["ip_namespace"]["node"]) == {"name"}

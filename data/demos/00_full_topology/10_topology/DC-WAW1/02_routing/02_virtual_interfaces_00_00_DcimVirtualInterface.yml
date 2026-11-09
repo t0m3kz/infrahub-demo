@@ -10,9 +10,7 @@ spec:
       device: waw1-leaf-01
       role: svi
       status: active
-      vrf: ["DC-WAW1", "PROD"]
     - name: Vlan200
       device: waw1-leaf-02
       role: svi
       status: active
-      vrf: ["DC-WAW1", "PROD"]

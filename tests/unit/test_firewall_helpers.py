@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 from tests.unit.firewall_helpers_shared import _make_pbr_activation, _make_segment_with_prefix
-from tests.unit.routing_helpers import make_vrf
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.helpers.firewall import (
     get_exchange_transits,
     get_firewall_static_routes,
@@ -49,7 +49,7 @@ def _make_fw_interface(
     """Build a cleaned DcimFirewallInterface dict."""
     iface: dict = {"name": name}
     if zone_name is not None:
-        iface["vrf"] = make_vrf({"name": zone_name})
+        iface.update(in_vrf(make_vrf({"name": zone_name})))
     if ip_addr is not None:
         iface["ip_address"] = {"address": ip_addr, "ip_namespace": {"name": "default"}}
     return iface
@@ -208,7 +208,7 @@ class TestGetFirewallStaticRoutes:
         """Routing is resolved from the interface's VRF, not the address namespace."""
         iface = {
             "name": "eth0.10",
-            "vrf": make_vrf({"name": "internal"}),
+            **in_vrf(make_vrf({"name": "internal"})),
             "ip_address": {"address": "10.0.0.1/30"},
         }
         zone = {"name": "internal", "trust_level": 100, "member_cidrs": ["10.0.0.0/8"]}
@@ -324,7 +324,7 @@ _NONPROD = _ns("NONPROD", "non_prod", 60001)
 
 def _leg(address: str, namespace: dict, exchanges: list[dict] | None = None, name: str = "eth1.3000") -> dict:
     return {
-        "vrf": make_vrf(namespace),
+        **in_vrf(make_vrf(namespace)),
         "name": name,
         "device": {"name": "dc-fw-1", "role": "internal-firewall"},
         "ip_address": {"address": address, "ip_namespace": {"node": {"name": {"value": "default"}}}},

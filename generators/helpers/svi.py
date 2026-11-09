@@ -1,7 +1,11 @@
 """The segment SVIs of a device: one ``DcimVirtualInterface`` (role ``svi``) per routed row of the device.
 
 The SVI carries no address (the anycast gateway stays ``segment.gateway``); it is the object a row is realized by on a
-switch (``segment_vlan``) and the VRF the switch routes it in (``vrf``). What a device needs is derived by
+switch (``segment_vlan``) and is an interface of the VRF the switch routes it in (the ``ManagedVRF`` among its
+``capabilities``). An SVI's only capability is its VRF (checks/vrf_instances.py S4), so the save of the SVI writes its
+``capabilities`` as the one-instance list (generators/helpers/interface_vrf.py ``vrf_capability``): one write, which is
+safe even right after the instance was created in the same pass, where a RelationshipAdd on the new node can reach the
+other replica first. What a device needs is derived by
 ``utils.vrf_demand.device_vrf_facts``; this module only turns the difference with what exists into writes.
 
 Identity: an SVI is found by its own uniqueness, (device, ``Vlan<vlan id>``), among the device's role-svi interfaces.
@@ -23,6 +27,7 @@ from utils.limits import DEFAULT_NAMESPACE
 from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, DeviceVrfFacts, RoutedRow
 
 from ..protocols import DcimVirtualInterface
+from .interface_vrf import vrf_capability
 
 
 @dataclass(frozen=True)
@@ -157,7 +162,7 @@ class SviMixin:
                 "device": {"id": facts.id},
                 "role": L3VNI_ROLE,
                 "status": "active",
-                "vrf": {"id": write.vrf_id},
+                **vrf_capability(write.vrf_id),
             }
             if write.existing_id:
                 data["id"] = write.existing_id
@@ -191,9 +196,8 @@ class SviMixin:
                 "role": SVI_ROLE,
                 "status": "active",
                 "segment_vlan": {"id": write.row_id},
+                **vrf_capability(write.vrf_id),
             }
-            if write.vrf_id:
-                data["vrf"] = {"id": write.vrf_id}
             if write.existing_id:
                 data["id"] = write.existing_id
             svi = await self.client.create(kind=DcimVirtualInterface, data=data)

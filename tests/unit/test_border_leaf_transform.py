@@ -18,7 +18,7 @@ import pytest
 
 from tests.smoke.fixture_builders.transit import _static_route_node, spec_vni
 from tests.smoke.fixture_builders.vrf import with_vrf_objects
-from tests.unit.routing_helpers import make_vrf
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.config.border_leaf import BorderLeaf
 from utils.exchange_transit import exchange_route_specs
 
@@ -49,7 +49,7 @@ def _ns(name: str, ns_type: str, l3_vni: int) -> dict:
 
 def _leg(address: str, ns: dict, exchange: dict) -> dict:
     return {
-        "vrf": make_vrf(ns),
+        **in_vrf(make_vrf(ns)),
         "name": _v("eth1.3001"),
         "device": _node({"name": _v("dc-fw-1"), "role": _v("internal-firewall")}),
         "ip_address": _node({"address": _v(address), "ip_namespace": {"node": {"name": {"value": "default"}}}}),

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from utils.limits import DEFAULT_NAMESPACE
+from utils.routing_domain import interface_vrf
 from utils.segment_addressing import routed_segment_namespace
 from utils.service_contexts import border_contexts, device_services
 from utils.vrf_demand import (
@@ -81,7 +82,7 @@ def svi_vrfs(interfaces: list[dict[str, Any]] | None) -> dict[int, str | None]:
     for iface in interfaces or []:
         vlan_id = svi_vlan_id(iface.get("name"))
         if iface.get("role") == SVI_ROLE and vlan_id is not None:
-            found[vlan_id] = ((iface.get("vrf") or {}).get("security_zone") or {}).get("name")
+            found[vlan_id] = (interface_vrf(iface).get("security_zone") or {}).get("name")
     return found
 
 

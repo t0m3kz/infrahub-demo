@@ -2,7 +2,7 @@ query context_routes($name: String!) {
   ManagedFirewallContext(name__value: $name) {
     edges {
       node {
-        ...FirewallContextRoutesFields
+        ...ContextRoutesFields
         tenant {
           node {
             id
@@ -21,7 +21,7 @@ query context_routes($name: String!) {
   ManagedLoadbalancerContext(name__value: $name) {
     edges {
       node {
-        ...LoadbalancerContextRoutesFields
+        ...ContextRoutesFields
         vip_prefix {
           node {
             prefix {

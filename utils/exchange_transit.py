@@ -216,7 +216,7 @@ def transit_leg_namespace(context_vlan: int | None, leg: dict[str, Any]) -> dict
     A transit leg is a sub-interface of an HA member (a firewall or a load balancer) with an address in a
     non-default namespace whose type has a slot, on a context with a VLAN. The one rule for the transform's
     transit legs (transforms/helpers/firewall.py transit_legs) and the border device's VRF demand
-    (utils/vrf_demand.py); ``leg`` is a cleaned interface of the context's ``capabilities``.
+    (utils/vrf_demand.py); ``leg`` is a cleaned leg interface (utils/service_contexts.py ``leg_interfaces``).
     """
     if (leg.get("device") or {}).get("role") not in SERVICE_MEMBER_ROLES:
         return None

@@ -3,7 +3,7 @@
 import pytest
 
 from tests.unit.firewall_helpers_shared import _make_pbr_activation
-from tests.unit.routing_helpers import make_vrf
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
 from transforms.helpers.firewall_pbr import get_customer_pbr_rules, refuse_unresolvable_contexts
 from utils.routing_domain import RoutingDomainError
@@ -28,7 +28,7 @@ def _make_context_leg(
     ctx: dict = {
         "legs": [
             {
-                "vrf": make_vrf({"name": "PROD"}),
+                **in_vrf(make_vrf({"name": "PROD"})),
                 "device": {"role": "internal-firewall"},
                 "ip_address": {"address": fw_ip, "ip_namespace": {"node": {"name": {"value": "default"}}}},
             }

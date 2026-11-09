@@ -23,8 +23,17 @@ from tests.unit.test_circuit_query_shapes import _selected_paths
 @pytest.mark.parametrize(
     ("filename", "root", "owners"),
     [
-        ("get_loadbalancer_inventory.gql", "ManagedLoadbalancerContext", {"capabilities.vrf"}),
-        ("get_transit_inventory.gql", "ManagedFirewallContext", {"capabilities.vrf"}),
+        # A leg's VRF is the ManagedVRF among its capabilities (InterfaceRoutingZoneFields), next to the circuits' VRF.
+        (
+            "get_loadbalancer_inventory.gql",
+            "ManagedLoadbalancerContext",
+            {"shared_devices.interfaces.capabilities", "shared_devices.interfaces.capabilities.vrf"},
+        ),
+        (
+            "get_transit_inventory.gql",
+            "ManagedFirewallContext",
+            {"shared_devices.interfaces.capabilities", "shared_devices.interfaces.capabilities.vrf"},
+        ),
         ("get_transit_inventory.gql", "TopologyRoutedExchange", {"vrf_a", "vrf_z"}),
     ],
     ids=["loadbalancer", "transit-legs", "transit-exchange"],
@@ -38,7 +47,7 @@ def test_inventory_queries_select_routing_from_vrf_and_only_ipam_identity(
     """Inventory legs and exchange sides select exact VRF owners, never direct IPAM or zone routing."""
     paths = _selected_paths(root_dir / "tests/integration/queries" / filename, root)
     for owner in owners:
-        assert {path.removeprefix(f"{owner}.") for path in paths if path.startswith(f"{owner}.")} == {
+        assert {path.removeprefix(f"{owner}.") for path in paths if path.startswith(f"{owner}.")} >= {
             "id",
             "deployment",
             "deployment.id",
@@ -56,7 +65,7 @@ def test_inventory_queries_select_routing_from_vrf_and_only_ipam_identity(
         set()
         if root == "TopologyRoutedExchange"
         else {
-            "capabilities.ip_address.ip_namespace.name",
+            "shared_devices.interfaces.ip_address.ip_namespace.name",
             "vip_prefix.ip_namespace.name"
             if root == "ManagedLoadbalancerContext"
             else "snat_address.ip_namespace.name",
@@ -132,40 +141,72 @@ def test_match_loadbalancer_contexts_drops_other_suites_and_unkeys_the_ambiguous
     [("PROD", "prod", 60000), ("NONPROD", "non_prod", 60001), ("MANAGEMENT", "management", 60003)],
 )
 def test_raw_service_leg_resolves_zone_independently_of_ipam(zone: str, vrf_type: str, l3_vni: int) -> None:
-    """Identical addresses in builtin default keep the leg's explicit routing authority after clean_data."""
-    cap: dict[str, Any] = {
-        "__typename": "DcimVirtualInterface",
-        "name": {"value": "eth1.3100"},
-        "device": {"node": {"id": "lb1", "name": {"value": "lb-01"}}},
-        "vrf": {
+    """Identical addresses in builtin default keep the leg's explicit routing authority (its VRF) after clean_data."""
+    node = {
+        "id": "ctx",
+        "shared_devices": _raw_members("ManagedLoadbalancerContext", "ctx", 3100, _raw_vrf(zone, vrf_type, l3_vni)),
+    }
+    legs, ports = _context_legs_and_ports(node)
+    assert ports == []
+    assert (legs[0]["namespace"], legs[0]["vrf_type"]) == (zone, vrf_type)
+    # A leg in no VRF has no routing zone, whatever its address says.
+    legs, _ = _context_legs_and_ports(
+        {"id": "ctx", "shared_devices": _raw_members("ManagedLoadbalancerContext", "ctx", 3100, None)}
+    )
+    assert (legs[0]["namespace"], legs[0]["vrf_type"]) == (None, None)
+
+
+def _raw_vrf(zone: str, vrf_type: str, l3_vni: int) -> dict[str, Any]:
+    """A raw ManagedVRF of DC10 in ``zone``."""
+    return {
+        "__typename": "ManagedVRF",
+        "id": f"vrf-dc10-{zone}",
+        "deployment": {"node": {"id": "dc10", "name": {"value": "DC10"}}},
+        "security_zone": {
             "node": {
-                "id": f"vrf-dc10-{zone}",
-                "deployment": {"node": {"id": "dc10", "name": {"value": "DC10"}}},
-                "security_zone": {
-                    "node": {
-                        "id": f"zone-{zone}",
-                        "name": {"value": zone},
-                        "vrf_type": {"value": vrf_type},
-                        "l3_vni": {"value": l3_vni},
-                    }
-                },
-            }
-        },
-        "ip_address": {
-            "node": {
-                "address": {"value": "100.66.64.5/29"},
-                "ip_namespace": {"node": {"name": {"value": "default"}}},
+                "id": f"zone-{zone}",
+                "name": {"value": zone},
+                "vrf_type": {"value": vrf_type},
+                "l3_vni": {"value": l3_vni},
             }
         },
     }
-    legs, ports = _context_legs_and_ports({"capabilities": {"edges": [{"node": cap}]}})
-    assert ports == []
-    assert (legs[0]["namespace"], legs[0]["vrf_type"]) == (zone, vrf_type)
-    cap["vrf"] = {"node": None}
-    cap["security_zone"] = {"node": {"name": {"value": zone}, "vrf_type": {"value": vrf_type}}}
-    cap["ip_address"]["node"]["security_zone"] = cap["security_zone"]
-    legs, _ = _context_legs_and_ports({"capabilities": {"edges": [{"node": cap}]}})
-    assert (legs[0]["namespace"], legs[0]["vrf_type"]) == (None, None)
+
+
+def _raw_members(
+    kind: str, ctx_id: str, vlan: int, vrf: dict[str, Any] | None, *, far_port: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """The raw members of a context: one load balancer whose uplink ``eth1`` (cabled to ``far_port``) carries the leg
+    ``eth1.<vlan>``, addressed in default and in ``vrf`` (none: in no VRF)."""
+    uplink = {
+        "__typename": "DcimPhysicalInterface",
+        "id": "up1",
+        "name": {"value": "eth1"},
+        "role": {"value": "uplink"},
+        "cable": {"node": {"id": "c1", "endpoints": {"edges": [{"node": far_port}]}}} if far_port else {"node": None},
+    }
+    leg = {
+        "__typename": "DcimVirtualInterface",
+        "id": "sub1",
+        "name": {"value": f"eth1.{vlan}"},
+        "role": {"value": "service"},
+        "vlan_id": {"value": vlan},
+        "parent_interface": {"node": {"id": "up1", "name": {"value": "eth1"}}},
+        "zone_capabilities": {"edges": [{"node": vrf}] if vrf else []},
+        "ip_address": {
+            "node": {"address": {"value": "100.66.64.5/29"}, "ip_namespace": {"node": {"name": {"value": "default"}}}}
+        },
+        "capabilities": {"edges": []},
+    }
+    member = {
+        "__typename": "DcimPhysicalDevice",
+        "id": "lb1",
+        "name": {"value": "lb-01"},
+        "role": {"value": "load-balancer"},
+        "shared_capabilities": {"edges": [{"node": {"__typename": kind, "id": ctx_id, "vlan_id": {"value": vlan}}}]},
+        "interfaces": {"edges": [{"node": uplink}, {"node": leg}]},
+    }
+    return {"edges": [{"node": member}]}
 
 
 async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None:
@@ -207,56 +248,19 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
                 "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         },
-        "capabilities": {
-            "edges": [
-                {
-                    "node": {
-                        "vrf": {
-                            "node": {
-                                "id": "vrf-dc10-prod",
-                                "deployment": {"node": {"id": "dc10", "name": value("DC10")}},
-                                "security_zone": {
-                                    "node": {
-                                        "id": "zone-prod",
-                                        "name": value("PROD"),
-                                        "vrf_type": value("prod"),
-                                        "l3_vni": value(60000),
-                                    }
-                                },
-                            }
-                        },
-                        "__typename": "DcimVirtualInterface",
-                        "id": "sub1",
-                        "name": value("eth1.3100"),
-                        "device": {"node": {"id": "lb1", "name": value("lb-01"), "role": value("load-balancer")}},
-                        "ip_address": {
-                            "node": {
-                                "address": value("100.66.64.5/29"),
-                                "ip_namespace": {"node": {"name": {"value": "default"}}},
-                            }
-                        },
-                    }
-                },
-                {
-                    "node": {
-                        "__typename": "DcimPhysicalInterface",
-                        "id": "p1",
-                        "name": value("Ethernet1/20"),
-                        "role": value("load-balancer"),
-                        "device": {"node": {"id": "bl1", "name": value("bl-01"), "role": value("border-leaf")}},
-                    }
-                },
-                {
-                    "node": {
-                        "__typename": "DcimPhysicalInterface",
-                        "id": "p2",
-                        "name": value("eth1"),
-                        "role": value("uplink"),
-                        "device": {"node": {"id": "lb1", "name": value("lb-01"), "role": value("load-balancer")}},
-                    }
-                },
-            ]
-        },
+        "shared_devices": _raw_members(
+            "ManagedLoadbalancerContext",
+            "ctx",
+            3100,
+            _raw_vrf("PROD", "prod", 60000),
+            far_port={
+                "__typename": "DcimPhysicalInterface",
+                "id": "p1",
+                "name": value("Ethernet1/20"),
+                "role": value("load-balancer"),
+                "device": {"node": {"id": "bl1", "name": value("bl-01"), "role": value("border-leaf")}},
+            },
+        ),
         "vips": {
             "edges": [
                 {

@@ -24,18 +24,40 @@ def _context(
     leg: str | None = "leg-1",
     vip_prefix: str | None = "vip-pfx-1",
 ) -> dict[str, Any]:
-    """A serving context: its member sub-interfaces carry leg addresses, its border port none."""
-    capabilities: list[dict[str, Any]] = [{"typename": "DcimPhysicalInterface"}]
-    if leg:
-        capabilities += [
-            {"typename": "DcimVirtualInterface", "ip_address": {"ip_prefix": {"id": leg}}},
-            {"typename": "DcimVirtualInterface", "ip_address": {"ip_prefix": {"id": leg}}},
-        ]
+    """A serving context: its two members (``shared_devices``), each with a leg addressed in the leg /29 (none: unwired)."""
     return {
         "id": ctx_id,
         "name": name,
         "vip_prefix": {"id": vip_prefix, "ip_namespace": {"id": "ns-prod"}} if vip_prefix else None,
-        "capabilities": capabilities,
+        "shared_devices": [lb_member(ctx_id, member, leg) for member in ("lb-1", "lb-2")],
+    }
+
+
+LB_CONTEXT_VLAN = 3100
+
+
+def lb_member(ctx_id: str, name: str, leg: str | None) -> dict[str, Any]:
+    """A load balancer member of the context (cleaned): its uplink and, with ``leg``, the leg sub-interface of the
+    uplink tagged with the context VLAN (utils/service_contexts.py ``leg_interfaces``) whose address is in ``leg``."""
+    uplink = {"typename": "DcimPhysicalInterface", "id": f"{name}-up", "name": "1.1", "role": "uplink"}
+    legs = [
+        {
+            "typename": "DcimVirtualInterface",
+            "id": f"{name}-leg",
+            "name": f"1.1.{LB_CONTEXT_VLAN}",
+            "role": "service",
+            "vlan_id": LB_CONTEXT_VLAN,
+            "parent_interface": {"name": "1.1"},
+            "ip_address": {"ip_prefix": {"id": leg}},
+        }
+    ]
+    return {
+        "typename": "DcimPhysicalDevice",
+        "id": name,
+        "name": name,
+        "role": "load-balancer",
+        "shared_capabilities": [{"typename": "ManagedLoadbalancerContext", "id": ctx_id, "vlan_id": LB_CONTEXT_VLAN}],
+        "interfaces": [uplink, *(legs if leg else [])],
     }
 
 

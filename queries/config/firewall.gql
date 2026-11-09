@@ -82,11 +82,6 @@ query firewall_config($device: String!) {
               ...FirewallFacingCableFields
               ...InterfaceRoutingZoneFields
               ... on DcimPhysicalInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 ip_address {
                   node {
                     address {
@@ -109,11 +104,6 @@ query firewall_config($device: String!) {
                 device {
                   node {
                     id
-                  }
-                }
-                vrf {
-                  node {
-                    ...RoutingVrfFields
                   }
                 }
                 ip_address {
@@ -145,11 +135,6 @@ query firewall_config($device: String!) {
                 }
               }
               ... on DcimLAGInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 ip_address {
                   node {
                     address {

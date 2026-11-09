@@ -30,15 +30,21 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
     ]
     interfaces = [
         SimpleNamespace(
+            id=f"leg-{m.device_id}",
             name=SimpleNamespace(value=f"eth1/1.{3001}"),
             device=SimpleNamespace(id=m.device_id),
             ip_address=SimpleNamespace(id=f"ip-{m.offset}"),
-            vrf=SimpleNamespace(id="vrf-prod"),
         )
         for m in members
     ]
-    # The legs' VRF instances, read by id with their zone (the store copy of a VRF may lack it).
-    vrfs = {"vrf-prod": SimpleNamespace(id="vrf-prod", security_zone=SimpleNamespace(id="prod"))}
+    # The legs' VRF instance with its zone: it lists the legs in its capabilities (the interface edge).
+    vrfs = {
+        "vrf-prod": SimpleNamespace(
+            id="vrf-prod",
+            security_zone=SimpleNamespace(id="prod"),
+            capabilities=SimpleNamespace(peers=[SimpleNamespace(id=leg.id) for leg in interfaces]),
+        )
+    }
     addresses = [
         SimpleNamespace(
             id=f"ip-{m.offset}",
@@ -56,7 +62,8 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
         if name == "DcimVirtualInterface":
             return interfaces
         if name == "ManagedVRF":
-            return [vrfs[i] for i in kwargs.get("ids") or [] if i in vrfs]
+            wanted = set(kwargs["capabilities__ids"])
+            return [vrf for vrf in vrfs.values() if wanted & {peer.id for peer in vrf.capabilities.peers}]
         if name == "IpamIPAddress":
             return addresses
         return [resource]
@@ -104,7 +111,7 @@ async def test_authored_leg_retains_its_prefix_without_allocator_identifier() ->
 
 
 @pytest.mark.parametrize(
-    "fault", ["length", "namespace", "zone", "missing_vrf", "member_type", "pool", "offset", "split", "missing_parent"]
+    "fault", ["length", "namespace", "zone", "member_type", "pool", "offset", "split", "missing_parent"]
 )
 @pytest.mark.asyncio
 async def test_inconsistent_addressed_leg_never_allocates_around_the_error(fault: str) -> None:
@@ -116,8 +123,6 @@ async def test_inconsistent_addressed_leg_never_allocates_around_the_error(fault
         model.prefix.ip_namespace.peer.name.value = "foreign"
     elif fault == "zone":
         model.vrfs["vrf-prod"].security_zone.id = "internet"
-    elif fault == "missing_vrf":
-        model.interfaces[0].vrf.id = None
     elif fault == "member_type":
         model.prefix.member_type.value = "prefix"
     elif fault == "pool":
@@ -133,6 +138,16 @@ async def test_inconsistent_addressed_leg_never_allocates_around_the_error(fault
     gen.client.allocate_next_ip_prefix.assert_not_awaited()
     model.upsert.assert_not_awaited()
     model.logger.error.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_leg_in_no_vrf_yet_keeps_its_prefix() -> None:
+    """A leg's VRF edge is written after its save: one in no instance yet is healed by the run, not rejected."""
+    gen, args, model = _fixture()
+    model.vrfs["vrf-prod"].capabilities.peers.pop(0)
+    assert await gen._allocate_transit_addresses(FIREWALL_CONTEXT, **args) is not None
+    gen.client.allocate_next_ip_prefix.assert_not_awaited()
+    assert model.upsert.await_args.args[0] is model.prefix
 
 
 @pytest.mark.asyncio

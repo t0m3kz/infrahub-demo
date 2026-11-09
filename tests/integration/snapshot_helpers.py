@@ -53,7 +53,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
         "name { value } capabilities { edges { node { id } } } "
         "... on DcimPhysicalInterface { ip_address { node { id address { value } } } segments { edges { node { id } } } } "
         "... on DcimVirtualInterface { ip_address { node { id address { value } } } "
-        "role { value } vrf { node { id } } segment_vlan { node { id } } } "
+        "role { value } segment_vlan { node { id } } } "
         "... on DcimLAGInterface { ip_address { node { id address { value } } } segments { edges { node { id } } } }"
     ),
     # cable_id, color and length_cm are derived by the cabling, HA and MLAG sites from the endpoints, the type and

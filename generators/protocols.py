@@ -182,14 +182,12 @@ class ManagedGenericInterfaces(CoreNode):
     capabilities: RelationshipManager[DcimInterface]
 
 
-class RoutingPolicy(ManagedGenericInterfaces):
+class RoutingPolicy(CoreNode):
     name: String
     description: StringOptional
     origin: Dropdown
-    kind: Dropdown
     priority: Integer
     default_action: Dropdown
-    customer_deployment: RelationshipAttribute[TopologyCustomer]
 
 
 class ManagedHA(CoreNode):
@@ -229,7 +227,6 @@ class DcimInterface(CoreNode):
     role: DropdownOptional
     status: Dropdown
     device: RelationshipAttribute[DcimDevice]
-    vrf: RelationshipAttribute[ManagedVRF]
     tags: RelationshipManager[BuiltinTag]
 
 
@@ -645,9 +642,7 @@ class ManagedSecurityContext(CoreNode):
     tenant: RelationshipAttribute[ManagedTenantScoped]
 
 
-class ManagedFirewallContext(
-    ManagedGeneric, ManagedSecurityContext, ManagedGenericSharedDevice, ManagedGenericInterfaces
-):
+class ManagedFirewallContext(ManagedGeneric, ManagedSecurityContext, ManagedGenericSharedDevice):
     context_id: StringOptional
     served_deployments: RelationshipManager[ManagedTenantScoped]
     terminated_segments: RelationshipManager[ManagedVxlanSegment]
@@ -703,7 +698,7 @@ class ManagedLoadbalancerHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, Man
 
 
 class ManagedLoadbalancerContext(
-    ManagedGeneric, ManagedSecurityContext, ManagedGenericSharedDevice, ManagedGenericInterfaces, ManagedLoadBalancer
+    ManagedGeneric, ManagedSecurityContext, ManagedGenericSharedDevice, ManagedLoadBalancer
 ):
     served_deployments: RelationshipManager[TopologyCustomerDC]
     vip_prefix: RelationshipAttribute[IpamPrefix]
@@ -719,13 +714,10 @@ class ManagedMLAG(ManagedGeneric, ManagedGenericDevice):
     interfaces: RelationshipManager[DcimInterface]
 
 
-class ManagedVRF(ManagedGeneric, ManagedGenericSharedDevice):
+class ManagedVRF(ManagedGeneric, ManagedGenericSharedDevice, ManagedGenericInterfaces):
     deployment: RelationshipAttribute[TopologySegmentHosting]
     security_zone: RelationshipAttribute[SecurityZone]
-    interfaces: RelationshipManager[DcimInterface]
     session_circuits: RelationshipManager[TopologySessionCircuit]
-    exchanges_a: RelationshipManager[TopologyExchangeGateway]
-    exchanges_z: RelationshipManager[TopologyExchangeGateway]
 
 
 class OrganizationManufacturer(CoreNode):
@@ -764,6 +756,10 @@ class ManagedOSPF(ManagedGeneric, ManagedGenericDevice):
     version: Dropdown
     peerings: RelationshipManager[ManagedOSPFPeering]
     router_id: RelationshipAttribute[IpamIPAddress]
+
+
+class ManagedPBR(ManagedGeneric, ManagedGenericDevice):
+    capabilities: RelationshipManager[DcimDeviceManaged]
 
 
 class ManagedStaticRoute(ManagedGeneric, ManagedGenericDevice):

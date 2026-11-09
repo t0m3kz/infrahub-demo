@@ -1,0 +1,42 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+# ============================================================================
+# Routing — policy-based routing to the firewall, a capability of the device
+# A device that has a ManagedPBR steers its routed tenant SVIs to the firewall context serving each SVI's footprint in
+# its DC; one without steers none. Nothing else is stored: which SVIs, the next hop (the VIP of the context's leg), the
+# ACL and the bypass are derived when the device is rendered (utils/vrf_demand.py ``pbr_footprints_by_name``,
+# transforms/helpers/firewall_pbr.py), so there is no interface object and no binding to keep in sync. The individual
+# device edge (ManagedGenericDevice), like ManagedOSPF: it cascades with its device. On 30_all the VRF pass of the
+# device writes it (generators/helpers/vrf.py), on 00_full_topology it is authored next to the routing processes.
+# The PBR of the overlay ingress (the L3 VNI SVI of a border leaf) is derived from the contexts on its service ports and
+# needs none.
+# ============================================================================
+
+nodes:
+  - name: PBR
+    namespace: Managed
+    description: "Policy-based routing of a device's tenant SVIs to the firewall context serving their footprint"
+    label: PBR
+    icon: "mdi:swap-horizontal-bold"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    uniqueness_constraints:
+      - ["name__value"]
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+    relationships:
+      - name: capabilities
+        peer: DcimDeviceManaged
+        label: "Device"
+        description: "The device that steers: one by construction (a many rel cannot be capped at 1)"
+        cardinality: many
+        optional: true
+        kind: Attribute
+        direction: inbound
+        identifier: capabilities
+        order_weight: 800

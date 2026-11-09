@@ -116,20 +116,25 @@ class TestFreshSharedBoarding:
             ("management", {f"{_SHARED}-PROD-MANAGEMENT"}),
         ):
             sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(vlan, ns_type)}")]
-            assert {peer.id for peer in sub.capabilities.peers} == {
-                context.id,
-                *(world.exchanges[name].id for name in expected),
+            # The leg carries its exchanges and its VRF instance; the context is no capability of it (derived).
+            assert set(_sub_names(world)[("fw-1", sub.name.value)]) == {
+                world.exchanges[name].id for name in expected
             }, ns_type
+            assert world.routing.store.vrfs[str(world.vrf_of(sub))].security_zone.peer.vrf_type.value == ns_type
 
     @pytest.mark.asyncio
-    async def test_border_service_ports_are_tagged_with_the_context_additively(self) -> None:
+    async def test_the_context_joins_service_contexts_once_its_legs_are_written(self) -> None:
+        """No port is tagged (the border ports are derived from the members' cables); the context joins the target
+        group of add_context_routes after its legs, so that generator starts on a complete context."""
         world = _World()
         gen, _ = _make_gen(world)
 
         await _run(gen, world, _payload())
 
         context = world.contexts[_SHARED]
-        assert world.tags == [(context.id, ["bl-port-fw-1", "bl-port-fw-2"])]
+        assert world.group_adds == [(context.id, ["group-service-contexts"])]
+        assert all(not port.capabilities.peers for port in world.bl_ports.values())
+        assert all(world.vrf_of(sub) for sub in world.sub_interfaces.values())
 
     @pytest.mark.asyncio
     async def test_shared_context_writes_are_all_untracked(self) -> None:
@@ -377,7 +382,8 @@ class TestHealingAndFailures:
         await _run(gen, world, _payload())
 
         assert len(world.sub_interfaces) == 6
-        assert all(len(caps) == (3 if name.endswith(".3000") else 2) for (_, name), caps in _sub_names(world).items())
+        assert all(len(caps) == (2 if name.endswith(".3000") else 1) for (_, name), caps in _sub_names(world).items())
+        assert all(world.vrf_of(sub) for sub in world.sub_interfaces.values())
         gen.logger.error.assert_not_called()
         before = world.writes
 
@@ -386,18 +392,20 @@ class TestHealingAndFailures:
         assert world.writes == before
 
     @pytest.mark.asyncio
-    async def test_untagged_port_alone_is_healed_without_touching_the_rest(self) -> None:
+    async def test_a_leg_out_of_its_vrf_alone_is_healed(self) -> None:
+        """A leg that lost its VRF edge makes the context incomplete: the next run puts it back, edge by edge."""
         world = _World()
         gen, _ = _make_gen(world)
         await _run(gen, world, _payload())
-        world.bl_ports["fw-2"].capabilities.peers.clear()
-        saves_before = len(world.saves)
+        sub = world.sub_interfaces[("fw-2", "Ethernet1/25.3000")]
+        vrf_id = world.vrf_of(sub)
+        sub.capabilities.peers = [peer for peer in sub.capabilities.peers if peer.typename != "ManagedVRF"]
+        edges_before = len(world.vrf_edges)
 
         await _run(gen, world, _payload())
 
-        assert world.tags[-1] == (world.contexts[_SHARED].id, ["bl-port-fw-2"])
-        # The heal path re-upserts, but the port tag is a relationship add, not a save.
-        assert len(world.saves) >= saves_before
+        assert world.vrf_of(sub) == vrf_id
+        assert world.vrf_edges[edges_before:] == [("add", vrf_id, [sub.id])]
 
     @pytest.mark.asyncio
     async def test_missing_namespace_is_an_error_without_writes(self) -> None:
@@ -588,7 +596,7 @@ class TestTransitMemberResolution:
             ("vfw-1", "eth1.3000"),
             ("vfw-2", "eth1.3000"),
         }
-        assert world.tags == [(context.id, ["bl-port-fw-1", "bl-port-fw-2"])]
+        assert world.group_adds == [(context.id, ["group-service-contexts"])]
         gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio

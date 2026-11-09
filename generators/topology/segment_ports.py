@@ -48,6 +48,7 @@ from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 from utils.graphql_queries import load_query
 from utils.limits import DEFAULT_NAMESPACE, OFFSET_ANYCAST
 from utils.segment_addressing import segment_namespace, tenant_pool_name
+from utils.service_contexts import member_border_ports
 
 from ..far_end import far_end_interfaces
 from ..helpers.edge_source import add_edges_with_source, current_account_id, remove_edges
@@ -144,17 +145,18 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
     def _terminated_service_port_ids(segment: dict[str, Any]) -> set[str]:
         """The border service ports of the firewall context the segment is terminated on (empty when it is not).
 
-        The ports of the context's ``capabilities`` that are a switch port or a LAG with the firewall service role:
-        the border leaf ports facing the HA pair (the members' own sub-interfaces are virtual interfaces).
+        The ports with the firewall service role that the context's members' uplinks are cabled to: the border leaf
+        ports facing the HA pair (utils/service_contexts.py ``member_border_ports``: a context has no interface edge).
         ``segment`` is the cleaned state segment (queries/topology/add/segment_vlans.gql).
         """
         context = segment.get("terminated_on") or {}
         return {
-            cap["id"]
-            for cap in context.get("capabilities") or []
-            if cap.get("id")
-            and cap.get("typename") in _SWITCHED_PORT_KINDS
-            and cap.get("role") == SERVICE_CONTEXT_ROLES[FIREWALL_CONTEXT_KIND]
+            port["id"]
+            for member in context.get("shared_devices") or []
+            for port in member_border_ports(member)
+            if port.get("id")
+            and port.get("typename") in _SWITCHED_PORT_KINDS
+            and port.get("role") == SERVICE_CONTEXT_ROLES[FIREWALL_CONTEXT_KIND]
         }
 
     @staticmethod

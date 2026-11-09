@@ -1,34 +1,23 @@
-fragment FirewallContextRoutesFields on ManagedFirewallContext {
-  id
-  name {
-    value
-  }
-  capabilities {
-    edges {
-      node {
-        __typename
-        id
-        device {
+# What the routes of a service context derive from (generators/topology/context_routes.py): its member devices. A
+# context has no interface edge: its legs are the sub-interfaces of a member's first uplink tagged with the transit VLAN
+# of the context (with their address and VRF), its border devices those whose service port the member's uplink (or the
+# host port a hosted member's NIC is pinned to) is cabled to (utils/service_contexts.py).
+
+# The far end of a member's uplink cable: the border service port, with its device (also read by segment_vlans.gql).
+fragment ServiceMemberCableFields on DcimPhysicalInterface {
+  cable {
+    node {
+      id
+      endpoints {
+        edges {
           node {
-            id
-            name {
-              value
-            }
-          }
-        }
-        ...InterfaceRoutingZoneFields
-        ... on DcimVirtualInterface {
-          vrf {
-            node {
-              ...RoutingVrfFields
-            }
-          }
-          ip_address {
-            node {
-              address {
+            __typename
+            ... on DcimPhysicalInterface {
+              id
+              role {
                 value
               }
-              ip_namespace {
+              device {
                 node {
                   id
                   name {
@@ -44,47 +33,80 @@ fragment FirewallContextRoutesFields on ManagedFirewallContext {
   }
 }
 
-fragment LoadbalancerContextRoutesFields on ManagedLoadbalancerContext {
+fragment ContextRoutesMemberFields on DcimDeviceManaged {
+  __typename
   id
   name {
     value
   }
-  capabilities {
+  role {
+    value
+  }
+  shared_capabilities {
     edges {
       node {
         __typename
         id
-        device {
-          node {
-            id
-            name {
-              value
-            }
+        ... on ManagedSecurityContext {
+          vlan_id {
+            value
           }
         }
-        ...InterfaceRoutingZoneFields
-        ... on DcimVirtualInterface {
-          vrf {
-            node {
-              ...RoutingVrfFields
-            }
+      }
+    }
+  }
+  ... on DcimDevice {
+    interfaces {
+      edges {
+        node {
+          __typename
+          id
+          name {
+            value
           }
-          ip_address {
-            node {
-              address {
-                value
-              }
-              ip_namespace {
-                node {
-                  id
-                  name {
-                    value
-                  }
+          role {
+            value
+          }
+          ...InterfaceRoutingZoneFields
+          ...ServiceMemberCableFields
+          ... on DcimVirtualInterface {
+            vlan_id {
+              value
+            }
+            ip_address {
+              node {
+                address {
+                  value
                 }
               }
             }
+            parent_interface {
+              node {
+                id
+                name {
+                  value
+                }
+                ...ServiceMemberCableFields
+              }
+            }
           }
         }
+      }
+    }
+  }
+}
+
+fragment ContextRoutesFields on ManagedGenericSharedDevice {
+  id
+  ... on ManagedGeneric {
+    name {
+      value
+    }
+  }
+  shared_devices {
+    edges {
+      node {
+        ...ContextRoutesMemberFields
       }
     }
   }

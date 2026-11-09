@@ -1,0 +1,62 @@
+---
+# The interfaces of each VRF instance of DC-WAW1: an interface is in a VRF as one of the instance's
+# `capabilities` (the interface edge, schemas/extensions/capabilities/vrf.yml). An upsert of that list replaces
+# it, so each instance's whole list is here, once, after every interface it names is loaded (90_bindings loads
+# last). The instances themselves and their members are declared with the topology.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc-waw1-vrf-internet"
+      deployment: "DC-WAW1"
+      security_zone: "INTERNET"
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3401"}
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3401"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-bl-01, name: "Vlan3902"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-bl-02, name: "Vlan3902"}
+    - name: "dc-waw1-vrf-management"
+      deployment: "DC-WAW1"
+      security_zone: "MANAGEMENT"
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3601"}
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3601"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-bl-01, name: "Vlan3903"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-bl-02, name: "Vlan3903"}
+    - name: "dc-waw1-vrf-prod"
+      deployment: "DC-WAW1"
+      security_zone: "PROD"
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-bl-01, name: "Vlan2500"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-bl-01, name: "Vlan3900"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-bl-02, name: "Vlan2500"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-bl-02, name: "Vlan3900"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-fw-01, name: "ethernet1/1.3000"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-fw-02, name: "ethernet1/1.3000"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-leaf-01, name: "Vlan200"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-leaf-01, name: "Vlan2500"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-leaf-02, name: "Vlan200"}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-leaf-02, name: "Vlan2500"}

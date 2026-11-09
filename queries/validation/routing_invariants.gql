@@ -19,11 +19,6 @@ query routing_invariants {
     edges {
       node {
         ...InterfaceRoutingZoneFields
-        vrf {
-          node {
-            ...RoutingVrfFields
-          }
-        }
         __typename
         id
         name {
@@ -67,11 +62,6 @@ query routing_invariants {
     edges {
       node {
         ...InterfaceRoutingZoneFields
-        vrf {
-          node {
-            ...RoutingVrfFields
-          }
-        }
         __typename
         id
         name {
@@ -115,11 +105,6 @@ query routing_invariants {
     edges {
       node {
         ...InterfaceRoutingZoneFields
-        vrf {
-          node {
-            ...RoutingVrfFields
-          }
-        }
         __typename
         id
         name {
@@ -267,11 +252,7 @@ query routing_invariants {
               interfaces {
                 edges {
                   node {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
+                    ...InterfaceRoutingZoneFields
                     capabilities {
                       edges {
                         node {
@@ -594,6 +575,7 @@ query routing_invariants {
                 capabilities {
                   edges {
                     node {
+                      ...InterfaceRoutingZoneFields
                       name {
                         value
                       }
@@ -602,11 +584,6 @@ query routing_invariants {
                           name {
                             value
                           }
-                        }
-                      }
-                      vrf {
-                        node {
-                          ...RoutingVrfFields
                         }
                       }
                     }

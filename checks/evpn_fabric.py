@@ -45,7 +45,7 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import MANAGEMENT_TYPE, TRANSIT_VNI_MAX, TRANSIT_VNI_MIN
 from utils.fabric_roles import VTEP_ROLES
 from utils.limits import MAX_ENCODABLE_VNI
-from utils.routing_domain import RoutingDomainError
+from utils.routing_domain import RoutingDomainError, interface_vrf
 from utils.segment_addressing import segment_namespace
 from utils.service_contexts import border_contexts
 from utils.vrf_demand import SVI_ROLE, internet_exits, leg_namespaces, realized_l3
@@ -129,7 +129,7 @@ def _has_l3_instance(device: dict[str, Any]) -> bool:
     routed = {
         name
         for iface in interfaces
-        if iface.get("role") == SVI_ROLE and (name := ((iface.get("vrf") or {}).get("security_zone") or {}).get("name"))
+        if iface.get("role") == SVI_ROLE and (name := (interface_vrf(iface).get("security_zone") or {}).get("name"))
     } | leg_namespaces(border_contexts(device))
     border_gateway = bool(_site_rt_asn(device)) and any(iface.get("role") == _MULTISITE_ROLE for iface in interfaces)
     exits = internet_exits(namespaces, border_gateway=border_gateway)

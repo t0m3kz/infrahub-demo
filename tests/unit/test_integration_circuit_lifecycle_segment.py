@@ -58,7 +58,7 @@ def _vrf(vrf_id: str, namespace: str, members: list[str], name: str = "vrf") -> 
     return {
         "id": vrf_id,
         "name": _name(name),
-        "namespace": {"node": {"name": _name(namespace)}},
+        "security_zone": {"node": {"name": _name(namespace)}},
         "shared_devices": {"edges": [{"node": {"name": _name(member)}} for member in members]},
     }
 
@@ -75,9 +75,19 @@ def _svi(device: str, name: str, segment: str | None, vrf_id: str | None, role: 
         "role": _name(role),
         "device": _device(device),
         "ip_address": {"node": None},
-        "vrf": {"node": {"id": vrf_id, "namespace": {"node": {"name": _name(SEGMENT_NAMESPACE)}}}}
-        if vrf_id
-        else {"node": None},
+        "zone_capabilities": {
+            "edges": [
+                {
+                    "node": {
+                        "__typename": "ManagedVRF",
+                        "id": vrf_id,
+                        "security_zone": {"node": {"name": _name(SEGMENT_NAMESPACE)}},
+                    }
+                }
+            ]
+            if vrf_id
+            else []
+        },
         "segment_vlan": row,
     }
 

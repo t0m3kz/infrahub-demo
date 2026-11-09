@@ -76,7 +76,13 @@ def _iface(role: str, vrf_namespace: str | None = None) -> dict[str, Any]:
         "capabilities": edges(),
     }
     if vrf_namespace:
-        node["vrf"] = {"node": {"security_zone": {"node": {"name": {"value": vrf_namespace}}}}}
+        node["zone_capabilities"] = edges(
+            {
+                "__typename": "ManagedVRF",
+                "id": f"vrf-{vrf_namespace}",
+                "security_zone": {"node": {"name": {"value": vrf_namespace}}},
+            }
+        )
     return node
 
 

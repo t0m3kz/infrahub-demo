@@ -11,4 +11,3 @@ spec:
       device: "ktw1-leaf-02"
       role: svi
       status: active
-      vrf: ["DC-KTW1", "PROD"]

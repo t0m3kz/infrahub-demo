@@ -77,17 +77,13 @@ query GetInterconnectInventory {
         capabilities {
           edges {
             node {
+              ...InterfaceRoutingZoneFields
               id
               __typename
               name {
                 value
               }
               ... on DcimPhysicalInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 cable {
                   node {
                     id
@@ -107,11 +103,6 @@ query GetInterconnectInventory {
                 }
               }
               ... on DcimVirtualInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 ip_address {
                   node {
                     address {

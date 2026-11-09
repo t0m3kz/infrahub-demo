@@ -84,11 +84,6 @@ query edge_config($device: String!) {
               }
               ...InterfaceRoutingZoneFields
               ... on DcimPhysicalInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 interface_type {
                   value
                 }
@@ -118,11 +113,6 @@ query edge_config($device: String!) {
                           __typename
                           ...InterfaceRoutingZoneFields
                           ... on DcimPhysicalInterface {
-                            vrf {
-                              node {
-                                ...RoutingVrfFields
-                              }
-                            }
                             name {
                               value
                             }
@@ -151,11 +141,6 @@ query edge_config($device: String!) {
                 vlan_id {
                   value
                 }
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 ip_address {
                   node {
                     address {
@@ -172,11 +157,6 @@ query edge_config($device: String!) {
                 }
               }
               ... on DcimLAGInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 lag_id {
                   value
                 }
@@ -299,11 +279,7 @@ query edge_config($device: String!) {
               interfaces {
                 edges {
                   node {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
+                    ...InterfaceRoutingZoneFields
                     capabilities {
                       edges {
                         node {
@@ -586,6 +562,7 @@ query edge_config($device: String!) {
                 capabilities {
                   edges {
                     node {
+                      ...InterfaceRoutingZoneFields
                       name {
                         value
                       }
@@ -594,11 +571,6 @@ query edge_config($device: String!) {
                           name {
                             value
                           }
-                        }
-                      }
-                      vrf {
-                        node {
-                          ...RoutingVrfFields
                         }
                       }
                     }
@@ -711,11 +683,6 @@ query edge_config($device: String!) {
     edges {
       node {
         ...InterfaceRoutingZoneFields
-        vrf {
-          node {
-            ...RoutingVrfFields
-          }
-        }
         ip_address {
           node {
             address {
@@ -741,11 +708,6 @@ query edge_config($device: String!) {
                   }
                   ...InterfaceRoutingZoneFields
                   ... on DcimVirtualInterface {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
                     ip_address {
                       node {
                         address {
@@ -755,11 +717,6 @@ query edge_config($device: String!) {
                     }
                   }
                   ... on DcimPhysicalInterface {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
                     ip_address {
                       node {
                         address {

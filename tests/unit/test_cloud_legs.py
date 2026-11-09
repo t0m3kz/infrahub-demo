@@ -12,9 +12,9 @@ from tests.unit.cloud_leg_helpers import (
     attachment,
     aws_chain,
     cleaned,
+    interface_vrf,
     peering,
     prefix,
-    routing_vrf,
 )
 from transforms.helpers.bgp import _build_session_from_peering, _far_end_is_ours
 from transforms.helpers.bgp_cloud import (
@@ -119,7 +119,7 @@ class TestLegDerivation:
         raw = peering("vif", "dx")
         circuit = raw["capabilities"]["edges"][1]["node"]
         circuit["vrf"] = {"node": None}
-        circuit["capabilities"]["edges"][0]["node"]["vrf"] = {"node": None}
+        circuit["capabilities"]["edges"][0]["node"]["zone_capabilities"] = {"edges": []}
         with pytest.raises(RoutingDomainError, match="missing VRF instance"):
             _legs(raw)
 
@@ -127,7 +127,7 @@ class TestLegDerivation:
         """An end's export VRF must agree by scoped ID, not merely by its zone name."""
         raw = peering("vif", "dx")
         circuit = raw["capabilities"]["edges"][1]["node"]
-        circuit["capabilities"]["edges"][0]["node"]["vrf"] = {"node": routing_vrf("PROD", "AM")}
+        circuit["capabilities"]["edges"][0]["node"]["zone_capabilities"] = interface_vrf("PROD", "AM")
         with pytest.raises(RoutingDomainError, match="conflicting VRF instances"):
             _legs(raw)
 
@@ -137,6 +137,7 @@ class TestLegDerivation:
         circuit = raw["capabilities"]["edges"][1]["node"]
         assert "vrf" not in raw
         assert "vrf" not in circuit["capabilities"]["edges"][-1]["node"]
+        assert "zone_capabilities" not in circuit["capabilities"]["edges"][-1]["node"]
 
 
 class TestRegisteredPrefixes:
@@ -255,7 +256,7 @@ class TestFarEnd:
             "ttl": 1,
             "capabilities": [
                 {
-                    "vrf": cleaned(routing_vrf())[0],
+                    "zone_capabilities": cleaned(*(e["node"] for e in interface_vrf()["edges"])),
                     "name": _LOCAL[1],
                     "device": {"name": _LOCAL[0]},
                     "ip_address": {
@@ -324,7 +325,7 @@ class TestFarEnd:
 
 def _subif(name: str = _LOCAL[1], namespace: str = "PROD") -> dict[str, Any]:
     return {
-        "vrf": cleaned(routing_vrf(namespace))[0],
+        "zone_capabilities": cleaned(*(e["node"] for e in interface_vrf(namespace)["edges"])),
         "name": name,
         "ip_address": {"address": "10.255.5.5/30", "ip_namespace": {"node": {"name": {"value": "default"}}}},
     }

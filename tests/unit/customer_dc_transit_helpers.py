@@ -12,6 +12,7 @@ from infrahub_sdk.query_groups import InfrahubGroupContextBase
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 from tests.unit.vrf_instances_helpers import edges, raw_device, raw_instance, raw_interface, raw_service_port
 from tests.unit.vrf_reconcile_helpers import VrfHost
+from utils.exchange_transit import transit_vlan
 
 _UNTRACKED = {"allow_upsert": True, "update_group_context": False}
 _TRACKED = {"allow_upsert": True}
@@ -43,14 +44,17 @@ _VLAN_POOLS = {"dc10-fw-context-vlan-pool": 3000, "dc10-lb-context-vlan-pool": 3
 class _Many:
     """A cardinality-many relationship manager."""
 
-    def __init__(self, peer_ids: list[str] | None = None) -> None:
-        self.peers = [SimpleNamespace(id=peer_id) for peer_id in peer_ids or []]
+    def __init__(self, peer_ids: list[str] | None = None, *, on_add: Any = None) -> None:
+        self.peers = [SimpleNamespace(id=peer_id, typename=None) for peer_id in peer_ids or []]
+        # peer id -> its typename, called on every add (the world knows which ids are VRF instances).
+        self.on_add = on_add
 
     async def fetch(self) -> None:
         return None
 
     def add(self, obj: Any) -> None:
-        self.peers.append(SimpleNamespace(id=obj["id"] if isinstance(obj, dict) else obj.id))
+        peer_id = obj["id"] if isinstance(obj, dict) else obj.id
+        self.peers.append(SimpleNamespace(id=peer_id, typename=self.on_add(peer_id) if self.on_add else None))
 
 
 class _World:
@@ -128,7 +132,6 @@ class _World:
         self.sub_interfaces: dict[tuple[str, str], Any] = {}
         self.addresses: dict[tuple[str, str], Any] = {}
         self.saves: list[tuple[str, str, dict[str, Any]]] = []
-        self.tags: list[tuple[str, list[str]]] = []
         self.allocated: dict[str, Any] = {}
         self.allocate_calls = 0
         self.vlan_pool_reads: list[str] = []
@@ -140,6 +143,7 @@ class _World:
         self.routing = VrfHost()
         self.border_svis: dict[tuple[str, str], dict[str, Any]] = {}
         self.lock_events: list[tuple[str, str]] = []
+        self.vrf_edges: list[tuple[str, str, list[str]]] = []
 
     async def execute_graphql(self, *, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         """Return the current border-device graph, including scoped memberships and context legs."""
@@ -153,24 +157,28 @@ class _World:
             ]
             service_ports: list[dict[str, Any]] = []
             svis: list[dict[str, Any]] = []
-            for port in self.bl_ports.values():
+            for member_id, port in self.bl_ports.items():
                 if port.device.id != device_id:
                     continue
-                for peer in port.capabilities.peers:
-                    context = next((ctx for ctx in self.contexts.values() if ctx.id == peer.id), None)
-                    if context is None:
+                # The border port faces the member cabled to it: the contexts it is a member of are behind the port.
+                for context in self.contexts.values():
+                    if member_id not in context.members or not context.vlan_id.value:
                         continue
                     legs = []
                     for sub in self.sub_interfaces.values():
-                        if context.id not in {cap.id for cap in sub.capabilities.peers}:
+                        vrf_id = self.vrf_of(sub)
+                        if sub.device.id != member_id or vrf_id is None or not sub.ip_address.id:
                             continue
+                        vrf = self._raw_vrf(self.routing.store.vrfs[vrf_id])
+                        ns_type = vrf["security_zone"]["node"]["vrf_type"]["value"]
+                        if sub.vlan_id.value != transit_vlan(context.vlan_id.value, ns_type):
+                            continue  # a leg of another context of the member
                         ip = next(ip for ip in self.addresses.values() if ip.id == sub.ip_address.id)
-                        vrf = self._raw_vrf(sub.vrf.peer)
                         legs.append(
                             {
                                 "_ns_type": vrf["security_zone"]["node"]["vrf_type"]["value"],
                                 "ip_address": {"node": {"address": {"value": ip.address.value}}},
-                                "vrf": {"node": vrf},
+                                "zone_capabilities": {"edges": [{"node": vrf}]},
                             }
                         )
                     # The border port is cabled to the uplink of a member of the context: the legs sit on that member.
@@ -190,7 +198,9 @@ class _World:
                     svis.append(
                         {
                             **raw_interface(data["id"], data["name"], "l3vni", typename="DcimVirtualInterface"),
-                            "vrf": {"node": self._raw_vrf(self.routing.store.vrfs[data["vrf"]["id"]])},
+                            "zone_capabilities": edges(
+                                self._raw_vrf(self.routing.store.vrfs[data["capabilities"][0]["id"]])
+                            ),
                         }
                     )
             device = raw_device(
@@ -224,6 +234,7 @@ class _World:
     def _raw_vrf(self, vrf: Any) -> dict[str, Any]:
         zone = next(zone for zone in self.namespaces.values() if zone.name.value == vrf.security_zone.peer.name.value)
         return {
+            "__typename": "ManagedVRF",
             "id": vrf.id,
             "deployment": {"node": {"id": vrf.deployment.id}},
             "security_zone": {
@@ -249,6 +260,16 @@ class _World:
     # --- reads -----------------------------------------------------------
     async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
         name = kind.__name__
+        if name == "ManagedVRF" and "capabilities__ids" in kwargs:  # the VRF of interfaces (the interface edge)
+            wanted = set(kwargs["capabilities__ids"])
+            return [
+                self._vrf_node(vrf_id)
+                for vrf_id in sorted(self.routing.store.vrfs)
+                if wanted & set(self.vrf_interfaces(vrf_id))
+            ]
+        if name == "TopologyExchangeGateway":  # generators/helpers/vrf.py: a routed exchange keeps an instance alive
+            end, ids = next((key, value) for key, value in kwargs.items() if key.endswith("__ids"))
+            return [ex for ex in self.exchanges.values() if ex.data[end.removesuffix("__ids")]["id"] in ids]
         if name == "ManagedVRF":
             found = list(self.routing.store.vrfs.values())
             for key, accessor in (
@@ -304,18 +325,15 @@ class _World:
             return [port for port in ports if port.id in kwargs["ids"]]
         if name == "TopologyRoutedExchange":
             return [ex for ex_name, ex in self.exchanges.items() if ex_name in kwargs["name__values"]]
-        if name == "DcimVirtualInterface":
-            if "vlan_id__value" in kwargs:
-                return [
-                    sub
-                    for sub in self.sub_interfaces.values()
-                    if sub.vlan_id.value == kwargs["vlan_id__value"]
-                    and sub.parent_interface.id in kwargs["parent_interface__ids"]
-                    and sub.device.id in kwargs["device__ids"]
-                    and set(kwargs["capabilities__ids"]).intersection(peer.id for peer in sub.capabilities.peers)
-                ]
-            ids = set(kwargs["capabilities__ids"])
-            return [sub for sub in self.sub_interfaces.values() if ids & {peer.id for peer in sub.capabilities.peers}]
+        if name == "DcimVirtualInterface":  # a context's legs: the members' sub-interfaces of their uplinks
+            assert "capabilities__ids" not in kwargs
+            return [
+                sub
+                for sub in self.sub_interfaces.values()
+                if sub.parent_interface.id in kwargs["parent_interface__ids"]
+                and sub.device.id in kwargs["device__ids"]
+                and ("vlan_id__value" not in kwargs or sub.vlan_id.value == kwargs["vlan_id__value"])
+            ]
         if name == "IpamIPAddress":
             if "address__values" in kwargs:  # CablingMixin._find_addresses: one read for a prefix's addresses
                 wanted = {(address, ns) for address in kwargs["address__values"] for ns in kwargs["ip_namespace__ids"]}
@@ -361,15 +379,9 @@ class _World:
             return next(prefix for prefix in self.allocated.values() if prefix.id == kwargs["id"])
         if name == "ManagedVRF":
             instance_id = kwargs["id"]
-            self.routing.store.external_refs[instance_id] = {
-                "interfaces": {sub.id for sub in self.sub_interfaces.values() if sub.vrf.id == instance_id},
-                **{
-                    reverse: {
-                        exchange.id for exchange in self.exchanges.values() if exchange.data[end]["id"] == instance_id
-                    }
-                    for reverse, end in (("exchanges_a", "vrf_a"), ("exchanges_z", "vrf_z"))
-                },
-            }
+            if "include" not in kwargs:  # generators/helpers/interface_vrf.py: the node an interface edge is written on
+                return self._vrf_node(instance_id)
+            self.routing.store.external_refs[instance_id] = {"capabilities": set(self.vrf_interfaces(instance_id))}
             return await self.routing._get(kind, instance_id, kwargs["include"])
         raise AssertionError(f"unexpected get({name})")
 
@@ -435,6 +447,7 @@ class _World:
                 )
             context = self.contexts.setdefault(data["name"], self._context(name, data["name"]))
             context.tenant_id = (data.get("tenant") or {}).get("id")
+            context.members = [member["id"] for member in data.get("shared_devices") or []]
             return self._node(name, data["name"], backing=context)
         if name == "TopologyRoutedExchange":
             exchange = self.exchanges.setdefault(
@@ -476,21 +489,12 @@ class _World:
                     parent_interface=SimpleNamespace(id=(data.get("parent_interface") or {}).get("id")),
                     vlan_id=SimpleNamespace(value=data.get("vlan_id")),
                     ip_address=SimpleNamespace(id=None),
-                    capabilities=_Many(),
+                    capabilities=_Many(on_add=lambda peer_id, key=key: self._joined(key, peer_id)),
                 ),
             )
             sub.ip_address = SimpleNamespace(id=(data.get("ip_address") or {}).get("id") or sub.ip_address.id)
-            vrf_id = (data.get("vrf") or {}).get("id")
-            assert vrf_id in self.routing.store.vrfs
-            active: set[str] = set()
-            for operation, key in self.lock_events:
-                if operation == "acquire":
-                    active.add(key)
-                else:
-                    active.remove(key)
-            assert active.intersection(f"vrf-device-{member}" for member in self.routing.store.vrfs[vrf_id].members)
-            assert any(key.startswith(("fw-context-", "lb-context-")) for key in active)
-            sub.vrf = SimpleNamespace(id=vrf_id, peer=self.routing.store.vrfs[vrf_id])
+            # The VRF is the instance's interface edge, written after the save (generators/helpers/interface_vrf.py).
+            assert "vrf" not in data and "capabilities" not in data
             return self._node(name, data["name"], backing=sub)
         raise AssertionError(f"unexpected create({name})")
 
@@ -499,6 +503,7 @@ class _World:
         context = SimpleNamespace(
             id=f"ctx-{len(self.contexts)}",
             kind=kind,
+            members=[],
             name=SimpleNamespace(value=name),
             vlan_id=SimpleNamespace(value=None),
             tenant_id=None,
@@ -530,22 +535,62 @@ class _World:
         if kind in _CONTEXT_KINDS and backing is not None:
 
             async def add_relationships(*, relation_to_update: str, related_nodes: list[str]) -> None:
-                if relation_to_update == "member_of_groups":  # the context joins service_contexts
-                    world.group_adds.append((backing.id, list(related_nodes)))
-                    return
-                assert relation_to_update == "capabilities"
-                world.tags.append((backing.id, list(related_nodes)))
-                for port in world.bl_ports.values():
-                    if port.id in related_nodes:
-                        port.capabilities.peers.append(SimpleNamespace(id=backing.id))
+                # A context has no interface edge: its only relationship write is joining service_contexts.
+                assert relation_to_update == "member_of_groups"
+                world.group_adds.append((backing.id, list(related_nodes)))
 
             node.add_relationships = add_relationships
         return node
 
+    # --- the VRF interface edge -------------------------------------------
+    def vrf_of(self, sub: Any) -> str | None:
+        """The instance a sub-interface is in: the ManagedVRF among its capabilities."""
+        return next((peer.id for peer in sub.capabilities.peers if peer.typename == "ManagedVRF"), None)
+
+    def vrf_interfaces(self, vrf_id: str) -> list[str]:
+        """The interfaces an instance lists in its capabilities (the same edges, seen from the instance)."""
+        return [sub.id for sub in self.sub_interfaces.values() if self.vrf_of(sub) == vrf_id]
+
+    def _joined(self, key: tuple[str, str], peer_id: str) -> str | None:
+        """A capability added to a sub-interface's loaded manager: a VRF instance is the leg joining it, saved with the
+        sub-interface while the border devices' VRF locks and the context's lock are held."""
+        vrf = self.routing.store.vrfs.get(peer_id)
+        if vrf is None:
+            return None
+        active: set[str] = set()
+        for operation, lock in self.lock_events:
+            if operation == "acquire":
+                active.add(lock)
+            else:
+                active.remove(lock)
+        assert active.intersection(f"vrf-device-{member}" for member in vrf.members)
+        assert any(lock.startswith(("fw-context-", "lb-context-")) for lock in active)
+        self.vrf_edges.append(("add", peer_id, [self.sub_interfaces[key].id]))
+        return "ManagedVRF"
+
+    def _vrf_node(self, vrf_id: str) -> Any:
+        """An instance as a ``capabilities__ids`` read or ``leave_vrfs`` (RelationshipRemove) sees it."""
+        vrf = self.routing.store.vrfs[vrf_id]
+        world = self
+
+        async def remove_relationships(*, relation_to_update: str, related_nodes: list[str]) -> None:
+            assert relation_to_update == "capabilities"
+            world.vrf_edges.append(("remove", vrf_id, list(related_nodes)))
+            for sub in world.sub_interfaces.values():
+                if sub.id in related_nodes:
+                    sub.capabilities.peers = [peer for peer in sub.capabilities.peers if peer.id != vrf_id]
+
+        return SimpleNamespace(
+            id=vrf_id,
+            security_zone=vrf.security_zone,
+            capabilities=SimpleNamespace(peers=[SimpleNamespace(id=sub) for sub in self.vrf_interfaces(vrf_id)]),
+            remove_relationships=remove_relationships,
+        )
+
     # --- assertions helpers ---------------------------------------------
     @property
     def writes(self) -> int:
-        return len(self.saves) + len(self.tags) + self.allocate_calls
+        return len(self.saves) + len(self.vrf_edges) + self.allocate_calls
 
     def saved(self, kind: str) -> list[str]:
         return [label for saved_kind, label, _ in self.saves if saved_kind == kind]
@@ -630,14 +675,10 @@ def _make_gen(world: _World) -> tuple[Any, list[str]]:
     gen.link_serving_context = AsyncMock()
     gen.set_controllers_from = MagicMock()
 
-    async def reconcile_border(context_id: str) -> None:
-        await gen.reconcile_vrfs(
-            {
-                port.device.id
-                for port in world.bl_ports.values()
-                if context_id in {peer.id for peer in port.capabilities.peers}
-            }
-        )
+    async def reconcile_border(target: Any, _label: str) -> None:
+        """The border devices facing the context's members (the real one resolves them through their cables)."""
+        member_ids = [device["id"] if isinstance(device, dict) else device.id for device in target.devices]
+        await gen.reconcile_vrfs({world.bl_ports[m].device.id for m in member_ids if m in world.bl_ports})
 
     gen._reconcile_border_vrfs = AsyncMock(side_effect=reconcile_border)
     return gen, events
@@ -660,4 +701,8 @@ async def _run(gen: Any, world: _World, payload: dict[str, Any]) -> None:
 
 
 def _sub_names(world: _World) -> dict[tuple[str, str], list[str]]:
-    return {key: [peer.id for peer in sub.capabilities.peers] for key, sub in world.sub_interfaces.items()}
+    """The exchanges each sub-interface is linked to (its capabilities but its VRF)."""
+    return {
+        key: [peer.id for peer in sub.capabilities.peers if peer.typename != "ManagedVRF"]
+        for key, sub in world.sub_interfaces.items()
+    }

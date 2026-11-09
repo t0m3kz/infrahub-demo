@@ -1,0 +1,16 @@
+---
+# The leaves of DC-GDN1 steer to the firewall: each has a ManagedPBR, a capability of the device like its BGP process.
+# It holds nothing else: which SVIs it steers (c900-db-p, whose footprint C900-P-DC-GDN1 is served by
+# shared-gdn1-fw-ha-prod) and the next hop, ACL and bypass are derived when the device is rendered. A border leaf has
+# none. On 30_all the VRF pass of the device writes the same object (generators/helpers/vrf.py).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedPBR
+  data:
+    - name: gdn1-leaf-01-pbr
+      status: active
+      capabilities: ["gdn1-leaf-01"]
+    - name: gdn1-leaf-02-pbr
+      status: active
+      capabilities: ["gdn1-leaf-02"]

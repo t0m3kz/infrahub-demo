@@ -16,7 +16,7 @@ from tests.unit.vrf_instances_helpers import (
     raw_row,
     raw_svi,
 )
-from tests.unit.vrf_reconcile_helpers import VrfHost, response
+from tests.unit.vrf_reconcile_helpers import FakeVrf, VrfHost, response
 
 _UNTRACKED = {"allow_upsert": True, "update_group_context": False}
 
@@ -72,9 +72,11 @@ def test_a_routed_row_creates_the_instance_and_its_svi() -> None:
             "role": "svi",
             "status": "active",
             "segment_vlan": {"id": "r1"},
-            "vrf": {"id": "new-1"},
+            # A new SVI is created in its VRF: the instance's interface edge, in the one create.
+            "capabilities": [{"id": "new-1"}],
         }
     ]
+    assert host.store.svi_refs["new-1"] == {"new-2"}
     assert [kind for kind, _ in host.created] == ["ManagedVRF", "DcimVirtualInterface"]
     assert host.saves == [_UNTRACKED, _UNTRACKED]
     assert host.deleted == []
@@ -181,7 +183,7 @@ def test_a_device_that_carries_no_vrf_gets_nothing_even_with_extra() -> None:
 
 
 def test_a_row_moved_to_another_row_updates_the_svi_in_place() -> None:
-    """Same name, another row: the SVI is written with its own id, not deleted and created."""
+    """Same name, another row: the SVI is written with its own id, not deleted and created, still in its VRF."""
     host = VrfHost(
         response(
             _leaf(
@@ -202,10 +204,33 @@ def test_a_row_moved_to_another_row_updates_the_svi_in_place() -> None:
             "role": "svi",
             "status": "active",
             "segment_vlan": {"id": "r2"},
-            "vrf": {"id": "vrf-1"},
+            "capabilities": [{"id": "vrf-1"}],
         }
     ]
+    assert host.edge_ops == []
     assert host.deleted == []
+
+
+def test_an_svi_moved_to_another_instance_moves_its_edge() -> None:
+    """An SVI in another topology's instance of its namespace is saved in place in the device's own: its only
+    capability is its VRF, so its save carries it, and the old instance no longer lists it."""
+    host = VrfHost(
+        response(
+            _leaf(
+                rows=[raw_row("r1", 100, "PROD")],
+                capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
+                interfaces=[raw_svi("svi-1", 100, "r1", "vrf-old", "PROD", vrf_deployment_id="dc-9")],
+            )
+        )
+    )
+    host.store.add(FakeVrf("vrf-old", "dc9-vrf-prod", "dc-9", "PROD"))
+
+    _reconcile(host, ["d1"])
+
+    assert host.written("DcimVirtualInterface")[0]["capabilities"] == [{"id": "vrf-1"}]
+    assert host.edge_ops == []
+    assert host.store.svi_refs["vrf-1"] == {"svi-1"}
+    assert not host.store.svi_refs["vrf-old"]
 
 
 def test_an_svi_that_would_lose_its_vrf_is_created_again() -> None:
@@ -343,7 +368,7 @@ def test_a_second_member_joins_the_existing_instance_without_a_create() -> None:
     assert host.written("ManagedVRF") == []
     assert host.edge_ops == [("add", "vrf-1", "shared_devices", ["d1"])]
     assert host.store.vrfs["vrf-1"].members == {"d1", "d2"}
-    assert host.written("DcimVirtualInterface")[0]["vrf"] == {"id": "vrf-1"}
+    assert host.written("DcimVirtualInterface")[0]["capabilities"] == [{"id": "vrf-1"}]
     assert host.lock_keys == ["vrf-device-d1", "vrf-dc-1-PROD"]
 
 
@@ -403,7 +428,7 @@ def test_a_moved_device_leaves_the_old_topology_and_joins_the_new_one() -> None:
     assert [data["shared_devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
     assert host.edge_ops == [("remove", "vrf-old", "shared_devices", ["d1"])]
     assert host.written("DcimVirtualInterface")[0]["id"] == "svi-1"
-    assert host.written("DcimVirtualInterface")[0]["vrf"] == {"id": "new-1"}
+    assert host.written("DcimVirtualInterface")[0]["capabilities"] == [{"id": "new-1"}]
     assert host.deleted == [("ManagedVRF", "vrf-old")]
 
 
@@ -432,9 +457,10 @@ def test_an_instance_still_used_by_an_svi_is_not_deleted() -> None:
     assert host.deleted == []
 
 
-@pytest.mark.parametrize("reference", ["interfaces", "session_circuits", "exchanges_a", "exchanges_z"])
+@pytest.mark.parametrize("reference", ["capabilities", "session_circuits", "exchanges"])
 def test_external_reference_retains_instance_until_truly_unused(reference: str) -> None:
-    """The last member can leave, but a routed interface, circuit or exchange keeps its scoped VRF."""
+    """The last member can leave, but a routed interface, circuit or exchange keeps its scoped VRF (an exchange names
+    the instance one-sidedly, ``vrf_a`` / ``vrf_z``: it is found by a filter, not an edge of the instance)."""
     instance = raw_instance("vrf-1", "leaf-1", "PROD")
     host = VrfHost(response(_leaf(vrfs=[instance])))
     host.store.external_refs["vrf-1"] = {reference: {"external-1"}}
@@ -444,12 +470,7 @@ def test_external_reference_retains_instance_until_truly_unused(reference: str) 
     assert host.store.vrfs["vrf-1"].members == set()
     assert host.edge_ops == [("remove", "vrf-1", "shared_devices", ["d1"])]
     assert host.deleted == []
-    assert host.client.get.await_args.kwargs["include"] == [
-        "interfaces",
-        "session_circuits",
-        "exchanges_a",
-        "exchanges_z",
-    ]
+    assert host.client.get.await_args.kwargs["include"] == ["capabilities", "session_circuits"]
     host.store.external_refs["vrf-1"][reference].clear()
 
     asyncio.run(host.prune_empty_vrfs(["dc-1"]))

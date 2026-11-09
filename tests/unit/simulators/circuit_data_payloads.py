@@ -383,7 +383,8 @@ def _handoff(
             process["node"].get("process_role", {}).get("value") == "overlay"
             for process in device.get("capabilities", {}).get("edges", [])
         ):
-            port["vrf"] = payload["vrf"]
+            # The end is in the instance: the ManagedVRF among its capabilities (alias zone_capabilities).
+            port["zone_capabilities"] = {"edges": [{"node": {"__typename": "ManagedVRF", **payload["vrf"]["node"]}}]}
     return payload
 
 

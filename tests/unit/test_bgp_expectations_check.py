@@ -8,7 +8,7 @@ from typing import Any, cast
 from checks import bgp_expectations
 from checks.bgp_closure import Finding, analyse
 from checks.bgp_expectations import CheckBgpExpectations
-from tests.unit.routing_helpers import make_vrf
+from tests.unit.routing_helpers import in_vrf, make_vrf
 
 POOL = "10.250.0.0/24"
 
@@ -26,7 +26,7 @@ def _zone(name: str, *prefixes: str, vrf_type: str = "prod") -> dict[str, Any]:
 
 def _interface(name: str, role: str, address: str, namespace: str = "default") -> dict[str, Any]:
     return {
-        "vrf": make_vrf({"name": namespace}),
+        **in_vrf(make_vrf({"name": namespace})),
         "name": name,
         "role": role,
         "ip_address": {"address": address, "ip_namespace": {"node": {"name": {"value": "default"}}}},
@@ -71,7 +71,7 @@ def _peering(
         "ttl": ttl,
         "capabilities": [
             {
-                "vrf": make_vrf({"name": "default"}),
+                **in_vrf(make_vrf({"name": "default"})),
                 "name": "Ethernet1",
                 "ip_address": {"address": address, "ip_namespace": {"node": {"name": {"value": "default"}}}},
                 "device": {"typename": "DcimPhysicalDevice", "name": device},
@@ -156,7 +156,7 @@ def test_e4_a_transit_session_on_a_device_that_is_no_default_exit() -> None:
     """The ISP session is in INTERNET but the device is no border gateway of an INTERNET instance."""
     transit = _peering("t1", ("edge1", "10.255.9.0/31"), ("isp1", "10.255.9.1/31"))
     for end in transit["capabilities"]:
-        end["vrf"] = make_vrf({"name": "INTERNET", "vrf_type": "internet", "l3_vni": 60002})
+        end.update(in_vrf(make_vrf({"name": "INTERNET", "vrf_type": "internet", "l3_vni": 60002})))
     edge = _device("edge1", "edge", "10.250.0.21/32")
     isp = _device("isp1", "edge", "10.250.0.99/32")
     findings = analyse(_cleaned([edge, isp], [transit]))

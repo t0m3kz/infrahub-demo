@@ -34,7 +34,7 @@ from transforms.helpers.vrf import VrfRealizationError, l3_vrf_names, svi_vrfs, 
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.circuit_underlay import NETWORK_APPLIANCE_KIND
 from utils.data_cleaning import clean_data
-from utils.device_services import overlay_pbr_bindings, pbr_bindings
+from utils.device_services import has_pbr, overlay_pbr_bindings, pbr_bindings
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
 from utils.segment_addressing import segment_hosting_candidates
@@ -594,7 +594,9 @@ class BaseDeviceTransform(InfrahubTransform):
         next hop has none); every other role gets no leaf transits.
         """
         firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
-        bindings = pbr_bindings(device_services(data))
+        # A device steers only when it has the capability (a ManagedPBR among its capabilities); the SVIs it steers
+        # and for which footprint are derived (pbr_bindings).
+        bindings = pbr_bindings(device_services(data)) if has_pbr(data) else {}
         steered_vlans = {vlan for name in bindings if (vlan := svi_vlan_id(name)) is not None}
         refuse_unresolvable_contexts(set(bindings.values()), firewall_contexts, device_name=data.get("name", ""))
         rules = get_customer_pbr_rules(routed, firewall_contexts, steered_vlans=steered_vlans)

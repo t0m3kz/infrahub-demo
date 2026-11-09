@@ -70,11 +70,6 @@ query border_leaf_config($device: String!) {
               ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
               ...InterfaceRoutingZoneFields
               ... on DcimPhysicalInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 interface_type {
                   value
                 }
@@ -104,11 +99,6 @@ query border_leaf_config($device: String!) {
                           __typename
                           ...InterfaceRoutingZoneFields
                           ... on DcimPhysicalInterface {
-                            vrf {
-                              node {
-                                ...RoutingVrfFields
-                              }
-                            }
                             name {
                               value
                             }
@@ -142,11 +132,6 @@ query border_leaf_config($device: String!) {
                     id
                   }
                 }
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 ip_address {
                   node {
                     address {
@@ -175,11 +160,6 @@ query border_leaf_config($device: String!) {
                 }
               }
               ... on DcimLAGInterface {
-                vrf {
-                  node {
-                    ...RoutingVrfFields
-                  }
-                }
                 lag_id {
                   value
                 }
@@ -295,11 +275,6 @@ query border_leaf_config($device: String!) {
     edges {
       node {
         ...InterfaceRoutingZoneFields
-        vrf {
-          node {
-            ...RoutingVrfFields
-          }
-        }
         ip_address {
           node {
             address {
@@ -325,11 +300,6 @@ query border_leaf_config($device: String!) {
                   }
                   ...InterfaceRoutingZoneFields
                   ... on DcimVirtualInterface {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
                     ip_address {
                       node {
                         address {
@@ -339,11 +309,6 @@ query border_leaf_config($device: String!) {
                     }
                   }
                   ... on DcimPhysicalInterface {
-                    vrf {
-                      node {
-                        ...RoutingVrfFields
-                      }
-                    }
                     ip_address {
                       node {
                         address {

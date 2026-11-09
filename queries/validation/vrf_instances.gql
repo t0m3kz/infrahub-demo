@@ -95,6 +95,15 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
               }
             }
           }
+          # The individual capabilities: a ManagedPBR says the device steers (utils/vrf_demand.py pbr_ids).
+          capabilities {
+            edges {
+              node {
+                __typename
+                id
+              }
+            }
+          }
         }
         ...ServiceBorderPortsFields
         ... on DcimDevice {
@@ -111,11 +120,6 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                 }
                 ...InterfaceRoutingZoneFields
                 ... on DcimPhysicalInterface {
-                  vrf {
-                    node {
-                      ...RoutingVrfFields
-                    }
-                  }
                   ip_address {
                     node {
                       address {
@@ -132,11 +136,6 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                   }
                 }
                 ... on DcimLAGInterface {
-                  vrf {
-                    node {
-                      ...RoutingVrfFields
-                    }
-                  }
                   ip_address {
                     node {
                       address {
@@ -153,11 +152,6 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                   }
                 }
                 ... on DcimVirtualInterface {
-                  vrf {
-                    node {
-                      ...RoutingVrfFields
-                    }
-                  }
                   ip_address {
                     node {
                       address {
@@ -168,21 +162,6 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                           name {
                             value
                           }
-                        }
-                      }
-                    }
-                  }
-                  vrf {
-                    node {
-                      id
-                      deployment {
-                        node {
-                          id
-                        }
-                      }
-                      security_zone {
-                        node {
-                          ...RoutingZoneFields
                         }
                       }
                     }
@@ -198,19 +177,6 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                     node {
                       __typename
                       id
-                      ... on RoutingPolicy {
-                        kind {
-                          value
-                        }
-                        origin {
-                          value
-                        }
-                        customer_deployment {
-                          node {
-                            id
-                          }
-                        }
-                      }
                     }
                   }
                 }

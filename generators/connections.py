@@ -20,6 +20,7 @@ from .far_end import ports_free_for
 from .helpers import CableTypeDetector, CablingPlanner
 from .helpers.cable_attributes import RackPosition, cable_attributes, endpoint_label
 from .helpers.common import save_with_node_not_found_retry
+from .helpers.interface_vrf import add_vrf, leave_vrfs, vrf_ids
 from .protocols import (
     DcimCable,
     DcimPhysicalDevice,
@@ -532,20 +533,19 @@ class CablingMixin:
         device_name: str,
         trunk_iface: Any,
         vlan_id_value: int,
-        capability_obj: Any | None = None,
-        extra_capability_objs: Sequence[Any] = (),
+        capability_objs: Sequence[Any] = (),
         ip_address_id: str | None = None,
         vrf_id: str | None = None,
         track: bool = True,
         role: str = "service",
     ) -> Any | None:
         """Upsert a VLAN-tagged DcimVirtualInterface on trunk_iface, named
-        <trunk>.<vlan_id> by convention and stating the tag in ``vlan_id``, linked to capability_obj (and any extra_capability_objs,
-        e.g. the exchanges a firewall-context leg belongs to) via capabilities.
-        Capabilities are only ever added, never removed, and carry CONTEXTS only
-        (customer_dc.py/customer_colocation.py's FirewallContext sub-interfaces).
-        Trunk-interface resolution stays with the caller since the fallback
-        behavior differs.
+        <trunk>.<vlan_id> by convention and stating the tag in ``vlan_id``, linked to ``capability_objs`` (the exchanges
+        a firewall-context leg belongs to) via capabilities, and put in the VRF instance ``vrf_id``
+        (generators/helpers/interface_vrf.py: it leaves another instance). Capabilities are only ever added, never
+        removed. A context is not one: its
+        legs are derived from the member's uplink (utils/service_contexts.py). Trunk-interface resolution stays with
+        the caller since the fallback behavior differs.
 
         No capability: a sub-interface the caller links itself (an office's WAN
         exit, which the BGP peering names as its interface), with its own ``role``.
@@ -567,26 +567,29 @@ class CablingMixin:
             "status": "active",
             "role": role,
             **({"ip_address": {"id": ip_address_id}} if ip_address_id else {}),
-            **({"vrf": {"id": vrf_id}} if vrf_id else {}),
         }
 
         try:
             sub_iface = await self.client.create(kind=DcimVirtualInterface, data=sub_iface_data)
             await sub_iface.save(**tracked_save_kwargs(track))
-            wanted = [cap.id for cap in (capability_obj, *extra_capability_objs) if cap is not None]
-            if wanted:
+            wanted = [cap.id for cap in capability_objs if cap is not None]
+            if wanted or vrf_id:
                 # A node built from create(data) does not know the capabilities the server already holds, and
                 # a RelationshipManager must be loaded before it is added to: one get with the relationship
                 # included (only the peer ids are read), not fetch(), which costs a get plus a read per peer kind.
                 stored = await self.client.get(kind=DcimVirtualInterface, id=sub_iface.id, include=["capabilities"])
                 capabilities = getattr(stored, "capabilities")
+                stale_vrfs = [old for old in vrf_ids(capabilities.peers) if old != vrf_id] if vrf_id else []
                 linked = {peer.id for peer in capabilities.peers}
                 missing = [cap_id for cap_id in dict.fromkeys(wanted) if cap_id not in linked]
-                if missing:
-                    for cap_id in missing:
-                        await self._safe_rel_add(capabilities, {"id": cap_id})
-                    # The capability may be an exchange another run created a moment ago.
+                for cap_id in missing:
+                    await self._safe_rel_add(capabilities, {"id": cap_id})
+                added_vrf = add_vrf(capabilities, vrf_id) if vrf_id else False
+                if missing or added_vrf:
+                    # The capability may be an exchange another run created a moment ago, the VRF an instance this
+                    # pass created: the save retries a NODE_NOT_FOUND, a RelationshipAdd would not.
                     await save_with_node_not_found_retry(stored, self.logger, **tracked_save_kwargs(track))
+                await leave_vrfs(self.client, sub_iface.id, stale_vrfs)
             self.logger.info(f"Upserted sub-interface {sub_iface_name} on {device_name}")
             return sub_iface
         except Exception as exc:

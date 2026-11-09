@@ -13,6 +13,8 @@ HANDOFF = "VC-C001-EQXFR-AWS"
 DCI = "VC-DCI-DC10-FR2"
 DCI_KEY = f"RoutingPassword:{DCI}-dci-key"
 UNTRACKED = {"update_group_context": False}
+# An end interface is updated in place (never upserted), untracked, through save_with_node_not_found_retry.
+INTERFACE_UPDATE = {"allow_upsert": False, **UNTRACKED}
 
 
 async def _run(client: FakeClient, payload: dict[str, Any]) -> Any:

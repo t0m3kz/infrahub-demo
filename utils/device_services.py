@@ -1,9 +1,9 @@
 """The PBR bindings of a switch, derived from the switch's own nested data (pure, no I/O).
 
-PBR steering is not stored: the SVIs a switch steers to a firewall, and for which customer footprint, carry no setting
-of their own (the ``kind: pbr`` ``RoutingPolicy`` and its interface ``capabilities`` held only membership), so they are
-derived when the device is rendered or reconciled.
+PBR steering is a capability of the device (``ManagedPBR``, ``has_pbr``): the SVIs it steers to a firewall, and for which
+customer footprint, carry no setting of their own, so they are derived when the device is rendered or reconciled.
 
+- ``has_pbr``: whether the device steers (a ``ManagedPBR`` among its ``capabilities``).
 - ``pbr_bindings``: the segment SVIs steered to the firewall of a footprint.
 - ``overlay_pbr_bindings``: the L3 VNI SVIs of a border leaf or border spine that steer what enters the VRF from the
   overlay, per footprint.
@@ -25,7 +25,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from utils.vrf_demand import device_vrf_facts
+from utils.vrf_demand import PBR_KIND, device_vrf_facts
+
+
+def has_pbr(device: dict[str, Any]) -> bool:
+    """Whether the cleaned device has a ``ManagedPBR`` among its ``capabilities``: it steers its tenant SVIs."""
+    return any(cap.get("typename") == PBR_KIND for cap in device.get("capabilities") or [])
 
 
 def pbr_bindings(device: dict[str, Any]) -> dict[str, str]:

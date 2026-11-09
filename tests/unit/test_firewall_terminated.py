@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from tests.unit.firewall_helpers_shared import fw_contexts
+from tests.unit.routing_helpers import in_vrf
 from transforms.config.firewall import apply_context_routes
 from transforms.helpers.firewall import get_firewall_static_routes
 from transforms.helpers.firewall_terminated import terminated_interfaces
@@ -170,10 +171,12 @@ class TestContextShape:
             "served_deployments": [{"id": "dep", "network_segments": [{"id": segment["id"]}]}],
         }
         leg = {
-            "vrf": {
-                "id": "vrf-prod",
-                "security_zone": {"id": "zone-prod", "name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
-            },
+            **in_vrf(
+                {
+                    "id": "vrf-prod",
+                    "security_zone": {"id": "zone-prod", "name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
+                }
+            ),
             "name": "eth1.3000",
             "device": {"id": "dev-fw"},
             "parent_interface": {"name": "eth1", "device": {"id": "dev-fw"}},
@@ -238,7 +241,7 @@ class TestRoutes:
         base = {
             "name": "eth1.101",
             "ip_address": {"address": "10.9.0.1/30", "ip_namespace": {"node": {"name": {"value": "default"}}}},
-            "vrf": {"id": "vrf-prod", "security_zone": {"id": "zone-prod", "name": "PROD"}},
+            **in_vrf({"id": "vrf-prod", "security_zone": {"id": "zone-prod", "name": "PROD"}}),
         }
         zones = [{"name": "PROD", "member_cidrs": ["10.1.0.0/24"]}]
 

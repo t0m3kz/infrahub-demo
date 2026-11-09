@@ -23,6 +23,7 @@ from typing import Any
 import pytest
 
 from tests.smoke.fixture_builders.common import make_transform
+from tests.unit.routing_helpers import in_vrf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.leaf import Leaf
@@ -84,11 +85,14 @@ def _instances(data: dict[str, Any]) -> list[str]:
 
 def _svis(data: dict[str, Any]) -> dict[str, str | None]:
     return {
-        edge["node"]["name"]["value"]: (
-            ((edge["node"]["vrf"]["node"] or {}).get("security_zone") or {}).get("node") or {}
+        edge["node"]["name"]["value"]: next(
+            (
+                cap["node"]["security_zone"]["node"]["name"]["value"]
+                for cap in (edge["node"].get("zone_capabilities") or {}).get("edges", [])
+                if cap["node"].get("__typename") == "ManagedVRF"
+            ),
+            None,
         )
-        .get("name", {})
-        .get("value")
         for edge in _node(data)["interfaces"]["edges"]
         if edge["node"]["role"]["value"] == "svi"
     }
@@ -134,7 +138,7 @@ class TestRefusal:
         data = _raw(_LEAF)
         for edge in _node(data)["interfaces"]["edges"]:
             if edge["node"]["name"]["value"] == "Vlan100":
-                edge["node"]["vrf"] = {"node": None}
+                edge["node"]["zone_capabilities"] = {"edges": []}
 
         with pytest.raises(VrfRealizationError, match="SVI Vlan100 is in VRF default, its segment routes in PROD"):
             _render(Leaf, data)
@@ -240,8 +244,8 @@ class TestReaders:
 
     def test_svi_vrfs_maps_the_vlan_to_the_vrf_name(self) -> None:
         interfaces = [
-            {"name": "Vlan100", "role": "svi", "vrf": {"security_zone": {"name": "PROD"}}},
-            {"name": "Vlan200", "role": "svi", "vrf": None},
+            {"name": "Vlan100", "role": "svi", **in_vrf({"id": "vrf-1", "security_zone": {"name": "PROD"}})},
+            {"name": "Vlan200", "role": "svi", "zone_capabilities": []},
             {"name": "Vlan4094", "role": "mlag-control"},
             {"name": "Vlanx", "role": "svi"},
         ]

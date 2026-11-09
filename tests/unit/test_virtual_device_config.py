@@ -17,6 +17,7 @@ from checks.firewall import CheckFirewall
 from tests.smoke.fixture_builders.common import run_transform
 from tests.smoke.fixture_builders.context_members import with_context_members
 from tests.smoke.fixture_builders.transit import build_virtual_firewall_data
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability, with_interface_vrfs
 from transforms.config.firewall import Firewall
 
 EMPTY_ROOTS = {"DcimDevice": {"edges": []}, "SecurityZone": {"edges": []}}
@@ -54,14 +55,14 @@ def test_virtual_firewall_payload_renders_its_contexts() -> None:
 def _checkable_virtual_firewall_data() -> dict:
     """The builder's payload with each interface's zone moved onto an explicit VRF instance and each context given its
     members (the device's HA pair), as the query returns it."""
-    data = with_context_members(build_virtual_firewall_data())
+    data = with_interface_vrfs(with_context_members(build_virtual_firewall_data()))
     device = data["DcimDevice"]["edges"][0]["node"]
     for edge in device["interfaces"]["edges"]:
         interface = edge["node"]
         zone = interface.pop("security_zone", None)
-        if zone and zone.get("node") and not interface.get("vrf"):
+        if zone and zone.get("node") and not interface.get("zone_capabilities"):
             name = zone["node"]["name"]["value"]
-            interface["vrf"] = {"node": {"id": f"vrf-{name.lower()}", "security_zone": zone}}
+            interface.update(interface_vrf_capability({"id": f"vrf-{name.lower()}", "security_zone": zone}))
     return data
 
 

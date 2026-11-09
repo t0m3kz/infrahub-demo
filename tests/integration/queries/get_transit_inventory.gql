@@ -73,7 +73,9 @@ query GetTransitInventory {
             }
           }
         }
-        capabilities {
+        # The members: a context has no interface edge, its legs and border ports are derived from them
+        # (utils/service_contexts.py, tests/integration/service_inventory_helpers.py _context_legs_and_ports).
+        shared_devices {
           edges {
             node {
               __typename
@@ -81,47 +83,145 @@ query GetTransitInventory {
               name {
                 value
               }
-              device {
-                node {
-                  id
-                  name {
-                    value
-                  }
-                  ... on DcimDeviceManaged {
-                    role {
-                      value
-                    }
-                  }
-                }
+              role {
+                value
               }
-              ... on DcimVirtualInterface {
-                vrf {
+              shared_capabilities {
+                edges {
                   node {
-                    ...RoutingVrfFields
-                  }
-                }
-                ip_address {
-                  node {
-                    address {
-                      value
-                    }
-                    ip_namespace {
-                      node {
-                        name {
-                          value
-                        }
+                    __typename
+                    id
+                    ... on ManagedSecurityContext {
+                      vlan_id {
+                        value
                       }
                     }
                   }
                 }
-                capabilities {
+              }
+              ... on DcimDevice {
+                interfaces {
                   edges {
                     node {
                       __typename
-                      ... on TopologyRoutedExchange {
-                        id
-                        name {
+                      id
+                      name {
+                        value
+                      }
+                      role {
+                        value
+                      }
+                      ...InterfaceRoutingZoneFields
+                      ... on DcimPhysicalInterface {
+                        cable {
+                          node {
+                            id
+                            endpoints {
+                              edges {
+                                node {
+                                  __typename
+                                  ... on DcimPhysicalInterface {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                    role {
+                                      value
+                                    }
+                                    device {
+                                      node {
+                                        id
+                                        name {
+                                          value
+                                        }
+                                        ... on DcimDeviceManaged {
+                                          role {
+                                            value
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      ... on DcimVirtualInterface {
+                        vlan_id {
                           value
+                        }
+                        parent_interface {
+                          node {
+                            id
+                            name {
+                              value
+                            }
+                            ... on DcimPhysicalInterface {
+                              cable {
+                                node {
+                                  id
+                                  endpoints {
+                                    edges {
+                                      node {
+                                        __typename
+                                        ... on DcimPhysicalInterface {
+                                          id
+                                          name {
+                                            value
+                                          }
+                                          role {
+                                            value
+                                          }
+                                          device {
+                                            node {
+                                              id
+                                              name {
+                                                value
+                                              }
+                                              ... on DcimDeviceManaged {
+                                                role {
+                                                  value
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                        ip_address {
+                          node {
+                            address {
+                              value
+                            }
+                            ip_namespace {
+                              node {
+                                name {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                        capabilities {
+                          edges {
+                            node {
+                              __typename
+                              ... on TopologyRoutedExchange {
+                                id
+                                name {
+                                  value
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     }

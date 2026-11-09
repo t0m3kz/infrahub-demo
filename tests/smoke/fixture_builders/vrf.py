@@ -14,7 +14,9 @@ from typing import Any, TypedDict
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.vrf import VrfRequirements, vrf_requirements
-from utils.vrf_demand import SVI_ROLE, VRF_KIND, svi_name
+from utils.device_services import has_pbr, pbr_bindings
+from utils.service_contexts import device_services
+from utils.vrf_demand import PBR_KIND, SVI_ROLE, VRF_KIND, svi_name
 
 # Standard routing metadata belongs to the explicit SecurityZone owner, not
 # to an address's IPAM namespace or the gateway prefix.
@@ -115,7 +117,60 @@ def _svi_node(vlan_id: int, namespace: ZoneMetadata) -> dict[str, Any]:
         "status": _value("active"),
         "role": _value(SVI_ROLE),
         "ip_address": {"node": None},
-        "vrf": {"node": routing_vrf(namespace["name"])},
+        **interface_vrf_capability(routing_vrf(namespace["name"])),
+    }
+
+
+def interface_vrf_capability(vrf: dict[str, Any]) -> dict[str, Any]:
+    """The raw selection that puts an interface in ``vrf`` (a raw ManagedVRF node): the ManagedVRF among its capabilities,
+    under the alias ``zone_capabilities`` (queries/fragments/routing_zone.gql ``InterfaceRoutingZoneFields``)."""
+    return {"zone_capabilities": {"edges": [{"node": {"__typename": VRF_KIND, **vrf}}]}}
+
+
+_NOT_INTERFACE_KINDS = frozenset({"TopologySessionCircuit", "ManagedStaticRoute"})
+_NOT_INTERFACE_KEYS = frozenset({"circuit_type", "next_hop", "registered_prefixes", "link_prefix", "prefix"})
+
+
+def _is_interface(item: dict[str, Any]) -> bool:
+    """Whether a raw fixture node holding a ``vrf`` is an interface (a circuit or a static route keeps its ``vrf``)."""
+    kind = str(item.get("__typename") or "")
+    if kind:
+        return kind not in _NOT_INTERFACE_KINDS and ("Interface" in kind)
+    return "name" in item and not (_NOT_INTERFACE_KEYS & item.keys())
+
+
+def with_interface_vrfs(data: Any) -> Any:
+    """A copy of raw fixture data where every interface's ``vrf`` (the builders' shorthand) is its VRF capability.
+
+    An interface is in a VRF through the instance's interface edge: the config queries select it as the ManagedVRF among
+    the interface's ``zone_capabilities`` (``interface_vrf_capability``), never as a ``vrf`` of the interface."""
+    result = copy.deepcopy(data)
+
+    def walk(item: Any) -> None:
+        if isinstance(item, list):
+            for child in item:
+                walk(child)
+        elif isinstance(item, dict):
+            vrf = item.get("vrf")
+            if isinstance(vrf, dict) and "node" in vrf and _is_interface(item):
+                item.pop("vrf")
+                if vrf["node"]:
+                    edges = item.setdefault("zone_capabilities", {"edges": []}).setdefault("edges", [])
+                    edges.insert(0, interface_vrf_capability(vrf["node"])["zone_capabilities"]["edges"][0])
+            for child in item.values():
+                walk(child)
+
+    walk(result)
+    return result
+
+
+def _pbr_node(device_name: str) -> dict[str, Any]:
+    """The raw ManagedPBR capability of a device that steers (generators/helpers/vrf.py ``sync_pbr`` writes it)."""
+    return {
+        "__typename": PBR_KIND,
+        "id": f"fixture-pbr-{device_name}",
+        "name": _value(f"{device_name}-pbr"),
+        "status": _value("active"),
     }
 
 
@@ -170,13 +225,16 @@ def with_vrf_objects(transform: BaseDeviceTransform, data: dict[str, Any]) -> di
     declares (tests/smoke/fixture_builders/derived_services.py): the demand depends on the contexts behind the ports."""
     from tests.smoke.fixture_builders.derived_services import with_device_services  # noqa: PLC0415 - import cycle
 
-    result = copy.deepcopy(with_device_services(transform, data))
+    result = copy.deepcopy(with_device_services(transform, with_interface_vrfs(data)))
     device_data, _, platform_name = transform.prepared_device(result)
     if not platform_name:
         return result
+    first = next(iter(result.values()))
+    node = first["edges"][0]["node"] if isinstance(first, dict) and "edges" in first else first
     requirements = vrf_requirements(device_data)
     if requirements.namespaces or requirements.svis:
-        first = next(iter(result.values()))
-        node = first["edges"][0]["node"] if isinstance(first, dict) and "edges" in first else first
         add_requirements(node, requirements, _namespace_dicts(device_data))
+    # A device that steers an SVI to a firewall has its ManagedPBR, the way the VRF pass of the device leaves it.
+    if pbr_bindings(device_services(device_data)) and not has_pbr(device_data):
+        _append(node, "capabilities", [_pbr_node(str(device_data.get("name") or "device"))])
     return result

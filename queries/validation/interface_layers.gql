@@ -3,11 +3,6 @@ query interface_layers {
     edges {
       node {
         ...InterfaceRoutingZoneFields
-        vrf {
-          node {
-            ...RoutingVrfFields
-          }
-        }
         id
         name {
           value
@@ -49,11 +44,6 @@ query interface_layers {
     edges {
       node {
         ...InterfaceRoutingZoneFields
-        vrf {
-          node {
-            ...RoutingVrfFields
-          }
-        }
         id
         name {
           value

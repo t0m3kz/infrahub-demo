@@ -31,13 +31,17 @@ def _transit_peering(namespace: dict[str, Any]) -> dict[str, Any]:
         "ttl": 1,
         "capabilities": [
             {
-                "vrf": {"id": f"vrf-{namespace.get('name')}", "security_zone": namespace},
+                "zone_capabilities": [
+                    {"typename": "ManagedVRF", "id": f"vrf-{namespace.get('name')}", "security_zone": namespace}
+                ],
                 "name": "Ethernet1/14",
                 "device": {"name": "eg-fr201"},
                 "ip_address": {"address": "203.0.113.0/31", "ip_namespace": {"node": {"name": {"value": "default"}}}},
             },
             {
-                "vrf": {"id": f"vrf-{namespace.get('name')}", "security_zone": namespace},
+                "zone_capabilities": [
+                    {"typename": "ManagedVRF", "id": f"vrf-{namespace.get('name')}", "security_zone": namespace}
+                ],
                 "name": "eth1",
                 "device": {"name": "EXT-LUMEN-FRA1"},
                 "ip_address": {"address": "203.0.113.1/31", "ip_namespace": {"node": {"name": {"value": "default"}}}},

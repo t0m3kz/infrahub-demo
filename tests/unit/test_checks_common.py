@@ -11,7 +11,7 @@ from checks.border_spine import CheckBorderSpine
 from checks.common import validate_exchange_gateways, validate_routing_password, validate_snat_addresses
 from checks.common import validate_transit_vlans as _validate_transit_vlans
 from checks.edge import CheckEdge
-from tests.unit.routing_helpers import make_vrf
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from tests.unit.service_contexts_helpers import make_far, make_iface, make_member, make_switch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.border_spine import BorderSpine
@@ -170,7 +170,7 @@ def _fw_leg(
         "parent_interface": {"name": "eth1", "device": {"id": "dev-fw-01"}},
         "device": {"id": "dev-fw-01"},
         "ip_address": ip_address,
-        "vrf": make_vrf({"name": namespace, "vrf_type": ns_type or _NS_TYPE.get(namespace)}) if namespace else None,
+        **(in_vrf(make_vrf({"name": namespace, "vrf_type": ns_type or _NS_TYPE.get(namespace)})) if namespace else {}),
         "capabilities": [_exchange()] if caps is None else caps,
     }
 
@@ -322,7 +322,7 @@ def _service_ports() -> list[dict]:
     member = make_member("fw-1", [{**_context(), "name": "ctx-1"}], subs=("ethernet1/1.3005",))
     leg = member["interfaces"][-1]
     leg["ip_address"] = {"address": "100.66.0.5/29", "ip_namespace": {"name": "default"}}
-    leg["vrf"] = make_vrf({"name": "PROD", "vrf_type": "prod", "l3_vni": 50001})
+    leg.update(in_vrf(make_vrf({"name": "PROD", "vrf_type": "prod", "l3_vni": 50001})))
     uplink = make_iface("fw-1:ethernet1/1", "ethernet1/1", "uplink")
     return make_switch({"Ethernet49": ("firewall", [make_far(member, uplink)])})["service_ports"]
 

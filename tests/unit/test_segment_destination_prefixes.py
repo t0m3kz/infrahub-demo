@@ -330,7 +330,7 @@ def test_the_query_selects_what_the_destination_rule_reads() -> None:
             "owner.org_id",
             "sdwan_gateway.name",
             "lan_prefixes.prefix",
-            "sdwan_gateway.interfaces.vrf.security_zone.vrf_type",
+            "sdwan_gateway.interfaces.capabilities.security_zone.vrf_type",
             "sdwan_gateway.interfaces.capabilities.vrf.security_zone.vrf_type",
             "vrfs.security_zone.id",
             "segment_deployments.segment.owner.org_id",

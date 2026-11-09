@@ -11,7 +11,13 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from tests.smoke.fixture_builders.context_members import with_context_members
-from tests.smoke.fixture_builders.vrf import routing_vrf, routing_zone, with_vrf_objects
+from tests.smoke.fixture_builders.vrf import (
+    interface_vrf_capability,
+    routing_vrf,
+    routing_zone,
+    with_interface_vrfs,
+    with_vrf_objects,
+)
 from tests.smoke.fixture_builders.zone_migration import migrate_zone_owners
 from transforms.common import BaseDeviceTransform
 
@@ -145,7 +151,7 @@ def _make_interface(
         "role": _v(role),
     }
     if ns_name != "default":
-        iface["vrf"] = _node(routing_vrf(ns_name))
+        iface.update(interface_vrf_capability(routing_vrf(ns_name)))
 
     if typename == "DcimPhysicalInterface":
         iface["interface_type"] = _v("10gbase-x-sfpp")
@@ -419,7 +425,7 @@ def run_transform(transform_cls: type, data: dict) -> str:
 
     The unit tests that build their own device data go through here too (the hook is idempotent).
     """
-    data = with_context_members(migrate_zone_owners(data))
+    data = with_context_members(with_interface_vrfs(migrate_zone_owners(data)))
     instance = make_transform(transform_cls)
     if isinstance(instance, BaseDeviceTransform):
         data = with_vrf_objects(instance, data)
@@ -436,7 +442,7 @@ def _write_data_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple
     """
     test_dir = SMOKE_DIR / dir_name
     test_dir.mkdir(parents=True, exist_ok=True)
-    data = with_context_members(migrate_zone_owners(data))
+    data = with_context_members(with_interface_vrfs(migrate_zone_owners(data)))
 
     try:
         instance = make_transform(transform_cls)

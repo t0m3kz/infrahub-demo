@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from tests.smoke.fixture_builders.vrf import routing_vrf
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
 from transforms.config.controller import ControllerPayload
 
 
@@ -211,7 +211,7 @@ def _raw_iface(device: str, name: str, address: str, namespace: str, vlan_id: in
     tag = int(suffix) if "." in name and suffix.isdigit() else None
     return {
         "node": {
-            "vrf": {"node": routing_vrf(namespace) if namespace != "default" else None},
+            **(interface_vrf_capability(routing_vrf(namespace)) if namespace != "default" else {}),
             "name": {"value": name},
             "vlan_id": {"value": tag if vlan_id == -1 else vlan_id},
             "ip_address": {

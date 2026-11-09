@@ -1,0 +1,58 @@
+---
+# The interfaces of each VRF instance of DC-KTW1: an interface is in a VRF as one of the instance's
+# `capabilities` (the interface edge, schemas/extensions/capabilities/vrf.yml). An upsert of that list replaces
+# it, so each instance's whole list is here, once, after every interface it names is loaded (90_bindings loads
+# last). The instances themselves and their members are declared with the topology.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc-ktw1-vrf-internet"
+      deployment: "DC-KTW1"
+      security_zone: "INTERNET"
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data: {device: ktw1-edge-01, name: "Ethernet1/2"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-xfw-01, name: "ethernet1/1.3401"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-xfw-02, name: "ethernet1/1.3401"}
+    - name: "dc-ktw1-vrf-prod"
+      deployment: "DC-KTW1"
+      security_zone: "PROD"
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-bl-01, name: "Vlan2500"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-bl-01, name: "Vlan3900"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-bl-02, name: "Vlan2500"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-bl-02, name: "Vlan3900"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-edge-01, name: "Tunnel1"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-edge-01, name: "Tunnel2"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-edge-01, name: "Tunnel4"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-edge-01, name: "Tunnel5"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-edge-01, name: "Tunnel6"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-fw-01, name: "ethernet1/1.3000"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-fw-02, name: "ethernet1/1.3000"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-leaf-01, name: "Vlan100"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-leaf-01, name: "Vlan2500"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-leaf-02, name: "Vlan100"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-leaf-02, name: "Vlan2500"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-xfw-01, name: "ethernet1/1.3001"}
+        - kind: DcimVirtualInterface
+          data: {device: ktw1-xfw-02, name: "ethernet1/1.3001"}
