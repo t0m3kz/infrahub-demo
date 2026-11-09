@@ -6,6 +6,7 @@ edge on the interface: they are derived here.
 
 - ``context_legs``: the sub-interfaces of a member that are legs of one of its contexts,
   the sub-interfaces of the first uplink whose ``vlan_id`` is ``transit_vlan(context vlan, namespace slot)``.
+- ``exchange_legs``: the legs of a routed exchange, the context's legs on a member in the exchange's two VRFs.
 - ``port_contexts`` / ``context_border_ports``: the border-leaf / edge service ports whose cable ends on a member, and
   the contexts the member belongs to.
 
@@ -40,6 +41,7 @@ from utils.exchange_transit import (
     namespace_type_for_environment,
     transit_vlan,
 )
+from utils.routing_domain import interface_vrfs
 
 SERVICE_PORTS_KEY = "service_ports"
 """The key of a switch's service ports (the interfaces of a service role) in its nested data, with their cables."""
@@ -153,6 +155,25 @@ def leg_interfaces(device: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
         device_ref = {**owner, **{k: v for k, v in (iface.get("device") or {}).items() if v is not None}}
         found.setdefault(leg.context_id, []).append({**iface, "device": device_ref})
     return found
+
+
+def exchange_legs(device: dict[str, Any], context_id: str, exchange: dict[str, Any]) -> list[dict[str, Any]]:
+    """The legs of a ``TopologyRoutedExchange`` on one member device, by name: the device's legs of the exchange's
+    gateway context ``context_id`` (``leg_interfaces``) that are in the exchange's ``vrf_a`` or ``vrf_z`` (the
+    interface's ``ManagedVRF``, utils/routing_domain.py ``interface_vrfs``). Nothing links a leg to its exchange."""
+    vrfs = {
+        str(vrf["id"])
+        for vrf in (exchange.get("vrf_a"), exchange.get("vrf_z"))
+        if isinstance(vrf, dict) and vrf.get("id")
+    }
+    return sorted(
+        (
+            leg
+            for leg in leg_interfaces(device).get(str(context_id), [])
+            if vrfs & {str(vrf.get("id")) for vrf in interface_vrfs(leg)}
+        ),
+        key=lambda leg: str(leg.get("name")),
+    )
 
 
 def leg_contexts(device: dict[str, Any]) -> dict[str, dict[str, Any]]:

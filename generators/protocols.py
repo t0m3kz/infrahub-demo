@@ -646,6 +646,7 @@ class ManagedFirewallContext(ManagedGeneric, ManagedSecurityContext, ManagedGene
     context_id: StringOptional
     served_deployments: RelationshipManager[ManagedTenantScoped]
     terminated_segments: RelationshipManager[ManagedVxlanSegment]
+    exchanges: RelationshipManager[TopologyRoutedExchange]
     snat_address: RelationshipAttribute[IpamIPAddress]
 
 
@@ -783,10 +784,12 @@ class RoutingOSPFInterface(ManagedGeneric, ManagedGenericInterfaces):
     metric: IntegerOptional
     mode: Dropdown
     name: String
+    device: RelationshipAttribute[DcimPhysicalDevice]
+    capabilities: RelationshipManager[DcimInterface]
     password: RelationshipAttribute[RoutingPassword]
 
 
-class ManagedOSPFPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces):
+class ManagedOSPFPeering(ManagedGeneric, ManagedPeering):
     cost: IntegerOptional
     network_type: Dropdown
     ospf_area: RelationshipAttribute[RoutingOSPFArea]
@@ -811,6 +814,7 @@ class TopologyCarrierCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
 
 class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppInstance):
     vlans: RelationshipManager[ManagedSegmentVlan]
+    ospf_interfaces: RelationshipManager[RoutingOSPFInterface]
     position: IntegerOptional
     rack_face: Dropdown
     serial: StringOptional
@@ -961,7 +965,7 @@ class LocationRegion(LocationGeneric):
     pass
 
 
-class TopologyRoutedExchange(TopologyExchangeGateway, ManagedGeneric, ManagedGenericInterfaces):
+class TopologyRoutedExchange(TopologyExchangeGateway, ManagedGeneric):
     gateway: RelationshipAttribute[ManagedFirewallContext]
 
 

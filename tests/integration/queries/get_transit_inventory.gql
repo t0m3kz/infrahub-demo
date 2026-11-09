@@ -210,19 +210,6 @@ query GetTransitInventory {
                             }
                           }
                         }
-                        capabilities {
-                          edges {
-                            node {
-                              __typename
-                              ... on TopologyRoutedExchange {
-                                id
-                                name {
-                                  value
-                                }
-                              }
-                            }
-                          }
-                        }
                       }
                     }
                   }

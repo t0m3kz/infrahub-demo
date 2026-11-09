@@ -95,6 +95,28 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
   vlan_id {
     value
   }
+  # The exchanges of the context: their legs are the context's legs in their two VRFs (utils/service_contexts.py
+  # exchange_legs), held by checks/common.py validate_exchange_gateways.
+  exchanges {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        vrf_a {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        vrf_z {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+      }
+    }
+  }
   snat_address {
     node {
       address {

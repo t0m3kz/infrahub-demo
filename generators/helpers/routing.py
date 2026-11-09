@@ -737,10 +737,10 @@ class RoutingPlanner:
         Mirrors ``_plan_ebgp_underlay``'s shape: one OSPF process per device
         (decoupled from cabling), one RoutingOSPFInterface per device-interface
         (interface-level settings — mode/metric/auth/password — are genuinely
-        per-device, so this stays 1:1), and ONE ManagedOSPFPeering per cable
-        pair, referencing BOTH devices' process + interface-config and both
-        physical interfaces — the same "one peering object models the session,
-        not just one side of it" shape as BGPPeering.
+        per-device, so this stays 1:1, a child of its device), and ONE ManagedOSPFPeering
+        per cable pair, referencing BOTH devices' process + interface-config — the same
+        "one peering object models the session, not just one side of it" shape as
+        BGPPeering. The peering reaches its interfaces through ``ospf_interface``.
         """
         area_ref: dict[str, Any] = {"id": existing_area_id}
         id_to_name = {info["id"]: name for name, info in device_map.items()}
@@ -777,6 +777,8 @@ class RoutingPlanner:
                     "name": ospf_iface_name,
                     "description": f"OSPF config for {dev_name}:{iname}",
                     "mode": "peer_to_peer",
+                    # A child of its device: the server refuses an interface of another device (common_parent).
+                    "device": {"id": iface.device.id},
                     "capabilities": [{"id": iface.id}],
                     **({"password": {"id": password_id}} if password_id else {}),
                 }
@@ -795,7 +797,6 @@ class RoutingPlanner:
                     "description": f"OSPF peering: {a_name} ({ia}) <-> {b_name} ({ib})",
                     "network_type": "point-to-point",
                     "ospf_area": area_ref,
-                    "capabilities": [{"id": a.id}, {"id": b.id}],
                     "ospf_process": [
                         {"hfid": f"{a_name}-ospf-underlay"},
                         {"hfid": f"{b_name}-ospf-underlay"},

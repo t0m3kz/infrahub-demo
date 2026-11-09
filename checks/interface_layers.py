@@ -8,8 +8,8 @@ There is no ``l2_mode`` attribute: the layer of a port is its content.
   faces a firewall or load-balancer pair is a trunk too, but a context has no interface edge (its border ports are
   derived from the cables, utils/service_contexts.py), so this check does not see it; a terminated segment it carries
   is a row tag.
-* An L3 signal is an ``ip_address``, any ``sub_interfaces``, or a routing capability (a BGP or OSPF session, an OSPF
-  interface, a routed exchange, an interconnect, tunnel or handoff circuit). A carrier circuit is L1 and never a signal.
+* An L3 signal is an ``ip_address``, any ``sub_interfaces``, or a routing capability (a BGP session, an OSPF
+  interface, an interconnect, tunnel or handoff circuit). A carrier circuit is L1 and never a signal.
 
 Rules:
 
@@ -45,8 +45,6 @@ L3_SIGNAL_KINDS = frozenset(
     {
         "ManagedBGPPeering",
         "RoutingOSPFInterface",
-        "ManagedOSPFPeering",
-        "TopologyRoutedExchange",
         "TopologySessionCircuit",
     }
 )

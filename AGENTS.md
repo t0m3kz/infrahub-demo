@@ -743,10 +743,13 @@ class MyCheck(InfrahubCheck):
   queries select both `device` ids). The VLAN tag of a sub-interface is its `vlan_id` and `inner_vlan_id` (QinQ C-tag), declared once on
   `DcimSubInterface` (unset: untagged); `<parent>.<vlan>` is only the default name the generators give, nothing parses it.
   `common_parent: device`
-  stays on the LAG pair `lag` / `member_interfaces` and on a VLAN row's ports (`ManagedSegmentVlan.capabilities`: the
-  row's `device` is its Parent, so the server refuses another switch's port, measured on 1.11.9); `common_parent` works
-  only on a node with a `kind: Parent` relationship and a peer with one (the interfaces' `device`, the row's `device`,
-  `CloudNetworkSegment`'s `virtual_network`), every other "same parent" rule is a check.
+  stays on the LAG pair `lag` / `member_interfaces`, on a VLAN row's ports (`ManagedSegmentVlan.capabilities`: the
+  row's `device` is its Parent, so the server refuses another switch's port, measured on 1.11.9) and on the OSPF
+  settings of interfaces of ONE device (`RoutingOSPFInterface`: a child of its device, `device` `kind: Parent`, peer
+  `DcimPhysicalDevice`, reverse `ospf_interfaces`, cascade, its interface edge re-declared with `common_parent:
+  device`); `common_parent` works only on a node with a `kind: Parent` relationship and a peer with one (the
+  interfaces' `device`, the row's and the OSPF settings' `device`, `CloudNetworkSegment`'s `virtual_network`), every
+  other "same parent" rule is a check.
 - **Interface addresses and layers**: `ip_address` is declared once, on the marker generic `DcimHasIPAddress`
   (inherited by a physical port, a LAG, a virtual interface and a cloud peering interface, not a console port): an
   Attribute with no cascade (a multisite VIP is one address on two loopbacks), so an address goes with its run's tracking or with decommission's
@@ -758,14 +761,15 @@ class MyCheck(InfrahubCheck):
   `capabilities` selection (`utils/segment_vlan.py` `port_rows`, `port_deployments`, `port_segments`). A person's
   request is the port assigned to the segment's DEPLOYMENT (`ManagedSegmentDeployment` inherits the interface edge
   too): a port then shows both, and every reader of what a port carries reads the row, never the deployment, so
-  nothing counts a port twice. A change of either edge raises no event a generator can use (see **VLAN rows**).
+  nothing counts a port twice. An assignment from either side fires `updated` on the deployment (measured on
+  1.11.9), which re-runs the reconcile (see **VLAN rows**).
   `checks/interface_layers.py` holds what the schema cannot: a deployment or a row lists only physical ports and LAGs
   (`DcimSwitchedInterface`, a marker; R3), one row of a segment per port (R4), both ERRORs, and a WARNING for a row
   member nobody asked for (R5: not assigned to the deployment, derived from no component and no firewall service port
   of a terminated segment; the next reconcile removes it). Every writer of an interface's `capabilities` adds and
   removes single edges (`generators/helpers/edges.py`), never saves the list. A segment itself is on no interface's
   `capabilities`. The layer of a port is its content, not its kind: a row or a deployment means switchport, an
-  address, sub-interfaces or a routed capability (BGP or OSPF peering, routed exchange, interconnect, tunnel or handoff
+  address, sub-interfaces or a routed capability (BGP peering, OSPF interface settings, interconnect, tunnel or handoff
   circuit) means routed; `checks/interface_layers.py` refuses both on one port (R1), or on a LAG member (R2). A border
   service port facing a context is a trunk too, but a context has no interface edge (its border ports are derived), so
   the check does not see it; a segment on a switch port's `capabilities` is impossible by schema (`ManagedVxlanSegment`
@@ -977,8 +981,10 @@ class MyCheck(InfrahubCheck):
     are `ManagedSegmentDeployment` (the ports a person asks for) and `ManagedSegmentVlan` (the ports realized on its
     switch, the one a reader of a port's segment reads; see **VLAN rows**). A segment is not on the interface edge, and
     a service context is not either (its legs and border ports are derived from its members,
-    `utils/service_contexts.py`); the kinds on `ManagedGenericInterfaces` are the VRF, the segment deployment and the
-    VLAN row, the routed exchange, peerings and OSPF.
+    `utils/service_contexts.py`), nor is a routed exchange (its legs are the context's legs in its two VRFs,
+    `exchange_legs`) or an OSPF peering (its interfaces are those of its `ospf_interface` settings); the kinds on
+    `ManagedGenericInterfaces` are the VRF, the segment deployment and the VLAN row, the BGP peering and the OSPF
+    interface settings.
     The circuits are on it too: their two ends are their `capabilities` (see **Circuit placement**).
 
 #### Schema Best Practices

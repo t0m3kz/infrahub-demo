@@ -530,22 +530,17 @@ class CablingMixin:
         device_name: str,
         trunk_iface: Any,
         vlan_id_value: int,
-        capability_objs: Sequence[Any] = (),
         ip_address_id: str | None = None,
         vrf_id: str | None = None,
         track: bool = True,
         role: str = "service",
     ) -> Any | None:
         """Upsert a VLAN-tagged DcimVirtualInterface on trunk_iface, named
-        <trunk>.<vlan_id> by convention and stating the tag in ``vlan_id``, linked to ``capability_objs`` (the exchanges
-        a firewall-context leg belongs to) via capabilities, and put in the VRF instance ``vrf_id``
-        (generators/helpers/interface_vrf.py: it leaves another instance). Capabilities are only ever added, never
-        removed. A context is not one: its
-        legs are derived from the member's uplink (utils/service_contexts.py). Trunk-interface resolution stays with
-        the caller since the fallback behavior differs.
-
-        No capability: a sub-interface the caller links itself (an office's WAN
-        exit, which the BGP peering names as its interface), with its own ``role``.
+        <trunk>.<vlan_id> by convention and stating the tag in ``vlan_id``, and put in the VRF instance ``vrf_id``
+        (generators/helpers/interface_vrf.py: it leaves another instance). Nothing else is linked to it: the context
+        and the exchanges a firewall-context leg belongs to are derived from the member's uplink and the leg's VRF
+        (utils/service_contexts.py). Trunk-interface resolution stays with the caller since the fallback behavior
+        differs. An office's WAN exit, which the BGP peering names as its interface, has its own ``role``.
 
         track=False makes the sub-interface save use update_group_context=False, for a
         sub-interface reached by more than one target (e.g. a shared
@@ -568,17 +563,15 @@ class CablingMixin:
         try:
             sub_iface = await self.client.create(kind=DcimVirtualInterface, data=sub_iface_data)
             await sub_iface.save(**tracked_save_kwargs(track))
-            wanted = [cap.id for cap in capability_objs if cap is not None]
-            if wanted or vrf_id:
+            if vrf_id:
                 # A node built from create(data) does not know the capabilities the server already holds: one get with
                 # the relationship included (only the peer ids are read). The edges are written one by one, never as a
-                # saved list (generators/helpers/interface_vrf.py), retried on NODE_NOT_FOUND: the capability may be
-                # an exchange another run created a moment ago, the VRF an instance this pass created.
+                # saved list (generators/helpers/interface_vrf.py), retried on NODE_NOT_FOUND: the VRF may be an
+                # instance this pass created.
                 stored = await self.client.get(kind=DcimVirtualInterface, id=sub_iface.id, include=["capabilities"])
                 peers = getattr(stored, "capabilities").peers
-                stale_vrfs = [old for old in vrf_ids(peers) if old != vrf_id] if vrf_id else []
-                linked = {peer.id for peer in peers}
-                missing = [cap_id for cap_id in [*wanted, *([vrf_id] if vrf_id else [])] if cap_id not in linked]
+                stale_vrfs = [old for old in vrf_ids(peers) if old != vrf_id]
+                missing = [vrf_id] if vrf_id not in {peer.id for peer in peers} else []
                 await join_capabilities(self.client, self.logger, sub_iface.id, missing)
                 await leave_vrfs(self.client, sub_iface.id, stale_vrfs)
             self.logger.info(f"Upserted sub-interface {sub_iface_name} on {device_name}")

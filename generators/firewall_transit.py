@@ -213,8 +213,9 @@ class TransitLegsMixin:
 
         Complete means: the context has its VLAN (and its SNAT address / VIP
         prefix where it takes one); every exchange exists; every member has a
-        sub-interface per leg with an address in that leg's namespace, linked
-        to the leg's exchanges, in the VRF instance of the leg's namespace.
+        sub-interface per leg with an address in that leg's namespace, in the
+        VRF instance of the leg's namespace (an exchange's legs are derived from
+        that, utils/service_contexts.py exchange_legs).
         Sub-interfaces are written last, so one with its address implies the
         leg's other addresses exist. Also returns the context (_context_named).
         """
@@ -233,15 +234,9 @@ class TransitLegsMixin:
             return incomplete
 
         exchange_names = [name for name, _, _ in exchange_specs]
-        exchange_ids = (
-            {
-                exchange.name.value: exchange.id
-                for exchange in await self.client.filters(kind=TopologyRoutedExchange, name__values=exchange_names)
-            }
-            if exchange_names
-            else {}
-        )
-        if len(exchange_ids) != len(exchange_names):
+        if exchange_names and len(
+            await self.client.filters(kind=TopologyRoutedExchange, name__values=exchange_names)
+        ) != len(exchange_names):
             return incomplete
 
         sub_interfaces = {
@@ -250,18 +245,15 @@ class TransitLegsMixin:
                 kind=DcimVirtualInterface,
                 device__ids=[member.device_id for member in members],
                 parent_interface__ids=[member.trunk.id for member in members],
-                include=["capabilities", "parent_interface"],
+                include=["parent_interface"],
             )
         }
         zones = await self._interface_zones(sorted(sub.id for sub in sub_interfaces.values()))
         address_namespace: dict[str, str] = {}  # IpamIPAddress id -> namespace id it must be in
         for leg_type in leg_types:
-            wanted = {exchange_ids[name] for name, a_type, z_type in exchange_specs if leg_type in (a_type, z_type)}
             for member in members:
                 sub = sub_interfaces.get((member.device_id, member.trunk.id, transit_vlan(vlan_id, leg_type)))
                 if sub is None or not sub.ip_address.id:
-                    return incomplete
-                if not wanted <= {cap.id for cap in sub.capabilities.peers}:
                     return incomplete
                 if zones.get(sub.id) != namespaces[leg_type].id:
                     return incomplete

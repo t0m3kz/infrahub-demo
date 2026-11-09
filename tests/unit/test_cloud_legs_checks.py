@@ -179,15 +179,17 @@ def test_the_queries_select_what_the_cloud_legs_read(query: str) -> None:
     assert "peer_ip.security_zone" not in peering_paths
 
 
-def test_the_edge_selects_exchange_gateway_zone_owners_without_registry_fallbacks() -> None:
-    """The exchange's two routing domains come from its zone edges, not address namespaces."""
-    document = parse(load_query(_QUERIES / "config/edge.gql"))
+def test_the_firewall_selects_exchange_gateway_zone_owners_without_registry_fallbacks() -> None:
+    """The exchange's two routing domains come from its VRF edges, not address namespaces: the firewall reads the
+    exchanges of its contexts (``exchanges``), whose legs are the context's legs in those VRFs."""
+    document = parse(load_query(_QUERIES / "config/firewall.gql"))
     fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
     operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
     tree = _selection_tree(operation.selection_set, fragments)
-    capability = tree["DcimDevice"]["edges"]["node"]["interfaces"]["edges"]["node"]["capabilities"]["edges"]["node"]
+    context = tree["DcimDevice"]["edges"]["node"]["shared_capabilities"]["edges"]["node"]
+    exchange = context["exchanges"]["edges"]["node"]
     for side in ("a", "z"):
-        assert f"vrf_{side}" in capability, f"ExchangeGateway.vrf_{side} is not selected"
-        vrf = capability[f"vrf_{side}"]["node"]
+        assert f"vrf_{side}" in exchange, f"ExchangeGateway.vrf_{side} is not selected"
+        vrf = exchange[f"vrf_{side}"]["node"]
         assert "id" in vrf
         assert set(vrf["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}

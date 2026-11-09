@@ -93,7 +93,9 @@ class TestFreshSharedBoarding:
         assert member_ips[("fw-2", "Ethernet1/25.3000")] == fw2
 
     @pytest.mark.asyncio
-    async def test_one_exchange_per_peer_joins_the_legs_and_names_its_gateway(self) -> None:
+    async def test_one_exchange_per_peer_names_its_gateway_and_the_vrfs_of_its_legs(self) -> None:
+        """An exchange names its context and its two VRFs; its legs are derived (the context's legs in those VRFs), so a
+        leg carries its VRF instance and nothing else: no exchange, no context."""
         world = _World()
         gen, _ = _make_gen(world)
 
@@ -110,16 +112,9 @@ class TestFreshSharedBoarding:
             assert z.security_zone.id == namespace_id
             assert a.deployment.id == z.deployment.id == "dc10-id"
         vlan = context.vlan_id.value
-        for ns_type, expected in (
-            ("prod", {f"{_SHARED}-PROD-INTERNET", f"{_SHARED}-PROD-MANAGEMENT"}),
-            ("internet", {f"{_SHARED}-PROD-INTERNET"}),
-            ("management", {f"{_SHARED}-PROD-MANAGEMENT"}),
-        ):
+        for ns_type in ("prod", "internet", "management"):
             sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(vlan, ns_type)}")]
-            # The leg carries its exchanges and its VRF instance; the context is no capability of it (derived).
-            assert set(_sub_names(world)[("fw-1", sub.name.value)]) == {
-                world.exchanges[name].id for name in expected
-            }, ns_type
+            assert _sub_names(world)[("fw-1", sub.name.value)] == [], ns_type
             assert world.routing.store.vrfs[str(world.vrf_of(sub))].security_zone.peer.vrf_type.value == ns_type
 
     @pytest.mark.asyncio
@@ -302,12 +297,15 @@ class TestRerunAndSecondCustomer:
         non_prod_internet_sub = world.sub_interfaces[
             ("fw-1", f"Ethernet1/25.{transit_vlan(non_prod_vlan, 'internet')}")
         ]
-        prod_exchange = world.exchanges[f"{_SHARED}-PROD-INTERNET"].id
-        non_prod_exchange = world.exchanges[f"{_SHARED_NON_PROD}-NONPROD-INTERNET"].id
-        prod_peers = {peer.id for peer in prod_internet_sub.capabilities.peers}
-        non_prod_peers = {peer.id for peer in non_prod_internet_sub.capabilities.peers}
-        assert prod_exchange in prod_peers and non_prod_exchange not in prod_peers
-        assert non_prod_exchange in non_prod_peers and prod_exchange not in non_prod_peers
+        # Each INTERNET leg is in the INTERNET VRF its own context's exchange names (the legs are derived from it).
+        for context_name, tenant, sub in (
+            (_SHARED, "PROD", prod_internet_sub),
+            (_SHARED_NON_PROD, "NONPROD", non_prod_internet_sub),
+        ):
+            exchange = world.exchanges[f"{context_name}-{tenant}-INTERNET"]
+            assert exchange.data["gateway"] == {"id": world.contexts[context_name].id}
+            assert str(world.vrf_of(sub)) == exchange.data["vrf_z"]["id"]
+            assert _sub_names(world)[("fw-1", sub.name.value)] == []
         # Each context takes its own INTERNET and MANAGEMENT /29: nothing is shared across the two environments.
         assert len([k for k in world.allocated if k.endswith("-INTERNET-transit")]) == 2
         assert len([k for k in world.allocated if k.endswith("-MANAGEMENT-transit")]) == 2
@@ -384,7 +382,7 @@ class TestHealingAndFailures:
         await _run(gen, world, _payload())
 
         assert len(world.sub_interfaces) == 6
-        assert all(len(caps) == (2 if name.endswith(".3000") else 1) for (_, name), caps in _sub_names(world).items())
+        assert all(caps == [] for caps in _sub_names(world).values())
         assert all(world.vrf_of(sub) for sub in world.sub_interfaces.values())
         gen.logger.error.assert_not_called()
         before = world.writes

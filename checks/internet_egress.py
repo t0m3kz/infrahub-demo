@@ -15,8 +15,9 @@ contexts) needs:
    the Internet edge context);
 2. for every member, an INTERNET leg: a sub-interface of the context tagged with ``vlan_id`` (the transit VLAN of the
    INTERNET slot, utils/exchange_transit.py) with an address in the INTERNET namespace;
-3. a ``TopologyRoutedExchange`` of the context between the tenant VRF and INTERNET, with every INTERNET leg linked to
-   it (generators/firewall_context.py names it ``{context}-{A}-{Z}`` and links the legs);
+3. a ``TopologyRoutedExchange`` of the context between the tenant VRF and INTERNET, with every INTERNET leg in its
+   INTERNET VRF (generators/firewall_context.py names it ``{context}-{A}-{Z}``; its legs are derived,
+   utils/service_contexts.py ``exchange_legs``);
 4. the border service ports behind the context: one ``DcimPhysicalInterface`` of role ``firewall`` on a border or
    edge device per member (the port the member's uplink is cabled to, utils/service_contexts.py);
 5. a ``snat_address``.
@@ -50,7 +51,7 @@ from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, namespace_type_
 from utils.fabric_roles import CARRIER_ROLES, EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
 from utils.firewall_split import footprint_contexts, internet_contexts, is_external
 from utils.routing_domain import interface_security_zone
-from utils.service_contexts import leg_interfaces, member_border_ports
+from utils.service_contexts import exchange_legs, leg_interfaces, member_border_ports
 
 DC_KIND = "TopologyCustomerDC"
 COLOCATION_KIND = "TopologyCustomerColocation"
@@ -64,6 +65,7 @@ APPLIANCE_KIND = "CloudNetworkAppliance"
 PHYSICAL_DEVICE_KIND = "DcimPhysicalDevice"
 PHYSICAL_PORT_KIND = "DcimPhysicalInterface"
 EXCHANGE_KIND = "TopologyRoutedExchange"
+"""The query root of the exchanges (queries/validation/internet_egress.gql)."""
 ACTIVE = "active"
 PAIR_SIZE = 2
 """A firewall cluster is exactly a pair: two members, and one border service port per member."""
@@ -120,7 +122,7 @@ def _internet_exchange(context: dict[str, Any], exchanges: list[dict[str, Any]])
 def _leg_gaps(
     member: dict[str, Any], legs: list[dict[str, Any]], vlan: int | None, exchange: dict[str, Any] | None
 ) -> list[str]:
-    """What the INTERNET leg of one member lacks: the leg itself, its address in INTERNET, its link to the exchange.
+    """What the INTERNET leg of one member lacks: the leg itself, its address in INTERNET, being a leg of the exchange.
 
     ``legs`` are the member's legs of the context (utils/service_contexts.py ``leg_interfaces``). The leg is the one
     that carries the INTERNET transit VLAN or already has an address in INTERNET; an address in another namespace is
@@ -150,11 +152,10 @@ def _leg_gaps(
         return [
             f"INTERNET leg '{leg_name}' is addressed in namespace '{namespace.get('name')}', not in the INTERNET namespace"
         ]
-    if exchange is not None and not any(
-        isinstance(cap, dict) and cap.get("typename") == EXCHANGE_KIND and cap.get("id") == exchange.get("id")
-        for cap in leg.get("capabilities") or []
-    ):
-        return [f"INTERNET leg '{leg_name}' is not linked to the exchange '{_name(exchange)}'"]
+    if exchange is not None and leg.get("id") not in {
+        other.get("id") for other in exchange_legs(member, _id(exchange.get("gateway")) or "", exchange)
+    }:
+        return [f"INTERNET leg '{leg_name}' is not in a VRF of the exchange '{_name(exchange)}'"]
     return []
 
 

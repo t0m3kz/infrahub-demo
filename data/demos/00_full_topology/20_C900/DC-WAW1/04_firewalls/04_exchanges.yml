@@ -1,4 +1,5 @@
-# Internal service exchanges use the same authored leg interfaces as the context.
+# Internal service exchanges of the context: their legs are the context's authored leg interfaces in their two VRFs
+# (derived, utils/service_contexts.py exchange_legs).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -7,28 +8,10 @@ spec:
     - name: c900-waw1-fw-01-waw1-fw-02-prod-PROD-INTERNET
       status: active
       gateway: c900-waw1-fw-01-waw1-fw-02-prod
-      capabilities:
-        - kind: DcimVirtualInterface
-          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3001"}
-        - kind: DcimVirtualInterface
-          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3001"}
-        - kind: DcimVirtualInterface
-          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3401"}
-        - kind: DcimVirtualInterface
-          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3401"}
       vrf_a: [DC-WAW1, PROD]
       vrf_z: [DC-WAW1, INTERNET]
     - name: c900-waw1-fw-01-waw1-fw-02-prod-PROD-MANAGEMENT
       status: active
       gateway: c900-waw1-fw-01-waw1-fw-02-prod
-      capabilities:
-        - kind: DcimVirtualInterface
-          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3001"}
-        - kind: DcimVirtualInterface
-          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3001"}
-        - kind: DcimVirtualInterface
-          data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3601"}
-        - kind: DcimVirtualInterface
-          data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3601"}
       vrf_a: [DC-WAW1, PROD]
       vrf_z: [DC-WAW1, MANAGEMENT]

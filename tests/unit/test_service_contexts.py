@@ -13,6 +13,7 @@ from utils.service_contexts import (
     context_legs,
     contexts_with_legs,
     device_services,
+    exchange_legs,
     interface_contexts,
     leg_contexts,
     leg_interfaces,
@@ -215,6 +216,34 @@ def test_contexts_with_legs_lists_a_context_once_with_the_legs_of_every_member()
     assert context["id"] == "ctx"
     assert [leg["device"]["name"] for leg in context["legs"]] == ["fw-1", "fw-2"]
     assert context["served_deployments"] == [{"id": "fp-1", "environment": "p"}]
+
+
+def _in_vrf(member: dict, name: str, vrf_id: str) -> None:
+    """Put the sub-interface ``name`` of ``member`` in the VRF instance ``vrf_id`` (its ManagedVRF capability)."""
+    leg = next(i for i in member["interfaces"] if i["name"] == name)
+    leg["zone_capabilities"] = [{"typename": "ManagedVRF", "id": vrf_id}]
+
+
+def test_exchange_legs_are_the_context_legs_in_its_two_vrfs() -> None:
+    """A routed exchange names its context and two VRFs: its legs on a member are the context's legs in either VRF, by
+    name; a leg of the context in a third VRF, a leg of another context or an interface that is no leg is not one."""
+    member = make_member(
+        "fw-1",
+        [make_context("ctx", 3000), make_context("other", 3001)],
+        subs=("ethernet1/1.3000", "ethernet1/1.3400", "ethernet1/1.3600", "ethernet1/1.3001", "ethernet1/1.web"),
+    )
+    for name, vrf in (
+        ("ethernet1/1.3000", "vrf-prod"),
+        ("ethernet1/1.3400", "vrf-internet"),
+        ("ethernet1/1.3600", "vrf-management"),
+        ("ethernet1/1.3001", "vrf-prod"),
+        ("ethernet1/1.web", "vrf-internet"),
+    ):
+        _in_vrf(member, name, vrf)
+    exchange = {"id": "x", "vrf_a": {"id": "vrf-prod"}, "vrf_z": {"id": "vrf-internet"}}
+    assert [leg["name"] for leg in exchange_legs(member, "ctx", exchange)] == ["ethernet1/1.3000", "ethernet1/1.3400"]
+    assert [leg["name"] for leg in exchange_legs(member, "other", exchange)] == ["ethernet1/1.3001"]
+    assert exchange_legs(member, "ctx", {"id": "x", "vrf_a": None, "vrf_z": None}) == []
 
 
 def test_border_contexts_follow_the_cables_of_the_service_ports() -> None:

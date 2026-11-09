@@ -61,57 +61,6 @@ fragment OspfInterfaceCapabilityFields on RoutingOSPFInterface {
       cost {
         value
       }
-      capabilities {
-        edges {
-          node {
-            name {
-              value
-            }
-            device {
-              node {
-                name {
-                  value
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-fragment ExchangeGatewayInterfaceCapabilityFields on TopologyExchangeGateway {
-  vrf_a {
-    node {
-      ...RoutingVrfFields
-    }
-  }
-  vrf_z {
-    node {
-      ...RoutingVrfFields
-    }
-  }
-  ... on TopologyRoutedExchange {
-    id
-    name {
-      value
-    }
-    description {
-      value
-    }
-    status {
-      value
-    }
-    gateway {
-      node {
-        id
-        tenant {
-          node {
-            id
-          }
-        }
-      }
     }
   }
 }
@@ -127,8 +76,8 @@ fragment InterfaceCapabilitiesFields on DcimInterface {
   }
 }
 
-# The interface's own `capabilities`, the ONE plain selection of the field on an interface object: OSPF, the routed
-# exchange and the VLAN rows a switch port is a member of, its switch's ManagedSegmentVlan per segment
+# The interface's own `capabilities`, the ONE plain selection of the field on an interface object: OSPF and the VLAN
+# rows a switch port is a member of, its switch's ManagedSegmentVlan per segment
 # (transforms/helpers/segments.py interface_segments reads the segment of each row's deployment).
 fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
   ...InterfaceRoutingZoneFields
@@ -137,7 +86,6 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
       node {
         __typename
         ...OspfInterfaceCapabilityFields
-        ...ExchangeGatewayInterfaceCapabilityFields
         ... on ManagedSegmentVlan {
           id
           vlan_id {

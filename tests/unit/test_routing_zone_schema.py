@@ -156,6 +156,9 @@ def test_exchange_gateways_and_session_circuits_no_longer_use_ipam_routing_metad
         not {"namespace_a", "namespace_z", "security_zone_a", "security_zone_z"}
         & _relationships(routing_schema_roots, "TopologyRoutedExchange").keys()
     )
+    # Its legs are derived (the context's legs in its two VRFs): it is not on the interface edge.
+    assert isinstance(exchange, NodeSchema)
+    assert "ManagedGenericInterfaces" not in exchange.inherit_from
     for root in routing_schema_roots:
         if root.extensions:
             for extension in root.extensions.nodes:
@@ -247,7 +250,7 @@ def test_hand_curated_protocols_match_routing_authority_types(root_dir: Path) ->
     assert fields["SecurityZone"]["l3_vni"] == "Integer"
     assert fields["SecurityZone"]["vrf_type"] == "Dropdown"
     assert fields["ManagedVRF"]["session_circuits"] == "RelationshipManager[TopologySessionCircuit]"
-    # The exchanges name the VRF one-sidedly; the interfaces are the inherited interface capabilities.
+    # The exchanges name the VRF one-sidedly; their legs are derived (the context legs in the two VRFs).
     assert set(fields["ManagedVRF"]) == {"deployment", "security_zone", "session_circuits"}
     assert fields["SecurityZone"]["vrfs"] == "RelationshipManager[ManagedVRF]"
     assert fields["SecurityZone"]["network_segments"] == "RelationshipManager[ManagedNetworkSegment]"

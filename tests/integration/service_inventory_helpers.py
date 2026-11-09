@@ -11,7 +11,7 @@ from infrahub_sdk import InfrahubClient
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
 from utils.routing_domain import interface_security_zone
-from utils.service_contexts import leg_interfaces, member_border_ports
+from utils.service_contexts import exchange_legs, leg_interfaces, member_border_ports
 
 from .circuit_helpers import _deployed_dc_names
 from .query_files import QUERY_GET_LOADBALANCER_INVENTORY, QUERY_GET_TENANT_SERVICES, QUERY_GET_TRANSIT_INVENTORY
@@ -134,20 +134,31 @@ def health_check_hfids(connection: dict[str, Any] | None) -> tuple[tuple[str, ..
 _SERVICE_PORT_DEVICE_ROLES = frozenset({"border-leaf", "edge"})
 
 
-def _context_legs_and_ports(node: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _context_legs_and_ports(
+    node: dict[str, Any], exchanges: list[dict[str, Any]] | None = None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """A service context's legs and the service ports facing it, derived from its raw members (``shared_devices``).
 
     A context has no interface edge (utils/service_contexts.py): a leg is a member's sub-interface of its first uplink
     tagged with the context's transit VLAN, {"interface", "device", "device_id", "address", "namespace", "vrf_type",
-    "exchanges"}, ``exchanges`` the names of the TopologyRoutedExchanges it is linked to (always empty for a
-    load-balancer leg). The legacy ``namespace`` key holds the routing SecurityZone name, not the address's IPAM
+    "exchanges"}, ``exchanges`` the names of the TopologyRoutedExchanges it is a leg of: of the raw ``exchanges``, the
+    ones whose gateway is the context and one of whose VRFs is the leg's (utils/service_contexts.py ``exchange_legs``;
+    none for a load-balancer leg). The legacy ``namespace`` key holds the routing SecurityZone name, not the address's IPAM
     namespace. A service port is the port of a border leaf (DC) or an edge (colocation metro) that a member's uplink is
     cabled to, of the role facing the member: {"id", "interface", "device", "role"}.
     """
     legs: list[dict[str, Any]] = []
     border_ports: dict[str, dict[str, Any]] = {}
+    context_id = str(node.get("id"))
+    own_exchanges = [
+        exchange for exchange in clean_data(exchanges or []) if (exchange.get("gateway") or {}).get("id") == context_id
+    ]
     for member in clean_data(_edge_nodes(node.get("shared_devices"))):
-        for leg in leg_interfaces(member).get(str(node.get("id")), []):
+        exchange_names: dict[str, list[str]] = {}
+        for exchange in own_exchanges:
+            for leg in exchange_legs(member, context_id, exchange):
+                exchange_names.setdefault(str(leg.get("name")), []).append(str(exchange.get("name")))
+        for leg in leg_interfaces(member).get(context_id, []):
             zone = interface_security_zone(leg)
             legs.append(
                 {
@@ -157,11 +168,7 @@ def _context_legs_and_ports(node: dict[str, Any]) -> tuple[list[dict[str, Any]],
                     "address": (leg.get("ip_address") or {}).get("address"),
                     "namespace": zone.get("name"),
                     "vrf_type": zone.get("vrf_type"),
-                    "exchanges": sorted(
-                        str(exchange.get("name"))
-                        for exchange in leg.get("capabilities") or []
-                        if exchange.get("typename") == "TopologyRoutedExchange"
-                    ),
+                    "exchanges": sorted(exchange_names.get(str(leg.get("name")), [])),
                 }
             )
         port_role = BORDER_ROLE_FOR_SERVICES.get(str(member.get("role") or ""))
@@ -210,8 +217,9 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
     raw = await client.execute_graphql(query=QUERY_GET_TRANSIT_INVENTORY, branch_name=branch)
 
     contexts: list[dict[str, Any]] = []
+    raw_exchanges = _edge_nodes(raw["TopologyRoutedExchange"])
     for node in _edge_nodes(raw["ManagedFirewallContext"]):
-        legs, border_ports = _context_legs_and_ports(node)
+        legs, border_ports = _context_legs_and_ports(node, raw_exchanges)
         contexts.append(
             {
                 "id": node["id"],
@@ -243,7 +251,7 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
             "gateway_id": _rel_node(node.get("gateway")).get("id"),
             "gateway_name": _value(_rel_node(node.get("gateway")).get("name")),
         }
-        for node in _edge_nodes(raw["TopologyRoutedExchange"])
+        for node in raw_exchanges
     ]
     logger.info(
         "Transit inventory on branch '%s': %d firewall context(s), %d routed exchange(s)",

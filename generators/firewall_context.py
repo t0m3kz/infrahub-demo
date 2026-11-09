@@ -383,8 +383,8 @@ class FirewallContextMixin(TransitLegsMixin):
 
         A leg is (context, namespace): every member's VLAN sub-interface
         `<uplink>.<transit_vlan>` addressed from a /29 in that VRF
-        (utils/exchange_transit.py), linked to the context and to the
-        exchange(s) of the leg. The tenant namespace (from the customer's
+        (utils/exchange_transit.py), in the VRF instance of the leg (an exchange's legs
+        are derived from that, never linked). The tenant namespace (from the customer's
         environment) is the first of spec.leg_types; a firewall context's
         other legs (EXCHANGE_PEERS: INTERNET, MANAGEMENT) are joined to it by
         one TopologyRoutedExchange `{context}-{A}-{Z}` per pair, so PROD is
@@ -595,7 +595,6 @@ class FirewallContextMixin(TransitLegsMixin):
                     return context_id
                 addresses[leg_type] = leg_addresses
 
-            exchanges: dict[str, Any] = {}
             for exchange_name, a_type, z_type in exchange_specs:
                 try:
                     exchange = await self.client.create(
@@ -612,19 +611,16 @@ class FirewallContextMixin(TransitLegsMixin):
                 except Exception as exc:
                     self.logger.error(f"Failed to upsert exchange '{exchange_name}': {exc}")
                     return context_id
-                exchanges[exchange_name] = exchange
 
+            # The legs of an exchange are derived (utils/service_contexts.py exchange_legs): the context's legs in its
+            # two VRFs. Nothing links a leg to its exchange.
             for leg_type in leg_types:
-                leg_exchanges = [
-                    exchanges[name] for name, a_type, z_type in exchange_specs if leg_type in (a_type, z_type)
-                ]
                 for member in members:
                     await self.ensure_vlan_subinterface(
                         device_id=member.device_id,
                         device_name=member.name,
                         trunk_iface=member.trunk,
                         vlan_id_value=transit_vlan(vlan_id, leg_type),
-                        capability_objs=leg_exchanges,
                         ip_address_id=addresses[leg_type][member.offset].id,
                         vrf_id=self._context_vrf(members, vrfs, namespaces[leg_type].name.value),
                         track=track,

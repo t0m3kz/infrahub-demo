@@ -702,7 +702,7 @@ async def _run(gen: Any, world: _World, payload: dict[str, Any]) -> None:
 
 
 def _sub_names(world: _World) -> dict[tuple[str, str], list[str]]:
-    """The exchanges each sub-interface is linked to (its capabilities but its VRF)."""
+    """The capabilities of each sub-interface but its VRF (none: a leg's exchanges and context are derived)."""
     return {
         key: [peer.id for peer in sub.capabilities.peers if peer.typename != "ManagedVRF"]
         for key, sub in world.sub_interfaces.items()

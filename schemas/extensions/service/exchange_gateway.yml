@@ -10,34 +10,19 @@ version: "1.0"
 #
 #   TopologyRoutedExchange   — the hop through ONE firewall CONTEXT
 #                              (`gateway`, a ManagedFirewallContext) between
-#                              two VRFs. Its legs are the context's firewall
-#                              VLAN sub-interfaces, one per VRF, each with an
-#                              address in the default IPAM namespace (carried in
-#                              capabilities). No leak: each VRF keeps
-#                              its own routing table and statics point at the
-#                              context's leg VIP in that VRF. Created per
-#                              context by the customer boarding generators,
-#                              named `{context}-{A}-{Z}`; there are no
-#                              bootstrap exchanges.
+#                              two VRFs. No leak: each VRF keeps its own routing
+#                              table and statics point at the context's leg VIP
+#                              in that VRF. Created per context by the customer
+#                              boarding generators, named `{context}-{A}-{Z}`;
+#                              there are no bootstrap exchanges.
 #
-# It inherits ManagedGenericInterfaces so it surfaces in
-# interface.capabilities — the same capability list already used
-# by RoutingOSPFInterface and ManagedVxlanSegment (see
-# queries/fragments/interface_capability_fields.gql). This is what lets a
-# device config query (e.g. border_leaf_config) discover "what is this
-# port doing" without a second, zone-rooted query.
-#
-# Which side of the exchange an interface belongs to is read off
-# interface.security_zone at render time — not duplicated here
-# as separate interface_a/interface_z fields, so the two can't disagree.
-#
-# TopologyRoutedExchange's interfaces (the legs) are unconstrained at the schema level
-# (no min_count/max_count). A node may re-declare an inherited relationship to add a
-# count, but only under the SAME name and the same peer (the node declaration then
-# replaces the generic's wholesale); a DIFFERENTLY named relationship carrying the
-# same identifier collides. The "one leg per zone on the gateway context's
-# devices" invariant is enforced by validate_exchange_gateways() in
-# checks/common.py, not by the schema.
+# It has no setting of its own and is NOT on the interface edge: its legs are
+# DERIVED, the context's legs (utils/service_contexts.py context_legs) on each
+# member in the exchange's vrf_a and vrf_z (the leg interface's ManagedVRF
+# capability), utils/service_contexts.py exchange_legs. The "one leg per VRF on
+# each member" invariant is enforced by validate_exchange_gateways() in
+# checks/common.py. A context lists its exchanges (`exchanges`, the reverse of
+# `gateway`).
 
 generics:
   - name: ExchangeGateway
@@ -78,7 +63,6 @@ nodes:
     inherit_from:
       - TopologyExchangeGateway
       - ManagedGeneric
-      - ManagedGenericInterfaces
     human_friendly_id:
       - name__value
     order_by:
@@ -96,7 +80,18 @@ nodes:
         on_delete: no-action
         identifier: "routed_exchange__gateway"
         order_weight: 1300
-        description: "Firewall context whose legs (one VLAN sub-interface per zone) form this exchange"
-      # interfaces (many, via ManagedGenericInterfaces) — the context's leg
-      # sub-interfaces, one per zone per member. Enforced by
-      # validate_exchange_gateways() in checks/common.py.
+        description: "Firewall context whose legs in the two VRFs (one VLAN sub-interface per VRF and member) form this exchange"  # yamllint disable-line rule:line-length
+
+extensions:
+  nodes:
+    - kind: ManagedFirewallContext
+      relationships:
+        - name: exchanges
+          label: "Routed Exchanges"
+          peer: TopologyRoutedExchange
+          cardinality: many
+          kind: Generic
+          optional: true
+          identifier: "routed_exchange__gateway"
+          order_weight: 1150
+          description: "The exchanges this context is the gateway of (written from the exchange side)"

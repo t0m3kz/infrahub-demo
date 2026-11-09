@@ -230,23 +230,23 @@ class TestFirewallCheck:
         assert "has no destination" in check._captured_errors[0]
 
 
-def _leg_interface(name: str, address: str, namespace: str, ns_type: str, exchange: dict, context: dict) -> dict:
-    """A firewall sub-interface in the raw firewall_config shape (leg of one exchange)."""
+def _vrf(namespace: str, ns_type: str) -> dict:
+    """A VRF instance in the raw RoutingVrfFields shape."""
     return {
-        **interface_vrf_capability(
-            {
-                "id": f"vrf-{namespace.lower()}",
-                "security_zone": _node(
-                    {"id": f"zone-{namespace.lower()}", "name": _v(namespace), "vrf_type": _v(ns_type)}
-                ),
-            }
-        ),
+        "id": f"vrf-{namespace.lower()}",
+        "security_zone": _node({"id": f"zone-{namespace.lower()}", "name": _v(namespace), "vrf_type": _v(ns_type)}),
+    }
+
+
+def _leg_interface(name: str, address: str, namespace: str, ns_type: str) -> dict:
+    """A firewall sub-interface in the raw firewall_config shape (a leg of the context in a VRF)."""
+    return {
+        **interface_vrf_capability(_vrf(namespace, ns_type)),
         "name": _v(name),
         "vlan_id": _v(int(name.rsplit(".", 1)[-1])),
         "parent_interface": _node({"name": _v("eth1"), "device": _node({"id": "dev-fw-1"})}),
         "device": _node({"id": "dev-fw-1"}),
         "ip_address": _node({"address": _v(address), "ip_namespace": {"node": {"name": {"value": "default"}}}}),
-        "capabilities": _edges([exchange]),
     }
 
 
@@ -258,16 +258,17 @@ def _exchange_payload(internet_vlan: str, snat: str | None = "192.0.2.5/32") -> 
         "vlan_id": _v(3005),
         "shared_devices": _edges([{"name": _v("fw-1")}]),
         "snat_address": _node({"address": _v(snat)}) if snat else {"node": None},
-    }
-    exchange = {
-        "__typename": "TopologyRoutedExchange",
-        "id": "xchg-1",
-        "name": _v("ctx-1-PROD-INTERNET"),
-        # The exchange's own namespace_a / namespace_z come back null through capabilities;
-        # the check reads the namespaces off the legs' addresses instead.
-        "security_zone_a": {"node": None},
-        "security_zone_z": {"node": None},
-        "gateway": _node({"id": "ctx-1"}),
+        # The exchange of the context: its legs are the context's legs in its two VRFs (derived).
+        "exchanges": _edges(
+            [
+                {
+                    "id": "xchg-1",
+                    "name": _v("ctx-1-PROD-INTERNET"),
+                    "vrf_a": _node(_vrf("PROD", "prod")),
+                    "vrf_z": _node(_vrf("INTERNET", "internet")),
+                }
+            ]
+        ),
     }
     uplink = {
         "__typename": "DcimPhysicalInterface",
@@ -277,8 +278,8 @@ def _exchange_payload(internet_vlan: str, snat: str | None = "192.0.2.5/32") -> 
     }
     interfaces = [
         uplink,
-        _leg_interface("eth1.3005", "100.66.0.5/29", "PROD", "prod", exchange, context),
-        _leg_interface(f"eth1.{internet_vlan}", "100.66.32.5/29", "INTERNET", "internet", exchange, context),
+        _leg_interface("eth1.3005", "100.66.0.5/29", "PROD", "prod"),
+        _leg_interface(f"eth1.{internet_vlan}", "100.66.32.5/29", "INTERNET", "internet"),
     ]
     device = {
         "name": _v("fw-1"),
@@ -297,7 +298,7 @@ class TestFirewallExchangeLegs:
 
     def test_wrong_transit_vlan_is_logged_as_error(self) -> None:
         check = _check()
-        check.validate(_exchange_payload("3005"))
+        check.validate(_exchange_payload("3205"))  # the NON-PROD slot of the context
         assert len(check._captured_errors) == 1
         assert "expected 3405" in check._captured_errors[0]
 

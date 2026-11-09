@@ -44,11 +44,11 @@ def _leg(
     port: str = "eth1",
     vlan: int = INTERNET_VLAN,
     namespace: tuple[str, str] | None = ("INTERNET", INTERNET_TYPE),
-    exchange: str | None = "ex-1",
     name: str | None = None,
 ) -> dict[str, Any]:
     """The sub-interface of a member tagged ``vlan`` (named ``<port>.<vlan>`` unless ``name`` says otherwise), with
-    an address in ``namespace`` (None: no address)."""
+    an address in ``namespace`` (None: no address) and in its VRF instance: an exchange's legs are the context's legs in
+    its two VRFs (derived), so the leg names no exchange."""
     address = (
         {
             "id": f"ip-{device}-{vlan}",
@@ -68,7 +68,6 @@ def _leg(
         "device": {"id": device, "name": device, "role": "internal-firewall"},
         "ip_address": address,
         **(in_vrf(make_vrf({"name": namespace[0], "vrf_type": namespace[1]})) if namespace else {}),
-        "capabilities": [{"typename": "TopologyRoutedExchange", "id": exchange, "name": "ex"}] if exchange else [],
     }
 
 
@@ -101,8 +100,8 @@ def _member(prefix: str, member_id: str, role: str, port_index: int) -> dict[str
                     "endpoints": [{"id": uplink_id}, _port(f"{prefix}-bl-{port_index}")],
                 },
             },
-            _leg(member_id, exchange=f"ex-{prefix}"),
-            _leg(member_id, vlan=VLAN, namespace=("PROD", "prod"), exchange=None),
+            _leg(member_id),
+            _leg(member_id, vlan=VLAN, namespace=("PROD", "prod")),
         ],
     }
 
@@ -139,8 +138,8 @@ def _exchange(prefix: str = "dc") -> dict[str, Any]:
         "id": f"ex-{prefix}",
         "name": f"shared-{prefix}-prod-PROD-INTERNET",
         "gateway": {"id": f"ctx-{prefix}", "name": f"shared-{prefix}-prod"},
-        "vrf_a": make_vrf({"id": "ns-prod", "name": "PROD", "vrf_type": "prod"}),
-        "vrf_z": make_vrf({"id": "ns-inet", "name": "INTERNET", "vrf_type": INTERNET_TYPE}),
+        "vrf_a": make_vrf({"name": "PROD", "vrf_type": "prod"}),
+        "vrf_z": make_vrf({"name": "INTERNET", "vrf_type": INTERNET_TYPE}),
     }
 
 
@@ -284,8 +283,7 @@ class TestDataCenter:
         member = _member_of(context, "dc-fw-2")
         leg_id = f"leg-dc-fw-2-{INTERNET_VLAN}"
         member["interfaces"] = [
-            _leg("dc-fw-2", name="uplink-internet", exchange="ex-dc") if i["id"] == leg_id else i
-            for i in member["interfaces"]
+            _leg("dc-fw-2", name="uplink-internet") if i["id"] == leg_id else i for i in member["interfaces"]
         ]
         assert egress_findings(_cleaned([_dc([context])])) == []
         member["interfaces"] = [
@@ -324,16 +322,17 @@ class TestDataCenter:
     def test_exchange_between_two_tenant_vrfs_does_not_count(self) -> None:
         """An exchange that does not reach INTERNET does not count."""
         exchange = _exchange()
-        exchange["vrf_z"] = make_vrf({"id": "ns-mgmt", "name": "MANAGEMENT", "vrf_type": "management"})
+        exchange["vrf_z"] = make_vrf({"name": "MANAGEMENT", "vrf_type": "management"})
         (finding,) = egress_findings(_cleaned([_dc()], exchanges=[exchange]))
         assert "no TopologyRoutedExchange" in finding
 
-    def test_leg_not_linked_to_the_exchange(self) -> None:
-        """A leg that is not in the exchange is not on its path."""
+    def test_leg_not_in_a_vrf_of_the_exchange(self) -> None:
+        """A leg in another INTERNET instance than the exchange's is no leg of it, so it is not on its path."""
         context = _context()
-        _internet_leg(context, "dc-fw-1")["capabilities"] = []
+        leg = _internet_leg(context, "dc-fw-1")
+        leg.update(in_vrf(make_vrf({"name": "INTERNET", "vrf_type": INTERNET_TYPE}, deployment="other-dc")))
         (finding,) = egress_findings(_cleaned([_dc([context])]))
-        assert "is not linked to the exchange" in finding
+        assert "is not in a VRF of the exchange" in finding
 
     def test_untagged_service_port(self) -> None:
         """One border service port tagged for a pair of members leaves one member without its port."""
@@ -719,7 +718,7 @@ class TestInternetEdge:
 
     def test_an_edge_of_another_environment_is_an_error(self) -> None:
         non_prod = _exchange("eg")
-        non_prod["vrf_a"] = make_vrf({"id": "ns-np", "name": "NONPROD", "vrf_type": "non_prod"})
+        non_prod["vrf_a"] = make_vrf({"name": "NONPROD", "vrf_type": "non_prod"})
         findings = egress_findings(_cleaned([_dc([_context(), _edge()])], exchanges=[non_prod, _exchange()]))
         assert len(findings) == 1 and "is for non_prod, the footprint is prod" in findings[0]
 

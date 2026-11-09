@@ -129,20 +129,29 @@ GATEWAY_ID = "ctx-1"
 CONTEXT_VLAN = 3005
 
 
-def _exchange(exchange_id: str = "xchg-1") -> dict:
+_NS_TYPE = {"PROD": "prod", "NONPROD": "non_prod", "INTERNET": "internet", "MANAGEMENT": "management"}
+
+
+def _vrf(namespace: str) -> dict:
+    """The VRF instance of ``namespace`` (the instance a leg in it is in, ``_fw_leg``)."""
+    return make_vrf({"name": namespace, "vrf_type": _NS_TYPE[namespace]})
+
+
+def _exchange(a: str = "PROD", z: str = "INTERNET", exchange_id: str = "xchg-1") -> dict:
+    """An exchange of the context between the VRFs of ``a`` and ``z``, as the context lists it (``exchanges``)."""
+    return {"id": exchange_id, "name": f"ctx-1-{a}-{z}", "vrf_a": _vrf(a), "vrf_z": _vrf(z)}
+
+
+def _context(
+    context_id: str = GATEWAY_ID, vlan: int | None = CONTEXT_VLAN, exchanges: list[dict] | None = None
+) -> dict:
     return {
-        "typename": "TopologyRoutedExchange",
-        "id": exchange_id,
-        "name": "ctx-1-PROD-INTERNET",
-        "gateway": {"id": GATEWAY_ID},
+        "typename": "ManagedFirewallContext",
+        "id": context_id,
+        "name": "ctx-1",
+        "vlan_id": vlan,
+        "exchanges": [_exchange()] if exchanges is None else exchanges,
     }
-
-
-def _context(context_id: str = GATEWAY_ID, vlan: int | None = CONTEXT_VLAN) -> dict:
-    return {"typename": "ManagedFirewallContext", "id": context_id, "name": "ctx-1", "vlan_id": vlan}
-
-
-_NS_TYPE = {"PROD": "prod", "NONPROD": "non_prod", "INTERNET": "internet"}
 
 
 def _fw_leg(
@@ -151,7 +160,6 @@ def _fw_leg(
     namespace: str | None = "PROD",
     ns_type: str | None = None,
     *,
-    caps: list[dict] | None = None,
     vlan_id: int | None = _FROM_NAME,
 ) -> dict:
     """A firewall leg; its tag is its ``vlan_id`` (by default the number its name ends in)."""
@@ -171,7 +179,6 @@ def _fw_leg(
         "device": {"id": "dev-fw-01"},
         "ip_address": ip_address,
         **(in_vrf(make_vrf({"name": namespace, "vrf_type": ns_type or _NS_TYPE.get(namespace)})) if namespace else {}),
-        "capabilities": [_exchange()] if caps is None else caps,
     }
 
 
@@ -200,101 +207,103 @@ def _validate(legs: list[dict], contexts: list[dict] | None = None) -> list[str]
 
 
 class TestValidateExchangeGateways:
-    def test_no_interfaces_key_returns_no_errors(self):
+    def test_no_interfaces_key_returns_no_errors(self) -> None:
+        """A device with no data has no exchange to judge."""
         assert validate_exchange_gateways({}) == []
 
-    def test_non_exchange_capability_ignored(self):
-        data = {"interfaces": [{"name": "Vlan10", "capabilities": [{"typename": "ManagedVxlanSegment"}]}]}
+    def test_a_device_in_no_context_has_no_exchange(self) -> None:
+        """The exchanges are the contexts' (``exchanges``): an interface capability names none."""
+        data = {"interfaces": [{"name": "Vlan10", "capabilities": [{"typename": "ManagedSegmentDeployment"}]}]}
         assert validate_exchange_gateways(data) == []
 
-    def test_one_leg_per_namespace_passes(self):
+    def test_a_context_without_exchanges_passes(self) -> None:
+        """A context with legs but no exchange (a load-balancer-like tenant-only context) has nothing to judge."""
+        assert _validate(_good_legs(), contexts=[_context(exchanges=[])]) == []
+
+    def test_one_leg_per_namespace_passes(self) -> None:
+        """The context's PROD and INTERNET legs are the exchange's legs: derived, never linked."""
         assert _validate(_good_legs()) == []
 
-    def test_missing_namespace_z_leg_reports_error(self):
+    def test_missing_namespace_z_leg_reports_error(self) -> None:
+        """No leg in the exchange's second VRF."""
         errors = _validate(_good_legs()[:1])
         assert len(errors) == 1
         assert "legs in 1 namespace(s) ['PROD'] — exactly 2" in errors[0]
 
-    def test_two_legs_in_one_namespace_reports_error(self):
-        legs = [*_good_legs(), _fw_leg("eth1.3005", "100.66.0.6/29", "PROD")]  # the same sub-interface name twice
+    def test_two_legs_in_one_namespace_reports_error(self) -> None:
+        """A leg on the INTERNET slot that is in the PROD VRF is a second PROD leg (and on the wrong VLAN)."""
+        legs = [*_good_legs()[:1], _fw_leg("eth1.3405", "100.66.0.6/29", "PROD")]
         errors = _validate(legs)
-        assert len(errors) == 1
-        assert "has 2 legs in namespace 'PROD'" in errors[0]
+        assert any("has 2 legs in namespace 'PROD'" in e for e in errors)
 
-    def test_leg_without_address_reports_error(self):
-        errors = _validate([*_good_legs()[:1], _fw_leg("eth1.3405", None, None)])
+    def test_leg_without_address_reports_error(self) -> None:
+        """A leg in its VRF with no address."""
+        errors = _validate([*_good_legs()[:1], _fw_leg("eth1.3405", None, "INTERNET")])
         assert any("no IP address / namespace" in e for e in errors)
 
-    def test_prod_and_non_prod_are_never_exchanged(self):
-        errors = _validate([*_good_legs()[:1], _fw_leg("eth1.3205", "100.66.16.6/29", "NONPROD")])
+    def test_prod_and_non_prod_are_never_exchanged(self) -> None:
+        """An exchange between the two tenant VRFs is refused."""
+        legs = [*_good_legs()[:1], _fw_leg("eth1.3205", "100.66.16.6/29", "NONPROD")]
+        errors = _validate(legs, contexts=[_context(exchanges=[_exchange("PROD", "NONPROD")])])
         assert any("not an allowed pair" in e for e in errors)
 
-    def test_three_namespaces_in_one_exchange_report_error(self):
-        errors = _validate([*_good_legs(), _fw_leg("eth1.3205", "100.66.16.6/29", "NONPROD")])
-        assert any("exactly 2" in e for e in errors)
+    def test_a_leg_in_another_vrf_is_no_leg_of_the_exchange(self) -> None:
+        """The context's NONPROD leg is not a leg of its PROD-INTERNET exchange."""
+        assert _validate([*_good_legs(), _fw_leg("eth1.3205", "100.66.16.6/29", "NONPROD")]) == []
 
-    def test_address_not_a_slash_29_reports_error(self):
+    def test_address_not_a_slash_29_reports_error(self) -> None:
+        """A leg is addressed in the transit /29."""
         legs = _good_legs()
         legs[0] = _fw_leg("eth1.3005", "100.66.0.5/30", "PROD")
         errors = _validate(legs)
         assert len(errors) == 1
         assert "not inside a /29" in errors[0]
 
-    def test_address_not_a_member_offset_reports_error(self):
+    def test_address_not_a_member_offset_reports_error(self) -> None:
+        """A leg holds a member address, never the VIP."""
         legs = _good_legs()
         legs[0] = _fw_leg("eth1.3005", "100.66.0.4/29", "PROD")  # the VIP, not a member
         errors = _validate(legs)
         assert len(errors) == 1
         assert "not a firewall member address" in errors[0]
 
-    def test_wrong_vlan_reports_error(self):
+    def test_wrong_vlan_reports_error(self) -> None:
+        """An INTERNET leg on the NON-PROD slot of the context."""
         legs = _good_legs()
-        legs[1] = _fw_leg("eth1.3005", "100.66.32.6/29", "INTERNET")  # context VLAN, not the INTERNET transit
+        legs[1] = _fw_leg("eth1.3205", "100.66.32.6/29", "INTERNET")
         errors = _validate(legs)
         assert len(errors) == 1
         assert "expected 3405" in errors[0]
 
-    def test_an_untagged_leg_reports_error(self):
+    def test_an_untagged_leg_is_no_leg(self) -> None:
+        """A sub-interface with no tag is no leg of the context, so the exchange misses its PROD leg."""
         legs = _good_legs()
         legs[0] = _fw_leg("eth1.web", "100.66.0.5/29", "PROD")
-        assert any("not tagged with the exchange's gateway context" in e for e in _validate(legs))
+        assert any("legs in 1 namespace(s) ['INTERNET']" in e for e in _validate(legs))
 
-    def test_the_tag_is_the_field_not_the_name(self):
+    def test_the_tag_is_the_field_not_the_name(self) -> None:
         """A name that says 3005 over another tag is no leg of the context; a different name over the right tag is."""
         legs = _good_legs()
         legs[0] = _fw_leg("eth1.3005", "100.66.0.5/29", "PROD", vlan_id=3999)
-        assert any("not tagged with the exchange's gateway context" in e for e in _validate(legs))
+        assert any("legs in 1 namespace(s) ['INTERNET']" in e for e in _validate(legs))
         legs[0] = _fw_leg("eth1.legacy", "100.66.0.5/29", "PROD", vlan_id=3005)
         assert _validate(legs) == []
 
-    def test_leg_without_gateway_context_reports_error(self):
-        legs = _good_legs()
-        legs[0] = _fw_leg("eth1.3999", "100.66.0.5/29", "PROD")
-        errors = _validate(legs)
+    def test_context_without_vlan_has_no_legs(self) -> None:
+        """No VLAN, no `<uplink>.<VLAN>` leg: the exchange has none."""
+        errors = _validate(_good_legs(), contexts=[_context(vlan=None)])
+        assert any("legs in 0 namespace(s)" in e for e in errors)
+
+    def test_two_exchanges_validated_independently(self) -> None:
+        """Each exchange of the context is judged on its own legs."""
+        exchanges = [_exchange(), _exchange("PROD", "MANAGEMENT", "xchg-2")]
+        errors = _validate(_good_legs(), contexts=[_context(exchanges=exchanges)])
         assert len(errors) == 1
-        assert "not tagged with the exchange's gateway context" in errors[0]
+        assert "ctx-1-PROD-MANAGEMENT" in errors[0]
+        assert "legs in 1 namespace(s) ['PROD']" in errors[0]
 
-    def test_leg_of_another_context_than_the_gateway_reports_error(self):
-        errors = _validate(_good_legs(), contexts=[_context("ctx-other")])
-        assert any("gateway context" in e for e in errors)
-
-    def test_context_without_vlan_has_no_legs(self):
-        """No VLAN, no `<uplink>.<VLAN>` leg: the exchange's legs are tagged with no context."""
-        assert any("gateway context" in e for e in _validate(_good_legs(), contexts=[_context(vlan=None)]))
-
-    def test_two_exchanges_validated_independently(self):
-        other = _exchange("xchg-2")
-        other["name"] = "ctx-1-NONPROD-INTERNET"
-        legs = [
-            *_good_legs(),
-            _fw_leg("eth1.3205", "100.66.16.5/29", "NONPROD", caps=[other]),
-        ]
-        errors = _validate(legs)
-        assert len(errors) == 1
-        assert "ctx-1-NONPROD-INTERNET" in errors[0]
-        assert "legs in 1 namespace(s) ['NONPROD']" in errors[0]
-
-    def test_device_name_included_in_error_message(self):
+    def test_device_name_included_in_error_message(self) -> None:
+        """The finding names the device."""
         assert "dc1-fw-01" in _validate(_good_legs()[:1])[0]
 
 
@@ -363,7 +372,7 @@ class TestValidateTransitVlans:
 
 def _snat_leg(snat: str | None, ns_type: str = "internet") -> dict:
     context = {**_context(), "snat_address": {"address": snat} if snat else None}
-    leg = _fw_leg("eth1.3405", "100.66.32.5/29", "INTERNET", ns_type, caps=[])
+    leg = _fw_leg("eth1.3405", "100.66.32.5/29", "INTERNET", ns_type)
     return _firewall([leg], contexts=[context])
 
 

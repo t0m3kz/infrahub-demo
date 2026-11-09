@@ -114,13 +114,9 @@ def test_r1_segment_and_bgp_peering_fail() -> None:
 
 
 def test_r1_every_l3_capability_is_a_signal() -> None:
-    """R1: the OSPF, exchange and circuit kinds all count; a carrier circuit never does."""
-    for kind in (
-        "RoutingOSPFInterface",
-        "ManagedOSPFPeering",
-        "TopologyRoutedExchange",
-        "TopologySessionCircuit",
-    ):
+    """R1: the OSPF interface settings and the session circuit count; a carrier circuit never does (nor an OSPF peering
+    or a routed exchange: neither is on the interface edge)."""
+    for kind in ("RoutingOSPFInterface", "TopologySessionCircuit"):
         assert len(_errors([_port(segments=1, caps=(kind,))])) == 1, kind
     assert _errors([_port(segments=1, caps=("TopologyCarrierCircuit",))]) == []
 

@@ -1,6 +1,6 @@
 # TopologyRoutedExchange declarations in recursive dependency order.
-# The routed exchange of the edge context between the tenant VRF and INTERNET; the INTERNET and PROD legs of both
-# members are linked to it.
+# The routed exchange of the edge context between the tenant VRF and INTERNET; its legs are the context's PROD and
+# INTERNET legs of both members (derived, utils/service_contexts.py exchange_legs).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -9,14 +9,5 @@ spec:
     - name: shared-ktw1-xfw-ha-prod-PROD-INTERNET
       gateway: shared-ktw1-xfw-ha-prod
       status: active
-      capabilities:
-        - kind: DcimVirtualInterface
-          data: {device: ktw1-xfw-01, name: "ethernet1/1.3001"}
-        - kind: DcimVirtualInterface
-          data: {device: ktw1-xfw-02, name: "ethernet1/1.3001"}
-        - kind: DcimVirtualInterface
-          data: {device: ktw1-xfw-01, name: "ethernet1/1.3401"}
-        - kind: DcimVirtualInterface
-          data: {device: ktw1-xfw-02, name: "ethernet1/1.3401"}
       vrf_a: [DC-KTW1, PROD]
       vrf_z: [DC-KTW1, INTERNET]
