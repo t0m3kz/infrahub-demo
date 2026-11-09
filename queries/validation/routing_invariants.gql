@@ -263,25 +263,27 @@ query routing_invariants {
             name {
               value
             }
-            interfaces {
-              edges {
-                node {
-                  vrf {
-                    node {
-                      ...RoutingVrfFields
-                    }
-                  }
-                  capabilities {
-                    edges {
+            ... on DcimDevice {
+              interfaces {
+                edges {
+                  node {
+                    vrf {
                       node {
-                        __typename
-                        ... on TopologySessionCircuit {
-                          circuit_type {
-                            value
-                          }
-                          vrf {
-                            node {
-                              ...RoutingVrfFields
+                        ...RoutingVrfFields
+                      }
+                    }
+                    capabilities {
+                      edges {
+                        node {
+                          __typename
+                          ... on TopologySessionCircuit {
+                            circuit_type {
+                              value
+                            }
+                            vrf {
+                              node {
+                                ...RoutingVrfFields
+                              }
                             }
                           }
                         }
