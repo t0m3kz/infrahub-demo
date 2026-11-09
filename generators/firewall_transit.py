@@ -31,6 +31,7 @@ from .protocols import (
     DcimVirtualInterface,
     IpamIPAddress,
     IpamPrefix,
+    ManagedVRF,
     SecurityZone,
     TopologyRoutedExchange,
 )
@@ -384,18 +385,31 @@ class TransitLegsMixin:
             capabilities__ids=[context_id],
             device__ids=[member.device_id for member in members],
             name__values=[f"{member.trunk.name.value}.{transit_vlan(vlan_id, leg_type)}" for member in members],
-            include=["vrf.security_zone"],
         )
         addressed = {
             interface.device.id: interface.ip_address.id for interface in interfaces if interface.ip_address.id
         }
         if not addressed:
             return None
-        if any(
-            interface.ip_address.id and (not interface.vrf.id or interface.vrf.peer.security_zone.id != namespace.id)
-            for interface in interfaces
-        ):
-            raise ValueError("Existing transit member has missing or conflicting VRF")
+        # The legs' VRF instances read with their zone, in one query: a VRF already in the client store from an earlier
+        # read of this run may lack its security_zone, and an `include` on the interface does not refresh it.
+        vrf_ids = sorted({interface.vrf.id for interface in interfaces if interface.ip_address.id and interface.vrf.id})
+        zone_of = {
+            vrf.id: vrf.security_zone.id
+            for vrf in (
+                await self.client.filters(kind=ManagedVRF, ids=vrf_ids, include=["security_zone"]) if vrf_ids else []
+            )
+        }
+        for interface in interfaces:
+            if not interface.ip_address.id:
+                continue
+            zone_id = zone_of.get(interface.vrf.id) if interface.vrf.id else None
+            if zone_id != namespace.id:
+                raise ValueError(
+                    f"Existing transit member {interface.name.value} (device {interface.device.id}) has VRF "
+                    f"{interface.vrf.id or 'none'} in security zone {zone_id or 'none'}, expected "
+                    f"{namespace.name.value} ({namespace.id})"
+                )
         addresses = await self.client.filters(kind=IpamIPAddress, ids=sorted(addressed.values()), include=["ip_prefix"])
         by_id = {address.id: address for address in addresses}
         prefix_ids = {address.ip_prefix.id for address in addresses}

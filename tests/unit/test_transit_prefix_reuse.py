@@ -28,12 +28,15 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
     ]
     interfaces = [
         SimpleNamespace(
+            name=SimpleNamespace(value=f"eth1/1.{3001}"),
             device=SimpleNamespace(id=m.device_id),
             ip_address=SimpleNamespace(id=f"ip-{m.offset}"),
-            vrf=SimpleNamespace(id="vrf-prod", peer=SimpleNamespace(security_zone=SimpleNamespace(id="prod"))),
+            vrf=SimpleNamespace(id="vrf-prod"),
         )
         for m in members
     ]
+    # The legs' VRF instances, read by id with their zone (the store copy of a VRF may lack it).
+    vrfs = {"vrf-prod": SimpleNamespace(id="vrf-prod", security_zone=SimpleNamespace(id="prod"))}
     addresses = [
         SimpleNamespace(
             id=f"ip-{m.offset}",
@@ -44,7 +47,19 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
     ]
     resource = SimpleNamespace(prefix=SimpleNamespace(value="100.66.0.0/20"))
     client = MagicMock()
-    client.filters = AsyncMock(side_effect=[interfaces, addresses, [resource]])
+
+    async def filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+        """Answer each read by its kind, so the order of the reads is free."""
+        name = getattr(kind, "__name__", str(kind))
+        if name == "DcimVirtualInterface":
+            return interfaces
+        if name == "ManagedVRF":
+            return [vrfs[i] for i in kwargs.get("ids") or [] if i in vrfs]
+        if name == "IpamIPAddress":
+            return addresses
+        return [resource]
+
+    client.filters = AsyncMock(side_effect=filters)
     client.get = AsyncMock(return_value=prefix)
     client.allocate_next_ip_prefix = AsyncMock()
     gen = TransitLegsMixin()
@@ -67,6 +82,7 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
             prefix=prefix,
             addresses=addresses,
             interfaces=interfaces,
+            vrfs=vrfs,
             resource=resource,
             upsert=gen.upsert_prefix_addresses,
             logger=gen.logger,
@@ -97,7 +113,7 @@ async def test_inconsistent_addressed_leg_never_allocates_around_the_error(fault
     elif fault == "namespace":
         model.prefix.ip_namespace.peer.name.value = "foreign"
     elif fault == "zone":
-        model.interfaces[0].vrf.peer.security_zone.id = "internet"
+        model.vrfs["vrf-prod"].security_zone.id = "internet"
     elif fault == "missing_vrf":
         model.interfaces[0].vrf.id = None
     elif fault == "member_type":
