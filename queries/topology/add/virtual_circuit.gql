@@ -93,7 +93,7 @@ query virtual_circuit_data($name: String!) {
                       }
                     }
                   }
-                  ... on DcimCapabilities {
+                  ... on DcimDeviceManaged {
                     capabilities {
                       edges {
                         node {

@@ -141,7 +141,7 @@ nodes:
       # exactly two devices, as ManagedMLAG does; domain_pairing creates the domain with both members in one save.
       # The cap holds when the domain is written; a write from the device side skips it.
       - name: capabilities
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: "Peer Devices"
         description: "The two peer devices of this HA domain"
         cardinality: many
@@ -285,7 +285,7 @@ nodes:
       # exactly two devices, as ManagedMLAG does; domain_pairing creates the domain with both members in one save.
       # The cap holds when the domain is written; a write from the device side skips it.
       - name: capabilities
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: "Peer Devices"
         description: "The two peer devices of this HA domain"
         cardinality: many

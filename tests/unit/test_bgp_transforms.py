@@ -334,7 +334,7 @@ class TestBuildSessionFromPeering:
 
 class TestExtractRemoteAsnFromPeering:
     """bgp_processes entries carry the owning device via `capabilities`
-    (ManagedBGP -> DcimCapabilities), not a `device` field. These tests pin
+    (ManagedBGP -> DcimDeviceManaged), not a `device` field. These tests pin
     that shape down directly, independent of the higher-level session-building
     tests, since a regression here silently drops every eBGP session."""
 

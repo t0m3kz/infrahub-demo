@@ -14,7 +14,7 @@ fragment LoadbalancerDeviceFields on DcimDevice {
       }
     }
   }
-  ... on DcimCapabilities {
+  ... on DcimDeviceManaged {
     shared_capabilities {
       edges {
         node {

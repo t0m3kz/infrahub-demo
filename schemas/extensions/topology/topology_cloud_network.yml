@@ -551,7 +551,6 @@ nodes:
       - CoreArtifactTarget
       - DcimDevice
       - DcimDeviceManaged
-      - DcimCapabilities
       - DcimSoftwareRunner
     uniqueness_constraints:
       - ["name__value"]

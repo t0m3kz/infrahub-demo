@@ -324,7 +324,7 @@ fragment VirtualPort on DcimInterface {
           }
         }
       }
-      ... on DcimCapabilities {
+      ... on DcimDeviceManaged {
         capabilities {
           edges {
             node {

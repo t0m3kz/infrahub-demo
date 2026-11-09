@@ -1,6 +1,6 @@
-"""ManagedVRF membership rides the shared device edge (``DcimCapabilities.shared_capabilities``).
+"""ManagedVRF membership rides the shared device edge (``DcimDeviceManaged.shared_capabilities``).
 
-``device_memberships`` is the one typename filter; the queries select the edge only inside ``... on DcimCapabilities``
+``device_memberships`` is the one typename filter; the queries select the edge only inside ``... on DcimDeviceManaged``
 or a concrete kind that inherits it (``... on DcimPhysicalDevice``, the firewalls of a switch's hosting deployment):
 the field is not on ``DcimDevice``. No query selects a device-level ``vrfs`` any more.
 """
@@ -28,8 +28,8 @@ from utils.vrf_demand import device_memberships, device_vrf_facts
 
 QUERIES = Path(__file__).resolve().parents[2] / "queries"
 EDGE = "shared_capabilities"
-CAPABILITIES = "DcimCapabilities"
-#: kinds that inherit ``DcimCapabilities``: a query that names one of them reaches the edge without the generic
+CAPABILITIES = "DcimDeviceManaged"
+#: kinds that inherit ``DcimDeviceManaged``: a query that names one of them reaches the edge without the generic
 #: (a firewall's contexts are its shared capabilities, read through ``... on DcimPhysicalDevice``)
 CAPABILITY_KINDS = {CAPABILITIES, "DcimPhysicalDevice"}
 #: parents that may still select a field named ``vrfs`` (a deployment's or a namespace's own instances)
@@ -204,7 +204,7 @@ def test_raw_device_with_a_foreign_shared_kind_has_the_same_facts() -> None:
 
 
 def test_every_shared_capabilities_selection_is_inside_a_capabilities_kind() -> None:
-    """The edge is on ``DcimCapabilities``, not on ``DcimDevice``: it is selected under ``... on DcimCapabilities`` or
+    """The edge is on ``DcimDeviceManaged``, not on ``DcimDevice``: it is selected under ``... on DcimDeviceManaged`` or
     under a concrete kind that inherits it (``CAPABILITY_KINDS``)."""
     offenders = []
     selecting = []

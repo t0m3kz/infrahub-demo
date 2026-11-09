@@ -16,7 +16,7 @@ query firewall_config($device: String!) {
           }
         }
         ...DeviceSharedCapabilitiesOnDeviceFields
-        ... on DcimCapabilities {
+        ... on DcimDeviceManaged {
           capabilities {
             edges {
               node {

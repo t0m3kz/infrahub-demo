@@ -52,7 +52,7 @@ generics:
     include_in_menu: false
     relationships:
       - name: capabilities
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: Assigned Compute
         cardinality: many
         kind: Generic
@@ -74,7 +74,7 @@ generics:
     include_in_menu: false
     relationships:
       - name: shared_devices
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: Members
         cardinality: many
         kind: Generic
@@ -100,7 +100,7 @@ generics:
 
 extensions:
   nodes:
-    - kind: DcimCapabilities
+    - kind: DcimDeviceManaged
       relationships:
         - name: capabilities
           peer: ManagedGenericDevice

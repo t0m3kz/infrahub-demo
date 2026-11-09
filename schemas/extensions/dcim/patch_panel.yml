@@ -5,7 +5,7 @@ version: "1.0"
 # A passive patch panel: ports and nothing else.
 #
 # DcimPatchPanel is NOT a DcimDevice. It inherits no generic at all, so it has no role, platform, address, interface
-# list, artifact (CoreArtifactTarget) and none of the capability edges (DcimCapabilities: `capabilities` and
+# list, artifact (CoreArtifactTarget) and none of the capability edges (DcimDeviceManaged: `capabilities` and
 # `shared_capabilities`), no VRF demand and no VLAN row. Its two port kinds inherit DcimEndpoint only: the `cable` edge
 # is all it takes for a DcimCable to join a panel port to an interface (DcimCable.endpoints peers DcimEndpoint).
 # tests/unit/test_patch_panel_schema.py guards both.

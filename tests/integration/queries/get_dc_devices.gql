@@ -6,7 +6,7 @@ fragment PeeringParticipant on DcimDevice {
 fragment DeviceRoutingFields on DcimDevice {
   name { value }
   ... on DcimDeviceManaged { role { value } }
-  ... on DcimCapabilities {
+  ... on DcimDeviceManaged {
     capabilities {
       edges {
         node {

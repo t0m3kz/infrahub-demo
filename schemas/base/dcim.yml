@@ -2,19 +2,6 @@
 version: "1.0"
 
 generics:
-  - name: Capabilities
-    namespace: Dcim
-    description: "Unified compute endpoint — any node that can host managed capabilities"
-    include_in_menu: false
-    human_friendly_id:
-      - name__value
-    display_label: "{{name__value}}"
-    attributes:
-      - name: name
-        kind: Text
-        optional: false
-        order_weight: 1000
-
   # The slim device: a name and the interfaces it holds. It is all an interface needs of its device (the interface
   # `device` Parent, the HFID `[device name, name]`), so a holder of interfaces that is not a managed device (a cloud
   # transport: Direct Connect, VPN connection) inherits ONLY this. The unique name holds across every kind that
@@ -609,7 +596,6 @@ nodes:
       - CoreArtifactTarget
       - DcimDevice
       - DcimDeviceManaged
-      - DcimCapabilities
       - AppInstance
       - DcimSoftwareRunner
     attributes:
@@ -651,7 +637,6 @@ nodes:
       - CoreArtifactTarget
       - DcimDevice
       - DcimDeviceManaged
-      - DcimCapabilities
       - AppInstance
       - DcimSoftwareRunner
     attributes:

@@ -148,7 +148,7 @@ query bgp_expectations {
             }
           }
         }
-        ... on DcimCapabilities {
+        ... on DcimDeviceManaged {
           shared_capabilities {
             edges {
               node {

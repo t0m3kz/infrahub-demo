@@ -329,7 +329,6 @@ nodes:
     include_in_menu: false
     inherit_from:
       - CloudResource
-      - DcimCapabilities
       - AppInstance
       - DcimSoftwareRunner
     human_friendly_id:

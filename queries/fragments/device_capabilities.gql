@@ -197,7 +197,7 @@ fragment ManagedBGPServiceFields on ManagedBGP {
   }
 }
 
-fragment DeviceCapabilitiesFields on DcimCapabilities {
+fragment DeviceCapabilitiesFields on DcimDeviceManaged {
   capabilities {
     edges {
       node {
@@ -323,7 +323,7 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
 }
 
 fragment DeviceSharedCapabilitiesOnDeviceFields on DcimDevice {
-  ... on DcimCapabilities {
+  ... on DcimDeviceManaged {
     shared_capabilities {
       edges {
         node {
@@ -344,7 +344,7 @@ fragment DeviceSharedCapabilitiesOnDeviceFields on DcimDevice {
 
 fragment DeviceCapabilitiesOnDeviceFields on DcimDevice {
   ...DeviceSharedCapabilitiesOnDeviceFields
-  ... on DcimCapabilities {
+  ... on DcimDeviceManaged {
     ...DeviceCapabilitiesFields
   }
 }

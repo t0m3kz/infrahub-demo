@@ -386,11 +386,11 @@ class TestCloudNetworkAppliance:
     _KIND = "CloudNetworkAppliance"
 
     def test_it_inherits_the_device_generics_and_not_cloud_resource_nor_the_hosted_instance_ones(self) -> None:
-        """DcimDevice gives interfaces/owner/platform, DcimCapabilities the BGP and HA edges; CloudResource would clash on
+        """DcimDevice gives interfaces/owner/platform, DcimDeviceManaged the BGP and HA edges; CloudResource would clash on
         name/description/status (no allow_override), AppInstance belongs to a machine of ours."""
         inherited = _kind(self._KIND)["inherit_from"]
 
-        assert {"CoreArtifactTarget", "DcimDevice", "DcimCapabilities"} <= set(inherited)
+        assert {"CoreArtifactTarget", "DcimDevice", "DcimDeviceManaged"} <= set(inherited)
         assert "CloudResource" not in inherited
         assert "AppInstance" not in inherited
         assert _kind(self._KIND)["generate_template"] is True

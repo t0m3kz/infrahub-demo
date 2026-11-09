@@ -105,7 +105,7 @@ def test_a_cloud_transport_inherits_only_the_slim_device() -> None:
     for kind in sorted(_TRANSPORTS):
         inherited = set(nodes[kind]["inherit_from"])
         assert "DcimDevice" in inherited, kind
-        assert not inherited & {"DcimDeviceManaged", "DcimCapabilities", "CoreArtifactTarget", "AppInstance"}, kind
+        assert not inherited & {"DcimDeviceManaged", "CoreArtifactTarget", "AppInstance"}, kind
 
 
 def test_the_internet_is_a_passive_device_and_a_facility_with_one_interface_kind() -> None:

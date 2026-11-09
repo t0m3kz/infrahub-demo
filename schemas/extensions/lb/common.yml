@@ -314,18 +314,3 @@ nodes:
         optional: true
         order_weight: 800
         identifier: vip_service__health_checks
-
-extensions:
-  nodes:
-    # The reverse of LoadbalancerVIP.pool_members (the base generic cannot name LoadbalancerVIP: the base loads first).
-    - kind: AppInstance
-      relationships:
-        - name: pool_vips
-          label: "Pool Of"
-          peer: LoadbalancerVIP
-          cardinality: many
-          kind: Generic
-          optional: true
-          order_weight: 9650
-          identifier: vip_service__pool_members
-          description: "The VIPs this instance is a pool member of"

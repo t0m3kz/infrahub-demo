@@ -118,7 +118,7 @@ query evpn_fabric {
             }
           }
         }
-        ... on DcimCapabilities {
+        ... on DcimDeviceManaged {
           shared_capabilities {
             edges {
               node {

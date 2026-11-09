@@ -22,9 +22,9 @@ nodes:
     label: VRF Instance
     icon: "mdi:routes"
     include_in_menu: false
-    # The shared device edge, not ManagedGenericDevice: that one (DcimCapabilities.capabilities) cascades, and deleting
+    # The shared device edge, not ManagedGenericDevice: that one (DcimDeviceManaged.capabilities) cascades, and deleting
     # one member would delete the topology's VRF. Membership is `shared_devices` (reverse
-    # `DcimCapabilities.shared_capabilities`), with no cascade.
+    # `DcimDeviceManaged.shared_capabilities`), with no cascade.
     inherit_from:
       - ManagedGeneric
       - ManagedGenericSharedDevice

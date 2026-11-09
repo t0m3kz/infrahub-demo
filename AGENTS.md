@@ -248,7 +248,7 @@ class MyCheck(InfrahubCheck):
 | Namespace | Holds |
 | --------- | ----- |
 | Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
-| Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimDeviceManaged`, `DcimCapabilities`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped, and the two transports `CloudDirectConnect` and `CloudVPNConnection`, which inherit `CloudResource`, `CloudTransport` and only the slim `DcimDevice` (see **Device generics**); a cloud region hosts nothing but the provider's connect devices (`TopologyProviderConnect`). The cloud and SaaS side of a connection is one provider-neutral model (see **Cloud and SaaS connections**): the transport devices (`CloudDirectConnect`, `CloudVPNConnection`, generic `CloudTransport` with `account`, `region` or `saas_region`, `owner`), the peering interface `CloudPeeringInterface` (a `DcimInterface` of its transport), the gateway `CloudGateway` (`hub`, `edge` or `customer`) with `CloudGatewayAttachment` and `CloudGatewayRouteTable`, `CloudVirtualNetwork` and `CloudServiceEndpoint` |
+| Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimDeviceManaged`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped, and the two transports `CloudDirectConnect` and `CloudVPNConnection`, which inherit `CloudResource`, `CloudTransport` and only the slim `DcimDevice` (see **Device generics**); a cloud region hosts nothing but the provider's connect devices (`TopologyProviderConnect`). The cloud and SaaS side of a connection is one provider-neutral model (see **Cloud and SaaS connections**): the transport devices (`CloudDirectConnect`, `CloudVPNConnection`, generic `CloudTransport` with `account`, `region` or `saas_region`, `owner`), the peering interface `CloudPeeringInterface` (a `DcimInterface` of its transport), the gateway `CloudGateway` (`hub`, `edge` or `customer`) with `CloudGatewayAttachment` and `CloudGatewayRouteTable`, `CloudVirtualNetwork` and `CloudServiceEndpoint` |
 | Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**), the one meeting point of every internet connection `TopologyInternet` (bootstrap data, see **Circuit placement**) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
@@ -795,7 +795,7 @@ class MyCheck(InfrahubCheck):
   cascade`); unique on [deployment, security_zone], HFID [deployment name, zone name], named
   `{deployment lower}-vrf-{zone lower}` (`dc10-vrf-prod`), the scope of its route-target. Its members are the
   devices of that topology that route in the namespace: `shared_devices` (the shared device edge, reverse
-  `DcimCapabilities.shared_capabilities`, no cascade), written edge by edge with RelationshipAdd/RelationshipRemove,
+  `DcimDeviceManaged.shared_capabilities`, no cascade), written edge by edge with RelationshipAdd/RelationshipRemove,
   never as a list (a new instance is created with its first member in the create data); the zone lists its instances through
   `SecurityZone.vrfs`. `l3_vni` stays on the zone (one value: a stretched VRF and the global INTERNET RT need it);
   the instance has no duplicate VNI field; RD, RT, SVI VLAN and EVPN vs VRF-lite
@@ -864,7 +864,7 @@ class MyCheck(InfrahubCheck):
   HA `{first}-{second}`, so PROD and NON-PROD never meet on one context. A dedicated pair is `{owner}-{first}-{second}-ha-{class}`
   (HA domain) with the context `{owner}-{first}-{second}-{class}` on it, its members `{owner}-{physical}-{class}`. The HA and the
   context are nodes of one generic and the server resolves an upsert by name, so they never share one.
-- **Load balancer pool members are servers, not addresses**: `LoadbalancerVIP.pool_members` peers `DcimCapabilities` (physical or
+- **Load balancer pool members are servers, not addresses**: `LoadbalancerVIP.pool_members` peers `AppInstance` (physical or
   virtual device, cloud instance); a member's address is its `primary_address`, or the `private_ip` of a cloud instance.
   An on-prem server with none gets one reserved in its component's segment prefix by the application generator (kept as its
   primary address), a server that has one keeps it. The VIP has no link to the application: the generator derives it from
@@ -879,10 +879,10 @@ class MyCheck(InfrahubCheck):
   and `checks/segment_security.py` refuses a zone next to a segment or group tag (a zone qualifies a prefix or address selector).
 - **Capability edges**: a capability reaches devices through ONE of two device-edge generics (a kind inherits exactly
   one, `tests/unit/test_capability_edge_names.py`) and interfaces via `ManagedGenericInterfaces` (inherit it only when
-  something reads the interface edge). Both device edges sit on `DcimCapabilities`:
-  - **Individual**, `ManagedGenericDevice`: `DcimCapabilities.capabilities` (identifier `capabilities`) cascades with the
+  something reads the interface edge). Both device edges sit on `DcimDeviceManaged`:
+  - **Individual**, `ManagedGenericDevice`: `DcimDeviceManaged.capabilities` (identifier `capabilities`) cascades with the
     device. Anything that must die with its device stays here: a BGP or OSPF process, an MLAG domain, a firewall HA pair.
-  - **Shared**, `ManagedGenericSharedDevice`: `DcimCapabilities.shared_capabilities` (identifier `shared_capabilities`,
+  - **Shared**, `ManagedGenericSharedDevice`: `DcimDeviceManaged.shared_capabilities` (identifier `shared_capabilities`,
     `on_delete: no-action`, explicit) never cascades; the object's members are its `shared_devices`. Deleting a member
     never deletes the object and deleting the object leaves its devices. `ManagedVRF` and the service contexts
     (`ManagedFirewallContext`, `ManagedLoadbalancerContext`, on the thin generic `ManagedSecurityContext`) are shared kinds
@@ -893,7 +893,7 @@ class MyCheck(InfrahubCheck):
   - Rules of a shared kind: members are written from the shared side, edge by edge (RelationshipAdd/RelationshipRemove),
     never as a saved list, because several generators attach devices to one object; it has a lifecycle owner (a
     `Parent`, like `ManagedVRF.deployment`, or a data file); the transforms and checks read
-    `shared_capabilities { __typename ... on <Kind> {...} }` once, inside `... on DcimCapabilities` (the field is not on
+    `shared_capabilities { __typename ... on <Kind> {...} }` once, inside `... on DcimDeviceManaged` (the field is not on
     `DcimDevice`), in `DeviceCapabilitiesOnDeviceFields`, and filter on the typename (`device_memberships`).
   - `ManagedVRF`'s SVIs reach it through `DcimVirtualInterface.vrf`. A segment is not on the interface edge: a switch
     port's membership is `segments` (see **Interface addresses and

@@ -159,7 +159,7 @@ nodes:
         order_weight: 1700
     relationships:
       - name: capabilities
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: "Device"
         description: "The device this process runs on: one by construction (a many rel cannot be capped at 1)"  # yamllint disable-line rule:line-length
         cardinality: many

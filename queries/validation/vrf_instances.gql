@@ -86,7 +86,7 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
             }
           }
         }
-        ... on DcimCapabilities {
+        ... on DcimDeviceManaged {
           shared_capabilities {
             edges {
               node {

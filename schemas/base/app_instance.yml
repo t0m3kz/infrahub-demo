@@ -1,16 +1,10 @@
 ---
 version: "1.0"
 
-# Glue with one shared field: it joins the compute endpoints an application can run on (physical and virtual device,
-# controller, cloud instance) to the two things that point at them, so the peer of both edges stays narrow to servers (a
-# switch, a firewall or an appliance is not an instance). Its `name` and HFID stay because object files name
-# instances by string (`AppComponent.instances: [ktw1-vm-01]`) and the loader resolves a string through the peer
-# generic's HFID. The edges back to the peers are declared by the schemas that own them (the base loads first):
-# `components` in extensions/application, `pool_vips` in extensions/lb.
 generics:
   - name: Instance
     namespace: App
-    description: "Any node that can back an AppComponent or be a pool member of a VIP (physical, virtual, or cloud)"
+    description: "Marker generic — any node that can back an AppComponent (physical, virtual, or cloud)"
     label: "App Instance"
     icon: "mdi:server-outline"
     include_in_menu: false

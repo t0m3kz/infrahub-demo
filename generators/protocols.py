@@ -35,10 +35,6 @@ if TYPE_CHECKING:
     )
 
 
-class DcimCapabilities(CoreNode):
-    name: StringOptional
-
-
 class CloudTransport(CoreNode):
     account: RelationshipAttribute[CloudAccount]
     owner: RelationshipAttribute[OrganizationCustomer]
@@ -106,6 +102,8 @@ class DcimDeviceManaged(CoreNode):
     platform: RelationshipAttribute[DcimPlatform]
     primary_address: RelationshipAttribute[IpamIPAddress]
     tags: RelationshipManager[BuiltinTag]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    shared_capabilities: RelationshipManager[ManagedGenericSharedDevice]
 
 
 class TopologyDeviceHosting(CoreNode):
@@ -173,11 +171,11 @@ class ManagedGeneric(CoreNode):
 
 
 class ManagedGenericDevice(CoreNode):
-    capabilities: RelationshipManager[DcimCapabilities]
+    capabilities: RelationshipManager[DcimDeviceManaged]
 
 
 class ManagedGenericSharedDevice(CoreNode):
-    shared_devices: RelationshipManager[DcimCapabilities]
+    shared_devices: RelationshipManager[DcimDeviceManaged]
 
 
 class ManagedGenericInterfaces(CoreNode):
@@ -202,8 +200,7 @@ class ManagedHA(CoreNode):
 
 
 class AppInstance(CoreNode):
-    components: RelationshipManager[AppComponent]
-    pool_vips: RelationshipManager[LoadbalancerVIP]
+    name: String
 
 
 class DcimHasSubInterface(CoreNode):
@@ -474,17 +471,13 @@ class DcimConsoleInterface(DcimInterface, DcimEndpoint, CoreArtifactTarget):
     speed: Integer
 
 
-class ManagedControllerPhysical(
-    ManagedController, CoreArtifactTarget, DcimDevice, DcimDeviceManaged, DcimCapabilities, AppInstance
-):
+class ManagedControllerPhysical(ManagedController, CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppInstance):
     position: IntegerOptional
     rack_face: Dropdown
     serial: StringOptional
 
 
-class ManagedControllerVirtual(
-    ManagedController, CoreArtifactTarget, DcimDevice, DcimDeviceManaged, DcimCapabilities, AppInstance
-):
+class ManagedControllerVirtual(ManagedController, CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppInstance):
     cpu: IntegerOptional
     memory: IntegerOptional
     storage: IntegerOptional
@@ -662,7 +655,7 @@ class ManagedFirewallContext(
 class ManagedFirewallHA(ManagedHA, ManagedGeneric, ManagedGenericDevice):
     ha_protocol: Dropdown
     ha_timer: Dropdown
-    capabilities: RelationshipManager[DcimCapabilities]
+    capabilities: RelationshipManager[DcimDeviceManaged]
 
 
 class LoadbalancerHealthCheck(CoreNode):
@@ -677,7 +670,7 @@ class IpamIPAddress(BuiltinIPAddress):
     fqdn: StringOptional
 
 
-class CloudInstance(CloudResource, DcimCapabilities, AppInstance):
+class CloudInstance(CloudResource, AppInstance):
     cpu_count: IntegerOptional
     instance_type: StringOptional
     memory_gb: IntegerOptional
@@ -703,7 +696,7 @@ class CloudLoadBalancer(ManagedLoadBalancer, CloudResource, CoreArtifactTarget):
 
 
 class ManagedLoadbalancerHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedLoadBalancer):
-    capabilities: RelationshipManager[DcimCapabilities]
+    capabilities: RelationshipManager[DcimDeviceManaged]
     contexts: RelationshipManager[ManagedLoadbalancerContext]
 
 
@@ -743,7 +736,7 @@ class LocationMetro(LocationGeneric):
     pass
 
 
-class CloudNetworkAppliance(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, DcimCapabilities):
+class CloudNetworkAppliance(CoreArtifactTarget, DcimDevice, DcimDeviceManaged):
     cloud_id: StringOptional
     term_length: IntegerOptional
     account: RelationshipAttribute[CloudAccount]
@@ -817,7 +810,7 @@ class TopologyCarrierCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
     term_length: IntegerOptional
 
 
-class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, DcimCapabilities, AppInstance):
+class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppInstance):
     vlans: RelationshipManager[ManagedSegmentVlan]
     position: IntegerOptional
     rack_face: Dropdown
@@ -1088,7 +1081,7 @@ class TopologySessionCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
     originated_prefixes: RelationshipManager[IpamPrefix]
 
 
-class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, DcimCapabilities, AppInstance):
+class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppInstance):
     cpu: IntegerOptional
     memory: IntegerOptional
     storage: IntegerOptional

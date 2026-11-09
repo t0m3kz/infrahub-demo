@@ -119,7 +119,7 @@ def test_a_transport_is_a_slim_device_with_its_place_on_the_transport_generic() 
     for kind in ("CloudDirectConnect", "CloudVPNConnection"):
         inherited = nodes[kind]["inherit_from"]
         assert "CloudTransport" in inherited and "DcimDevice" in inherited
-        assert "DcimDeviceManaged" not in inherited and "DcimCapabilities" not in inherited
+        assert "DcimDeviceManaged" not in inherited
     assert _names(transport, "relationships") == {"account", "region", "saas_region", "owner"}
     assert all(_field(transport, "relationships", name)["optional"] for name in _names(transport, "relationships"))
 

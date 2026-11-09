@@ -17,7 +17,7 @@ query lisp_fabric {
               name { value }
               role { value }
               platform { node { name { value } } }
-              ... on DcimCapabilities {
+              ... on DcimDeviceManaged {
                 capabilities { edges { node { __typename } } }
               }
             }

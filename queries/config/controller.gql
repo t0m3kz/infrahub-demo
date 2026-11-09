@@ -30,7 +30,7 @@ query controller_payload($controller: String!) {
               # VRF handoffs (eBGP whose local address sits in a tenant
               # namespace) — the Orchestrator configures the SD-WAN gateway
               # side, so the VCO payload carries them.
-              ... on DcimCapabilities {
+              ... on DcimDeviceManaged {
                 capabilities {
                   edges {
                     node {
