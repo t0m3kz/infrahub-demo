@@ -15,22 +15,22 @@ spec:
       deployment: DC-WAW1
       capabilities:
         - kind: DcimLAGInterface
-          data: {device: waw1-leaf-01, name: "Port-Channel10"}
+          data: {device: waw1-leaf-01, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: waw1-leaf-02, name: "Port-Channel10"}
+          data: {device: waw1-leaf-02, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: waw1-srv-01, name: "bond0"}
+          data: {device: waw1-srv-01, name: "bond0", lag_id: 1}
         - kind: DcimPhysicalInterface
           data: {device: waw1-srv-02, name: "eno1"}
     - segment: c900-internal-fw-waw1-p
       deployment: DC-WAW1
       capabilities:
         - kind: DcimLAGInterface
-          data: {device: waw1-leaf-01, name: "Port-Channel10"}
+          data: {device: waw1-leaf-01, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: waw1-leaf-02, name: "Port-Channel10"}
+          data: {device: waw1-leaf-02, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: waw1-srv-01, name: "bond0"}
+          data: {device: waw1-srv-01, name: "bond0", lag_id: 1}
         - kind: DcimPhysicalInterface
           data: {device: waw1-srv-02, name: "eno1"}
         - kind: DcimPhysicalInterface

@@ -15,22 +15,22 @@ spec:
       deployment: DC-GDN1
       capabilities:
         - kind: DcimLAGInterface
-          data: {device: gdn1-leaf-01, name: "Port-Channel10"}
+          data: {device: gdn1-leaf-01, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: gdn1-leaf-02, name: "Port-Channel10"}
+          data: {device: gdn1-leaf-02, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: gdn1-srv-01, name: "bond0"}
+          data: {device: gdn1-srv-01, name: "bond0", lag_id: 1}
         - kind: DcimPhysicalInterface
           data: {device: gdn1-srv-02, name: "eno1"}
     - segment: c900-internal-fw-gdn1-p
       deployment: DC-GDN1
       capabilities:
         - kind: DcimLAGInterface
-          data: {device: gdn1-leaf-01, name: "Port-Channel10"}
+          data: {device: gdn1-leaf-01, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: gdn1-leaf-02, name: "Port-Channel10"}
+          data: {device: gdn1-leaf-02, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: gdn1-srv-01, name: "bond0"}
+          data: {device: gdn1-srv-01, name: "bond0", lag_id: 1}
         - kind: DcimPhysicalInterface
           data: {device: gdn1-srv-02, name: "eno1"}
         - kind: DcimPhysicalInterface

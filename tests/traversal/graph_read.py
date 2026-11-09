@@ -50,7 +50,7 @@ QUERIES = {
     "cport": """TopologyProviderConnect { edges { node { id name { value } location { node { __typename display_label name { value } } } } } }""",
     # THE INTERNET: a device that is a facility, one interface of its own kind; the carriers on it are who is attached
     "inet": """TopologyInternet { edges { node { id name { value } parent { node { __typename name { value } } } interfaces { edges { node { __typename id name { value } } } }
-      circuits { edges { node { id name { value } } } } } } }""",
+      circuits { edges { node { id ... on ManagedGeneric { name { value } } } } } } } }""",
     "inetif": f"""TopologyInternetInterface {{ edges {{ node {{ {IF_TOP}
       capabilities {{ edges {{ node {{ __typename id ... on TopologyCarrierCircuit {{ name {{ value }} }} }} }} }} }} }} }}""",
     "mlag": """ManagedMLAG { edges { node { id name { value } peer_devices { value } domain_id { value }

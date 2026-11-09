@@ -15,13 +15,13 @@ spec:
       deployment: DC-KTW1
       capabilities:
         - kind: DcimLAGInterface
-          data: {device: ktw1-leaf-01, name: "Port-Channel10"}
+          data: {device: ktw1-leaf-01, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: ktw1-leaf-02, name: "Port-Channel10"}
+          data: {device: ktw1-leaf-02, name: "Port-Channel10", lag_id: 10}
         - kind: DcimPhysicalInterface
           data: {device: ktw1-leaf-01, name: "Ethernet1/1"}
         - kind: DcimLAGInterface
-          data: {device: ktw1-srv-01, name: "bond0"}
+          data: {device: ktw1-srv-01, name: "bond0", lag_id: 1}
         - kind: DcimPhysicalInterface
           data: {device: ktw1-srv-02, name: "eno1"}
         - kind: DcimPhysicalInterface
@@ -30,11 +30,11 @@ spec:
       deployment: DC-KTW1
       capabilities:
         - kind: DcimLAGInterface
-          data: {device: ktw1-leaf-01, name: "Port-Channel10"}
+          data: {device: ktw1-leaf-01, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: ktw1-leaf-02, name: "Port-Channel10"}
+          data: {device: ktw1-leaf-02, name: "Port-Channel10", lag_id: 10}
         - kind: DcimLAGInterface
-          data: {device: ktw1-srv-01, name: "bond0"}
+          data: {device: ktw1-srv-01, name: "bond0", lag_id: 1}
         - kind: DcimPhysicalInterface
           data: {device: ktw1-srv-02, name: "eno1"}
         - kind: DcimPhysicalInterface
