@@ -178,7 +178,6 @@ class TestFreshSharedBoarding:
             customer_id="cust-1",
             context_id=world.contexts[_SHARED].id,
             current_ids=[],
-            parent_id="dc10-id",
         )
 
     @pytest.mark.asyncio
@@ -191,16 +190,16 @@ class TestFreshSharedBoarding:
         assert events == [f"acquire:fw-context-{_SHARED}", "release"]
 
 
-class TestDcServingLinkIsReplacedNotPruned:
-    """A DC footprint has one serving firewall context: link_serving_context replaces it, nothing is unlinked."""
+class TestDcServingLinkConverges:
+    """A DC footprint lists its firewall contexts: the new one is added and a stale internal one is unlinked."""
 
     @pytest.mark.asyncio
-    async def test_a_previous_context_is_never_removed_by_a_relationship_mutation(self) -> None:
+    async def test_a_previous_internal_context_is_unlinked_after_the_new_one_is_added(self) -> None:
         world = _World()
         gen, _ = _make_gen(world)
         gen.unlink_stale_serving_contexts = AsyncMock()
         payload = _payload()
-        payload["TopologyCustomerDC"][0]["serving_firewall_context"] = {"node": {"id": "ctx-dedicated"}}
+        payload["TopologyCustomerDC"][0]["serving_firewall_contexts"] = {"edges": [{"node": {"id": "ctx-dedicated"}}]}
 
         await _run(gen, world, payload)
 
@@ -209,9 +208,13 @@ class TestDcServingLinkIsReplacedNotPruned:
             customer_id="cust-1",
             context_id=world.contexts[_SHARED].id,
             current_ids=["ctx-dedicated"],
-            parent_id="dc10-id",
         )
-        gen.unlink_stale_serving_contexts.assert_not_awaited()
+        calls = {call.args[0].role: call.kwargs for call in gen.unlink_stale_serving_contexts.await_args_list}
+        assert calls[FIREWALL_CONTEXT.role] == {
+            "customer_id": "cust-1",
+            "current_ids": ["ctx-dedicated"],
+            "served_ids": [world.contexts[_SHARED].id],
+        }
 
     @pytest.mark.asyncio
     async def test_the_leg_step_returns_the_context_it_built_and_the_one_it_found(self) -> None:
@@ -266,7 +269,6 @@ class TestRerunAndSecondCustomer:
             customer_id="cust-2",
             context_id=world.contexts[_SHARED].id,
             current_ids=[],
-            parent_id="dc10-id",
         )
 
     @pytest.mark.asyncio

@@ -41,7 +41,6 @@ def _app_gen(lb_vips: dict[str, Any], lb_errors: list[str] | None = None) -> Any
     gen.client = AsyncMock()
     gen._init_client = AsyncMock()
     gen.logger = MagicMock()
-    gen._ensure_segment_zones = AsyncMock()
     gen._ensure_segment_isolation_mode = AsyncMock()
     gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
     gen._reconcile_load_balancing = AsyncMock(return_value=(lb_vips, list(lb_errors or [])))
@@ -165,7 +164,6 @@ def _tracked_run(web_load_balanced: bool) -> set[tuple[str, str]]:
     gen.client = _TrackingClient()
     del gen._get_or_create_by_name
     del gen._upsert_policy_rule
-    gen._ensure_segment_zones = AsyncMock()
     gen._ensure_segment_isolation_mode = AsyncMock()
     gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
     gen._get_profile = AsyncMock(return_value=None)

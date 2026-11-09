@@ -13,7 +13,7 @@ fragment ``DeviceServicesFields`` (queries/fragments/device_services.gql). In sh
 
 - the device: ``typename``, ``id``, ``name``, ``role``, ``status``, ``member_of_groups``, ``deployment`` (with the
   hosting ``parent``), ``vlans`` (the segment rows of ``vrf_instances.gql``, with each footprint's ``parent`` and
-  ``serving_firewall_context(s)``), ``shared_capabilities`` and ``interfaces`` (see utils/service_contexts.py for the
+  ``serving_firewall_contexts``), ``shared_capabilities`` and ``interfaces`` (see utils/service_contexts.py for the
   ports and legs of the contexts).
 
 Nothing here re-states a rule that exists elsewhere: the SVI steering is ``DeviceVrfFacts.pbr_footprints_by_name`` and

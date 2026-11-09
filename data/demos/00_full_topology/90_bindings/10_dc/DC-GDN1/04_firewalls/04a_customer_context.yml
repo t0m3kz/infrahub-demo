@@ -1,4 +1,5 @@
-# Upsert the existing C900 footprint from its keys, linking the internal context that serves it.
+# Upsert the existing C900 footprint from its keys, listing the firewall contexts that serve it: the DC has no
+# Internet edge pair, so its internal context holds every rule.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -8,4 +9,4 @@ spec:
       environment: p
       infrastructure_orchestrator: ansible_automation_platform
       parent: DC-GDN1
-      serving_firewall_context: shared-gdn1-fw-ha-prod
+      serving_firewall_contexts: [shared-gdn1-fw-ha-prod]

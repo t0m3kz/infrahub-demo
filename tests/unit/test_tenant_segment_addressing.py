@@ -259,15 +259,10 @@ class TestGenerateOrder:
         order: list[str] = []
         seen: list[Any] = []
 
-        async def zone(client: Any, segment: dict[str, Any]) -> None:
-            order.append("zone")
-            segment["security_zone"] = {"name": "PROD", "vrf_type": "prod"}
-
         async def tag(client: Any, lock: Any, *, segment: dict[str, Any]) -> None:
             order.append("tag")
             seen.append(segment.get("gateway"))
 
-        monkeypatch.setattr("generators.topology.segment.ensure_segment_security_zone", zone)
         monkeypatch.setattr("generators.topology.segment.ensure_segment_tag", tag)
         gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
         gen.client = AsyncMock()
@@ -288,6 +283,13 @@ class TestGenerateOrder:
                             "__typename": "ManagedVxlanSegment",
                             "name": {"value": "c008-krafven-dev-d"},
                             "environment": {"value": "d"},
+                            "security_zone": {
+                                "node": {
+                                    "id": "zone-1",
+                                    "name": {"value": "NONPROD"},
+                                    "vrf_type": {"value": "non_prod"},
+                                }
+                            },
                             "gateway": {"node": None},
                         }
                     }
@@ -297,7 +299,7 @@ class TestGenerateOrder:
 
         asyncio.run(gen.generate(data))
 
-        assert order == ["zone", "address", "tag"]
+        assert order == ["address", "tag"]
         assert seen == [{"id": "gw-1"}]
 
 

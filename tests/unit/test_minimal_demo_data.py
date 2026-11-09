@@ -1,19 +1,19 @@
 """The 30_all customer and fabric data states intent only: nothing a schema default or a generator supplies.
 
 A restated default is a second source of truth that silently diverges when the
-schema default moves; a hand-typed derived value (a segment's security zone)
-either repeats the generator or contradicts it. Both are deleted from the data,
-and these tests keep them out. ``environment`` is the deliberate exception: it
-must stay explicit (a silent ``p`` means the PROD namespace, zone and firewall
-leg), and the schema requires it on footprints and applications.
+schema default moves: it is deleted from the data, and these tests keep it out.
+``environment`` is the deliberate exception: it must stay explicit (a silent ``p``
+means the PROD namespace, zone and firewall leg), and the schema requires it on
+footprints and applications. A segment's ``security_zone`` is mandatory too, and
+every segment in data/ names it (the zone of its environment, or its exchange zone).
 """
 
 from __future__ import annotations
 
 import pytest
 
-from tests.integration.demo_data import ROOT, Declared, attribute, declared, declared_in, name
-from utils.exchange_transit import is_exchange_zone
+from tests.integration.demo_data import ROOT, Declared, attribute, declared, declared_in, name, relationship
+from utils.exchange_transit import is_exchange_zone, namespace_type_for_environment, zone_name_for_namespace_type
 
 _ALL_DEMO = ROOT / "data" / "demos" / "30_all"
 
@@ -99,46 +99,31 @@ def test_an_office_has_no_environment() -> None:
     assert attribute("TopologyCustomerOffice", "environment") is None
 
 
-def _generator_zoned_segments() -> set[str]:
-    """Segments whose zone a generator derives: every VXLAN segment (add_vxlan_segment) and every
-    segment an application component lives on (add_app_application)."""
-    vxlan = {name(obj) for obj in declared("ManagedVxlanSegment", _ALL_DEMO)}
-    used = {
-        str(obj.item["network_segment"])
-        for obj in declared("AppComponent", _ALL_DEMO)
-        if obj.item.get("network_segment")
-    }
-    return vxlan | used
+_SEGMENT_KINDS = ("ManagedVxlanSegment", "CloudNetworkSegment")
+_ALL_DATA = ROOT / "data"
 
 
-def test_the_scan_finds_generator_zoned_segments() -> None:
-    """VXLAN segments (a colocation cage's too) and cloud subnets with components."""
-    zoned = _generator_zoned_segments()
-    assert {"c005-web-frontend-local-dc10-p", "c011-nordix-prod-p", "c003-vaultex-subnet-prod-p"} <= zoned
+def test_the_scan_finds_segments_of_every_dataset() -> None:
+    """VXLAN segments (a colocation cage's too) and cloud subnets of 30_all, 00_full_topology and the others."""
+    found = {name(obj) for obj in declared_in(_ALL_DATA) if obj.kind in _SEGMENT_KINDS}
+    assert {"c005-web-frontend-local-dc10-p", "c011-nordix-prod-p", "c003-vaultex-subnet-prod-p"} <= found
+    assert any(obj.kind == "CloudNetworkSegment" for obj in declared_in(ROOT / "data" / "demos" / "00_full_topology"))
 
 
-def test_generator_zoned_segments_declare_no_tenant_zone() -> None:
-    """ensure_security_zone derives PROD/NONPROD from the environment: typing it is a second source.
-    An exchange zone (MANAGEMENT services) is authored data the generator keeps."""
-    zoned = _generator_zoned_segments()
-    offenders = [
-        f"{obj.path.relative_to(ROOT)}: {name(obj)} security_zone {obj.item['security_zone']}"
-        for obj in declared_in(_ALL_DEMO)
-        if obj.kind in {"ManagedVxlanSegment", "CloudNetworkSegment"}
-        and obj.item.get("security_zone")
-        and not is_exchange_zone(obj.item["security_zone"])
-        and name(obj) in zoned
-    ]
+def test_security_zone_is_required_with_no_default() -> None:
+    """The schema refuses a segment without its routing domain: nothing fills it in after creation."""
+    definition = relationship("ManagedNetworkSegment", "security_zone") or {}
+    assert definition.get("optional") is False
+
+
+@pytest.mark.parametrize("kind", _SEGMENT_KINDS)
+def test_every_authored_segment_names_its_security_zone(kind: str) -> None:
+    """Every segment in data/ states its zone: a tenant segment the zone of its environment (p -> PROD, else
+    NONPROD), a shared service segment its exchange zone (MANAGEMENT services)."""
+    offenders = []
+    for obj in declared(kind, _ALL_DATA):
+        zone = obj.item.get("security_zone")
+        expected = zone_name_for_namespace_type(namespace_type_for_environment(str(obj.item.get("environment"))))
+        if not zone or (zone != expected and not is_exchange_zone(zone)):
+            offenders.append(f"{obj.path.relative_to(ROOT)}: {name(obj)} security_zone {zone}, expected {expected}")
     assert not offenders, "\n".join(offenders)
-
-
-def test_segments_no_generator_touches_keep_their_zone() -> None:
-    """A segment no generator zones (a cloud subnet without an app) must state it,
-    or checks/segment_security.py reports it zoneless."""
-    zoned = _generator_zoned_segments()
-    missing = [
-        f"{obj.path.relative_to(ROOT)}: {name(obj)}"
-        for obj in declared_in(_ALL_DEMO)
-        if obj.kind == "CloudNetworkSegment" and name(obj) not in zoned and not obj.item.get("security_zone")
-    ]
-    assert not missing, "\n".join(missing)

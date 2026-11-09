@@ -20,6 +20,7 @@ spec:
           data:
             customer_name: "nordix-prod"
             environment: "p"
+            security_zone: "PROD"
             customer_deployments:
               - "C006-P-DC11"
             member_of_groups:

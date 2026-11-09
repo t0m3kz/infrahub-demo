@@ -18,6 +18,7 @@ spec:
           data:
             customer_name: "nordix-prod"
             environment: "p"
+            security_zone: "PROD"
             gateway:
               data:
                 address: "10.1.101.1/24"

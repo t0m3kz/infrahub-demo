@@ -1,4 +1,0 @@
-# DcimPhysicalDevice:ktw1-leaf-01 -> DcimPhysicalDevice:waw1-leaf-01
-## plain
-L2 DcimPhysicalDevice:ktw1-leaf-01 -> DcimPhysicalDevice:waw1-leaf-01: 1 equal-cost path(s), depth 6
-  DcimPhysicalDevice:ktw1-leaf-01 -> ManagedSegmentVlan:ktw1-leaf-01/2500 -> ManagedSegmentDeployment:c900-sync-p/DC-KTW1 -> ManagedVxlanSegment:c900-sync-p -> ManagedSegmentDeployment:c900-sync-p/DC-WAW1 -> ManagedSegmentVlan:waw1-leaf-01/2500 -> DcimPhysicalDevice:waw1-leaf-01

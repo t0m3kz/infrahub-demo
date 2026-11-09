@@ -32,7 +32,7 @@ def _segment(
     seg_id: str,
     kind: str = "ManagedVxlanSegment",
     env: str | None = "p",
-    zone: str | None = "PROD",
+    zone: str = "PROD",
     prefix: str | None = "10.0.0.0/24",
     name: str | None = None,
     vrf_type: Any = _UNSET,
@@ -66,9 +66,7 @@ def _segment(
             "id": seg_id,
             "name": _v(name or seg_id),
             "environment": _v(env),
-            "security_zone": {"node": {"id": f"zone-{zone}", "name": _v(zone), "vrf_type": _v(vrf_type)}}
-            if zone
-            else {"node": None},
+            "security_zone": {"node": {"id": f"zone-{zone}", "name": _v(zone), "vrf_type": _v(vrf_type)}},
             "gateway": gateway,
             **extra,
         }
@@ -109,7 +107,7 @@ def _run(segments: list[dict[str, Any]], rules: list[dict[str, Any]] | None = No
 
 
 class TestZone:
-    """Invariants 1-3: zone present, zone follows environment, an exchange-zone segment is exempt."""
+    """Zone follows environment, an exchange-zone segment is exempt (the schema makes the zone mandatory)."""
 
     @pytest.mark.parametrize("kind", ["ManagedVxlanSegment", "CloudNetworkSegment"])
     def test_tenant_segment_in_matching_zone_passes(self, kind: str) -> None:
@@ -120,13 +118,6 @@ class TestZone:
     def test_non_prod_environments_map_to_nonprod_zone(self, env: str) -> None:
         """Any environment but p belongs in NONPROD."""
         assert _run([_segment("a", env=env, zone="NONPROD")])._captured_errors == []
-
-    @pytest.mark.parametrize("kind", ["ManagedVxlanSegment", "CloudNetworkSegment"])
-    def test_missing_zone_is_an_error_for_every_kind(self, kind: str) -> None:
-        """A segment without a security_zone is an error, whatever its kind."""
-        check = _run([_segment("a", kind, zone=None)])
-        assert len(check._captured_errors) == 1
-        assert "has no security_zone" in check._captured_errors[0]
 
     def test_zone_contradicting_environment_is_an_error(self) -> None:
         """A prod segment in NONPROD is flagged."""

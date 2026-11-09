@@ -1,5 +1,6 @@
 ---
-# C900's production footprint belongs to the metro; its physical workload stands in the PAR-COLO1 zone.
+# C900's production footprint belongs to the metro; its physical workload stands in the PAR-COLO1 zone. Its only
+# firewall is the cage's Internet edge context (10_topology/COLO-PAR/03_firewalls), which holds all its rules.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -9,3 +10,4 @@ spec:
       environment: p
       infrastructure_orchestrator: ansible_automation_platform
       parent: PAR
+      serving_firewall_contexts: [shared-par-xfw-ha-prod]

@@ -47,7 +47,7 @@ def raw_footprint(footprint_id: str, parent_id: str = HOSTING_ID, *, context: bo
         "id": footprint_id,
         "name": {"value": footprint_id},
         "parent": {"node": {"id": parent_id}},
-        "serving_firewall_context": {"node": {"id": "ctx-1"}} if context else {"node": None},
+        "serving_firewall_contexts": {"edges": [{"node": {"id": "ctx-1"}}] if context else []},
     }
 
 

@@ -7,11 +7,12 @@ check fails closed: every ENABLED internet rule is followed from its source segm
 segment (``network_segments`` of a ``TopologyCustomerDC`` or ``TopologyCustomerColocation``), and a missing element is
 an ERROR that blocks the proposed change. One finding per rule, footprint, context and missing element.
 
-A DC footprint (``serving_firewall_context``), and each firewall context of a colocation footprint
-(``serving_firewall_contexts``), needs:
+Every firewall context a footprint lists (``serving_firewall_contexts``, internal and Internet edge alike) that holds
+its internet rules (utils/firewall_split.py: the Internet edge context when the footprint lists one, else its
+contexts) needs:
 
-1. exactly two member devices (``shared_devices``), both with role ``firewall`` (``external-firewall`` for the
-   context a topology names as its Internet edge);
+1. exactly two member devices (``shared_devices``), both with role ``internal-firewall`` (``external-firewall`` for
+   the Internet edge context);
 2. for every member, an INTERNET leg: a sub-interface of the context tagged with ``vlan_id`` (the transit VLAN of the
    INTERNET slot, utils/exchange_transit.py) with an address in the INTERNET namespace;
 3. a ``TopologyRoutedExchange`` of the context between the tenant VRF and INTERNET, with every INTERNET leg linked to
@@ -27,12 +28,10 @@ firewall device is ignored), and the footprint is served when at least one zone 
 are exactly two ``CloudNetworkAppliance`` with role ``firewall`` and status ``active`` (no legs, ports, SNAT or
 contexts apply to it, the provider runs them). A metro with neither is an ERROR.
 
-A DC or a colocation metro may name the contexts that enforce the Internet policy and translate the source for all its
-segments, one per environment (``internet_edge_contexts``). A footprint whose parent names one for its environment is
-checked against THAT context (the elements above), and its serving context needs only a ``snat_address`` (the public
-address its traffic is translated to there, for a dedicated context). A parent that names none for the environment keeps
-the elements above on the serving context. Two contexts for one environment, or one with no exchange between a tenant VRF
-and INTERNET (its environment cannot be told), are errors.
+A footprint that lists an Internet edge context (a context on an external-firewall pair) is checked against THAT
+context (the elements above): it must list exactly one, for its environment, and a dedicated internal context of it
+(``tenant`` set) needs only a ``snat_address`` (the public address its traffic is translated to on the edge). A
+footprint that lists none keeps the elements above on its serving contexts.
 
 Deliberate gap: only the on-prem footprints are checked. A cloud footprint (``TopologyCustomerCloud``) and an office
 (``TopologyCustomerOffice``) are skipped silently: egress from the cloud leaves through the provider's own gateways,
@@ -49,6 +48,7 @@ from transforms.helpers.policy import rule_enabled
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, namespace_type_for_environment, transit_vlan
 from utils.fabric_roles import CARRIER_ROLES, EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
+from utils.firewall_split import footprint_contexts, internet_contexts, is_external
 from utils.routing_domain import interface_security_zone
 from utils.service_contexts import leg_interfaces, member_border_ports
 
@@ -255,7 +255,7 @@ def colocation_gaps(footprint: dict[str, Any], cleaned: dict[str, Any]) -> list[
     """What a colocation footprint lacks: its zones with firewalls must pass, and something must serve it."""
     metro_id = _id(footprint.get("parent"))
     metro = _name(footprint.get("parent"))
-    contexts = [context for context in footprint.get("serving_firewall_contexts") or [] if isinstance(context, dict)]
+    contexts = footprint_contexts(footprint)
     exchanges = cleaned.get(EXCHANGE_KIND) or []
     gaps: list[Gap] = []
     passed = False
@@ -309,71 +309,45 @@ def _tenant_type(context: dict[str, Any], exchanges: list[dict[str, Any]]) -> st
     return None
 
 
-def egress_assignment(
-    footprint: dict[str, Any], exchanges: list[dict[str, Any]]
-) -> tuple[dict[str, Any] | None, list[Gap]]:
-    """The context its parent names as Internet egress for the footprint's environment, and what is wrong with the choice.
-
-    (None, []) when the parent names none for this environment: the serving context keeps the Internet elements.
-    """
-    parent = footprint.get("parent")
-    assigned = [
-        c
-        for c in (parent.get("internet_edge_contexts") if isinstance(parent, dict) else None) or []
-        if isinstance(c, dict)
-    ]
-    environment = footprint.get("environment")
-    if not assigned or not environment:
-        return None, []
-    wanted = namespace_type_for_environment(str(environment))
-    gaps = [
-        Gap(_name(context), "it is named as Internet egress but has no exchange between a tenant VRF and INTERNET")
-        for context in sorted(assigned, key=_name)
-        if _tenant_type(context, exchanges) is None
-    ]
-    matching = [context for context in sorted(assigned, key=_name) if _tenant_type(context, exchanges) == wanted]
-    if len(matching) > 1:
-        names = ", ".join(_name(context) for context in matching)
-        gaps.append(
-            Gap(
-                None,
-                f"'{_name(parent)}' names {len(matching)} Internet egress contexts for {wanted} ({names}): one per environment",
-            )
-        )
-        return None, gaps
-    return (matching[0] if matching else None), gaps
-
-
-def _egress_gaps(
-    kind: str, footprint: dict[str, Any], egress: dict[str, Any], exchanges: list[dict[str, Any]]
-) -> list[Gap]:
-    """The elements of the egress context, and the public address a dedicated serving context translates to."""
+def _edge_gaps(footprint: dict[str, Any], contexts: list[dict[str, Any]], exchanges: list[dict[str, Any]]) -> list[Gap]:
+    """What the footprint's Internet edge lacks: one edge context of its environment, complete, and the public address
+    of a dedicated internal context (the address its traffic is translated to on the edge)."""
+    edges = sorted((context for context in contexts if is_external(context)), key=_name)
+    if len(edges) > 1:
+        names = ", ".join(_name(context) for context in edges)
+        return [Gap(None, f"it lists {len(edges)} Internet edge contexts ({names}): one per footprint")]
+    (edge,) = edges
     gaps = [
         Gap(gap.context, f"egress context: {gap.missing}")
-        for gap in context_gaps(egress, exchanges, EXTERNAL_FIREWALL_ROLE)
+        for gap in context_gaps(edge, exchanges, EXTERNAL_FIREWALL_ROLE)
     ]
-    serving = footprint.get("serving_firewall_context") if kind == DC_KIND else None
-    if isinstance(serving, dict) and _id(serving) != _id(egress) and not _id(serving.get("snat_address")):
-        gaps.append(
-            Gap(_name(serving), "no snat_address (the public address its traffic is translated to on the egress)")
-        )
+    wanted = namespace_type_for_environment(str(footprint.get("environment") or ""))
+    tenant_type = _tenant_type(edge, exchanges)
+    if footprint.get("environment") and tenant_type is not None and tenant_type != wanted:
+        gaps.append(Gap(_name(edge), f"the Internet edge context is for {tenant_type}, the footprint is {wanted}"))
+    gaps.extend(
+        Gap(_name(context), "no snat_address (the public address its traffic is translated to on the egress)")
+        for context in sorted(contexts, key=_name)
+        if not is_external(context) and _id(context.get("tenant")) and not _id(context.get("snat_address"))
+    )
     return gaps
 
 
 def footprint_gaps(kind: str, footprint: dict[str, Any], cleaned: dict[str, Any]) -> list[Gap]:
-    """What an on-prem footprint lacks to send its segments' internet traffic through our firewalls."""
+    """What an on-prem footprint lacks to send its segments' internet traffic through our firewalls.
+
+    The contexts that hold the footprint's internet rules are its Internet edge context when it lists one, else its
+    serving contexts (utils/firewall_split.py ``internet_contexts``)."""
     exchanges = cleaned.get(EXCHANGE_KIND) or []
-    egress, assignment_gaps = egress_assignment(footprint, exchanges)
-    if egress is not None:
-        return assignment_gaps + _egress_gaps(kind, footprint, egress, exchanges)
-    if assignment_gaps:
-        return assignment_gaps
+    contexts = footprint_contexts(footprint)
+    holders = internet_contexts(contexts)
+    if any(is_external(context) for context in holders):
+        return _edge_gaps(footprint, contexts, exchanges)
     if kind == COLOCATION_KIND:
         return colocation_gaps(footprint, cleaned)
-    context = footprint.get("serving_firewall_context")
-    if not isinstance(context, dict):
-        return [Gap(None, "no serving firewall context (serving_firewall_context is unset)")]
-    return [gap for gap in context_gaps(context, exchanges)]
+    if not holders:
+        return [Gap(None, "no serving firewall context (serving_firewall_contexts is empty)")]
+    return [gap for context in sorted(holders, key=_name) for gap in context_gaps(context, exchanges)]
 
 
 def internet_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:

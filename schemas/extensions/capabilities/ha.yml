@@ -216,10 +216,11 @@ nodes:
         optional: true
         order_weight: 1400
     relationships:
-      # Every deployment this context filters for, dedicated (the tenant) and
-      # shared alike. Written only from the deployment side (its own
-      # serving_firewall_context(s), set by customer_dc.py/customer_colocation.py),
-      # so concurrent boardings onto one shared context never race on a list.
+      # Every deployment this context filters for, dedicated (the tenant), shared and Internet edge alike. Written
+      # only from the deployment side (its own serving_firewall_contexts, set by customer_dc.py /
+      # customer_colocation.py), so concurrent boardings onto one shared context never race on a list. Whether the
+      # context holds a footprint's internet rules follows from the role of its pair and the footprint's other
+      # contexts (transforms/helpers/firewall_contexts.py).
       - name: served_deployments
         peer: ManagedTenantScoped
         label: "Served Deployments"
@@ -249,17 +250,6 @@ nodes:
         optional: true
         identifier: firewall_context__snat_address
         order_weight: 1100
-      # Reverse of TopologySegmentHosting.internet_edge_contexts (extensions below): the DCs and colocation metros
-      # whose Internet traffic this context enforces and translates. Written only from the hosting side.
-      - name: internet_edge_hostings
-        peer: TopologySegmentHosting
-        label: "Internet Edge For"
-        description: "Topologies whose Internet traffic this context enforces and translates (it may stand elsewhere)"
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: topology_hosting__internet_edge_contexts
-        order_weight: 1150
 
   # ── Load Balancer HA domain (on-prem, physical devices) ───────────────────
   - name: LoadbalancerHA
@@ -441,22 +431,8 @@ nodes:
 
 extensions:
   nodes:
-    # The firewall context at the Internet edge of a DC, colocation metro or office, one per environment (PROD,
-    # NON-PROD: checks/internet_egress.py): it enforces the Internet policy and performs the final SNAT. It stands on
-    # an external-firewall pair that may be in another topology (a colocation shared by several DCs) and is meant for
-    # both directions; only the outbound one is built. A hosting with none keeps the Internet leg and SNAT of each
-    # serving context. Chosen in the data; nothing picks one by discovery order.
     - kind: TopologySegmentHosting
       relationships:
-        - name: internet_edge_contexts
-          label: Internet Edge Contexts
-          peer: ManagedFirewallContext
-          cardinality: many
-          kind: Generic
-          optional: true
-          identifier: topology_hosting__internet_edge_contexts
-          order_weight: 7960
-          description: "Firewall contexts at the Internet edge of this topology (policy and final SNAT), one per environment"  # yamllint disable-line rule:line-length
         # The contexts this topology owns (SecurityContext.deployment, a Parent): a decommissioned DC, colocation
         # metro or office takes its contexts with it. The members are the devices; they never cascade.
         - name: security_contexts
@@ -486,10 +462,14 @@ extensions:
           identifier: firewall_context__terminated_segments
           description: "Firewall context whose pair owns this segment's gateway as a floating VIP (the fabric only bridges it)."  # yamllint disable-line rule:line-length
 
-    # Deployment side of FirewallContext.served_deployments (above), declared per kind because the cardinality
-    # differs (the identifier is shared): a DC footprint has ONE serving context (its dedicated one, else the shared
-    # one), a colocation footprint one per zone of its metro that has a firewall pair. Lets a footprint query find
-    # the FirewallContexts its segments terminate on in one hop.
+    # Deployment side of FirewallContext.served_deployments (above): EVERY firewall context that enforces the
+    # footprint's policy, internal and external (Internet edge) alike. Declared per kind (the identifier is shared):
+    # only the footprints with a firewall service have it (a cloud footprint and an office do not). A DC footprint
+    # lists its internal context (its dedicated one, else the shared one) and, when its DC has one, the Internet edge
+    # context on the DC's external-firewall pair; a colocation footprint the context of each zone of its metro that
+    # has a firewall pair. Which context holds which rules follows from the list (transforms/helpers/
+    # firewall_contexts.py): with an internal and an external context, the external one holds the internet rules and
+    # the internal one the rest; a single context holds them all.
     - kind: TopologyCustomerColocation
       relationships:
         - name: serving_firewall_contexts
@@ -500,21 +480,21 @@ extensions:
           optional: true
           identifier: firewall_context__served_deployments
           order_weight: 925
-          description: "FirewallContexts its segments terminate on: the shared one of each zone with a firewall pair."
+          description: "Every FirewallContext enforcing its policy: the context of each zone with a firewall pair"
 
     # Deployment side of LoadbalancerContext.served_deployments. Only a DC footprint is load balanced:
     # a colocation metro has no LB uplinks (generators/topology/customer_colocation.py).
     - kind: TopologyCustomerDC
       relationships:
-        - name: serving_firewall_context
-          label: "Serving Firewall Context"
+        - name: serving_firewall_contexts
+          label: "Serving Firewall Contexts"
           peer: ManagedFirewallContext
-          kind: Attribute
-          cardinality: one
+          kind: Generic
+          cardinality: many
           optional: true
           identifier: firewall_context__served_deployments
           order_weight: 925
-          description: "FirewallContext its segments terminate on: its dedicated one, else the shared one."
+          description: "Every FirewallContext enforcing its policy: its internal one and the DC's Internet edge one"
         - name: serving_loadbalancer_context
           label: "Serving Load Balancer Context"
           peer: ManagedLoadbalancerContext

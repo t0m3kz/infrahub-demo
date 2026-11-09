@@ -9,7 +9,7 @@ spec:
   data:
     - {prefix: "10.200.0.0/16", ip_namespace: "default", status: active,
        description: "AWS VPC block"}
-    # The spoke accounts behind the transit gateway (AWS) and the hub VNet (Azure): each block is named by the
+    # The spoke accounts behind the transit gateway (AWS) and the Virtual WAN hub (Azure): each block is named by the
     # attachment that announces it towards us, so it is flat here.
     - {prefix: "10.201.0.0/16", ip_namespace: "default", status: active,
        description: "Azure VNet block"}

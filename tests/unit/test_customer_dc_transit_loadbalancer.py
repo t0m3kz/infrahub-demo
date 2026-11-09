@@ -95,7 +95,7 @@ class TestLoadbalancerSharedContext:
         assert world.group_adds == [(context.id, ["group-service-contexts"])]  # no port tag: derived
         assert events == [f"acquire:lb-context-{_LB_PROD}", "release"]
         gen.link_serving_context.assert_awaited_once_with(
-            LOADBALANCER_CONTEXT, customer_id="cust-1", context_id=context.id, current_ids=[], parent_id="dc10-id"
+            LOADBALANCER_CONTEXT, customer_id="cust-1", context_id=context.id, current_ids=[]
         )
         gen.logger.error.assert_not_called()
 
@@ -151,7 +151,7 @@ class TestLoadbalancerSharedContext:
         assert all(label != _LB_PROD for _, label, _ in world.saves[prod_saves:])
         assert prod_context.vlan_id.value == 3100
         gen.link_serving_context.assert_awaited_with(
-            LOADBALANCER_CONTEXT, customer_id="cust-2", context_id=non_prod.id, current_ids=[], parent_id="dc10-id"
+            LOADBALANCER_CONTEXT, customer_id="cust-2", context_id=non_prod.id, current_ids=[]
         )
 
     @pytest.mark.asyncio
@@ -174,7 +174,6 @@ class TestLoadbalancerSharedContext:
             customer_id="cust-2",
             context_id=world.contexts[_LB_PROD].id,
             current_ids=[],
-            parent_id="dc10-id",
         )
 
     @pytest.mark.asyncio

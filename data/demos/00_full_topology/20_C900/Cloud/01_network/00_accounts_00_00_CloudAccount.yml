@@ -21,9 +21,8 @@ spec:
       provider: "P006"
       owner: "C900"
     # The spoke accounts: three AWS accounts whose VPCs attach to the transit gateway of c900-aws-prod (shared with
-    # them, the attachment lives in the spoke account), and three Azure subscriptions whose VNets peer with the hub
-    # VNet of c900-azure-prod and use its ExpressRoute gateway (gateway transit). All PROD: a spoke never joins a
-    # nonprod network.
+    # them, the attachment lives in the spoke account), and three Azure subscriptions whose VNets connect to the
+    # Virtual WAN hub of c900-azure-prod (06_azure_hub_*). All PROD: a spoke never joins a nonprod network.
     - name: "c900-aws-payments"
       account_id: "900000000011"
       environment: "p"

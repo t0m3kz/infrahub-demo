@@ -61,7 +61,6 @@ class CustomerDeploymentColocationExchangeGenerator(
     _parent_required = False
     _parent_generators = ("add_colocation_zone",)
     _context_specs = (FIREWALL_CONTEXT,)
-    _serving_many = True
 
     def _hosting_parents(self, customer: dict[str, Any]) -> list[dict[str, Any]]:
         """The zones of the footprint's metro (customer.parent), by name; a zone without firewalls is skipped

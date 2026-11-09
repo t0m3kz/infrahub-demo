@@ -54,7 +54,7 @@ def test_the_services_root_reads_the_rows_the_hosting_and_the_service_ports(path
     row = node["vlans"]["edges"]["node"]["segment_deployment"]["node"]["segment"]["node"]
     assert {"terminated_on", "customer_deployments", "gateway", "security_zone", "stretch_scope"} <= set(row)
     footprint = row["customer_deployments"]["edges"]["node"]
-    assert {"parent", "serving_firewall_context", "serving_firewall_contexts"} <= set(footprint)
+    assert {"parent", "serving_firewall_contexts"} <= set(footprint)
     assert "parent" in node["deployment"]["node"]
     far_end = node["service_ports"]["edges"]["node"]["cable"]["node"]["endpoints"]["edges"]["node"]
     member = far_end["device"]["node"]

@@ -113,7 +113,7 @@ def _raw_segment(site: str) -> dict[str, Any]:
     footprints = [
         item
         for item in _items("TopologyCustomerDC", _site(site))
-        if item.get("serving_firewall_context") == context_name
+        if context_name in item.get("serving_firewall_contexts", [])
     ]
     assert footprints
     footprint = footprints[-1]

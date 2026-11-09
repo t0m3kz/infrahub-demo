@@ -1475,10 +1475,14 @@
                                       "id": "fixture-dc"
                                     }
                                   },
-                                  "serving_firewall_context": {
-                                    "node": {
-                                      "id": "ctx-1"
-                                    }
+                                  "serving_firewall_contexts": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "ctx-1"
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               }
@@ -1551,10 +1555,14 @@
                                       "id": "fixture-dc"
                                     }
                                   },
-                                  "serving_firewall_context": {
-                                    "node": {
-                                      "id": "ctx-1"
-                                    }
+                                  "serving_firewall_contexts": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "ctx-1"
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               }

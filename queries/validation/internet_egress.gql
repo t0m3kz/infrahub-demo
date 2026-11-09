@@ -55,15 +55,6 @@ query internet_egress {
             name {
               value
             }
-            ... on TopologySegmentHosting {
-              internet_edge_contexts {
-                edges {
-                  node {
-                    ...InternetEgressContext
-                  }
-                }
-              }
-            }
           }
         }
         network_segments {
@@ -76,9 +67,11 @@ query internet_egress {
             }
           }
         }
-        serving_firewall_context {
-          node {
-            ...InternetEgressContext
+        serving_firewall_contexts {
+          edges {
+            node {
+              ...InternetEgressContext
+            }
           }
         }
       }
@@ -99,15 +92,6 @@ query internet_egress {
             id
             name {
               value
-            }
-            ... on TopologySegmentHosting {
-              internet_edge_contexts {
-                edges {
-                  node {
-                    ...InternetEgressContext
-                  }
-                }
-              }
             }
           }
         }

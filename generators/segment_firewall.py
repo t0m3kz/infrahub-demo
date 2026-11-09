@@ -10,7 +10,6 @@ from utils.limits import RULE_SAVE_ATTEMPTS
 from utils.ports import PortSpec
 
 from .helpers.rules import RulesPlanner
-from .helpers.security_zone import ensure_security_zone
 from .named_objects import GetOrCreateByNameMixin
 from .protocols import SecurityPolicy, SecurityPolicyRule, SecuritySecurityProfile
 
@@ -282,26 +281,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
                 changed.append(field)
         return changed
 
-    async def _ensure_segment_zones(self, segments: list[dict[str, Any]]) -> None:
-        """Zone each segment from its own environment and record it in the dict.
-
-        The in-memory ``security_zone`` is updated here, before any rule is
-        planned: otherwise the first run reads a stale missing zone and treats
-        every flow as cross-zone. A segment without an id is skipped (a component with no segment).
-        """
-        for segment in segments:
-            if not segment.get("id"):
-                continue
-            zone_name = await ensure_security_zone(
-                self.client,
-                kind=segment.get("typename"),
-                segment_id=segment["id"],
-                environment=segment.get("environment"),
-                current_zone=(segment.get("security_zone") or {}).get("name"),
-            )
-            if zone_name:
-                segment["security_zone"] = {**(segment.get("security_zone") or {}), "name": zone_name}
-
     async def _segment_policy(self, segment: dict[str, Any], policy_name: str) -> Any | None:
         """The source segment's one SecurityPolicy: the one it already has
         (from this generator or a hand-written data file), else its
@@ -453,6 +432,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         except Exception as exc:
             self.logger.warning("  Could not set isolation_mode on segment %s: %s", segment.get("name", seg_id), exc)
             return
-        # Recorded like the zone: the component tags and rules of this same run
+        # Recorded in the dict: the component tags and rules of this same run
         # are planned against the mode just written, not the one read.
         segment["isolation_mode"] = derived

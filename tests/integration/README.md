@@ -12,9 +12,8 @@ The integration tests follow an **incremental scenario-based approach** that mir
 
 - `test_01_setup.py` - Schema loading, menu, and bootstrap data
 - `test_02_repository.py` - Git repository integration and sync
-- `test_03_full_topology.py` - loads `data/demos/00_full_topology` onto main (`tests/traversal/load_topology.py`) and runs the traversal cases of
-  `tests/traversal` over it (the same assertions as `uv run invoke check-model`); part of the fast profile, NOT of the
-  30_all subset (the sample lands on main and 30_all branches from main)
+- `test_03_full_topology.py` - loads `data/demos/00_full_topology` onto main (`tests/traversal/load_topology.py`); part of
+  the fast profile, NOT of the 30_all subset (the sample lands on main and 30_all branches from main)
 
 #### Phase 2: Incremental Scenarios (Order 10+)
 

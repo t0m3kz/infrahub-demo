@@ -100,7 +100,7 @@ def test_fixed_l3_vni_band_is_reserved_and_encodable(routing_schema_roots: list[
     [
         ("ManagedVRF", "security_zone", "vrf__security_zone", "vrfs", False),
         ("TopologySessionCircuit", "vrf", "session_circuit__vrf", "session_circuits", True),
-        ("ManagedNetworkSegment", "security_zone", "network_segment__security_zone", "network_segments", True),
+        ("ManagedNetworkSegment", "security_zone", "network_segment__security_zone", "network_segments", False),
     ],
 )
 def test_routing_authority_edges_have_matching_typed_inverses(

@@ -7,6 +7,7 @@ spec:
     - owner: "C003"
       customer_name: "web-frontend"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C003", "p"]]
       gateway:
@@ -28,6 +29,7 @@ spec:
     - owner: "C003"
       customer_name: "app-backend"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C003", "p"]]
       gateway:
@@ -49,6 +51,7 @@ spec:
     - owner: "C003"
       customer_name: "database"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C003", "p"]]
       gateway:
@@ -70,6 +73,7 @@ spec:
     - owner: "C003"
       customer_name: "cache"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C003", "p"]]
       gateway:
@@ -91,6 +95,7 @@ spec:
     - owner: "C003"
       customer_name: "message-queue"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C003", "p"]]
       gateway:
@@ -114,6 +119,7 @@ spec:
     - owner: "C003"
       customer_name: "web-frontend"
       environment: "s"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C003", "s"]]
       gateway:
@@ -135,6 +141,7 @@ spec:
     - owner: "C003"
       customer_name: "app-backend"
       environment: "s"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C003", "s"]]
       gateway:
@@ -156,6 +163,7 @@ spec:
     - owner: "C003"
       customer_name: "database"
       environment: "s"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C003", "s"]]
       gateway:
@@ -177,6 +185,7 @@ spec:
     - owner: "C003"
       customer_name: "cache"
       environment: "s"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C003", "s"]]
       gateway:
@@ -198,6 +207,7 @@ spec:
     - owner: "C003"
       customer_name: "message-queue"
       environment: "s"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C003", "s"]]
       gateway:

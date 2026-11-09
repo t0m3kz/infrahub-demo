@@ -5,13 +5,13 @@ exchange transits); the context list is built in ``transforms.helpers.firewall_c
 """
 
 from collections.abc import Collection, Mapping
-from ipaddress import IPv4Network, collapse_addresses
 from typing import Any
 
 from transforms.helpers.firewall import _context_leg_ip
 from transforms.helpers.policy import rule_selector, segment_flows
 from utils.exchange_transit import MANAGEMENT_TYPE, exchange_peer_zones
-from utils.fabric_roles import INTERNAL_FIREWALL_ROLE
+from utils.fabric_roles import FIREWALL_ROLES
+from utils.firewall_split import is_external
 from utils.routing_domain import interface_vrf
 from utils.segment_addressing import is_terminated, segment_namespace, segment_prefix
 from utils.vrf_demand import L3VNI_ROLE, svi_name, svi_vlan_id
@@ -33,7 +33,7 @@ def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
 def _has_firewall_leg(ctx: dict[str, Any]) -> bool:
     """True when the context has an addressed leg on a firewall member (inline contexts have none)."""
     return any(
-        (leg.get("device") or {}).get("role") == INTERNAL_FIREWALL_ROLE and (leg.get("ip_address") or {}).get("address")
+        (leg.get("device") or {}).get("role") in FIREWALL_ROLES and (leg.get("ip_address") or {}).get("address")
         for leg in ctx.get("legs") or []
     )
 
@@ -43,7 +43,9 @@ def _resolve_context_nexthops(
 ) -> tuple[dict[str, str], str | None]:
     """Resolve each FirewallContext's nexthop in ``namespace`` (_context_leg_ip), keyed
     by dedicated tenant deployment id, plus the one shared (tenant-less) context's
-    nexthop if any.
+    nexthop if any. An Internet edge context is never the shared one: it is the next hop of the footprints it serves
+    with no internal context (the only ones it still lists, transforms/helpers/firewall_contexts.py
+    ``_steering_only``).
     """
     context_nexthop_by_deployment: dict[str, str] = {}
     shared_nexthop: str | None = None
@@ -53,7 +55,11 @@ def _resolve_context_nexthops(
             continue
         tenant = ctx.get("tenant") or {}
         tenant_id = tenant.get("id")
-        if tenant_id:
+        if is_external(ctx):
+            for footprint in ctx.get("served_deployments") or []:
+                if footprint.get("id"):
+                    context_nexthop_by_deployment.setdefault(footprint["id"], fw_ip)
+        elif tenant_id:
             context_nexthop_by_deployment[tenant_id] = fw_ip
         else:
             shared_nexthop = fw_ip
@@ -103,20 +109,6 @@ def _needs_firewall(
     return peer_nexthop == own_nexthop
 
 
-def _inspected_prefixes(namespace_prefixes: list[str], via_firewall: set[str]) -> list[str]:
-    """The modeled destinations of a segment in a DC with an Internet edge that go through its firewall context.
-
-    Every prefix registered in the segment's namespace (the tenant segments, the offices, the cloud blocks, the tunnel
-    ranges), merged into the fewest covering networks, plus the prefixes a rule forces through the firewall. A
-    bypassed prefix is matched before this list. What is in none of them (the Internet) follows normal routing, whose
-    default route is the Internet edge context's.
-    """
-    networks = [
-        IPv4Network(prefix, strict=False) for prefix in {*namespace_prefixes, *via_firewall} if ":" not in prefix
-    ]
-    return [str(network) for network in collapse_addresses(networks)]
-
-
 def refuse_unresolvable_contexts(
     footprints: Collection[str], firewall_contexts: list[dict[str, Any]] | None, *, device_name: str
 ) -> None:
@@ -140,8 +132,6 @@ def refuse_unresolvable_contexts(
 def get_customer_pbr_rules(
     activations: list[dict[str, Any]] | None,
     firewall_contexts: list[dict[str, Any]] | None,
-    edge_contexts: list[dict[str, Any]] | None = None,
-    namespace_prefixes: dict[str, list[str]] | None = None,
     steered_vlans: set[int] | None = None,
 ) -> list[dict[str, Any]]:
     """Build PBR rules that redirect all traffic to the firewall by default.
@@ -198,10 +188,6 @@ def get_customer_pbr_rules(
 
     if not any(_has_firewall_leg(ctx) for ctx in firewall_contexts or []):
         return []
-
-    # A DC with an Internet edge (``edge_contexts``, the contexts its hosting names) sends no Internet traffic through
-    # the customer context: a segment whose namespace has an edge leg redirects only its inspected destinations
-    # (``fw_redirect_prefixes``) and leaves the rest to normal routing (the edge's default route).
 
     # Nexthop maps per VRF namespace: a segment is redirected to the VIP of the
     # context's leg in the segment's own namespace.
@@ -286,18 +272,8 @@ def get_customer_pbr_rules(
         # traffic to it through the firewall, the same on both leaves.
         bypass_prefixes = bypass - via_firewall
 
-        edge_hosted = any(_context_leg_ip(edge, own_namespace) for edge in edge_contexts or [])
         rules.append(
             {
-                **(
-                    {
-                        "fw_redirect_prefixes": _inspected_prefixes(
-                            (namespace_prefixes or {}).get(str(own_namespace), []), via_firewall
-                        )
-                    }
-                    if edge_hosted
-                    else {}
-                ),
                 "vlan_id": vlan_id,
                 "segment_name": seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}",
                 "bypass_prefixes": sorted(bypass_prefixes),

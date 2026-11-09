@@ -519,7 +519,7 @@ class TopologyCustomerDC(
     name: StringOptional
     design: RelationshipAttribute[TopologyCustomerTemplateDC]
     network_segments: RelationshipManager[ManagedVxlanSegment]
-    serving_firewall_context: RelationshipAttribute[ManagedFirewallContext]
+    serving_firewall_contexts: RelationshipManager[ManagedFirewallContext]
     serving_loadbalancer_context: RelationshipAttribute[ManagedLoadbalancerContext]
 
 

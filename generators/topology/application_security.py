@@ -206,14 +206,12 @@ class AppApplicationGenerator(
         edges = self._dependency_edges_from_components(components)
 
         # Runs unconditionally per component (not gated on having a
-        # dependency edge below) so every segment this app uses gets
-        # its zone and isolation mode. The zone is set first and recorded on
-        # the segment dicts, so the rules below are planned against it; each
-        # edge target is zoned too, as it may belong to an application that
-        # has not run yet.
+        # dependency edge below) so every segment this app uses gets its
+        # tags and isolation mode; each edge target gets its tags too, as it
+        # may belong to an application that has not run yet. The zone is the
+        # segment's own (mandatory in the schema, read by the query).
         segments = self._used_segments(components, edges)
-        await self._ensure_segment_zones(segments)
-        # After the zones (the tenant test reads them). A segment without an id is a component without one.
+        # A segment without an id is a component without one.
         for segment in segments:
             if segment.get("id"):
                 await ensure_segment_tag(self.client, self.resource_lock, segment=segment)

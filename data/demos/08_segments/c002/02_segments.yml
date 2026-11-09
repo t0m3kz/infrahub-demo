@@ -7,6 +7,7 @@ spec:
     - owner: "C002"
       customer_name: "web-frontend"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C002", "p"]]
       gateway:
@@ -28,6 +29,7 @@ spec:
     - owner: "C002"
       customer_name: "app-backend"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C002", "p"]]
       gateway:
@@ -49,6 +51,7 @@ spec:
     - owner: "C002"
       customer_name: "database"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C002", "p"]]
       gateway:
@@ -72,6 +75,7 @@ spec:
     - owner: "C002"
       customer_name: "web-frontend"
       environment: "d"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C002", "d"]]
       gateway:
@@ -93,6 +97,7 @@ spec:
     - owner: "C002"
       customer_name: "app-backend"
       environment: "d"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C002", "d"]]
       gateway:
@@ -114,6 +119,7 @@ spec:
     - owner: "C002"
       customer_name: "database"
       environment: "d"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C002", "d"]]
       gateway:

@@ -13,6 +13,7 @@ spec:
     - owner: "C001"
       customer_name: "web-app"
       environment: "p"
+      security_zone: "PROD"
       stretch_scope: local
       arp_suppression: true
       customer_deployments:
@@ -23,6 +24,7 @@ spec:
     - owner: "C001"
       customer_name: "db-backend"
       environment: "p"
+      security_zone: "PROD"
       stretch_scope: local
       arp_suppression: true
       customer_deployments:

@@ -52,8 +52,9 @@ def _fw_context(context_id: str) -> dict:
 
 
 def _flattened(context: dict) -> dict:
-    """The context as ``_flatten_deployment_firewall_contexts`` returns it: with its served footprints and (no) legs."""
-    return {**context, "served_deployments": [], "legs": []}
+    """The context as ``_flatten_deployment_firewall_contexts`` returns it: with its served footprints, (no) legs and
+    the role of the member that holds it."""
+    return {**context, "served_deployments": [], "legs": [], "shared_devices": [{"role": "internal-firewall"}]}
 
 
 def _make_fw_device(*, contexts: list[dict] | None = None, extra_capability: dict | None = None) -> dict:

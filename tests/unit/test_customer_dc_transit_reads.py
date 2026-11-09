@@ -184,8 +184,8 @@ class TestServingLinkComesFromTheBoardingQuery:
     @pytest.mark.parametrize(
         ("serving", "expected"),
         [
-            ({"node": {"id": "ctx-found"}}, ["ctx-found"]),
-            ({"node": None}, []),  # an empty optional relationship
+            ({"edges": [{"node": {"id": "ctx-found"}}]}, ["ctx-found"]),
+            ({"edges": []}, []),  # an empty optional relationship
             ({}, []),
             (None, []),
         ],
@@ -195,7 +195,7 @@ class TestServingLinkComesFromTheBoardingQuery:
         world = _World()
         gen, _ = _make_gen(world)
         payload = _payload()
-        payload["TopologyCustomerDC"][0]["serving_firewall_context"] = serving
+        payload["TopologyCustomerDC"][0]["serving_firewall_contexts"] = serving
 
         await _run(gen, world, payload)
 
@@ -204,7 +204,6 @@ class TestServingLinkComesFromTheBoardingQuery:
             customer_id="cust-1",
             context_id=world.contexts[_SHARED].id,
             current_ids=expected,
-            parent_id="dc10-id",
         )
 
     @pytest.mark.asyncio
@@ -221,9 +220,17 @@ class TestServingLinkComesFromTheBoardingQuery:
         [
             (
                 "customer_dc.gql",
-                ["serving_firewall_context { node { id } }", "serving_loadbalancer_context { node { id } }"],
+                [
+                    "serving_firewall_contexts { edges { node { id shared_devices { edges { node { role { value } } } } } } }",
+                    "serving_loadbalancer_context { node { id } }",
+                ],
             ),
-            ("customer_colocation.gql", ["serving_firewall_contexts { edges { node { id } } }"]),
+            (
+                "customer_colocation.gql",
+                [
+                    "serving_firewall_contexts { edges { node { id shared_devices { edges { node { role { value } } } } } } }"
+                ],
+            ),
         ],
     )
     def test_the_boarding_queries_select_the_serving_links(self, root_dir: Path, query: str, fields: list[str]) -> None:

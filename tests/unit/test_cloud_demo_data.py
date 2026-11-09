@@ -7,11 +7,45 @@ check R3 never sees it. The only input of this repository is YAML, so this is th
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
-from tests.traversal.walks import declared_rides_on, yaml_documents
+import yaml
+
+from tests.unit.demo_yaml_helpers import walk_objects
 
 ROOT = Path(__file__).resolve().parents[2]
 KIND = "CloudDirectConnect"
+
+
+def yaml_documents(directory: Path) -> list[Any]:
+    """The `spec` of every document of the object files under a directory."""
+    specs: list[Any] = []
+    for path in sorted([*directory.rglob("*.yml"), *directory.rglob("*.yaml")]):
+        specs += [doc.get("spec", {}) for doc in yaml.safe_load_all(path.read_text()) if isinstance(doc, dict)]
+    return specs
+
+
+def _target(rides_on: Any) -> str | None:
+    """The name a ``rides_on`` value points at: an HFID string, a one-item HFID list or a nested object."""
+    if isinstance(rides_on, str):
+        return rides_on
+    if isinstance(rides_on, list) and len(rides_on) == 1:
+        return str(rides_on[0])
+    if isinstance(rides_on, dict) and isinstance(rides_on.get("data"), dict) and "name" in rides_on["data"]:
+        return str(rides_on["data"]["name"])
+    return None
+
+
+def declared_rides_on(documents: list[Any]) -> dict[str, str]:
+    """{transport name: name it rides on} for every transport of the object-file specs that declares one."""
+    found: list[tuple[str, dict[str, Any]]] = []
+    for document in documents:
+        walk_objects(document, "", found)
+    return {
+        str(entry["name"]): target
+        for kind, entry in found
+        if kind == KIND and "name" in entry and (target := _target(entry.get("rides_on")))
+    }
 
 
 def _self_riding(documents: list) -> list[str]:

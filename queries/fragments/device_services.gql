@@ -316,9 +316,11 @@ fragment ServiceRowFields on ManagedSegmentVlan {
                     }
                   }
                   ... on TopologyCustomerDC {
-                    serving_firewall_context {
-                      node {
-                        id
+                    serving_firewall_contexts {
+                      edges {
+                        node {
+                          id
+                        }
                       }
                     }
                   }

@@ -36,9 +36,9 @@ class CheckSegmentSecurity(WarningCheck):
     Runs on settled data (gateways are allocated asynchronously, so a generator
     cannot refuse a rule to an address-less segment; this check does):
 
-    - every segment has a security_zone;
     - a tenant segment's zone follows its environment (p -> PROD, else
-      NONPROD), an exchange-zone segment is exempt;
+      NONPROD), an exchange-zone segment is exempt (the schema makes the zone
+      mandatory, so every segment has one);
     - a routed tenant segment's owner zone has the VRF type of its
       environment (p -> prod, else non_prod), independently of IPAM identity;
       exchange-zone segments are exempt from both environment rules;
@@ -95,18 +95,15 @@ class CheckSegmentSecurity(WarningCheck):
         self._validate_contracts(segments, tags)
 
     def _validate_zone(self, segment: dict[str, Any]) -> None:
-        """Zone present; tenant zone == f(environment); an exchange-zone segment is exempt."""
+        """Tenant zone == f(environment); an exchange-zone segment is exempt.
+
+        The zone itself is mandatory in the schema (ManagedNetworkSegment.security_zone).
+        """
         seg_name = segment.get("name", "<unnamed-segment>")
         kind = segment.get("typename")
-        zone = (segment.get("security_zone") or {}).get("name")
-        if not zone:
-            self.log_error(
-                message=(f"{kind} '{seg_name}' has no security_zone — zone-based firewalls match any zone on that side")
-            )
-            return
+        zone = segment["security_zone"]["name"]
         if is_exchange_zone(zone):
-            # A shared service segment (e.g. the DC-local MANAGEMENT services) sits in an exchange zone by
-            # design; ensure_security_zone keeps that zone too (one predicate, so the two never disagree).
+            # A shared service segment (e.g. the DC-local MANAGEMENT services) sits in an exchange zone by design.
             return
         environment = segment["environment"]
         expected = zone_name_for_namespace_type(namespace_type_for_environment(environment))
@@ -121,8 +118,8 @@ class CheckSegmentSecurity(WarningCheck):
         """A routed tenant segment's owner zone has the VRF type of its environment."""
         if segment.get("typename") not in ROUTED_SEGMENT_KINDS:
             return
-        zone = segment.get("security_zone") or {}
-        if not zone.get("name") or is_exchange_zone(zone["name"]):
+        zone = segment["security_zone"]
+        if is_exchange_zone(zone["name"]):
             return
         prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
         if not prefix:

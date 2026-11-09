@@ -71,7 +71,7 @@ async def test_shared_termination_moves_only_when_all_footprints_use_the_new_con
     gen = make_generator(CustomerDeploymentDCExchangeGenerator)
     segment = _segment("customer", "other")
     others = (
-        [SimpleNamespace(serving_firewall_context=SimpleNamespace(id=other_context))]
+        [SimpleNamespace(serving_firewall_contexts=SimpleNamespace(peers=[SimpleNamespace(id=other_context)]))]
         if other_context is not None
         else []
     )

@@ -31,7 +31,7 @@ upserts go under `90_bindings/`. Splitting a mixed file retains each complete ne
 | `20_C900/DC-KTW1/`, `20_C900/DC-WAW1/`, `20_C900/DC-GDN1/` | Customer footprints, routed and firewall-terminated segments/realizations, VMs, virtual switches, port groups, SDNs/Kubernetes and tenant firewall rules (the leaves' `ManagedPBR` sits with their BGP processes in `10_topology/<DC>/02_routing/`) |
 | `20_C900/DCI/` | Stretched segment definition |
 | `20_C900/COLO-PAR/` | Existing owned physical workload, footprint, cable, gateway-port binding and static route; the direct colocation-host experiment is retained unchanged |
-| `20_C900/Cloud/` | Owned accounts, networks, gateways, route tables, attachments, footprints, segments, instance, transports/peerings, service endpoints and hosted clusters |
+| `20_C900/Cloud/` | Owned accounts, networks, gateways, route tables, attachments, footprints, segments, instances, transports/peerings, service endpoints and hosted clusters |
 | `20_C900/SaaS/` | Existing customer Webex/Zscaler transports and endpoint |
 | `20_C900/Office/`, `21_C901/Office/` | Barcelona/Lisbon locations, footprints, SD-WAN edges, campus devices and cables; C900 Wi-Fi segments, policies and VLAN rows |
 | `90_bindings/10_dc/` | Tenant port/host tags followed by expanded firewall trunks, shared-cluster SDN link and late footprint-to-context upserts |
@@ -243,6 +243,7 @@ flowchart LR
   subgraph AZ["Azure"]
     EAZ["EXT-AZURE-ER-WEU"]
     ER["er-c900-weu"]
+    VWAN["vwan-hub-c900-weu"]
     VNET["vnet-c900-weu"]
   end
   subgraph GCP["GCP"]
@@ -286,7 +287,8 @@ flowchart LR
   DXGW --- TGW
   TGW --- VPC
   DX -.-|"par1-dxvif-fgp4c5d6-aws-900000000001"| VGW
-  ER --- VNET
+  ER --- VWAN
+  VWAN --- VNET
 ```
 
 The diagram shows that the cloud and SaaS (Direct Connect, ExpressRoute, GCP, Webex) end in the cage and, thankfully, not on the DC
@@ -353,8 +355,7 @@ Internet access of each site, the one thing every user notices when it is missin
     ktw1-edge-01 Eth1/2   bcn-office-edge-01 GE1   ktw1-edge-01 Eth1/1   par-colo1-edge-01 Eth1/14
 ```
 
-The shortest paths between the sites, for people who like their packets to arrive (L1 = cables and carriers, L3 = BGP, session circuits, tunnels; details in the
-golden files `tests/traversal/golden/`):
+The shortest paths between the sites, for people who like their packets to arrive (L1 = cables and carriers, L3 = BGP, session circuits, tunnels):
 
 | Pair | L1 | L3 |
 | ---- | -- | -- |
@@ -367,7 +368,7 @@ golden files `tests/traversal/golden/`):
 | DC - DC (`c900-db-p` - `c900-web-p`) | segment - leaf - spine - border leaf - `ktw1-df10003-gdn1` (or `-B`) - border leaf - spine - leaf - segment | EVPN DCI session between the two border leaves |
 | second DC - AWS (`c900-app-p`) | border leaf of DC-WAW1 - `waw1-df10013-par1/B` - cage edge - cage cables `XC21450001/2` - AWS port `EXT-AWS-DX-PAR` - Direct Connect | EVPN DCI to the cage edge, handoff to the VIF (not through DC-KTW1) |
 | cage - cage (FRA1 - AMS1) | `fra1-df10027-ams1` | EVPN DCI session between the two edges |
-| VM - VM (frontend KTW1 - backend WAW1) | through the waypoint `ktw1-df10001-waw1` (a plain trace is too deep, see below) | VM - component - segment - leaf - spine - border leaf - EVPN DCI - border leaf - ... - VM |
+| VM - VM (frontend KTW1 - backend WAW1) | through the dark fibre `ktw1-df10001-waw1` | VM - component - segment - leaf - spine - border leaf - EVPN DCI - border leaf - ... - VM |
 
 ## The DCI mesh
 
@@ -429,15 +430,11 @@ role (`parent_interface`, the first uplink `eno1`, the rule of `generators/virtu
 segment of its DC. The application `c900-web-shop-p` (`90_bindings/40_applications/C900/`) names the VMs as the instances of its
 components: frontend (`c900-web-p`, the KTW1 VMs), backend (`c900-app-p`, WAW1), database (`c900-db-p`, GDN1).
 
-- **L1** of a VM is its NIC and the host's cabling: `vm - eth0 - eno1 - cable - panel - panel - leaf` (11 hops; or
-  through `bond0` and `eno2` to the second leaf). A plain L1 trace from a VM to another site is deeper than the server
-  allows (`max_depth` 30: the VM to the leaf is 11, the DC to the cloud 21 more), so a VM pair asks for L1 through a
-  waypoint, one `--via` leg on each side (the Direct Connect, or the dark fibre between two DCs; 30 hops is a limit, not a suggestion).
-- **L3** of a VM is the segment of its component: `utils/path_trace.py` `END_KINDS` lets a VM end cross
-  `AppComponent` and the segment's chain (deployment, VLAN row), and from there it routes like a segment end
-  (`VM -> component -> segment -> leaf -> BGP ...`). The component is the one typed statement that a VM is in a segment
-  (the generators of `30_all` derive the host port's segment and the VM's address from it). Two VMs of one host are one
-  hop apart through the host (the same hypervisor and segment; the shortest path in this document, enjoy it).
+- **L1** of a VM is its NIC and the host's cabling: `vm - eth0 - eno1 - cable - panel - panel - leaf` (or through
+  `bond0` and `eno2` to the second leaf).
+- **L3** of a VM is the segment of its component: `VM -> component -> segment -> leaf -> BGP ...`. The component is the
+  one typed statement that a VM is in a segment (the generators of `30_all` derive the host port's segment and the VM's
+  address from it). Two VMs of one host are one hop apart through the host (the same hypervisor and segment).
 
 ## Shared vocabulary for all clouds
 
@@ -516,9 +513,10 @@ it physically is (the cage for a cross-connect, the region for a Fabric connecti
 | `SecurityIPsecProfile` | IKE/ESP parameters of a tunnel, one profile for many tunnels | `IPSEC-AES256-SHA256-DH14` |
 | `CloudVPNConnection` | a transport without ports: holds the tunnels (interfaces); SaaS: `saas_region` and `owner` | `vpn-c900-aws-euc1`, `zscaler-c900-muc` |
 | `CloudPeeringInterface` | the BGP termination in the cloud, an interface of the transport | `lag1.1000`, `er-c900-weu-pri`, `gcp-c900-vlan-att-1`, `gcp-c900-ded-1`, `Tunnel1`, `webex-c900-fra` |
-| `CloudGateway` | hub, edge gateway, customer gateway | `tgw-c900-euc1` (hub), `dxgw-c900`, `vgw-c900-euc1`, `ergw-c900-weu`, `cr-c900-euw3` (edge), `cgw-c900-ktw1` (customer) |
-| `CloudGatewayAttachment`, `CloudGatewayRouteTable` | gateway connections and the routing domain of a hub | `tgwa-c900-vpc`, `tgwa-c900-dxgw`, `rt-c900-prod` |
-| `CloudVirtualNetwork` | a virtual network; `peers` | `vpc-c900-prod`, `vnet-c900-weu` + `vnet-c900-weu-spoke`; the spoke accounts `vpc-c900-payments`, `vnet-c900-payments-weu` and so on |
+| `CloudGateway` | hub, edge gateway, customer gateway | `tgw-c900-euc1`, `vwan-hub-c900-weu` (hub), `dxgw-c900`, `vgw-c900-euc1`, `ergw-c900-weu`, `cr-c900-euw3` (edge), `cgw-c900-ktw1` (customer) |
+| `CloudGatewayAttachment`, `CloudGatewayRouteTable` | gateway connections and the routing domain of a hub | `tgwa-c900-vpc`, `tgwa-c900-dxgw`, `rt-c900-prod`; Azure `vhuba-c900-weu`, `vhuba-c900-ergw`, `rt-c900-weu` |
+| `CloudVirtualNetwork` | a virtual network; `peers` | `vpc-c900-prod`, `vnet-c900-weu` + `vnet-c900-weu-spoke`; the spoke accounts `vpc-c900-payments`, `vnet-c900-payments-weu` and so on; `vnet-c900-sandbox-weu` `peers` `vnet-c900-weu-spoke` |
+| `CloudInstance` | a server in a cloud subnet, the end of a server-to-server flow (inventory only: no application, no rule) | `c900-app-euc1-1` (`c900-subnet-p`), one `.11` in each workload segment: `c900-payments-euc1-1`, `c900-analytics-euc1-1`, `c900-shared-euc1-1`, `c900-spoke-weu-1`, `c900-payments-weu-1`, `c900-analytics-weu-1`, `c900-identity-weu-1`, `c900-sandbox-weu-1` (the GCP VPC has no segment) |
 | `CloudServiceEndpoint` | a private path to a service | `vpce-c900-s3`, `vpce-c900-webex` |
 
 Removed: `CloudVirtualInterface`, `TopologySaasConnection` (their facts are in `CloudPeeringInterface`),
@@ -572,7 +570,7 @@ Full = in the model and in the data; partial = a field exists but simplified; no
 | AWS DX hosted (partner account), LAG | full | `partner_account` (GCP Partner Interconnect); LAG: the ports `dxcon-1a/1b` and bundle `lag1` of `EXT-AWS-DX-PAR`, two cables `XC21450001/2` to the cage edge, one transport `dx-c900-fra-lag` whose VIFs ride on the bundle |
 | GCP Dedicated Interconnect: a routed port without a VLAN | full | `ic-ded-c900-fra`, port `ic-dedicated-port`, peering `gcp-c900-ded-1` without `vlan_id`; our end is the physical `Ethernet1/5` of the cage edge with an address, circuit `par1-ded1-gcp-c900-prod-project` |
 | AWS public VIF | partial | `scope: public` and `advertised_prefixes` (US -> cloud) are in the model, no example |
-| Azure ExpressRoute: a circuit, two links, two /30 peerings, ExpressRoute Gateway in the VNet | full | one `er-c900-weu` whose peerings `er-c900-weu-pri/-sec` ride on the ports `msee-pri/-sec` of `EXT-AZURE-ER-WEU` (the carrier ends), `ergw-c900-weu` + `ergwa-c900-weu`; the spoke through `peers` |
+| Azure ExpressRoute: a circuit, two links, two /30 peerings, ExpressRoute gateway in a Virtual WAN hub | full | one `er-c900-weu` whose peerings `er-c900-weu-pri/-sec` ride on the ports `msee-pri/-sec` of `EXT-AZURE-ER-WEU` (the carrier ends), `ergw-c900-weu` associated with the hub `vwan-hub-c900-weu` (`vhuba-c900-ergw`) |
 | Azure Microsoft peering | partial | `scope: public` + `advertised_prefixes`, no example; route filters not modelled |
 | GCP Interconnect: VLAN attachment -> Cloud Router -> VPC | full | Partner Interconnect, `gcp-c900-vlan-att-1`, `cr-c900-euw3` |
 | AWS S2S VPN: customer gateway, two tunnels with BGP, the TGW side | full | `cgw-c900-ktw1` (`customer`), two tunnels; the provider side is `CloudVPNConnection.gateway` (a hub here; VGW has no example) |
@@ -580,10 +578,11 @@ Full = in the model and in the data; partial = a field exists but simplified; no
 | IKE/IPsec parameters, tunnel key | full | `SecurityIPsecProfile` (9 fields), `tunnel_key`, `tunnel_mode`, `endpoint_ip` on the tunnel |
 | DX allowed-prefix list | full | `allowed_prefixes` of the attachment `tgwa-c900-dxgw` (the VPC and the spoke accounts) |
 | Route filters | none | not modelled |
-| VNet peering, service endpoint (S3, PrivateLink) | full | `vnet-c900-weu-spoke` `peers` `vnet-c900-weu`; `vpce-c900-s3` (route), `vpce-c900-webex` (address) |
+| VNet peering (not transitive), service endpoint (S3, PrivateLink) | full | `vnet-c900-sandbox-weu` `peers` `vnet-c900-weu-spoke`; `vpce-c900-s3` (route), `vpce-c900-webex` (address) |
 | DX Gateway association with many TGW / VGW | full | several attachments with `peer_gateway` = the same gateway |
 | AWS spoke accounts on a shared transit gateway (cross-account attachments) | full | `c900-aws-payments`, `-analytics`, `-shared`: a VPC each, attached to `tgw-c900-euc1` of `c900-aws-prod` (`tgwa-c900-payments` and so on, `owner_account` = the spoke account), associated with and propagated into `rt-c900-prod`; their blocks are in the `allowed_prefixes` of `tgwa-c900-dxgw` |
-| Azure spoke subscriptions on the hub VNet (cross-subscription peering, gateway transit) | full | `c900-azure-payments`, `-analytics`, `-identity`: a VNet each that `peers` `vnet-c900-weu`; the `allowed_prefixes` of `ergwa-c900-weu` list the hub and every spoke block |
+| Azure Virtual WAN hub with spoke subscriptions (cross-subscription VNet connections) | full | `vwan-hub-c900-weu` (`hub`, AS 65515) in `c900-azure-prod`, its default route table `rt-c900-weu`; a VNet connection per VNet: the hub VNet `vnet-c900-weu`, `vnet-c900-weu-spoke` and the VNets of `c900-azure-payments`, `-analytics`, `-identity` (`vhuba-c900-payments` and so on, `owner_account` = the spoke subscription), associated with and propagated into `rt-c900-weu`; the ExpressRoute gateway is associated with the hub (`vhuba-c900-ergw`, `peer_gateway`), whose `allowed_prefixes` list the five VNet blocks. The same shape as the AWS transit gateway |
+| A subscription without transit | full | `c900-azure-sandbox`, footprint `C900-P-SANDBOX-AZURE-WESTEUROPE`, `vnet-c900-sandbox-weu` (10.211.0.0/16, segment `c900-sandbox-azure-p` 10.211.1.0/24): no gateway, no hub connection, only `peers` `vnet-c900-weu-spoke`; peering is not transitive, so it reaches the spoke and nothing behind it, and on-prem does not reach it |
 | Owner account of a SaaS resource | none | SaaS has no account; there are `owner` and `service_id` |
 
 ## Loading onto an isolated branch
@@ -605,65 +604,13 @@ The load is idempotent: every object is upserted by its
 human-friendly id, including the realization of a segment in a DC (`ManagedSegmentDeployment`, named by its segment and
 its deployment) and the VLAN row of a switch (named by its device and its VLAN id), so a second load updates what is there.
 The small script `tests/traversal/load_topology.py` (the data directory holds no code) runs that ordinary directory load;
-`invoke check-model` and the test `tests/integration/test_03_full_topology.py` use the same script.
+the test `tests/integration/test_03_full_topology.py` uses the same script.
 
-## Fast model test
+## Integration test
 
-Two entries, the same assertions (`tests/traversal/check_model.py`, case `full_topology`): `uv run invoke check-model`
-(a throwaway `tv-*` branch, nothing on `main`) and `uv run invoke test-integration-fast` (test_01 + test_02 +
-`test_03_full_topology.py`: it loads the sample on the `main` of the stack and runs these assertions; afterwards the
-stack with the sample stays when `INFRAHUB_TESTING_KEEP_STACK=1`).
-
-`uv run invoke check-model` loads the schema and this data (`tests/traversal/load_topology.py`) onto a throwaway branch,
-asks the server for paths (`utils/path_trace.py`, `traverse_paths`, chains `kind:hfid`) and checks the assertions and the
-golden files, in a few minutes (a blessing compared with the alternative). Description: `tests/traversal/README.md`.
-
-Assertions per pair (ends `src` and `dst`, `through` = the transports the target must be reachable through): L1 and L3
-reach the target, the equal-cost path set is complete, every chain crosses a transport (`CloudDirectConnect` or
-`CloudVPNConnection`), the circuit types on the chains of each transport (carriers in L1, session circuits in L3), the
-transport `dx-c900-fra-lag` holds a port, a bundle and a VIF, the reverse direction and the golden file (sorted
-chains). A negative pair gives a complete empty result (a test that expects nothing and can still fail, such is life). All object kinds non-empty (also `lag`) and the inventory
-(peering scope, AS, allowed prefixes) in a separate golden file. For the three sites (DC, colocation, office): each
-reaches INTERNET in L1 through its own access carrier (`sites`), and the data is laid out as the diagram describes
-(`layout`: the cloud carriers in the cage, the dark fibres DC - cage, the tunnels on the office edge, the panel jack to
-the Fabric port).
-
-## Walking the graph
-
-| Layer | Step | Edge |
-| ----- | ---- | ---- |
-| L1 | our edge port -> carrier circuit | `DcimInterface.capabilities` |
-| L1 | circuit -> port on the other side | `TopologyCarrierCircuit.capabilities` |
-| L1 | port -> transport | the port's `device` (`CloudDirectConnect`) |
-| L1 | port -> bundle | the port's `lag` (`lag__members`) |
-| L1 | port or bundle -> VIF | `sub_interfaces` of the port or bundle, or `CloudPeeringInterface(parent_interface__ids: [...])` |
-| L1 | VIF -> gateway -> attachments -> virtual network -> cloud segment | `gateway`, `CloudGatewayAttachment`, `virtual_network`, `network_segments` |
-| L1 | tunnel: our `Tunnel<n>` rides on the port of the internet carrier | `DcimVirtualInterface.parent_interface` |
-| L3 | sub-interface or routed port -> session circuit | `DcimInterface.capabilities` |
-| L3 | session circuit -> peering on the other side | `TopologySessionCircuit.capabilities` |
-| L3 | peering -> gateway (tunnel: the transport's gateway `CloudVPNConnection.gateway`) -> virtual network | `gateway`, `device.gateway` |
-
-```bash
-INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec \
-  uv run python utils/path_trace.py ManagedVxlanSegment:c900-web-p CloudNetworkSegment:c900-subnet-p [--layer l1|l3|both] [--max-paths 64] [--via <node>]
-```
-
-A node is `kind:hfid` (the HFID parts joined with `/`, only the last may contain `/`:
-`DcimPhysicalInterface:eg-fr201/Ethernet1/13`), `kind:name` or a bare name (refused when ambiguous; hints when there is
-no match). `--via X` is two independent traces, src -> X and X -> dst. The tool does not read the graph: one server
-`traverse_paths` per layer, with the list of kinds a path may cross (the table at the top of the file); it prints the
-equal-cost (ECMP) path set, then the longer alternatives. Server limits: depth 30, `max_paths` 1..100, a budget per call
-(when the forward search exhausts the budget it is repeated from the target). Exit code 1 when a leg has no path, and the shell will report it with the enthusiasm it always shows.
-
-The result (equal cost, `kind:hfid`) is in the golden files `tests/traversal/golden/full_topology__*.txt`, for example
-L1 from the cage to DX (`full_topology__colo__aws.txt`): `par-colo1-edge-01` -> port `Ethernet1/3` -> cable `CBL-PAR1-EDGE-AWS-A`
--> `EXT-AWS-DX-PAR/dxcon-1a` -> bundle `lag1` -> VIF `lag1.1100` -> transport -> gateway -> attachment -> virtual network -> cloud segment; and from
-the segment in the DC (`full_topology__c900-web-p__c900-subnet-p.txt`): segment -> port or bundle of the leaf
--> leaf -> spine -> border leaf -> carrier `ktw1-df10007-par1` (dark fibre) -> `par-colo1-edge-01` -> cable `CBL-PAR1-EDGE-AWS-A` ->
-`dxcon-1a` -> bundle `lag1` -> `lag1.1100`. The path to ExpressRoute goes through the port `Ethernet1/1` of the cage
-edge, through the panel (front, rear) to the Fabric port and the carrier `par1-eqx-7c1e9a2b-azure-90000000-0000-0000-0000-000000000002`. The VPN tunnels and the
-SaaS tunnels (Zscaler, office - DC) exist only in L3 (a session circuit); their internet carrier is checked by the case
-`internet` and the row about tunnel interfaces.
+`uv run invoke test-integration-fast` (test_01 + test_02 + `test_03_full_topology.py`) loads the sample on the `main`
+of a fresh test stack. With `INFRAHUB_TESTING_KEEP_STACK=1` the stack stays up afterwards with the sample on `main`,
+for a review.
 
 ## Pod, internet through the ISP and extra pairs
 
@@ -674,8 +621,8 @@ border leaves, border leaf 1 to the edge through jack 2 of the panel, border lea
 leaf-02 has the same `vlan_id` 100 as leaf-01. EVPN overlay: leaf-01/02 - spine - BL - edge. There are 5 L1 paths
 server -> edge: 4 through the spine and a border leaf (2 leaves x 1 spine x 2 BL) and 1 old direct connection
 leaf-01 -> panel -> edge from the base sample (every network has one legacy link nobody dares to remove). The leaves, spine and server are deployed to the pod `DC-KTW1-9-POD-1`
-(`TopologyPod`, design `S_MIDDLE`), the border leaves and the edge to DC-KTW1. Assertions: `walks.pod_rows`. DC-WAW1
-and DC-GDN1 have the same pod (`pods:` in `cases.yml`, one entry per DC) without the old direct link: 4 L1 paths server
+(`TopologyPod`, design `S_MIDDLE`), the border leaves and the edge to DC-KTW1. DC-WAW1
+and DC-GDN1 have the same pod without the old direct link: 4 L1 paths server
 -> edge, all through the spine, and both leaves peer only upwards (`leaves_to_edge` is empty).
 
 **DC hall** (suite `KTW1-SUITE-1`, 2 rows x 9 slots: the `S_MIDDLE` envelope, which `checks/suite_capacity.py` holds
@@ -693,7 +640,7 @@ for every pod that has racks; rows and slots are data, nothing generates them, t
 The panels are of type `lc-24`, each at U 42 on the front of its rack (above the devices; `position` and `rack_face` as on a
 device); the data declares only the used jacks (front n -> rear n): `PP-KTW1-01` 1 and 2, `PP-KTW1-02` 1
 and 2, `PP-KTW1-03` 1, `PP-KTW1-04` 1, and `add_patch_panel` builds the other ports of the type where it runs (the
-traversal stack of `check-model` runs no generator, so there a panel holds only its used jacks). The server's cable goes through two panels (port, cable, front and rear, cable, front
+sample alone runs no generator, so there a panel holds only its used jacks). The server's cable goes through two panels (port, cable, front and rear, cable, front
 and rear, cable, port), the other uplinks stay on direct cables (a panel everywhere would be art, not networking):
 
 ```text
@@ -711,7 +658,7 @@ and rear, cable, port), the other uplinks stay on direct cables (a panel everywh
 
 16 DC cables in total (there were 12: the two server cables were replaced by six; panels are how two cables become six). The leaf - spine - border leaf uplinks
 deliberately do not go through panels: an extra panel (3 nodes of depth) would level the shortest path leaf - spine - BL
-with the detour leaf-01 - panel - edge - BL, and the `--via` path set is to stay unambiguous (ambiguity is for novels, not for traces).
+with the detour leaf-01 - panel - edge - BL.
 
 Every physical device of ours stands in a rack with its unit: the DC devices as above (DC-WAW1 and DC-GDN1 the same
 layout), the cage `PAR-COLO1-RACK-01` holds the panel (U 42) and `par-colo1-edge-01` (U 40), the FRA and AMS cages
@@ -756,31 +703,10 @@ exchange through a firewall is not in the sample (the internet egress from the c
 the DC's, following the pattern `INET-LUMEN-EQXFR2` of 30_all and `INET-<office>` of `add_sdwan_edge`:
 `par-colo1-edge-01:Ethernet1/14` - `par1-ispb-77302-isp-b` - `EXT-ISP-B-PE1:et-0/0/1` and `bcn-office-edge-01:GE1` -
 `bcn-office-ispa-48212-isp-a` - `EXT-ISP-A-PE1:et-0/0/1`. Both ISP routers already have an uplink to `INTERNET:bus` (rule I3), so
-each of the three sites reaches INTERNET in L1 (the assertion `sites` in `cases.yml`: the carriers of every chain are
-exactly the site's access and the router's uplink). Many carriers on one `bus` are allowed by interface kind; the
+each of the three sites reaches INTERNET in L1 through exactly its own access and the router's uplink. Many carriers on one `bus` are allowed by interface kind; the
 accesses of the cage and the office are NOT INTERNET attachments (an attachment is an ISP uplink or the public side of a
-service), so `internet:` in `cases.yml` still has four attachments. For these two accesses there are /31 addresses in the
+service), so THE INTERNET still has four attachments. For these two accesses there are /31 addresses in the
 `INTERNET` space, but no eBGP session (L3 has only the first ISP from the DC).
-
-**Pairs between the sites and to the cloud** (`cases.yml`, files `full_topology__office__*`, `__colo__*`, `__lis__*`,
-`__bcn__*`): office - DC, office - colocation, colocation - DC, the second office - DC, an access point - its edge, office - AWS (L1
-through the internet and the cage to Direct Connect, L3 through the tunnel and AWS VPN), colocation - AWS (directly, one
-`cross_connect` carrier) and colocation - ExpressRoute (the panel of the patch panel and the Fabric port,
-`virtual_connection` carriers). The assertion `layout` reads the data: every cloud and SaaS carrier starts on a device of
-the cage, never in the DC; the dark fibres join the DC and the cage; every tunnel ends on the office edge; the cage edge
-reaches the Fabric port through one jack of a panel. For pairs from a tenant segment the equal-cost path set is large
-(three start ports, two border leaves, two variants of the BGP hop): the pair asks for `max_paths: 100` (the server
-limit), and the sessions without ports (only overlay processes) keep the set under the limit (a diet for path sets). The `dci` circuit
-(`ktw1-dci-a-par1`) is not on the shortest L3 chain (the chain goes through the BGP processes and the EVPN peering), so the
-L3 circuit types on the DC - cloud chains are `handoff`, not `dci`.
-
-**Extra pairs** (`cases.yml`): the VPN tunnels only (`via: [CloudVPNConnection]`: 2 L1 legs through the internet
-carrier, 2 L3 legs of type `vpn`, no handoff), SaaS Webex (cross-connect + handoff) and Zscaler (a tunnel on the
-internet carrier, a `tunnel` circuit without a session), cloud <-> cloud (a segment in the network `vnet-c900-weu-spoke`
-reached through `peers` of the ExpressRoute hub) and one negative pair (a segment in a VPC without an attachment: exactly
-`L1: no physical path found` and `L3: no routed path found` are expected). R5 is two-sided: a crypto profile only with
-IPsec and always with IPsec (a GRE tunnel has no profile). Azure ExpressRoute: a `logical` circuit without
-`partner_account` is correct (the provider is the carrier's `provider`), so there is no new rule (a rare victory for restraint).
 
 **Clusters** (`10_topology/DC-*/01_physical/03_servers_and_clusters_*`, `20_C900/Cloud/05_clusters`): one cluster model, three vendors on
 purpose. Each DC has extra servers (cabled straight to the leaf pair) and a cluster, `ktw1-vsphere-cl01` (vSphere, three
@@ -790,8 +716,7 @@ frontends of KTW1 stand on different hosts, which is the anti-affinity rule. On 
 an on-prem RKE2 cluster of five VMs whose three control plane nodes stand on three hosts (the quorum rule). Outside our racks:
 `mpc-c900-par`, a vSphere cluster that Equinix runs for C900 (Managed Private Cloud, four hosts in the Paris IBX, in the new
 account `c900-equinix-prod`), `eks-c900-euc1` (EKS on `vpc-c900-prod`, nodes in `c900-subnet-p`) and `aks-c900-weu` (AKS in the
-payments subscription, nodes in `c900-payments-azure-p`). `checks/cluster.py` (rules CL1 to CL7) judges them; the inventory
-golden lists them. The Equinix cluster has no VM and no Fabric connection to the cage yet.
+payments subscription, nodes in `c900-payments-azure-p`). `checks/cluster.py` (rules CL1 to CL7) judges them. The Equinix cluster has no VM and no Fabric connection to the cage yet.
 
 **Virtual switches and SDNs** (`20_C900/DC-*/03_tenant`): each cluster has a virtual switch, a distributed switch in KTW1, a
 Linux bridge in WAW1 and an Open vSwitch in GDN1, with the host bond and the single ports as uplinks, a port group per tenant
@@ -809,8 +734,7 @@ pair (`C9300-48UXM_ACCESS_SWITCH`, role `access-switch`), and every access switc
 (`C9130AXI-B_AP`, role `access-point`, `eth0` to `TenGigabitEthernet1/0/1-2`). The role `access-point` is new in the
 schema (the template used to call an AP a `controller`, which it is not). It is inventory only: the office fabric generator
 (`add_office_fabric`) is not run here, so there is no LISP site, no VRF, no address and no wifi. In the rack the switches sit
-below the edge (U 39 down in Barcelona, U 38 down in Lisbon); the access points are ceiling devices without a rack. L1 from an
-access point to its edge is a traced pair (`full_topology__bcn__campus.txt`, `full_topology__lis__campus.txt`).
+below the edge (U 39 down in Barcelona, U 38 down in Lisbon); the access points are ceiling devices without a rack.
 
 **The second office, Lisbon** (`21_C901/Office`): the customer is C901
 (`Lusitana Retail Lda`, `21_C901/00_identity/01_customers_00_01_OrganizationCustomer.yml`),
@@ -820,8 +744,7 @@ Portugal is declared next to its metro, since the bootstrap countries stop at Sp
 edge 2 has `lis-office-ispb-77303-isp-b` to `EXT-ISP-B-PE1:et-0/0/2`. Each edge has `Tunnel1` on `GE1` and a `tunnel` circuit to the
 DC edge (`lis-office-tunnel-a-ktw1` to `Tunnel5`, `lis-office-tunnel-b-ktw1` to `Tunnel6` of `ktw1-edge-01`, which rides on the same
 ISP-A access as the other tunnels). The tunnels of C901 end on C901's edges and the owner is derived; nothing links the two customers.
-There is no Zscaler tunnel for Lisbon, because the Zscaler transport belongs to C900. The traversal config checks each edge reaches
-THE INTERNET through its own access (`office-lisbon-1`, `office-lisbon-2`) and the first edge reaches the DC (`full_topology__lis__dc.txt`).
+There is no Zscaler tunnel for Lisbon, because the Zscaler transport belongs to C900.
 
 **Office, its edge and the tunnels** (`20_C900/Office`, `90_bindings/60_offices/C900/Office`):
 the office has its own SD-WAN edge `bcn-office-edge-01` (template
@@ -863,29 +786,12 @@ office - Zscaler tunnel.
 - A `rides_on` loop onto itself: the server accepts it, but the read returns an empty `rides_on` (and deletes the previous
   edge), so check R3 sees loops of at least two objects. The input guards it: the unit test
   `tests/unit/test_cloud_demo_data.py` rejects a `rides_on` onto itself in the YAML files (it does not protect changes
-  from the API or the UI), and `check-model` verifies that every `rides_on` of the data is in the graph.
+  from the API or the UI).
 - The `parent_interface` of a peering (the `DcimSubInterface` marker, the same edge as a device sub-interface) has no
   `common_parent`, so the server does not hold that the parent is on the same transport (the bundle and its members:
   the server holds them): that is `checks/interface_parents.py` (rule 1). The first peering on a partner transport's port
   passes the schema (the schema was not asked to look).
 - The BGP sessions of the cloud legs are manual (artisanal, small batch); nothing allocates a /31 or an AS for a circuit whose end is a cloud
   peering.
-- A VXLAN segment has its prefix in `gateway.ip_prefix`, a cloud segment in `cidr_block` (text): the script treats them
-  differently.
 - A port carries a segment as a member of the segment's deployment (`90_bindings/96_segment_ports`, one list per
-  deployment): the script reads the deployments among each port's `capabilities`.
-
-## The far ends, one shortest path each (`reachability`, `invoke check-model --reach`)
-
-The pairs above assert the exact chains: the whole equal-cost set, the goldens, the circuit types per transport. That is
-what takes the time (a pair from a tenant segment to the cloud is 130 to 190 seconds of the server counting every
-combination of two leaves, two spines and two border leaves; the tracer needs 36 seconds for one such leg with
-`max_paths: 100` and 6 with `1`). So a second section asks only the question that matters to a user: can this end
-reach that one. The ends are where somebody or something sits: the three VMs, the three office edges (an access point
-has no address and no routing, so for L3 its office is the edge), four cloud segments, and for L1 the two access points, the VM
-and the cloud segments towards THE INTERNET. L3 is the full mesh of the ten ends (45 traces). L1 is a list of pairs; the
-tracer searches 30 nodes deep, so a long one goes through a waypoint (`via`): server to access point and access point to
-access point over THE INTERNET, access point and server to the AWS segment through the cage. It costs one shortest path per
-pair, a minute or two for the lot, and fails a row for the pair that has none. It replaced seven pairs that only asked
-the same question from another start (the two spoke accounts, the three `* - INTERNET` sites that the `sites` rows already
-judge, the VM - AWS and the second DC - AWS), which is why they have no golden any more.
+  deployment).

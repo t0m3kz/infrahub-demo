@@ -101,8 +101,7 @@ class TestSegmentPolicy:
 class TestEnsureSegmentIsolationMode:
     """isolation_mode used to be hand-authored per segment (only one demo
     example, data/demos/30_all/07_applications/c005/00_segments.yml); this
-    derives it from the segment's owning application's security_profile,
-    same shape as VxlanSegmentGenerator's security_zone derivation."""
+    derives it from the segment's owning application's security_profile."""
 
     def test_derives_microsegmented_for_fintech_strict(self):
         gen = _make_gen()
@@ -804,64 +803,6 @@ class TestRuleCreationFailure:
                     port=("tcp", 8443, None),
                 )
             )
-
-
-class TestEnsureSegmentZones:
-    """Zones are set on every kind and recorded in the dict before rules are planned."""
-
-    @staticmethod
-    def _segment(typename: str = "ManagedVxlanSegment", **extra: Any) -> dict[str, Any]:
-        return {"id": "seg-1", "name": "seg-1", "typename": typename, "environment": "p", **extra}
-
-    @staticmethod
-    def _gen() -> Any:
-        gen = _make_gen()
-        gen.client = MagicMock()
-        gen.client.filters = AsyncMock(return_value=[MagicMock(id="zone-1")])
-        obj = MagicMock()
-        obj.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=obj)
-        return gen
-
-    def test_zone_is_recorded_in_the_segment_dict(self) -> None:
-        """The first run sees the zone it just wrote, so same-zone flows are not cross-zone."""
-        gen = self._gen()
-        segment = self._segment()
-
-        asyncio.run(gen._ensure_segment_zones([segment]))
-
-        assert segment["security_zone"]["name"] == "PROD"
-        assert RulesPlanner.zone_context(segment, dict(segment))[2] is False
-        assert gen.client.create.call_args.kwargs["kind"] == "ManagedVxlanSegment"
-
-    def test_cloud_segment_is_zoned_with_its_own_kind(self) -> None:
-        gen = self._gen()
-
-        asyncio.run(gen._ensure_segment_zones([self._segment("CloudNetworkSegment")]))
-
-        assert gen.client.create.call_args.kwargs["kind"] == "CloudNetworkSegment"
-
-    def test_second_pass_writes_nothing(self) -> None:
-        gen = self._gen()
-        segments = [self._segment()]
-
-        asyncio.run(gen._ensure_segment_zones(segments))
-        asyncio.run(gen._ensure_segment_zones([self._segment(security_zone={"name": "PROD"})]))
-
-        assert gen.client.create.await_count == 1
-
-    def test_component_without_a_segment_is_skipped(self) -> None:
-        gen = self._gen()
-
-        asyncio.run(gen._ensure_segment_zones([{}]))
-
-        gen.client.create.assert_not_awaited()
-
-    def test_segment_without_typename_fails_instead_of_guessing_a_kind(self) -> None:
-        gen = self._gen()
-
-        with pytest.raises(ValueError, match="typename"):
-            asyncio.run(gen._ensure_segment_zones([{"id": "seg-1", "environment": "p"}]))
 
 
 class TestReconcileSegmentRuleEarlyExits:

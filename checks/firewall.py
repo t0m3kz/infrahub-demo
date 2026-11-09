@@ -16,8 +16,7 @@ class CheckFirewall(InfrahubCheck):
     into them, per context). Every rule lives in its source segment's policy,
     so a rule whose source is another segment is an error, as is a rule with
     no destination (segment, prefix, IP or the internet zone). A rule's zone is its
-    segment's security_zone; a segment without one is an error, since
-    zone-based firewalls then match any zone on that side. A rule to a
+    segment's security_zone (mandatory in the schema). A rule to the
     internet zone must not be apply_on_switch. Its exchange legs
     (checks/common.py validate_exchange_gateways), SNAT addresses
     (validate_snat_addresses) and the members of its contexts (validate_context_members: exactly
@@ -79,12 +78,3 @@ class CheckFirewall(InfrahubCheck):
                     "force the whole ACL of a firewalled segment onto the switch"
                 )
             )
-        for side, segment in (("source", source), ("destination", destination)):
-            if segment.get("id") and not segment.get("security_zone"):
-                self.log_error(
-                    message=(
-                        f"Policy '{policy_name}' rule '{rule_name}': {side}_segment "
-                        f"'{segment.get('name', segment.get('id'))}' has no security_zone — zone-based "
-                        "firewalls match any zone on that side"
-                    )
-                )

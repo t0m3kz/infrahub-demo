@@ -1,7 +1,9 @@
 # The firewalls of a hosting deployment and what their contexts' legs derive from: the contexts they are a member of and
 # their interfaces (utils/service_contexts.py contexts_with_legs).
 fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
-  devices(role__value: "internal-firewall") {
+  # Both firewall roles: a footprint with no internal context is steered to its Internet edge one
+  # (transforms/helpers/firewall_contexts.py _steering_only).
+  devices(role__values: ["internal-firewall", "external-firewall"]) {
     edges {
       node {
         __typename
@@ -76,11 +78,15 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
   context_id {
     value
   }
-  # The devices that enforce the context: checks/common.py validate_context_members holds them to one HA pair.
+  # The devices that enforce the context: checks/common.py validate_context_members holds them to one HA pair. Their
+  # role is the context's (an Internet edge context stands on an external-firewall pair).
   shared_devices {
     edges {
       node {
         name {
+          value
+        }
+        role {
           value
         }
       }
@@ -173,30 +179,53 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
       node {
         id
         ... on TopologyCustomerDC {
-          parent {
-            node {
-              id
-              ... on TopologySegmentHosting {
-                internet_edge_contexts {
+          name {
+            value
+          }
+          network_segments {
+            edges {
+              node {
+                id
+                ...ContextServedSegmentFields
+              }
+            }
+          }
+          # Every context the footprint lists, with its members' role: the share of the footprint's rules each one
+          # holds follows from the list (utils/firewall_split.py), and an Internet edge translates a footprint with a
+          # dedicated internal context to that context's public address.
+          serving_firewall_contexts {
+            edges {
+              node {
+                id
+                tenant {
+                  node {
+                    id
+                  }
+                }
+                snat_address {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
+                shared_devices {
                   edges {
                     node {
-                      id
+                      role {
+                        value
+                      }
                     }
                   }
                 }
               }
             }
           }
-          network_segments {
-            edges {
-              node {
-                id
-                ...ContextServedSegmentFields
-              }
-            }
-          }
         }
         ... on TopologyCustomerColocation {
+          name {
+            value
+          }
           network_segments {
             edges {
               node {
@@ -205,48 +234,30 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
               }
             }
           }
-        }
-      }
-    }
-  }
-  internet_edge_hostings {
-    edges {
-      node {
-        id
-        ... on TopologyDataCenter {
-          children {
+          # Every context the footprint lists, with its members' role: the share of the footprint's rules each one
+          # holds follows from the list (utils/firewall_split.py), and an Internet edge translates a footprint with a
+          # dedicated internal context to that context's public address.
+          serving_firewall_contexts {
             edges {
               node {
                 id
-                ... on TopologyCustomerDC {
-                  name {
-                    value
+                tenant {
+                  node {
+                    id
                   }
-                  environment {
-                    value
-                  }
-                  network_segments {
-                    edges {
-                      node {
-                        id
-                        ...ContextServedSegmentFields
-                      }
+                }
+                snat_address {
+                  node {
+                    address {
+                      value
                     }
                   }
-                  serving_firewall_context {
+                }
+                shared_devices {
+                  edges {
                     node {
-                      id
-                      tenant {
-                        node {
-                          id
-                        }
-                      }
-                      snat_address {
-                        node {
-                          address {
-                            value
-                          }
-                        }
+                      role {
+                        value
                       }
                     }
                   }

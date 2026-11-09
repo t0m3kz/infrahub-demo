@@ -1,11 +1,11 @@
 # ManagedFirewallContext declarations in recursive dependency order.
 # The firewall contexts of DC-KTW1, one per environment of C900 (production):
-#   shared-ktw1-fw-ha-prod   on the internal pair; C900's east-west context (the footprint names it, below). It has a
-#                            leg in PROD only: the DC has an Internet edge, so it keeps no INTERNET leg and no public
-#                            address.
-#   shared-ktw1-xfw-ha-prod  on the external pair; the Internet edge of the DC (internet_edge_hostings), with a PROD leg
-#                            and an INTERNET leg, joined by the routed exchange below, and the public address (SNAT) the
-#                            traffic of the shared customers leaves with.
+#   shared-ktw1-fw-ha-prod   on the internal pair; C900's east-west context (the footprint lists it, 90_bindings). It
+#                            has a leg in PROD only: the DC has an Internet edge, so it keeps no INTERNET leg and no
+#                            public address.
+#   shared-ktw1-xfw-ha-prod  on the external pair; the Internet edge of the DC (the footprint lists it too), with a PROD
+#                            leg and an INTERNET leg, joined by the routed exchange below, and the public address (SNAT)
+#                            the traffic of the shared customers leaves with.
 # The transit VLAN of a leg is the context's vlan_id plus the slot of its VRF (utils/exchange_transit.py: PROD 0,
 # INTERNET 400). A context's legs (03_legs.yml: the sub-interfaces of each member's first uplink tagged with a transit
 # VLAN) and the firewall ports of the border leaves that face its pair are derived, never listed on the context
@@ -24,7 +24,6 @@ spec:
       deployment: DC-KTW1
       shared_devices: [ktw1-xfw-01, ktw1-xfw-02]
       vlan_id: 3001
-      internet_edge_hostings: ["DC-KTW1"]
       snat_address:
         data:
           address: "192.0.2.20/32"

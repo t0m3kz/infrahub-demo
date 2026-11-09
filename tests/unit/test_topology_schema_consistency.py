@@ -298,9 +298,10 @@ class TestRelationshipIdentifiers:
         assert owners == []
         assert "serving_zone" not in _relationship_names("TopologyCustomerColocation")
 
-    def test_serving_firewall_context_is_one_on_a_dc_and_many_on_a_colocation_footprint(self) -> None:
-        """Declared per kind, never on ManagedTenantScoped: a DC footprint has the one context serving it, a colocation
-        footprint one per zone of its metro. Both share the identifier of the context's served_deployments."""
+    def test_every_footprint_with_a_firewall_service_lists_its_firewall_contexts(self) -> None:
+        """Declared per kind, never on ManagedTenantScoped: a DC and a colocation footprint list every firewall
+        context that enforces their policy, internal and Internet edge alike (many), on the identifier of the
+        context's served_deployments. No hosting names an Internet edge any more."""
         ha = _document(_SCHEMAS / "extensions" / "capabilities" / "ha.yml")
         extensions = {e["kind"]: e for e in ha["extensions"]["nodes"]}
         served = next(r for r in _kind("ManagedFirewallContext")["relationships"] if r["name"] == "served_deployments")
@@ -308,23 +309,20 @@ class TestRelationshipIdentifiers:
         def relationship(kind: str, name: str) -> dict[str, Any]:
             return next(r for r in extensions[kind]["relationships"] if r["name"] == name)
 
-        dc = relationship("TopologyCustomerDC", "serving_firewall_context")
-        colocation = relationship("TopologyCustomerColocation", "serving_firewall_contexts")
-
-        assert (dc["cardinality"], dc["optional"], dc["peer"]) == ("one", True, "ManagedFirewallContext")
-        assert (colocation["cardinality"], colocation["optional"], colocation["peer"]) == (
-            "many",
-            True,
-            "ManagedFirewallContext",
-        )
-        assert dc["identifier"] == colocation["identifier"] == served["identifier"]
+        for kind in ("TopologyCustomerDC", "TopologyCustomerColocation"):
+            listed = relationship(kind, "serving_firewall_contexts")
+            assert (listed["cardinality"], listed["optional"], listed["peer"]) == (
+                "many",
+                True,
+                "ManagedFirewallContext",
+            )
+            assert listed["identifier"] == served["identifier"]
+            assert "serving_firewall_context" not in {r["name"] for r in extensions[kind]["relationships"]}
+            assert {"ManagedTenantScoped"} <= set(_kind(kind)["inherit_from"])
         assert "ManagedTenantScoped" not in extensions
-        assert {r["name"] for r in extensions["TopologyCustomerDC"]["relationships"]} >= {"serving_firewall_context"}
-        assert "serving_firewall_context" not in {
-            r["name"] for r in extensions["TopologyCustomerColocation"]["relationships"]
-        }
-        assert {"ManagedTenantScoped"} <= set(_kind("TopologyCustomerColocation")["inherit_from"])
-        assert {"ManagedTenantScoped"} <= set(_kind("TopologyCustomerDC")["inherit_from"])
+        hosting = {r["name"] for r in extensions["TopologySegmentHosting"]["relationships"]}
+        assert "internet_edge_contexts" not in hosting
+        assert "internet_edge_hostings" not in {r["name"] for r in _kind("ManagedFirewallContext")["relationships"]}
 
     def test_footprint_segments_are_declared_per_kind_with_a_concrete_peer(self) -> None:
         """The segments of a DC, colocation and office footprint are VXLAN only and a cloud footprint's are

@@ -36,6 +36,9 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
     # A footprint with no hosting facility (a colocation metro without a zone) simply has no
     # contexts: an info log. A required one (a DC footprint's DC) that is missing is an error.
     _parent_required: bool = True
+    # Whether the footprint's segments terminated on a firewall context follow its internal context when it moves
+    # (a DC footprint: checks/segment_placement.py holds terminations to DC footprints only).
+    _relinks_terminated_segments: bool = False
 
     # Provided by DeviceMixin.
     if TYPE_CHECKING:
@@ -128,13 +131,14 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
                     complete = False
                 else:
                     served.append(context_id)
-                    if spec == FIREWALL_CONTEXT and not self._serving_many:
+                    if spec == FIREWALL_CONTEXT and self._relinks_terminated_segments:
                         await self._relink_terminated_segments(customer_id, context_id)
                     await self._reconcile_border_vrfs(target, context_id)
-            # A single serving link is replaced by link_serving_context; a many one is converged here. Only a run
-            # that built every context it set out to may drop a link (a failed one raises under the generator
-            # logger before this point).
-            if self._serving_many and complete:
+            # A single serving link is replaced by link_serving_context; a many one is converged here, per spec: the
+            # firewall list holds the internal and the Internet edge contexts, each spec drops only links of its
+            # own role (serving_context_ids). Only a run that built every context it set out to may drop a link (a
+            # failed one raises under the generator logger before this point).
+            if spec.serving_many and complete:
                 await self.unlink_stale_serving_contexts(
                     spec,
                     customer_id=customer_id,

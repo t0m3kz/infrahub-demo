@@ -8,6 +8,7 @@ spec:
     - owner: "C900"
       customer_name: "subnet"
       environment: "p"
+      security_zone: "PROD"
       segment_type: "cloud_subnet"
       virtual_network: "vpc-c900-prod"
       availability_zone: ["eu-central-1", "eu-central-1a"]

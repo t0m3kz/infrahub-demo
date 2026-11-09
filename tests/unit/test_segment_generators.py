@@ -37,16 +37,10 @@ import pytest
 from generators.logger import GeneratorError
 from generators.protocols import ManagedSegmentDeployment
 from generators.topology.segment import VxlanSegmentGenerator
-from tests.unit import segment_generators_helpers
 from tests.unit.query_shape_helpers import query_tree
 from tests.unit.segment_generators_helpers import _DEP_1, _DEP_2, _make_gen, _seg_response
-from utils.data_cleaning import clean_data
 from utils.graphql_queries import load_query
 from utils.limits import STRETCHED_VNI_POOL
-
-# Autouse fixture, re-exported so pytest registers it in this module.
-ensure_zone = segment_generators_helpers.ensure_zone
-
 
 # ===========================================================================
 # TestVxlanSegmentGeneratorGenerate
@@ -269,39 +263,6 @@ class TestVxlanSegmentGeneratorGenerate:
             "name": "DC1-VNI-Pool",
         }
 
-    def test_zone_helper_gets_the_segments_own_kind_environment_and_zone(self, ensure_zone: AsyncMock) -> None:
-        """The kind is the segment's real typename and the environment is its own."""
-        gen = _make_gen()
-        gen._activate_segment_in_deployment = AsyncMock()
-
-        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
-        node = data["ManagedVxlanSegment"]["edges"][0]["node"]
-        node["environment"] = {"value": "d"}
-        node["security_zone"] = {"node": {"name": {"value": "NONPROD"}}}
-        asyncio.run(gen.generate(data))
-
-        ensure_zone.assert_awaited_once_with(gen.client, clean_data(data)["ManagedVxlanSegment"][0])
-
-    def test_missing_environment_is_not_defaulted_to_production(self, ensure_zone: AsyncMock) -> None:
-        """No environment reaches the helper as None, which fails closed there."""
-        gen = _make_gen()
-        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[])
-        del data["ManagedVxlanSegment"]["edges"][0]["node"]["environment"]
-        asyncio.run(gen.generate(data))
-
-        assert ensure_zone.call_args.args[1].get("environment") is None
-
-    def test_zone_helper_failure_stops_the_run(self, ensure_zone: AsyncMock) -> None:
-        """A zone that cannot be set is not logged away: the run fails."""
-        ensure_zone.side_effect = LookupError("Security zone PROD not found")
-        gen = _make_gen()
-        gen._activate_segment_in_deployment = AsyncMock()
-
-        with pytest.raises(LookupError):
-            asyncio.run(gen.generate(_seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])))
-
-        gen._activate_segment_in_deployment.assert_not_awaited()
-
     def test_segment_tag_helper_gets_the_segment_before_any_activation(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The group tag is ensured once per run, with the run's lock, before a deployment is activated."""
         order: list[str] = []
@@ -378,15 +339,6 @@ class TestVxlanSegmentGeneratorGenerate:
         assert {"name", "vrf_type", "l3_vni"} <= set(
             fields["ManagedVxlanSegment"]["edges"]["node"]["security_zone"]["node"]
         )
-
-    def test_zone_runs_even_when_no_deployments_resolved(self, ensure_zone: AsyncMock) -> None:
-        """Zone classification is a property of the segment itself, not of
-        whether its hosting parent could be resolved."""
-        gen = _make_gen()
-        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[])
-        asyncio.run(gen.generate(data))
-
-        ensure_zone.assert_awaited_once()
 
 
 # ===========================================================================

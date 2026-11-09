@@ -187,9 +187,9 @@ def is_exchange_zone(zone: str | None) -> bool:
 
     The one exchange-zone predicate. A segment in an exchange zone is a shared
     service by design (e.g. the DC-local MANAGEMENT services), so its zone is
-    authored data, not f(environment): ensure_security_zone keeps it, the
-    segment_security check exempts it from the environment rules, RulesPlanner
-    governs its flows by EXCHANGE_PEERS, and it is never a routed tenant segment.
+    authored data, not f(environment): the segment_security check exempts it
+    from the environment rules, RulesPlanner governs its flows by
+    EXCHANGE_PEERS, and it is never a routed tenant segment.
     """
     return zone in exchange_peer_zones()
 

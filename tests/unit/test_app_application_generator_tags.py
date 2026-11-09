@@ -201,12 +201,11 @@ class TestSegmentTags:
         frontend["network_segment"] = _tenant(frontend["network_segment"], tag_id)
         return _app(frontend)
 
-    def test_component_and_edge_target_segments_are_tagged_after_zones_before_rules(self) -> None:
+    def test_component_and_edge_target_segments_are_tagged_before_rules(self) -> None:
         """The application run gives each segment it touches its group tag and its routing tag, the edge
         target's segment included."""
         gen = self._gen()
         order: list[str] = []
-        gen._ensure_segment_zones = AsyncMock(side_effect=lambda segments: order.append("zones"))
         gen._reconcile_segment_rule = AsyncMock(side_effect=lambda **kw: order.append("rule") or (True, False))
         ensure = AsyncMock(side_effect=lambda client, lock, *, segment: order.append(f"tag {segment['id']}"))
         routing = AsyncMock(side_effect=lambda client, *, segment: order.append(f"routing {segment['id']}"))
@@ -217,7 +216,7 @@ class TestSegmentTags:
         ):
             asyncio.run(gen._reconcile_application_rules(self._app_on_tenant_segments()))
 
-        assert order == ["zones", "tag seg-src", "routing seg-src", "tag seg-dst", "routing seg-dst", "rule"]
+        assert order == ["tag seg-src", "routing seg-src", "tag seg-dst", "routing seg-dst", "rule"]
         assert all(call.args == (gen.client, gen.resource_lock) for call in ensure.await_args_list)
         assert all(call.args == (gen.client,) for call in routing.await_args_list)
 

@@ -1,0 +1,13 @@
+---
+# A sandbox subscription of C900 with no transit: its VNet peers one spoke VNet directly and has no hub connection
+# and no gateway (07_sandbox_01_00_CloudVirtualNetwork.yml), so it reaches that spoke and nothing behind it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "c900-azure-sandbox"
+      account_id: "90000000-0000-0000-0000-000000000021"
+      environment: "p"
+      provider: "P005"
+      owner: "C900"

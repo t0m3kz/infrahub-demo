@@ -13,9 +13,6 @@ def _make_gen() -> Any:
     gen.client = AsyncMock()
     gen._init_client = AsyncMock()
     gen.logger = MagicMock()
-    # Zone assignment has its own tests (test_segment_firewall_mixin.py,
-    # test_security_zone_helper.py) - stubbed at the boundary here.
-    gen._ensure_segment_zones = AsyncMock()
     return gen
 
 

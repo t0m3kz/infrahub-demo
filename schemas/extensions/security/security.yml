@@ -455,11 +455,14 @@ extensions:
           order_weight: 907
           identifier: policyrule_destination_segment
           description: "Policy rules whose destination is this segment"
+        # Mandatory: every segment, VXLAN or cloud, names its routing domain when it is created (a tenant segment the
+        # zone of its environment, PROD or NONPROD; a shared service segment its exchange zone). Nothing fills it in
+        # afterwards.
         - name: security_zone
           peer: SecurityZone
           cardinality: one
           kind: Attribute
-          optional: true
+          optional: false
           order_weight: 902
           description: "Authoritative routing domain and independent trust classification for this segment"
           identifier: network_segment__security_zone

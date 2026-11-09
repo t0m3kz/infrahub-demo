@@ -3,6 +3,12 @@ fragment InternetEgressContext on ManagedFirewallContext {
   name {
     value
   }
+  # A dedicated context (tenant set) behind an Internet edge needs its own public address (checks/internet_egress.py).
+  tenant {
+    node {
+      id
+    }
+  }
   vlan_id {
     value
   }

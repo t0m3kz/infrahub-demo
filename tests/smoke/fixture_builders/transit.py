@@ -486,14 +486,23 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
+def _footprint_context(context_id: str, role: str, *, tenant: str | None, snat: str | None) -> dict:
+    """A context of a footprint's ``serving_firewall_contexts``: its members' role, tenant and public address."""
+    return {
+        "id": context_id,
+        "tenant": _node({"id": tenant} if tenant else None),
+        "snat_address": _node({"address": _v(snat)} if snat else None),
+        "shared_devices": _edges([{"role": _v(role)}, {"role": _v(role)}]),
+    }
+
+
 def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dict:
     """An external-firewall member carrying the Internet edge context of a DC (PROD).
 
-    The context has a PROD and an INTERNET leg and names the DC (``internet_edge_hostings``) whose footprints it serves:
-    C005 on a shared context (seg-a, 10.1.0.0/24, a rule to the internet and one to seg-b) and C006 on a dedicated one
+    The context has a PROD and an INTERNET leg and serves the DC's footprints (``served_deployments``), each of which
+    lists it next to its internal context (``serving_firewall_contexts``): C005 on a shared context (seg-a, 10.1.0.0/24, a rule to the internet and one to seg-b) and C006 on a dedicated one
     with its own public address 198.51.100.9 (seg-b, 10.2.0.0/24, a rule to the internet and one from it). The edge
-    holds the three internet rules only, both directions; the east-west rule stays on the internal pair. A pod of the
-    DC carries no segments.
+    holds the three internet rules only, both directions; the east-west rule stays on the internal pair.
     """
     from tests.smoke.fixture_builders.firewall import (  # noqa: PLC0415 - firewall.py imports this module's package
         _make_policy_header,
@@ -545,7 +554,12 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
             "name": _v("C005-P-DC10"),
             "environment": _v("p"),
             "network_segments": _edges([served(seg_a)]),
-            "serving_firewall_context": _node({"id": "ctx-shared", "tenant": _node(None), "snat_address": _node(None)}),
+            "serving_firewall_contexts": _edges(
+                [
+                    _footprint_context("ctx-shared", "internal-firewall", tenant=None, snat=None),
+                    _footprint_context("ctx-edge", "external-firewall", tenant=None, snat="198.51.100.5/32"),
+                ]
+            ),
         },
         {
             "id": "fp-c006",
@@ -553,15 +567,13 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
             "name": _v("C006-P-DC10"),
             "environment": _v("p"),
             "network_segments": _edges([served(seg_b)]),
-            "serving_firewall_context": _node(
-                {
-                    "id": "ctx-c006",
-                    "tenant": _node({"id": "fp-c006"}),
-                    "snat_address": _node({"address": _v("198.51.100.9/32")}),
-                }
+            "serving_firewall_contexts": _edges(
+                [
+                    _footprint_context("ctx-c006", "internal-firewall", tenant="fp-c006", snat="198.51.100.9/32"),
+                    _footprint_context("ctx-edge", "external-firewall", tenant=None, snat="198.51.100.5/32"),
+                ]
             ),
         },
-        {"id": "pod-1", "__typename": "TopologyPod"},
     ]
     cap = {
         "__typename": "ManagedFirewallContext",
@@ -570,9 +582,11 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
         "vlan_id": _v(3002),
         "context_id": _v(None),
         "tenant": _node(None),
-        "served_deployments": _edges([]),
+        "served_deployments": _edges(footprints),
         "snat_address": _node({"address": _v("198.51.100.5/32")}),
-        "internet_edge_hostings": _edges([{"id": "dc-10", "children": _edges(footprints)}]),
+        "shared_devices": _edges(
+            [{"name": _v(name), "role": _v("external-firewall")} for name in (device_name, f"{device_name}-peer")]
+        ),
     }
     interfaces = []
     for ns_type, prefix in (("prod", "100.66.0.16/29"), ("internet", "100.66.32.16/29")):

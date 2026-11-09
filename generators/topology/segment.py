@@ -51,7 +51,6 @@ from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..helpers.routing_tag import ensure_segment_routing_tag
 from ..helpers.security_tag import ensure_segment_tag
-from ..helpers.security_zone import ensure_segment_security_zone
 from ..pools import PoolMixin
 from ..protocols import (
     ManagedSegmentDeployment,
@@ -111,9 +110,6 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, Common
 
         self.logger.info(f"Processing segment: {segment_name}")
 
-        # The segment's macro trust zone (PROD/NONPROD) from its own
-        # environment; unlocks the cross-zone branch in RulesPlanner.zone_context.
-        await ensure_segment_security_zone(self.client, segment)
         await self.ensure_segment_addressing(segment)
         # The segment's group tag (a routed tenant segment only), before any
         # segment lock is taken: the helper takes its own.

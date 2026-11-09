@@ -1,7 +1,7 @@
 # CloudNetworkSegment declarations in recursive dependency order.
-# Two more cloud segments for the extra pairs of the traversal check. The spoke segment sits in the Azure spoke VNet,
-# which only peers with the hub VNet the ExpressRoute gateway is attached to: the DC reaches it across `peers`. The
-# isolated segment sits in a VPC with no attachment at all: nothing reaches it, and the check must say so.
+# Two more cloud segments. The spoke segment sits in the Azure spoke VNet, connected to the Virtual WAN hub
+# `vwan-hub-c900-weu` like the other spoke subscriptions: the DC reaches it through the hub's ExpressRoute association.
+# The isolated segment sits in a VPC with no attachment at all: nothing reaches it.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -10,6 +10,7 @@ spec:
     - owner: "C900"
       customer_name: "spoke"
       environment: "p"
+      security_zone: "PROD"
       segment_type: "cloud_subnet"
       virtual_network: "vnet-c900-weu-spoke"
       availability_zone: ["westeurope", "westeurope-1"]
@@ -18,6 +19,7 @@ spec:
     - owner: "C900"
       customer_name: "isolated"
       environment: "p"
+      security_zone: "PROD"
       segment_type: "cloud_subnet"
       virtual_network: "vpc-c900-isolated"
       availability_zone: ["eu-central-1", "eu-central-1a"]

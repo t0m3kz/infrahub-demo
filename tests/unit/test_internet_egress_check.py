@@ -162,15 +162,14 @@ def _rule(
     }
 
 
-def _dc(contexts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """A DC footprint carrying the segment. It has ONE serving context (none for ``[]``)."""
-    contexts = [_context()] if contexts is None else contexts
-    assert len(contexts) <= 1
+def _dc(contexts: list[dict[str, Any]] | None = None, environment: str = "p") -> dict[str, Any]:
+    """A DC footprint carrying the segment, listing ``contexts`` (one complete shared one by default, none for ``[]``)."""
     return {
         "id": "fp-dc",
         "name": "C006-P-DC11",
+        "environment": environment,
         "network_segments": [SEGMENT],
-        "serving_firewall_context": contexts[0] if contexts else None,
+        "serving_firewall_contexts": [_context()] if contexts is None else contexts,
     }
 
 
@@ -614,7 +613,7 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
                     "id": "fp-1",
                     "name": value("C006-P-DC11"),
                     "network_segments": _edges([{"id": "seg-1", "name": value("seg")}]),
-                    "serving_firewall_context": {"node": context},
+                    "serving_firewall_contexts": _edges([context]),
                 }
             ]
         ),
@@ -650,7 +649,8 @@ class TestCheckClass:
         """clean_data keeps every shape the check reads."""
         assert self._run(_raw_payload(snat=True)) == []
         assert (
-            clean_data(_raw_payload(snat=True))["TopologyCustomerDC"][0]["serving_firewall_context"]["vlan_id"] == VLAN
+            clean_data(_raw_payload(snat=True))["TopologyCustomerDC"][0]["serving_firewall_contexts"][0]["vlan_id"]
+            == VLAN
         )
 
     def test_raw_payload_without_snat_logs_an_error(self) -> None:
@@ -659,86 +659,73 @@ class TestCheckClass:
         assert "no snat_address" in error
 
 
-def _hosting(contexts: list[dict[str, Any]]) -> dict[str, Any]:
-    """A DC that names the given contexts as its Internet egress."""
-    return {"id": "dc-11", "name": "DC11", "internet_edge_contexts": contexts}
-
-
 def _dedicated(snat: bool = True) -> dict[str, Any]:
-    """A dedicated customer context with no Internet leg: only its own public address, when it has one."""
+    """A dedicated internal context with no Internet leg: only its own public address, when it has one."""
     return {
         "id": "ctx-ded",
         "name": "c006-dedicated-prod",
+        "tenant": {"id": "fp-dc"},
         "snat_address": {"id": "snat-ded", "address": "198.51.100.9/32"} if snat else None,
+        "shared_devices": [{"id": "ded-fw-1", "name": "ded-fw-1", "role": "internal-firewall"}],
     }
 
 
-def _assigned_dc(
-    egress: list[dict[str, Any]], serving: dict[str, Any] | None = None, environment: str = "p"
-) -> dict[str, Any]:
-    """A DC footprint of an environment whose DC names ``egress`` and whose serving context is ``serving``."""
-    footprint = _dc([serving if serving is not None else _dedicated()])
-    footprint.update(parent=_hosting(egress), environment=environment)
-    return footprint
+def _edge(prefix: str = "eg") -> dict[str, Any]:
+    """A complete Internet edge context on an external-firewall pair."""
+    return _context(prefix, role="external-firewall")
 
 
-class TestEgressAssignment:
-    """A DC that names its Internet egress: the footprint is checked against that context, not its serving one."""
+class TestInternetEdge:
+    """A footprint that lists an Internet edge context: it is checked against that context, not its internal one."""
 
-    def test_dedicated_context_without_legs_passes_when_the_egress_is_complete(self) -> None:
-        cleaned = _cleaned([_assigned_dc([_context("eg", role="external-firewall")])], exchanges=[_exchange("eg")])
+    def test_dedicated_context_without_legs_passes_when_the_edge_is_complete(self) -> None:
+        cleaned = _cleaned([_dc([_dedicated(), _edge()])], exchanges=[_exchange("eg")])
         assert egress_findings(cleaned) == []
 
-    def test_the_egress_context_is_held_to_every_element(self) -> None:
-        egress = _context("eg", role="external-firewall")
-        egress["snat_address"] = None
-        findings = egress_findings(_cleaned([_assigned_dc([egress])], exchanges=[_exchange("eg")]))
+    def test_a_shared_internal_context_needs_no_public_address(self) -> None:
+        shared = _context()
+        shared["snat_address"] = None
+        cleaned = _cleaned([_dc([shared, _edge()])], exchanges=[_exchange("eg")])
+        assert egress_findings(cleaned) == []
+
+    def test_the_edge_context_is_held_to_every_element(self) -> None:
+        edge = _edge()
+        edge["snat_address"] = None
+        findings = egress_findings(_cleaned([_dc([_dedicated(), edge])], exchanges=[_exchange("eg")]))
         assert len(findings) == 1
         assert "egress context: no snat_address" in findings[0] and "shared-eg-prod" in findings[0]
 
     def test_a_dedicated_context_needs_its_own_public_address(self) -> None:
-        cleaned = _cleaned(
-            [_assigned_dc([_context("eg", role="external-firewall")], _dedicated(snat=False))],
-            exchanges=[_exchange("eg")],
-        )
+        cleaned = _cleaned([_dc([_dedicated(snat=False), _edge()])], exchanges=[_exchange("eg")])
         findings = egress_findings(cleaned)
         assert len(findings) == 1 and "c006-dedicated-prod" in findings[0] and "no snat_address" in findings[0]
 
-    def test_the_egress_serving_the_footprint_itself_needs_no_second_address(self) -> None:
-        egress = _context("eg", role="external-firewall")
-        cleaned = _cleaned([_assigned_dc([egress], egress)], exchanges=[_exchange("eg")])
+    def test_an_edge_only_footprint_is_checked_against_the_edge(self) -> None:
+        """The edge is the footprint's only firewall (C900-PAR): it holds every rule and must be complete."""
+        assert egress_findings(_cleaned([_dc([_edge()])], exchanges=[_exchange("eg")])) == []
+        edge = _edge()
+        edge["vlan_id"] = None
+        findings = egress_findings(_cleaned([_dc([edge])], exchanges=[_exchange("eg")]))
+        assert findings and all("egress context" in finding for finding in findings)
+
+    def test_an_edge_only_colocation_footprint_needs_no_zone_firewall(self) -> None:
+        cleaned = _colocation_cleaned([_edge()], zones=[], prefixes=("eg",))
         assert egress_findings(cleaned) == []
 
-    def test_an_edge_on_internal_firewalls_is_refused(self) -> None:
-        """The context a topology names as its Internet edge stands on an external-firewall pair."""
-        findings = egress_findings(_cleaned([_assigned_dc([_context("eg")])], exchanges=[_exchange("eg")]))
-        assert findings and all("external-firewall" in finding for finding in findings)
-
-    def test_two_contexts_for_one_environment_are_an_error(self) -> None:
-        second = _context("eg2", role="external-firewall")
+    def test_two_edge_contexts_are_an_error(self) -> None:
         exchanges = [_exchange("eg"), _exchange("eg2")]
-        findings = egress_findings(
-            _cleaned([_assigned_dc([_context("eg", role="external-firewall"), second])], exchanges=exchanges)
-        )
-        assert len(findings) == 1 and "2 Internet egress contexts for prod" in findings[0]
+        findings = egress_findings(_cleaned([_dc([_context(), _edge(), _edge("eg2")])], exchanges=exchanges))
+        assert len(findings) == 1 and "2 Internet edge contexts" in findings[0]
 
-    def test_a_context_for_another_environment_leaves_the_footprint_on_its_serving_context(self) -> None:
-        """The DC names only a NONPROD egress: a PROD footprint keeps the elements on its own serving context."""
+    def test_an_edge_of_another_environment_is_an_error(self) -> None:
         non_prod = _exchange("eg")
         non_prod["vrf_a"] = make_vrf({"id": "ns-np", "name": "NONPROD", "vrf_type": "non_prod"})
-        findings = egress_findings(
-            _cleaned(
-                [_assigned_dc([_context("eg", role="external-firewall")], _context())],
-                exchanges=[non_prod, _exchange()],
-            )
-        )
-        assert findings == []
+        findings = egress_findings(_cleaned([_dc([_context(), _edge()])], exchanges=[non_prod, _exchange()]))
+        assert len(findings) == 1 and "is for non_prod, the footprint is prod" in findings[0]
 
-    def test_an_egress_without_an_exchange_cannot_be_matched_and_is_reported(self) -> None:
-        findings = egress_findings(_cleaned([_assigned_dc([_context("eg", role="external-firewall")])], exchanges=[]))
-        assert any("no exchange between a tenant VRF and INTERNET" in finding for finding in findings)
+    def test_an_edge_without_an_exchange_is_reported(self) -> None:
+        findings = egress_findings(_cleaned([_dc([_context(), _edge()])], exchanges=[]))
+        assert any("no TopologyRoutedExchange between the tenant VRF and INTERNET" in finding for finding in findings)
 
-    def test_a_footprint_whose_dc_names_none_is_unchanged(self) -> None:
-        footprint = _dc()
-        footprint.update(parent=_hosting([]), environment="p")
-        assert egress_findings(_cleaned([footprint])) == []
+    def test_a_footprint_without_an_edge_keeps_the_elements_on_its_contexts(self) -> None:
+        assert egress_findings(_cleaned([_dc()])) == []

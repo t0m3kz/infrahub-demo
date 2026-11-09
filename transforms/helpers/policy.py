@@ -156,8 +156,14 @@ def segment_flows(segment: dict[str, Any]) -> tuple[dict[str, Any], list[dict[st
     return egress, ingress
 
 
-def _rule_key(policy_key: str, rule: dict[str, Any]) -> str:
-    return str(rule.get("id") or (policy_key, rule.get("index"), rule.get("name")))
+def policy_key(header: dict[str, Any]) -> str:
+    """The key a policy is grouped by in a rule table: its name, else its id."""
+    return str(header.get("name") or header.get("id") or "")
+
+
+def rule_key(policy: str, rule: dict[str, Any]) -> str:
+    """The identity of a rule in a table (``policy`` is its policy's ``policy_key``): its id, else its place."""
+    return str(rule.get("id") or (policy, rule.get("index"), rule.get("name")))
 
 
 def segment_rule_policies(segments: Iterable[dict[str, Any]], exclude: set[str] | None = None) -> list[dict[str, Any]]:
@@ -183,16 +189,16 @@ def segment_rule_policies(segments: Iterable[dict[str, Any]], exclude: set[str] 
     seen: set[str] = set()
 
     def _add(header: dict[str, Any], rules: list[dict[str, Any]]) -> None:
-        key = str(header.get("name") or header.get("id") or "")
+        key = policy_key(header)
         if not key:
             return
         policy = policies.setdefault(key, {**{k: v for k, v in header.items() if k != "rules"}, "rules": []})
         for rule in rules:
             offered.add(key)
-            rule_key = _rule_key(key, rule)
-            if rule_key in seen or rule_key in excluded:
+            identity = rule_key(key, rule)
+            if identity in seen or identity in excluded:
                 continue
-            seen.add(rule_key)
+            seen.add(identity)
             policy["rules"].append(rule)
 
     for segment in segments:

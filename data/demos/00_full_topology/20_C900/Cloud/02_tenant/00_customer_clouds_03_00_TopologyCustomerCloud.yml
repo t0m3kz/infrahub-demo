@@ -1,0 +1,13 @@
+---
+# The footprint of C900 in the sandbox subscription: one footprint per account, of the account's owner and environment
+# (checks/customer_cloud_account.py CA1 to CA3).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner: "C900"
+      environment: "p"
+      account: "c900-azure-sandbox"
+      customer_name: "sandbox-azure"
+      parent: "westeurope"

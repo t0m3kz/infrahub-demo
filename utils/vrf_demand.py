@@ -345,7 +345,7 @@ def _routed_row(row: dict[str, Any], role: str | None) -> RoutedRow | None:
                 id=fp["id"],
                 name=fp.get("name"),
                 parent_id=(fp.get("parent") or {}).get("id"),
-                has_context=bool(fp.get("serving_firewall_context") or fp.get("serving_firewall_contexts")),
+                has_context=bool(fp.get("serving_firewall_contexts")),
             )
             for fp in segment.get("customer_deployments") or []
             if fp.get("id")

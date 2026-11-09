@@ -6,8 +6,7 @@ The SDK loads a directory recursively, files sorted by name, one after the other
 00_common, 10_topology, 20_C900, 21_C901 and 90_bindings provide the dependency order. Loading is idempotent:
 every object is upserted by its human-friendly id, including segment realizations and VLAN rows.
 
-Used by this script, `tests/traversal/check_model.py` (`invoke check-model`) and
-`tests/integration/test_03_full_topology.py`. No Python lives under data/ (tests/unit/test_no_python_in_data.py).
+Used by this script and `tests/integration/test_03_full_topology.py`. No Python lives under data/ (tests/unit/test_no_python_in_data.py).
 """
 
 import argparse

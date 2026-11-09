@@ -10,12 +10,7 @@ import pytest
 
 from generators.logger import GeneratorError
 from generators.protocols import ManagedSegmentDeployment
-from tests.unit import segment_generators_helpers
 from tests.unit.segment_generators_helpers import _DEP_1, _DEP_2, _make_gen, _seg_response
-
-# Autouse fixture, re-exported so pytest registers it in this module.
-ensure_zone = segment_generators_helpers.ensure_zone
-
 
 # ===========================================================================
 # TestSegmentVniInvariant — behaviour of generate() against a stateful fake

@@ -401,13 +401,8 @@ class MyCheck(InfrahubCheck):
   virtual colocation hosts `appliances` (`TopologyApplianceHosting`). A provider's own router that a cable reaches is a
   physical device of its `TopologyExternalProviders`. `OrganizationProvider.connection_profile` names the operator's
   vocabulary and is inventory only. The sample is `data/demos/00_full_topology` (one topology in numbered folders by facility type, `tests/traversal/load_topology.py` loads it;
-  its README holds the per-operator table, `invoke check-model` and `test_03_full_topology.py` walk it; three sites reach each other and the INTERNET: the DC, one colocation cage `PAR-COLO1` where every cloud and SaaS leg lands (never on the DC edge) and the C900 office with an SD-WAN edge of its own); `checks/cloud_connection.py` (R1 to R9) holds what the schema cannot (the edge derives the cloud side's
+  its README holds the per-operator table, `test_03_full_topology.py` loads it; three sites reach each other and the INTERNET: the DC, one colocation cage `PAR-COLO1` where every cloud and SaaS leg lands (never on the DC edge) and the C900 office with an SD-WAN edge of its own); `checks/cloud_connection.py` (R1 to R9) holds what the schema cannot (the edge derives the cloud side's
   prefixes, see **Border policy**).
-- **Path tracer**: `utils/path_trace.py` asks the SERVER for paths between ANY two nodes (`InfrahubPathTraversal`, one
-  `traverse_paths` call per layer, `kind_filter` = the layer's row of `LAYERS`: `l1` cabled or carried, `l3` routed).
-  A node is `kind:hfid` (HFID parts joined with `/`) or a bare name; nothing is computed locally. ECMP is the set of
-  paths at the MINIMUM depth, the longer ones follow. Server limits: `max_depth` 30, `max_paths` 1..100. A chain is a
-  row of nodes, which is what `tests/traversal/` (`invoke check-model`, goldens in `tests/traversal/golden/`) asserts.
 - **Session circuits** (virtual circuits): `TopologySessionCircuit` is the connection between topologies on which routing
   is generated or recorded; its role is its `circuit_type` (`dci`, `handoff`, `tunnel`, `vpn`), required, never a kind. It has no `owner` field (derived, see **Circuit placement**). The
   carrier kind keeps its own `circuit_type` (the carrier's nature) beside it. `tunnel` (SD-WAN office edge <->
@@ -461,8 +456,11 @@ class MyCheck(InfrahubCheck):
   outside party cannot forge one (see **Routing identity**).
 - **Internet egress**: an enabled rule to `INTERNET` must be enforced by hardware on every DC and colocation
   footprint of its source segment: `checks/internet_egress.py` requires a complete firewall pair, an INTERNET leg with
-  an address per member, the exchange to INTERNET, the tagged border service ports and a `snat_address` per serving
-  context (a colocation metro: each zone with firewalls, or a complete provider-hosted pair of its virtual colocation).
+  an address per member, the exchange to INTERNET, the tagged border service ports and a `snat_address` on each
+  context of the footprint's `serving_firewall_contexts` that holds its internet rules (`utils/firewall_split.py`
+  `internet_contexts`): its Internet edge context when it lists one (exactly one, of its environment; a dedicated
+  internal context then needs only its own `snat_address`), else its serving contexts (a colocation metro: each zone
+  with firewalls, or a complete provider-hosted pair of its virtual colocation).
   Cloud and office egress is an accepted gap, not checked (the office has a policy artifact, below, but no check). Towards a public SaaS or cloud service the path is the
   L1 of THE INTERNET (see **Circuit placement**) and L3 in the `INTERNET` namespace; no rule of this check judges it.
 - **Office firewall policy**: an office has no firewall context (`served_deployments` is for DC and colocation footprints);
@@ -476,7 +474,9 @@ class MyCheck(InfrahubCheck):
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint
-  with no `design` is not metered. `add_customer_deployment_dc` (triggered on creation only) links the footprint's
+  with no `design` is not metered. `add_customer_deployment_dc` (triggered on creation only) adds the footprint's
+  internal firewall context and, when the DC has an `external-firewall` pair, the DC's Internet edge context to its
+  `serving_firewall_contexts` (converged like the colocation set, below), and links its
   `serving_loadbalancer_context`; when a re-run moves it to another context (dedicated <-> shared), it re-runs
   `add_app_component` for the footprint's load-balanced components, so their VIPs, R_server and callers' R_client
   rules follow. A `design` change alone re-runs nothing, and a hand edit of the link is not followed up.
@@ -485,13 +485,16 @@ class MyCheck(InfrahubCheck):
   exchanges) on the firewall pair of EVERY `TopologyColocationZone` of the metro that has `devices(role: internal-firewall)`; a
   zone without firewalls does nothing and a `TopologyVirtualColocation` (provider-hosted appliances) is never a
   serving zone, so two firewall zones mean two contexts and each zone's firewall enforces the footprint's full policy.
-  The footprint links them all in `serving_firewall_contexts` (many); a DC footprint has ONE,
-  `serving_firewall_context` (its dedicated or the shared one). Both are declared per kind in
-  `schemas/extensions/capabilities/ha.yml` on the identifier of the context's `served_deployments`, and the host
-  generator's `_serving_many` picks the flow. A re-run converges the colocation set: a link to a context it no longer
-  serves from is removed, the shared context itself stays (untracked, so `delete_unused_nodes` never reclaims it). The transform
+  The footprint links them all in `serving_firewall_contexts` (many), and a DC footprint shares that list: its
+  internal context (its dedicated or the shared one) and the DC's Internet edge context. Every footprint with a
+  firewall service lists ALL its contexts there, internal and external; it is declared per kind in
+  `schemas/extensions/capabilities/ha.yml` on the identifier of the context's `served_deployments` (a cloud footprint
+  and an office have none), and the spec's `serving_many` picks the flow. A re-run converges the set, per spec (each
+  converges the links of its own role, `serving_context_ids`): a link to a context it no longer serves from is removed
+  edge by edge, the shared context itself stays (untracked, so `delete_unused_nodes` never reclaims it). The transform
   reads the other end, `FirewallContext.served_deployments`, so each firewall places the footprint's rules in its own
-  contexts. Locks are per context and a run holds one at a time.
+  contexts: which share goes where follows from the footprint's list (see **Firewall roles**). Locks are per context
+  and a run holds one at a time.
 - **Terminated segments**: `ManagedVxlanSegment.terminated_on` (Attribute, one, optional) peers a
   `ManagedFirewallContext`; the reverse is `terminated_segments` on the context (Generic, many; both ends declared in
   `schemas/extensions/capabilities/ha.yml`, identifier `firewall_context__terminated_segments`, narrowed to the concrete
@@ -522,7 +525,8 @@ class MyCheck(InfrahubCheck):
     the border leaves
     (`apply_context_routes`), and `get_firewall_static_routes` skips an interface with a `virtual_ip`.
   - **Check**: `checks/segment_placement.py` holds a termination to a gateway inside the segment prefix, DC footprints
-    only, each served by the context (`served_deployments`). Demo: C005's `firewalled-dc10` in
+    only, each served by the context (`served_deployments`, the reverse of the footprint's
+    `serving_firewall_contexts`). Demo: C005's `firewalled-dc10` in
     `data/demos/30_all/07_applications/c005/00_segments.yml`, on DC10's shared PROD context (`test_64c`).
 - **Footprint segments**: `network_segments` (the reverse of `segment__customer_deployments`) is declared per kind in
   `schemas/extensions/service/segment.yml`: `ManagedVxlanSegment` on `TopologyCustomerDC`, `TopologyCustomerColocation`
@@ -654,8 +658,10 @@ class MyCheck(InfrahubCheck):
   capability of the device, like OSPF: a `ManagedPBR` (individual device edge, cascades, nothing beyond `ManagedGeneric`;
   presence = the device steers). Nothing is stored per interface: the steered SVIs and their footprint are derived when
   the device is rendered (`utils/vrf_demand.py` `pbr_footprints_by_name`: an SVI of a segment whose footprint in the
-  device's DC has a `serving_firewall_context`; `utils/device_services.py` `pbr_bindings`), and so are the ACL, bypass
-  and next hop (`transforms/helpers/firewall_pbr.py`). The transform steers only a device with a `ManagedPBR`
+  device's DC lists a firewall context, `serving_firewall_contexts`; `utils/device_services.py` `pbr_bindings`), and so
+  are the ACL, bypass and next hop (`transforms/helpers/firewall_pbr.py`): the footprint's internal context in the
+  device's DC, else (it has none there) its Internet edge context (`utils/firewall_split.py` `steering_contexts`,
+  applied per footprint by `transforms/helpers/firewall_contexts.py` `_steering_only`). The transform steers only a device with a `ManagedPBR`
   (`has_pbr`). On 30_all the VRF pass of the device writes it (`generators/helpers/vrf.py` `sync_pbr`: created when the
   device has a steered SVI, deleted when it has none); on 00_full_topology it is authored next to the routing processes.
   `checks/vrf_instances.py` rule (i) reports a device that steers without one (ERROR) or has one and steers nothing
@@ -670,12 +676,19 @@ class MyCheck(InfrahubCheck):
   has no `ManagedPBR`; its PBR 2 on the L3 VNI SVI is derived from the contexts behind its service ports
   (`pbr_overlay_footprints_by_name`) and needs none.
 - **Firewall roles**: a device is an `internal-firewall` (east-west and the customers' contexts) or an `external-firewall`
-  (the Internet edge of one or more topologies, named by `TopologySegmentHosting.internet_edge_contexts`, see
-  `checks/internet_egress.py`). `utils/fabric_roles.py` holds the roles once (`INTERNAL_FIREWALL_ROLE`,
+  (the Internet edge: its context is listed by the footprints it serves, next to their internal one, in
+  `serving_firewall_contexts`, see `checks/internet_egress.py`). A context's role is its members' role.
+  `utils/fabric_roles.py` holds the roles once (`INTERNAL_FIREWALL_ROLE`,
   `EXTERNAL_FIREWALL_ROLE`, `FIREWALL_ROLES` for code that means any firewall); both are rendered by the Firewall
   transform and join the `firewalls` group. The `firewall` role of an INTERFACE (the border port facing a pair) is a
-  different dropdown and keeps its name. A DC with an external pair keeps no INTERNET leg on its customer contexts (a
-  dedicated one keeps only its own `snat_address`): `generators/firewall_context.py` (`EDGE_CONTEXT`).
+  different dropdown and keeps its name. Which context holds which rule is decided PER FOOTPRINT from its list
+  (`utils/firewall_split.py` `rule_share`, never per context: one shared internal context serves footprints with and
+  without an edge): with an internal and an external context, the external one holds the internet rules (both
+  directions, `is_internet_rule`) and the internal one the rest; a footprint with one kind of context places every rule
+  on it (C900-PAR: the edge only). An edge context translates each footprint it serves to the `snat_address` of the
+  footprint's dedicated internal context, else to its own. A DC with an external pair keeps no INTERNET leg on its
+  customer contexts (a dedicated one keeps only its own `snat_address`): `generators/firewall_context.py`
+  (`EDGE_CONTEXT`).
 - **Route protection**: every BGP session is protected against a neighbour announcing what it must not, internal
   sessions included (external and transit keep `utils/ownership.py exchange_policies`). ONE derivation,
   `utils/bgp_expectation.py` (pure; the transform renders it and `checks/bgp_expectations.py` compares it): a session
@@ -867,7 +880,7 @@ class MyCheck(InfrahubCheck):
   A **Parent** relationship must be mandatory (no optional Parent, so no uniqueness over an optional relationship: use a
   plain edge when the peer is optional). `infrahubctl schema load` is ADDITIVE: it refuses a change of `inherit_from`,
   `hierarchy` or `parent` on a kind that has instances, so such a change needs a rebuilt stack
-  (`uv run invoke clean-testcontainers`, or `check-model --rebuild`).
+  (`uv run invoke clean-testcontainers`).
 - **MLAG peer pair uniqueness is an attribute, the rest are checks**: a uniqueness constraint cannot use a many
   relationship, so the pair is mirrored into the unique Text attribute `ManagedMLAG.peer_devices` (the sorted member
   names joined with a comma, `mlag_peer_devices` in `utils/segment_vlan.py`), written by `generators/domain_pairing.py`.
@@ -1189,11 +1202,9 @@ uv run pytest --cov=.
 Integration runs go through `uv run invoke test-integration` (see the `infrahub-running-integration-tests` skill), one
 stack at a time. Two loops:
 
-- **Fast (minutes)**: `uv run invoke check-model` (schema plus `data/demos/00_full_topology` on a throwaway `tv-*` branch of
-  the :8100 stack, then the tracer asserts of `tests/traversal/`; `--rebuild` for a clean stack; the pairs run two at a
-  time, `--pair <regex>` picks some, `--reach` runs only the far-end matrix: one shortest path per pair, no goldens) and
-  `uv run invoke test-integration-fast` (`test_01` setup, `test_02` repository sync, `test_03` the same topology and
-  traversal). Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
+- **Fast (minutes)**: `uv run invoke test-integration-fast` (`test_01` setup, `test_02` repository sync, `test_03` loads
+  `data/demos/00_full_topology` onto the stack's `main`). For a review stack, run it with `INFRAHUB_TESTING_KEEP_STACK=1`:
+  the stack stays up on :8100 with the sample on `main`. Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
   against the live schema, so a field the schema rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict")
   fails there, where the full subset costs tens of minutes (the task worker log names the field).
 - **Full 30_all subset**: `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`; `64` is `test_64`,
@@ -1202,7 +1213,7 @@ stack at a time. Two loops:
 
 | Change touches | Run |
 | --- | --- |
-| Schema, queries, checks of the model, `data/demos/00_full_topology` | Fast: `check-model` and `test-integration-fast` (`01, 02, 03`) |
+| Schema, queries, checks of the model, `data/demos/00_full_topology` | Fast: `test-integration-fast` (`01, 02, 03`) |
 | Generators (including their helpers), `data/bootstrap`, `data/demos/30_all`, queries used by generators | Fast, then the full subset **including `test_65` and `test_66`** (a generator's cleanup is only proven by `test_66`) |
 | Templates, transforms, checks and their validation queries | Fast, then subset `01, 02, 59–64` (no `test_65` or `test_66`) plus the smoke golden diff |
 | Docs, tests only | Unit + smoke |

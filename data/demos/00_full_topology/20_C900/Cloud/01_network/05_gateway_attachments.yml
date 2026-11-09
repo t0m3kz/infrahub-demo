@@ -37,20 +37,6 @@ spec:
       gateway: "vgw-c900-euc1"
       virtual_network: "vpc-c900-prod"
       owner_account: "c900-aws-prod"
-    - name: "ergwa-c900-weu"
-      description: "ExpressRoute gateway in the hub VNet"
-      status: active
-      gateway: "ergw-c900-weu"
-      virtual_network: "vnet-c900-weu"
-      owner_account: "c900-azure-prod"
-      # Gateway transit: the gateway announces the hub VNet and every VNet peered with it, the spokes of other
-      # subscriptions included.
-      allowed_prefixes:
-        - ["10.201.0.0/16", "default"]
-        - ["10.203.0.0/16", "default"]
-        - ["10.208.0.0/16", "default"]
-        - ["10.209.0.0/16", "default"]
-        - ["10.210.0.0/16", "default"]
     - name: "cra-c900-euw3"
       description: "Cloud Router in the VPC"
       status: active
