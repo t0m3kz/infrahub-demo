@@ -90,7 +90,9 @@ def _activation(vlan: int = 100, *, dep: str = "dep-a", namespace: dict | None =
 
 
 def _deployment(contexts: list[dict]) -> dict[str, Any]:
-    return {"devices": [{"capabilities": [{"typename": "ManagedFirewallHA", "contexts": contexts}]}]}
+    """A deployment whose one firewall is a member of `contexts` (its shared capabilities)."""
+    shared = [{"typename": "ManagedFirewallContext", **context} for context in contexts]
+    return {"devices": [{"shared_capabilities": shared}]}
 
 
 def _device(contexts: list[dict], activations: list[dict], *, name: str = "leaf-01") -> dict[str, Any]:

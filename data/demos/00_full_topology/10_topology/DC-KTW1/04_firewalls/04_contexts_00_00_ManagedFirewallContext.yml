@@ -16,7 +16,8 @@ spec:
   kind: ManagedFirewallContext
   data:
     - name: shared-ktw1-fw-ha-prod
-      cluster: ktw1-fw-ha
+      deployment: DC-KTW1
+      shared_devices: [ktw1-fw-01, ktw1-fw-02]
       vlan_id: 3000
       capabilities:
         - kind: DcimVirtualInterface
@@ -28,7 +29,8 @@ spec:
         - kind: DcimPhysicalInterface
           data: {device: ktw1-bl-02, name: "Ethernet1/25"}
     - name: shared-ktw1-xfw-ha-prod
-      cluster: ktw1-xfw-ha
+      deployment: DC-KTW1
+      shared_devices: [ktw1-xfw-01, ktw1-xfw-02]
       vlan_id: 3001
       internet_edge_hostings: ["DC-KTW1"]
       snat_address:

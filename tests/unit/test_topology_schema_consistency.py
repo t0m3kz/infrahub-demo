@@ -455,10 +455,10 @@ class TestCloudNetworkAppliance:
         assert deployments[self._KIND]["identifier"] == "topology__appliances"
 
     def test_the_provider_hosting_generic_is_a_valid_peer_and_only_provider_hosted_deployments_inherit_it(self) -> None:
-        """A generic used as a relationship peer needs a name and an hfid, or an object file cannot reference it."""
+        """The generic is glue: relationships only. The name and the hfid are the inheritors' (a SaaS region or a virtual
+        colocation); no object file reaches an appliance's deployment through the generic."""
         generic = next(g for g in _document(_TOPOLOGY / "topology.yml")["generics"] if g["name"] == "ApplianceHosting")
-        assert generic["human_friendly_id"] == ["name__value"]
-        assert [a["name"] for a in generic["attributes"]] == ["name"]
+        assert "human_friendly_id" not in generic and not generic.get("attributes")
         inheritors = [
             node["name"]
             for path in sorted(_TOPOLOGY.glob("*.yml"))
@@ -518,7 +518,7 @@ class TestCloudNetworkAppliance:
     def test_the_cloud_hosting_generic_links_a_customer_cloud_to_its_instances(self) -> None:
         """A cloud instance is a CloudResource, not a device: the footprint reads it through a generic of its own."""
         generic = next(g for g in _document(_TOPOLOGY / "topology.yml")["generics"] if g["name"] == "CloudHosting")
-        assert generic["human_friendly_id"] == ["name__value"]
+        assert "human_friendly_id" not in generic and not generic.get("attributes")
         instances = next(r for r in generic["relationships"] if r["name"] == "instances")
         assert (instances["peer"], instances["cardinality"], instances["identifier"]) == (
             "CloudInstance",

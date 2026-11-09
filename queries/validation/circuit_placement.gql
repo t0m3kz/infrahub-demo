@@ -96,8 +96,10 @@ query circuit_placement {
                       node {
                         id
                         __typename
-                        name {
-                          value
+                        ... on TopologyDeployment {
+                          name {
+                            value
+                          }
                         }
                       }
                     }
@@ -294,8 +296,10 @@ fragment VirtualPort on DcimInterface {
           node {
             id
             __typename
-            name {
-              value
+            ... on TopologyDeployment {
+              name {
+                value
+              }
             }
           }
         }

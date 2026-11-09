@@ -59,8 +59,11 @@ def _device(contexts: list[dict[str, Any]] | None = None, **overrides: Any) -> d
                 "typename": "ManagedLoadbalancerHA",
                 "name": "ha-1",
                 "capabilities": [{}, {}],
-                "contexts": [_context()] if contexts is None else contexts,
             }
+        ],
+        "shared_capabilities": [
+            {"typename": "ManagedLoadbalancerContext", **context}
+            for context in ([_context()] if contexts is None else contexts)
         ],
     }
     base.update(overrides)
@@ -75,7 +78,7 @@ class TestLoadBalancerCheck:
 
     def test_virtual_device_skips_appliance_readiness_but_validates_contexts(self) -> None:
         device = _device(status="planned", interfaces=[{"role": "uplink", "status": "planned"}])
-        device["capabilities"][0]["contexts"] = [_context(vlan_id=None)]
+        device["shared_capabilities"] = [{"typename": "ManagedLoadbalancerContext", **_context(vlan_id=None)}]
         check = _check()
         check.validate({"DcimPhysicalDevice": [], "DcimVirtualDevice": [device]})
         assert check._captured_errors == ["Context 'dc1-lb-PROD' on 'lb-1' has no leg VLAN"]

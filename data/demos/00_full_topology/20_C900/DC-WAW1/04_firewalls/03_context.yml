@@ -5,7 +5,8 @@ spec:
   kind: ManagedFirewallContext
   data:
     - name: c900-waw1-fw-01-waw1-fw-02-prod
-      cluster: c900-waw1-fw-01-waw1-fw-02-ha-prod
+      deployment: DC-WAW1
+      shared_devices: [c900-waw1-fw-01-prod, c900-waw1-fw-02-prod]
       tenant:
         kind: TopologyCustomerDC
         data:

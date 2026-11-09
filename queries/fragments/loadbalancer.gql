@@ -15,6 +15,14 @@ fragment LoadbalancerDeviceFields on DcimDevice {
     }
   }
   ... on DcimCapabilities {
+    shared_capabilities {
+      edges {
+        node {
+          __typename
+          ...LoadbalancerContextConfigFields
+        }
+      }
+    }
     capabilities {
       edges {
         node {
@@ -64,13 +72,6 @@ fragment LoadbalancerDeviceFields on DcimDevice {
                       }
                     }
                   }
-                }
-              }
-            }
-            contexts {
-              edges {
-                node {
-                  ...LoadbalancerContextConfigFields
                 }
               }
             }

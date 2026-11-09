@@ -328,6 +328,7 @@ fragment DeviceSharedCapabilitiesOnDeviceFields on DcimDevice {
       edges {
         node {
           __typename
+          ...FirewallContextConfigFields
           ... on ManagedVRF {
             security_zone {
               node {

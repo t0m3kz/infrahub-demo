@@ -62,6 +62,7 @@ def _make_exchange_data(platform: str, *, ns_types: tuple[str, ...]) -> dict[str
         }
 
     context = {
+        "__typename": "ManagedFirewallContext",
         "id": "ctx-shared",
         "name": {"value": "dc11-fw-shared"},
         "vlan_id": {"value": 3000},
@@ -100,11 +101,11 @@ def _make_exchange_data(platform: str, *, ns_types: tuple[str, ...]) -> dict[str
                             {"node": {"name": {"value": "dc11-fw-02"}}},
                         ]
                     },
-                    "contexts": {"edges": [{"node": context}]},
                 }
             }
         ]
     }
+    device["shared_capabilities"] = {"edges": [{"node": context}]}
     data.pop("SecurityZone", None)
     return data
 

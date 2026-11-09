@@ -53,14 +53,12 @@ class TopologyConnectorRouting(CoreNode):
 
 class TopologyCircuit(CoreNode):
     description: StringOptional
-    name: String
     status: Dropdown
     locations: RelationshipManager[TopologyFacility]
     provider: RelationshipAttribute[OrganizationProvider]
 
 
 class TopologyConnectableLocation(CoreNode):
-    name: String
     circuits: RelationshipManager[TopologyCircuit]
 
 
@@ -116,7 +114,6 @@ class TopologyDeviceHosting(CoreNode):
 
 
 class TopologyApplianceHosting(CoreNode):
-    name: String
     appliances: RelationshipManager[CloudNetworkAppliance]
 
 
@@ -125,7 +122,6 @@ class TopologyBilledAccount(CoreNode):
 
 
 class TopologyCloudHosting(CoreNode):
-    name: String
     instances: RelationshipManager[CloudInstance]
 
 
@@ -206,7 +202,8 @@ class ManagedHA(CoreNode):
 
 
 class AppInstance(CoreNode):
-    name: String
+    components: RelationshipManager[AppComponent]
+    pool_vips: RelationshipManager[LoadbalancerVIP]
 
 
 class DcimHasSubInterface(CoreNode):
@@ -297,6 +294,7 @@ class TopologySegmentHosting(CoreNode):
     routing_filter_enforce: BooleanOptional
     vni_pool: RelationshipAttribute[CoreNumberPool]
     vrfs: RelationshipManager[ManagedVRF]
+    security_contexts: RelationshipManager[ManagedSecurityContext]
 
 
 class CloudAccount(CloudResource, CoreArtifactTarget):
@@ -646,11 +644,16 @@ class LocationFacility(LocationGeneric):
     pass
 
 
-class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces):
-    context_id: StringOptional
+class ManagedSecurityContext(CoreNode):
     vlan_id: IntegerOptional
-    cluster: RelationshipAttribute[ManagedFirewallHA]
+    deployment: RelationshipAttribute[TopologySegmentHosting]
     tenant: RelationshipAttribute[ManagedTenantScoped]
+
+
+class ManagedFirewallContext(
+    ManagedGeneric, ManagedSecurityContext, ManagedGenericSharedDevice, ManagedGenericInterfaces
+):
+    context_id: StringOptional
     served_deployments: RelationshipManager[ManagedTenantScoped]
     terminated_segments: RelationshipManager[ManagedVxlanSegment]
     snat_address: RelationshipAttribute[IpamIPAddress]
@@ -704,10 +707,9 @@ class ManagedLoadbalancerHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, Man
     contexts: RelationshipManager[ManagedLoadbalancerContext]
 
 
-class ManagedLoadbalancerContext(ManagedGeneric, ManagedGenericInterfaces, ManagedLoadBalancer):
-    vlan_id: IntegerOptional
-    cluster: RelationshipAttribute[ManagedLoadbalancerHA]
-    tenant: RelationshipAttribute[ManagedTenantScoped]
+class ManagedLoadbalancerContext(
+    ManagedGeneric, ManagedSecurityContext, ManagedGenericSharedDevice, ManagedGenericInterfaces, ManagedLoadBalancer
+):
     served_deployments: RelationshipManager[TopologyCustomerDC]
     vip_prefix: RelationshipAttribute[IpamPrefix]
     vips: RelationshipManager[LoadbalancerVIP]

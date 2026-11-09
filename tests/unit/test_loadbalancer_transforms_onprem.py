@@ -80,6 +80,7 @@ def _onprem_data(
         },
     }
     context = {
+        "__typename": "ManagedLoadbalancerContext",
         "id": "ctx-prod",
         "name": _v("LB-01-LB-02-ha-PROD"),
         "vlan_id": _v(3100),
@@ -103,7 +104,6 @@ def _onprem_data(
                 {"name": _v("LB-02"), "primary_address": {"node": {"address": _v("192.168.2.2/32")}}},
             ]
         ),
-        "contexts": _edges([context] if with_context else []),
     }
     interfaces = [
         {
@@ -127,6 +127,7 @@ def _onprem_data(
         "role": _v("load-balancer"),
         "platform": {"node": {"name": _v(platform)}},
         "capabilities": _edges([ha]),
+        "shared_capabilities": _edges([context] if with_context else []),
         "interfaces": _edges(interfaces),
     }
     # Both roots, in the query's order: the one not matching the device name is empty.

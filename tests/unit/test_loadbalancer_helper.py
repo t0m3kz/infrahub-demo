@@ -73,7 +73,8 @@ def _context(
 
 
 def _caps(*contexts: dict[str, Any]) -> list[dict[str, Any]]:
-    return [{"typename": "ManagedLoadbalancerHA", "name": "LB-01-LB-02-ha", "contexts": list(contexts)}]
+    """The device's shared capabilities: the contexts it is a member of."""
+    return [{"typename": "ManagedLoadbalancerContext", **context} for context in contexts]
 
 
 def _contexts(*contexts: dict[str, Any], platform: str = "f5_tmos") -> list[dict[str, Any]]:

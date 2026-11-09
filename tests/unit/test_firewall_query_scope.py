@@ -27,14 +27,19 @@ def test_firewall_query_has_scoped_roots_and_shared_interface_fragment() -> None
     assert argument.name.value == "name__value"
     assert isinstance(argument.value, StringValueNode)
     assert argument.value.value == "MANAGEMENT"
-    assert query.count("...FirewallContextConfigFields") == 1
+    # The contexts are the device's own shared capabilities: the query spreads the one device fragment that
+    # selects them, once, and selects no context edge of its own (no HA `contexts`, no `cluster`).
+    fragment = (root / "queries/fragments/device_capabilities.gql").read_text()
+    assert fragment.count("...FirewallContextConfigFields") == 1
+    assert "...FirewallContextConfigFields" not in query
+    assert "contexts {" not in query
     assert "...DeviceSharedCapabilitiesOnDeviceFields" in query
     assert "...InterfaceCapabilitiesWithSegmentOnInterfaceFields" in query
 
 
 @pytest.mark.parametrize("platform", ["paloalto_panos", "juniper_junos", "checkpoint_gaia"])
 def test_foreign_global_zone_data_cannot_change_firewall_config(platform: str) -> None:
-    """Only the HA context supplies configuration, despite unrelated input roots."""
+    """Only the device's shared context supplies configuration, despite unrelated input roots."""
     data = _make_exchange_data(platform, ns_types=("prod", "internet"))
     firewall = _make_fw()
     before = asyncio.run(firewall.transform(data))
@@ -109,8 +114,8 @@ def test_management_routes_keep_filtered_infrastructure_prefixes() -> None:
 def test_ha_context_segments_supply_address_objects_once() -> None:
     """Repeated served footprints do not duplicate device-level address objects."""
     data = _make_exchange_data("paloalto_panos", ns_types=("prod", "internet"))
-    ha = data["DcimPhysicalDevice"]["edges"][0]["node"]["capabilities"]["edges"][0]["node"]
-    context = ha["contexts"]["edges"][0]["node"]
+    device = data["DcimPhysicalDevice"]["edges"][0]["node"]
+    context = device["shared_capabilities"]["edges"][0]["node"]
     context["served_deployments"]["edges"].append(context["served_deployments"]["edges"][0])
     firewall = _make_fw()
     with patch.object(firewall, "_render", return_value="rendered") as render:

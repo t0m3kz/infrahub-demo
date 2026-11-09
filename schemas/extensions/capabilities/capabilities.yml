@@ -80,7 +80,7 @@ generics:
         kind: Generic
         optional: true
         identifier: shared_capabilities
-        order_weight: 9500
+        order_weight: 9600
 
   # Capabilities attached to device interfaces (segments, circuits, peerings, firewall-context legs, VIPs)
   - name: GenericInterfaces

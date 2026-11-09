@@ -255,6 +255,18 @@ nodes:
         description: "Health checks associated with this application component"
 extensions:
   nodes:
+    # The reverse of AppComponent.instances (the base generic cannot name AppComponent: the base loads first).
+    - kind: AppInstance
+      relationships:
+        - name: components
+          label: "Components"
+          peer: AppComponent
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 9600
+          identifier: "app_component__instances"
+          description: "The application components this instance runs"
     - kind: OrganizationCustomer
       relationships:
         - name: applications

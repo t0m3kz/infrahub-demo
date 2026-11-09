@@ -1,7 +1,8 @@
 """ManagedVRF membership rides the shared device edge (``DcimCapabilities.shared_capabilities``).
 
 ``device_memberships`` is the one typename filter; the queries select the edge only inside ``... on DcimCapabilities``
-(the field is not on ``DcimDevice``) and no query selects a device-level ``vrfs`` any more.
+or a concrete kind that inherits it (``... on DcimPhysicalDevice``, the firewalls of a switch's hosting deployment):
+the field is not on ``DcimDevice``. No query selects a device-level ``vrfs`` any more.
 """
 
 from __future__ import annotations
@@ -28,6 +29,9 @@ from utils.vrf_demand import device_memberships, device_vrf_facts
 QUERIES = Path(__file__).resolve().parents[2] / "queries"
 EDGE = "shared_capabilities"
 CAPABILITIES = "DcimCapabilities"
+#: kinds that inherit ``DcimCapabilities``: a query that names one of them reaches the edge without the generic
+#: (a firewall's contexts are its shared capabilities, read through ``... on DcimPhysicalDevice``)
+CAPABILITY_KINDS = {CAPABILITIES, "DcimPhysicalDevice"}
 #: parents that may still select a field named ``vrfs`` (a deployment's or a namespace's own instances)
 VRFS_ALLOWED_PARENTS = {"TopologySegmentHosting", "SecurityZone", "TopologyCustomerOffice"}
 
@@ -199,15 +203,16 @@ def test_raw_device_with_a_foreign_shared_kind_has_the_same_facts() -> None:
 # --- query shape ---------------------------------------------------------------------------------------------------
 
 
-def test_every_shared_capabilities_selection_is_inside_dcim_capabilities() -> None:
-    """The edge is on ``DcimCapabilities``, not on ``DcimDevice``: it is selected under ``... on DcimCapabilities``."""
+def test_every_shared_capabilities_selection_is_inside_a_capabilities_kind() -> None:
+    """The edge is on ``DcimCapabilities``, not on ``DcimDevice``: it is selected under ``... on DcimCapabilities`` or
+    under a concrete kind that inherits it (``CAPABILITY_KINDS``)."""
     offenders = []
     selecting = []
     for path in _all_queries():
         for name, types in _fields(path):
             if name == EDGE:
                 selecting.append(_rel(path))
-                if CAPABILITIES not in types:
+                if not CAPABILITY_KINDS & set(types):
                     offenders.append((_rel(path), types))
     assert offenders == []
     assert {"fragments/device_capabilities.gql", "validation/evpn_fabric.gql", "validation/vrf_instances.gql"} <= set(
@@ -267,4 +272,4 @@ def test_a_query_spreading_the_device_fragment_selects_the_edge_only_inside_dcim
             if name == EDGE:
                 found.append(types)
     assert found, "the spread must reach the shared_capabilities selection"
-    assert all(CAPABILITIES in types for types in found)
+    assert all(CAPABILITY_KINDS & set(types) for types in found)

@@ -57,11 +57,9 @@ def _firewall_input(vendor: str, *, snat: bool) -> dict[str, Any]:
     data = json.loads((_CONFIGS / f"firewall_{vendor}_exchange_transit" / "input.json").read_text())
     if not snat:
         device = data["DcimPhysicalDevice"]["edges"][0]["node"]
-        for edge in device["capabilities"]["edges"]:
-            capability = edge["node"]
-            if capability["__typename"] == "ManagedFirewallHA":
-                for context in capability["contexts"]["edges"]:
-                    context["node"].pop("snat_address", None)
+        for edge in device["shared_capabilities"]["edges"]:
+            if edge["node"]["__typename"] == "ManagedFirewallContext":
+                edge["node"].pop("snat_address", None)
     return data
 
 

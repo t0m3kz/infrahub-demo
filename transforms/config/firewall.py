@@ -5,8 +5,8 @@ from transforms.helpers.addressing import sub_interface_parent
 from transforms.helpers.firewall import get_firewall_static_routes, get_firewall_zones, get_zone_policies
 from transforms.helpers.firewall_contexts import (
     firewall_context_zone_data,
-    firewall_ha_contexts,
     get_firewall_contexts,
+    member_firewall_contexts,
     place_policies_in_contexts,
 )
 from transforms.helpers.firewall_terminated import terminated_interfaces
@@ -255,8 +255,7 @@ class Firewall(BaseDeviceTransform):
         interfaces = device.get("interfaces") or []
         activations = self._collect_activations_from_interfaces(interfaces)
         ha = get_ha(device.get("capabilities"), interfaces, device.get("name"))
-        cluster_contexts = firewall_ha_contexts(device.get("capabilities"))
-        contexts = get_firewall_contexts(interfaces, ha, cluster_contexts)
+        contexts = get_firewall_contexts(interfaces, ha, member_firewall_contexts(device.get("shared_capabilities")))
         root, by_context = place_policies_in_contexts(contexts, [act.get("segment") or {} for act in activations])
         return activations, contexts, root, by_context
 

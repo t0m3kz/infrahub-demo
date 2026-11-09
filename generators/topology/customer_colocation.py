@@ -67,4 +67,12 @@ class CustomerDeploymentColocationExchangeGenerator(
         """The zones of the footprint's metro (customer.parent), by name; a zone without firewalls is skipped
         when its context is resolved, not here, so its generator is still waited for."""
         metro = customer.get("parent") or {}
-        return sorted((zone for zone in metro.get("children") or [] if zone.get("id")), key=lambda z: z.get("name", ""))
+        # A context's lifecycle owner is its hosting deployment, the metro (a zone is no hosting kind).
+        return sorted(
+            (
+                {**zone, "hosting_deployment_id": metro.get("id")}
+                for zone in metro.get("children") or []
+                if zone.get("id")
+            ),
+            key=lambda z: z.get("name", ""),
+        )

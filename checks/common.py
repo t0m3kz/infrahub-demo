@@ -4,7 +4,8 @@ from typing import Any
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.firewall import get_exchange_transits
-from transforms.helpers.firewall_contexts import firewall_ha_contexts
+from transforms.helpers.firewall_contexts import member_firewall_contexts
+from transforms.helpers.ha import get_ha
 from transforms.helpers.segments import routed_activations
 from utils.data_cleaning import get_data
 from utils.exchange_transit import (
@@ -262,12 +263,41 @@ def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
     return errors
 
 
+def validate_context_members(data: dict[str, Any]) -> list[str]:
+    """Errors in the members of the firewall contexts this device enforces.
+
+    A context holds no HA edge: its members (``shared_devices``) are the devices that enforce it, and the schema cannot
+    say they are one pair. So: a device in an HA domain enforces only contexts whose members are exactly that domain's
+    members; a standalone device (no HA domain) only contexts of which it is the one member.
+    """
+    errors: list[str] = []
+    device_name = data.get("name", "unknown")
+    ha = get_ha(data.get("capabilities"))
+    pair = sorted(ha["members"]) if ha else [device_name]
+    for context in member_firewall_contexts(data.get("shared_capabilities")):
+        members = sorted(member.get("name") or "" for member in context.get("shared_devices") or [])
+        if members == pair:
+            continue
+        label = f"FirewallContext '{context.get('name', 'unknown')}' on '{device_name}'"
+        if ha:
+            errors.append(
+                f"{label}: its members {members} are not the HA pair '{ha.get('name')}' {pair}; a context is enforced "
+                "by exactly the two members of one HA domain"
+            )
+        else:
+            errors.append(
+                f"{label}: its members {members}, but '{device_name}' is in no HA domain, so the context must have it as "
+                "its only member"
+            )
+    return errors
+
+
 def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
     """A firewall context with an INTERNET leg on this device must have a public SNAT address.
 
     The leg is a sub-interface tagged with the context whose address sits in a
-    namespace of type internet. Full HA-owned context data takes precedence over
-    interface-local references. The context's snat_address (one per context,
+    namespace of type internet. The full data of a context the device is a member of
+    takes precedence over interface-local references. The context's snat_address (one per context,
     shared by all its tenant VRFs) must be set and lie outside the non-internet
     space (utils/internet_space.py NON_INTERNET_PREFIXES): a private SNAT
     address would be filtered by the edge's RM-TRANSIT-OUT and never return.
@@ -275,9 +305,9 @@ def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     device_name = data.get("name", "unknown")
     contexts: dict[str, dict[str, Any]] = {}
-    cluster_contexts = {
+    member_contexts = {
         context.get("id") or context.get("name", "unknown"): context
-        for context in firewall_ha_contexts(data.get("capabilities"))
+        for context in member_firewall_contexts(data.get("shared_capabilities"))
     }
     for interface in data.get("interfaces") or []:
         namespace = interface_security_zone(interface)
@@ -286,7 +316,7 @@ def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
         for cap in interface.get("capabilities") or []:
             if cap.get("typename") == "ManagedFirewallContext":
                 context_id = cap.get("id") or cap.get("name", "unknown")
-                contexts.setdefault(context_id, cluster_contexts.get(context_id, cap))
+                contexts.setdefault(context_id, member_contexts.get(context_id, cap))
 
     for context in contexts.values():
         label = f"FirewallContext '{context.get('name', 'unknown')}' on '{device_name}'"

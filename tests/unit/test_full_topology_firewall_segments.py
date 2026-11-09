@@ -169,8 +169,8 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
     context = next(
         obj for obj in _items("ManagedFirewallContext", _site(site)) if obj["name"] == _segment(site)["terminated_on"]
     )
-    ha = next(obj for obj in _items("ManagedFirewallHA", _site(site)) if obj["name"] == context["cluster"])
-    assert member in ha["capabilities"]
+    assert member in context["shared_devices"]
+    ha = next(obj for obj in _items("ManagedFirewallHA", _site(site)) if member in obj["capabilities"])
     leg_ref = next(
         cap["data"]
         for cap in context["capabilities"]
@@ -245,6 +245,7 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
                 }
             ]
         ),
+        "shared_capabilities": _many([cap]),
         "interfaces": _many(
             [
                 uplink,

@@ -15,6 +15,7 @@ from graphql import FieldNode, OperationDefinitionNode, parse
 
 from checks.firewall import CheckFirewall
 from tests.smoke.fixture_builders.common import run_transform
+from tests.smoke.fixture_builders.context_members import with_context_members
 from tests.smoke.fixture_builders.transit import build_virtual_firewall_data
 from transforms.config.firewall import Firewall
 
@@ -51,8 +52,9 @@ def test_virtual_firewall_payload_renders_its_contexts() -> None:
 
 
 def _checkable_virtual_firewall_data() -> dict:
-    """The builder's payload with each interface's zone moved onto an explicit VRF instance, as the query returns it."""
-    data = build_virtual_firewall_data()
+    """The builder's payload with each interface's zone moved onto an explicit VRF instance and each context given its
+    members (the device's HA pair), as the query returns it."""
+    data = with_context_members(build_virtual_firewall_data())
     device = data["DcimDevice"]["edges"][0]["node"]
     for edge in device["interfaces"]["edges"]:
         interface = edge["node"]
@@ -80,7 +82,7 @@ def test_ha_owned_snat_overrides_stale_interface_references(address: str | None,
     """A stale public SNAT on an interface cannot hide an invalid HA-owned context."""
     data = _checkable_virtual_firewall_data()
     device = data["DcimDevice"]["edges"][0]["node"]
-    context = device["capabilities"]["edges"][0]["node"]["contexts"]["edges"][0]["node"]
+    context = device["shared_capabilities"]["edges"][0]["node"]
     context["snat_address"] = {"node": {"address": {"value": address}}} if address else {"node": None}
     for edge in device["interfaces"]["edges"]:
         for capability in edge["node"]["capabilities"]["edges"]:

@@ -864,7 +864,7 @@ class MyCheck(InfrahubCheck):
   HA `{first}-{second}`, so PROD and NON-PROD never meet on one context. A dedicated pair is `{owner}-{first}-{second}-ha-{class}`
   (HA domain) with the context `{owner}-{first}-{second}-{class}` on it, its members `{owner}-{physical}-{class}`. The HA and the
   context are nodes of one generic and the server resolves an upsert by name, so they never share one.
-- **Load balancer pool members are servers, not addresses**: `LoadbalancerVIP.pool_members` peers `AppInstance` (physical or
+- **Load balancer pool members are servers, not addresses**: `LoadbalancerVIP.pool_members` peers `DcimCapabilities` (physical or
   virtual device, cloud instance); a member's address is its `primary_address`, or the `private_ip` of a cloud instance.
   An on-prem server with none gets one reserved in its component's segment prefix by the application generator (kept as its
   primary address), a server that has one keeps it. The VIP has no link to the application: the generator derives it from
@@ -884,8 +884,11 @@ class MyCheck(InfrahubCheck):
     device. Anything that must die with its device stays here: a BGP or OSPF process, an MLAG domain, a firewall HA pair.
   - **Shared**, `ManagedGenericSharedDevice`: `DcimCapabilities.shared_capabilities` (identifier `shared_capabilities`,
     `on_delete: no-action`, explicit) never cascades; the object's members are its `shared_devices`. Deleting a member
-    never deletes the object and deleting the object leaves its devices. `ManagedVRF` is the first shared kind (an SNMP
-    profile, NTP or AAA would be the next). A new shared kind is only a node with
+    never deletes the object and deleting the object leaves its devices. `ManagedVRF` and the service contexts
+    (`ManagedFirewallContext`, `ManagedLoadbalancerContext`, on the thin generic `ManagedSecurityContext`) are shared kinds
+    (an SNMP profile, NTP or AAA would be the next). A context's lifecycle owner is its hosting deployment (a `Parent`,
+    `TopologySegmentHosting.security_contexts`); its members are the devices that enforce it, and it holds no HA edge: a
+    firewall finds its `ManagedFirewallHA` through its own capabilities. A new shared kind is only a node with
     `inherit_from: [ManagedGeneric, ManagedGenericSharedDevice]`; it declares no device relationship of its own.
   - Rules of a shared kind: members are written from the shared side, edge by edge (RelationshipAdd/RelationshipRemove),
     never as a saved list, because several generators attach devices to one object; it has a lifecycle owner (a

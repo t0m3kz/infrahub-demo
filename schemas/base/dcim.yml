@@ -12,7 +12,7 @@ generics:
     attributes:
       - name: name
         kind: Text
-        optional: true
+        optional: false
         order_weight: 1000
 
   # The slim device: a name and the interfaces it holds. It is all an interface needs of its device (the interface

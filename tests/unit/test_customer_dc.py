@@ -284,7 +284,8 @@ class TestFirewallContextProvisioning:
         assert target.spec is FIREWALL_CONTEXT
         assert target.context_name("PROD") == f"shared-{cluster.name.value}-prod"
         assert target.context_name("NONPROD") == f"shared-{cluster.name.value}-nonprod"
-        assert (target.cluster_id, target.tenant_id, target.track) == (cluster.id, None, False)
+        assert (target.deployment_id, target.tenant_id, target.track) == ("dc10-id", None, False)
+        assert target.devices == [fw_device]
         assert kwargs["customer"]["environment"] == "p"
 
     @pytest.mark.asyncio
@@ -302,7 +303,8 @@ class TestFirewallContextProvisioning:
         assert target.context_name("PROD") == "c005-DC10-FW1-DC10-FW2-prod"
         # The HA domain and its context are two nodes of one generic: they never share a name.
         assert target.context_name("PROD") != dedicated_cluster.name.value
-        assert (target.cluster_id, target.tenant_id, target.track) == ("dedicated-cluster-1", "cust-1", True)
+        # A dedicated context lives in the same DC as the shared one; its members are the dedicated pair.
+        assert (target.deployment_id, target.tenant_id, target.track) == ("dc10-id", "cust-1", True)
         assert target.devices == dedicated_fws
 
     @pytest.mark.asyncio
@@ -758,7 +760,7 @@ class TestLoadbalancerContextTarget:
         await gen.generate(_dc_payload_with_parent(fw_devices=[], lb_devices=self._LBS))
 
         (target,) = self._lb_targets(gen)
-        assert (target.cluster_id, target.tenant_id, target.track) == ("lb-cluster-1", None, False)
+        assert (target.deployment_id, target.tenant_id, target.track) == ("dc10-id", None, False)
         assert target.context_name("PROD") == "shared-DC10-LB1-LB2-prod"
         assert target.context_name("NONPROD") == "shared-DC10-LB1-LB2-nonprod"
         assert gen.client.filters.call_args.kwargs["capabilities__ids"] == ["lb-1"]
@@ -795,7 +797,7 @@ class TestLoadbalancerContextTarget:
             name_parts=("c005", "prod"),
         )
         (target,) = self._lb_targets(gen)
-        assert (target.cluster_id, target.tenant_id, target.track) == ("ded-lb-cluster", "cust-1", True)
+        assert (target.deployment_id, target.tenant_id, target.track) == ("dc10-id", "cust-1", True)
         assert target.context_name("PROD") == "c005-DC10-LB1-DC10-LB2-prod"
         assert target.context_name("PROD") != dedicated_cluster.name.value
         assert target.devices == dedicated_lbs
@@ -914,12 +916,14 @@ class TestGetOrCreateContext:
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
-        await gen._get_or_create_context(spec, "dc10-shared", "cluster-1", None)
+        await gen._get_or_create_context(spec, "dc10-shared", "dc10-id", ["fw-1", "fw-2"], None)
 
         assert gen.client.create.call_args.kwargs["kind"] is spec.context_kind
         data = gen.client.create.call_args.kwargs["data"]
-        assert data["cluster"] == {"id": "cluster-1"}
-        assert "tenant" not in data
+        # The hosting deployment is the context's Parent; the members are the pair that enforces it.
+        assert data["deployment"] == {"id": "dc10-id"}
+        assert data["shared_devices"] == [{"id": "fw-1"}, {"id": "fw-2"}]
+        assert "cluster" not in data and "tenant" not in data
         created.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
@@ -929,7 +933,9 @@ class TestGetOrCreateContext:
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
-        await gen._get_or_create_context(FIREWALL_CONTEXT, "dc10-shared", "cluster-1", None, track=False)
+        await gen._get_or_create_context(
+            FIREWALL_CONTEXT, "dc10-shared", "dc10-id", ["fw-1", "fw-2"], None, track=False
+        )
 
         created.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
@@ -939,7 +945,9 @@ class TestGetOrCreateContext:
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
-        await gen._get_or_create_context(LOADBALANCER_CONTEXT, "dc10-cust-1-dedicated", "cluster-1", "cust-1")
+        await gen._get_or_create_context(
+            LOADBALANCER_CONTEXT, "dc10-cust-1-dedicated", "dc10-id", ["lb-1", "lb-2"], "cust-1"
+        )
 
         data = gen.client.create.call_args.kwargs["data"]
         assert data["tenant"] == {"id": "cust-1"}

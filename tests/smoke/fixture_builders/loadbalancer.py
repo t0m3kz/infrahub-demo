@@ -121,6 +121,7 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
         leg_name = f"eth1.{vlan_id + (200 if namespace == 'NONPROD' else 0)}"
         contexts.append(
             {
+                "__typename": "ManagedLoadbalancerContext",
                 "id": f"ctx-{namespace}",
                 "name": _v(f"{cluster}-{namespace}"),
                 "vlan_id": _v(vlan_id),
@@ -164,7 +165,6 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
         "lb_type": _v("l4_software" if platform.startswith("haproxy") else "l4_hardware"),
         "scheme": _v("internal"),
         "capabilities": _edges(_lb_members(device_name, peer_name)),
-        "contexts": _edges(contexts),
     }
     interfaces = [
         {
@@ -197,6 +197,7 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
             }
         ),
         "capabilities": _edges([ha_cap]),
+        "shared_capabilities": _edges(contexts),
         "interfaces": _edges(interfaces),
     }
     return {"DcimPhysicalDevice": _edges([device_node]), "DcimVirtualDevice": _edges([])}

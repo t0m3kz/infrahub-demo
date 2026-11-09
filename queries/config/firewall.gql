@@ -55,13 +55,6 @@ query firewall_config($device: String!) {
                       }
                     }
                   }
-                  contexts {
-                    edges {
-                      node {
-                        ...FirewallContextConfigFields
-                      }
-                    }
-                  }
                 }
               }
             }

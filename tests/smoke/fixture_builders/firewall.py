@@ -442,6 +442,7 @@ def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
         for member, host in (("dc1-fw-01", 5), ("dc1-fw-02", 6))
     ]
     context = {
+        "__typename": "ManagedFirewallContext",
         "id": "ctx-shared",
         "name": _v("dc1-fw-shared"),
         "vlan_id": _v(3000),
@@ -451,7 +452,7 @@ def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
     }
     firewall = {
         "node": {
-            "capabilities": _edges([{"__typename": "ManagedFirewallHA", "contexts": _edges([context])}]),
+            "shared_capabilities": _edges([context]),
         }
     }
     data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]["devices"] = {"edges": [firewall]}

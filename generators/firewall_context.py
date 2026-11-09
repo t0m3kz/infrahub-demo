@@ -311,6 +311,7 @@ class FirewallContextMixin(TransitLegsMixin):
         """
         parent_id: str = parent.get("id", "")
         parent_name: str = parent.get("name", parent_id)
+        deployment_id: str = parent.get("hosting_deployment_id") or parent_id
         edge_hosted = spec.role != EXTERNAL_FIREWALL_ROLE and bool(parent.get("external_firewall_devices"))
         skip_reason = spec.skip_reason(parent)
         if skip_reason:
@@ -354,7 +355,7 @@ class FirewallContextMixin(TransitLegsMixin):
             return _ContextTarget(
                 spec=spec,
                 name_base=cluster.name.value,
-                cluster_id=cluster.id,
+                deployment_id=deployment_id,
                 tenant_id=None,
                 track=False,
                 devices=devices,
@@ -381,7 +382,7 @@ class FirewallContextMixin(TransitLegsMixin):
         return _ContextTarget(
             spec=spec,
             name_base=cluster.name.value.removesuffix(f"-ha-{env_class}"),
-            cluster_id=cluster.id,
+            deployment_id=deployment_id,
             tenant_id=customer_id,
             track=True,
             devices=devices,
@@ -548,7 +549,12 @@ class FirewallContextMixin(TransitLegsMixin):
                 if snat_pool is None:
                     return
             context_obj = await self._get_or_create_context(
-                spec, context_name, target.cluster_id, target.tenant_id, track=track
+                spec,
+                context_name,
+                target.deployment_id,
+                [_dev_id(device) for device in target.devices],
+                target.tenant_id,
+                track=track,
             )
             if context_obj is None:
                 return
@@ -810,12 +816,21 @@ class FirewallContextMixin(TransitLegsMixin):
         return dedicated_clusters[0], virtual_devices
 
     async def _get_or_create_context(
-        self, spec: ContextSpec, context_name: str, cluster_id: str, tenant_id: str | None, *, track: bool = True
+        self,
+        spec: ContextSpec,
+        context_name: str,
+        deployment_id: str,
+        member_ids: list[str],
+        tenant_id: str | None,
+        *,
+        track: bool = True,
     ) -> Any | None:
         # Always create+upsert, never pre-check-and-skip — both context kinds'
         # uniqueness_constraints on name__value (schemas/extensions/capabilities/
         # ha.yml) make allow_upsert=True match the existing node by name. A
-        # pre-check-then-return would silently skip reconciling cluster/tenant.
+        # pre-check-then-return would silently skip reconciling deployment/members/tenant.
+        # The members are the devices of the one pair that enforces the context, written as the whole list: this
+        # generator is their only writer, and a re-run after a member swap converges on the current pair.
         # track=False (a shared context): written, never claimed by this
         # customer's tracking group — see _resolve_context_target.
         try:
@@ -823,7 +838,8 @@ class FirewallContextMixin(TransitLegsMixin):
                 kind=spec.context_kind,
                 data={
                     "name": context_name,
-                    "cluster": {"id": cluster_id},
+                    "deployment": {"id": deployment_id},
+                    "shared_devices": [{"id": member_id} for member_id in member_ids],
                     **({"tenant": {"id": tenant_id}} if tenant_id else {}),
                 },
             )

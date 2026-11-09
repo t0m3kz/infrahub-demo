@@ -113,22 +113,15 @@ class TestFirewallExchangeLegs:
 
     @pytest.mark.asyncio
     async def test_cluster_context_without_legs_renders_its_policies(self) -> None:
-        """A colocation context sits on the cluster only (no interface on a member):
+        """A colocation context is a shared capability of the member only (no interface on a member):
         its vsys and the rules of the segments it serves still render."""
         data = _make_context_smoke_data("paloalto_panos", serves_segment=True)
         device = data["DcimPhysicalDevice"]["edges"][0]["node"]
         context = device["interfaces"]["edges"].pop()["node"]["capabilities"]["edges"][0]["node"]
         device["capabilities"] = {
-            "edges": [
-                {
-                    "node": {
-                        "__typename": "ManagedFirewallHA",
-                        "name": {"value": "fr-fw-ha"},
-                        "contexts": {"edges": [{"node": context}]},
-                    }
-                }
-            ]
+            "edges": [{"node": {"__typename": "ManagedFirewallHA", "name": {"value": "fr-fw-ha"}}}]
         }
+        device["shared_capabilities"] = {"edges": [{"node": {**context, "__typename": "ManagedFirewallContext"}}]}
         out = await _make_fw().transform(data)
         assert "set vsys c005-dedicated rulebase security rules smoke-permit-rule" in out
         assert "virtual-router vr-" not in out

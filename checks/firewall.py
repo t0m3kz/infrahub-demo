@@ -7,7 +7,7 @@ from infrahub_sdk.checks import InfrahubCheck
 from transforms.config.firewall import Firewall
 from transforms.helpers.policy import is_internet_destination
 
-from .common import validate_exchange_gateways, validate_snat_addresses
+from .common import validate_context_members, validate_exchange_gateways, validate_snat_addresses
 
 
 class CheckFirewall(InfrahubCheck):
@@ -19,14 +19,19 @@ class CheckFirewall(InfrahubCheck):
     segment's security_zone; a segment without one is an error, since
     zone-based firewalls then match any zone on that side. A rule to a
     internet zone must not be apply_on_switch. Its exchange legs
-    (checks/common.py validate_exchange_gateways) and SNAT addresses
-    (validate_snat_addresses) are validated too."""
+    (checks/common.py validate_exchange_gateways), SNAT addresses
+    (validate_snat_addresses) and the members of its contexts (validate_context_members: exactly
+    its HA pair) are validated too."""
 
     query = "firewall_config"
 
     def validate(self, data: Any) -> None:
         device, _, _ = Firewall._device_and_platform(data)
-        for error in [*validate_exchange_gateways(device), *validate_snat_addresses(device)]:
+        for error in [
+            *validate_exchange_gateways(device),
+            *validate_snat_addresses(device),
+            *validate_context_members(device),
+        ]:
             self.log_error(message=error)
         # collect_policies only reads class attributes, no client: the check
         # validates exactly what the transform places, not a second copy.

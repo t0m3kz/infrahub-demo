@@ -46,15 +46,17 @@ def _make_context_leg(
 # ===========================================================================
 
 
-def _make_ha_capability(*, contexts: list[dict] | None = None) -> dict:
-    return {"typename": "ManagedFirewallHA", "contexts": contexts or []}
+def _fw_context(context_id: str) -> dict:
+    """A firewall context as a device's shared capability (cleaned shape)."""
+    return {"typename": "ManagedFirewallContext", "id": context_id}
 
 
 def _make_fw_device(*, contexts: list[dict] | None = None, extra_capability: dict | None = None) -> dict:
-    capabilities = [_make_ha_capability(contexts=contexts)]
+    """A firewall whose shared capabilities hold the contexts it is a member of."""
+    shared_capabilities = list(contexts or [])
     if extra_capability:
-        capabilities.append(extra_capability)
-    return {"capabilities": capabilities}
+        shared_capabilities.append(extra_capability)
+    return {"shared_capabilities": shared_capabilities}
 
 
 class TestFlattenDeploymentFirewallContexts:
@@ -67,27 +69,27 @@ class TestFlattenDeploymentFirewallContexts:
     def test_dc_tier_device_contexts_extracted(self) -> None:
         """DC-tier devices (border-leaf, firewall, spine) have contexts directly
         under deployment.devices — no parent hop needed."""
-        ctx = {"id": "ctx-1"}
+        ctx = _fw_context("ctx-1")
         deployment = {"devices": [_make_fw_device(contexts=[ctx])]}
         assert _flatten_deployment_firewall_contexts(deployment) == [ctx]
 
     def test_pod_tier_device_contexts_extracted_via_parent(self) -> None:
         """Pod-tier devices (leaf/tor/access-leaf) have their deployment set to
         the POD, so contexts live under deployment.parent.devices instead."""
-        ctx = {"id": "ctx-1"}
+        ctx = _fw_context("ctx-1")
         deployment = {"devices": [], "parent": {"devices": [_make_fw_device(contexts=[ctx])]}}
         assert _flatten_deployment_firewall_contexts(deployment) == [ctx]
 
     def test_non_firewall_ha_capability_ignored(self) -> None:
         deployment = {
-            "devices": [_make_fw_device(contexts=[{"id": "ctx-1"}], extra_capability={"typename": "ManagedBGP"})]
+            "devices": [_make_fw_device(contexts=[_fw_context("ctx-1")], extra_capability={"typename": "ManagedBGP"})]
         }
         result = _flatten_deployment_firewall_contexts(deployment)
-        assert result == [{"id": "ctx-1"}]
+        assert result == [_fw_context("ctx-1")]
 
     def test_dedup_across_dc_and_pod_tier_paths(self) -> None:
         """A context reachable both directly and via parent must not double-count."""
-        ctx = {"id": "ctx-1"}
+        ctx = _fw_context("ctx-1")
         deployment = {
             "devices": [_make_fw_device(contexts=[ctx])],
             "parent": {"devices": [_make_fw_device(contexts=[ctx])]},
@@ -96,7 +98,7 @@ class TestFlattenDeploymentFirewallContexts:
         assert result == [ctx]
 
     def test_multiple_contexts_across_devices(self) -> None:
-        ctx_a, ctx_b = {"id": "ctx-a"}, {"id": "ctx-b"}
+        ctx_a, ctx_b = _fw_context("ctx-a"), _fw_context("ctx-b")
         deployment = {"devices": [_make_fw_device(contexts=[ctx_a]), _make_fw_device(contexts=[ctx_b])]}
         result = _flatten_deployment_firewall_contexts(deployment)
         assert {c["id"] for c in result} == {"ctx-a", "ctx-b"}

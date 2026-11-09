@@ -11,7 +11,7 @@ from .common import validate_appliance
 
 
 def validate_loadbalancer_contexts(device: dict[str, Any]) -> list[str]:
-    """Errors in the contexts the device's HA cluster hosts: leg, VIP range, VIPs and their pool members.
+    """Errors in the contexts the device is a member of: leg, VIP range, VIPs and their pool members.
 
     A context is complete when it has its VLAN and VIP range, this device has a leg of it (a sub-interface with an
     address), and every VIP sits inside the range and balances across at least one member. A context with no VIP
@@ -19,8 +19,8 @@ def validate_loadbalancer_contexts(device: dict[str, Any]) -> list[str]:
     """
     errors: list[str] = []
     device_name = device.get("name", "Unknown")
-    clusters = [c for c in (device.get("capabilities") or []) if c.get("typename") == "ManagedLoadbalancerHA"]
-    for context in clusters[0].get("contexts") or [] if clusters else []:
+    members_of = device.get("shared_capabilities") or []
+    for context in (c for c in members_of if c.get("typename") == "ManagedLoadbalancerContext"):
         label = f"Context '{context.get('name')}' on '{device_name}'"
         if not context.get("vlan_id"):
             errors.append(f"{label} has no leg VLAN")

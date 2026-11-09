@@ -89,7 +89,7 @@ def _context(
         "name": f"shared-{prefix}-prod",
         "vlan_id": VLAN,
         "snat_address": {"id": f"snat-{prefix}", "address": "198.51.100.1/32"},
-        "cluster": {"id": f"ha-{prefix}", "name": f"ha-{prefix}", "capabilities": [_device(i, role) for i in ids]},
+        "shared_devices": [_device(i, role) for i in ids],
         "capabilities": [
             *(_leg(i, exchange=f"ex-{prefix}") for i in ids),
             *(_leg(i, vlan=VLAN, namespace=("PROD", "prod"), exchange=None) for i in ids),
@@ -214,32 +214,25 @@ class TestDataCenter:
         assert "TopologyCustomerDC 'C006-P-DC11'" in finding
         assert "no serving firewall context" in finding
 
-    def test_empty_cluster(self) -> None:
-        """A cluster without members lacks the pair (and with it every leg)."""
+    @pytest.mark.parametrize("members", [[], None])
+    def test_no_member_firewalls(self, members: list[dict[str, Any]] | None) -> None:
+        """A context with no member devices (empty or absent `shared_devices`) lacks the pair and every leg."""
         context = _context()
-        context["cluster"]["capabilities"] = []
-        (finding,) = egress_findings(_cleaned([_dc([context])]))
-        assert "context 'shared-dc-prod'" in finding
-        assert "cluster 'ha-dc' has 0 member device(s)" in finding
-
-    def test_no_cluster(self) -> None:
-        """A context with no cluster link is reported as such."""
-        context = _context()
-        context["cluster"] = None
+        context["shared_devices"] = members
         findings = egress_findings(_cleaned([_dc([context])]))
-        assert any("no cluster (ManagedFirewallHA)" in finding for finding in findings)
+        assert any("no member firewalls (shared_devices)" in finding for finding in findings)
 
     def test_one_member_only(self) -> None:
         """One member of a pair is not a pair."""
         context = _context()
-        context["cluster"]["capabilities"].pop()
+        context["shared_devices"].pop()
         (finding,) = egress_findings(_cleaned([_dc([context])]))
         assert "has 1 member device(s), 1 with role internal-firewall" in finding
 
     def test_member_with_another_role(self) -> None:
         """Two members of which one is no firewall are not a firewall pair."""
         context = _context()
-        context["cluster"]["capabilities"][1]["role"] = "load-balancer"
+        context["shared_devices"][1]["role"] = "load-balancer"
         findings = egress_findings(_cleaned([_dc([context])]))
         assert any("2 member device(s), 1 with role internal-firewall" in finding for finding in findings)
 
@@ -548,7 +541,7 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
         "name": value("shared-dc10-prod"),
         "vlan_id": value(VLAN),
         "snat_address": {"node": {"id": "snat", "address": value("198.51.100.1/32")}} if snat else {"node": None},
-        "cluster": {"node": {"id": "ha-1", "name": value("ha-1"), "capabilities": _edges(members)}},
+        "shared_devices": _edges(members),
         "capabilities": _edges([*legs, *ports]),
     }
     return {

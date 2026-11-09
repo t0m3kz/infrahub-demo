@@ -301,12 +301,12 @@ def _leg(context: dict[str, Any], device_name: str, ha: dict[str, Any] | None) -
 
 
 def get_loadbalancer_contexts(
-    device_capabilities: list[dict[str, Any]] | None,
+    shared_capabilities: list[dict[str, Any]] | None,
     device_name: str,
     ha: dict[str, Any] | None,
     platform: str,
 ) -> list[dict[str, Any]]:
-    """The contexts of the device's ManagedLoadbalancerHA cluster that have a leg on this device.
+    """The load balancer contexts the device is a member of that have a leg on this device.
 
     Each is {name, partition, dedicated, vrf (namespace name), route_domain (its l3_vni), vrf_device
     (``vrf-<NAMESPACE>``), vip_prefix, leg (see _leg), vips (see _vip)}, PROD first. A context whose leg
@@ -316,12 +316,7 @@ def get_loadbalancer_contexts(
     """
     if platform not in _VENDORS:
         raise ValueError(f"{platform}: no load-balancer template; refusing to render {device_name}")
-    contexts = [
-        context
-        for cap in device_capabilities or []
-        if cap.get("typename") == "ManagedLoadbalancerHA"
-        for context in cap.get("contexts") or []
-    ]
+    contexts = [cap for cap in shared_capabilities or [] if cap.get("typename") == "ManagedLoadbalancerContext"]
     rendered: list[tuple[int, dict[str, Any]]] = []
     for context in contexts:
         leg = _leg(context, device_name, ha)

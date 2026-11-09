@@ -153,7 +153,8 @@ class _ContextTarget:
 
     spec: ContextSpec
     name_base: str
-    cluster_id: str
+    # The hosting deployment (a DC, or the metro of a zone): the context's mandatory Parent.
+    deployment_id: str
     tenant_id: str | None
     track: bool
     devices: list[Any]

@@ -14,25 +14,17 @@ fragment InternetEgressContext on ManagedFirewallContext {
       }
     }
   }
-  cluster {
-    node {
-      id
-      name {
-        value
-      }
-      capabilities {
-        edges {
-          node {
-            id
-            __typename
-            name {
-              value
-            }
-            ... on DcimDeviceManaged {
-              role {
-                value
-              }
-            }
+  shared_devices {
+    edges {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+        ... on DcimDeviceManaged {
+          role {
+            value
           }
         }
       }

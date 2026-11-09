@@ -81,13 +81,7 @@ generics:
   - name: ApplianceHosting
     namespace: Topology
     description: "Deployment in which a provider-hosted network function is rented"
-    human_friendly_id:
-      - name__value
     include_in_menu: false
-    attributes:
-      - name: name
-        kind: Text
-        order_weight: 100
     relationships:
       - name: appliances
         peer: CloudNetworkAppliance
@@ -125,13 +119,7 @@ generics:
   - name: CloudHosting
     namespace: Topology
     description: "Deployment in which a customer's cloud instances run"
-    human_friendly_id:
-      - name__value
     include_in_menu: false
-    attributes:
-      - name: name
-        kind: Text
-        order_weight: 100
     relationships:
       - name: instances
         peer: CloudInstance

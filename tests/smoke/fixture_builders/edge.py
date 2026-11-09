@@ -64,7 +64,7 @@ def build_border_leaf_bgw_stretched_data(*, device_name: str, platform: str) -> 
     fw_port = next(e["node"] for e in device_node["interfaces"]["edges"] if e["node"]["role"] == _v("firewall"))
     firewall = {
         "node": {
-            "capabilities": _edges([{"__typename": "ManagedFirewallHA", "contexts": fw_port["capabilities"]}]),
+            "shared_capabilities": fw_port["capabilities"],
         }
     }
     device_node["deployment"]["node"]["devices"] = {"edges": [firewall]}

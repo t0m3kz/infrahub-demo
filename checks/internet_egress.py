@@ -10,8 +10,8 @@ an ERROR that blocks the proposed change. One finding per rule, footprint, conte
 A DC footprint (``serving_firewall_context``), and each firewall context of a colocation footprint
 (``serving_firewall_contexts``), needs:
 
-1. a cluster (``ManagedFirewallHA``) of exactly two member devices, both with role ``firewall`` (``external-firewall``
-   for the context a topology names as its Internet edge);
+1. exactly two member devices (``shared_devices``), both with role ``firewall`` (``external-firewall`` for the
+   context a topology names as its Internet edge);
 2. for every member, an INTERNET leg: a sub-interface of the context named ``<port>.<vlan>`` (the transit VLAN of the
    INTERNET slot, utils/exchange_transit.py) with an address in the INTERNET namespace;
 3. a ``TopologyRoutedExchange`` of the context between the tenant VRF and INTERNET, with every INTERNET leg linked to
@@ -90,10 +90,18 @@ def _id(node: dict[str, Any] | str | None) -> str | None:
     return str(node) if node else None
 
 
-def _members(cluster: dict[str, Any]) -> list[dict[str, Any]]:
-    """The member devices of a cluster, by name."""
+def _members(context: dict[str, Any]) -> list[dict[str, Any]]:
+    """The member devices of a context (its ``shared_devices``), by name."""
     return sorted(
-        (member for member in cluster.get("capabilities") or [] if isinstance(member, dict)),
+        (member for member in context.get("shared_devices") or [] if isinstance(member, dict)),
+        key=_name,
+    )
+
+
+def _ha_members(domain: dict[str, Any]) -> list[dict[str, Any]]:
+    """The member devices of an HA domain (its ``capabilities``), by name."""
+    return sorted(
+        (member for member in domain.get("capabilities") or [] if isinstance(member, dict)),
         key=_name,
     )
 
@@ -170,17 +178,15 @@ def context_gaps(
     context a topology names as its Internet edge.
     """
     label = _name(context)
-    cluster = context.get("cluster")
-    cluster = cluster if isinstance(cluster, dict) else {}
-    members = _members(cluster)
+    members = _members(context)
     firewalls = [member for member in members if member.get("role") == member_role]
     gaps: list[str] = []
 
-    if not cluster:
-        gaps.append("no cluster (ManagedFirewallHA)")
+    if not members:
+        gaps.append("no member firewalls (shared_devices)")
     elif len(members) != PAIR_SIZE or len(firewalls) != PAIR_SIZE:
         gaps.append(
-            f"cluster '{_name(cluster)}' has {len(members)} member device(s), {len(firewalls)} with role "
+            f"context '{label}' has {len(members)} member device(s), {len(firewalls)} with role "
             f"{member_role}: a complete pair is exactly {PAIR_SIZE} firewalls"
         )
 
@@ -228,7 +234,7 @@ def virtual_pair_gaps(colocation: dict[str, Any]) -> list[str]:
         return ["it hosts no firewall HA domain (ManagedFirewallHA)"]
     problems: list[str] = []
     for domain in sorted(domains.values(), key=_name):
-        members = _members(domain)
+        members = _ha_members(domain)
         complete = len(members) == PAIR_SIZE and all(
             member.get("typename") == APPLIANCE_KIND
             and member.get("role") == FIREWALL_ROLE
@@ -254,8 +260,7 @@ def _zone_firewall_ids(zone: dict[str, Any]) -> set[str]:
 
 
 def _context_member_ids(context: dict[str, Any]) -> set[str]:
-    cluster = context.get("cluster")
-    return {str(member["id"]) for member in _members(cluster if isinstance(cluster, dict) else {}) if member.get("id")}
+    return {str(member["id"]) for member in _members(context) if member.get("id")}
 
 
 def colocation_gaps(footprint: dict[str, Any], cleaned: dict[str, Any]) -> list[Gap]:

@@ -243,15 +243,7 @@ def build_overlay_pbr_bl_data(*, device_name: str, platform: str) -> dict:
     data = build_exchange_transit_bl_data(device_name=device_name, platform=platform, with_customer_port=False)
     node = data["DcimDevice"]["edges"][0]["node"]
     fw_port = next(e["node"] for e in node["interfaces"]["edges"] if e["node"]["role"] == _v("firewall"))
-    node["deployment"]["node"]["devices"] = {
-        "edges": [
-            {
-                "node": {
-                    "capabilities": _edges([{"__typename": "ManagedFirewallHA", "contexts": fw_port["capabilities"]}])
-                }
-            }
-        ]
-    }
+    node["deployment"]["node"]["devices"] = {"edges": [{"node": {"shared_capabilities": fw_port["capabilities"]}}]}
     policies = [
         {
             "node": {
@@ -467,7 +459,7 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
     # keep the HA sync port of the HA fixture, replace the zone legs by the context legs
     ha_port = [e for e in device["interfaces"]["edges"] if e["node"]["name"]["value"] == "ethernet1/7"]
     device["interfaces"]["edges"] = [{"node": i} for i in interfaces] + ha_port
-    device["capabilities"]["edges"][0]["node"]["contexts"] = _edges(contexts)
+    device["shared_capabilities"] = _edges(contexts)
 
     def zone(name: str, segments: list[dict]) -> dict:
         return {
@@ -590,7 +582,7 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
     ha_port = [e for e in device["interfaces"]["edges"] if e["node"]["name"]["value"] == "ethernet1/7"]
     device["interfaces"]["edges"] = [{"node": i} for i in interfaces] + ha_port
     device["role"] = _v("external-firewall")
-    device["capabilities"]["edges"][0]["node"]["contexts"] = _edges([cap])
+    device["shared_capabilities"] = _edges([cap])
     data["SecurityZone"] = _edges([])
     return data
 
@@ -638,12 +630,8 @@ def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
             ]
         ),
     }
-    # The full context is fetched once through the member's HA capability.
-    shared = next(
-        edge["node"]
-        for edge in device["capabilities"]["edges"][0]["node"]["contexts"]["edges"]
-        if edge["node"]["id"] == shared_id
-    )
+    # The full context is fetched once through the member's shared capabilities.
+    shared = next(edge["node"] for edge in device["shared_capabilities"]["edges"] if edge["node"]["id"] == shared_id)
     shared["terminated_segments"] = _edges([term])
     shared["served_deployments"]["edges"][0]["node"]["network_segments"]["edges"].append({"node": term_served})
     device["interfaces"]["edges"].append(
@@ -725,11 +713,11 @@ def build_virtual_firewall_data() -> dict:
 
     ha_cap = device["capabilities"]["edges"][0]["node"]
     dedicated_context = next(
-        edge["node"] for edge in ha_cap["contexts"]["edges"] if edge["node"]["id"] == dedicated["id"]
+        edge["node"] for edge in device["shared_capabilities"]["edges"] if edge["node"]["id"] == dedicated["id"]
     )
     dedicated_context["name"] = _v("fw-C007-p-dedicated-context")
     dedicated_context["tenant"] = _node({"name": _v("C007-p")})
-    ha_cap["contexts"] = _edges([dedicated_context])
+    device["shared_capabilities"] = _edges([dedicated_context])
     ha_cap["name"] = _v("fw-C007-p-dedicated-ha")
     ha_cap["capabilities"] = _edges([{"name": _v(member)} for member in _VIRTUAL_FW_MEMBERS])
     device["name"] = _v(device_name)

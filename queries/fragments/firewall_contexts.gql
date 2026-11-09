@@ -65,19 +65,11 @@ fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
     edges {
       node {
         ... on DcimPhysicalDevice {
-          capabilities {
+          shared_capabilities {
             edges {
               node {
                 __typename
-                ... on ManagedFirewallHA {
-                  contexts {
-                    edges {
-                      node {
-                        ...FirewallContextLegFields
-                      }
-                    }
-                  }
-                }
+                ...FirewallContextLegFields
               }
             }
           }
@@ -105,6 +97,16 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
   }
   context_id {
     value
+  }
+  # The devices that enforce the context: checks/common.py validate_context_members holds them to one HA pair.
+  shared_devices {
+    edges {
+      node {
+        name {
+          value
+        }
+      }
+    }
   }
   vlan_id {
     value

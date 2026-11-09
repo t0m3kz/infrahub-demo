@@ -351,10 +351,10 @@ class TestFootprintServedByTwoColocationZones:
 
     @staticmethod
     def _zone_firewall(context_id: str, segments: list[dict]) -> list[dict]:
-        """get_firewall_contexts() of one zone's firewall: its cluster's context, serving the footprint."""
+        """get_firewall_contexts() of one zone's firewall: the context it is a member of, serving the footprint."""
         served = [{"id": "footprint-1", "network_segments": segments}]
         cap = {"typename": "ManagedFirewallContext", "id": context_id, "name": f"shared-{context_id}", "vlan_id": None}
-        return get_firewall_contexts([], cluster_contexts=[{**cap, "served_deployments": served}])
+        return get_firewall_contexts([], member_contexts=[{**cap, "served_deployments": served}])
 
     def test_each_zones_context_holds_the_same_rules_in_its_own_table(self) -> None:
         segs = _segments(_placement_rule("a-to-b", "s1", "s2"), _placement_rule("b-to-a", "s2", "s1", index=20))
