@@ -11,7 +11,7 @@ spec:
       status: active
       provider: "P004"
       description: "PROD handoff eg-fr201 <-> AWS Direct Connect private VIF (Nordix VPC behind the hub)"
-      security_zone: "PROD"
+      vrf: [FR, "PROD"]
       link_prefix: ["10.255.143.254/31", "default"]
       password: "eqx-fr2-aws-euc1-key"
       locations:

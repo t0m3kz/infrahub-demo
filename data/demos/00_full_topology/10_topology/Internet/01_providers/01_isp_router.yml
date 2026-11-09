@@ -1,4 +1,3 @@
----
 # The router of the second ISP, at its own external-provider facility. Its port towards the cage edge carries the
 # transit /31 of the access par1-ispb-77302-isp-b and is nested under it (the prefix is in 00_common/04_internet).
 apiVersion: infrahub.app/v1
@@ -14,7 +13,6 @@ spec:
       interfaces:
         - kind: DcimPhysicalInterface
           data:
-            security_zone: "INTERNET"
             name: et-0/0/1
             status: active
             description: "Transit customer: par-colo1-edge-01"
@@ -24,7 +22,6 @@ spec:
                 ip_namespace: "default"
         - kind: DcimPhysicalInterface
           data:
-            security_zone: "INTERNET"
             name: et-0/0/2
             status: active
             description: "Transit customer: lis-office-edge-02"

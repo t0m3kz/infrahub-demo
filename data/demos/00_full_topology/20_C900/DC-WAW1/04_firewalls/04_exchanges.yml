@@ -7,8 +7,6 @@ spec:
     - name: c900-waw1-fw-01-waw1-fw-02-prod-PROD-INTERNET
       status: active
       gateway: c900-waw1-fw-01-waw1-fw-02-prod
-      security_zone_a: PROD
-      security_zone_z: INTERNET
       capabilities:
         - kind: DcimVirtualInterface
           data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3001"}
@@ -18,11 +16,11 @@ spec:
           data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3401"}
         - kind: DcimVirtualInterface
           data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3401"}
+      vrf_a: [DC-WAW1, PROD]
+      vrf_z: [DC-WAW1, INTERNET]
     - name: c900-waw1-fw-01-waw1-fw-02-prod-PROD-MANAGEMENT
       status: active
       gateway: c900-waw1-fw-01-waw1-fw-02-prod
-      security_zone_a: PROD
-      security_zone_z: MANAGEMENT
       capabilities:
         - kind: DcimVirtualInterface
           data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3001"}
@@ -32,3 +30,5 @@ spec:
           data: {device: c900-waw1-fw-01-prod, name: "eth1/1.3601"}
         - kind: DcimVirtualInterface
           data: {device: c900-waw1-fw-02-prod, name: "eth1/1.3601"}
+      vrf_a: [DC-WAW1, PROD]
+      vrf_z: [DC-WAW1, MANAGEMENT]

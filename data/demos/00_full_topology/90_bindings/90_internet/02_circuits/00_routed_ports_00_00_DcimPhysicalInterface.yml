@@ -7,7 +7,7 @@ kind: Object
 spec:
   kind: DcimPhysicalInterface
   data:
-    - security_zone: "INTERNET"
+    - vrf: [DC-KTW1, "INTERNET"]
       device: ktw1-edge-01
       name: Ethernet1/2
       description: "Internet access (ktw1-ispa-48211-isp-a): transit to the ISP, tunnels ride on it"
@@ -16,8 +16,7 @@ spec:
         data:
           address: "198.51.100.10/31"
           ip_namespace: "default"
-    - security_zone: "INTERNET"
-      device: EXT-ISP-A-PE1
+    - device: EXT-ISP-A-PE1
       name: et-0/0/0
       description: "Transit customer: ktw1-edge-01"
       status: active

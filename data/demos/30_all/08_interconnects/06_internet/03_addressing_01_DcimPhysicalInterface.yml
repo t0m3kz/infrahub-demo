@@ -7,7 +7,7 @@ kind: Object
 spec:
   kind: DcimPhysicalInterface
   data:
-    - security_zone: "INTERNET"
+    - vrf: [FR, "INTERNET"]
       name: "Ethernet1/14"
       device: "eg-fr201"
       status: active
@@ -16,7 +16,7 @@ spec:
         data:
           address: "203.0.113.1/31"
           ip_namespace: "default"
-    - security_zone: "INTERNET"
+    - vrf: [FR, "INTERNET"]
       name: "Ethernet1/14"
       device: "eg-fr202"
       status: active
@@ -25,7 +25,7 @@ spec:
         data:
           address: "203.0.113.3/31"
           ip_namespace: "default"
-    - security_zone: "INTERNET"
+    - vrf: [PA, "INTERNET"]
       name: "Ethernet1/14"
       device: "eg-pa401"
       status: active
@@ -34,7 +34,7 @@ spec:
         data:
           address: "203.0.113.5/31"
           ip_namespace: "default"
-    - security_zone: "INTERNET"
+    - vrf: [PA, "INTERNET"]
       name: "Ethernet1/14"
       device: "eg-pa402"
       status: active
@@ -44,8 +44,7 @@ spec:
           address: "203.0.113.7/31"
           ip_namespace: "default"
 
-    - security_zone: "INTERNET"
-      name: "et-0/0/0"
+    - name: "et-0/0/0"
       device: "EXT-LUMEN-FRA1"
       status: active
       description: "Transit customer: Equinix FR cage (eg-fr201)"
@@ -53,8 +52,7 @@ spec:
         data:
           address: "203.0.113.0/31"
           ip_namespace: "default"
-    - security_zone: "INTERNET"
-      name: "et-0/0/0"
+    - name: "et-0/0/0"
       device: "EXT-COGENT-FRA1"
       status: active
       description: "Transit customer: Equinix FR cage (eg-fr202)"
@@ -62,8 +60,7 @@ spec:
         data:
           address: "203.0.113.2/31"
           ip_namespace: "default"
-    - security_zone: "INTERNET"
-      name: "et-0/0/0"
+    - name: "et-0/0/0"
       device: "EXT-LUMEN-PAR1"
       status: active
       description: "Transit customer: Equinix PA cage (eg-pa401)"
@@ -71,8 +68,7 @@ spec:
         data:
           address: "203.0.113.4/31"
           ip_namespace: "default"
-    - security_zone: "INTERNET"
-      name: "et-0/0/0"
+    - name: "et-0/0/0"
       device: "EXT-COGENT-PAR1"
       status: active
       description: "Transit customer: Equinix PA cage (eg-pa402)"

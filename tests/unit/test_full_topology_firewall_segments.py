@@ -200,7 +200,7 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
     address = leg["ip_address"]
     if isinstance(address, list):
         address = {"data": {"address": address[0], "ip_namespace": address[1]}}
-    zone_name = leg["security_zone"]
+    zone_name = leg["vrf"][1]
     cap = {
         "id": context["name"],
         "__typename": "ManagedFirewallContext",
@@ -593,7 +593,7 @@ def test_new_gdn_pair_uses_free_template_ports_rack_units_and_shared_transit_pre
     assert [leg["ip_address"]["data"]["address"] for leg in legs] == ["100.66.0.37/29", "100.66.0.38/29"]
     assert legs[0]["ip_address"]["data"]["ip_prefix"]["data"]["prefix"] == "100.66.0.32/29"
     assert legs[1]["ip_address"]["data"]["ip_prefix"] == ["100.66.0.32/29", "default"]
-    assert {leg["security_zone"] for leg in legs} == {"PROD"}
+    assert {leg["vrf"][1] for leg in legs} == {"PROD"}
     raw = _raw_member("gdn1", "gdn1-fw-01")
     device = cast(dict[str, Any], clean_data(raw))
     contexts = get_firewall_contexts(device["interfaces"], get_ha(device["capabilities"]))

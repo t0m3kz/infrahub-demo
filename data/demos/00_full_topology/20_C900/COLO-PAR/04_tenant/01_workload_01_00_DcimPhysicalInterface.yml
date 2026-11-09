@@ -5,7 +5,7 @@ kind: Object
 spec:
   kind: DcimPhysicalInterface
   data:
-    - security_zone: "PROD"
+    - vrf: [PAR, "PROD"]
       device: par-colo1-xfw-01
       name: ethernet1/2
       role: uplink

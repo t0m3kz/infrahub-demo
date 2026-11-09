@@ -28,7 +28,7 @@ spec:
       interfaces:
         - kind: DcimPhysicalInterface
           data:
-            security_zone: "PROD"
+            vrf: [PAR, "PROD"]
             name: eno1
             role: uplink
             status: active

@@ -1,4 +1,3 @@
----
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -9,7 +8,7 @@ spec:
       provider: P901
       circuit_type: handoff
       status: active
-      security_zone: "PROD"
+      vrf: [PAR, "PROD"]
       link_prefix:
         - 10.255.128.6/31
         - "default"

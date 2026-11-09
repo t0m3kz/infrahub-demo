@@ -466,7 +466,7 @@ def _internet_l3_rows(d: dict, cfg: dict) -> list[Row]:
             str([val(a, "address") for a in addr]),
         )
     )
-    vrf = [v for v in d["vrf"] if ((v.get("namespace") or {}).get("node") or {}).get("name", {}).get("value") == ns]
+    vrf = [v for v in d["vrf"] if ((v.get("security_zone") or {}).get("node") or {}).get("name", {}).get("value") == ns]
     member = any(edge in [x["display_label"] for x in rel(v, "shared_devices")] for v in vrf)
     rows.append(
         (f"internet L3: {edge} is a member of the {ns} VRF instance", member, str([val(v, "name") for v in vrf]))

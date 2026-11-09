@@ -42,8 +42,7 @@ spec:
     # GW1's router-id: a loopback, not a handoff address (those are generated at circuit
     # creation). 10.255.64.0/24 holds the loopbacks of the party devices modelled as stubs,
     # clear of the handoff pools.
-    - security_zone: "PROD"
-      name: "Loopback0"
+    - name: "Loopback0"
       device: "EQX-FR2-SDWAN-GW1"
       role: loopback
       status: active

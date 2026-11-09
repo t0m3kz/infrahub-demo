@@ -38,10 +38,15 @@ def _external_handoffs() -> list[dict[str, Any]]:
     zone's own /31 pool in default IPAM), so the circuit is what the data holds; ``zones`` is each end's domain.
     """
     return [
-        {**circuit, "zones": [circuit.get("security_zone")] * len(circuit["capabilities"])}
+        {**circuit, "zones": [_zone(circuit)] * len(circuit["capabilities"])}
         for circuit in _objects(_INTERCONNECTS, "TopologySessionCircuit", "handoff")
-        if circuit.get("security_zone") in ("PROD", "NONPROD")
+        if _zone(circuit) in ("PROD", "NONPROD")
     ]
+
+
+def _zone(circuit: dict) -> str | None:
+    """The zone of a circuit's routing VRF, ``[deployment, zone]`` in the data."""
+    return (circuit.get("vrf") or [None, None])[1]
 
 
 class TestAllDemoData:
@@ -51,7 +56,7 @@ class TestAllDemoData:
             "HANDOFF-FR2-AWS-EUC1-PROD",
             "HANDOFF-FR2-SDWAN-GW1-PROD",
         ]
-        assert {p["security_zone"] for p in _external_handoffs()} == {"PROD"}
+        assert {_zone(p) for p in _external_handoffs()} == {"PROD"}
         assert all("ip_namespace" not in p for p in _external_handoffs())
 
     @pytest.mark.parametrize("peering", _external_handoffs(), ids=lambda p: p["name"])

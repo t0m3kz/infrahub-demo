@@ -4,7 +4,7 @@ kind: Object
 spec:
   kind: DcimVirtualInterface
   data:
-    - security_zone: "PROD"
+    - vrf: [DC-GDN1, "PROD"]
       name: ethernet1/1.3000
       device: gdn1-fw-01
       parent_interface: ["gdn1-fw-01", "ethernet1/1"]
@@ -21,7 +21,7 @@ spec:
               ip_namespace: "default"
               status: active
               description: GDN1 internal firewall PROD transit
-    - security_zone: "PROD"
+    - vrf: [DC-GDN1, "PROD"]
       name: ethernet1/1.3000
       device: gdn1-fw-02
       parent_interface: ["gdn1-fw-02", "ethernet1/1"]

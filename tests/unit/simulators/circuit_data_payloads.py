@@ -428,7 +428,7 @@ def build_payloads(without_cables: bool = False, without_circuits: Iterable[str]
                 name(circuit),
                 [str(p) for p in circuit.item["locations"]],
                 [(str(d), str(p)) for d, p in circuit.item["capabilities"]],
-                str(circuit.item["security_zone"]),
+                str(circuit.item["vrf"][1]),
             )
         )
 

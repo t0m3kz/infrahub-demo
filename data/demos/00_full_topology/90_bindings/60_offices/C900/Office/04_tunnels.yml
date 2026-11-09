@@ -1,4 +1,3 @@
----
 # The tunnels of the C900 office (inventory only, no BGP). The office is the first location (its owner is the tunnel's,
 # derived) and each end rides a live internet carrier circuit of its own (checks/circuit_placement.py): the office
 # edge the access bcn-office-ispa-48212-isp-a (90_bindings/90_internet/02_circuits), the DC edge
@@ -9,7 +8,7 @@ kind: Object
 spec:
   kind: TopologySessionCircuit
   data:
-    - security_zone: "PROD"
+    - vrf: [C900-OFFICE, "PROD"]
       name: bcn-office-tunnel-ktw1
       description: SD-WAN tunnel from the C900 office edge to the DC edge over the internet, no BGP
       provider: P035
@@ -21,7 +20,7 @@ spec:
       capabilities:
         - ["bcn-office-edge-01", "Tunnel1"]
         - ["ktw1-edge-01", "Tunnel4"]
-    - security_zone: "PROD"
+    - vrf: [C900-OFFICE, "PROD"]
       name: bcn-office-tunnel1-zscaler-muc
       description: Tunnel to the Zscaler enforcement node, no BGP
       provider: P030

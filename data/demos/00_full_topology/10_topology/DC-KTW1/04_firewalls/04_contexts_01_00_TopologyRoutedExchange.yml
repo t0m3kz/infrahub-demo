@@ -8,8 +8,6 @@ spec:
   data:
     - name: shared-ktw1-xfw-ha-prod-PROD-INTERNET
       gateway: shared-ktw1-xfw-ha-prod
-      security_zone_a: PROD
-      security_zone_z: INTERNET
       status: active
       capabilities:
         - kind: DcimVirtualInterface
@@ -20,3 +18,5 @@ spec:
           data: {device: ktw1-xfw-01, name: "ethernet1/1.3401"}
         - kind: DcimVirtualInterface
           data: {device: ktw1-xfw-02, name: "ethernet1/1.3401"}
+      vrf_a: [DC-KTW1, PROD]
+      vrf_z: [DC-KTW1, INTERNET]

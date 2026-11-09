@@ -4,7 +4,7 @@ kind: Object
 spec:
   kind: TopologySessionCircuit
   data:
-    - security_zone: "PROD"
+    - vrf: [C001-OFFICE, "PROD"]
       name: "C001-PARTNER-ACME-FR2"
       circuit_type: tunnel
       member_of_groups: [virtual_circuits]

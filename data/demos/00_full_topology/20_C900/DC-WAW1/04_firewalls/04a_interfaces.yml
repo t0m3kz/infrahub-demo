@@ -4,7 +4,7 @@ kind: Object
 spec:
   kind: DcimVirtualInterface
   data:
-    - security_zone: "PROD"
+    - vrf: [DC-WAW1, "PROD"]
       device: c900-waw1-fw-01-prod
       name: eth1/1.3001
       parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
@@ -12,7 +12,7 @@ spec:
       status: active
       mtu: 9000
       ip_address: ["100.66.0.45/29", "default"]
-    - security_zone: "PROD"
+    - vrf: [DC-WAW1, "PROD"]
       device: c900-waw1-fw-02-prod
       name: eth1/1.3001
       parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
@@ -20,7 +20,7 @@ spec:
       status: active
       mtu: 9000
       ip_address: ["100.66.0.46/29", "default"]
-    - security_zone: "INTERNET"
+    - vrf: [DC-WAW1, "INTERNET"]
       device: c900-waw1-fw-01-prod
       name: eth1/1.3401
       parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
@@ -28,7 +28,7 @@ spec:
       status: active
       mtu: 9000
       ip_address: ["100.66.32.13/29", "default"]
-    - security_zone: "INTERNET"
+    - vrf: [DC-WAW1, "INTERNET"]
       device: c900-waw1-fw-02-prod
       name: eth1/1.3401
       parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
@@ -36,7 +36,7 @@ spec:
       status: active
       mtu: 9000
       ip_address: ["100.66.32.14/29", "default"]
-    - security_zone: "MANAGEMENT"
+    - vrf: [DC-WAW1, "MANAGEMENT"]
       device: c900-waw1-fw-01-prod
       name: eth1/1.3601
       parent_interface: ["c900-waw1-fw-01-prod", "eth1/1"]
@@ -44,7 +44,7 @@ spec:
       status: active
       mtu: 9000
       ip_address: ["100.66.48.5/29", "default"]
-    - security_zone: "MANAGEMENT"
+    - vrf: [DC-WAW1, "MANAGEMENT"]
       device: c900-waw1-fw-02-prod
       name: eth1/1.3601
       parent_interface: ["c900-waw1-fw-02-prod", "eth1/1"]
