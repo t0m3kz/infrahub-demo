@@ -14,7 +14,8 @@ import pytest
 
 from generators.protocols import AppComponent
 from tests.unit.app_application_generator_helpers import _app, _backend, _dep, _frontend, _make_gen, _segment
-from tests.unit.query_shape_helpers import compact
+from tests.unit.query_shape_helpers import compact, fragment_text
+from utils.graphql_queries import load_query
 
 # ===========================================================================
 # TestComponentTags
@@ -151,9 +152,9 @@ class TestComponentTags:
 
     def test_application_query_reads_the_tag_of_components_edge_targets_and_segments(self, root_dir: Path) -> None:
         """The fast path needs the tag of every child, every dependency target and every segment."""
-        query = compact((root_dir / "queries/topology/add/application.gql").read_text())
+        query = compact(load_query(root_dir / "queries/topology/add/application.gql"))
         assert query.count("security_tag { node { id } }") == 3
-        fragment = query.split("fragment AppComponentSecurityFields")[0]
+        fragment = fragment_text(root_dir / "queries/topology/add/application.gql", "SegmentSecurityFields")
         assert fragment.count("security_tag { node { id } }") == 1
         assert "vrf_type { value }" in fragment
 
@@ -342,7 +343,7 @@ class TestCrossSegmentComponentTags:
 
     def test_application_query_reads_the_calling_application_of_a_component(self, root_dir: Path) -> None:
         """The fan-out reads dependents' source application (AppApplicationGenerator._calling_application_ids)."""
-        query = compact((root_dir / "queries/topology/add/application.gql").read_text())
+        query = compact(load_query(root_dir / "queries/topology/add/application.gql"))
         dependents = query.split("dependents {", 1)[1].split("depends_on {", 1)[0]
         # `__typename` is required: the live server cannot resolve a hierarchical parent without it
         # ("Unable to identify the type of the instance"), which failed every add_app_application run.

@@ -75,3 +75,12 @@ def compact(text: str) -> str:
 
     ``terminated_on { node { id } }`` is found in the result however the file lays the selection out."""
     return " ".join(print_ast(parse(text)).split())
+
+
+def fragment_text(path: Path, name: str) -> str:
+    """One named fragment of the assembled query (shared fragments included), as a single normalized line."""
+    document = parse(load_query(path))
+    for definition in document.definitions:
+        if isinstance(definition, FragmentDefinitionNode) and definition.name.value == name:
+            return " ".join(print_ast(definition).split())
+    raise KeyError(f"{path}: no fragment {name}")

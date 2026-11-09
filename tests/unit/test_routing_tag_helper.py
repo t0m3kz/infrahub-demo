@@ -13,13 +13,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.protocols import CoreNumberPool
 
-from generators.helpers.routing_tag import (
-    ensure_routing_tag,
-    ensure_segment_routing_tag,
-)
+from generators.helpers.routing_tag import ensure_routing_tag, ensure_segment_routing_tag
 from generators.logger import GeneratorError
 from generators.topology.customer_routing_tag import CustomerRoutingTagGenerator
 from tests.unit.query_shape_helpers import compact
+from utils.graphql_queries import load_query
 from utils.limits import CUSTOMER_ROUTING_TAG_POOL, SEGMENT_ROUTING_TAG_POOL
 
 
@@ -254,6 +252,6 @@ class TestCustomerRoutingTagGenerator:
 
     def test_application_query_selects_the_segment_tag(self, root_dir: Path) -> None:
         """SegmentSecurityFields feeds the application generator's segments to the same helper."""
-        query = compact((root_dir / "queries/topology/add/application.gql").read_text())
+        query = compact(load_query(root_dir / "queries/topology/add/application.gql"))
         fragment = query.split("fragment SegmentSecurityFields", 1)[1].split("\nfragment ", 1)[0]
         assert "routing_tag { value }" in fragment

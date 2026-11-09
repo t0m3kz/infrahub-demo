@@ -216,37 +216,3 @@ query evpn_fabric {
     }
   }
 }
-
-fragment EvpnFabricLegFields on DcimInterface {
-  device {
-    node {
-      ... on DcimDeviceManaged {
-        role {
-          value
-        }
-      }
-    }
-  }
-  ...InterfaceRoutingZoneFields
-  ... on DcimVirtualInterface {
-    vrf {
-      node {
-        ...RoutingVrfFields
-      }
-    }
-    ip_address {
-      node {
-        address {
-          value
-        }
-        ip_namespace {
-          node {
-            name {
-              value
-            }
-          }
-        }
-      }
-    }
-  }
-}

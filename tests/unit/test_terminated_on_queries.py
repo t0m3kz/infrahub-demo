@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from tests.unit.query_shape_helpers import compact
+from utils.graphql_queries import load_query
 
 _FEEDS_THE_GATE = {
     # The fabric configs (leaf, border leaf, edge, ... spread these) and the VRF demand.
@@ -32,5 +33,6 @@ _FEEDS_THE_GATE = {
 @pytest.mark.parametrize(("path", "selections"), sorted(_FEEDS_THE_GATE.items()))
 def test_the_query_selects_terminated_on(root_dir: Path, path: str, selections: int) -> None:
     """Each selection of a segment's gateway for the gate sits next to a ``terminated_on { node { id } }``."""
-    text = compact((root_dir / path).read_text())
+    # A shared fragment file is read as written: assembling it would append the fragments it spreads.
+    text = compact((root_dir / path).read_text() if "/fragments/" in path else load_query(root_dir / path))
     assert text.count("terminated_on { node { id } }") == selections

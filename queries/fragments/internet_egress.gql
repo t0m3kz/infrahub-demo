@@ -1,0 +1,104 @@
+fragment InternetEgressContext on ManagedFirewallContext {
+  id
+  name {
+    value
+  }
+  vlan_id {
+    value
+  }
+  snat_address {
+    node {
+      id
+      address {
+        value
+      }
+    }
+  }
+  cluster {
+    node {
+      id
+      name {
+        value
+      }
+      capabilities {
+        edges {
+          node {
+            id
+            __typename
+            name {
+              value
+            }
+            ... on DcimDeviceManaged {
+              role {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  capabilities {
+    edges {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+        role {
+          value
+        }
+        device {
+          node {
+            id
+            name {
+              value
+            }
+            ... on DcimDeviceManaged {
+              role {
+                value
+              }
+            }
+          }
+        }
+        ...InterfaceRoutingZoneFields
+        ... on DcimVirtualInterface {
+          vrf {
+            node {
+              ...RoutingVrfFields
+            }
+          }
+          ip_address {
+            node {
+              id
+              address {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+          capabilities {
+            edges {
+              node {
+                __typename
+                ... on TopologyRoutedExchange {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

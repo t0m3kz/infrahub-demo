@@ -1,0 +1,91 @@
+fragment FirewallContextRoutesFields on ManagedFirewallContext {
+  id
+  name {
+    value
+  }
+  capabilities {
+    edges {
+      node {
+        __typename
+        id
+        device {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        ...InterfaceRoutingZoneFields
+        ... on DcimVirtualInterface {
+          vrf {
+            node {
+              ...RoutingVrfFields
+            }
+          }
+          ip_address {
+            node {
+              address {
+                value
+              }
+              ip_namespace {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment LoadbalancerContextRoutesFields on ManagedLoadbalancerContext {
+  id
+  name {
+    value
+  }
+  capabilities {
+    edges {
+      node {
+        __typename
+        id
+        device {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        ...InterfaceRoutingZoneFields
+        ... on DcimVirtualInterface {
+          vrf {
+            node {
+              ...RoutingVrfFields
+            }
+          }
+          ip_address {
+            node {
+              address {
+                value
+              }
+              ip_namespace {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

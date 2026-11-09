@@ -27,7 +27,8 @@ from generators.helpers.lb_vip import (
 from generators.lb_vip import load_balanced_components_in
 from generators.protocols import AppComponent, ManagedVxlanSegment
 from tests.unit.lb_vip_helpers import _context, _instance, _with_footprints
-from tests.unit.query_shape_helpers import fragment_tree, query_tree
+from tests.unit.query_shape_helpers import fragment_text, fragment_tree, query_tree
+from utils.graphql_queries import load_query
 
 # ===========================================================================
 # Pure planning
@@ -174,8 +175,8 @@ def test_application_query_reads_the_serving_context_from_the_segment_and_the_da
 ) -> None:
     """The context sits on the segment's footprints (the dependency targets read it through the same fragment); an
     instance only names its data center, whatever its device kind."""
-    query = (root_dir / "queries/topology/add/application.gql").read_text()
-    instance = query.split("fragment AppInstanceFields", 1)[1].split("fragment AppComponentSecurityFields", 1)[0]
+    query = load_query(root_dir / "queries/topology/add/application.gql")
+    instance = fragment_text(root_dir / "queries/topology/add/application.gql", "AppInstanceFields")
     assert "serving_loadbalancer_context" not in instance
     flat = " ".join(instance.split())
     physical = flat.split("... on DcimPhysicalDevice", 1)[1].split("... on DcimVirtualDevice", 1)[0]

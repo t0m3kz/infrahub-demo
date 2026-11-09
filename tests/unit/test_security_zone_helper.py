@@ -12,6 +12,7 @@ from checks.segment_security import CheckSegmentSecurity
 from generators.helpers.security_zone import ensure_security_zone
 from generators.protocols import SecurityZone
 from utils.exchange_transit import ZONE_BY_NS_TYPE
+from utils.graphql_queries import load_query
 
 
 def _client(zone_id: str = "zone-1") -> Any:
@@ -179,7 +180,7 @@ def test_application_query_selects_segment_typename() -> None:
     """The app loop zones segments by their real kind: the query must select it (no default kind exists)."""
     from pathlib import Path
 
-    text = Path(__file__).resolve().parents[2].joinpath("queries/topology/add/application.gql").read_text()
+    text = load_query(Path(__file__).resolve().parents[2].joinpath("queries/topology/add/application.gql"))
     fragment = text.split("fragment SegmentSecurityFields", 1)[1].split("\n}\n", 1)[0]
 
     assert "__typename" in fragment

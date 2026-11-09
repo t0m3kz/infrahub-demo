@@ -5,12 +5,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tests.unit.query_shape_helpers import fragment_text
+from utils.graphql_queries import load_query
 from utils.segment_addressing import segment_prefix
 
 
 def _query(root_dir: Path) -> str:
     """The application query text without comment lines."""
-    text = (root_dir / "queries" / "topology" / "add" / "application.gql").read_text()
+    text = load_query(root_dir / "queries" / "topology" / "add" / "application.gql")
     return "\n".join(line for line in text.splitlines() if not line.strip().startswith("#"))
 
 
@@ -20,7 +22,7 @@ def test_target_segment_carries_the_fields_a_cloud_endpoint_needs(root_dir: Path
     target = " ".join(text[text.index("target {") : text.index("health_checks")].split())
     for needle in ("...SegmentSecurityFields", "cidr_block { value }", "virtual_network {"):
         assert needle in target
-    head = " ".join(text[: text.index("fragment AppComponentSecurityFields")].split())
+    head = fragment_text(root_dir / "queries/topology/add/application.gql", "SegmentSecurityFields")
     assert "__typename" in head
     assert "environment { value }" in head
 

@@ -29,6 +29,7 @@ from tests.unit.lb_vip_helpers import (
     _web,
 )
 from tests.unit.query_shape_helpers import fragment_tree
+from utils.graphql_queries import load_query
 
 # ===========================================================================
 # AppApplicationGenerator: R_client and the run's errors
@@ -247,7 +248,7 @@ class TestCloudClientRule:
 
 def test_application_query_reads_the_cloud_placement_of_instances(root_dir: Path) -> None:
     """A cloud instance's private IP, virtual network and CIDR blocks (neutral IPAM, no routing zone)."""
-    query = (root_dir / "queries/topology/add/application.gql").read_text()
+    query = load_query(root_dir / "queries/topology/add/application.gql")
     fragment = query.split("fragment AppInstanceFields", 1)[1].split("fragment AppComponentSecurityFields", 1)[0]
     cloud = " ".join(fragment.split("... on CloudInstance {", 1)[1].split())
     assert "private_ip { value }" in cloud
