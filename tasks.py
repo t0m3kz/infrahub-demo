@@ -280,7 +280,10 @@ def test_integration_routing(
 
 @_task(optional=["basetemp", "server_port"])
 def test_integration_all_demo(
-    context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
+    context: Context,
+    basetemp: str = "~/.pytest-tmp/infrahub-demo",
+    server_port: int = 8100,
+    idempotency: bool = False,
 ) -> None:
     """Run the 30_all demo suite: staged load, then every layer it produces.
 
@@ -288,11 +291,17 @@ def test_integration_all_demo(
     run together and in order: load and generator dispatch (59), the app
     catalogue enforcement workflow (60), compute and the application graph
     (61), interconnects and tenant services (62), colo cloud/partner/SaaS zone
-    policy check + render (64), and reruns of the security generators that
-    must leave the branch unchanged (65), and the sessions of an Interconnect and a Handoff
+    policy check + render (64), and the sessions of an Interconnect and a Handoff
     following the status of their carrier or of the circuit itself, both ways (66, mutates the
     branch).
+
+    The reruns of the generators that must leave the branch unchanged (65, about 20 minutes) are optional:
+    ``--idempotency`` adds them, before 66.
+
+    Example:
+        uv run invoke test-integration-all-demo --idempotency
     """
+    idempotency_module = "tests/integration/test_65_all_demo_idempotency.py " if idempotency else ""
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
@@ -303,8 +312,8 @@ def test_integration_all_demo(
         "tests/integration/test_64_all_demo_firewall_config.py "
         "tests/integration/test_64b_all_demo_management_lb_config.py "
         "tests/integration/test_64c_all_demo_terminated_segment.py "
-        "tests/integration/test_65_all_demo_idempotency.py "
-        "tests/integration/test_66_all_demo_circuit_lifecycle.py",
+        + idempotency_module
+        + "tests/integration/test_66_all_demo_circuit_lifecycle.py",
         basetemp=basetemp,
         server_port=server_port,
     )
