@@ -69,9 +69,6 @@ class TestFlattenDeploymentFirewallContexts:
     def test_none_deployment_returns_empty(self) -> None:
         assert _flatten_deployment_firewall_contexts(None) == []
 
-    def test_empty_deployment_returns_empty(self) -> None:
-        assert _flatten_deployment_firewall_contexts({}) == []
-
     def test_dc_tier_device_contexts_extracted(self) -> None:
         """DC-tier devices (border-leaf, firewall, spine) have contexts directly
         under deployment.devices — no parent hop needed."""

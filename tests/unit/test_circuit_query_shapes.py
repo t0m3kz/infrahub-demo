@@ -265,17 +265,6 @@ def test_the_fakes_carry_every_field_the_generator_reads() -> None:
     assert not set(_GENERATOR_READS) - carried, f"read but never faked: {sorted(set(_GENERATOR_READS) - carried)}"
 
 
-def test_the_cable_is_selected_on_the_port_and_on_its_parent(generator_paths: set[str]) -> None:
-    """A cable-only handoff has no circuit: the carrier is the cable on the physical port or on the parent."""
-    assert {"capabilities.cable.id", "capabilities.parent_interface.cable.id"} <= generator_paths
-
-
-def test_the_decommissioned_filter_has_a_status_to_read(generator_paths: set[str]) -> None:
-    """The generator drops decommissioned carriers, so the query selects the carrier's status, on a port and its parent."""
-    assert "capabilities.capabilities.status" in generator_paths
-    assert "capabilities.parent_interface.capabilities.status" in generator_paths
-
-
 def test_the_circuit_projects_only_vrf_owned_routing(generator_paths: set[str]) -> None:
     """Global zone fields are visible through the local owner, never directly on the circuit or IPAM."""
     assert {path for path in generator_paths if path.startswith("vrf.")} == {

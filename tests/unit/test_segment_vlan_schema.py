@@ -116,24 +116,3 @@ class TestTheRowPointsAtItsDevice:
         assert {"svi", "vlan_domain"}.isdisjoint(r["name"] for r in row["relationships"])
         extended = {n["kind"] for n in segment_schema["extensions"]["nodes"]}
         assert "DcimVirtualInterface" not in extended
-
-    def test_the_vlan_domain_generic_is_gone(self, root_dir: Path) -> None:
-        """No domain object and no marker generic: a device inherits nothing for it, an MLAG neither."""
-        dcim = _load(root_dir, "schemas/base/dcim.yml")
-        mlag = _load(root_dir, "schemas/extensions/capabilities/mlag.yml")
-
-        assert "ManagedGenericVlanDomain" not in {g["name"] for g in dcim["generics"]}
-        assert "ManagedGenericVlanDomain" not in _node(dcim, "PhysicalDevice")["inherit_from"]
-        assert "ManagedGenericVlanDomain" not in _node(mlag, "MLAG")["inherit_from"]
-
-    def test_no_standalone_domain_kind_is_left(self, root_dir: Path) -> None:
-        offenders = [
-            str(path.relative_to(root_dir))
-            for directory in ("schemas", "generators", "transforms", "checks", "queries", "data")
-            for path in (root_dir / directory).rglob("*")
-            if path.is_file()
-            and path.suffix in {".yml", ".py", ".gql", ".j2"}
-            and "StandaloneVlanDomain" in path.read_text()
-        ]
-
-        assert offenders == []

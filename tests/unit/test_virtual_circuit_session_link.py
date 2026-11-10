@@ -1,41 +1,13 @@
-"""Unit tests for the link of add_virtual_circuit: a /31 from the namespace pool with our end the lower address, the vpn."""
+"""Unit tests for the vpn link of add_virtual_circuit (the handoff /31 and session are in test_virtual_circuit_session_handoff.py)."""
 
 from __future__ import annotations
 
 import pytest
 
-from tests.unit.simulators.circuit_fakes import FakeClient, handoff_payload, vpn_payload
+from tests.unit.simulators.circuit_fakes import FakeClient, vpn_payload
 from tests.unit.virtual_circuit_session_helpers import _assert_refused, _peering, _run
 
 VPN = "VC-C001-ZS-VPN"
-BASE = "10.255.128.0"
-
-
-def _addresses(client: FakeClient) -> dict[str, str]:
-    """Interface id -> the address id it was given."""
-    return {iface_id: iface.ip_address.id for iface_id, iface in client.interfaces.items()}
-
-
-class TestHandoffLink:
-    @pytest.mark.asyncio
-    async def test_a_slash_31_uses_offsets_0_and_1(self) -> None:
-        """Our end is the lower address of a /31 allocated from the namespace pool."""
-        client = FakeClient()
-
-        await _run(client, handoff_payload())
-
-        assert client.allocations[0]["prefix_length"] == 31
-        assert _addresses(client) == {"if-hs": f"IpamIPAddress:{BASE}/31", "if-aws": "IpamIPAddress:10.255.128.1/31"}
-
-    @pytest.mark.asyncio
-    async def test_the_session_is_directly_connected_with_bfd(self) -> None:
-        """One eBGP session, TTL 1, BFD on."""
-        client = FakeClient()
-
-        await _run(client, handoff_payload())
-
-        peering = _peering(client, "bgp")
-        assert (peering["session_type"], peering["ttl"], peering["bfd_enabled"]) == ("EBGP", 1, True)
 
 
 class TestVpn:

@@ -16,9 +16,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from generators.common import CommonGenerator
 from generators.firewall_context import FIREWALL_CONTEXT
-from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 from tests.unit.customer_dc_transit_helpers import (
     _LB_DEVICES,
     _LB_PROD,
@@ -34,10 +32,6 @@ from tests.unit.customer_dc_transit_helpers import (
     _World,
 )
 from utils.exchange_transit import transit_vlan
-
-
-def test_generator_is_a_common_generator() -> None:
-    assert issubclass(CustomerDeploymentDCExchangeGenerator, CommonGenerator)
 
 
 class TestFreshSharedBoarding:

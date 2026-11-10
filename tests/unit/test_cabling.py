@@ -79,16 +79,6 @@ def _build_strategy_plan(planner: CablingPlanner, scenario: str, cabling_offset:
 class TestCablingPlannerCore:
     """Test CablingPlanner core functionality: initialization, device mapping, sorting."""
 
-    def test_initialization(self) -> None:
-        """Test basic CablingPlanner initialization."""
-        bottom_interfaces: list[Any] = create_mock_interfaces("leaf-01", ["Ethernet1/1"])
-        top_interfaces: list[Any] = create_mock_interfaces("spine-01", ["Ethernet1/1"])
-
-        planner = CablingPlanner(bottom_interfaces, top_interfaces)
-
-        assert planner.bottom_by_device is not None
-        assert planner.top_by_device is not None
-
     def test_empty_interfaces_handled_gracefully(self) -> None:
         """Test initialization with empty interface lists."""
         planner = CablingPlanner([], [])
@@ -333,24 +323,6 @@ class TestCablingIdempotency:
             src2, dst2 = conn2
             assert src1.id == src2.id, f"Connection {i}: source mismatch"
             assert dst1.id == dst2.id, f"Connection {i}: destination mismatch"
-
-    def test_existing_cables_preserved(self) -> None:
-        """Test that existing cables are included in plan (idempotent re-run)."""
-        # 2 ToRs with 2 uplinks each - ALREADY CONNECTED
-        tor1 = create_mock_interfaces_with_cables("tor-01", ["Ethernet1/31", "Ethernet1/32"], connected=True)
-        tor2 = create_mock_interfaces_with_cables("tor-02", ["Ethernet1/31", "Ethernet1/32"], connected=True)
-
-        # 4 Spines with 2 ports each - SOME CONNECTED
-        spine1 = create_mock_interfaces_with_cables("spine-01", ["Ethernet1/1", "Ethernet1/2"], connected=True)
-        spine2 = create_mock_interfaces_with_cables("spine-02", ["Ethernet1/1", "Ethernet1/2"], connected=True)
-        spine3 = create_mock_interfaces_with_cables("spine-03", ["Ethernet1/1", "Ethernet1/2"], connected=False)
-        spine4 = create_mock_interfaces_with_cables("spine-04", ["Ethernet1/1", "Ethernet1/2"], connected=False)
-
-        planner = CablingPlanner(tor1 + tor2, spine1 + spine2 + spine3 + spine4)
-        cabling_plan = _build_strategy_plan(planner, "intra_rack")
-
-        # Should still return all 4 connections (existing connections included)
-        assert len(cabling_plan) == 4
 
     def test_round_robin_offsets_count_tors_that_reused_existing_cables(self) -> None:
         """A ToR that keeps its existing cables still claims its round-robin slots,

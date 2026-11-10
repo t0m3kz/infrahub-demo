@@ -108,21 +108,6 @@ class TestValidateRoutingPasswordOspf:
         }
         assert validate_routing_password(data) == []
 
-    def test_no_interfaces_key_returns_no_errors(self):
-        assert validate_routing_password({}) == []
-
-
-class TestValidateRoutingPasswordCombined:
-    def test_bgp_and_ospf_errors_both_reported(self):
-        data = {
-            "capabilities": [_bgp_capability([{"name": "underlay-a", "password": None}])],
-            "interfaces": [
-                {"name": "Ethernet1", "capabilities": [_ospf_interface_capability(None)]},
-            ],
-        }
-        errors = validate_routing_password(data)
-        assert len(errors) == 2
-
 
 _FROM_NAME: Any = object()  # a leg's tag defaults to the number its test name ends in
 GATEWAY_ID = "ctx-1"

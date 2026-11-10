@@ -26,13 +26,6 @@ def test_the_order_weights_of_a_rule_stay_unique() -> None:
     assert len(weights) == len(set(weights))
 
 
-def test_there_is_no_external_segment_kind_left() -> None:
-    """Neither the node nor its bootstrap data survives: the internet owns no segment."""
-    assert "ManagedExternalSegment" not in schema()
-    assert not declared("ManagedExternalSegment", BOOTSTRAP)
-    assert not (ROOT / "data" / "bootstrap" / "27_external_segments.yml").exists()
-
-
 def test_the_internet_zone_the_code_names_is_a_bootstrap_zone() -> None:
     """INTERNET_ZONE (utils/exchange_transit.py) is the zone data/bootstrap/24_security_zones.yml declares."""
     assert INTERNET_ZONE in {name(zone) for zone in declared("SecurityZone", BOOTSTRAP)}

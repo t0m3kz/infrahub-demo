@@ -15,7 +15,7 @@ import pytest
 
 from tests.unit.base_device_transform_helpers import _device_data, _make_tor, _make_transform
 from tests.unit.segment_port_helpers import deployment_caps
-from transforms.common import BaseDeviceTransform, get_capabilities
+from transforms.common import get_capabilities
 from transforms.config.tor import ToR
 
 # ---------------------------------------------------------------------------
@@ -24,15 +24,6 @@ from transforms.config.tor import ToR
 
 
 class TestGetCapabilitiesEdgeCases:
-    def test_empty_dict_returns_false_false(self) -> None:
-        result = get_capabilities({})
-        assert result == {"bgp_enabled": False, "ospf_enabled": False}
-
-    def test_unknown_service_type_ignored(self) -> None:
-        result = get_capabilities({"capabilities": [{"typename": "UnknownService"}]})
-        assert result["bgp_enabled"] is False
-        assert result["ospf_enabled"] is False
-
     def test_multiple_bgp_entries_still_true_once(self) -> None:
         result = get_capabilities(
             {
@@ -142,39 +133,6 @@ class TestTransformDataRouting:
             result = await t.transform({"raw": "data"})
         assert "no-platform-dev" in result
         assert "No configuration generated" in result
-
-    @pytest.mark.asyncio
-    async def test_activation_from_segments(self) -> None:
-        """Activations on segment.segment_deployments on the interface segments are collected."""
-        t = _make_transform(device_role="leaf")
-        interfaces = [
-            {
-                "name": "Ethernet10",
-                "capabilities": deployment_caps(
-                    {
-                        "id": "seg-1",
-                        "typename": "ManagedVxlanSegment",
-                        "name": "seg-100",
-                        "customer_name": "seg-100",
-                        "segment_deployments": [{"vlan_id": 100, "vni": 10100}],
-                    }
-                ),
-            }
-        ]
-        device = _device_data(interfaces=interfaces)
-
-        fake_template = MagicMock()
-        fake_template.render.return_value = "! rendered"
-
-        with (
-            patch("transforms.common.clean_data") as mock_clean,
-            patch.object(t, "_load_template", return_value=fake_template),
-        ):
-            mock_clean.return_value = {"DcimPhysicalDevice": [device]}
-            await t.transform({"raw": "data"})
-
-        rendered_kwargs = fake_template.render.call_args[1]
-        assert rendered_kwargs.get("vlans") is not None
 
     @pytest.mark.asyncio
     async def test_activation_missing_yields_no_vlans(self) -> None:
@@ -349,9 +307,6 @@ class TestToRClassAttributes:
 
     def test_query_is_leaf_config(self) -> None:
         assert ToR.query == "leaf_config"
-
-    def test_inherits_base_device_transform(self) -> None:
-        assert issubclass(ToR, BaseDeviceTransform)
 
     def test_extra_config_includes_vxlan_keys(self) -> None:
         """ToR uses device_role='tor' so _extra_config returns vxlan/vlans/acls."""

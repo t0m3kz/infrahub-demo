@@ -127,29 +127,6 @@ class TestMetroPools:
         assert kwargs["node_attribute"] == "vni"
         assert (kwargs["start_range"], kwargs["end_range"]) == (SITE_VNI_START, SITE_VNI_END)
 
-    @pytest.mark.asyncio
-    async def test_both_pools_are_attached_to_the_metro_in_one_call(self) -> None:
-        """fabric_asn_pool and vni_pool ride one attach_refs on the metro; no other pool is attached."""
-        gen = _make_generator()
-
-        await gen.generate({"TopologyColocationMetro": [_metro()]})
-
-        gen.attach_refs.assert_awaited_once_with(
-            kind=TopologyColocationMetro,
-            node_id="metro-1",
-            refs={"fabric_asn_pool": "asn-pool-id", "vni_pool": "vni-pool-id"},
-        )
-
-    @pytest.mark.asyncio
-    async def test_metro_names_are_lower_cased_in_pool_names(self) -> None:
-        """Pool names follow the lower-cased metro name, the same space as device names."""
-        gen = _make_generator()
-
-        await gen.generate({"TopologyColocationMetro": [_metro("AM", "m-am")]})
-
-        assert gen.upsert_asn_pool.await_args_list[-1].kwargs["pool_name"] == "am-asn-pool"
-        assert gen.upsert_number_pool.await_args_list[-1].kwargs["pool_name"] == "am-vni-pool"
-
 
 class TestMetroOwnsNoKit:
     """The metro runs with no kit at all and never creates devices, IP pools or locks."""

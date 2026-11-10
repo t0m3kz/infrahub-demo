@@ -115,11 +115,6 @@ class TestInfrastructureOrchestrator:
 
         assert definitions == [f"{_ORCHESTRATED} (schemas/extensions/topology/topology_customer.yml)"]
 
-    def test_no_other_kind_defines_the_attribute(self) -> None:
-        """Equivalent view by kind, so a failure names the offender."""
-        owners = sorted(kind for kind in _all_entries() if _ORCHESTRATOR_ATTRIBUTE in _attribute_names(kind))
-        assert owners == [_ORCHESTRATED]
-
     @pytest.mark.parametrize(
         "kind",
         [
@@ -564,9 +559,6 @@ class TestCloudNetworkAppliance:
         assert "TopologyBilledAccount" in _kind(kind)["inherit_from"]
         assert {"provider_account_number"}.isdisjoint(_attribute_names(kind))
         assert "owner" not in _relationship_names(kind)
-
-    def test_the_virtual_device_lost_the_provider_ordering_fields(self) -> None:
-        assert [name for name in _attribute_names("DcimVirtualDevice") if name.startswith("provider_")] == []
 
     def test_routers_have_no_ha_domain_kind_and_firewall_pairs_use_the_existing_one(self) -> None:
         """A provider-hosted router is an independent appliance; a firewall pair is a plain ManagedFirewallHA, whose

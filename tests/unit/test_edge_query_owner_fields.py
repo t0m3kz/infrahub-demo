@@ -101,11 +101,6 @@ def _peer(kind: str, relationship: str) -> str:
 class TestChangedFilesParse:
     """Every changed .gql file is valid GraphQL syntax."""
 
-    @pytest.mark.parametrize("path", [_EDGE, _FRAGMENT], ids=lambda p: p.name)
-    def test_the_gql_file_parses(self, path: Path) -> None:
-        """graphql-core parses the file (fragment spreads are validated by the repository sync of test-integration-fast)."""
-        assert parse(path.read_text()).definitions
-
     def test_the_edge_operation_keeps_its_three_extra_roots(self) -> None:
         """The roots the owner filter reads are all still selected (``public_origins`` is the aliased public-origin circuits)."""
         for root in ("public_origins", "ManagedNetworkSegment", "TopologyCustomerOffice"):

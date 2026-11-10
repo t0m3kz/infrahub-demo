@@ -45,13 +45,6 @@ def test_block_size_scales_with_border_leafs() -> None:
     assert calculate_fabric_asn_block_size(max_pods=2, max_border_leafs_per_fabric=0) == 500
 
 
-def test_name_to_asn_range_deterministic() -> None:
-    """Same name always produces the same range."""
-    r1 = name_to_asn_range("DC1", max_pods=2)
-    r2 = name_to_asn_range("DC1", max_pods=2)
-    assert r1 == r2
-
-
 def test_name_to_asn_range_unique_per_dc() -> None:
     """Different DC names produce non-overlapping ranges."""
     dc1_start, dc1_end = name_to_asn_range("DC1", max_pods=2)

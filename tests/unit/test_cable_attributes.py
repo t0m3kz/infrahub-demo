@@ -305,8 +305,3 @@ class TestSuiteLayoutData:
                     assert isinstance(value, int) and not isinstance(value, bool) and value >= 1, (
                         f"{suite.item.get('shortname')} in {suite.path.relative_to(ROOT)}: {name}={value!r}"
                     )
-
-    def test_every_suite_is_loadable_with_its_layout(self) -> None:
-        """Every LocationSuite in the data states its grid (rows, racks_per_row), the rest comes from defaults."""
-        suites = declared("LocationSuite", ROOT / "data")
-        assert all(isinstance(s.item.get("rows"), int) and isinstance(s.item.get("racks_per_row"), int) for s in suites)

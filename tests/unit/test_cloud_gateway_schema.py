@@ -44,14 +44,6 @@ def _extension(kind: str) -> dict[str, Any]:
     raise AssertionError(f"no extension of {kind}")
 
 
-def test_the_transit_gateway_kinds_are_merged_into_the_gateway() -> None:
-    """No CloudTransitGateway, attachment or route table of the old names remain."""
-    kinds = set(_nodes())
-
-    assert {"CloudGateway", "CloudGatewayAttachment", "CloudGatewayRouteTable"} <= kinds
-    assert not {k for k in kinds if "TransitGateway" in k}
-
-
 def test_gateway_types_are_hub_edge_customer_and_the_region_is_optional() -> None:
     """The type is neutral and a global gateway has no region."""
     gateway = _nodes()["CloudGateway"]

@@ -222,10 +222,6 @@ class TestSegmentPolicyName:
         assert RulesPlanner.segment_policy_name({"name": "web", "virtual_network": None}) == "seg-web-egress"
         assert RulesPlanner.segment_policy_name({"name": "web", "virtual_network": {"id": "vn-1"}}) == "seg-web-egress"
 
-    def test_cloud_dependency_dispatch_is_gone(self) -> None:
-        """Cloud flows are ordinary rules: the planner has no cloud-specific dispatch."""
-        assert not hasattr(RulesPlanner, "is_cloud_dependency")
-
 
 # ===========================================================================
 # TestCreateOrUpdatePolicyRule

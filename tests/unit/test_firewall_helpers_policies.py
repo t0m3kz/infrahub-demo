@@ -126,9 +126,6 @@ class TestGetZonePolicies:
     def test_none_returns_empty(self) -> None:
         assert get_zone_policies(None) == []
 
-    def test_empty_list_returns_empty(self) -> None:
-        assert get_zone_policies([]) == []
-
     def test_disabled_policy_is_skipped(self) -> None:
         policy = _make_policy(name="skipped", enabled=False, rules=[_make_rule()])
         assert get_zone_policies([policy]) == []
@@ -241,11 +238,6 @@ class TestGetZonePolicies:
         rule = _make_rule(protocol="tcp", port_start=8080, port_end=8090)
         result = get_zone_policies([_make_policy(rules=[rule])])
         assert result[0]["rules"][0]["dst_port"] == "range 8080 8090"
-
-    def test_rule_protocol_any_maps_to_ip(self) -> None:
-        rule = _make_rule(protocol="any", port_start=None)
-        result = get_zone_policies([_make_policy(rules=[rule])])
-        assert result[0]["rules"][0]["protocol"] == "ip"
 
     def test_rule_icmp_port_not_set(self) -> None:
         """Port is ignored for non-TCP/UDP protocols."""

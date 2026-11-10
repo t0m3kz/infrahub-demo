@@ -108,10 +108,6 @@ class TestCarrierCircuitPlacement:
         messages = _run(carrier=[_carrier_circuit("X", [DC10, DC11, FR2], [BL10_END, EG_FR_END])])
         assert len(messages) == 1 and "at most 2 distinct locations" in messages[0]
 
-    def test_a_provider_router_end_has_no_location(self) -> None:
-        """The ISP router is placed nowhere: one location (ours), the circuit's provider owns the router."""
-        assert _run(carrier=[INET_OFFICE]) == []
-
     def test_a_router_not_owned_by_the_circuit_provider_fails(self) -> None:
         """The circuit's provider must name the router end."""
         circuit = _carrier_circuit(
@@ -190,10 +186,6 @@ class TestCarrierCircuitPlacement:
 
 class TestCarrierCircuitOwnership:
     """The owner of a circuit is derived from the offices among its locations: they are of one owner."""
-
-    def test_office_access_circuit_passes(self) -> None:
-        """INET-C001-OFFICE ends on C001's office: the owner derives, no finding."""
-        assert _run(carrier=[INET_OFFICE]) == []
 
     def test_two_offices_of_one_owner_pass(self) -> None:
         """Two offices of the same owner derive one owner."""

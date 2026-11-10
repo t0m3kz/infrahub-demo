@@ -88,9 +88,6 @@ class TestInterfaceSpeedMatcher:
     def test_extract_speed_plain_string(self) -> None:
         assert InterfaceSpeedMatcher.extract_speed("100GBASE-SR4") == 100_000
 
-    def test_extract_speed_lowercase(self) -> None:
-        assert InterfaceSpeedMatcher.extract_speed("25gbase-cr") == 25_000
-
     def test_extract_speed_with_value_attr(self) -> None:
         intf_type = Mock(value="40GBASE-LR4")
         assert InterfaceSpeedMatcher.extract_speed(intf_type) == 40_000

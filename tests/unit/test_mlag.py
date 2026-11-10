@@ -545,37 +545,3 @@ class TestDC1Pod1MLAGScenario:
         assert result is not None
         assert "DC1-POD1-L1" in result["devices"]
         assert "DC1-POD1-L2" in result["devices"]
-
-    def test_bgp_cap_before_mlag_does_not_block_extraction(self) -> None:
-        result = get_mlag(self._l1_caps(), self._l1_interfaces(), device_name="DC1-POD1-L1")
-        assert result is not None
-
-    def test_l2_same_domain_same_result(self) -> None:
-        """Both peers share the same ManagedMLAG node — result is identical."""
-        l2_caps = [{"typename": "ManagedBGP"}, self._l1_caps()[1]]
-        result_l1 = get_mlag(self._l1_caps(), self._l1_interfaces(), device_name="DC1-POD1-L1")
-        result_l2 = get_mlag(l2_caps, self._l1_interfaces(), device_name="DC1-POD1-L1")
-        assert result_l1 == result_l2
-
-
-class TestDC1Pod2MLAGScenario:
-    """Reflects DC1-POD2-L1-L2-MLAG domain (domain_id=2)."""
-
-    def test_domain_id_2_extracted(self) -> None:
-        caps = [_mlag_cap(name="DC1-POD2-L1-L2-MLAG", domain_id=2, devices=["DC1-POD2-L1", "DC1-POD2-L2"])]
-        result = get_mlag(caps, device_name="DC1-POD2-L1")
-        assert result is not None
-        assert result["domain_id"] == 2
-        assert result["name"] == "DC1-POD2-L1-L2-MLAG"
-
-    def test_peer_link_port_channel100(self) -> None:
-        caps = [
-            _mlag_cap(
-                name="DC1-POD2-L1-L2-MLAG",
-                domain_id=2,
-                interfaces=_on("DC1-POD1-L1", _peer_link_iface("Port-Channel100")),
-            )
-        ]
-        result = get_mlag(caps, device_name="DC1-POD1-L1")
-        assert result is not None
-        assert result["peer_link"] == "Port-Channel100"

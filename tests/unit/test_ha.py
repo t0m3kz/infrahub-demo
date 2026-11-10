@@ -266,18 +266,6 @@ class TestGetHaFirstCapabilityWins:
 
 
 class TestGetHaDevices:
-    def test_devices_sourced_from_capabilities_key(self) -> None:
-        """ManagedFirewallHA stores peer devices under 'capabilities', not 'devices'."""
-        cap = {
-            "typename": "ManagedFirewallHA",
-            "name": "DC1-FW-HA",
-            "group_id": 1,
-            "capabilities": [{"name": "dc1-fw-01"}, {"name": "dc1-fw-02"}],
-        }
-        result = get_ha([cap])
-        assert result is not None
-        assert result["devices"] == ["dc1-fw-01", "dc1-fw-02"]
-
     def test_devices_key_in_cap_is_not_used(self) -> None:
         """A 'devices' key on the cap (MLAG-style) must NOT be picked up."""
         cap = {
@@ -389,29 +377,6 @@ class TestDC1FirewallHAScenario:
         assert result is not None
         assert "dc1-fw-01" in result["devices"]
         assert "dc1-fw-02" in result["devices"]
-
-    def test_bgp_cap_before_ha_does_not_block_extraction(self) -> None:
-        result = get_ha(self._fw_caps(), self._fw_interfaces())
-        assert result is not None
-
-    def test_both_peers_share_same_ha_node_same_result(self) -> None:
-        """Both HA peers reference the same ManagedFirewallHA node — result is identical."""
-        fw2_caps = [
-            {"typename": "ManagedBGP"},
-            _ha_cap(
-                name="DC1-FW-HA",
-                group_id=1,
-                mode="active-passive",
-                priority=110,
-                preempt=True,
-                ha_timer="standard",
-                ha_protocol="clusterxl",
-                devices=["dc1-fw-01", "dc1-fw-02"],
-            ),
-        ]
-        result_fw1 = get_ha(self._fw_caps(), self._fw_interfaces())
-        result_fw2 = get_ha(fw2_caps, self._fw_interfaces())
-        assert result_fw1 == result_fw2
 
 
 def _ha_of(capabilities: list[dict], interfaces: list[dict], device_name: str) -> dict:

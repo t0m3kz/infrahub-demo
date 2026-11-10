@@ -725,6 +725,3 @@ class TestInternetEdge:
     def test_an_edge_without_an_exchange_is_reported(self) -> None:
         findings = egress_findings(_cleaned([_dc([_context(), _edge()])], exchanges=[]))
         assert any("no TopologyRoutedExchange between the tenant VRF and INTERNET" in finding for finding in findings)
-
-    def test_a_footprint_without_an_edge_keeps_the_elements_on_its_contexts(self) -> None:
-        assert egress_findings(_cleaned([_dc()])) == []

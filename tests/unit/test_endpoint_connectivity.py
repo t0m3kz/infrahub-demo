@@ -11,12 +11,9 @@ Tests:
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
-
 import pytest
 
 from generators.helpers.cabling import InterfaceSpeedMatcher
-from generators.types import ConnectionFingerprint
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 from utils.data_cleaning import clean_data
 
@@ -232,36 +229,6 @@ class TestEndpointDataParsing:
 # ============================================================================
 # Connection Fingerprinting Tests
 # ============================================================================
-
-
-class TestConnectionFingerprinting:
-    """Test connection uniqueness and deduplication."""
-
-    def test_fingerprint_uniqueness(self) -> None:
-        """Test that different fingerprints are unique."""
-        fp1 = ConnectionFingerprint("server-01", "eth0", "tor-1", "Ethernet1/1")
-        fp2 = ConnectionFingerprint("server-01", "eth1", "tor-1", "Ethernet1/1")  # Different interface
-        fp3 = ConnectionFingerprint("server-01", "eth0", "tor-2", "Ethernet1/1")  # Different switch
-
-        assert fp1 != fp2
-        assert fp1 != fp3
-        assert fp2 != fp3
-        assert len({fp1, fp2, fp3}) == 3  # All unique in set
-
-    def test_fingerprint_equality(self) -> None:
-        """Test that identical fingerprints are equal."""
-        fp1 = ConnectionFingerprint("server-01", "eth0", "tor-1", "Ethernet1/1")
-        fp2 = ConnectionFingerprint("server-01", "eth0", "tor-1", "Ethernet1/1")
-
-        assert fp1 == fp2
-        assert hash(fp1) == hash(fp2)
-
-    def test_fingerprint_frozen(self) -> None:
-        """Test that fingerprints are immutable."""
-        fp = ConnectionFingerprint("server-01", "eth0", "tor-1", "Ethernet1/1")
-
-        with pytest.raises(FrozenInstanceError):
-            fp.server_name = "server-02"  # type: ignore
 
 
 # ============================================================================

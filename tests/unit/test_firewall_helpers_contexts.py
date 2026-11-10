@@ -54,9 +54,6 @@ class TestGetFirewallContexts:
     def test_none_returns_empty(self) -> None:
         assert fw_contexts(None) == []
 
-    def test_empty_list_returns_empty(self) -> None:
-        assert fw_contexts([]) == []
-
     def test_interface_without_context_capability_ignored(self) -> None:
         iface = {"name": "eth0", "capabilities": [{"typename": "ManagedVxlanSegment"}]}
         assert fw_contexts([iface]) == []

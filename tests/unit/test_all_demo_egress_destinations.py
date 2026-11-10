@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from tasks import ALL_DEMO_DATA
-from tests.integration.demo_data import BOOTSTRAP, ROOT, Declared, declared, declared_session, distinct, name
+from tests.integration.demo_data import ROOT, Declared, declared, declared_session, distinct, name
 from utils.exchange_transit import INTERNET_ZONE
 
 _ALL = ROOT / ALL_DEMO_DATA
@@ -178,11 +178,6 @@ def test_the_rules_aim_at_the_vpc_block_the_acme_range_and_the_internet() -> Non
     assert "destination_segment" not in rules[30]
     assert "destination_prefixes" not in rules[30]
     assert rules[30]["apply_on_switch"] is False
-
-
-def test_the_internet_zone_is_declared_in_the_bootstrap() -> None:
-    """Rule 30 names a zone that exists."""
-    assert INTERNET_ZONE in {name(zone) for zone in declared("SecurityZone", BOOTSTRAP)}
 
 
 def test_a_destination_registered_behind_nothing_is_rejected_by_the_derivation() -> None:

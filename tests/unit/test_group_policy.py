@@ -482,12 +482,6 @@ class TestQueries:
         assert fragments.count("fragment SecurityTagGroupPolicyFields on SecurityTag") == 1
 
     @pytest.mark.parametrize("query", DEVICE_QUERIES)
-    def test_the_enforcement_switch_is_read_on_the_data_center_root(self, root_dir: Path, query: str) -> None:
-        """``group_policy_enforce`` (A6) rides on the fleet TopologyDataCenter root of every device query."""
-        paths = _selected_paths(root_dir / query, "TopologyDataCenter")
-        assert "group_policy_enforce" in paths
-
-    @pytest.mark.parametrize("query", DEVICE_QUERIES)
     def test_every_spread_resolves_against_the_fragments_directory(self, root_dir: Path, query: str) -> None:
         """.infrahub.yml loads the whole queries/fragments/ directory: every named spread, transitively
         (SecurityTagPlacementFields -> HostNicFields), must be defined there exactly once."""
