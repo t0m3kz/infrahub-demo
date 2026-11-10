@@ -16,6 +16,7 @@ spec:
     - security_zone: "PROD"
       owner: C900
       customer_name: web
+      routing_tag: 101
       environment: p
       customer_deployments: ["C900-P-DC-KTW1"]
       gateway:

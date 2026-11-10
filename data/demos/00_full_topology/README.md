@@ -59,8 +59,11 @@ The network entitlement allows six segments, twelve 25G and four 100G host ports
 three 100G ports). The physical chassis and their existing shared HA/context remain authored and are never deleted.
 
 The standard bootstrap tiers (S, M, L and XL, in each of the data center, colocation and cloud template kinds) are
-unchanged; every footprint states one as its required `design`, the smallest that holds its segments (and, for a cloud
-footprint, the virtual networks of its account in its region). A demo may define a valid custom template earlier in its own
+unchanged; every footprint states one as its required `design`, the smallest that holds its segments, its host-facing ports
+(the tagged 25G and 100G ports of its segments, `checks/customer_quota.py`) and, for a cloud footprint, the virtual
+networks of its account in its region. The leaf customer ports of the sample are 100G and the bootstrap shared tiers
+allow none, so `C900-P-DC-GDN1` (3 ports, 2 segments) names `S_100G` and `C900-P-DC-KTW1` (5 ports, 3 segments)
+`M_100G`, the S and M tiers with 100G ports (`00_common/00_global/05_customer_designs.yml`). A demo may define a valid custom template earlier in its own
 numbered files (`00_common/00_global/05_customer_designs.yml` here); it cannot borrow one from an unrelated demo.
 A data center or colocation template states four sizing numbers, all required: `address_prefix_length` (the IPv4 block of
 the customer's pool), `segment_prefix_length` (the IPv4 subnet of a segment with no `host_count`), `ipv6_prefix_length`
@@ -513,7 +516,7 @@ it physically is (the cage for a cross-connect, the region for a Fabric connecti
 | `CloudPeeringInterface` | the BGP termination in the cloud, an interface of the transport | `lag1.1000`, `er-c900-weu-pri`, `gcp-c900-vlan-att-1`, `gcp-c900-ded-1`, `Tunnel1`, `webex-c900-fra` |
 | `CloudGateway` | hub, edge gateway, customer gateway | `tgw-c900-euc1`, `vwan-hub-c900-weu` (hub), `dxgw-c900`, `vgw-c900-euc1`, `ergw-c900-weu`, `cr-c900-euw3` (edge), `cgw-c900-ktw1` (customer) |
 | `CloudGatewayAttachment`, `CloudGatewayRouteTable` | gateway connections and the routing domain of a hub | `tgwa-c900-vpc`, `tgwa-c900-dxgw`, `rt-c900-prod`; Azure `vhuba-c900-weu`, `vhuba-c900-ergw`, `rt-c900-weu` |
-| `CloudVirtualNetwork` | a virtual network; `peers` | `vpc-c900-prod`, `vnet-c900-weu` + `vnet-c900-weu-spoke`; the spoke accounts `vpc-c900-payments`, `vnet-c900-payments-weu` and so on; `vnet-c900-sandbox-weu` `peers` `vnet-c900-weu-spoke` |
+| `CloudVirtualNetwork` | a virtual network; `peers` | `vpc-c900-prod`, `vpc-c900-vgw`, `vnet-c900-weu` + `vnet-c900-weu-spoke`; the spoke accounts `vpc-c900-payments`, `vnet-c900-payments-weu` and so on; `vnet-c900-sandbox-weu` `peers` `vnet-c900-weu-spoke` |
 | `CloudInstance` | a server in a cloud subnet, the end of a server-to-server flow (inventory only: no application, no rule) | `c900-app-euc1-1` (`c900-subnet-p`), one `.11` in each workload segment: `c900-payments-euc1-1`, `c900-analytics-euc1-1`, `c900-shared-euc1-1`, `c900-spoke-weu-1`, `c900-payments-weu-1`, `c900-analytics-weu-1`, `c900-identity-weu-1`, `c900-sandbox-weu-1` (the GCP VPC has no segment) |
 | `CloudServiceEndpoint` | a private path to a service | `vpce-c900-s3`, `vpce-c900-webex` |
 
@@ -564,7 +567,7 @@ Full = in the model and in the data; partial = a field exists but simplified; no
 | Scenario | Coverage | Notes |
 | -------- | -------- | ----- |
 | AWS DX dedicated, transit VIF -> DX Gateway -> TGW -> VPC | full | `dx-c900-fra-lag`, `lag1.1000` (scope `private`), `dxgw-c900` (edge) -> `tgwa-c900-dxgw` (`allowed_prefixes` 10.200.0.0/16 and the spoke blocks) -> `tgw-c900-euc1` (hub) -> `tgwa-c900-vpc` |
-| AWS DX, private VIF -> VGW -> VPC | full | `lag1.1100`, `vgw-c900-euc1` |
+| AWS DX, private VIF -> VGW -> VPC | full | `lag1.1100`, `vgw-c900-euc1` -> `vgwa-c900-vpc` -> `vpc-c900-vgw` (a VPC of its own: a block reached by the transit VIF and the VGW would be registered behind two attachment points, `checks/routing_invariants.py` rule 8) |
 | AWS DX hosted (partner account), LAG | full | `partner_account` (GCP Partner Interconnect); LAG: the ports `dxcon-1a/1b` and bundle `lag1` of `EXT-AWS-DX-PAR`, two cables `XC21450001/2` to the cage edge, one transport `dx-c900-fra-lag` whose VIFs ride on the bundle |
 | GCP Dedicated Interconnect: a routed port without a VLAN | full | `ic-ded-c900-fra`, port `ic-dedicated-port`, peering `gcp-c900-ded-1` without `vlan_id`; our end is the physical `Ethernet1/5` of the cage edge with an address, circuit `par1-ded1-gcp-c900-prod-project` |
 | AWS public VIF | partial | `scope: public` and `advertised_prefixes` (US -> cloud) are in the model, no example |

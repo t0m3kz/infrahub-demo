@@ -200,3 +200,40 @@ def test_a_virtual_interface_on_a_port_of_a_provider_connect_still_fails() -> No
 def test_a_peering_with_no_parent_is_not_reported() -> None:
     """A routed port needs no parent."""
     assert _run(_peering("gcp-ded", None)) == []
+
+
+def _provider_interface(name: str, parent: dict[str, Any] | None) -> dict[str, Any]:
+    """A raw TopologyProviderInterface row: the end of a Fabric connection on a port of the provider connect."""
+    return {
+        "id": f"provider-if-{name}",
+        "__typename": "TopologyProviderInterface",
+        "name": {"value": name},
+        "device": {
+            "node": {"id": "ext-fabric", "__typename": "TopologyProviderConnect", "name": {"value": "ext-fabric"}}
+        },
+        "parent_interface": parent,
+    }
+
+
+def test_a_provider_interface_riding_on_a_port_of_its_own_provider_connect_passes() -> None:
+    """00_full: et-0/0/0.1101 of EXT-FABRIC-PAR rides on et-0/0/0 of EXT-FABRIC-PAR (the same device)."""
+    parent = _parent("et-0/0/0", "ext-fabric", device_kind="TopologyProviderConnect")
+
+    assert _run(_provider_interface("et-0/0/0.1101", parent)) == []
+
+
+def test_a_provider_interface_on_a_port_of_another_device_fails() -> None:
+    """Rule 1 holds for it too: the connection rides on the port of ITS OWN provider connect."""
+    parent = _parent("et-0/0/0", "ext-other", device_kind="TopologyProviderConnect")
+    findings = _run(_provider_interface("et-0/0/0.1101", parent))
+
+    assert len(findings) == 1 and "'ext-other'" in findings[0]["message"]
+    assert findings[0]["object_type"] == "TopologyProviderInterface"
+
+
+def test_the_query_selects_the_name_and_device_of_a_provider_interface() -> None:
+    """Without them the device of the interface reads as nothing and every provider interface is 'another device'."""
+    node = query_tree(QUERY)["DcimSubInterface"]["edges"]["node"]
+    assert {"name", "device"} <= set(node)
+    assert unselected([_provider_interface("et-0/0/0.1101", _parent("et-0/0/0", "ext-fabric"))], node) == []
+    assert "... on TopologyProviderInterface" in QUERY.read_text()

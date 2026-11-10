@@ -25,12 +25,22 @@ def _row(segment: str, vlan: int = 100) -> dict[str, Any]:
     }
 
 
+def _sub(role: str, device_kind: str) -> dict[str, Any]:
+    """A raw sub-interface of a port: a routed one (a service sub-interface of a physical device) or a VM NIC."""
+    return {
+        "__typename": "DcimVirtualInterface",
+        "role": {"value": role},
+        "device": {"node": {"__typename": device_kind}},
+    }
+
+
 def _port(
     name: str = "Ethernet1",
     *,
     segments: int = 0,
     ip: bool = False,
     subs: int = 0,
+    nics: int = 0,
     lag: bool = False,
     caps: tuple[str, ...] = (),
     rows: tuple[dict[str, Any], ...] = (),
@@ -44,7 +54,10 @@ def _port(
         "device": {"node": {"name": {"value": "leaf-1"}}},
         "lag": {"node": {"id": "lag-1"} if lag else None},
         "ip_address": {"node": {"id": "ip-1"} if ip else None},
-        "sub_interfaces": {"count": subs},
+        "sub_interfaces": {
+            "edges": [{"node": _sub("service", "DcimPhysicalDevice")} for _ in range(subs)]
+            + [{"node": _sub("uplink", "DcimVirtualDevice")} for _ in range(nics)]
+        },
         "capabilities": _caps(*caps, rows=members),
     }
 
@@ -90,6 +103,18 @@ def test_pure_switchports_and_routed_ports_pass() -> None:
         _port("E7"),
     ]
     assert _errors(ports) == []
+
+
+def test_a_vm_nic_pinned_to_a_lag_member_is_no_sub_interface_signal() -> None:
+    """00_full: ktw1-vm-01 eth0 rides on eno1 of ktw1-srv-01, a member of bond0: the NIC is no routed sub-interface."""
+    assert _errors([_port("eno1", lag=True, nics=2)]) == []
+    assert _errors([_port("eno1", nics=1)]) == []
+
+
+def test_a_routed_sub_interface_on_a_lag_member_still_fails() -> None:
+    """R2 stays for a real sub-interface: with a NIC beside it only the routed one is reported."""
+    errors = _errors([_port("Ethernet1/3", lag=True, subs=1, nics=1)])
+    assert len(errors) == 1 and "is a LAG member but carries sub_interfaces" in errors[0]
 
 
 def test_r1_segment_and_ip_address_fail() -> None:

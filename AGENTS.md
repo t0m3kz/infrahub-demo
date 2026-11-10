@@ -365,8 +365,10 @@ class MyCheck(InfrahubCheck):
     `redundancy.priority` stays out: the name or description says which is primary). Per-end VLAN tags are not carrier
     attributes (Fabric `vlan_s_tag`/`vlan_c_tag` and Megaport `ordered_vlan` live per end).
   - **Tunnel** (`circuit_type: tunnel`): two locations and two ports, one location a `TopologyCustomerOffice` (its owner
-    is the tunnel's, derived; the only type with `registered_prefixes`), no handoff-only field, every end port rides a
-    live internet carrier circuit of its own (no contiguity rule).
+    is the tunnel's, derived; the only type with `registered_prefixes`), no handoff-only field, every end port of ours
+    rides a live internet carrier circuit of its own (no contiguity rule); an end that is a `CloudPeeringInterface` (the
+    tunnel of a cloud or SaaS transport, Zscaler) is the provider's side: its internet access is the provider's and
+    it rides no carrier of ours.
   - **Interconnect** (`dci`): no office owner, no handoff-only field, two locations and two ports, both ports carried, the
     carriers found at the two ports
     form one contiguous path between the two locations and a single carrier is pure fibre (its two ends are the
@@ -838,7 +840,7 @@ class MyCheck(InfrahubCheck):
   `hosting_device` it is pinned to, a cloud peering's is a port or LAG of its transport. It and its inverse
   `sub_interfaces` (declared once on the marker generic `DcimHasSubInterface`, many, peer `DcimSubInterface`: a NIC
   parents several sub-interfaces, a host port several NICs, a transport LAG several peerings; `checks/interface_layers.py`
-  reads it as an L3 signal, a port with sub-interfaces is routed; the generators filter on `parent_interface__ids`) carry
+  reads it as an L3 signal, a port with sub-interfaces is routed, except for a VM base NIC pinned to a host port (`is_host_nic`), which may sit on a bond member; the generators filter on `parent_interface__ids`) carry
   no `common_parent`, so the cross-device rule is `checks/interface_parents.py` (rooted on `DcimSubInterface`): a parent
   on another device is an ERROR unless the interface is a NIC of a `DcimVirtualDevice` pinned to a port of its
   `hosting_device`, a NIC's parent is a physical port, and an uplink's host port is cabled. The transforms render a

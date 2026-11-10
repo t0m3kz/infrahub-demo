@@ -283,6 +283,17 @@ class TestTunnelCircuit:
         assert "end 'C001-OFFICE-EDGE1:GE1' rides no live internet carrier circuit" in messages[0]
         assert "INET-C001-OFFICE" not in messages[0]
 
+    def test_a_cloud_peering_end_needs_no_carrier(self) -> None:
+        """The far end of a SaaS tunnel is the transport's CloudPeeringInterface: the provider's side, no carrier."""
+        peering = _vport("zscaler-c900-muc", "Tunnel1", kind="CloudPeeringInterface", region=EUC1)
+        assert _run(tunnels=[_tunnel("T", [C001_OFFICE, FR2], [OFFICE_EDGE, peering])]) == []
+
+    def test_a_cloud_peering_end_does_not_excuse_the_office_end(self) -> None:
+        """The exemption is for the provider's end only: our own end still needs its internet access."""
+        peering = _vport("zscaler-c900-muc", "Tunnel1", kind="CloudPeeringInterface", region=EUC1)
+        messages = _run(tunnels=[_tunnel("T", [C001_OFFICE, FR2], [_vport("C001-OFFICE-EDGE1", "GE1"), peering])])
+        assert len(messages) == 1 and "end 'C001-OFFICE-EDGE1:GE1' rides no live internet carrier" in messages[0]
+
     def test_each_end_needs_its_own_internet_circuit(self) -> None:
         """A shared carrier would not do: both ends are checked, one finding per end."""
         messages = _run(

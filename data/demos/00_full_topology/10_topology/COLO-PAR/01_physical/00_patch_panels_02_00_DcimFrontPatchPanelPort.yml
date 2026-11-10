@@ -1,0 +1,106 @@
+---
+# The front ports of every panel of COLO-PAR, as add_patch_panel builds them from the panel_type (lc-24: 24 front ports,
+# lc-upc), each on the rear port of the same number. 00_full runs no generator, so the ports are data and
+# checks/patch_panel_pairing.py finds the panels complete. The jacks the cables use are also declared in
+# 00_patch_panels.yml; both land on one port (upsert by panel and name).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimFrontPatchPanelPort
+  data:
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "1"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:1"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "2"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:2"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "3"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:3"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "4"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:4"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "5"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:5"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "6"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:6"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "7"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:7"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "8"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:8"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "9"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:9"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "10"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:10"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "11"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:11"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "12"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:12"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "13"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:13"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "14"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:14"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "15"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:15"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "16"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:16"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "17"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:17"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "18"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:18"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "19"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:19"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "20"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:20"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "21"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:21"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "22"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:22"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "23"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:23"
+    - panel: ["par-colo1-rack-01", "PP-PAR-COLO1-01"]
+      name: "24"
+      connector: lc-upc
+      rear_port: "par-colo1-rack-01:PP-PAR-COLO1-01:24"
