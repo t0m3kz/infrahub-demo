@@ -2,12 +2,16 @@
 # already the cloud cross-connect on eg-fr201 (AWS) and eg-pa401 (Azure), so 1/14
 # is the one that is free on all four. The ISP side is the first customer port
 # on its provider edge.
+# The port is in its VRF instance through its interface capabilities (ManagedVRF on the interface edge): the
+# address is in the `default` namespace and the zone comes from the VRF.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimPhysicalInterface
   data:
-    - vrf: [FR, "INTERNET"]
+    - capabilities:
+        - kind: ManagedVRF
+          data: {name: "fr-vrf-internet", deployment: FR, security_zone: "INTERNET"}
       name: "Ethernet1/14"
       device: "eg-fr201"
       status: active
@@ -16,7 +20,9 @@ spec:
         data:
           address: "203.0.113.1/31"
           ip_namespace: "default"
-    - vrf: [FR, "INTERNET"]
+    - capabilities:
+        - kind: ManagedVRF
+          data: {name: "fr-vrf-internet", deployment: FR, security_zone: "INTERNET"}
       name: "Ethernet1/14"
       device: "eg-fr202"
       status: active
@@ -25,7 +31,9 @@ spec:
         data:
           address: "203.0.113.3/31"
           ip_namespace: "default"
-    - vrf: [PA, "INTERNET"]
+    - capabilities:
+        - kind: ManagedVRF
+          data: {name: "pa-vrf-internet", deployment: PA, security_zone: "INTERNET"}
       name: "Ethernet1/14"
       device: "eg-pa401"
       status: active
@@ -34,7 +42,9 @@ spec:
         data:
           address: "203.0.113.5/31"
           ip_namespace: "default"
-    - vrf: [PA, "INTERNET"]
+    - capabilities:
+        - kind: ManagedVRF
+          data: {name: "pa-vrf-internet", deployment: PA, security_zone: "INTERNET"}
       name: "Ethernet1/14"
       device: "eg-pa402"
       status: active
