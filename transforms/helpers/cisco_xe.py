@@ -132,21 +132,6 @@ def get_cisco_xe_acls(acls: Iterable[dict[str, Any]] | None, role: str) -> list[
     return result
 
 
-def refuse_unfiltered_ipv6(vlans: Iterable[dict[str, Any]], role: str) -> None:
-    """Raise when an IPv6 gateway SVI would carry a segment ACL.
-
-    A segment has one gateway address, IPv4 or IPv6. The ACL is an IPv4 ``ip access-list extended`` bound with
-    ``ip access-group``, which an IPv6 SVI never evaluates: the segment would pass everything under a policy that says
-    deny by default. The NX-OS and EOS templates have the same gap; cisco_xe refuses it.
-    """
-    ipv6 = [str(v["vlan_id"]) for v in vlans if v.get("acl_name") and v.get("gateway_ipv6")]
-    if ipv6:
-        raise _refusal(
-            role,
-            f"the segment ACL of VLAN {', '.join(ipv6)}: its gateway SVI is IPv6 and no `ipv6 access-list` is rendered",
-        )
-
-
 def get_cisco_xe_vrf_routes(
     vrf_routes: Iterable[dict[str, Any]] | None, defined_vrfs: Iterable[str], role: str, *, lisp: bool
 ) -> list[dict[str, Any]]:

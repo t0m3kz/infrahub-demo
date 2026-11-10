@@ -316,6 +316,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: customer_cloud
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/customer_cloud.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: customer_dc
     tests:
       - name: syntax_check

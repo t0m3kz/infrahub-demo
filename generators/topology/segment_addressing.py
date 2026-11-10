@@ -1,16 +1,20 @@
-"""Addresses a VXLAN segment: its prefix from the customer's pool and the anycast gateway on the first address.
+"""Addresses a VXLAN segment, and boards the customer pools it is addressed from.
 
-A segment with no gateway gets a prefix sized from its ``host_count`` (a /24 without one,
-``utils/segment_addressing.py`` ``segment_prefix_length``) and its anycast gateway on ``OFFSET_ANYCAST``; an authored
-gateway is kept.
+A segment with no gateway gets a prefix of its ``ip_version`` and its anycast gateway on the first address
+(``OFFSET_ANYCAST``); an authored gateway is kept. An IPv4 segment is sized from its ``host_count``, else the
+``segment_prefix_length`` of its footprint's design; an IPv6 segment (no ``host_count``) is the design's
+``ipv6_segment_prefix_length``. An office has no design: its segment takes the default length of the global tenant
+pool.
 
-The prefix comes from the CUSTOMER's pool, one per (customer, environment, facility kind) named
-``{org_id}-{environment}-{dc|colocation}-ipv4``. The first segment request creates it: a block of the footprint
-design's ``address_prefix_length`` is carved from the environment's global tenant pool (``Tenant-PROD-IPv4`` or
-``Tenant-NONPROD-IPv4``, keyed by the pool name) and becomes the pool's first resource. A request the pool cannot
-satisfy carves another block of the same length and adds it to the same pool, once (identifier
-``{pool name}-{n}``); nothing is ever re-allocated. One lock per customer pool serializes creating, growing and
-drawing. A segment of an office has no design: it is addressed from the global tenant pool directly.
+The prefix comes from the CUSTOMER's pool of the segment's family, one per (customer, environment, facility kind,
+family) named ``{org_id}-{environment}-{dc|colocation|cloud}-{ipv4|ipv6}``. The pools are created WHEN THE FOOTPRINT IS
+BOARDED (``ensure_customer_pools``, called by add_customer_deployment_dc, _colocation and _cloud): a block of the
+design's ``address_prefix_length`` (IPv6: ``ipv6_prefix_length``) is carved from the environment's global tenant pool
+(``Tenant-PROD-IPv4``, ``Tenant-NONPROD-IPv6``, ...) and becomes the pool's first resource. The segment generator calls
+the same function again (idempotent: it repairs a pool that is missing), and a request the pool cannot satisfy carves
+another block of the same length and adds it to the same pool, once (identifier ``{pool name}-{n}``); nothing is ever
+re-allocated. One lock per customer pool serializes creating, growing and drawing. A customer's footprints of one kind
+and environment share the pool (the second finds it).
 
 The footprint whose design decides the block and the pool is the first of the segment's footprints of the first kind
 in DC, colocation order (``utils/segment_addressing.py`` ``addressing_footprint``).
@@ -28,8 +32,14 @@ from typing import TYPE_CHECKING, Any
 from infrahub_sdk.exceptions import GraphQLError
 from infrahub_sdk.protocols import CoreIPPrefixPool
 
+from utils.exchange_transit import ZONE_BY_NS_TYPE, namespace_type_for_environment
 from utils.limits import DEFAULT_NAMESPACE, OFFSET_ANYCAST
 from utils.segment_addressing import (
+    BLOCK_LENGTH_FIELD,
+    CUSTOMER_POOL_FAMILIES,
+    IPV4,
+    IPV6,
+    SEGMENT_LENGTH_FIELD,
     addressing_footprint,
     customer_pool_name,
     segment_namespace,
@@ -64,25 +74,45 @@ class SegmentAddressingMixin:
         _get_parent_pool_with_retry = PoolMixin._get_parent_pool_with_retry
         upsert_prefix_addresses = CablingMixin.upsert_prefix_addresses
 
+    async def ensure_customer_pools(
+        self, *, kind: str, org_id: str, environment: str, design: dict[str, Any], footprint_name: str
+    ) -> None:
+        """Board a footprint: create, once, the customer's pool of each family its kind has (find it when it exists).
+
+        ``kind`` is the footprint kind (``TopologyCustomerDC``, ``...Colocation`` or ``...Cloud``), ``design`` the
+        cleaned template row with the block lengths. A customer's footprints of one kind and environment share the
+        pools, so the second footprint finds them. The global pool is the environment's tenant pool of the family.
+        """
+        zone = ZONE_BY_NS_TYPE[namespace_type_for_environment(environment)]
+        for family in CUSTOMER_POOL_FAMILIES[kind]:
+            block_length = design.get(BLOCK_LENGTH_FIELD[family])
+            if block_length is None:
+                self.fail(f"Footprint {footprint_name}: its design {design.get('name')} has no {family} block length")
+            pool_name = customer_pool_name(org_id, environment, kind, family)
+            async with self.resource_lock(f"customer-pool-{pool_name}"):
+                await self._find_or_create_customer_pool(pool_name, tenant_pool_name(zone, family), block_length)
+
     async def ensure_segment_addressing(self, segment: dict[str, Any]) -> None:
         """Allocate a missing gateway once, using explicit zone authority and default IPAM."""
         segment_id, segment_name = segment["id"], segment["name"]
-        length = segment_prefix_length(segment.get("host_count"))
+        version = segment.get("ip_version") or IPV4
+        # A host_count means nothing to an IPv6 segment (a check warns); the IPv4 sizing is validated up front.
+        host_count = None if version == IPV6 else segment.get("host_count")
         if segment.get("gateway"):
-            self._check_allocated_length(segment, length)
+            self._check_allocated_length(segment, host_count)
             return
-        global_pool_name = tenant_pool_name(segment_namespace(segment)["name"])
+        global_pool_name = tenant_pool_name(segment_namespace(segment)["name"], version)
         footprint = addressing_footprint(segment.get("customer_deployments") or [])
         async with self.resource_lock(f"segment-addressing-{segment_id}"):
             if footprint is None:
                 pool_name = global_pool_name
-                prefix = await self._allocate_from_tenant_pool(segment_name, global_pool_name, length)
+                prefix = await self._allocate_from_tenant_pool(segment_name, global_pool_name, host_count)
             else:
                 pool_name = customer_pool_name(
-                    segment["owner"]["org_id"], segment["environment"], footprint["typename"]
+                    segment["owner"]["org_id"], segment["environment"], footprint["typename"], version
                 )
                 prefix = await self._allocate_from_customer_pool(
-                    segment_name, pool_name, global_pool_name, footprint, length
+                    segment_name, pool_name, global_pool_name, footprint, version, host_count
                 )
             gateway = (
                 await self.upsert_prefix_addresses(
@@ -104,14 +134,15 @@ class SegmentAddressingMixin:
         }
         self.logger.info(f"Segment {segment_name}: gateway {gateway.address.value} from {pool_name}")
 
-    def _check_allocated_length(self, segment: dict[str, Any], wanted: int) -> None:
+    def _check_allocated_length(self, segment: dict[str, Any], host_count: int | None) -> None:
         """Fail, naming the remedy, when a segment with a host_count has a prefix of another length.
 
         A prefix length cannot change in place, so a host_count edited after the allocation is reported and never
-        re-allocated. A segment without a host_count is a /24 by default and not judged here.
+        re-allocated. A segment without a host_count (every IPv6 one) takes its design's default and is not judged here.
         """
-        if segment.get("host_count") is None:
+        if host_count is None:
             return
+        wanted = segment_prefix_length(host_count)
         prefix = ((segment.get("gateway") or {}).get("ip_prefix") or {}).get("prefix")
         if not prefix or int(prefix.rsplit("/", 1)[1]) == wanted:
             return
@@ -141,43 +172,64 @@ class SegmentAddressingMixin:
                 f"prefix (identifier {segment_name}) and rerun; the server said: {exc}"
             )
 
-    async def _allocate_from_tenant_pool(self, segment_name: str, pool_name: str, length: int) -> Any:
-        """The prefix of a segment with no design (an office's) straight from the global tenant pool."""
+    async def _allocate_from_tenant_pool(self, segment_name: str, pool_name: str, host_count: int | None) -> Any:
+        """The prefix of a segment with no design (an office's) straight from the global tenant pool.
+
+        Sized from its host_count, else the pool's own default length.
+        """
         pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name)
         if not pools:
             self.fail(f"Segment {segment_name}: tenant pool {pool_name} not found")
+        length = segment_prefix_length(host_count, pools[0].default_prefix_length.value)
         prefix = await self._allocate_prefix(pools[0], segment_name, length)
         if prefix is None:
             self.fail(f"Segment {segment_name}: tenant pool {pool_name} returned no prefix")
         return prefix
 
+    async def _find_or_create_customer_pool(self, pool_name: str, global_pool_name: str, block_length: int) -> Any:
+        """The customer's pool by name (with its resources), created from a block of the global pool when missing.
+
+        The caller holds the pool's lock. The one implementation of "ensure the pool", for boarding and for the
+        segment request that repairs a missing one. The pool is shared by the customer's footprints and segments, so
+        it is saved untracked: no single run's cleanup may reclaim it.
+        """
+        pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name, include=["resources"])
+        if pools:
+            return pools[0]
+        return await self.ensure_sliced_pool(
+            pool_name=pool_name,
+            parent_pool_name=global_pool_name,
+            prefix_length=block_length,
+            role="customer",
+            kind="prefix",
+            member_type="prefix",
+            is_pool=True,
+            track=False,
+        )
+
     async def _allocate_from_customer_pool(
-        self, segment_name: str, pool_name: str, global_pool_name: str, footprint: dict[str, Any], length: int
+        self,
+        segment_name: str,
+        pool_name: str,
+        global_pool_name: str,
+        footprint: dict[str, Any],
+        version: str,
+        host_count: int | None,
     ) -> Any:
         """The prefix of a segment from its customer's pool, created or grown by one block when needed."""
         design = footprint.get("design") or {}
-        block_length = design.get("address_prefix_length")
-        if block_length is None:
+        block_length = design.get(BLOCK_LENGTH_FIELD[version])
+        default_length = design.get(SEGMENT_LENGTH_FIELD[version])
+        if block_length is None or default_length is None:
             self.fail(f"Segment {segment_name}: footprint {footprint['name']} has no design to size {pool_name}")
+        length = segment_prefix_length(host_count, default_length)
         if length < block_length:
             self.fail(
                 f"Segment {segment_name} needs a /{length}, larger than the /{block_length} address block of design "
                 f"{design.get('name')} (footprint {footprint['name']}); give the footprint a larger design"
             )
         async with self.resource_lock(f"customer-pool-{pool_name}"):
-            pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name, include=["resources"])
-            if pools:
-                pool = pools[0]
-            else:
-                pool = await self.ensure_sliced_pool(
-                    pool_name=pool_name,
-                    parent_pool_name=global_pool_name,
-                    prefix_length=block_length,
-                    role="customer",
-                    kind="prefix",
-                    member_type="prefix",
-                    is_pool=True,
-                )
+            pool = await self._find_or_create_customer_pool(pool_name, global_pool_name, block_length)
             try:
                 prefix = await self._allocate_prefix(pool, segment_name, length)
             except GraphQLError as exc:

@@ -10,5 +10,8 @@ spec:
       dedicated_loadbalancer: false
       max_segments: 6
       address_prefix_length: 21
+      segment_prefix_length: 24
+      ipv6_prefix_length: 58
+      ipv6_segment_prefix_length: 64
       ports_25g: 12
       ports_100g: 4

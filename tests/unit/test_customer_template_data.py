@@ -30,7 +30,9 @@ from utils.exchange_transit import is_exchange_zone
 _BOOTSTRAP = ROOT / "data" / "bootstrap"
 _DEMOS = ROOT / "data" / "demos"
 _KIND = "TopologyCustomerTemplateDC"
-_NUMBERS = ("max_segments", "address_prefix_length", "ports_25g", "ports_100g")
+_SIZING = ("segment_prefix_length", "ipv6_prefix_length", "ipv6_segment_prefix_length")
+_NUMBERS = ("max_segments", "address_prefix_length", *_SIZING, "ports_25g", "ports_100g")
+_BLOCK_KINDS = ("TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo")
 _SHARED = ("S", "M")
 _DEDICATED = ("L", "XL")
 _TIER_ORDER = (*_SHARED, *_DEDICATED)
@@ -44,6 +46,10 @@ _BLOCK_TIERS = {"S": (2, 23), "M": (6, 21), "L": (12, 20), "XL": (24, 19)}
 # tier -> (max_segments, max_virtual_networks, address_prefix_length) of the cloud kind: the length is the routed range of
 # the footprint, not a block for its segments.
 _CLOUD_TIERS = {"S": (2, 1, 28), "M": (6, 3, 27), "L": (12, 6, 26), "XL": (24, 12, 25)}
+
+
+# tier -> (segment_prefix_length, ipv6_prefix_length, ipv6_segment_prefix_length) of the data center and colocation kinds.
+_SIZING_TIERS = {"S": (24, 60, 64), "M": (24, 58, 64), "L": (24, 56, 64), "XL": (24, 52, 64)}
 
 
 def _rows() -> dict[str, Declared]:
@@ -158,11 +164,48 @@ def test_the_cloud_tiers_have_the_agreed_values(tier: str) -> None:
     assert (row["max_segments"], row["max_virtual_networks"], row["address_prefix_length"]) == _CLOUD_TIERS[tier]
 
 
-@pytest.mark.parametrize("kind", ["TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo"])
-def test_the_address_block_holds_the_tier(kind: str) -> None:
-    """Rule 9(a) of checks/customer_quota.py on the data: a /<address_prefix_length> holds max_segments /24s."""
+@pytest.mark.parametrize("tier", _TIER_ORDER)
+def test_the_sizing_tiers_have_the_agreed_values(tier: str) -> None:
+    """Every tier: IPv4 segments of /24, an IPv6 block of /60 /58 /56 /52 and /64 IPv6 segments, in both kinds."""
+    for kind in _BLOCK_KINDS:
+        row = next(r for r in declared(kind, _BOOTSTRAP) if r.item["name"] == tier).item
+        assert tuple(row[column] for column in _SIZING) == _SIZING_TIERS[tier], f"{kind} {tier}"
+
+
+@pytest.mark.parametrize("kind", _BLOCK_KINDS)
+def test_the_address_blocks_hold_the_tier(kind: str) -> None:
+    """checks/customer_quota.py on the data: the IPv4 block holds max_segments segments of segment_prefix_length, the
+    IPv6 block max_segments segments of ipv6_segment_prefix_length, and a segment is never larger than its block."""
     for row in declared(kind, _BOOTSTRAP):
-        assert 2 ** (24 - row.item["address_prefix_length"]) >= row.item["max_segments"], f"{kind} {row.item['name']}"
+        item = row.item
+        label = f"{kind} {item['name']}"
+        assert item["segment_prefix_length"] >= item["address_prefix_length"], label
+        assert item["ipv6_segment_prefix_length"] >= item["ipv6_prefix_length"], label
+        assert 2 ** (item["segment_prefix_length"] - item["address_prefix_length"]) >= item["max_segments"], label
+        assert 2 ** (item["ipv6_segment_prefix_length"] - item["ipv6_prefix_length"]) >= item["max_segments"], label
+
+
+@pytest.mark.parametrize("column", _SIZING)
+def test_schema_requires_the_sizing_numbers_on_the_data_center_and_colocation_tiers_only(column: str) -> None:
+    """Required, no default, a range; the cloud tier has none of them (its subnets are provider-assigned, IPv4 only)."""
+    for kind in _BLOCK_KINDS:
+        definition = attribute(kind, column) or {}
+        assert definition["kind"] == "Number" and definition["optional"] is False, f"{kind}.{column}"
+        assert "default_value" not in definition and "order_weight" in definition
+        assert set(definition["parameters"]) == {"min_value", "max_value"}
+    assert attribute("TopologyCustomerTemplateCloud", column) is None
+    assert column not in schema()["TopologyCustomerTemplate"].attributes
+
+
+def test_the_sizing_ranges_are_the_agreed_ones() -> None:
+    """IPv4 segments /16../29, the IPv6 block /32../64, IPv6 segments /64../120 (anything but /64 breaks SLAAC)."""
+    ranges = {column: (attribute(_KIND, column) or {})["parameters"] for column in _SIZING}
+    assert ranges == {
+        "segment_prefix_length": {"min_value": 16, "max_value": 29},
+        "ipv6_prefix_length": {"min_value": 32, "max_value": 64},
+        "ipv6_segment_prefix_length": {"min_value": 64, "max_value": 120},
+    }
+    assert "SLAAC" in (attribute(_KIND, "ipv6_segment_prefix_length") or {})["description"]
 
 
 @pytest.mark.parametrize("tier", _TIER_ORDER)

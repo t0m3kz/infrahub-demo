@@ -674,6 +674,8 @@ def _make_gen(world: _World) -> tuple[Any, list[str]]:
     gen.acquire_resource_lock = AsyncMock(side_effect=acquire)
     gen.release_resource_lock = AsyncMock(side_effect=release)
     gen.link_serving_context = AsyncMock()
+    # The customer's pools are boarded by their own tests (tests/unit/test_customer_pool_boarding.py).
+    gen.ensure_customer_pools = AsyncMock()
     gen.set_controllers_from = MagicMock()
 
     async def reconcile_border(target: Any, _label: str) -> None:

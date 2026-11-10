@@ -201,6 +201,42 @@ generics:
           max_value: 28
         order_weight: 325
 
+  # The segment sizing and the IPv6 block of a data center or colocation tier (a cloud tier has none of them: its
+  # subnets are provider-assigned and its routed range is IPv4). A marker generic of attributes only, no
+  # human_friendly_id and no uniqueness: the same reason as TopologyCustomerTemplate.
+  - name: CustomerTemplateSizing
+    namespace: Topology
+    description: "Segment sizing and IPv6 block of a data center or colocation service tier"
+    include_in_menu: false
+    attributes:
+      - name: segment_prefix_length
+        kind: Number
+        label: "Segment Prefix Length"
+        description: "IPv4 prefix length of a segment that states no host_count; with a host_count the segment is sized from it"  # yamllint disable-line rule:line-length
+        optional: false
+        parameters:
+          min_value: 16
+          max_value: 29
+        order_weight: 326
+      - name: ipv6_prefix_length
+        kind: Number
+        label: "IPv6 Block Prefix Length"
+        description: "IPv6 customer block carved from the tenant IPv6 pool"
+        optional: false
+        parameters:
+          min_value: 32
+          max_value: 64
+        order_weight: 327
+      - name: ipv6_segment_prefix_length
+        kind: Number
+        label: "IPv6 Segment Prefix Length"
+        description: "IPv6 prefix length of an IPv6 segment; anything other than /64 breaks SLAAC"
+        optional: false
+        parameters:
+          min_value: 64
+          max_value: 120
+        order_weight: 328
+
 nodes:
   - name: CustomerDC
     namespace: Topology
@@ -499,6 +535,7 @@ nodes:
     icon: "mdi:file-document-edit-outline"
     inherit_from:
       - TopologyCustomerTemplate
+      - TopologyCustomerTemplateSizing
     include_in_menu: false
     human_friendly_id:
       - name__value
@@ -538,6 +575,7 @@ nodes:
     icon: "mdi:file-document-edit-outline"
     inherit_from:
       - TopologyCustomerTemplate
+      - TopologyCustomerTemplateSizing
     include_in_menu: false
     human_friendly_id:
       - name__value

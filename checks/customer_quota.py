@@ -17,8 +17,7 @@ from checks.base import WarningCheck
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import SERVICE_CONTEXT_ROLES, is_exchange_zone
 from utils.interface_speed import InterfaceSpeedMatcher
-from utils.limits import SEGMENT_PREFIX_LENGTH_DEFAULT
-from utils.segment_addressing import segment_prefix_length
+from utils.segment_addressing import IPV4, IPV6, segment_prefix_length
 from utils.segment_vlan import port_segments
 
 from .common import deployment_scope_ids
@@ -55,11 +54,15 @@ class CheckCustomerQuota(WarningCheck):
     Zero means none allowed. A speed without a `ports_<speed>g` attribute (only 25G and 100G host ports exist in
     the model: the server device types carry no other NIC) is not metered.
 
-    Besides the quota: the address block of a data center or colocation template holds its tier (a
-    ``/address_prefix_length`` has room for ``max_segments`` segments of the default size); a cloud segment with a
-    ``host_count`` and a ``cidr_block`` has a block at least as large as the host count needs (the same sizing as the
-    VXLAN allocator, ``utils/segment_addressing.py``); and a WARNING for a VXLAN segment whose footprints are of
-    different kinds (the customer pool that addresses it is the one of the first kind, data center before colocation).
+    Besides the quota, the tier itself (a data center or colocation template; a cloud template has none of these
+    numbers): its IPv4 block holds ``max_segments`` segments of ``segment_prefix_length`` and its IPv6 block
+    ``max_segments`` segments of ``ipv6_segment_prefix_length``, and a segment is never larger than its block (ERRORs
+    naming the tier). A cloud segment with a ``host_count`` and a ``cidr_block`` has a block at least as large as the
+    host count needs (the same sizing as the VXLAN allocator, ``utils/segment_addressing.py``), and is IPv4 (ERROR: it
+    carries a provider ``cidr_block``). A VXLAN segment's gateway prefix is of its ``ip_version`` (ERROR), and a
+    ``host_count`` on an IPv6 segment is a WARNING (it sizes nothing there). And a WARNING for a VXLAN segment whose
+    footprints are of different kinds (the customer pool that addresses it is the one of the first kind, data center
+    before colocation).
     """
 
     query = "customer_quota"
@@ -81,6 +84,7 @@ class CheckCustomerQuota(WarningCheck):
         for segment in cleaned.get("ManagedVxlanSegment") or []:
             self._collect(segment, ports_by_segment[segment["id"]], footprints, segments, ports)
             self._warn_mixed_kinds(segment)
+            self._validate_ip_version(segment)
 
         for fp in footprints.values():
             if fp["kind"] == CLOUD_KIND:
@@ -191,22 +195,69 @@ class CheckCustomerQuota(WarningCheck):
                 )
 
     def _validate_block(self, kind: str, template: dict[str, Any]) -> None:
-        """ERROR when a template's address block has no room for ``max_segments`` segments of the default size."""
-        length = template["address_prefix_length"]
-        room = 2 ** max(SEGMENT_PREFIX_LENGTH_DEFAULT - length, 0)
-        if room < template["max_segments"]:
+        """ERRORs when a tier's blocks have no room for ``max_segments`` segments of the tier's size, per family."""
+        name = template.get("name")
+        families = (
+            (IPV4, template["address_prefix_length"], template["segment_prefix_length"], "segment_prefix_length"),
+            (
+                IPV6,
+                template["ipv6_prefix_length"],
+                template["ipv6_segment_prefix_length"],
+                "ipv6_segment_prefix_length",
+            ),
+        )
+        for family, block, segment, field in families:
+            label = "IPv6 " if family == IPV6 else ""
+            if segment < block:
+                self.log_error(
+                    message=(
+                        f"Design '{name}' ({kind}): its {field} /{segment} is larger than its /{block} {label}address "
+                        "block"
+                    ),
+                    object_id=template.get("id"),
+                    object_type=kind,
+                )
+                continue
+            room = 2 ** (segment - block)
+            if room < template["max_segments"]:
+                self.log_error(
+                    message=(
+                        f"Design '{name}' ({kind}): its /{block} {label}address block holds {room} /{segment} "
+                        f"segments, fewer than the {template['max_segments']} its max_segments allows"
+                    ),
+                    object_id=template.get("id"),
+                    object_type=kind,
+                )
+
+    def _validate_ip_version(self, segment: dict[str, Any]) -> None:
+        """A gateway prefix of the segment's family (ERROR), and no host_count on an IPv6 segment (WARNING)."""
+        version = segment.get("ip_version") or IPV4
+        prefix = ((segment.get("gateway") or {}).get("ip_prefix") or {}).get("prefix")
+        if prefix and (":" in prefix) != (version == IPV6):
             self.log_error(
                 message=(
-                    f"Design '{template.get('name')}' ({kind}): its /{length} address block holds {room} "
-                    f"/{SEGMENT_PREFIX_LENGTH_DEFAULT} segments, fewer than the {template['max_segments']} "
-                    "its max_segments allows"
+                    f"Segment '{segment.get('name')}': its gateway prefix {prefix} is not {version.replace('ip', 'IP')}, "
+                    "the ip_version the segment states"
                 ),
-                object_id=template.get("id"),
-                object_type=kind,
+                object_id=segment.get("id"),
+                object_type="ManagedVxlanSegment",
+            )
+        if version == IPV6 and segment.get("host_count") is not None:
+            self.log_warning(
+                message=(
+                    f"Segment '{segment.get('name')}': host_count {segment['host_count']} sizes nothing on an IPv6 "
+                    "segment (its prefix is the ipv6_segment_prefix_length of its design)"
+                )
             )
 
     def _validate_cloud_block(self, segment: dict[str, Any]) -> None:
-        """ERROR when a cloud segment's cidr_block is smaller than its host_count needs."""
+        """ERRORs when a cloud segment is not IPv4, or its cidr_block is smaller than its host_count needs."""
+        if (segment.get("ip_version") or IPV4) != IPV4:
+            self.log_error(
+                message=f"Cloud segment '{segment.get('name')}': it must be IPv4 (it carries a provider cidr_block)",
+                object_id=segment.get("id"),
+                object_type="CloudNetworkSegment",
+            )
         host_count, cidr_block = segment.get("host_count"), segment.get("cidr_block")
         if host_count is None or not cidr_block:
             return

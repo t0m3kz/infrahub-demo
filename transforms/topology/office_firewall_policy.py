@@ -18,7 +18,7 @@ from infrahub_sdk.transforms import InfrahubTransform
 from transforms.helpers.firewall import get_zone_policies
 from transforms.helpers.policy import enabled_policies, segment_policies, segment_rule_policies
 from utils.data_cleaning import clean_data
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import refuse_ipv6_segment, segment_prefix
 
 OFFICE_KIND = "TopologyCustomerOffice"
 
@@ -36,6 +36,8 @@ def _default_action(segment: dict[str, Any]) -> str:
 def build_office_policy(office: dict[str, Any]) -> dict[str, Any]:
     """The firewall policy payload of one cleaned office row (``office_firewall_policy.gql``)."""
     segments = [segment for segment in office.get("network_segments") or [] if isinstance(segment, dict)]
+    for segment in segments:
+        refuse_ipv6_segment(segment, "the office firewall policy")
     rules = get_zone_policies(segment_rule_policies(segments))
     zones = sorted(
         {zone for segment in segments if (zone := _zone(segment))}

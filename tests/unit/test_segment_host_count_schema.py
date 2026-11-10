@@ -36,11 +36,17 @@ def test_host_count_is_an_optional_number_of_the_generic(kind: str) -> None:
 def test_the_generator_query_reads_what_the_addressing_needs() -> None:
     """host_count, the owner's org_id, each footprint's kind and the design's block of a DC and a colocation one."""
     assert "host_count { value }" in _QUERY
+    assert "ip_version { value }" in _QUERY
     assert "owner { node { id org_id { value } } }" in _QUERY
     assert "id __typename name { value }" in _QUERY
     for kind in ("TopologyCustomerDC", "TopologyCustomerColocation"):
         fragment = _QUERY.split(f"... on {kind} {{", 1)[1]
-        assert fragment.lstrip().startswith("design { node { id name { value } address_prefix_length { value } } }")
+        # The design's block and segment lengths of both families (see generators/topology/segment_addressing.py).
+        design = " ".join(fragment.lstrip().split("parent {", 1)[0].split())
+        assert design == (
+            "design { node { id name { value } address_prefix_length { value } segment_prefix_length { value } "
+            "ipv6_prefix_length { value } ipv6_segment_prefix_length { value } } }"
+        )
     assert _QUERY.count("__typename") == 2  # the segment and each footprint, once
 
 
@@ -48,7 +54,7 @@ def test_the_generator_query_reads_what_the_addressing_needs() -> None:
     "declaration",
     [
         "class TopologyCustomerTemplateCloud(TopologyCustomerTemplate):\n    max_virtual_networks: Integer",
-        "class TopologyCustomerTemplateColo(TopologyCustomerTemplate):",
+        "class TopologyCustomerTemplateColo(TopologyCustomerTemplate, TopologyCustomerTemplateSizing):",
         "    address_prefix_length: Integer\n    dedicated_firewall: Boolean",
         "    design: RelationshipAttribute[TopologyCustomerTemplateCloud]",
         "    design: RelationshipAttribute[TopologyCustomerTemplateColo]",
@@ -65,7 +71,9 @@ def test_max_segments_moved_up_to_the_generic_in_the_protocols() -> None:
     """max_segments is the TopologyCustomerTemplate generic's, no template class repeats it."""
     generic = _PROTOCOLS.split("class TopologyCustomerTemplate(CoreNode):", 1)[1].split("\n\n\n", 1)[0]
     assert "max_segments: Integer" in generic
-    nodes = re.findall(r"class TopologyCustomerTemplate\w+\(TopologyCustomerTemplate\):\n((?:    .*\n)+)", _PROTOCOLS)
+    nodes = re.findall(
+        r"class TopologyCustomerTemplate\w+\(TopologyCustomerTemplate(?:, \w+)?\):\n((?:    .*\n)+)", _PROTOCOLS
+    )
     assert len(nodes) == 3 and not any("max_segments" in body for body in nodes)
 
 

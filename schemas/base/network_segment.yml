@@ -74,17 +74,37 @@ generics:
             label: Cloud Subnet
             description: "Subnet of a cloud virtual network (the provider is the network's account provider)"
             color: "#FF9900"
-      # The size of the segment's prefix is derived from it (utils/segment_addressing.py segment_prefix_length): the
-      # hosts plus the network, broadcast and gateway addresses, rounded up to a power of two. Unset: a /24.
+      # The size of the segment's IPv4 prefix is derived from it (utils/segment_addressing.py segment_prefix_length):
+      # the hosts plus the network, broadcast and gateway addresses, rounded up to a power of two. Unset: the
+      # segment_prefix_length of the footprint's design.
       - name: host_count
         kind: Number
         label: Host Count
         optional: true
         order_weight: 260
-        description: "Hosts the segment must hold; sizes its prefix (unset: a /24). A cloud subnet is provider-assigned: only checked."  # yamllint disable-line rule:line-length
+        description: "Hosts the segment must hold; sizes its IPv4 prefix (unset: its design's segment_prefix_length). Not used by IPv6."  # yamllint disable-line rule:line-length
         parameters:
           min_value: 1
           max_value: 1021
+      # One address family per segment, no dual stack. IPv6 is addressed (a /64 from the customer's IPv6 pool) but
+      # no device renders it yet: a transform refuses a device that carries one (utils/segment_addressing.py
+      # require_ipv4_segments). A cloud segment is IPv4 (checks/customer_quota.py).
+      - name: ip_version
+        kind: Dropdown
+        label: IP Version
+        optional: false
+        default_value: ipv4
+        order_weight: 265
+        description: "Address family of the segment's prefix and gateway; IPv6 segments are addressed but not rendered yet"  # yamllint disable-line rule:line-length
+        choices:
+          - name: ipv4
+            label: IPv4
+            description: "IPv4 prefix, sized from host_count or the design's segment_prefix_length"
+            color: "#3498DB"
+          - name: ipv6
+            label: IPv6
+            description: "IPv6 prefix, the design's ipv6_segment_prefix_length, from the customer's IPv6 pool"
+            color: "#9B59B6"
       - name: isolation_mode
         kind: Dropdown
         label: Isolation Mode

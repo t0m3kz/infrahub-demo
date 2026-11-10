@@ -18,7 +18,7 @@ from utils.exchange_transit import (
     ZONE_BY_NS_TYPE,
 )
 from utils.routing_domain import interface_security_zone, interface_vrfs
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import refuse_ipv6_segment, segment_prefix
 from utils.service_contexts import leg_contexts
 
 DEFAULT_ROUTE = "0.0.0.0/0"
@@ -261,6 +261,17 @@ class Firewall(BaseDeviceTransform):
             return self._no_platform_config(device)
 
         activations, contexts, root_policies_data, context_policies_data = self.collect_policies(device)
+        # Zone members, context routes, the SNAT sources and the default-permit source are IPv4 prefixes: an IPv6
+        # segment would drop out of them silently or widen to any. A terminated one is the pair's own interface.
+        for context in contexts:
+            terminated = {segment.get("id") for segment in context.get("terminated_segments") or []}
+            for segment in context.get("segments") or []:
+                if segment.get("id") not in terminated:
+                    refuse_ipv6_segment(segment, "the firewall transform (zones, rules, context routes)")
+        for activation in activations:
+            refuse_ipv6_segment(
+                activation.get("segment") or {}, "the firewall transform (zones, rules, context routes)"
+            )
 
         ha = get_ha(device.get("capabilities"), device.get("interfaces"), device.get("name"))
         # A transit leg renders inside its context, not as a root interface.

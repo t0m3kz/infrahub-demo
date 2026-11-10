@@ -95,6 +95,9 @@ query customer_dc($name: String!) {
         }
         design {
           node {
+            name { value }
+            address_prefix_length { value }
+            ipv6_prefix_length { value }
             dedicated_firewall { value }
             dedicated_loadbalancer { value }
           }

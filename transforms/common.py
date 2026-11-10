@@ -10,7 +10,7 @@ from netutils.utils import jinja2_convenience_function
 from transforms.helpers.acl import get_acls
 from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.bgp_facts import annotate_bgp_policy
-from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
+from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes
 from transforms.helpers.firewall import (
     get_exchange_transits,
     get_leaf_firewall_transits,
@@ -37,7 +37,7 @@ from utils.data_cleaning import clean_data
 from utils.device_services import has_pbr, overlay_pbr_bindings, pbr_bindings
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
-from utils.segment_addressing import l2_only_on, l2_only_view, segment_hosting_candidates
+from utils.segment_addressing import l2_only_on, l2_only_view, refuse_ipv6_segment, segment_hosting_candidates
 from utils.service_contexts import (
     DEVICE_SERVICES_ROOT,
     attach_device_services,
@@ -413,7 +413,6 @@ class BaseDeviceTransform(InfrahubTransform):
         """
         if platform_name != "cisco_xe" or self.device_role not in self._CISCO_XE_FABRIC_ROLES:
             return {}
-        refuse_unfiltered_ipv6(config.get("vlans") or [], self.device_role)
         lisp = config.get(OVERLAY_CONFIG_KEYS["lisp"])
         defined_vrfs = l3_vrf_names(lisp, config.get("vxlan"))
         return {
@@ -522,6 +521,12 @@ class BaseDeviceTransform(InfrahubTransform):
         if not self.device_role:
             return {}
         activations = data.get("segment_deployments")
+        # The switch templates render the SVI address of an IPv6 gateway but not what it needs around it (the VRF's
+        # IPv6 address family and route target, the IPv6 ACL, the PBR to the firewall): refuse, never half-render.
+        # An office switch's LISP renderer refuses its own (transforms/helpers/lisp.py).
+        if self.device_role not in OFFICE_LISP_ROLES:
+            for act in routed_activations(activations):
+                refuse_ipv6_segment(act.get("segment") or {}, f"the {platform_name} {self.device_role} (VRF, ACL, PBR)")
         # PBR and the zero-trust ACLs hang off the segment's SVI; a segment a firewall context terminates has none.
         routed = routed_activations(activations)
         # A border gateway's stitched segments are hostless (no customer-facing port),

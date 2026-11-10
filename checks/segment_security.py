@@ -21,7 +21,7 @@ from utils.exchange_transit import (
 )
 from utils.group_policy import MICROSEGMENTED, RESERVED_GROUPS, tag_pool
 from utils.ownership import customer_owner
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import has_ipv6_gateway, segment_prefix
 
 from .base import WarningCheck
 
@@ -163,6 +163,15 @@ class CheckSegmentSecurity(WarningCheck):
                     continue
                 segment = by_id.get(endpoint["id"], endpoint)
                 if segment_prefix(segment):
+                    continue
+                if has_ipv6_gateway(segment):
+                    self.log_error(
+                        message=(
+                            f"rule '{rule.get('name', rule.get('id'))}': {side} segment "
+                            f"'{segment.get('name', endpoint['id'])}' has an IPv6 gateway: IPv6 segments are not "
+                            "rendered by the rule tables yet, so the rule would render as any"
+                        )
+                    )
                     continue
                 self.log_warning(
                     message=(

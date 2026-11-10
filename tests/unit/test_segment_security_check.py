@@ -213,12 +213,13 @@ class TestRuleEndpoints:
         check = _run([_segment("a", prefix=None), _segment("b")], [_rule("r", "a", "b")])
         assert "source segment 'a'" in check._captured_infos[0]
 
-    def test_ipv6_only_segment_still_warns_because_the_rule_resolver_is_ipv4_only(self) -> None:
-        """The warning is about the leaf ACL and firewall table (policy.rule_endpoint, IPv4 only), not the MSS-G
-        classifier (utils.segment_addressing.classifier_prefix, IPv4 else IPv6): an IPv6-only endpoint renders as any."""
+    def test_ipv6_only_segment_is_an_error_because_the_rule_resolver_is_ipv4_only(self) -> None:
+        """The leaf ACL and the firewall table (policy.rule_endpoint) are IPv4 only and refuse an IPv6 endpoint: the
+        proposed change fails here, before a transform does. The MSS-G classifier (classifier_prefix) is not judged."""
         check = _run([_segment("a"), _segment("b", prefix="2001:db8::/64")], [_rule("r", "a", "b")])
-        assert len(check._captured_infos) == 1
-        assert "destination segment 'b' resolves to no prefix" in check._captured_infos[0]
+        assert check._captured_infos == []
+        assert len(check._captured_errors) == 1
+        assert "destination segment 'b' has an IPv6 gateway" in check._captured_errors[0]
 
     def test_prefixless_segment_in_the_internet_zone_warns_too(self) -> None:
         """The internet is a zone, not a segment: a prefix-less segment is never taken for it."""

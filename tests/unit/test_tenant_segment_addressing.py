@@ -73,6 +73,7 @@ class _Client:
                 return []
             pool = MagicMock(id=f"pool-{kwargs['name__value']}")
             pool.name.value = kwargs["name__value"]
+            pool.default_prefix_length.value = 24  # 23b_tenant_pools.yml: an office segment takes the pool's default
             return [pool]
         raise AssertionError(f"unexpected filters({kind})")
 
@@ -153,7 +154,7 @@ class TestEnsureSegmentAddressing:
         assert allocation["kind"] is IpamPrefix
         assert allocation["member_type"] == "address"
         assert allocation["data"] == {"role": "customer", "status": "active", "description": segment["name"]}
-        # No host_count: a /24, the default segment size (utils/limits.py SEGMENT_PREFIX_LENGTH_DEFAULT).
+        # No host_count and no design (an office): the pool's own default_prefix_length, a /24.
         assert allocation["prefix_length"] == 24
         assert gen.upserts == [
             {"offsets": (OFFSET_ANYCAST,), "description": f"{segment['name']} anycast gateway", "track": False}

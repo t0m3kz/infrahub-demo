@@ -85,6 +85,9 @@ spec:
     - name: run-customer-deployment-colocation-generator
       description: Provision FirewallContext/dedicated LB for a colocation customer deployment
       generator: add_customer_deployment_colocation
+    - name: run-customer-deployment-cloud-generator
+      description: Create the customer's cloud pool for a cloud customer deployment
+      generator: add_customer_deployment_cloud
     - name: run-colocation-metro-generator
       description: Create a colocation metro's VNI and ASN pools (the Multi-Site site)
       generator: add_colocation_metro

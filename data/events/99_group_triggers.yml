@@ -112,6 +112,12 @@ spec:
       group: customer_deployments_colocation
       action: run-customer-deployment-colocation-generator
 
+    - name: trigger-customer-deployment-cloud-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: customer_deployments_cloud
+      action: run-customer-deployment-cloud-generator
+
     - name: trigger-colocation-metro-on-added
       branch_scope: "other_branches"
       member_update: added

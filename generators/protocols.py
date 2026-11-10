@@ -252,6 +252,7 @@ class ManagedNetworkSegment(CoreNode):
     description: StringOptional
     environment: Dropdown
     host_count: IntegerOptional
+    ip_version: Dropdown
     isolation_mode: Dropdown
     name: String
     routing_tag: IntegerOptional
@@ -551,15 +552,21 @@ class TopologyCustomerOffice(
     owner: RelationshipAttribute[OrganizationEntity]
 
 
+class TopologyCustomerTemplateSizing(CoreNode):
+    ipv6_prefix_length: Integer
+    ipv6_segment_prefix_length: Integer
+    segment_prefix_length: Integer
+
+
 class TopologyCustomerTemplateCloud(TopologyCustomerTemplate):
     max_virtual_networks: Integer
 
 
-class TopologyCustomerTemplateColo(TopologyCustomerTemplate):
+class TopologyCustomerTemplateColo(TopologyCustomerTemplate, TopologyCustomerTemplateSizing):
     pass
 
 
-class TopologyCustomerTemplateDC(TopologyCustomerTemplate):
+class TopologyCustomerTemplateDC(TopologyCustomerTemplate, TopologyCustomerTemplateSizing):
     ports_100g: Integer
     ports_25g: Integer
 

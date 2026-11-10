@@ -12,11 +12,20 @@
 #   ports_<n>g    - checks/customer_quota.py (DC), host-facing leaf/access ports of that speed tagged with the
 #     footprint's segments (0 = none of that speed allowed)
 #   max_virtual_networks - checks/customer_quota.py (cloud), the virtual networks of the footprint's account
-#   address_prefix_length - DC and colocation: the block generators/topology/segment_ports.py carves from the
-#     environment's tenant pool (Tenant-PROD-IPv4 / Tenant-NONPROD-IPv4) for the customer's own prefix pool, which
-#     the customer's segments are addressed from; checks/customer_quota.py requires it to hold max_segments /24s.
-#     Cloud: the routed range of the footprint (one account in one cloud region), not the address space of its
-#     segments; nothing reads it yet.
+#   address_prefix_length - DC and colocation: the IPv4 block generators/topology/segment_addressing.py carves from
+#     the environment's tenant pool (Tenant-PROD-IPv4 / Tenant-NONPROD-IPv4) for the customer's own prefix pool when
+#     the footprint is boarded; the customer's segments are addressed from it.
+#     Cloud: the routed range of the footprint (one account in one cloud region), IPv4 only, carved at boarding
+#     into the customer's cloud pool; nothing draws from that pool yet (it exists for the later routed-range
+#     allocation per virtual network), and the cloud tiers have none of the three numbers below.
+#   segment_prefix_length - DC and colocation: the IPv4 prefix of a segment that states no host_count (24 in every
+#     tier; a host_count sizes the prefix instead).
+#   ipv6_prefix_length - DC and colocation: the IPv6 block carved from Tenant-PROD-IPv6 / Tenant-NONPROD-IPv6 for
+#     the customer's IPv6 pool.
+#   ipv6_segment_prefix_length - DC and colocation: the prefix of an IPv6 segment (64 in every tier: anything else
+#     breaks SLAAC).
+#   checks/customer_quota.py requires the IPv4 block to hold max_segments segments of segment_prefix_length and
+#   the IPv6 block max_segments segments of ipv6_segment_prefix_length.
 #
 # The DC numbers are the highest use in data/demos/30_all (S: 1 segment, 4 x 25G; M: 4 segments, 8 x 25G; L: 3
 # segments, 4 x 25G; XL: unused) with headroom: about 1.5x the tier's highest use, at least one segment more, rounded
@@ -35,6 +44,9 @@ spec:
       dedicated_loadbalancer: false
       max_segments: 2
       address_prefix_length: 23
+      segment_prefix_length: 24
+      ipv6_prefix_length: 60
+      ipv6_segment_prefix_length: 64
       ports_25g: 6
       ports_100g: 0
 
@@ -44,6 +56,9 @@ spec:
       dedicated_loadbalancer: false
       max_segments: 6
       address_prefix_length: 21
+      segment_prefix_length: 24
+      ipv6_prefix_length: 58
+      ipv6_segment_prefix_length: 64
       ports_25g: 12
       ports_100g: 0
 
@@ -53,6 +68,9 @@ spec:
       dedicated_loadbalancer: true
       max_segments: 12
       address_prefix_length: 20
+      segment_prefix_length: 24
+      ipv6_prefix_length: 56
+      ipv6_segment_prefix_length: 64
       ports_25g: 24
       ports_100g: 4
 
@@ -62,6 +80,9 @@ spec:
       dedicated_loadbalancer: true
       max_segments: 24
       address_prefix_length: 19
+      segment_prefix_length: 24
+      ipv6_prefix_length: 52
+      ipv6_segment_prefix_length: 64
       ports_25g: 48
       ports_100g: 8
 ---
@@ -74,21 +95,33 @@ spec:
       description: "Up to 2 segments, a /23 address block."
       max_segments: 2
       address_prefix_length: 23
+      segment_prefix_length: 24
+      ipv6_prefix_length: 60
+      ipv6_segment_prefix_length: 64
 
     - name: "M"
       description: "Up to 6 segments, a /21 address block."
       max_segments: 6
       address_prefix_length: 21
+      segment_prefix_length: 24
+      ipv6_prefix_length: 58
+      ipv6_segment_prefix_length: 64
 
     - name: "L"
       description: "Up to 12 segments, a /20 address block."
       max_segments: 12
       address_prefix_length: 20
+      segment_prefix_length: 24
+      ipv6_prefix_length: 56
+      ipv6_segment_prefix_length: 64
 
     - name: "XL"
       description: "Up to 24 segments, a /19 address block."
       max_segments: 24
       address_prefix_length: 19
+      segment_prefix_length: 24
+      ipv6_prefix_length: 52
+      ipv6_segment_prefix_length: 64
 ---
 apiVersion: infrahub.app/v1
 kind: Object

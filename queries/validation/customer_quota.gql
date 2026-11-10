@@ -6,10 +6,11 @@
 #   - TopologyCustomerCloud: the design's max_segments and max_virtual_networks, the footprint's cloud segments
 #     (network_segments) and its account and region (the virtual networks it counts are the account's in that region).
 #   - CloudVirtualNetwork: the account and region of each network.
-#   - TopologyCustomerTemplateDC / ...Colocation: the max_segments and address block of each tier (the block must hold
-#     the tier).
-#   - CloudNetworkSegment: the host_count and cidr_block of each cloud segment.
-#   - ManagedVxlanSegment: the footprints each names, with their kind.
+#   - TopologyCustomerTemplateDC / ...Colocation: the max_segments, the IPv4 and IPv6 address blocks and the segment
+#     sizes of each tier (each block must hold the tier's segments).
+#   - CloudNetworkSegment: the host_count, cidr_block and ip_version of each cloud segment (IPv4 only).
+#   - ManagedVxlanSegment: the footprints each names, with their kind, its ip_version and host_count, and the family of
+#     its gateway's prefix (it must match the ip_version).
 #   - DcimPhysicalInterface / DcimLAGInterface with capabilities: the switch ports tagged with a segment (a VLAN row,
 #     ManagedSegmentVlan, of it among the port's `capabilities`, read from the port, the segment through the row's
 #     deployment; the check joins them to the segments by id). A port's speed is its
@@ -73,15 +74,35 @@ query customer_quota {
   }
 
   TopologyCustomerTemplateDC {
-    edges { node { id name { value } max_segments { value } address_prefix_length { value } } }
+    edges {
+      node {
+        id
+        name { value }
+        max_segments { value }
+        address_prefix_length { value }
+        segment_prefix_length { value }
+        ipv6_prefix_length { value }
+        ipv6_segment_prefix_length { value }
+      }
+    }
   }
 
   TopologyCustomerTemplateColo {
-    edges { node { id name { value } max_segments { value } address_prefix_length { value } } }
+    edges {
+      node {
+        id
+        name { value }
+        max_segments { value }
+        address_prefix_length { value }
+        segment_prefix_length { value }
+        ipv6_prefix_length { value }
+        ipv6_segment_prefix_length { value }
+      }
+    }
   }
 
   CloudNetworkSegment {
-    edges { node { id name { value } host_count { value } cidr_block { value } } }
+    edges { node { id name { value } host_count { value } cidr_block { value } ip_version { value } } }
   }
 
   ManagedVxlanSegment {
@@ -89,6 +110,9 @@ query customer_quota {
       node {
         id
         name { value }
+        ip_version { value }
+        host_count { value }
+        gateway { node { id ip_prefix { node { id prefix { value } } } } }
         security_zone { node { ...RoutingZoneFields } }
         customer_deployments { edges { node { id __typename name { value } } } }
       }

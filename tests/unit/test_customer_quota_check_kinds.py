@@ -88,14 +88,25 @@ def _vxlan(seg_id: str, *footprints: tuple[str, str]) -> dict[str, Any]:
     }
 
 
-def _template(name: str, max_segments: int, length: int) -> dict[str, Any]:
-    """A DC or colocation template row."""
+def _template(
+    name: str,
+    max_segments: int,
+    length: int,
+    *,
+    segment_length: int = 24,
+    ipv6_length: int = 58,
+    ipv6_segment_length: int = 64,
+) -> dict[str, Any]:
+    """A DC or colocation template row with its four tier numbers (the defaults hold any tier below)."""
     return {
         "node": {
             "id": f"tpl-{name}",
             "name": _v(name),
             "max_segments": _v(max_segments),
             "address_prefix_length": _v(length),
+            "segment_prefix_length": _v(segment_length),
+            "ipv6_prefix_length": _v(ipv6_length),
+            "ipv6_segment_prefix_length": _v(ipv6_segment_length),
         }
     }
 
@@ -160,7 +171,7 @@ class TestCloudQuota:
 
 
 class TestAddressBlockHoldsTheTier:
-    """Rule (a): a /<address_prefix_length> has room for max_segments /24 segments (data center and colocation)."""
+    """Rule (a): the IPv4 and IPv6 blocks have room for max_segments segments of the tier's size (DC and colocation)."""
 
     @pytest.mark.parametrize("kind", ["TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo"])
     @pytest.mark.parametrize(("max_segments", "length"), [(2, 23), (6, 21), (8, 21), (24, 19), (1, 24)])
@@ -176,19 +187,73 @@ class TestAddressBlockHoldsTheTier:
         assert "'XL'" in finding["message"] and f"/{length} address block" in finding["message"]
         assert finding["object_type"] == kind
 
+    @pytest.mark.parametrize("kind", ["TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo"])
+    @pytest.mark.parametrize(
+        ("segment_length", "max_segments", "fits"), [(26, 8, True), (26, 9, False), (24, 2, True), (24, 3, False)]
+    )
+    def test_the_block_holds_segments_of_the_tiers_own_size(
+        self, kind: str, segment_length: int, max_segments: int, fits: bool
+    ) -> None:
+        """A /23 block holds 8 /26 segments (not 9) and 2 /24s (not 3): the tier's segment size decides."""
+        template = _template("L", max_segments, 23, segment_length=segment_length)
+        errors = _run({kind: _edges(template)})._errors
+        assert (errors == []) is fits
+        if not fits:
+            assert f"/{segment_length}" in errors[0]["message"] and "'L'" in errors[0]["message"]
+
+    @pytest.mark.parametrize("kind", ["TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo"])
+    @pytest.mark.parametrize(
+        ("ipv6_length", "ipv6_segment_length", "max_segments", "fits"),
+        [(60, 64, 16, True), (60, 64, 17, False), (58, 64, 64, True), (56, 64, 256, True), (56, 64, 257, False)],
+    )
+    def test_the_ipv6_block_holds_the_tiers_segments(
+        self, kind: str, ipv6_length: int, ipv6_segment_length: int, max_segments: int, fits: bool
+    ) -> None:
+        """A /60 holds 16 /64s, a /58 holds 64, a /56 holds 256; the error names the tier."""
+        template = _template("M", max_segments, 16, ipv6_length=ipv6_length, ipv6_segment_length=ipv6_segment_length)
+        errors = [e for e in _run({kind: _edges(template)})._errors if "IPv6" in e["message"]]
+        assert (errors == []) is fits
+        if not fits:
+            assert "'M'" in errors[0]["message"] and f"/{ipv6_length} IPv6 address block" in errors[0]["message"]
+
+    @pytest.mark.parametrize("kind", ["TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo"])
+    def test_a_segment_larger_than_its_block_is_an_error_in_each_family(self, kind: str) -> None:
+        """segment_prefix_length /22 in a /23 block, ipv6_segment_prefix_length /56 in a /58 block: both name the tier."""
+        template = _template("S", 1, 23, segment_length=22, ipv6_length=58, ipv6_segment_length=56)
+        messages = [finding["message"] for finding in _run({kind: _edges(template)})._errors]
+        assert len(messages) == 2
+        assert "segment_prefix_length /22 is larger than its /23 address block" in messages[0]
+        assert "ipv6_segment_prefix_length /56 is larger than its /58 IPv6 address block" in messages[1]
+        assert all("'S'" in message for message in messages)
+
     def test_the_cloud_template_is_not_judged(self) -> None:
         """A cloud template's length is the footprint's routed range, not a block for its segments."""
         payload = {"TopologyCustomerTemplateCloud": _edges(_template("XL", 24, 25))}
         assert _run(payload)._errors == []
+        bare = {"node": {"id": "tpl-XL", "name": _v("XL"), "max_segments": _v(24), "address_prefix_length": _v(25)}}
+        assert _run({"TopologyCustomerTemplateCloud": _edges(bare)})._errors == []
 
 
 class TestCloudSegmentBlock:
     """Rule (b): a cloud segment's cidr_block is at least as large as its host_count needs."""
 
     @staticmethod
-    def _segment(host_count: int | None, cidr_block: str | None) -> dict[str, Any]:
-        node = {"id": "cs-1", "name": _v("c003-web"), "host_count": _v(host_count), "cidr_block": _v(cidr_block)}
+    def _segment(host_count: int | None, cidr_block: str | None, ip_version: str = "ipv4") -> dict[str, Any]:
+        node = {
+            "id": "cs-1",
+            "name": _v("c003-web"),
+            "host_count": _v(host_count),
+            "cidr_block": _v(cidr_block),
+            "ip_version": _v(ip_version),
+        }
         return {"CloudNetworkSegment": _edges({"node": node})}
+
+    def test_a_cloud_segment_must_be_ipv4(self) -> None:
+        """A cloud segment carries a provider cidr_block: an ipv6 one is an ERROR naming it."""
+        (finding,) = _run(self._segment(None, "10.0.0.0/24", ip_version="ipv6"))._errors
+        assert "'c003-web'" in finding["message"] and "must be IPv4" in finding["message"]
+        assert finding["object_type"] == "CloudNetworkSegment"
+        assert _run(self._segment(None, "10.0.0.0/24"))._errors == []
 
     @pytest.mark.parametrize(
         ("host_count", "cidr_block"),
@@ -231,3 +296,46 @@ class TestMixedKindWarning:
         """Two data center footprints are one kind."""
         segment = _vxlan("stretch", ("C005-P-DC10", "TopologyCustomerDC"), ("C005-P-DC12", "TopologyCustomerDC"))
         assert _run({"ManagedVxlanSegment": _edges(segment)})._warnings == []
+
+
+class TestSegmentIpVersion:
+    """Rule (d): a VXLAN segment's gateway prefix is of its ip_version, and an IPv6 segment has no host_count."""
+
+    @staticmethod
+    def _segment(ip_version: str, prefix: str | None, host_count: int | None = None) -> dict[str, Any]:
+        node = {
+            "id": "seg-1",
+            "name": _v("c001-app"),
+            "ip_version": _v(ip_version),
+            "host_count": _v(host_count),
+            "gateway": {"node": {"id": "gw-1", "ip_prefix": {"node": {"id": "p-1", "prefix": _v(prefix)}}}}
+            if prefix
+            else {"node": None},
+            "security_zone": {"node": None},
+            "customer_deployments": {"edges": []},
+        }
+        return {"ManagedVxlanSegment": _edges({"node": node})}
+
+    @pytest.mark.parametrize(
+        ("ip_version", "prefix"), [("ipv4", "10.1.0.0/24"), ("ipv6", "fd5a:1760::/64"), ("ipv4", None), ("ipv6", None)]
+    )
+    def test_a_gateway_of_the_segments_family_or_none_passes(self, ip_version: str, prefix: str | None) -> None:
+        """No gateway yet is not judged; the family of a gateway must be the segment's."""
+        check = _run(self._segment(ip_version, prefix))
+        assert check._errors == [] and check._warnings == []
+
+    @pytest.mark.parametrize(("ip_version", "prefix"), [("ipv4", "fd5a:1760::/64"), ("ipv6", "10.1.0.0/24")])
+    def test_a_gateway_of_the_other_family_is_an_error(self, ip_version: str, prefix: str) -> None:
+        """The error names the segment, the prefix and the stated version."""
+        (finding,) = _run(self._segment(ip_version, prefix))._errors
+        assert "'c001-app'" in finding["message"] and prefix in finding["message"]
+        assert f"not {ip_version.replace('ip', 'IP')}" in finding["message"]
+        assert finding["object_type"] == "ManagedVxlanSegment"
+
+    def test_a_host_count_on_an_ipv6_segment_is_a_warning(self) -> None:
+        """It sizes nothing there: a WARNING, never an error; an IPv4 segment keeps its host_count silently."""
+        check = _run(self._segment("ipv6", "fd5a:1760::/64", host_count=50))
+        assert check._errors == []
+        (warning,) = check._warnings
+        assert "'c001-app'" in warning and "host_count 50" in warning and "IPv6" in warning
+        assert _run(self._segment("ipv4", "10.1.0.0/26", host_count=50))._warnings == []

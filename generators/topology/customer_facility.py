@@ -20,16 +20,18 @@ from utils.data_cleaning import clean_data
 from ..firewall_context import FIREWALL_CONTEXT, FirewallContextMixin
 from ..firewall_context_spec import _ContextTarget
 from ..helpers.vrf import VrfMixin
+from .segment_addressing import SegmentAddressingMixin
 
 if TYPE_CHECKING:
     from ..devices import DeviceMixin
 
 
-class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
+class CustomerFacilityMixin(FirewallContextMixin, VrfMixin, SegmentAddressingMixin):
     """``generate()`` for a customer boarding generator on a facility with service pairs.
 
-    The host class also mixes in PoolMixin, DeviceMixin and CablingMixin (see
-    FirewallContextMixin) and CommonGenerator, and sets ``_customer_kind``,
+    It first boards the footprint's customer pools (``SegmentAddressingMixin.ensure_customer_pools``), so they exist
+    before the first segment asks for a prefix. The host class also mixes in PoolMixin, DeviceMixin and CablingMixin
+    (see FirewallContextMixin) and CommonGenerator, and sets ``_customer_kind``,
     ``_parent_label``, ``_parent_generators`` and ``_context_specs``.
     """
 
@@ -81,6 +83,13 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin):
 
         self.client.group_context.related_node_ids.append(customer_id)
         self.logger.info(f"Processing {kind} deployment {customer.get('name', customer_id)}")
+        await self.ensure_customer_pools(
+            kind=kind,
+            org_id=customer["owner"]["org_id"],
+            environment=customer["environment"],
+            design=customer.get("design") or {},
+            footprint_name=customer.get("name", customer_id),
+        )
 
         # This reads facility-level data (firewall_devices, loadbalancer_devices)
         # written by the facility's own generator (the only owner of its HA

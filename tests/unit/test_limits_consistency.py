@@ -182,6 +182,7 @@ class TestSetupDataNames:
             ("LB_LEG_POOL_TEMPLATE", {"prod", "non_prod"}),
             ("LB_VIP_POOL_TEMPLATE", {"prod", "non_prod"}),
             ("TENANT_POOL_TEMPLATE", {"prod", "non_prod"}),
+            ("TENANT_POOL_TEMPLATE_IPV6", {"prod", "non_prod"}),
         ],
     )
     def test_every_security_zone_has_the_pool_its_template_names(
@@ -216,6 +217,7 @@ class TestSetupDataNames:
             (lb_leg_pool_name, "LB_LEG_POOL_TEMPLATE"),
             (lb_vip_pool_name, "LB_VIP_POOL_TEMPLATE"),
             (tenant_pool_name, "TENANT_POOL_TEMPLATE"),
+            (lambda zone: tenant_pool_name(zone, "ipv6"), "TENANT_POOL_TEMPLATE_IPV6"),
             (handoff_pool_name, "HANDOFF_POOL_TEMPLATE"),
         ],
     )
@@ -445,11 +447,13 @@ class TestSharedVlanBand:
 class TestSegmentSizing:
     """The sizing of a tenant segment's prefix mirrors the schema and the tenant pools."""
 
-    def test_the_default_length_is_the_tenant_pools_default(self, prefix_pools: dict[str, dict[str, Any]]) -> None:
-        """Change ``SEGMENT_PREFIX_LENGTH_DEFAULT`` in utils/limits.py, or default_prefix_length in 23b_tenant_pools.yml."""
+    def test_the_tenant_pools_default_to_the_segment_size_of_their_family(
+        self, prefix_pools: dict[str, dict[str, Any]]
+    ) -> None:
+        """An office segment has no design: it takes the default_prefix_length of the pool (a /24, an IPv6 /64)."""
         for namespace in ("PROD", "NONPROD"):
-            pool = prefix_pools[tenant_pool_name(namespace)]
-            assert pool["default_prefix_length"] == limits.SEGMENT_PREFIX_LENGTH_DEFAULT
+            assert prefix_pools[tenant_pool_name(namespace)]["default_prefix_length"] == 24
+            assert prefix_pools[tenant_pool_name(namespace, "ipv6")]["default_prefix_length"] == 64
 
     def test_the_host_count_range_is_the_schema_parameters(self) -> None:
         """Change ``SEGMENT_HOST_COUNT_MAX`` in utils/limits.py, or the ``parameters`` of host_count in the schema."""
@@ -457,15 +461,18 @@ class TestSegmentSizing:
         assert definition is not None
         assert definition["parameters"] == {"min_value": 1, "max_value": limits.SEGMENT_HOST_COUNT_MAX}
 
-    def test_the_bounds_are_ordered_and_the_default_is_inside_them(self) -> None:
-        """A /22 is the largest segment, a /29 the smallest, and the default /24 is between."""
-        assert (
-            limits.SEGMENT_PREFIX_LENGTH_MIN < limits.SEGMENT_PREFIX_LENGTH_DEFAULT < limits.SEGMENT_PREFIX_LENGTH_MAX
-        )
+    def test_the_bounds_are_ordered_and_every_tiers_segment_size_is_inside_them(self, root_dir: Path) -> None:
+        """A /22 is the largest segment, a /29 the smallest; the tiers' segment_prefix_length is between."""
+        assert limits.SEGMENT_PREFIX_LENGTH_MIN < limits.SEGMENT_PREFIX_LENGTH_MAX
         assert (
             limits.SEGMENT_HOST_COUNT_MAX
             == 2 ** (32 - limits.SEGMENT_PREFIX_LENGTH_MIN) - limits.SEGMENT_RESERVED_ADDRESSES
         )
+        for kind in ("TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo"):
+            for row in _bootstrap_objects(root_dir, kind):
+                assert (
+                    limits.SEGMENT_PREFIX_LENGTH_MIN <= row["segment_prefix_length"] <= limits.SEGMENT_PREFIX_LENGTH_MAX
+                )
 
     def test_the_tenant_supernets_hold_the_largest_tier_block(self, prefix_pools: dict[str, dict[str, Any]]) -> None:
         """Every tier block (/19 at most) fits the tenant supernets the customer pools are carved from."""
@@ -476,3 +483,18 @@ class TestSegmentSizing:
         for namespace in ("PROD", "NONPROD"):
             supernet = ipaddress.ip_network(prefix_pools[tenant_pool_name(namespace)]["resources"]["data"][0]["prefix"])
             assert supernet.num_addresses // 256 >= largest
+
+    def test_the_ipv6_tenant_supernets_hold_the_largest_tier_block_and_are_disjoint(
+        self, prefix_pools: dict[str, dict[str, Any]], root_dir: Path
+    ) -> None:
+        """Every IPv6 tier block fits many times in each IPv6 supernet, and PROD and NONPROD never overlap."""
+        smallest_block = min(
+            row["ipv6_prefix_length"] for row in _bootstrap_objects(root_dir, "TopologyCustomerTemplateDC")
+        )
+        supernets = [
+            ipaddress.ip_network(prefix_pools[tenant_pool_name(namespace, "ipv6")]["resources"]["data"][0]["prefix"])
+            for namespace in ("PROD", "NONPROD")
+        ]
+        for supernet in supernets:
+            assert supernet.version == 6 and supernet.prefixlen < smallest_block
+        assert not supernets[0].overlaps(supernets[1])

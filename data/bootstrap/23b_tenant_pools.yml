@@ -1,13 +1,13 @@
----
 # Per-VRF tenant pools: the supernets the customers' own prefix pools are carved from.
-# add_vxlan_segment (generators/topology/segment_addressing.py) addresses every gateway-less
-# VXLAN tenant segment out of its customer's pool ({org_id}-{environment}-{dc|colocation}-ipv4,
-# created by the customer's first segment request from a block of its design's
-# address_prefix_length, grown by another block when it runs out), keyed by the segment name,
-# a /24 unless the segment states a host_count, and puts the anycast gateway on .1. The
-# environment's routing domain (`p` -> PROD, every other value -> NONPROD) picks the pool
-# here. A segment of an office has no design and takes its /24 from this pool directly.
-# A segment whose gateway is authored keeps it.
+# A customer's pools are created when its footprint is boarded (add_customer_deployment_dc, _colocation and _cloud),
+# by generators/topology/segment_addressing.py: {org_id}-{environment}-{dc|colocation}-ipv4 and -ipv6 from a block of
+# the design's address_prefix_length and ipv6_prefix_length, {org_id}-{environment}-cloud-ipv4 (IPv4 only) from
+# the cloud design's routed range; a pool that runs out is grown by another block. add_vxlan_segment addresses
+# every gateway-less VXLAN tenant segment out of the pool of its family (a segment's ip_version), keyed by the
+# segment name, with the design's segment_prefix_length or ipv6_segment_prefix_length unless the segment states a
+# host_count, and puts the anycast gateway on the first address. The environment's routing domain (`p` -> PROD,
+# every other value -> NONPROD) picks the pool here. A segment of an office has no design and takes its prefix from
+# this pool directly, of the pool's default_prefix_length. A segment whose gateway is authored keeps it.
 #
 # Same shape as 23_transit_pools.yml: every pool and resource prefix uses
 # built-in default IPAM. The pool name selects the segment's routing domain;
@@ -15,13 +15,14 @@
 #
 # Two disjoint /13s, so a tenant prefix is unique across both VRFs as well as
 # within one: 10.176.0.0/13 PROD, 10.184.0.0/13 NONPROD (2048 /24s each).
+# IPv6: two disjoint ULA /32s, fd5a:1760::/32 PROD and fd5a:1840::/32 NONPROD (nothing else uses fd5a::).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CoreIPPrefixPool
   data:
     - name: Tenant-PROD-IPv4
-      description: "Tenant segment /24s in the PROD VRF"
+      description: "Tenant segment IPv4 prefixes in the PROD VRF"
       default_prefix_type: IpamPrefix
       default_prefix_length: 24
       resources:
@@ -37,7 +38,7 @@ spec:
       ip_namespace: "default"
 
     - name: Tenant-NONPROD-IPv4
-      description: "Tenant segment /24s in the NONPROD VRF"
+      description: "Tenant segment IPv4 prefixes in the NONPROD VRF"
       default_prefix_type: IpamPrefix
       default_prefix_length: 24
       resources:
@@ -45,6 +46,38 @@ spec:
         data:
           - prefix: 10.184.0.0/13
             description: "Tenant segment space, NONPROD VRF"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: customer
+            ip_namespace: "default"
+      ip_namespace: "default"
+
+    - name: Tenant-PROD-IPv6
+      description: "Tenant segment IPv6 prefixes in the PROD VRF"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 64
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: fd5a:1760::/32
+            description: "Tenant segment IPv6 space, PROD VRF"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: customer
+            ip_namespace: "default"
+      ip_namespace: "default"
+
+    - name: Tenant-NONPROD-IPv6
+      description: "Tenant segment IPv6 prefixes in the NONPROD VRF"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 64
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: fd5a:1840::/32
+            description: "Tenant segment IPv6 space, NONPROD VRF"
             status: active
             member_type: prefix
             is_pool: true

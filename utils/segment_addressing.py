@@ -7,28 +7,41 @@ from typing import Any
 from utils.limits import (
     CUSTOMER_POOL_NAME_FORMAT,
     SEGMENT_HOST_COUNT_MAX,
-    SEGMENT_PREFIX_LENGTH_DEFAULT,
     SEGMENT_PREFIX_LENGTH_MAX,
     SEGMENT_RESERVED_ADDRESSES,
     TENANT_POOL_TEMPLATE,
+    TENANT_POOL_TEMPLATE_IPV6,
 )
 from utils.routing_domain import resolve_security_zone
 
+IPV4, IPV6 = "ipv4", "ipv6"
+"""The values of ``ManagedNetworkSegment.ip_version`` (and the family word of a customer pool name)."""
 
-def tenant_pool_name(zone_name: str) -> str:
-    """The semantic bootstrap pool name; its IPAM namespace remains default."""
-    return TENANT_POOL_TEMPLATE.format(namespace=zone_name)
+BLOCK_LENGTH_FIELD = {IPV4: "address_prefix_length", IPV6: "ipv6_prefix_length"}
+"""The design (customer template) field that sizes the customer's block of an address family."""
+
+SEGMENT_LENGTH_FIELD = {IPV4: "segment_prefix_length", IPV6: "ipv6_segment_prefix_length"}
+"""The design field that sizes a segment's prefix of an address family when the segment states no host_count."""
 
 
-def segment_prefix_length(host_count: int | None) -> int:
-    """The prefix length of a segment that must hold ``host_count`` hosts (None: the default /24).
+def tenant_pool_name(zone_name: str, ip_version: str = IPV4) -> str:
+    """The semantic bootstrap pool name of the zone's tenant space in one family; its IPAM namespace remains default."""
+    template = TENANT_POOL_TEMPLATE_IPV6 if ip_version == IPV6 else TENANT_POOL_TEMPLATE
+    return template.format(namespace=zone_name)
+
+
+def segment_prefix_length(host_count: int | None, default: int | None = None) -> int:
+    """The prefix length of a segment that must hold ``host_count`` hosts (None: ``default``).
 
     The smallest prefix that holds the hosts plus the network, broadcast and gateway addresses (a power of two), never
-    smaller than a /29 (``SEGMENT_PREFIX_LENGTH_MAX``). The one sizing rule: the VXLAN segment allocator
-    (generators/topology/segment_ports.py) and the cloud segment check (checks/customer_quota.py) both use it.
+    smaller than a /29 (``SEGMENT_PREFIX_LENGTH_MAX``). The default is the footprint design's ``segment_prefix_length``
+    (an office has no design: the tenant pool's own default). The one sizing rule: the VXLAN segment allocator
+    (generators/topology/segment_addressing.py) and the cloud segment check (checks/customer_quota.py) both use it.
     """
     if host_count is None:
-        return SEGMENT_PREFIX_LENGTH_DEFAULT
+        if default is None:
+            raise ValueError("a segment with no host_count needs a default prefix length")
+        return default
     if not 1 <= host_count <= SEGMENT_HOST_COUNT_MAX:
         raise ValueError(f"host_count {host_count} is outside 1..{SEGMENT_HOST_COUNT_MAX}")
     needed = host_count + SEGMENT_RESERVED_ADDRESSES
@@ -39,8 +52,19 @@ def segment_prefix_length(host_count: int | None) -> int:
 FOOTPRINT_KIND_ORDER = ("TopologyCustomerDC", "TopologyCustomerColocation")
 """The footprint kinds that have a customer pool, in the order that decides which footprint addresses a segment."""
 
-CUSTOMER_POOL_FACILITY = {"TopologyCustomerDC": "dc", "TopologyCustomerColocation": "colocation"}
-"""The facility word in a customer pool's name, by footprint kind."""
+CUSTOMER_POOL_FACILITY = {
+    "TopologyCustomerDC": "dc",
+    "TopologyCustomerColocation": "colocation",
+    "TopologyCustomerCloud": "cloud",
+}
+"""The facility word in a customer pool's name, by footprint kind (every kind that is boarded with pools)."""
+
+CUSTOMER_POOL_FAMILIES = {
+    "TopologyCustomerDC": (IPV4, IPV6),
+    "TopologyCustomerColocation": (IPV4, IPV6),
+    "TopologyCustomerCloud": (IPV4,),
+}
+"""The address families whose pools a footprint kind is boarded with (a cloud footprint has the IPv4 routed range only)."""
 
 
 def addressing_footprint(customer_deployments: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -56,10 +80,13 @@ def addressing_footprint(customer_deployments: list[dict[str, Any]]) -> dict[str
     return None
 
 
-def customer_pool_name(org_id: str, environment: str, footprint_kind: str) -> str:
-    """The name of a customer's prefix pool for one environment and facility kind (``c005-p-dc-ipv4``)."""
+def customer_pool_name(org_id: str, environment: str, footprint_kind: str, ip_version: str = IPV4) -> str:
+    """The name of a customer's prefix pool for one environment, facility kind and family (``c005-p-dc-ipv4``)."""
     return CUSTOMER_POOL_NAME_FORMAT.format(
-        owner=org_id.lower(), environment=environment.lower(), facility=CUSTOMER_POOL_FACILITY[footprint_kind]
+        owner=org_id.lower(),
+        environment=environment.lower(),
+        facility=CUSTOMER_POOL_FACILITY[footprint_kind],
+        family=ip_version,
     )
 
 
@@ -173,3 +200,30 @@ def segment_prefix(seg: dict[str, Any], family: str = "ipv4") -> str | None:
 def classifier_prefix(seg: dict[str, Any]) -> str | None:
     """The one prefix a segment is classified by (MSS-G): its IPv4 prefix, else its IPv6 one."""
     return segment_prefix(seg, "ipv4") or segment_prefix(seg, "ipv6")
+
+
+class Ipv6SegmentNotRenderedError(ValueError):
+    """A renderer met a segment with an IPv6 gateway that it cannot render completely."""
+
+
+def has_ipv6_gateway(seg: dict[str, Any]) -> bool:
+    """Whether the segment's single gateway (its address, else its prefix) is IPv6.
+
+    The signal is the gateway, not the ``ip_version`` attribute, because a segment with no gateway yet is L2 only and
+    has nothing to render, and the transform queries read the gateway everywhere. ``seg`` is cleaned query data.
+    """
+    gateway = seg.get("gateway") or {}
+    address = gateway.get("address") or (gateway.get("ip_prefix") or {}).get("prefix")
+    return bool(address) and ":" in address
+
+
+def refuse_ipv6_segment(seg: dict[str, Any], consumer: str) -> None:
+    """Raise when ``seg`` has an IPv6 gateway: ``consumer`` renders IPv4 only and would give a wrong or incomplete config.
+
+    A transform refuses what it cannot render and never skips it (AGENTS.md, **IPv6 segments**). ``consumer`` names
+    the renderer in the message.
+    """
+    if has_ipv6_gateway(seg):
+        raise Ipv6SegmentNotRenderedError(
+            f"Segment '{seg.get('name')}': IPv6 segments are not rendered by {consumer} yet; refusing incomplete config"
+        )

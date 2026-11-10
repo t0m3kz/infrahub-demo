@@ -21,6 +21,7 @@ query app_component_segment($fqdn: String!) {
             # customer whose pool addresses the segment and the design of each footprint (vxlan_segment.gql selects
             # the same). The prefix of the gateway is how a changed host_count is detected.
             host_count { value }
+            ip_version { value }
             owner { node { id org_id { value } } }
             security_zone { node { ...RoutingZoneFields } }
             gateway { node { id address { value } ip_prefix { node { id prefix { value } } } } }
@@ -32,10 +33,28 @@ query app_component_segment($fqdn: String!) {
                     __typename
                     name { value }
                     ... on TopologyCustomerDC {
-                      design { node { id name { value } address_prefix_length { value } } }
+                      design {
+                        node {
+                          id
+                          name { value }
+                          address_prefix_length { value }
+                          segment_prefix_length { value }
+                          ipv6_prefix_length { value }
+                          ipv6_segment_prefix_length { value }
+                        }
+                      }
                     }
                     ... on TopologyCustomerColocation {
-                      design { node { id name { value } address_prefix_length { value } } }
+                      design {
+                        node {
+                          id
+                          name { value }
+                          address_prefix_length { value }
+                          segment_prefix_length { value }
+                          ipv6_prefix_length { value }
+                          ipv6_segment_prefix_length { value }
+                        }
+                      }
                     }
                   }
                 }

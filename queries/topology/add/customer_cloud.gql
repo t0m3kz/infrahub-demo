@@ -1,0 +1,15 @@
+# add_customer_deployment_cloud: the footprint's customer and the routed range of its design, from which the customer's
+# cloud pool is carved (generators/topology/customer_cloud.py). A cloud design has no IPv6 or segment-size numbers.
+query customer_cloud($name: String!) {
+  TopologyCustomerCloud(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        environment { value }
+        owner { node { id org_id { value } } }
+        design { node { name { value } address_prefix_length { value } } }
+      }
+    }
+  }
+}

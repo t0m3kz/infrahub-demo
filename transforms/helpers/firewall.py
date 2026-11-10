@@ -16,7 +16,7 @@ from utils.exchange_transit import (
 from utils.fabric_roles import FIREWALL_ROLES
 from utils.limits import ACL_CLOSING_SEQ, DEFAULT_NAMESPACE, VLAN_NAME_MAX
 from utils.routing_domain import interface_security_zone, interface_vrf
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import refuse_ipv6_segment, segment_prefix
 
 
 def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -46,6 +46,7 @@ def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[d
             continue
         member_cidrs: list[str] = []
         for seg in zone.get("network_segments") or []:
+            refuse_ipv6_segment(seg, "the firewall zones")
             prefix = segment_prefix(seg)
             if prefix:
                 member_cidrs.append(prefix)

@@ -62,6 +62,10 @@ The standard bootstrap tiers (S, M, L and XL, in each of the data center, coloca
 unchanged; every footprint states one as its required `design`, the smallest that holds its segments (and, for a cloud
 footprint, the virtual networks of its account in its region). A demo may define a valid custom template earlier in its own
 numbered files (`00_common/00_global/05_customer_designs.yml` here); it cannot borrow one from an unrelated demo.
+A data center or colocation template states four sizing numbers, all required: `address_prefix_length` (the IPv4 block of
+the customer's pool), `segment_prefix_length` (the IPv4 subnet of a segment with no `host_count`), `ipv6_prefix_length`
+(the IPv6 block) and `ipv6_segment_prefix_length` (the IPv6 subnet, /64); `M_INTERNAL` repeats the M tier's. No generator runs
+over this sample, so the customer pools are not created here.
 The sample supplies `dc-waw1-management-pool` and `dc-waw1-fw-context-vlan-pool`; it does not run `add_dc` over the
 authored fabric. Management reserves `172.16.0.0/22` in the bootstrap `default` namespace's `172.16.0.0/18` range.
 Check availability before loading onto another populated branch. Context VLAN bases start at 3001, preserving the

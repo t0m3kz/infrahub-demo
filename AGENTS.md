@@ -260,8 +260,9 @@ class MyCheck(InfrahubCheck):
 - **Segments are VXLAN only**: there is no VLAN segment kind. The VLAN of a port is generated per switch (see
   **VLAN rows**), a segment has no manual `vlan_id` and lists its footprints in `customer_deployments`.
   Every segment has a gateway: an authored one is kept, else `add_vxlan_segment` (`ensure_segment_addressing`) allocates
-  the segment a prefix sized from its `host_count` (a /24 without one) from its customer's pool (see **Service tiers and
-  customer pools**) and puts the anycast gateway on `.1`; there is no segment without one. The `INFRA` pseudo-customer's segment (`infra-core-dns-ntp-p`, management zone) is such a segment with an authored
+  the segment a prefix of its `ip_version` (`ipv4` by default, `ipv6`; one family, no dual stack), sized from its
+  `host_count` or its design's `segment_prefix_length`, from its customer's pool (see **Service tiers and customer
+  pools**) and puts the anycast gateway on the first address; there is no segment without one. The `INFRA` pseudo-customer's segment (`infra-core-dns-ntp-p`, management zone) is such a segment with an authored
   gateway. A segment is pure L2 on the fabric only when a firewall terminates it (`terminated_on`, see **VLAN rows**).
   A fixed VLAN number is only needed towards an outside party, and that is a handoff circuit's `<port>.<vlan>`
   sub-interface, not a segment.
@@ -489,28 +490,58 @@ class MyCheck(InfrahubCheck):
   `TopologyCustomerCloud`) has a REQUIRED `design`, a template of its own kind (`TopologyCustomerTemplateDC`,
   `TopologyCustomerTemplateColo`, `TopologyCustomerTemplateCloud`; the colocation kind is short because a kind is at
   most 32 characters), so every footprint is metered. The tiers are named `S`, `M`, `L` and `XL` in every kind
-  (`data/bootstrap/21_customer_templates.yml`, S 2 segments / M 6 / L 12 / XL 24). The generic
-  `TopologyCustomerTemplate` carries `max_segments` and `address_prefix_length` (16 to 28); the DC kind adds
+  (`data/bootstrap/21_customer_templates.yml`, S 2 segments / M 6 / L 12 / XL 24), so the template generic has NO
+  uniqueness constraint, NO `human_friendly_id` and no `unique` name: the server would enforce them across the kinds
+  (a colocation `S` found the DC `S`, NODE_NOT_FOUND); each node has its own (`tests/unit/test_customer_template_data.py`).
+  The generic `TopologyCustomerTemplate` carries `max_segments` and `address_prefix_length` (16 to 28); the DC kind adds
   `ports_25g`, `ports_100g` (0 = no host-facing ports of that speed) and keeps `dedicated_firewall` and
-  `dedicated_loadbalancer` (L and XL), the cloud kind adds `max_virtual_networks` (S 1, M 3, L 6, XL 12).
-  `address_prefix_length` is the customer's block in the tenant pool for DC and colocation (S /23, M /21, L /20,
-  XL /19) and, for cloud, the routed range of the footprint (one account in one cloud region), not the address space of
-  its segments (S /28, M /27, L /26, XL /25). `checks/customer_quota.py` enforces `max_segments` for all three kinds (a
-  cloud footprint counts its cloud segments), the ports (DC) and `max_virtual_networks` (the account's networks in the
-  footprint's region), requires a DC or colocation block to hold its tier (`2^(24 - address_prefix_length) >=
-  max_segments`), a cloud segment with a `host_count` and a `cidr_block` to have a block of the size `host_count` needs,
-  and warns about a segment whose footprints are of different kinds.
-  **Segment prefix and customer pool**: `ManagedNetworkSegment.host_count` (optional, 1 to 1021) sizes the segment's
-  prefix: the smallest that holds the hosts plus network, broadcast and gateway (a /29 to a /22; none: a /24), the one
-  function `utils/segment_addressing.py` `segment_prefix_length` (the VXLAN allocator and the cloud check). The prefix
-  comes from the customer's pool `{org_id}-{environment}-{dc|colocation}-ipv4`
-  (`generators/topology/segment_addressing.py`), created by the first segment request (not with the footprint): a block
-  of the design's `address_prefix_length` carved from `Tenant-PROD-IPv4` or `Tenant-NONPROD-IPv4` is its first resource,
-  and a request it cannot satisfy carves one more block of that length into the same pool (`<pool>-<n>`, under the
-  pool's lock, never re-allocated). The footprint whose design decides is the first of the segment's footprints of the
-  first kind in DC, colocation order (by name); an office segment, which has no design, is addressed from the tenant
-  pool directly. The anycast gateway stays on the first address; an authored gateway is kept. The server refuses another
-  length for an allocated identifier, so a changed `host_count` is reported with its remedy, never re-allocated.
+  `dedicated_loadbalancer` (L and XL), the cloud kind adds `max_virtual_networks` (S 1, M 3, L 6, XL 12). The DC and
+  colocation kinds share `TopologyCustomerTemplateSizing` and state FOUR numbers per tier: `address_prefix_length`
+  (the IPv4 customer block: S /23, M /21, L /20, XL /19), `segment_prefix_length` (the IPv4 subnet of a segment with no
+  `host_count`: /24 in every tier), `ipv6_prefix_length` (the IPv6 customer block, 32 to 64: S /60, M /58, L /56,
+  XL /52) and `ipv6_segment_prefix_length` (the IPv6 subnet of a segment, 64 to 120: /64 in every tier, anything else
+  breaks SLAAC). For cloud, `address_prefix_length` is the routed range of the footprint (one account in one cloud
+  region, S /28, M /27, L /26, XL /25), IPv4 only, not the address space of its segments, and a cloud tier has none of
+  the other three. `checks/customer_quota.py` enforces `max_segments` for all three kinds (a cloud footprint counts
+  its cloud segments), the ports (DC) and `max_virtual_networks` (the account's networks in the footprint's region),
+  requires the IPv4 block of a DC or colocation tier to hold its segments (`2^(segment_prefix_length -
+  address_prefix_length) >= max_segments`), the IPv6 block likewise (`2^(ipv6_segment_prefix_length -
+  ipv6_prefix_length) >= max_segments`) and a segment never larger than its block (ERRORs naming the tier; a cloud
+  template is not judged), a cloud segment with a `host_count` and a `cidr_block` to have a block of the size
+  `host_count` needs, a gateway prefix of the segment's `ip_version` (ERROR), a cloud segment to be IPv4 (ERROR: it
+  carries a provider `cidr_block`), warns about a `host_count` on an IPv6 segment (it sizes nothing there) and about a
+  segment whose footprints are of different kinds.
+  **Segment prefix and customer pools**: `ManagedNetworkSegment.ip_version` (`ipv4` default, `ipv6`, required, no
+  `dual`) names the segment's one family. `host_count` (optional, 1 to 1021) sizes an IPv4 segment's prefix: the
+  smallest that holds the hosts plus network, broadcast and gateway (a /29 to a /22); with none the prefix is the
+  design's `segment_prefix_length` (an office segment, which has no design, takes the default length of the global tenant
+  pool), the one function `utils/segment_addressing.py` `segment_prefix_length` (the VXLAN allocator and the cloud
+  check). An IPv6 segment is the design's `ipv6_segment_prefix_length`. The prefix comes from the customer's pool of its
+  family, `{org_id}-{environment}-{dc|colocation}-{ipv4|ipv6}` (a cloud footprint: `{org_id}-{environment}-cloud-ipv4`),
+  which is created WHEN THE FOOTPRINT IS BOARDED, by `add_customer_deployment_dc`, `add_customer_deployment_colocation`
+  and `add_customer_deployment_cloud` (the group trigger of `customer_deployments_cloud`; every cloud footprint declares
+  the group), all through the one function `SegmentAddressingMixin.ensure_customer_pools`
+  (`generators/topology/segment_addressing.py`); `ensure_segment_addressing` calls the same function again (idempotent,
+  it repairs a missing pool). A block of the design's `address_prefix_length` (IPv6: `ipv6_prefix_length`) carved from
+  the environment's global tenant pool (`Tenant-PROD-IPv4`, `Tenant-NONPROD-IPv4` and `Tenant-PROD-IPv6`,
+  `Tenant-NONPROD-IPv6`, ULA `fd5a:1760::/32` and `fd5a:1840::/32`, in `data/bootstrap/23b_tenant_pools.yml`) is its first
+  resource, and a request it cannot satisfy carves one more block of that length into the same pool (`<pool>-<n>`, under
+  the pool's lock, never re-allocated). A customer's footprints of the same kind and environment share the pool (the
+  second finds it); the pool is saved outside any run's tracking, so no run's cleanup reclaims it. The CLOUD POOL HAS NO
+  CONSUMER YET: a cloud subnet is provider-assigned, and the pool exists for the later routed-range allocation per
+  virtual network. The footprint whose design decides the segment's pool is the first of its footprints of the first kind
+  in DC, colocation order (by name). The anycast gateway stays on the first address; an authored gateway is kept. The
+  server refuses another length for an allocated identifier, so a changed `host_count` (or tier length) is reported with
+  its remedy, never re-allocated.
+  **IPv6 segments are addressed, not rendered**: no template renders them completely, and a transform refuses what it
+  cannot render and never skips it (`utils/segment_addressing.py` `has_ipv6_gateway` / `refuse_ipv6_segment`, the
+  gateway's family is the signal). The SVI address line of an IPv6 gateway renders on every platform
+  (`transforms/helpers/segments.py` `get_vlans`), but not the VRF's IPv6 address family and route target, the IPv6 ACL, the
+  PBR to the firewall or the firewall's zones and rules, so the gates are: a fabric switch with a routed IPv6 segment
+  (`BaseDeviceTransform._extra_config`; an office switch's LISP renderer has its own refusal), `rule_endpoint` (the one
+  resolver of the switch ACLs, the firewall rule tables and the office policy), the firewall transform and its zones, and
+  the office firewall policy; `checks/segment_security.py` reports a rule endpoint on an IPv6 segment as an ERROR. Not
+  gated yet: the load balancer, the external (cloud, SD-WAN) tenant sessions, which drop the prefix and fail closed.
   `add_customer_deployment_dc` (triggered on creation only) adds the footprint's
   internal firewall context and, when the DC has an `external-firewall` pair, the DC's Internet edge context to its
   `serving_firewall_contexts` (converged like the colocation set, below), and links its

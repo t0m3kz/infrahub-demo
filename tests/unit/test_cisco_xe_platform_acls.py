@@ -21,7 +21,7 @@ from transforms.config.access_leaf import AccessLeaf
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
-from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
+from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes
 
 # ---------------------------------------------------------------------------
 # 6. Segment ACLs and inter-VRF statics: transforms/helpers/cisco_xe.py + the cisco_xe_acl / cisco_xe_vrf_static templates
@@ -260,39 +260,16 @@ class TestCiscoXeVrfRoutes:
 
 
 class TestCiscoXeIpv6SviIsRefused:
-    """An IPv6 gateway SVI cannot be protected by the IPv4 segment ACL."""
-
-    def test_an_ipv6_gateway_svi_with_an_acl_is_refused(self) -> None:
-        """An `ip access-group` ACL never filters an IPv6 SVI: refuse rather than ship it open."""
-        with pytest.raises(ValueError, match="the segment ACL of VLAN 300: its gateway SVI is IPv6"):
-            refuse_unfiltered_ipv6(
-                [
-                    {"vlan_id": 100, "acl_name": "ACL-VLAN100-IN", "gateway_ipv6": None},
-                    {"vlan_id": 300, "acl_name": "ACL-VLAN300-IN", "gateway_ipv6": "2001:db8::1/64"},
-                ],
-                "leaf",
-            )
-
-    def test_an_ipv6_svi_without_an_acl_and_ipv4_svis_pass(self) -> None:
-        """No ACL on the IPv6 SVI (no security policy in the query): nothing to protect, nothing to refuse."""
-        refuse_unfiltered_ipv6(
-            [
-                {"vlan_id": 100, "acl_name": "ACL-VLAN100-IN", "gateway_ipv6": None},
-                {"vlan_id": 300, "acl_name": None, "gateway_ipv6": "2001:db8::1/64"},
-            ],
-            "leaf",
-        )
+    """An IPv6 gateway SVI cannot be protected by the IPv4 segment ACL: the switch transform refuses the segment."""
 
     def test_through_transform(self) -> None:
-        """An IPv6 gateway on the ACL-protected segment makes transform() raise."""
+        """An IPv6 gateway on the ACL-protected segment makes transform() raise (BaseDeviceTransform._extra_config)."""
         data = _golden_input(ACL_EVPN)
         gateway = _host_segment(data)["gateway"]["node"]
         gateway["address"]["value"] = "2001:db8:100::1/64"
         gateway["ip_prefix"]["node"]["prefix"]["value"] = "2001:db8:100::/64"
 
-        with pytest.raises(
-            ValueError, match="cisco_xe leaf cannot render the segment ACL of VLAN 100: its gateway SVI"
-        ):
+        with pytest.raises(ValueError, match="IPv6 segments are not rendered by the cisco_xe leaf .* yet"):
             run_transform(Leaf, data)
 
 
