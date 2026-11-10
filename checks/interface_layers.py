@@ -8,7 +8,9 @@ There is no ``l2_mode`` attribute: the layer of a port is its content.
   faces a firewall or load-balancer pair is a trunk too, but a context has no interface edge (its border ports are
   derived from the cables, utils/service_contexts.py), so this check does not see it; a terminated segment it carries
   is a row tag.
-* An L3 signal is an ``ip_address``, any ``sub_interfaces``, or a routing capability (a BGP session, an OSPF
+* An L3 signal is an ``ip_address``, a sub-interface other than a VM NIC pinned to the port (a base NIC of a virtual
+  device rides on its host's port, bond member included: the attachment of a machine is no routing, and
+  generators/virtual_nics.py pins to the cabled physical port, never to the bond), or a routing capability (a BGP session, an OSPF
   interface, an interconnect, tunnel or handoff circuit). A carrier circuit is L1 and never a signal.
 
 Rules:
@@ -43,6 +45,7 @@ from typing import Any
 
 from checks.base import WarningCheck
 from generators.topology.endpoint import ENDPOINT_NIC_ROLES
+from generators.virtual_nics import is_host_nic
 from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
@@ -75,10 +78,9 @@ def l2_tags(port: dict[str, Any]) -> list[str]:
 
 def l3_signals(port: dict[str, Any]) -> list[str]:
     """What makes a cleaned physical or LAG port a routed port."""
+    routed_subs = [sub for sub in port.get("sub_interfaces") or [] if not is_host_nic(sub)]
     signals = [
-        label
-        for label, found in (("ip_address", port.get("ip_address")), ("sub_interfaces", port.get("sub_interfaces")))
-        if found
+        label for label, found in (("ip_address", port.get("ip_address")), ("sub_interfaces", routed_subs)) if found
     ]
     return signals + sorted(capability_kinds(port) & L3_SIGNAL_KINDS)
 

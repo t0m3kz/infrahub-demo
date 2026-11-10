@@ -13,5 +13,5 @@ spec:
       environment: "p"
       infrastructure_orchestrator: ansible_automation_platform
       parent: "DC-KTW1"
-      design: "M"
+      design: M_100G
       serving_firewall_contexts: [shared-ktw1-fw-ha-prod, shared-ktw1-xfw-ha-prod]

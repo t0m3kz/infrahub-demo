@@ -32,10 +32,10 @@ spec:
         - ["10.206.0.0/16", "default"]
         - ["10.207.0.0/16", "default"]
     - name: "vgwa-c900-vpc"
-      description: "Virtual private gateway attached to the VPC"
+      description: "Virtual private gateway attached to its own VPC"
       status: active
       gateway: "vgw-c900-euc1"
-      virtual_network: "vpc-c900-prod"
+      virtual_network: "vpc-c900-vgw"
       owner_account: "c900-aws-prod"
     - name: "cra-c900-euw3"
       description: "Cloud Router in the VPC"

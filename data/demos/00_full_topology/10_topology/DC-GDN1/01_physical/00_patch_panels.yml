@@ -2,7 +2,7 @@
 # The panels of the GDN1 data hall, as in DC-KTW1: PP-GDN1-01 in the border rack (jack 1: border leaf 1 to the
 # edge), PP-GDN1-02 in the compute rack (jack 1 eno1, jack 2 eno2 of the server), PP-GDN1-03 and PP-GDN1-04 in the leaf
 # racks (jack 1, the run to the compute rack). Type lc-24; the used jacks are declared (front n -> rear n) and
-# add_patch_panel builds the rest.
+# the other ports are in 00_patch_panels_01_00 and _02_00 (no generator runs here).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

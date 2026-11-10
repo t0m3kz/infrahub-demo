@@ -25,6 +25,14 @@ if TYPE_CHECKING:
 
 # The roles of the base NICs a virtual template provides; a context sub-interface (role service) is not one.
 PINNED_ROLES = ("management", "uplink", "ha")
+VIRTUAL_DEVICE_KIND = "DcimVirtualDevice"
+
+
+def is_host_nic(interface: dict[str, Any]) -> bool:
+    """True for a cleaned interface that is a base NIC of a virtual device (the kind this module pins to a host port)."""
+    return (interface.get("device") or {}).get("typename") == VIRTUAL_DEVICE_KIND and interface.get(
+        "role"
+    ) in PINNED_ROLES
 
 
 def pair_nics_with_host_ports(nics: list[Any], host_ports: list[Any]) -> list[tuple[Any, Any]]:

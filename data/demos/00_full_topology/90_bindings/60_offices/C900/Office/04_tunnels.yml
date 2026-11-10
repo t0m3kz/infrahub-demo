@@ -2,7 +2,8 @@
 # derived) and each end rides a live internet carrier circuit of its own (checks/circuit_placement.py): the office
 # edge the access bcn-office-ispa-48212-isp-a (90_bindings/90_internet/02_circuits), the DC edge
 # ktw1-ispa-48211-isp-a (90_bindings/50_connections/Cloud/00_carriers/00_carrier_circuits.yml).
-# The Zscaler end is a tunnel of the SaaS transport zscaler-c900-muc, which has no carrier of its own.
+# The Zscaler end is a tunnel of the SaaS transport zscaler-c900-muc: the provider's side, its internet access is the
+# provider's own and it rides no carrier of ours (checks/circuit_placement.py exempts a CloudPeeringInterface end).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

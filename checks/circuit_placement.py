@@ -35,7 +35,9 @@ overlay routing)
     3. none of the handoff-only fields (``ip_namespace``, ``password``),
     4. every end port rides a live internet carrier circuit of its own (``circuit_type`` internet): the office edge
        uplink its INET-<office>, the gateway's public port its own
-       internet access. The ends share no path, so there is no contiguity rule.
+       internet access. The ends share no path, so there is no contiguity rule. EXCEPT an end that is a
+       ``CloudPeeringInterface``, the tunnel of a cloud or SaaS transport (Zscaler): it is the provider's side, its
+       access to the internet is the provider's own and is not modelled, so it rides no carrier of ours.
 
 Interconnect circuit (``circuit_type`` dci: between two EVPN Multi-Site border gateways; an underlay and an EVPN
 session are built)
@@ -480,6 +482,8 @@ class CheckCircuitPlacement(InfrahubCheck):
         self._validate_owner(circuit, TUNNEL, locations)
 
         for port in ports:
+            if port.get("typename") == CLOUD_PEERING_KIND:
+                continue
             live = _live_carriers(port)
             if any(carrier.get("circuit_type") == INTERNET_CARRIER for carrier in live):
                 continue

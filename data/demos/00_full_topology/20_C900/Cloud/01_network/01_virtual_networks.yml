@@ -39,6 +39,18 @@ spec:
             ip_namespace: "default"
             status: active
             description: AWS isolated VPC block (no attachment)
+    # The VPC behind the virtual private gateway only (vgwa-c900-vpc): the private VIF lag1.1100 reaches it and nothing
+    # else does, so its block is registered behind exactly one attachment point (checks/routing_invariants.py rule 8;
+    # vpc-c900-prod is reached over the Direct Connect gateway and the transit gateway).
+    - name: vpc-c900-vgw
+      account: c900-aws-prod
+      region: eu-central-1
+      cidr_blocks:
+        data:
+          - prefix: "10.212.0.0/16"
+            ip_namespace: "default"
+            status: active
+            description: AWS VPC block behind the virtual private gateway
     # The spoke accounts. AWS: a VPC in its own account, attached to the transit gateway of c900-aws-prod
     # (05_gateway_attachments.yml).
     - name: vpc-c900-payments

@@ -13,8 +13,9 @@ module reads that leg from the cleaned query roots ``CloudPeeringInterface`` and
 - the prefixes registered behind the session, cloud to us (``registered``): for a private or saas peering the
   ``allowed_prefixes`` of every gateway attachment reached from the peering's gateway, an attachment with none meaning
   the CIDR blocks of its virtual network; the walk goes gateway -> attachments -> peer gateways (hubs) -> their
-  attachments, once per gateway. Entering a hub through an attachment that has an associated route table, only the VPC
-  attachments propagating into that table count. A public peering registers nothing;
+  attachments, once per gateway. Entering a hub through an attachment that has an associated route table, only the
+  VPC attachments propagating into that table count. A public peering registers nothing. The attachment point of a
+  leg (``group``) is its hub chain (``attachment_point``);
 - the prefixes WE announce to the cloud (``advertised``): the peering's ``advertised_prefixes``, public or static only.
 
 The exchange rule itself stays in ``utils/ownership.py``.
@@ -149,6 +150,37 @@ def reachable_prefixes(
     return [found[key] for key in sorted(found)]
 
 
+def attachment_point(start: Any, attachments: Iterable[dict[str, Any]] | None) -> str | None:
+    """The attachment point of a peering that lands on the gateway ``start``: its hub chain, else the gateway itself.
+
+    Gateways joined by an attachment whose target is a gateway (a Direct Connect gateway associated with a transit
+    gateway) are one cloud network reached over several transports (a transit VIF, a VPN to the hub): their sessions
+    are alternatives, not rivals for a prefix, like the primary and secondary peering of one gateway. The point is
+    the names of the chain, sorted and joined with ``+`` (the gateway's own name when it has no such neighbour).
+    """
+    start_id = _ref(start)
+    if not start_id:
+        return None
+    links: dict[str, set[str]] = {}
+    names: dict[str, str] = {start_id: _name(start) or start_id}
+    for attachment in attachments or []:
+        hub, peer = attachment.get("gateway"), attachment.get("peer_gateway")
+        hub_id, peer_id = _ref(hub), _ref(peer)
+        if not (hub_id and peer_id):
+            continue
+        names.setdefault(hub_id, _name(hub) or hub_id)
+        names.setdefault(peer_id, _name(peer) or peer_id)
+        links.setdefault(hub_id, set()).add(peer_id)
+        links.setdefault(peer_id, set()).add(hub_id)
+    chain, queue = {start_id}, deque([start_id])
+    while queue:
+        for neighbour in links.get(queue.popleft(), ()):
+            if neighbour not in chain:
+                chain.add(neighbour)
+                queue.append(neighbour)
+    return "+".join(sorted(names[gateway] for gateway in chain))
+
+
 def _transport_owner(transport: dict[str, Any]) -> str | None:
     """The customer key of a transport: its account's owner, else its own ``owner`` (a SaaS has no account)."""
     return customer_owner((transport.get("account") or {}).get("owner")) or customer_owner(transport.get("owner"))
@@ -198,7 +230,7 @@ def cloud_legs(
                         circuit=str(circuit.get("name")),
                         local=(end_device, end["name"]),
                         owner=owner,
-                        group=_name(gateway) or name,
+                        group=attachment_point(gateway, attachment_list) or name,
                         scope=scope,
                         peer_ip=peering.get("peer_ip") or None,
                         peer_asn=(peering.get("peer_asn") or {}).get("asn"),

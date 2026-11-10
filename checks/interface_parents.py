@@ -27,11 +27,10 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from generators.virtual_nics import PINNED_ROLES
+from generators.virtual_nics import is_host_nic
 from utils.data_cleaning import clean_data
 
 _SUB_INTERFACE = "DcimSubInterface"
-_VIRTUAL_DEVICE = "DcimVirtualDevice"
 _PHYSICAL_INTERFACE = "DcimPhysicalInterface"
 _UPLINK_ROLE = "uplink"
 _PEERING = "CloudPeeringInterface"
@@ -53,7 +52,7 @@ def interface_parent_errors(iface: dict[str, Any]) -> list[str]:
     host_id = host.get("id") if isinstance(host, dict) else None
     where = f"{_label(device)} {_label(iface)}"
     on_other_device = parent_device.get("id") != device.get("id")
-    is_nic = device.get("typename") == _VIRTUAL_DEVICE and iface.get("role") in PINNED_ROLES
+    is_nic = is_host_nic(iface)
     if not is_nic:
         if on_other_device and not (
             iface.get("typename") == _PEERING and parent_device.get("typename") == _PROVIDER_CONNECT
