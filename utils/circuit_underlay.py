@@ -47,9 +47,17 @@ CLOUD_TRANSPORT_KINDS = ("CloudDirectConnect", "CloudVPNConnection")
 INTERNET_KIND = "TopologyInternet"
 # The shared interface of THE INTERNET: the one kind that may be an end of many carriers.
 INTERNET_INTERFACE_KIND = "TopologyInternetInterface"
-# The facility of an ISP router: the other kind of place an internet carrier terminates on.
-ISP_KIND = "TopologyExternalProviders"
+# A provider's own router (an ISP or partner PE) has no place object and no deployment: its provider is its ``owner``.
+PROVIDER_KIND = "OrganizationProvider"
 # A handoff end is a VLAN sub-interface, <parent>.<vlan>: the VLAN lives in the name.
+
+
+def is_provider_device(device: dict[str, Any]) -> bool:
+    """The cleaned device is a provider's own router: owned by an ``OrganizationProvider`` and placed nowhere (no
+    ``deployment``, ``region``, ``saas_region`` or ``location``), so the circuit's own ``provider`` names its end."""
+    owner = device.get("owner")
+    placed = device.get("deployment") or device.get("region") or device.get("saas_region") or device.get("location")
+    return isinstance(owner, dict) and owner.get("typename") == PROVIDER_KIND and not placed
 
 
 def overlay_processes(device: dict[str, Any]) -> list[dict[str, Any]]:

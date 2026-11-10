@@ -189,7 +189,7 @@ def test_party_and_excluded_devices_get_no_demand() -> None:
         raw_device("d1", "spine-1", role="spine", rows=rows),
         raw_device("d2", "fw-1", role="internal-firewall", rows=rows),
         raw_device("d3", "stub", role="edge", rows=rows, groups=("provider_stubs",)),
-        raw_device("d4", "pe", role="edge", rows=rows, deployment_kind="TopologyExternalProviders"),
+        raw_device("d4", "pe", role="edge", rows=rows, deployment_kind=None, owner_kind="OrganizationProvider"),
         raw_device("d5", "rtr", role="edge", rows=rows, deployment_kind="TopologyCloudRegion"),
         raw_device("d6", "ctl", role="leaf", rows=rows, typename="DcimVirtualDevice"),
     ]
@@ -222,3 +222,17 @@ def test_instance_and_svi_names() -> None:
     """The derived names."""
     assert instance_name("DC10", "NONPROD") == "dc10-vrf-nonprod"
     assert svi_name(321) == "Vlan321"
+
+
+def test_a_device_without_deployment_is_a_party_only_when_a_provider_owns_it() -> None:
+    """A provider's own router has no deployment; an unowned or customer-owned one without deployment is not a party."""
+    rows = [raw_row("r1", 100, "PROD")]
+    party = facts_of(
+        raw_device("d1", "pe", role="edge", rows=rows, deployment_kind=None, owner_kind="OrganizationProvider")
+    )
+    assert party.carries_vrfs is False
+    for owner_kind in (None, "OrganizationCustomer"):
+        other = facts_of(raw_device("d2", "rtr", role="edge", rows=rows, deployment_kind=None, owner_kind=owner_kind))
+        assert other.carries_vrfs is True
+    placed = facts_of(raw_device("d3", "rtr", role="edge", rows=rows, owner_kind="OrganizationProvider"))
+    assert placed.carries_vrfs is True

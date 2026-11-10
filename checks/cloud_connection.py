@@ -1,4 +1,4 @@
-"""Validate the cloud side of a connection: gateways, transports, their interfaces and tunnels (R1 to R9).
+"""Validate the cloud side of a connection: gateways, transports, their interfaces and tunnels (R1 to R11).
 
 A transport (``CloudDirectConnect``, ``CloudVPNConnection``) is a device that holds interfaces: the
 ``CloudPeeringInterface`` that ride on the ports and LAG of the provider's ``TopologyProviderConnect`` (or tunnels). The schema accepts what these rules refuse (measured on 1.11.9): an
@@ -20,6 +20,10 @@ R8  a peering that has a ``vlan_id`` rides on a port or LAG (a tunnel needs no p
 R9  placement: a transport has exactly one of ``region`` and ``saas_region``; with an ``account`` it has no ``owner``,
     without one it needs ``saas_region`` and ``owner``; a peering is an interface of a transport and one of scope
     ``saas`` is on a transport with a ``saas_region``
+R10 a public service endpoint (enabled, ``access: public``) has a ``TopologyProviderConnect`` of its provider at its
+    place (its ``saas_region``, else the region of its virtual network): nothing but provider and place links them;
+    exactly one of them is the public side (attached to THE INTERNET), a private port at the same place has no carrier
+R11 that public side has an ``internet`` carrier circuit with an end on THE INTERNET (``TopologyInternet``)
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
+from utils.circuit_underlay import INTERNET_KIND
 from utils.data_cleaning import clean_data
 
 ATTACHMENT = "CloudGatewayAttachment"
@@ -41,6 +46,8 @@ VPN_CONNECTION = "CloudVPNConnection"
 HUB = "hub"
 PHYSICAL = "physical"
 IPSEC = "ipsec"
+PROVIDER_CONNECT = "TopologyProviderConnect"
+PUBLIC = "public"
 
 
 def _ref(value: Any) -> str | None:
@@ -60,8 +67,20 @@ def _dicts(values: Any) -> list[dict[str, Any]]:
     return [value for value in values or [] if isinstance(value, dict)]
 
 
+def _internet_attached(connect: dict[str, Any]) -> bool:
+    """A port of the device is an end of a live ``internet`` carrier whose other end is on THE INTERNET."""
+    for port in _dicts(connect.get("interfaces")):
+        for circuit in _dicts(port.get("capabilities")):
+            if circuit.get("circuit_type") != "internet" or circuit.get("status") == "decommissioned":
+                continue
+            ends = _dicts(circuit.get("capabilities"))
+            if any(isinstance(e.get("device"), dict) and e["device"].get("typename") == INTERNET_KIND for e in ends):
+                return True
+    return False
+
+
 class CheckCloudConnection(InfrahubCheck):
-    """The cloud side of a connection is consistent where the schema cannot say it (rules R1 to R9)."""
+    """The cloud side of a connection is consistent where the schema cannot say it (rules R1 to R11)."""
 
     query = "cloud_connection"
 
@@ -87,8 +106,10 @@ class CheckCloudConnection(InfrahubCheck):
             self._r8_parent(peering)
             self._r9_peering(peering, transports)
         self._r8_vlans(peerings)
+        connects = _dicts(cleaned.get(PROVIDER_CONNECT))
         for endpoint in _dicts(cleaned.get(ENDPOINT)):
             self._r4_endpoint_segments(endpoint)
+            self._r10_public_endpoint(endpoint, connects)
 
     def _error(self, node: dict[str, Any], kind: str, message: str) -> None:
         self.log_error(message=message, object_id=node.get("id"), object_type=kind)
@@ -148,6 +169,43 @@ class CheckCloudConnection(InfrahubCheck):
                 DIRECT_CONNECT,
                 f"{label} is logical on a transport of ours ('{_name(up)}') and also has a partner_account: "
                 "a partner's connection rides on the partner's port.",
+            )
+
+    def _r10_public_endpoint(self, endpoint: dict[str, Any], connects: list[dict[str, Any]]) -> None:
+        """R10 and R11 for one enabled public endpoint: its provider connect, and that device's internet carrier."""
+        if endpoint.get("access") != PUBLIC or endpoint.get("status") == "decommissioned":
+            return
+        place = _ref(endpoint.get("saas_region")) or _ref((endpoint.get("virtual_network") or {}).get("region"))
+        provider = _ref(endpoint.get("provider"))
+        label = f"R10: public endpoint '{_name(endpoint)}'"
+        if place is None:
+            self._error(endpoint, ENDPOINT, f"{label} has neither a saas_region nor a virtual network with a region.")
+            return
+        found = [c for c in connects if _ref(c.get("provider")) == provider and _ref(c.get("location")) == place]
+        if not found:
+            self._error(
+                endpoint,
+                ENDPOINT,
+                f"{label} has no provider connect device of its provider at its place: a TopologyProviderConnect "
+                "with the endpoint's provider and a location equal to its region or saas_region.",
+            )
+            return
+        attached = [c for c in found if _internet_attached(c)]
+        if not attached:
+            names = ", ".join(sorted(_name(c) for c in found))
+            self._error(
+                endpoint,
+                ENDPOINT,
+                f"R11: public endpoint '{_name(endpoint)}': none of its provider connects ({names}) has an internet "
+                "carrier circuit to THE INTERNET.",
+            )
+        elif len(attached) > 1:
+            names = ", ".join(sorted(_name(c) for c in attached))
+            self._error(
+                endpoint,
+                ENDPOINT,
+                f"{label} has {len(attached)} provider connects attached to THE INTERNET ({names}): exactly one is "
+                "the public side.",
             )
 
     def _r4_endpoint_segments(self, endpoint: dict[str, Any]) -> None:

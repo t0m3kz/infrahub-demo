@@ -19,18 +19,24 @@ from utils.data_cleaning import clean_data
 from utils.internet_object import internet_findings
 
 INTERNET = _place("INTERNET", "TopologyInternet")
-ISP_A = _place("ISP-A", "TopologyExternalProviders")
-ISP_B = _place("ISP-B", "TopologyExternalProviders")
+# The providers that own the ISP routers: a router has no place object and no deployment, its owner is its provider.
+PROV_A = {"id": "id-P-A", "__typename": "OrganizationProvider"}
+PROV_B = {"id": "id-P-B", "__typename": "OrganizationProvider"}
+PROV_PARTNER = {"id": "id-P-PARTNER", "__typename": "OrganizationProvider"}
 DC90 = _place("DC90", "TopologyDataCenter")
 WEBEX = _place("WEBEX-FRANKFURT", "TopologySaasRegion")
 EUC1 = _place("eu-central-1", "TopologyCloudRegion")
 BUS = "TopologyInternetInterface"
 
 
-def _device(name: str, place: dict[str, Any] | None, *, region: str | None = None) -> dict[str, Any]:
+def _device(
+    name: str, place: dict[str, Any] | None, *, region: str | None = None, owner: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """A device node as the query selects it: a physical device (deployment), a transport (region or SaaS region) or
-    THE INTERNET (neither)."""
+    THE INTERNET (neither); ``owner`` makes it a provider's router (owned, placed nowhere)."""
     node: dict[str, Any] = {"id": f"id-{name}", "__typename": "X", "name": {"value": name}}
+    if owner is not None:
+        node["owner"] = {"node": owner}
     if region == "region":
         node.update(region={"node": place}, saas_region={"node": None})
     elif region == "saas":
@@ -55,8 +61,8 @@ def _end(device: dict[str, Any], port: str, kind: str = "DcimPhysicalInterface")
 
 
 EDGE = _device("dc90-edge-01", DC90)
-PE_A = _device("PE-A", ISP_A)
-PE_B = _device("PE-B", ISP_B)
+PE_A = _device("PE-A", None, owner=PROV_A)
+PE_B = _device("PE-B", None, owner=PROV_B)
 NET = {**_device("INTERNET", None), "__typename": "TopologyInternet"}
 BUS_END = _end(NET, "bus", BUS)
 WEBEX_TRANSPORT = _device("webex-pub", WEBEX, region="saas")
@@ -66,20 +72,22 @@ S3_TRANSPORT = _device("s3-pub", EUC1, region="region")
 def _carrier(
     name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]], circuit_type: str = "internet", **extra: Any
 ) -> dict[str, Any]:
+    owners = [e["device"]["node"]["owner"]["node"] for e in ends if "owner" in e.get("device", {}).get("node", {})]
     return {
         "id": f"id-{name}",
         "name": {"value": name},
         "status": {"value": extra.get("status", "active")},
         "circuit_type": {"value": circuit_type},
+        "provider": {"node": owners[0] if owners else None},
         "locations": _edges(locations),
         "capabilities": _edges(ends),
     }
 
 
-ACCESS_A = _carrier("INET-A", [DC90, ISP_A], [_end(EDGE, "Ethernet1/2"), _end(PE_A, "et-0/0/0")])
-ACCESS_B = _carrier("INET-B", [DC90, ISP_B], [_end(EDGE, "Ethernet1/1"), _end(PE_B, "et-0/0/0")])
-UPLINK_A = _carrier("UPL-A", [ISP_A, INTERNET], [_end(PE_A, "xe-0/1/0"), BUS_END])
-UPLINK_B = _carrier("UPL-B", [ISP_B, INTERNET], [_end(PE_B, "xe-0/1/0"), BUS_END])
+ACCESS_A = _carrier("INET-A", [DC90], [_end(EDGE, "Ethernet1/2"), _end(PE_A, "et-0/0/0")])
+ACCESS_B = _carrier("INET-B", [DC90], [_end(EDGE, "Ethernet1/1"), _end(PE_B, "et-0/0/0")])
+UPLINK_A = _carrier("UPL-A", [INTERNET], [_end(PE_A, "xe-0/1/0"), BUS_END])
+UPLINK_B = _carrier("UPL-B", [INTERNET], [_end(PE_B, "xe-0/1/0"), BUS_END])
 PUBLIC_WEBEX = _carrier("PUB-WEBEX", [WEBEX, INTERNET], [_end(WEBEX_TRANSPORT, "pub-1"), BUS_END])
 PUBLIC_S3 = _carrier("PUB-S3", [EUC1, INTERNET], [_end(S3_TRANSPORT, "pub-1"), BUS_END])
 MEETING_POINT = [ACCESS_A, ACCESS_B, UPLINK_A, UPLINK_B, PUBLIC_WEBEX, PUBLIC_S3]
@@ -157,7 +165,7 @@ class TestAddCircuitPlacesTheInternetEnd:
         derived, problem = plan_locations([], ends)
 
         assert problem is None
-        assert {location.kind for location in derived} == {"TopologyExternalProviders", "TopologyInternet"}
+        assert {location.kind for location in derived} == {"TopologyInternet"}  # the router has no place
 
     def test_a_public_side_derives_its_region_and_the_internet(self) -> None:
         ends = [self._endpoint(WEBEX_TRANSPORT, "pub-1"), self._endpoint(NET, "bus", BUS)]
@@ -175,7 +183,7 @@ class TestAddCircuitPlacesTheInternetEnd:
         derived, problem = plan_locations([authored], ends)
 
         assert problem is None
-        assert [location.kind for location in derived] == ["TopologyExternalProviders"]
+        assert derived == []
 
 
 class TestSharedInterface:
@@ -186,7 +194,7 @@ class TestSharedInterface:
         assert _ports_check(MEETING_POINT) == []
 
     def test_the_exemption_is_by_kind_a_physical_port_still_ends_one_carrier(self) -> None:
-        twice = _carrier("UPL-A2", [ISP_A, INTERNET], [_end(PE_A, "xe-0/1/0"), BUS_END])
+        twice = _carrier("UPL-A2", [INTERNET], [_end(PE_A, "xe-0/1/0"), BUS_END])
         (message,) = _ports_check([UPLINK_A, twice])
         assert "Port 'PE-A:xe-0/1/0' is an end of 2 carrier circuits" in message
         assert "INTERNET:bus" not in message
@@ -194,8 +202,8 @@ class TestSharedInterface:
     def test_the_same_name_on_another_kind_is_not_exempt(self) -> None:
         """A physical port called `bus` is a port like any other: two carriers on it are refused."""
         physical = _end(NET, "bus")
-        one = _carrier("UPL-A", [ISP_A, INTERNET], [_end(PE_A, "xe-0/1/0"), physical])
-        two = _carrier("UPL-B", [ISP_B, INTERNET], [_end(PE_B, "xe-0/1/0"), physical])
+        one = _carrier("UPL-A", [INTERNET], [_end(PE_A, "xe-0/1/0"), physical])
+        two = _carrier("UPL-B", [INTERNET], [_end(PE_B, "xe-0/1/0"), physical])
         (message,) = _ports_check([one, two])
         assert "Port 'INTERNET:bus' is an end of 2 carrier circuits" in message
 
@@ -204,7 +212,7 @@ class TestSharedInterface:
         assert _ports_check([UPLINK_A]) == []
 
     def test_any_other_kind_is_still_refused_as_an_end(self) -> None:
-        other = _carrier("UPL-X", [ISP_A, INTERNET], [_end(PE_A, "xe-0/1/0"), _end(NET, "lo", "DcimVirtualInterface")])
+        other = _carrier("UPL-X", [INTERNET], [_end(PE_A, "xe-0/1/0"), _end(NET, "lo", "DcimVirtualInterface")])
         (message,) = _ports_check([other])
         assert "is not a DcimPhysicalInterface" in message and "TopologyInternetInterface" not in message
 
@@ -215,13 +223,13 @@ class TestAttachments:
         (message,) = _run([ACCESS_A, wrong])
         assert "TopologyDataCenter 'DC90'" in message and "terminates on" in message
 
-    def test_a_carrier_that_does_not_list_the_internet_still_needs_its_two_locations(self) -> None:
-        wrong = _carrier("UPL-A", [ISP_A], [_end(PE_A, "xe-0/1/0"), BUS_END])
+    def test_a_carrier_that_does_not_list_the_internet_is_refused(self) -> None:
+        wrong = _carrier("UPL-A", [], [_end(PE_A, "xe-0/1/0"), BUS_END])
         (message,) = _run([wrong])
-        assert "1 location(s)" in message
+        assert "terminates on" in message and "placed ends" in message
 
     def test_an_attachment_is_an_internet_circuit(self) -> None:
-        wrong = _carrier("UPL-A", [ISP_A, INTERNET], [_end(PE_A, "xe-0/1/0"), BUS_END], "cross_connect")
+        wrong = _carrier("UPL-A", [INTERNET], [_end(PE_A, "xe-0/1/0"), BUS_END], "cross_connect")
         (message,) = _run([ACCESS_A, wrong])
         assert "ends on THE INTERNET but is a cross_connect" in message
 
@@ -237,7 +245,7 @@ class TestAttachments:
 
     def test_the_interface_must_sit_on_the_internet_object(self) -> None:
         stray = _end(PE_A, "xe-0/1/9", BUS)
-        carrier = _carrier("UPL-X", [ISP_A, INTERNET], [stray, _end(PE_B, "xe-0/1/0")])
+        carrier = _carrier("UPL-X", [INTERNET], [stray, _end(PE_B, "xe-0/1/0")])
         assert any("a device that is not THE INTERNET" in message for message in _findings([carrier]))
 
     def test_an_isp_router_that_serves_access_needs_an_attachment(self) -> None:
@@ -246,24 +254,24 @@ class TestAttachments:
         assert "ISP router 'PE-B' serves internet access ('INET-B') but has no attachment" in message
 
     def test_one_finding_per_router_however_many_accesses(self) -> None:
-        second = _carrier("INET-B2", [DC90, ISP_B], [_end(EDGE, "Ethernet1/5"), _end(PE_B, "et-0/0/1")])
+        second = _carrier("INET-B2", [DC90], [_end(EDGE, "Ethernet1/5"), _end(PE_B, "et-0/0/1")])
         assert len(_findings([ACCESS_B, second])) == 1
 
     def test_a_partner_access_to_an_attached_isp_needs_no_attachment_of_its_own(self) -> None:
         """A partner router (ISP kind) buys access from PE-A, which is attached: its access reaches the public sides."""
-        partner = _device("PARTNER-EDGE", _place("PARTNER", "TopologyExternalProviders"))
+        partner = _device("PARTNER-EDGE", None, owner=PROV_PARTNER)
         access = _carrier(
             "INET-P",
-            [ISP_A, _place("PARTNER", "TopologyExternalProviders")],
+            [],
             [_end(partner, "et-0/0/0"), _end(PE_A, "et-0/0/1")],
         )
         assert _run([ACCESS_A, UPLINK_A, access]) == []
 
     def test_a_partner_access_to_an_unattached_isp_is_one_finding_per_router(self) -> None:
-        partner = _device("PARTNER-EDGE", _place("PARTNER", "TopologyExternalProviders"))
+        partner = _device("PARTNER-EDGE", None, owner=PROV_PARTNER)
         access = _carrier(
             "INET-P",
-            [ISP_B, _place("PARTNER", "TopologyExternalProviders")],
+            [],
             [_end(partner, "et-0/0/0"), _end(PE_B, "et-0/0/1")],
         )
         assert len(_findings([access])) == 2
@@ -273,11 +281,13 @@ class TestAttachments:
         assert _run([ACCESS_A, ACCESS_B], internet=[]) == []
 
     def test_a_decommissioned_access_needs_no_attachment(self) -> None:
-        gone = _carrier("INET-B", [DC90, ISP_B], ACCESS_B["capabilities"]["edges"], status="decommissioned")
+        gone = _carrier(
+            "INET-B", [DC90], [e["node"] for e in ACCESS_B["capabilities"]["edges"]], status="decommissioned"
+        )
         assert _findings([gone]) == []
 
     def test_a_decommissioned_attachment_does_not_count(self) -> None:
-        uplink = _carrier("UPL-A", [ISP_A, INTERNET], [_end(PE_A, "xe-0/1/0"), BUS_END], status="decommissioned")
+        uplink = _carrier("UPL-A", [INTERNET], [_end(PE_A, "xe-0/1/0"), BUS_END], status="decommissioned")
         (message,) = _findings([ACCESS_A, uplink])
         assert "ISP router 'PE-A'" in message
 
@@ -321,3 +331,19 @@ def test_a_far_end_placed_by_nothing_known_is_still_refused() -> None:
     """A device with a place of another kind (a DC) is refused as before, whatever kind its port has."""
     bad = _carrier("INET-BAD", [DC90, INTERNET], [_end(EDGE, "Ethernet1/2"), BUS_END])
     assert _findings([bad])
+
+
+class TestProviderRouterEnd:
+    """A provider's router has no location; the circuit's provider must own one such end."""
+
+    def test_a_router_end_owned_by_another_provider_than_the_circuits_is_refused(self) -> None:
+        wrong = _carrier("UPL-A", [INTERNET], [_end(PE_A, "xe-0/1/0"), BUS_END])
+        wrong["provider"] = {"node": PROV_B}
+        (message,) = _run([ACCESS_A, wrong])
+        assert "none is owned by the circuit's provider" in message
+
+    def test_an_unowned_device_with_no_deployment_is_not_a_provider_router(self) -> None:
+        bare = _device("BARE", None)
+        carrier = _carrier("INET-X", [DC90], [_end(EDGE, "Ethernet1/9"), _end(bare, "et-0/0/0")])
+        (message,) = _run([carrier])
+        assert "no deployment and not a router of a provider" in message

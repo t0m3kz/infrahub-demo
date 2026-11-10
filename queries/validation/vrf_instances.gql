@@ -87,6 +87,12 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
           }
         }
         ... on DcimDeviceManaged {
+          # The party marker of a device with no deployment (utils/vrf_demand.py PARTY_OWNER_KINDS).
+          owner {
+            node {
+              __typename
+            }
+          }
           shared_capabilities {
             edges {
               node {

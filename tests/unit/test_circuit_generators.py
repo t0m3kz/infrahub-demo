@@ -23,7 +23,6 @@ from generators.topology.circuit import (
 from tests.unit.simulators.circuit_fakes import (
     CAGE,
     CIRCUIT_ID,
-    ISP,
     METRO,
     REGION,
     SAAS_REGION,
@@ -111,8 +110,8 @@ def _saas_transport_port(**kwargs: Any) -> dict[str, Any]:
 
 
 def _isp_pe(**kwargs: Any) -> dict[str, Any]:
-    """The ISP's access PE, deployed in its TopologyExternalProviders."""
-    return interface("if-pe", "xe-0/0/1", "pe-orange-fr", deployment=ISP, **kwargs)
+    """The ISP's access PE: a provider's own router, placed nowhere (no deployment, its provider is its owner)."""
+    return interface("if-pe", "xe-0/0/1", "pe-orange-fr", no_deployment=True, **kwargs)
 
 
 def _added_locations(client: FakeClient) -> list[tuple[str, dict[str, Any]]]:
@@ -120,7 +119,7 @@ def _added_locations(client: FakeClient) -> list[tuple[str, dict[str, Any]]]:
 
 
 class TestCarrierCircuitPlacement:
-    """Each end deployed in a DC, ISP or cloud region places itself; the rest is authored."""
+    """Each end deployed in a DC or cloud region places itself; the rest is authored."""
 
     @pytest.mark.parametrize(
         ("ends", "authored", "derived"),
@@ -134,8 +133,7 @@ class TestCarrierCircuitPlacement:
             pytest.param(
                 [cage_edge(), _saas_transport_port()], [CAGE], ["loc-webex-eu"], id="transport-saas-region-derived"
             ),
-            pytest.param([cage_edge(), _isp_pe()], [CAGE], ["loc-ORANGE-FR"], id="isp-derived"),
-            pytest.param([dc_border_leaf(), _isp_pe()], [], ["dep-DC10", "loc-ORANGE-FR"], id="both-ends-derived"),
+            pytest.param([dc_border_leaf(), _isp_pe()], [], ["dep-DC10"], id="isp-router-end-has-no-location"),
             # The on-ramp edge deploys to its zone: the cage end is derived too, nothing has to be authored.
             pytest.param([dc_border_leaf(), cage_edge()], [], ["dep-DC10", "loc-FR2"], id="zone-and-dc-derived"),
             pytest.param(
@@ -191,7 +189,7 @@ class TestCarrierCircuitPlacement:
         client = FakeClient()
         ends = [cage_edge(), interface("if-x", "eth1", "dev-x", no_deployment=True)]
 
-        await physical_generator(client).generate(carrier_payload(ends=ends, locations=[CAGE, ISP]))
+        await physical_generator(client).generate(carrier_payload(ends=ends, locations=[CAGE, REGION]))
 
         assert client.writes == []
 
@@ -223,28 +221,10 @@ class TestCarrierCircuitPlacementRefusals:
                 id="authored-zone-contradicts-derived-zone",
             ),
             pytest.param(
-                [dc_border_leaf(), interface("if-x", "eth1", "dev-x", no_deployment=True)],
-                [],
-                r"found 1: DC10$",
-                id="second-end-not-placed",
-            ),
-            pytest.param(
                 [dc_border_leaf(), cage_edge()],
-                [CAGE, ISP],
-                r"found 3: FR2, ORANGE-FR, DC10$",
+                [CAGE, REGION],
+                r"found 3: FR2, eu-central-1, DC10$",
                 id="more-than-two",
-            ),
-            pytest.param(
-                [cage_edge(), interface("if-x", "eth1", "dev-x", no_deployment=True)],
-                [CAGE],
-                r"found 1: FR2$",
-                id="device-without-deployment",
-            ),
-            pytest.param(
-                [cage_edge(), interface("if-y", "eth1", "dev-y", deployment=METRO)],
-                [CAGE],
-                r"found 1: FR2$",
-                id="metro-deployment-not-derived",
             ),
         ],
     )
@@ -265,14 +245,11 @@ class TestCarrierCircuitPlacementRefusals:
     async def test_error_names_the_circuit_and_its_endpoints(self) -> None:
         with pytest.raises(GeneratorError) as excinfo:
             await physical_generator(FakeClient()).generate(
-                carrier_payload(
-                    ends=[dc_border_leaf(), cage_edge(no_deployment=True)],
-                    locations=[],
-                )
+                carrier_payload(ends=[dc_border_leaf(), cage_edge()], locations=[CAGE, REGION])
             )
 
         assert str(excinfo.value).startswith(
-            "DF-DC10-EQXFR2 (bl-dc101101/Ethernet1/35 | eg-fr201/Ethernet1/10): needs exactly 2 distinct locations"
+            "DF-DC10-EQXFR2 (bl-dc101101/Ethernet1/35 | eg-fr201/Ethernet1/10): needs at most 2 distinct locations"
         )
 
 
@@ -347,7 +324,7 @@ class TestFanOutToSessionCircuits:
         client = FakeClient()
         gen = physical_generator(client)
 
-        await gen.generate(carrier_payload(ends=[], locations=[CAGE, ISP]))
+        await gen.generate(carrier_payload(ends=[], locations=[CAGE, REGION]))
 
         assert client.filter_calls == []
         gen.run_generator.assert_not_awaited()
@@ -358,7 +335,7 @@ class TestFanOutToSessionCircuits:
         gen = physical_generator(client)
 
         with pytest.raises(GeneratorError):
-            await gen.generate(carrier_payload(locations=[CAGE, ISP]))
+            await gen.generate(carrier_payload(locations=[CAGE, REGION]))
 
         assert client.filter_calls == []
         gen.run_generator.assert_not_awaited()
@@ -397,7 +374,6 @@ class TestPlanLocations:
             pytest.param(VIRTUAL_COLOCATION, "loc-AM-NE", id="virtual-colocation"),
             pytest.param(dc_place(), "dep-DC10", id="dc"),
             pytest.param(REGION, "loc-eu-central-1", id="cloud-region"),
-            pytest.param(ISP, "loc-ORANGE-FR", id="isp"),
         ],
     )
     def test_a_facility_deployment_derives_its_end(self, deployment: dict[str, Any], derived_id: str) -> None:
@@ -424,9 +400,8 @@ class TestPlanLocations:
 
         derived, problem = plan_locations([], ends)
 
-        assert derived == []
-        assert problem is not None
-        assert "found 1: DC10" in problem
+        assert problem is None
+        assert [location.id for location in derived] == ["dep-DC10"]
 
     def test_an_authored_zone_other_than_the_edges_zone_contradicts(self) -> None:
         """FR6 authored, the edge sits in FR2: same kind, different place."""
@@ -451,7 +426,15 @@ class TestPlanLocations:
 
     def test_the_problem_text_names_the_colocation_source(self) -> None:
         """The refusal lists what a deployment can derive, colocation included."""
-        _, problem = plan_locations([], [_endpoint("if-a", "dev-x", None)])
+        ends = [_endpoint("if-a", "dev-x", dc_place("DC10")), _endpoint("if-b", "dev-y", CAGE)]
+        authored = [loc for loc in [CircuitLocation.parse(clean_data(REGION))] if loc]
+        _, problem = plan_locations(authored, ends)
 
         assert problem is not None
-        assert "a DC, ISP, cloud region or colocation derived from an endpoint device's deployment" in problem
+        assert "a DC, cloud region or colocation derived from an endpoint device's deployment" in problem
+
+    def test_a_circuit_between_two_provider_routers_has_no_location(self) -> None:
+        """Neither end is placed: zero locations is a valid plan (checks/circuit_placement.py judges the owners)."""
+        ends = [_endpoint("if-a", "pe-a", None), _endpoint("if-b", "pe-b", None)]
+
+        assert plan_locations([], ends) == ([], None)

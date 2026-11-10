@@ -57,7 +57,7 @@ nodes:
   # A region is a provider place and hosts NOTHING: no devices, no appliances. The cloud resources of a region
   # (accounts, networks, gateways, Direct Connect, peering interfaces, VPN connections) are the CloudResource nodes
   # that point at it. The provider-side device of a handoff, where a BGP session needs one, is a physical stub in the
-  # colocation zone where the legs meet, or in the provider's TopologyExternalProviders, never in the region.
+  # colocation zone where the legs meet, or a router of the provider's own with no deployment, never in the region.
   - name: CloudRegion
     namespace: Topology
     icon: mdi:earth

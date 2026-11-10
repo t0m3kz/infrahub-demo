@@ -4,7 +4,7 @@
 # A carrier circuit's ends are one list, capabilities: exactly two
 # interfaces by schema (min_count 1, max_count 2) and by check (two), one per end. Each endpoint
 # carries its device's deployment: the deployment's kind places that end (a DC,
-# ISP, cloud region, colocation zone or virtual colocation deployment is the
+# cloud region, colocation zone or virtual colocation deployment is the
 # circuit's location there), checked against the circuit's current locations. A cloud
 # transport (the device of a cloud port) is placed by its region or SaaS region instead. THE INTERNET object is a
 # device and a facility at once: the device itself is the location of its end (hence __typename and display_label).

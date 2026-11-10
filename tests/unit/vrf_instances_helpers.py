@@ -305,7 +305,8 @@ def raw_device(
     interfaces: list[dict[str, Any]] | None = None,
     service_ports: list[dict[str, Any]] | None = None,
     groups: tuple[str, ...] = (),
-    deployment_kind: str = "TopologyPod",
+    deployment_kind: str | None = "TopologyPod",
+    owner_kind: str | None = None,
     vrfs: list[dict[str, Any]] | None = None,
     hosting_id: str | None = HOSTING_ID,
     status: str | None = None,
@@ -316,7 +317,8 @@ def raw_device(
     ``shared_capabilities``; a ManagedVRF passed in ``capabilities`` is taken as a membership too (the pre-r3
     spelling), any other capability is dropped; ``shared_others`` are foreign shared kinds (a ``__typename`` only).
     ``pbr`` gives it a ManagedPBR among its individual ``capabilities`` (it steers). The device sits in a pod of the DC
-    ``hosting_id`` (None: a deployment with no hosting parent)."""
+    ``hosting_id`` (None: a deployment with no hosting parent); ``deployment_kind=None`` gives it no deployment, and
+    ``owner_kind`` selects its owner's ``__typename``."""
     caps = capabilities or []
     members = [*(vrfs or []), *(cap for cap in caps if cap.get("__typename") == VRF_KIND)]
     node: dict[str, Any] = {
@@ -326,12 +328,14 @@ def raw_device(
         "role": {"value": role},
         "member_of_groups": edges(*({"name": {"value": group}} for group in groups)),
         "shared_capabilities": edges(*members, *({"__typename": kind} for kind in shared_others or [])),
-        "deployment": raw_deployment(deployment_kind, hosting_id),
+        "deployment": raw_deployment(deployment_kind, hosting_id) if deployment_kind else {"node": None},
         "vlans": edges(*(rows or [])),
         "interfaces": edges(*(interfaces or [])),
         "service_ports": edges(*(service_ports or [])),
         "capabilities": edges(*([{"__typename": "ManagedPBR", "id": f"pbr-{device_id}"}] if pbr else [])),
     }
+    if owner_kind:
+        node["owner"] = {"node": {"__typename": owner_kind}}
     if status:
         node["status"] = {"value": status}
     return node

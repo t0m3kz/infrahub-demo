@@ -10,27 +10,28 @@ those carriers must look like; this module does, on the cleaned carrier dicts of
 
 I1  there is one INTERNET object, with exactly one interface and it is the internet interface
 I2  an attachment (a carrier with an end of the internet interface kind) is an ``internet`` circuit, the interface is
-    on the INTERNET object, and its other end is an ISP router (``TopologyExternalProviders``), the port of a cloud or
-    SaaS transport (``region`` or ``saas_region``) or a port of the provider's connect device
+    on the INTERNET object, and its other end is an ISP router (a device owned by a provider, with no deployment),
+    the port of a cloud or SaaS transport (``region`` or ``saas_region``) or a port of the provider's connect device
     (``TopologyProviderConnect``: an Internet Access service on the Fabric port the cage edge is cabled to, the public
     side of a region): never a DC or a cage of ours (an edge reaches the internet through an access of its own), never
     the internet interface again
-I3  once the INTERNET is modelled, an ISP router that serves an internet access carrier has an attachment, else the
-    access reaches no public side. An access between two routers of ISP kind (a partner's border router buying access
-    from an ISP) is judged as one: it is fine when either end is attached. With no INTERNET object in the data nothing
-    is judged
+I3  once the INTERNET is modelled, an ISP router (a device owned by a provider, with no deployment) that serves an
+    internet access carrier has an attachment, else the access reaches no public side. An access between two ISP
+    routers (a partner's border router buying access from an ISP) is judged as one: it is fine when either end is
+    attached. With no INTERNET object in the data nothing is judged
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from utils.circuit_underlay import DECOMMISSIONED, INTERNET_INTERFACE_KIND, INTERNET_KIND, ISP_KIND
+from utils.circuit_underlay import DECOMMISSIONED, INTERNET_INTERFACE_KIND, INTERNET_KIND, is_provider_device
 
 ATTACHMENT_CARRIER_TYPE = "internet"
-# The facility of the far end of an attachment: an ISP, or the region a public side transport sits in. The provider's
-# connect device is accepted by its kind (its location may be a cage: the cage is the provider's port, not our edge).
-FAR_END_FACILITY_KINDS = (ISP_KIND, "TopologyCloudRegion", "TopologySaasRegion")
+# The facility of the far end of an attachment: the region a public side transport sits in. An ISP router has none (a
+# provider's device, see ``is_provider_device``), and the provider's connect device is accepted by its kind (its
+# location may be a cage: the cage is the provider's port, not our edge).
+FAR_END_FACILITY_KINDS = ("TopologyCloudRegion", "TopologySaasRegion")
 PROVIDER_CONNECT_KIND = "TopologyProviderConnect"
 Finding = tuple[dict[str, Any], str]
 
@@ -105,6 +106,7 @@ def _attachment_findings(carrier: dict[str, Any]) -> list[str]:
         _name(_device(port))
         for port in far
         if _device(port).get("typename") != PROVIDER_CONNECT_KIND
+        and not is_provider_device(_device(port))
         and _facility_kind(_device(port)) not in FAR_END_FACILITY_KINDS
     ]
     if len(far) != 1 or bad:
@@ -129,7 +131,7 @@ def internet_findings(carriers: list[dict[str, Any]], internet_objects: list[dic
         for carrier in live:
             if is_attachment(carrier) or carrier.get("circuit_type") != ATTACHMENT_CARRIER_TYPE:
                 continue
-            isp_routers = [d for d in (_device(port) for port in _ports(carrier)) if _facility_kind(d) == ISP_KIND]
+            isp_routers = [d for d in (_device(port) for port in _ports(carrier)) if is_provider_device(d)]
             if any(str(device.get("id")) in attached for device in isp_routers):
                 continue
             for device in isp_routers:

@@ -14,4 +14,3 @@ spec:
       object_template: MX204_ISP_PE
       owner: P014
       description: "ISP router: far end of the internet carrier (VPN and Zscaler legs)"
-      deployment: ISP-A

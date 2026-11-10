@@ -148,7 +148,8 @@ def test_an_instance_on_a_device_that_never_carries_one_is_an_error() -> None:
             "d3",
             "pe-1",
             role="edge",
-            deployment_kind="TopologyExternalProviders",
+            deployment_kind=None,
+            owner_kind="OrganizationProvider",
             capabilities=[raw_instance("v3", "pe-1", "PROD")],
         ),
     ):

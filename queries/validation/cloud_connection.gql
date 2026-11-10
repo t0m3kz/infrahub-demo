@@ -1,6 +1,6 @@
 # validate_cloud_connection (checks/cloud_connection.py): the rules the schema cannot hold on the cloud side of a
 # connection. R1-R2 gateways, attachments and route tables, R3 transports (rides_on), R4 service endpoints and tunnel
-# keys, R5-R6 tunnels, R8 VLAN peerings, R9 placement and owner of a transport.
+# keys, R5-R6 tunnels, R8 VLAN peerings, R9 placement and owner of a transport, R10-R11 the provider connect of a public endpoint.
 query cloud_connection {
   CloudGatewayAttachment {
     edges {
@@ -75,8 +75,42 @@ query cloud_connection {
       node {
         id
         name { value }
-        virtual_network { node { id name { value } } }
+        status { value }
+        access { value }
+        provider { node { id } }
+        saas_region { node { id } }
+        virtual_network { node { id name { value } region { node { id } } } }
         segments { edges { node { id name { value } virtual_network { node { id } } } } }
+      }
+    }
+  }
+  TopologyProviderConnect {
+    edges {
+      node {
+        id
+        name { value }
+        provider { node { id } }
+        location { node { id } }
+        interfaces {
+          edges {
+            node {
+              id
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    ... on TopologyCarrierCircuit {
+                      id
+                      status { value }
+                      circuit_type { value }
+                      capabilities { edges { node { __typename device { node { __typename id } } } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -11,15 +11,18 @@ owners among the locations of any circuit is an error; a tunnel needs an office;
 office with an owner.
 
 Carrier circuits
-    1. exactly two distinct locations (the authored cage plus the ends add_circuit derives),
-    2. each location is the ``deployment`` of one end's device, one end per location: a DC, ISP or cloud region,
+    1. at most two distinct locations (the authored cage plus the ends add_circuit derives),
+    2. each location is the ``deployment`` of one end's device, one end per location: a DC or cloud region,
        or for colocation kit the zone (or virtual colocation) the device is deployed to. A cloud transport (the
        device of a cloud port, it has no ``deployment``) is placed by its ``region`` (TopologyCloudRegion) or its
        ``saas_region`` (TopologySaasRegion). A sibling zone of the
        same metro is not the end: add_circuit (``plan_locations``) refuses an authored location that differs from
        the end device's deployment. The metro is no facility and no device is deployed to it. The provider's port
        (``TopologyProviderConnect``: a Fabric port of a cage, the public side of a region) has no deployment either: its
-       facility is its own ``location``, the zone, region or SaaS region it sits in,
+       facility is its own ``location``, the zone, region or SaaS region it sits in. A provider's own router (an ISP or
+       partner PE: owned by an ``OrganizationProvider``, placed nowhere) has no location; the circuit's own ``provider``
+       must own one such router (it names the end), so a circuit between two providers' routers (a partner's access
+       from its ISP) has no location at all,
     3. its offices (an office's access circuit, add_sdwan_edge's INET-<office>) are of one owner.
     4. THE INTERNET (``TopologyInternet``, a device that is a facility itself, so its own end's location) and the
        carriers that end on its interface: ``utils/internet_object.py`` (I1 to I4).
@@ -30,8 +33,8 @@ overlay routing)
     2. one location is a TopologyCustomerOffice (its owner is the tunnel's); the only type with
        ``registered_prefixes`` (the others have none),
     3. none of the handoff-only fields (``ip_namespace``, ``password``),
-    4. every end port rides a live internet carrier circuit of its own (one with an end on a
-       TopologyExternalProviders): the office edge uplink its INET-<office>, the gateway's public port its own
+    4. every end port rides a live internet carrier circuit of its own (``circuit_type`` internet): the office edge
+       uplink its INET-<office>, the gateway's public port its own
        internet access. The ends share no path, so there is no contiguity rule.
 
 Interconnect circuit (``circuit_type`` dci: between two EVPN Multi-Site border gateways; an underlay and an EVPN
@@ -122,6 +125,7 @@ from utils.circuit_underlay import (
     TUNNEL_TYPE,
     VPN_TYPE,
     derived_underlay,
+    is_provider_device,
     overlay_processes,
     port_cabled,
     port_underlay,
@@ -143,7 +147,7 @@ NOUNS = {TUNNEL: "Tunnel", INTERCONNECT: "Interconnect", HANDOFF: "Handoff", VPN
 # The fields a handoff (and a vpn, for the namespace) carries; the schema leaves them optional on the one session kind.
 HANDOFF_ONLY_FIELDS = ("vrf", "password")
 
-INTERNET = "TopologyExternalProviders"
+INTERNET_CARRIER = "internet"
 OFFICE = "TopologyCustomerOffice"
 PHYSICAL_DEVICE = "DcimPhysicalDevice"
 PHYSICAL_PORT = "DcimPhysicalInterface"
@@ -207,6 +211,12 @@ def _facility(device: dict[str, Any] | None) -> dict[str, Any] | None:
         return device
     place = device.get("deployment") or device.get("region") or device.get("saas_region") or device.get("location")
     return place if isinstance(place, dict) else None
+
+
+def _ref_id(node: Any) -> str | None:
+    """The id of a cleaned reference: a dict, or the bare id clean_data collapses an id-only object to."""
+    value = node.get("id") if isinstance(node, dict) else node
+    return str(value) if value else None
 
 
 def _ports(circuit: dict[str, Any]) -> list[dict[str, Any]]:
@@ -363,40 +373,60 @@ class CheckCircuitPlacement(InfrahubCheck):
         name = _name(circuit)
         locations = _locations(circuit)
         self._validate_owner(circuit, CARRIER, locations)
-        if len(locations) != CIRCUIT_ENDS:
+        if len(locations) > CIRCUIT_ENDS:
             self._error(
                 circuit,
                 CARRIER,
                 f"Carrier circuit '{name}' terminates on {len(locations)} location(s) ({_labels(locations)}): a "
-                f"carrier circuit has exactly {CIRCUIT_ENDS} distinct locations, one facility per end.",
+                f"carrier circuit has at most {CIRCUIT_ENDS} distinct locations, one facility per end that is placed.",
             )
             return
 
         ends = _ends(circuit)
         if len(ends) != CIRCUIT_ENDS:
             return  # checks/carrier_circuit_ports.py reports the end count
-        undeployed = [port for port, deployment in ends if deployment is None]
-        for port in undeployed:
+        provider = _ref_id(circuit.get("provider"))
+        placed: list[tuple[str, dict[str, Any] | None]] = []
+        routers: list[dict[str, Any]] = []
+        unplaced = False
+        for port in _ports(circuit):
+            label, device = _port_label(port), port.get("device") or {}
+            if (deployment := _facility(device)) is not None:
+                placed.append((label, deployment))
+            elif is_provider_device(device):
+                routers.append(device)
+            else:
+                unplaced = True
+                self._error(
+                    circuit,
+                    CARRIER,
+                    f"Carrier circuit '{name}' end '{label}' is on a device with no deployment and not a router of "
+                    "a provider: set the device's deployment to the facility it sits in (an on-ramp edge: its "
+                    "colocation zone), or own it by a provider.",
+                )
+        if unplaced:
+            return
+        if routers and not any(_ref_id(device.get("owner")) == provider for device in routers):
             self._error(
                 circuit,
                 CARRIER,
-                f"Carrier circuit '{name}' end '{port}' is on a device with no deployment: set the device's "
-                "deployment to the facility it sits in (an on-ramp edge: its colocation zone).",
+                f"Carrier circuit '{name}' has provider-owned router end(s) ({', '.join(_name(d) for d in routers)}) "
+                "but none is owned by the circuit's provider: the circuit's provider names the end that has no "
+                "location.",
             )
-        if undeployed:
             return
-
-        if any(
+        if len(placed) == len(locations) and any(
             all(_end_at(location, deployment) for location, (_, deployment) in zip(locations, order))
-            for order in permutations(ends)
+            for order in permutations(placed)
         ):
             return
         self._error(
             circuit,
             CARRIER,
-            f"Carrier circuit '{name}' terminates on {_labels(locations)} but its ends are {_ends_label(ends)}: "
-            "each location is the deployment of one end's device (a DC, ISP, cloud region, or for colocation kit the "
-            "zone or virtual colocation the device is deployed to; not a sibling zone of its metro).",
+            f"Carrier circuit '{name}' terminates on {_labels(locations)} but its placed ends are "
+            f"{_ends_label(placed)}: each location is the deployment of one end's device (a DC, cloud region, or for "
+            "colocation kit the zone or virtual colocation the device is deployed to; not a sibling zone of its "
+            "metro), and an end that is a provider's router has none.",
         )
 
     def _validate_owner(self, circuit: dict[str, Any], kind: str, locations: list[dict[str, Any]]) -> None:
@@ -451,14 +481,14 @@ class CheckCircuitPlacement(InfrahubCheck):
 
         for port in ports:
             live = _live_carriers(port)
-            if any(location.get("typename") == INTERNET for carrier in live for location in _locations(carrier)):
+            if any(carrier.get("circuit_type") == INTERNET_CARRIER for carrier in live):
                 continue
             found = f"its live carrier circuits are {_carriers_label(live)}" if live else "it is on no live one"
             self._error(
                 circuit,
                 TUNNEL,
                 f"Tunnel circuit '{name}' end '{_port_label(port)}' rides no live internet carrier circuit (one "
-                f"with an end on a {INTERNET}): {found}. Every end of a tunnel has its own internet access.",
+                f"of circuit_type {INTERNET_CARRIER}): {found}. Every end of a tunnel has its own internet access.",
             )
 
     # ------------------------------------------------------------------

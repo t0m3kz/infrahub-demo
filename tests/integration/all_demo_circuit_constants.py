@@ -80,23 +80,22 @@ ALL_DEMO_GATEWAY_ACCESS_CIRCUITS: dict[str, frozenset[tuple[str, str]]] = {
     "INET-LUMEN-EQXFR2-GW": frozenset({("EQX-FR2-SDWAN-GW1", "eth1"), ("EXT-LUMEN-FRA1", "et-0/0/1")}),
 }
 
-ALL_DEMO_GATEWAY_ACCESS_LOCATIONS: tuple[str, ...] = ("FR2", "ISP-LUMEN")
+# The ISP router has no place: the circuit has the cage alone.
+ALL_DEMO_GATEWAY_ACCESS_LOCATIONS: tuple[str, ...] = ("FR2",)
 
 
 # The partner's own internet access (08_interconnects/07_zone_policies/01_partner_tunnel.yml): the stub router
-# EXT-ACME-EDGE1 (deployed to the partner topology PARTNER-ACME) to a free `customer` port of Cogent's Frankfurt edge.
-# Unowned shared underlay: the carrier of the partner end of the tunnel C001-PARTNER-ACME-FR2. The data lists only
-# ISP-COGENT; add_circuit derives PARTNER-ACME from the stub's deployment.
+# EXT-ACME-EDGE1 (owned by ACME, no deployment) to a free `customer` port of Cogent's Frankfurt edge (also placed
+# nowhere). Unowned shared underlay: the carrier of the partner end of the tunnel C001-PARTNER-ACME-FR2. Both ends are
+# provider routers, so the circuit has no location.
 ALL_DEMO_PARTNER_ACCESS_CIRCUITS: dict[str, frozenset[tuple[str, str]]] = {
     "INET-ACME-COGENT": frozenset({("EXT-ACME-EDGE1", "et-0/0/0"), ("EXT-COGENT-FRA1", "et-0/0/1")}),
 }
 
-ALL_DEMO_PARTNER_ACCESS_LOCATIONS: tuple[str, ...] = ("ISP-COGENT", "PARTNER-ACME")
-
 
 # The uplink of every ISP router to THE INTERNET (data/bootstrap/03b_internet.yml, rule I3): the four transit provider edges
 # (08_interconnects/06_internet/04_circuits.yml) and Orange's access PE (04_internet/02_access_edge.yml), each from its
-# uplink port to INTERNET:bus. Unowned shared underlay; the data lists the ISP only, add_circuit derives INTERNET.
+# uplink port to INTERNET:bus. Unowned shared underlay; the data lists INTERNET as the one location.
 ALL_DEMO_ISP_UPLINK_CIRCUITS: dict[str, tuple[str, str]] = {
     "UPL-EXT-LUMEN-FRA1": ("EXT-LUMEN-FRA1", "xe-0/1/0"),
     "UPL-EXT-LUMEN-PAR1": ("EXT-LUMEN-PAR1", "xe-0/1/0"),
@@ -119,7 +118,7 @@ ALL_DEMO_SHARED_INTERNET_CIRCUITS: frozenset[str] = (
 
 
 # The SD-WAN offices' internet access (add_sdwan_edge): INET-<office> runs from the office edge's GE1 to a free
-# `customer` port of the one ISP access PE (30_all/04_internet), in the ISP's location. The offices board in one load and
+# `customer` port of the one ISP access PE (30_all/04_internet); the office is the one location. The offices board in one load and
 # take the first free port in natural order under a lock, so together they hold xe-0/1/[0..n-1] exactly.
 ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS: dict[str, str] = {f"INET-{name(office)}": name(office) for office in _SDWAN_OFFICES}
 
@@ -127,7 +126,6 @@ ALL_DEMO_SDWAN_EDGE_UPLINK = "GE1"
 
 ALL_DEMO_ISP_ACCESS_DEVICE = "EXT-ORANGE"
 
-ALL_DEMO_ISP_ACCESS_LOCATION = "ISP-ORANGE"
 
 ALL_DEMO_ISP_ACCESS_PORTS: frozenset[str] = frozenset(f"xe-0/1/{n}" for n in range(len(_SDWAN_OFFICES)))
 

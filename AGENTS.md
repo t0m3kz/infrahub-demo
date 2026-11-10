@@ -288,6 +288,16 @@ class MyCheck(InfrahubCheck):
   (`DcimDevice: DcimDeviceManaged`, the alias keeps the result key); `TopologyDeviceHosting.devices`, `sdwan_gateway`,
   `managed_devices`, `DcimPlatform.devices` and `DcimSoftwareImage.devices` peer `DcimDeviceManaged` (read `interfaces`
   through `... on DcimDevice`). `DcimProviderPort` is a marker generic (`provider`, `bandwidth`) that `CloudDirectConnect` and `TopologyProviderConnect` list next to the slim `DcimDevice` (a generic cannot inherit a generic): the second is the provider's connect device at ONE place: the Fabric port of a colocation zone, the public (internet-facing) side of a cloud region or a SaaS region. It is a slim device with no account and no owner (it is one per place, not per customer), its place is its mandatory `location` (a `TopologyFacility`: a zone, a region or a SaaS region), the provider's own id of the port is its `external_id`, and its circuits are `internet` carriers (to THE INTERNET) or `virtual_connection`s. It is NOT a Direct Connect: the private connections of a cloud stay in `CloudDirectConnect` and `CloudVPNConnection`. No generator or check of its own: `add_circuit` places a circuit end by its `location`.
+- **The provider lists what it owns and serves**: there is no place object for an ISP or partner. The reverse edges are
+  declared once in `schemas/extensions/topology/topology_provider_links.yml` (same identifier and peer kind as the
+  forward edge, held by `tests/unit/test_provider_links_schema.py`): `OrganizationEntity.owned_devices` (forward
+  `DcimDeviceManaged.owner`), and on `OrganizationProvider` its `circuits`, `provider_ports` (`DcimProviderPort`) and
+  `service_endpoints` (`CloudServiceEndpoint`). A provider's own router is a device it owns with no `deployment`
+  (`utils/vrf_demand.py` `PARTY_OWNER_KINDS`: it carries no VRF); `add_sdwan_edge` finds the ISP's access device as the
+  one device the internet provider owns. A public service endpoint (`access: public`) is judged by
+  `checks/cloud_connection.py` R10 and R11: exactly one `TopologyProviderConnect` of its provider at its place (its SaaS
+  region, else the region of its virtual network) with an `internet` carrier to THE INTERNET (a private port of the
+  same provider and place has none and is ignored).
 - **Circuit placement**: two circuit kinds, both inheriting `[TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces]`:
   `TopologyCarrierCircuit` and `TopologySessionCircuit`. `locations` (peer `TopologyFacility`, max 2, no `min_count`:
   it is enforced on update only) is declared ONCE, on the `TopologyCircuit` generic. The ends are the shared interface
@@ -299,17 +309,22 @@ class MyCheck(InfrahubCheck):
   provider-delivered `virtual_connection` or `metro_ethernet` service) with no role and no session; its `locations` peer
   `TopologyFacility`: the DC (never a pod, rack or footprint), the colocation
   cage `TopologyColocationZone` or the provider-hosted `TopologyVirtualColocation` (never the metro), the
-  `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
+  `TopologyCloudRegion` (never a zone or `TopologyCloud`), the
   `TopologySaasRegion`, the `TopologyCustomerOffice` or THE INTERNET `TopologyInternet` (below). Data lists only the cage; `add_circuit` adds every end
-  whose endpoint device's `deployment` is a facility (border leaf -> DC, ISP PE -> ISP),
+  whose endpoint device's `deployment` is a facility (border leaf -> DC),
   when the circuit is created or its ends change: nothing re-runs it on a later `deployment` edit (the check reports
-  it). A circuit has no `owner` field: its owner is DERIVED, never stored (`utils/ownership.py` `circuit_owner`): the owner of
+  it). A provider's own router (an ISP or partner PE) has no place object and no `deployment`: it is owned by its
+  `OrganizationProvider` (`owner`) and its end has no location, the circuit's own `provider` names it. A circuit has no `owner` field: its owner is DERIVED, never stored (`utils/ownership.py` `circuit_owner`): the owner of
   the `TopologyCustomerOffice` among its `locations` (an office's access circuit, `add_sdwan_edge`'s `INET-<office>`, and a
   tunnel); two offices of different owners among the locations raise `CircuitOwnerError`, reported by the
   check. Any other circuit is shared underlay, unowned. `checks/circuit_placement.py` guards what the schema
   cannot, per circuit (a session circuit's rules are selected by `circuit_type`, the schema leaves its type-specific
   fields optional):
-  - **Carrier**: exactly two distinct locations, one per end device's `deployment`; its offices are of one owner.
+  - **Carrier**: at most two distinct locations, one per end whose device is placed (its `deployment`, region, SaaS region,
+    provider connect `location`, or THE INTERNET itself); an end on a provider's router (`utils/circuit_underlay.py`
+    `is_provider_device`: owner is an `OrganizationProvider`, placed nowhere) has none, and the circuit's `provider` owns at
+    least one such router (a circuit between two providers' routers, a partner's access from its ISP, has no location at all:
+    `locations: []`); any other end with no place is refused. Its offices are of one owner.
     `checks/carrier_circuit_ports.py`: a port is an end of at most one carrier and both ends
     are physical ports, EXCEPT a `virtual_connection` (a provider port hosts one connection per S-tag, and an end may be
     the `DcimVirtualInterface` NIC of a provider-hosted appliance, or a `TopologyProviderInterface`: the end of ONE
@@ -321,17 +336,16 @@ class MyCheck(InfrahubCheck):
     provider's own router).
   - **THE INTERNET** (`TopologyInternet`, the singleton `INTERNET`): the meeting point of every internet connection, "a
     kind of cable or switch for all". It does not change between datasets, so it and its one interface `bus` are
-    BOOTSTRAP data (`data/bootstrap/03b_internet.yml`, after the label "Internet" it sits under, next to the ISPs
-    `TopologyExternalProviders`); the ISPs, their uplinks and the public sides are dataset data. It is a passive
+    BOOTSTRAP data (`data/bootstrap/03b_internet.yml`, after the label "Internet" it sits under); the ISPs, their uplinks and the public sides are dataset data. It is a passive
     `TopologyDeployment`, a slim `DcimDevice` and a `TopologyFacility`: no role, platform, address, VRF, routing or
     artifact (`carries_vrfs` and the readers of managed devices never see it); addresses and prefixes stay in the
     `INTERNET` namespace. Its ONE interface is a `TopologyInternetInterface`, and that KIND lets many carriers end on it
     (`checks/carrier_circuit_ports.py` exempts the kind, not a name). An attachment is an `internet` carrier of its own
     from the uplink port of an ISP router (or the port of the `CloudDirectConnect` that is a region's public side) to the
     bus, so L1 from any ISP reaches any public side through it. The device is a facility itself, so `add_circuit` places
-    the bus end by the device (no `deployment`) and a data file lists only the ISP. `utils/internet_object.py`
+    the bus end by the device (no `deployment`); an uplink lists INTERNET, the ISP router has no location. `utils/internet_object.py`
     (called by `checks/circuit_placement.py`) holds I1 (one `INTERNET`, one interface, of the bus kind), I2 (an
-    attachment is an `internet` circuit whose other end is an ISP router or a cloud or SaaS transport, never a DC or a
+    attachment is an `internet` circuit whose other end is an ISP router (a provider's router) or a cloud or SaaS transport, never a DC or a
     cage) and I3 (an ISP router that serves an internet access carrier has an attachment: it applies to EVERY dataset
     since `INTERNET` is bootstrap; an access between two ISP-kind routers, a partner buying from an attached ISP, is
     judged as one). A public cloud or SaaS service is a `CloudServiceEndpoint` with `access: public` and its range as
@@ -399,9 +413,9 @@ class MyCheck(InfrahubCheck):
   `allowed_prefixes` (cloud to us) and sits in `CloudGatewayRouteTable`s of a hub; the prefixes we announce to the cloud
   are the peering's `advertised_prefixes` (public or static only). A cloud region hosts nothing, a SaaS region or a
   virtual colocation hosts `appliances` (`TopologyApplianceHosting`). A provider's own router that a cable reaches is a
-  physical device of its `TopologyExternalProviders`. `OrganizationProvider.connection_profile` names the operator's
+  physical device owned by that provider with no `deployment`. `OrganizationProvider.connection_profile` names the operator's
   vocabulary and is inventory only. The sample is `data/demos/00_full_topology` (one topology in numbered folders by facility type, `tests/traversal/load_topology.py` loads it;
-  its README holds the per-operator table, `test_03_full_topology.py` loads it; three sites reach each other and the INTERNET: the DC, one colocation cage `PAR-COLO1` where every cloud and SaaS leg lands (never on the DC edge) and the C900 office with an SD-WAN edge of its own); `checks/cloud_connection.py` (R1 to R9) holds what the schema cannot (the edge derives the cloud side's
+  its README holds the per-operator table, `test_03_full_topology.py` loads it; three sites reach each other and the INTERNET: the DC, one colocation cage `PAR-COLO1` where every cloud and SaaS leg lands (never on the DC edge) and the C900 office with an SD-WAN edge of its own); `checks/cloud_connection.py` (R1 to R11) holds what the schema cannot (the edge derives the cloud side's
   prefixes, see **Border policy**).
 - **Session circuits** (virtual circuits): `TopologySessionCircuit` is the connection between topologies on which routing
   is generated or recorded; its role is its `circuit_type` (`dci`, `handoff`, `tunnel`, `vpn`), required, never a kind. It has no `owner` field (derived, see **Circuit placement**). The
@@ -876,7 +890,7 @@ class MyCheck(InfrahubCheck):
   Only our routing devices carry one (`carries_vrfs`: leaf, tor, access-leaf, border-leaf, border-spine, edge,
   access-switch, distribution-switch, physical or a `CloudNetworkAppliance`): never a spine, an L2 leaf, a firewall or a
   load balancer (their VRF is the context), a controller, or a party's device (a provider stub, an appliance of a cloud
-  region, a device of an external provider). A device with demand but no hosting deployment gets nothing (check rule g, ERROR).
+  region, a device with no deployment owned by an `OrganizationProvider`: an ISP or partner router). A device with demand but no hosting deployment gets nothing (check rule g, ERROR).
   `generators/helpers/vrf.py` is the only writer (untracked; lock order: the segment lock, the device locks
   `vrf-device-<id>`, then the instance locks `vrf-<deployment>-<namespace>`, the latter only to create or delete; never
   under a context lock): the segment reconcile, the context legs (`customer_facility`), `add_virtual_circuit`, the office
@@ -928,9 +942,9 @@ class MyCheck(InfrahubCheck):
   control SVI, added edge by edge by `generators/mlag.py`; `get_mlag` reads them from the domain, never by role or name
   on the device. The role `mlag-peer` stays the interface's own identity.
 - **What a deployment hosts is typed by its kind**: a device's `deployment` is its host's, and each kind of host has a generic
-  of its own, so the picker and the schema refuse the rest. `TopologyDeviceHosting` (DC, pod, colocation zone, office,
-  external provider) lists the physical devices and controllers (a provider's physical router lives in its
-  `TopologyExternalProviders`, never in a region);
+  of its own, so the picker and the schema refuse the rest. `TopologyDeviceHosting` (DC, pod, colocation zone, office)
+  lists the physical devices and controllers (a provider's physical router has no deployment: its provider is its `owner`,
+  never in a region);
   `TopologyApplianceHosting` (virtual colocation, SaaS region, cloud region) lists its `appliances` (`CloudNetworkAppliance`, identifier
   `topology__appliances`); `TopologyCloudHosting` (customer cloud) lists its `instances` (`CloudInstance`, the EC2 of the
   tenant). A virtual device keeps `deployment` on the `TopologyDeployment` generic: it runs for a customer footprint. The

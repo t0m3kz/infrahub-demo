@@ -55,14 +55,13 @@ _PLACE_KINDS = (
     "TopologyColocationZone",
     "TopologyVirtualColocation",
     "TopologyCloudRegion",
-    "TopologyExternalProviders",
     "TopologyCustomerOffice",
     "TopologySaasRegion",
 )
 # add_sdwan_edge: the edge uplink, the ISP access device of the offices' internet underlay and its first free ports.
 EDGE_UPLINK = "GE1"
 ISP_ACCESS_DEVICE = "EXT-ORANGE"
-ISP_ACCESS_LOCATION = "ISP-ORANGE"
+ISP_ACCESS_PROVIDER = "P019"  # owner of the ISP access device: the provider of the offices' INET circuits
 GATEWAY_PUBLIC_PORT = "eth1"
 
 
@@ -85,6 +84,7 @@ class _Model:
     def __init__(self, without_cables: bool, without_circuits: frozenset[str]) -> None:
         self.without_circuits = without_circuits
         self.places = self._places()
+        self.providers = {str(p.item["org_id"]) for p in distinct(declared("OrganizationProvider", BOOTSTRAP))}
         self.namespaces = {name(ns): str(ns.value("vrf_type")) for ns in distinct(declared("SecurityZone", BOOTSTRAP))}
         self.sdwan_offices = [office for office in _all("TopologyCustomerOffice") if office.item.get("sdwan_gateway")]
         self.devices: dict[str, dict[str, Any]] = {}
@@ -134,6 +134,7 @@ class _Model:
                     "deployment": device.item.get("deployment"),
                     "region": device.item.get("region"),
                     "location": device.item.get("location"),
+                    "owner": device.item.get("owner"),
                     "bgp": roles.get(name(device), []),
                 }
         self.provider_ports = {(str(i.item["device"]), name(i)) for i in _all(PROVIDER_INTERFACE)}
@@ -194,7 +195,8 @@ class _Model:
                     "circuit_type": "internet",
                     "status": "active",
                     "owner": str(office.item["owner"]),
-                    "locations": [name(office), ISP_ACCESS_LOCATION],
+                    "locations": [name(office)],
+                    "provider": ISP_ACCESS_PROVIDER,
                     "ends": [
                         (sdwan_edge_name(name(office)), EDGE_UPLINK),
                         (ISP_ACCESS_DEVICE, f"xe-0/1/{index}"),
@@ -208,6 +210,7 @@ class _Model:
                     "circuit_type": str(circuit.value("circuit_type")),
                     "status": str(circuit.value("status")),
                     "owner": circuit.item.get("owner"),
+                    "provider": str(circuit.item["provider"]),
                     "locations": [str(location) for location in circuit.item["locations"]],
                     "ends": [(str(device), str(port)) for device, port in circuit.item["capabilities"]],
                 }
@@ -260,6 +263,7 @@ class _Model:
             "id": f"id-{row['name']}",
             "name": {"value": row["name"]},
             "status": {"value": row["status"]},
+            "circuit_type": {"value": row["circuit_type"]},
             "locations": _edges(
                 {key: self.places[place][key] for key in ("id", "__typename", "name")} for place in row["locations"]
             ),
@@ -324,6 +328,7 @@ class _Model:
             "status": {"value": row["status"]},
             "circuit_type": {"value": row["circuit_type"]},
             "owner": {"node": {"id": f"id-{owner}", "org_id": {"value": owner}} if owner else None},
+            "provider": {"node": {"id": f"id-{row['provider']}"}},
             "locations": _edges(self.places[place] for place in row["locations"]),
             "capabilities": _edges(
                 {
@@ -336,12 +341,21 @@ class _Model:
                             "__typename": self.devices[device]["kind"],
                             "name": {"value": device},
                             **self.placement(device),
+                            **self.owner_of(device),
                         }
                     },
                 }
                 for device, port in row["ends"]
             ),
         }
+
+    def owner_of(self, device: str) -> dict[str, Any]:
+        """A managed device's owner as the placement query selects it (a provider or a customer)."""
+        owner = self.devices[device].get("owner")
+        if not owner:
+            return {}
+        kind = "OrganizationProvider" if str(owner) in self.providers else "OrganizationCustomer"
+        return {"owner": {"node": {"id": f"id-{owner}", "__typename": kind}}}
 
     def virtual_payload(
         self,

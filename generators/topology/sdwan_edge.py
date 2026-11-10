@@ -24,15 +24,15 @@ so no session is generated and the tunnel is not a member of the
 one save. The Gateway's public port is its one ``customer`` physical interface;
 the trunk (role uplink) is not used here.
 
-The underlay's far end is not authored per office. The ISP is the one
-TopologyExternalProviders of the internet provider (data/demos/30_all/
-04_internet), its one device the access PE; the circuit takes that PE's first
+The underlay's far end is not authored per office. The ISP is the internet provider (an OrganizationProvider, there
+is no place object for it) and its one device, owned by it, the access PE (data/demos/30_all/04_internet); the
+circuit takes that PE's first
 free ``customer`` port (a port that is an end of no carrier circuit), and
 reuses its own port on a rerun. The pick and the circuit's single save (a
 carrier circuit needs both ends at creation) run under one resource_lock,
 because the offices board in one load and run concurrently. The circuit's
-locations are the office and the ISP; the tunnel's are the office and the
-Gateway's zone.
+locations are the office alone (the ISP's router is placed nowhere: the circuit's provider names it); the tunnel's
+are the office and the Gateway's zone.
 
 The office's LAN is allocated here too, when the office declares none: one /24 from
 the PROD tenant pool (``Tenant-PROD-IPv4``, data/bootstrap/23b_tenant_pools.yml), keyed by
@@ -62,6 +62,7 @@ green one that silently stopped half way.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from infrahub_sdk.protocols import CoreIPPrefixPool
@@ -81,15 +82,13 @@ from ..protocols import (
     ManagedController,
     TopologyCarrierCircuit,
     TopologyCustomerOffice,
-    TopologyExternalProviders,
     TopologySessionCircuit,
 )
 
 # Who sells each office its internet access. Not modelled per office (no
 # "chosen ISP" signal on TopologyCustomerOffice), so every office's underlay
-# gets the same provider: Orange S.A. Its TopologyExternalProviders (the ISP
-# location, with the access PE as its one device) is the underlay's far end,
-# resolved from this org. A per-office knob is added only when a transform or
+# gets the same provider: Orange S.A. Its one device (the access PE, owned by it) is
+# the underlay's far end, resolved from this org. A per-office knob is added only when a transform or
 # check reads it.
 _INTERNET_PROVIDER_ORG_ID = "P019"
 # Who operates the overlay riding that underlay: the SD-WAN service provider
@@ -168,17 +167,16 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             self.fail(f"{office_name}: gateway {gateway_name} has several role=customer public interfaces {names}")
         gateway_public_port_id: str = public_ports[0]["id"]
 
-        internet_provider_id, overlay_provider_id = await self._resolve_provider_ids(office_name)
+        internet_provider_id, isp_name, overlay_provider_id = await self._resolve_provider_ids(office_name)
         edge = await self._ensure_edge_device(office_name, office_id, owner_id)
         edge_uplink = await self._find_edge_uplink(edge.id, office_name)
-        isp_location_id, isp_name, isp_device_id = await self._resolve_isp_access(office_name, internet_provider_id)
+        isp_device_id = await self._resolve_isp_access(office_name, internet_provider_id)
 
         await self._ensure_internet_circuit(
             office_name=office_name,
             office_id=office_id,
             provider_id=internet_provider_id,
             edge_uplink_id=edge_uplink.id,
-            isp_location_id=isp_location_id,
             isp_name=isp_name,
             isp_device_id=isp_device_id,
         )
@@ -193,15 +191,17 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         await self._attach_to_orchestrator(gateway_id=gateway_id, gateway_name=gateway_name, edge_id=edge.id)
         await self._ensure_office_lan(office, office_name=office_name, office_id=office_id)
 
-    async def _resolve_provider_ids(self, office_name: str) -> tuple[str, str]:
-        """(internet provider id, overlay provider id), both looked up in one query."""
+    async def _resolve_provider_ids(self, office_name: str) -> tuple[str, str, str]:
+        """(internet provider id, its circuit-name slug, overlay provider id), all looked up in one query."""
         org_ids = [_INTERNET_PROVIDER_ORG_ID, _OVERLAY_PROVIDER_ORG_ID]
         providers = await self.client.filters(kind="OrganizationProvider", org_id__values=org_ids)
-        by_org_id = {provider.org_id.value: provider.id for provider in providers}
+        by_org_id = {provider.org_id.value: provider for provider in providers}
         missing = [org_id for org_id in org_ids if org_id not in by_org_id]
         if missing:
             self.fail(f"{office_name}: provider org(s) {missing} not found")
-        return by_org_id[_INTERNET_PROVIDER_ORG_ID], by_org_id[_OVERLAY_PROVIDER_ORG_ID]
+        isp = by_org_id[_INTERNET_PROVIDER_ORG_ID]
+        isp_slug = re.sub(r"[^a-z0-9]+", "-", isp.name.value.lower()).strip("-")
+        return isp.id, isp_slug, by_org_id[_OVERLAY_PROVIDER_ORG_ID].id
 
     async def _ensure_edge_device(self, office_name: str, office_id: str, owner_id: str) -> Any:
         """Create/upsert the Edge, mirroring generators/devices.py's
@@ -242,18 +242,12 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             self.fail(f"{office_name}: edge device has no role=uplink interface")
         return sorted(ifaces, key=lambda i: i.name.value)[0]
 
-    async def _resolve_isp_access(self, office_name: str, internet_provider_id: str) -> tuple[str, str, str]:
-        """(ISP location id, its name, access PE device id): the internet provider's one topology and its one device."""
-        isps = await self.client.filters(
-            kind=TopologyExternalProviders, provider__ids=[internet_provider_id], include=["devices"]
-        )
-        if len(isps) != 1:
-            self.fail(f"{office_name}: expected exactly 1 ISP topology for the internet provider, found {len(isps)}")
-        isp = isps[0]
-        device_ids = [peer.id for peer in getattr(isp, "devices").peers]
-        if len(device_ids) != 1:
-            self.fail(f"{office_name}: ISP {isp.name.value} must host exactly 1 access device, found {len(device_ids)}")
-        return isp.id, isp.name.value, device_ids[0]
+    async def _resolve_isp_access(self, office_name: str, internet_provider_id: str) -> str:
+        """The access PE device id: the one device the internet provider owns."""
+        devices = await self.client.filters(kind=DcimPhysicalDevice, owner__ids=[internet_provider_id])
+        if len(devices) != 1:
+            self.fail(f"{office_name}: the internet provider must own exactly 1 access device, found {len(devices)}")
+        return devices[0].id
 
     async def _ensure_internet_circuit(
         self,
@@ -262,7 +256,6 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         office_id: str,
         provider_id: str,
         edge_uplink_id: str,
-        isp_location_id: str,
         isp_name: str,
         isp_device_id: str,
     ) -> None:
@@ -288,9 +281,9 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
                     "status": "active",
                     "provider": {"id": provider_id},
                     "description": f"{office_name} internet access (SD-WAN underlay)",
-                    # locations peers TopologyFacility, and both the office itself
-                    # (not the edge device) and the ISP the far end sits in are facilities.
-                    "locations": [{"id": office_id}, {"id": isp_location_id}],
+                    # locations peers TopologyFacility: the office itself (not the edge device). The ISP's router has
+                    # no place; the circuit's provider names it.
+                    "locations": [{"id": office_id}],
                     "capabilities": [{"id": edge_uplink_id}, {"id": isp_port_id}],
                     "member_of_groups": [_target_group(GROUP_CARRIER_CIRCUITS)],
                 },

@@ -33,6 +33,11 @@ query circuit_placement {
         circuit_type {
           value
         }
+        provider {
+          node {
+            id
+          }
+        }
         locations {
           edges {
             node {
@@ -132,6 +137,15 @@ query circuit_placement {
                         name {
                           value
                         }
+                      }
+                    }
+                  }
+                  # A provider's own router has no deployment: its provider is its owner.
+                  ... on DcimDeviceManaged {
+                    owner {
+                      node {
+                        id
+                        __typename
                       }
                     }
                   }
@@ -351,6 +365,9 @@ fragment Carrier on TopologyCarrierCircuit {
     value
   }
   status {
+    value
+  }
+  circuit_type {
     value
   }
   locations {

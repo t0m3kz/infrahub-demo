@@ -56,7 +56,6 @@ from .all_demo_circuit_constants import (
     ALL_DEMO_GATEWAY_ACCESS_LOCATIONS,
     ALL_DEMO_INTERNET_BUS,
     ALL_DEMO_ISP_ACCESS_DEVICE,
-    ALL_DEMO_ISP_ACCESS_LOCATION,
     ALL_DEMO_ISP_ACCESS_PORTS,
     ALL_DEMO_SDWAN_EDGE_UPLINK,
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
@@ -293,7 +292,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if len(isp_ends) != 1:
                 errors.append(f"{circuit_id}: {len(isp_ends)} end(s) on {ALL_DEMO_ISP_ACCESS_DEVICE}, expected 1")
             isp_ports.extend(isp_ends)
-            expected_locations = sorted([office, ALL_DEMO_ISP_ACCESS_LOCATION])
+            expected_locations = [office]
             if circuit["locations"] != expected_locations:
                 errors.append(f"{circuit_id}: locations {circuit['locations']}, expected {expected_locations}")
         if set(isp_ports) != ALL_DEMO_ISP_ACCESS_PORTS or len(isp_ports) != len(ALL_DEMO_ISP_ACCESS_PORTS):

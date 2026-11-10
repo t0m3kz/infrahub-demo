@@ -3,9 +3,9 @@
 # checks/circuit_placement.py): one `internet` carrier per router, from its uplink port to INTERNET:bus (the Lumen and
 # Cogent provider edges of ../06_internet/02_devices.yml on xe-0/1/0, Orange's access PE of ../../04_internet on
 # et-0/0/0), so a public side is reachable at L1 through any ISP. Shared underlay, unowned; the carriers share the bus
-# by its kind. Only the ISP is listed: add_circuit derives INTERNET from the end device itself. Not transit: no
-# address, no peering (the transit folder pairs every circuit with one). The partner's router (EXT-ACME-EDGE1) has
-# none: it buys access from Cogent, so its access reaches the INTERNET through Cogent's attachment.
+# by its kind. The ISP's router has no place: INTERNET is the one location (add_circuit derives it from the end device
+# too). Not transit: no address, no peering (the transit folder pairs every circuit with one). The partner's router
+# (EXT-ACME-EDGE1) has none: it buys access from Cogent, so its access reaches the INTERNET through Cogent's attachment.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -20,7 +20,7 @@ spec:
       provider: "P014"
       description: "Uplink of EXT-LUMEN-FRA1 to the internet"
       locations:
-        - "ISP-LUMEN"
+        - "INTERNET"
       capabilities:
         - ["EXT-LUMEN-FRA1", "xe-0/1/0"]
         - ["INTERNET", "bus"]
@@ -33,7 +33,7 @@ spec:
       provider: "P014"
       description: "Uplink of EXT-LUMEN-PAR1 to the internet"
       locations:
-        - "ISP-LUMEN"
+        - "INTERNET"
       capabilities:
         - ["EXT-LUMEN-PAR1", "xe-0/1/0"]
         - ["INTERNET", "bus"]
@@ -46,7 +46,7 @@ spec:
       provider: "P023"
       description: "Uplink of EXT-COGENT-FRA1 to the internet"
       locations:
-        - "ISP-COGENT"
+        - "INTERNET"
       capabilities:
         - ["EXT-COGENT-FRA1", "xe-0/1/0"]
         - ["INTERNET", "bus"]
@@ -59,7 +59,7 @@ spec:
       provider: "P023"
       description: "Uplink of EXT-COGENT-PAR1 to the internet"
       locations:
-        - "ISP-COGENT"
+        - "INTERNET"
       capabilities:
         - ["EXT-COGENT-PAR1", "xe-0/1/0"]
         - ["INTERNET", "bus"]
@@ -72,7 +72,7 @@ spec:
       provider: "P019"
       description: "Uplink of EXT-ORANGE to the internet"
       locations:
-        - "ISP-ORANGE"
+        - "INTERNET"
       capabilities:
         - ["EXT-ORANGE", "et-0/0/0"]
         - ["INTERNET", "bus"]
