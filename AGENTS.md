@@ -1343,13 +1343,15 @@ Integration runs go through `uv run invoke test-integration` (see the `infrahub-
 stack at a time. Two loops:
 
 - **Fast (minutes)**: `uv run invoke test-integration-fast` (`test_01` setup, `test_02` repository sync, `test_03` loads
-  `data/demos/00_full_topology` onto the stack's `main`). For a review stack, run it with `INFRAHUB_TESTING_KEEP_STACK=1`:
-  the stack stays up on :8100 with the sample on `main`. Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
+  `data/demos/00_full_topology` onto the branch `full-topology`, never onto `main`, which the other scenarios deploy into;
+  the scenarios share one session). For a review stack, run it with `INFRAHUB_TESTING_KEEP_STACK=1`:
+  the stack stays up on :8100 with the sample on that branch. Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
   against the live schema, so a field the schema rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict")
   fails there, where the full subset costs tens of minutes (the task worker log names the field).
 - **Full 30_all subset**: `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`; `64` is `test_64`,
   `64b`, `64c`). `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the
-  branch) runs last. The fast loop loads its topology onto the stack's `main`: `uv run invoke clean-testcontainers` first.
+  branch) runs last. The fast loop loads its topology onto its own branch, so it can share a session with the scenarios; `uv run invoke
+  clean-testcontainers` first.
 
 | Change touches | Run |
 | --- | --- |

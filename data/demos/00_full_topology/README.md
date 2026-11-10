@@ -606,9 +606,9 @@ the test `tests/integration/test_03_full_topology.py` uses the same script.
 
 ## Integration test
 
-`uv run invoke test-integration-fast` (test_01 + test_02 + `test_03_full_topology.py`) loads the sample on the `main`
-of a fresh test stack. With `INFRAHUB_TESTING_KEEP_STACK=1` the stack stays up afterwards with the sample on `main`,
-for a review.
+`uv run invoke test-integration-fast` (test_01 + test_02 + `test_03_full_topology.py`) loads the sample on the branch
+`full-topology` of a fresh test stack (never on `main`, which the other scenarios deploy into). With
+`INFRAHUB_TESTING_KEEP_STACK=1` the stack stays up afterwards with the sample on that branch, for a review.
 
 ## Pod, internet through the ISP and extra pairs
 
