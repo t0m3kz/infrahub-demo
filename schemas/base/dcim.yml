@@ -248,16 +248,7 @@ generics:
         label: "VLAN ID"
         optional: true
         order_weight: 1410
-        description: "VLAN tag on the parent (outer S-tag of a QinQ one), unset is untagged; the name <parent>.<vlan> is only a convention"  # yamllint disable-line rule:line-length
-        parameters:
-          min_value: 1
-          max_value: 4094
-      - name: inner_vlan_id
-        kind: Number
-        label: "Inner VLAN ID (C-tag)"
-        optional: true
-        order_weight: 1420
-        description: "The inner VLAN of a QinQ interface"
+        description: "VLAN tag on the parent, unset is untagged; the name <parent>.<vlan> is only a convention"  # yamllint disable-line rule:line-length
         parameters:
           min_value: 1
           max_value: 4094
