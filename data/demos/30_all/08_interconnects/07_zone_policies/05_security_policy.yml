@@ -5,6 +5,8 @@
 # the prefix C001 registers behind the partner tunnel (01_partner_tunnel.yml), and the Zscaler rule
 # the internet zone (a SaaS PoP is public space: nothing registers it). Both prefix objects
 # use default IPAM and PROD routing, declared where registered; no prefix is declared for the policy alone.
+# A prefix selector names its zone (destination_zone PROD): a zone qualifies a selector, and the rule has no
+# destination segment to take it from.
 # These are rules of C001's "nordix-prod" segment
 # (data/demos/30_all/07_applications/c001/00_segment.yml), so they live in that
 # segment's own policy — every rule does: seg-<segment>-egress is the one
@@ -41,6 +43,8 @@ spec:
             # The VPC block of nordix-vpc-prod (a PROD prefix object, not a copy in `default`).
             destination_prefixes:
               - ["10.10.0.0/16", "default"]
+            # The zone qualifies the selector: the VPC block is PROD space, the segment's own zone.
+            destination_zone: "PROD"
             log: false
             description: "Nordix web/app tier to its AWS VPC over Direct Connect"
 
@@ -52,6 +56,7 @@ spec:
             source_segment: "c001-nordix-prod-p"
             destination_prefixes:
               - ["198.18.0.0/24", "default"]
+            destination_zone: "PROD"
             log: true
             description: "Nordix to Acme Logistics B2B extranet over C001-PARTNER-ACME-FR2"
 

@@ -72,6 +72,8 @@ class TestClientRule:
         data = rules["portal-to-web-tcp-443-vip-dc10-lb-prod"]
         assert data["destination_ip_addresses"] == [{"id": "vip-a"}]
         assert "destination_segment" not in data
+        # The VIP has no segment: the target's tenant zone (the context's VIP range is in it) qualifies it.
+        assert data["destination_zone"] == {"hfid": ["PROD"]}
         assert data["source_segment"] == {"id": "seg-portal"}
         assert (data["protocol"], data["port_start"]) == ("tcp", 443)
         # Looked up by name in the policy's rules, which are read once with their selectors (_read_policy_rules).

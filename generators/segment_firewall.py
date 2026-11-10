@@ -24,6 +24,8 @@ RULE_INDEX_STEP = 10
 RULE_DEFAULT_VALIDITY_DAYS = 180
 # The cardinality-many selectors a generated rule sets: R_client's VIPs, R_server's leg.
 _SELECTOR_FIELDS = ("destination_ip_addresses", "source_prefixes")
+# The zones that qualify those selectors: R_client's destination, R_server's source.
+_ZONE_FIELDS = ("source_zone", "destination_zone")
 
 
 def _default_expiry_iso() -> str:
@@ -267,6 +269,14 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             current = peer.id if peer.initialized else None
             if current != wanted:
                 setattr(rule, field, {"id": wanted} if wanted else None)
+                changed.append(field)
+        # The zone of a selector side is written by HFID (generators/helpers/rules.py zone_ref), so it is compared by HFID.
+        for field in _ZONE_FIELDS:
+            wanted_hfid = (rule_data.get(field) or {}).get("hfid")
+            peer = getattr(rule, field)
+            current_hfid = (list(peer.hfid or []) or None) if peer.initialized else None
+            if current_hfid != wanted_hfid:
+                setattr(rule, field, {"hfid": wanted_hfid} if wanted_hfid else None)
                 changed.append(field)
         for field in _SELECTOR_FIELDS:
             if field not in rule_data:

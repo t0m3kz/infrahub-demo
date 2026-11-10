@@ -13,6 +13,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from generators.helpers.lb_vip import leg_zone
 from generators.helpers.rules import RulesPlanner
 from generators.protocols import SecurityPolicy
 from generators.segment_firewall import SegmentFirewallMixin
@@ -305,6 +306,28 @@ class TestServerRule:
         assert (data["protocol"], data["port_start"]) == ("tcp", 443)
         assert data["expires_at"] is None
         assert "source_segment" not in data
+        # The leg /29 has no segment: the zone of the leg's VLAN slot qualifies it (transforms/helpers/policy.py).
+        assert data["source_zone"] == {"hfid": ["PROD"]}
+
+    def test_the_source_zone_is_the_zone_of_the_context_leg(self) -> None:
+        """leg_zone reads the zone of the leg's VLAN slot; no leg (or two zones) names none."""
+        assert leg_zone(_context()) == "PROD"
+        assert leg_zone(_context(leg=None)) is None
+
+    def test_a_leg_with_no_zone_leaves_the_source_zone_out(self) -> None:
+        """No zone is invented: the payload names none and checks/segment_security.py reports the rule."""
+        payload = RulesPlanner.build_lb_server_rule_payload(
+            policy_id="pol-lb",
+            rule_name="web",
+            context_name="dc10-lb-PROD",
+            component={"fqdn": "web"},
+            segment=_segment("seg-web"),
+            leg_prefix_id="leg-1",
+            leg_zone=None,
+            port=("tcp", 443, None),
+        )
+
+        assert "source_zone" not in payload
 
     def test_policy_is_segment_less_and_untracked(self) -> None:
         gen = _vip_gen()
@@ -395,6 +418,7 @@ class TestServerRule:
             component={"fqdn": "web", "security_tag": {"id": "tag-web"}},
             segment=segment,
             leg_prefix_id="leg-1",
+            leg_zone="PROD",
             port=("tcp", 443, None),
         )
 
@@ -592,6 +616,33 @@ def _existing_rule(*, vip_ids: list[str], destination_segment: str | None = None
 
 class TestSelectorReconciliation:
     _CLIENT_RULE = {"log": False, "apply_on_switch": False}
+
+    def test_a_rule_without_its_selector_zone_gets_it(self) -> None:
+        """An R_client written before the zone was derived is given it, compared by HFID."""
+        rule = _existing_rule(vip_ids=["vip-a"])
+        rule.destination_zone.initialized = False
+        rule.source_zone.initialized = False
+        data = {
+            **self._CLIENT_RULE,
+            "destination_ip_addresses": [{"id": "vip-a"}],
+            "destination_zone": {"hfid": ["PROD"]},
+        }
+
+        assert SegmentFirewallMixin._reconcile_rule_payload(rule, data, keep_profile=False) == ["destination_zone"]
+        assert rule.destination_zone == {"hfid": ["PROD"]}
+
+    def test_a_selector_zone_in_the_desired_state_is_not_modified(self) -> None:
+        rule = _existing_rule(vip_ids=["vip-a"])
+        rule.destination_zone.initialized = True
+        rule.destination_zone.hfid = ["PROD"]
+        rule.source_zone.initialized = False
+        data = {
+            **self._CLIENT_RULE,
+            "destination_ip_addresses": [{"id": "vip-a"}],
+            "destination_zone": {"hfid": ["PROD"]},
+        }
+
+        assert SegmentFirewallMixin._reconcile_rule_payload(rule, data, keep_profile=False) == []
 
     def test_stale_vip_set_is_brought_to_the_new_one(self) -> None:
         rule = _existing_rule(vip_ids=["vip-old", "vip-a"])

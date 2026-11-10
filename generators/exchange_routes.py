@@ -17,7 +17,7 @@ from typing import Any
 from utils.exchange_transit import exchange_route_specs
 
 from .connections import tracked_save_kwargs
-from .protocols import DcimDevice, ManagedStaticRoute, ManagedVRF
+from .protocols import DcimDeviceManaged, ManagedStaticRoute, ManagedVRF
 
 EDGE_ROLE = "edge"
 """A colocation edge keeps the tenant default a local static: it resolves the VIP over its own transit L2VNI, and
@@ -71,7 +71,8 @@ class ExchangeRoutesMixin:
 
         A device in no instance of a route's VRF fails the run: the instance follows the legs, so it is a defect to
         report, not a route to skip."""
-        devices = await self.client.filters(kind=DcimDevice, ids=device_ids)
+        # DcimDeviceManaged, not the slim DcimDevice: the role (an edge keeps its tenant default local) is on it.
+        devices = await self.client.filters(kind=DcimDeviceManaged, ids=device_ids)
         instances = await self._vrf_instances([d.id for d in devices])
         for device in devices:
             is_edge = getattr(getattr(device, "role", None), "value", None) == EDGE_ROLE

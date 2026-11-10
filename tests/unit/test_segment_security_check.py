@@ -248,6 +248,54 @@ class TestRuleEndpoints:
         assert _run([_segment("a")], [_rule("r", "a", None)])._captured_errors == []
 
 
+_PREFIX = {"edges": [{"node": {"id": "p", "prefix": _v("10.10.0.0/16")}}]}
+_ADDRESS = {"edges": [{"node": {"id": "i", "address": _v("100.66.96.65/32")}}]}
+
+
+class TestSelectorZones:
+    """A rule side with a selector and no segment names the zone the selector is routed in."""
+
+    @pytest.mark.parametrize(
+        ("side", "field", "selector"),
+        [
+            pytest.param("destination", "destination_prefixes", _PREFIX, id="destination-prefix"),
+            pytest.param("destination", "destination_ip_addresses", _ADDRESS, id="destination-address"),
+            pytest.param("source", "source_prefixes", _PREFIX, id="source-prefix"),
+            pytest.param("source", "source_ip_addresses", _ADDRESS, id="source-address"),
+        ],
+    )
+    def test_a_selector_side_without_segment_or_zone_is_an_error(
+        self, side: str, field: str, selector: dict[str, Any]
+    ) -> None:
+        """The render cannot place the selector in a routing table: caught here, before the transform refuses."""
+        source = None if side == "source" else "a"
+        destination = "a" if side == "source" else None
+        check = _run([_segment("a")], [_rule("r", source, destination, **{field: selector})])
+        assert any(f"its {side} selector has no {side}_segment and no {side}_zone" in e for e in check._captured_errors)
+
+    @pytest.mark.parametrize("side", ["source", "destination"])
+    def test_a_zone_next_to_the_selector_passes(self, side: str) -> None:
+        """The zone qualifies the selector."""
+        source = None if side == "source" else "a"
+        destination = "a" if side == "source" else None
+        rule = _rule(
+            "r", source, destination, **{f"{side}_prefixes": _PREFIX, f"{side}_zone": {"node": {"name": _v("PROD")}}}
+        )
+        check = _run([_segment("a")], [rule])
+        assert not any("selector has no" in e for e in check._captured_errors)
+
+    def test_a_segment_on_the_selector_side_passes(self) -> None:
+        """A selector narrowing a segment takes the segment's zone."""
+        rule = _rule("r", "a", "b", destination_prefixes=_PREFIX)
+        check = _run([_segment("a"), _segment("b")], [rule])
+        assert not any("selector has no" in e for e in check._captured_errors)
+
+    def test_a_disabled_rule_is_not_checked(self) -> None:
+        """A rule that is not rendered needs no zone."""
+        rule = _rule("r", "a", None, destination_prefixes=_PREFIX, disabled=_v(True))
+        assert not any("selector has no" in e for e in _run([_segment("a")], [rule])._captured_errors)
+
+
 def _internet_rule(rule_id: str = "r", zone: str = "INTERNET", **extra: Any) -> dict[str, Any]:
     """A rule from segment a to a zone (the internet): no destination segment."""
     return _rule(rule_id, "a", None, destination_zone={"node": {"name": _v(zone)}}, **extra)
@@ -750,3 +798,21 @@ def test_all_demo_gateways_use_default_ipam_and_their_owner_zone() -> None:
         )
     assert checked, "the scan found no authored gateway (the MANAGEMENT services)"
     assert check._captured_errors == []
+
+
+def test_every_authored_selector_side_without_a_segment_names_its_zone() -> None:
+    """Every dataset: an authored rule side with a prefix or address selector and no segment names its zone, so the
+    check (TestSelectorZones) and the render (transforms/helpers/policy.py rule_zone) never meet one without."""
+    from tests.integration.demo_data import ROOT, declared  # noqa: PLC0415
+
+    rules = declared("SecurityPolicyRule", ROOT / "data")
+    missing = [
+        (str(rule.path.relative_to(ROOT)), rule.item.get("name"), side)
+        for rule in rules
+        for side in ("source", "destination")
+        if (rule.item.get(f"{side}_prefixes") or rule.item.get(f"{side}_ip_addresses"))
+        and not rule.item.get(f"{side}_segment")
+        and not rule.item.get(f"{side}_zone")
+    ]
+    assert rules, "no SecurityPolicyRule declared under data/"
+    assert missing == []

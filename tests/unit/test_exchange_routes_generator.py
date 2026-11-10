@@ -173,8 +173,11 @@ class _Gen(ContextRoutesGenerator):
         self.resource_lock.return_value.__aexit__ = AsyncMock(return_value=False)
 
         async def filters(kind: Any, **_: Any) -> list[Any]:
-            if kind.__name__ == "DcimDevice":
+            if kind.__name__ == "DcimDeviceManaged":
                 return self.devices
+            if kind.__name__ == "DcimDevice":
+                # The slim generic has no role, as on the server: an edge read through it looks like a border leaf.
+                return [SimpleNamespace(id=d.id, name=d.name) for d in self.devices]
             return [
                 SimpleNamespace(
                     id=f"vrf-{d.id}-{ns}",

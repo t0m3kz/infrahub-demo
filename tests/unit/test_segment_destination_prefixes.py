@@ -44,8 +44,10 @@ def _edges(*nodes: dict[str, Any]) -> dict[str, Any]:
 
 
 def _dest_rule(rule_id: str, *cidrs: str, src: str | None = "src", **extra: Any) -> dict[str, Any]:
-    """A rule from segment ``src`` with the given destination prefixes (id and prefix, as the query selects)."""
+    """A rule from segment ``src`` with the given destination prefixes (id and prefix, as the query selects), in
+    the PROD zone that qualifies them (a selector side with no segment names its zone)."""
     nodes = [{"id": f"pfx-{cidr}", "prefix": _v(cidr)} for cidr in cidrs]
+    extra.setdefault("destination_zone", {"node": {"id": "zone-prod", "name": _v("PROD"), "vrf_type": _v("prod")}})
     return _rule(rule_id, src, None, destination_prefixes=_edges(*nodes), **extra)
 
 

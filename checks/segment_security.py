@@ -46,9 +46,12 @@ class CheckSegmentSecurity(WarningCheck):
     - a rule endpoint segment resolves to a prefix (or the rule has an explicit
       selector): otherwise it would render as any (a warning: L2-only segments
       have no gateway by design);
-    - a rule has one kind of destination: ``destination_zone`` (the internet,
-      INTERNET and no other zone) excludes a destination segment, prefix,
-      address and group tag;
+    - a rule side with a prefix or address selector and no segment names its
+      zone (``source_zone`` / ``destination_zone``): the zone qualifies the
+      selector, the render needs it;
+    - a bare ``destination_zone`` (no selector) is the internet, INTERNET and
+      no other zone, and excludes a destination segment and group tag; next
+      to a prefix or address selector a zone only qualifies it;
     - an app component's environment should match its segment's (warning);
     - every component of a microsegmented segment has a group tag; a tag groups
       exactly one component or exactly one segment, never both (an orphan is
@@ -86,6 +89,7 @@ class CheckSegmentSecurity(WarningCheck):
             self._validate_gateway_zone(segment)
         self._validate_unique_names(segments)
         self._validate_rule_endpoints(segments, rules)
+        self._validate_selector_zones(rules)
         self._validate_rule_destinations(rules)
         self._validate_destination_prefixes(cleaned, segments, rules)
         self._warn_component_environment(components)
@@ -164,6 +168,27 @@ class CheckSegmentSecurity(WarningCheck):
                     message=(
                         f"rule '{rule.get('name', rule.get('id'))}': {side} segment "
                         f"'{segment.get('name', endpoint['id'])}' resolves to no prefix — it would render as any"
+                    )
+                )
+
+    def _validate_selector_zones(self, rules: list[dict[str, Any]]) -> None:
+        """A rule side with a prefix or address selector and no segment names its zone (``{side}_zone``).
+
+        The zone qualifies the selector: it is the routing context the transforms render the selector in
+        (transforms/helpers/policy.py ``rule_zone``), and no IPAM object carries one. Without it the render fails.
+        """
+        for rule in rules:
+            if not rule_enabled(rule):
+                continue
+            for side in ("source", "destination"):
+                if not (rule.get(f"{side}_prefixes") or rule.get(f"{side}_ip_addresses")):
+                    continue
+                if (rule.get(f"{side}_segment") or {}).get("id") or (rule.get(f"{side}_zone") or {}).get("name"):
+                    continue
+                self.log_error(
+                    message=(
+                        f"rule '{rule.get('name', rule.get('id'))}': its {side} selector has no {side}_segment and no "
+                        f"{side}_zone — name the zone the {side} prefixes or addresses are routed in"
                     )
                 )
 

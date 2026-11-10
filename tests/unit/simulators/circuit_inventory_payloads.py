@@ -95,9 +95,9 @@ def inventory_payload(
                 continue
             circuit["__typename"] = SESSION
             named_owners(circuit)
-            if circuit_type == TUNNEL and tunnel_vrfs.get(circuit["name"]["value"]):
+            vrf = tunnel_vrfs.get(circuit["name"]["value"]) if circuit_type == TUNNEL else None
+            if vrf:
                 # A declared tunnel that names its VRF (the partner tunnel: its registered range is routed there).
-                vrf = tunnel_vrfs[circuit["name"]["value"]]
                 circuit["vrf"] = {"node": _raw_vrf(str(vrf[1]), str(vrf[0]))}
             if circuit_type == HANDOFF:
                 # An authored handoff names its key.
