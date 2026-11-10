@@ -77,7 +77,6 @@ from .all_demo_circuit_constants import (
 from .all_demo_firewall_constants import (
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
     ALL_DEMO_INTERNET_EGRESS_RULES,
-    ALL_DEMO_SNAT_POOL_PREFIX,
     transit_namespace_type,
 )
 from .conftest import TestInfrahubDockerWithClient
@@ -672,8 +671,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         Every edge (ALL_DEMO_INTERNET_BGWS: eg-fr201/202, eg-pa401/402) carries the
         INTERNET L3 VNI and the global route-target in `vrf context INTERNET`,
         advertises it into EVPN under `vrf INTERNET`, and filters the transit
-        session (default-only in, only the public SNAT block out, aggregated
-        with summary-only). Each edge also peers its zone partner over the
+        session (default-only in). What the edge announces upstream is the
+        explicitly originated public space (`originated_prefixes` of INTERNET
+        session circuits), which 30_all does not author: not asserted here. Each edge also peers its zone partner over the
         interlink: one `FABRIC-PEERS` neighbour (iBGP, remote-as = the site AS,
         no peer-type, no update-source, an `out` route-map), `evpn multisite
         fabric-tracking` on the interlink port only and `dci-tracking` on the
@@ -705,28 +705,12 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 sum(any(end == device for end, _ in ends) for _, ends in ALL_DEMO_DCI_CIRCUITS.values()),
             )
 
-            # The public block goes upstream as one summary and nothing else leaves (every edge).
-            if not re.search(
-                rf"ip prefix-list TRANSIT-OUT-PUBLIC seq \d+ permit {re.escape(ALL_DEMO_SNAT_POOL_PREFIX)}\n",
-                rendered,
-            ):
-                errors.append(f"{device}: TRANSIT-OUT-PUBLIC does not permit {ALL_DEMO_SNAT_POOL_PREFIX}")
-            if not re.search(
-                r"route-map RM-USER-\S+-OUT permit \d+\n\s+match ip address prefix-list TRANSIT-OUT-PUBLIC\n",
-                rendered,
-            ):
-                errors.append(f"{device}: the transit export does not permit TRANSIT-OUT-PUBLIC")
-
             vrf_context = re.search(r"^vrf context INTERNET\n((?:[ \t]+.*\n)*)", rendered + "\n", re.MULTILINE)
             bgp_vrf = re.search(r"^[ \t]+vrf INTERNET\n((?:[ \t]{4,}.*\n)*)", rendered + "\n", re.MULTILINE)
             if vrf_context is None:
                 errors.append(f"{device}: no 'vrf context INTERNET'")
                 continue
             has_vni = re.search(rf"^[ \t]+vni {INTERNET_L3_VNI}\b", vrf_context.group(1), re.MULTILINE) is not None
-            if bgp_vrf is None or f"aggregate-address {ALL_DEMO_SNAT_POOL_PREFIX} summary-only" not in bgp_vrf.group(1):
-                errors.append(
-                    f"{device}: no 'aggregate-address {ALL_DEMO_SNAT_POOL_PREFIX} summary-only' inside 'vrf INTERNET'"
-                )
             if not has_vni:
                 errors.append(f"{device}: no 'vni {INTERNET_L3_VNI}' inside 'vrf context INTERNET'")
             if f"route-target both {INTERNET_ROUTE_TARGET}" not in vrf_context.group(1):
