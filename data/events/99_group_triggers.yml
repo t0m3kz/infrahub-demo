@@ -118,6 +118,12 @@ spec:
       group: customer_deployments_cloud
       action: run-customer-deployment-cloud-generator
 
+    - name: trigger-cloud-attachment-range-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: cloud_attachment_ranges
+      action: run-cloud-attachment-range-generator
+
     - name: trigger-colocation-metro-on-added
       branch_scope: "other_branches"
       member_update: added

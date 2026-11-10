@@ -182,7 +182,7 @@ def routed_segment_namespace(seg: dict[str, Any]) -> dict[str, Any]:
     return segment_namespace(seg)
 
 
-def segment_prefix(seg: dict[str, Any], family: str = "ipv4") -> str | None:
+def segment_prefix(seg: dict[str, Any], family: str) -> str | None:
     """The CIDR a segment matches on, or None when it has none in `family`.
 
     The gateway's prefix wins (on-prem VLAN/VXLAN segments); a cloud segment
@@ -197,13 +197,38 @@ def segment_prefix(seg: dict[str, Any], family: str = "ipv4") -> str | None:
     return None
 
 
-def classifier_prefix(seg: dict[str, Any]) -> str | None:
-    """The one prefix a segment is classified by (MSS-G): its IPv4 prefix, else its IPv6 one."""
-    return segment_prefix(seg, "ipv4") or segment_prefix(seg, "ipv6")
+def own_prefix(seg: dict[str, Any]) -> str | None:
+    """The segment's prefix in its OWN family (``segment_family``), None for a segment with no gateway and no cidr_block.
+
+    The reader for every consumer that works on a segment as it is (ACL, firewall zone and rule endpoint, policy, the
+    MSS-G classifier, the checks). A consumer that is IPv4 only by design calls ``segment_prefix(seg, IPV4)`` instead,
+    so its intent is visible.
+    """
+    family = segment_family(seg)
+    return segment_prefix(seg, family) if family else None
+
+
+def prefix_family(prefix: str) -> str:
+    """The address family (``ipv4`` or ``ipv6``) of a prefix or address string."""
+    return IPV6 if ":" in prefix else IPV4
+
+
+def segment_family(seg: dict[str, Any]) -> str | None:
+    """The segment's own address family, from its gateway (the address, else its prefix); a cloud segment with a
+    ``cidr_block`` is IPv4; a segment with neither (L2 only) has no family: None."""
+    gateway = seg.get("gateway") or {}
+    address = gateway.get("address") or (gateway.get("ip_prefix") or {}).get("prefix")
+    if address:
+        return prefix_family(address)
+    return IPV4 if seg.get("cidr_block") else None
 
 
 class Ipv6SegmentNotRenderedError(ValueError):
     """A renderer met a segment with an IPv6 gateway that it cannot render completely."""
+
+
+class AddressFamilyMismatchError(ValueError):
+    """A rule joins an endpoint of one address family to a segment of the other: no ACL of either family matches it."""
 
 
 def has_ipv6_gateway(seg: dict[str, Any]) -> bool:
@@ -221,7 +246,9 @@ def refuse_ipv6_segment(seg: dict[str, Any], consumer: str) -> None:
     """Raise when ``seg`` has an IPv6 gateway: ``consumer`` renders IPv4 only and would give a wrong or incomplete config.
 
     A transform refuses what it cannot render and never skips it (AGENTS.md, **IPv6 segments**). ``consumer`` names
-    the renderer in the message.
+    the renderer in the message. The fabric switches render an IPv6 segment (SVI, VRF family, ACL); the consumers
+    still gated are the firewall (zones, rule tables, context routes), the office policy, the PBR to a firewall context
+    (its legs are IPv4 only) and the switch roles whose templates were not extended (the colocation edge).
     """
     if has_ipv6_gateway(seg):
         raise Ipv6SegmentNotRenderedError(

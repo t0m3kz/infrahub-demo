@@ -6,6 +6,9 @@
 #   - TopologyCustomerCloud: the design's max_segments and max_virtual_networks, the footprint's cloud segments
 #     (network_segments) and its account and region (the virtual networks it counts are the account's in that region).
 #   - CloudVirtualNetwork: the account and region of each network.
+#   - CloudGatewayAttachment: its virtual network and whether it has allowed_prefixes (authored or the routed range of
+#     generators/topology/cloud_range.py); TopologyCustomerTemplateCloud: the block and max_virtual_networks of each
+#     cloud tier (the block must hold a /29 routed range per network).
 #   - TopologyCustomerTemplateDC / ...Colocation: the max_segments, the IPv4 and IPv6 address blocks and the segment
 #     sizes of each tier (each block must hold the tier's segments).
 #   - CloudNetworkSegment: the host_count, cidr_block and ip_version of each cloud segment (IPv4 only).
@@ -69,6 +72,28 @@ query customer_quota {
         id
         account { node { id } }
         region { node { id } }
+      }
+    }
+  }
+
+  CloudGatewayAttachment {
+    edges {
+      node {
+        id
+        name { value }
+        virtual_network { node { id } }
+        allowed_prefixes { edges { node { id } } }
+      }
+    }
+  }
+
+  TopologyCustomerTemplateCloud {
+    edges {
+      node {
+        id
+        name { value }
+        address_prefix_length { value }
+        max_virtual_networks { value }
       }
     }
   }

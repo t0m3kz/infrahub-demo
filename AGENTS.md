@@ -506,8 +506,9 @@ class MyCheck(InfrahubCheck):
   its cloud segments), the ports (DC) and `max_virtual_networks` (the account's networks in the footprint's region),
   requires the IPv4 block of a DC or colocation tier to hold its segments (`2^(segment_prefix_length -
   address_prefix_length) >= max_segments`), the IPv6 block likewise (`2^(ipv6_segment_prefix_length -
-  ipv6_prefix_length) >= max_segments`) and a segment never larger than its block (ERRORs naming the tier; a cloud
-  template is not judged), a cloud segment with a `host_count` and a `cidr_block` to have a block of the size
+  ipv6_prefix_length) >= max_segments`) and a segment never larger than its block (ERRORs naming the tier). A cloud tier is
+  judged on its routed range only: `2^(29 - address_prefix_length) >= max_virtual_networks` (ERROR). `checks/customer_quota.py`
+  also WARNs about an attachment to a footprint's virtual network with no `allowed_prefixes`, and requires a cloud segment with a `host_count` and a `cidr_block` to have a block of the size
   `host_count` needs, a gateway prefix of the segment's `ip_version` (ERROR), a cloud segment to be IPv4 (ERROR: it
   carries a provider `cidr_block`), warns about a `host_count` on an IPv6 segment (it sizes nothing there) and about a
   segment whose footprints are of different kinds.
@@ -527,21 +528,55 @@ class MyCheck(InfrahubCheck):
   `Tenant-NONPROD-IPv6`, ULA `fd5a:1760::/32` and `fd5a:1840::/32`, in `data/bootstrap/23b_tenant_pools.yml`) is its first
   resource, and a request it cannot satisfy carves one more block of that length into the same pool (`<pool>-<n>`, under
   the pool's lock, never re-allocated). A customer's footprints of the same kind and environment share the pool (the
-  second finds it); the pool is saved outside any run's tracking, so no run's cleanup reclaims it. The CLOUD POOL HAS NO
-  CONSUMER YET: a cloud subnet is provider-assigned, and the pool exists for the later routed-range allocation per
-  virtual network. The footprint whose design decides the segment's pool is the first of its footprints of the first kind
+  second finds it); the pool is saved outside any run's tracking, so no run's cleanup reclaims it. The cloud pool's consumer is the routed range of each virtual network: `ensure_cloud_ranges`
+  (`generators/topology/cloud_range.py`) draws one `CLOUD_RANGE_PREFIX_LENGTH` (/29, `utils/limits.py`) slice per
+  `CloudVirtualNetwork` of the footprint's account in its region, identifier `{account}/{network}`, and writes it as the
+  `allowed_prefixes` of the `CloudGatewayAttachment`s of that network, edge by edge. Authored `allowed_prefixes` win: an
+  attachment that has any is left alone, and a network with no attachment gets no slice. It is called by
+  `add_customer_deployment_cloud` (the footprint is boarded) and by `add_cloud_attachment_range` (group
+  `cloud_attachment_ranges`: an attachment joins it, or an `updated` rule on its `virtual_network`; an event runs a
+  generator on the node that fired it, so no rule on an attachment can run the footprint's generator; every attachment
+  declares the group). The slice replaces the network's CIDR blocks as what `bgp_cloud.py` accepts from that attachment.
+  Not followed up: a hand edit of `allowed_prefixes`, and an attachment retargeted away from a network (its old slice
+  stays). The footprint whose design decides the segment's pool is the first of its footprints of the first kind
   in DC, colocation order (by name). The anycast gateway stays on the first address; an authored gateway is kept. The
   server refuses another length for an allocated identifier, so a changed `host_count` (or tier length) is reported with
   its remedy, never re-allocated.
-  **IPv6 segments are addressed, not rendered**: no template renders them completely, and a transform refuses what it
-  cannot render and never skips it (`utils/segment_addressing.py` `has_ipv6_gateway` / `refuse_ipv6_segment`, the
-  gateway's family is the signal). The SVI address line of an IPv6 gateway renders on every platform
-  (`transforms/helpers/segments.py` `get_vlans`), but not the VRF's IPv6 address family and route target, the IPv6 ACL, the
-  PBR to the firewall or the firewall's zones and rules, so the gates are: a fabric switch with a routed IPv6 segment
-  (`BaseDeviceTransform._extra_config`; an office switch's LISP renderer has its own refusal), `rule_endpoint` (the one
-  resolver of the switch ACLs, the firewall rule tables and the office policy), the firewall transform and its zones, and
-  the office firewall policy; `checks/segment_security.py` reports a rule endpoint on an IPv6 segment as an ERROR. Not
-  gated yet: the load balancer, the external (cloud, SD-WAN) tenant sessions, which drop the prefix and fail closed.
+  **IPv6 segments, status per consumer**: a segment has ONE gateway of ONE family, and the gateway's family is the signal
+  (`utils/segment_addressing.py` `segment_family`, `has_ipv6_gateway`, `prefix_family`).
+  - **Fabric switches** (`cisco_nxos`, `arista_eos`, `cisco_xe`, `sonic`, `dell_sonic`; leaf, tor, access-leaf, and the
+    border leaf where it renders ACLs and PBR at all) render it in IPv6 form: the SVI `ipv6 address` (EOS `ipv6 address
+    virtual`), the anycast flag (either family, `build_overlay_node`), the VRF's IPv6 address family with the same explicit
+    RD and route-targets as IPv4 (`l3_vni_mappings[].ipv6`, set when a segment of the VRF is IPv6; IPv4 is always there:
+    the exchange statics and handoff sessions are IPv4) and its EVPN type-5 origination (`address-family ipv6`), the
+    segment's ingress ACL in IPv6 form (`transforms/helpers/acl.py`: the ACL carries its `family`; `ipv6 access-list` with
+    protocol `ipv6`, `ipv6 traffic-filter` / `ipv6 access-group` on the SVI, SONiC table type `L3V6` with `SRC_IPV6` /
+    `DST_IPV6`, IOS XE `ipv6 access-list` in prefix notation) and the routing-identity origination (an `ipv6 prefix-list` and
+    `match ipv6 address` in the same route-map as the IPv4 sequences; IOS XE renders none). The internet band of a permit
+    to `INTERNET` denies `NON_INTERNET_PREFIXES_IPV6` (`utils/internet_space.py`: ULA, link-local, multicast, loopback,
+    mapped and NAT64 space) for an IPv6 segment before `permit ... any`. A device may carry both families
+    (`leaf_cisco_nxos_dual_stack`). A rule of an IPv6 segment that names an endpoint of the other family is refused
+    (`AddressFamilyMismatchError`: no ACL of either family matches it). The BGP route protection needs nothing new: the
+    segment's prefix reaches the type-5 and the IPv6 lists from the zone's segments. Every IPv6 line is evidence U (no
+    lab, and the vendor guides are not in the repo); the template comments say which.
+  - **Firewalls and the office policy** render it through the ADDRESS TABLE (`transforms/helpers/address_table.py`): one
+    named object per prefix, family-agnostic, built once by the transform (`build_address_table`: zone members, then the
+    rule endpoints that are no member) with deterministic names (`addr-` and the prefix with `/`, `.`, `:` as `-`). A rule
+    carries the CIDR (`src`, `dst`) and, for an IPv6 endpoint, the table name (`src_ref`, `dst_ref`); the templates render
+    the name (PAN-OS `ip-netmask` and a `routing-table ipv6` route, Junos zone and global address-book and the `inet6.0`
+    table of the instance, Check Point `add network ... subnet6 ... mask-length6` and `set ipv6 static-route`; evidence I
+    for PAN-OS and Junos, U for Check Point). A rule endpoint that resolves to no address (a segment with no prefix) is an
+    error of the transform (`UnresolvedEndpointError`), never `any`. An IPv4 endpoint that is no zone member stays inline,
+    so the IPv4 configs are byte-identical; naming it too is one template variable. The office policy JSON carries the
+    same table as `addresses`. The switch ACLs keep inline prefixes (`rule_endpoint`).
+  - **Accepted gaps and what stays refused** (`Ipv6SegmentNotRenderedError`, one gate per consumer): the PBR to a firewall
+    context (`BaseDeviceTransform._firewall_pbr`, `get_overlay_pbr_rules`) and the transit legs of a firewall context with
+    legs (`apply_context_routes`: the leg pools, VIPs and anycast next hops are IPv4, so an IPv6 segment has no next hop;
+    a firewall with no legs, as in the colocation and standalone policy cases, renders IPv6); an office switch's LISP
+    renderer (`service ipv6`). Internet egress of an IPv6 segment is an accepted gap like the cloud and office one: no NAT
+    is rendered for an IPv6 source, and `checks/internet_egress.py` does not judge a rule whose source segment is IPv6
+    (it demands an IPv4 `snat_address`). Not gated: the load balancer and the external (cloud, SD-WAN) tenant sessions,
+    which drop the prefix and fail closed.
   `add_customer_deployment_dc` (triggered on creation only) adds the footprint's
   internal firewall context and, when the DC has an `external-firewall` pair, the DC's Internet edge context to its
   `serving_firewall_contexts` (converged like the colocation set, below), and links its
@@ -1020,7 +1055,7 @@ class MyCheck(InfrahubCheck):
 - **Rule destinations**: a `SecurityPolicyRule` targets a segment (`destination_segment`, narrowed by prefixes or
   addresses), prefixes, addresses, a group tag or a zone (`destination_zone`). The internet is the `INTERNET`, not a
   segment: a rule to it has `destination_zone: INTERNET` and nothing else (the firewall renders `to INTERNET`,
-  destination any; the leaf ACL denies `NON_INTERNET_PREFIXES` before the permit to any). Only that zone is accepted,
+  destination any; the leaf ACL denies `NON_INTERNET_PREFIXES` (`NON_INTERNET_PREFIXES_IPV6` in an IPv6 segment's ACL) before the permit to any). Only that zone is accepted,
   and `checks/segment_security.py` refuses a zone next to a segment or group tag (a zone qualifies a prefix or address selector).
 - **A device's functions are capabilities**: anything a device (or a cloud instance) does or is configured with beyond its
   identity is a capability object on the device edge, never an attribute or a relationship of the device kind. The device

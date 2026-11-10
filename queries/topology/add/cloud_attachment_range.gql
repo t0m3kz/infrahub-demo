@@ -1,0 +1,14 @@
+# add_cloud_attachment_range: the virtual network an attachment targets and the account that owns it
+# (generators/topology/cloud_attachment_range.py); the generator finds the account's footprint and gives the network its
+# routed range.
+query cloud_attachment_range($name: String!) {
+  CloudGatewayAttachment(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        virtual_network { node { id name { value } account { node { id name { value } } } } }
+      }
+    }
+  }
+}

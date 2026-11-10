@@ -17,6 +17,7 @@ from checks.base import WarningCheck
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import SERVICE_CONTEXT_ROLES, is_exchange_zone
 from utils.interface_speed import InterfaceSpeedMatcher
+from utils.limits import CLOUD_RANGE_PREFIX_LENGTH
 from utils.segment_addressing import IPV4, IPV6, segment_prefix_length
 from utils.segment_vlan import port_segments
 
@@ -26,6 +27,7 @@ FOOTPRINT_KIND = "TopologyCustomerDC"
 COLOCATION_KIND = "TopologyCustomerColocation"
 CLOUD_KIND = "TopologyCustomerCloud"
 FOOTPRINT_KINDS = (FOOTPRINT_KIND, COLOCATION_KIND, CLOUD_KIND)
+CLOUD_TEMPLATE_KIND = "TopologyCustomerTemplateCloud"
 BLOCK_TEMPLATE_KINDS = ("TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo")
 SWITCHED_KINDS = ("DcimPhysicalInterface", "DcimLAGInterface")
 
@@ -54,8 +56,11 @@ class CheckCustomerQuota(WarningCheck):
     Zero means none allowed. A speed without a `ports_<speed>g` attribute (only 25G and 100G host ports exist in
     the model: the server device types carry no other NIC) is not metered.
 
-    Besides the quota, the tier itself (a data center or colocation template; a cloud template has none of these
-    numbers): its IPv4 block holds ``max_segments`` segments of ``segment_prefix_length`` and its IPv6 block
+    Besides the quota, the tier itself. A cloud template: its ``address_prefix_length`` block holds
+    ``max_virtual_networks`` routed ranges of ``CLOUD_RANGE_PREFIX_LENGTH`` (/29), one per virtual network (ERROR naming
+    the tier), and a WARNING for an attachment to a virtual network of a footprint with no ``allowed_prefixes`` (neither
+    authored nor the routed range add_cloud_attachment_range writes: the BGP prefix list falls back to the network's CIDR
+    blocks). A data center or colocation template (a cloud template has none of these other numbers): its IPv4 block holds ``max_segments`` segments of ``segment_prefix_length`` and its IPv6 block
     ``max_segments`` segments of ``ipv6_segment_prefix_length``, and a segment is never larger than its block (ERRORs
     naming the tier). A cloud segment with a ``host_count`` and a ``cidr_block`` has a block at least as large as the
     host count needs (the same sizing as the VXLAN allocator, ``utils/segment_addressing.py``), and is IPv4 (ERROR: it
@@ -97,6 +102,9 @@ class CheckCustomerQuota(WarningCheck):
         for kind in BLOCK_TEMPLATE_KINDS:
             for template in cleaned.get(kind) or []:
                 self._validate_block(kind, template)
+        for template in cleaned.get(CLOUD_TEMPLATE_KIND) or []:
+            self._validate_cloud_tier(template)
+        self._warn_attachments_without_range(cleaned.get("CloudGatewayAttachment") or [], footprints, networks)
         for segment in cleaned.get("CloudNetworkSegment") or []:
             self._validate_cloud_block(segment)
 
@@ -228,6 +236,41 @@ class CheckCustomerQuota(WarningCheck):
                     object_id=template.get("id"),
                     object_type=kind,
                 )
+
+    def _validate_cloud_tier(self, template: dict[str, Any]) -> None:
+        """ERROR when a cloud tier's block has no room for a routed range per virtual network it allows."""
+        block, wanted = template["address_prefix_length"], template["max_virtual_networks"]
+        room = 2 ** (CLOUD_RANGE_PREFIX_LENGTH - block) if block <= CLOUD_RANGE_PREFIX_LENGTH else 0
+        if room < wanted:
+            self.log_error(
+                message=(
+                    f"Design '{template.get('name')}' ({CLOUD_TEMPLATE_KIND}): its /{block} block holds {room} "
+                    f"/{CLOUD_RANGE_PREFIX_LENGTH} routed ranges, fewer than the {wanted} virtual networks its "
+                    "max_virtual_networks allows"
+                ),
+                object_id=template.get("id"),
+                object_type=CLOUD_TEMPLATE_KIND,
+            )
+
+    def _warn_attachments_without_range(
+        self,
+        attachments: list[dict[str, Any]],
+        footprints: dict[str, dict[str, Any]],
+        networks: dict[str, set[str]],
+    ) -> None:
+        """WARNING for an attachment to a footprint's virtual network that has no ``allowed_prefixes`` at all."""
+        owner_of = {network_id: fp_id for fp_id, ids in networks.items() for network_id in ids}
+        for attachment in attachments:
+            footprint_id = owner_of.get((attachment.get("virtual_network") or {}).get("id", ""))
+            if footprint_id is None or attachment.get("allowed_prefixes"):
+                continue
+            self.log_warning(
+                message=(
+                    f"Attachment '{attachment.get('name')}' of footprint "
+                    f"'{footprints[footprint_id].get('name')}' has no allowed_prefixes: no routed range was "
+                    "authored or allocated (add_cloud_attachment_range), so its network's CIDR blocks are announced"
+                )
+            )
 
     def _validate_ip_version(self, segment: dict[str, Any]) -> None:
         """A gateway prefix of the segment's family (ERROR), and no host_count on an IPv6 segment (WARNING)."""

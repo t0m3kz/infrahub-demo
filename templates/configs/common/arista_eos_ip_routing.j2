@@ -7,3 +7,10 @@
 ! Enable IP routing
 ip routing
 {%- endif -%}
+{#- U: IPv6 routing is a separate global switch on EOS (`ipv6 unicast-routing`); a VRF takes its own in
+    arista_eos_vxlan.j2. Only a device with an IPv6 gateway SVI gets it. -#}
+{%- if vlans | default([]) | selectattr('gateway_ipv6') | list %}
+
+! Enable IPv6 routing
+ipv6 unicast-routing
+{%- endif -%}

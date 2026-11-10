@@ -521,12 +521,6 @@ class BaseDeviceTransform(InfrahubTransform):
         if not self.device_role:
             return {}
         activations = data.get("segment_deployments")
-        # The switch templates render the SVI address of an IPv6 gateway but not what it needs around it (the VRF's
-        # IPv6 address family and route target, the IPv6 ACL, the PBR to the firewall): refuse, never half-render.
-        # An office switch's LISP renderer refuses its own (transforms/helpers/lisp.py).
-        if self.device_role not in OFFICE_LISP_ROLES:
-            for act in routed_activations(activations):
-                refuse_ipv6_segment(act.get("segment") or {}, f"the {platform_name} {self.device_role} (VRF, ACL, PBR)")
         # PBR and the zero-trust ACLs hang off the segment's SVI; a segment a firewall context terminates has none.
         routed = routed_activations(activations)
         # A border gateway's stitched segments are hostless (no customer-facing port),
@@ -558,9 +552,11 @@ class BaseDeviceTransform(InfrahubTransform):
         vrf_routes = get_static_routes(data.get("capabilities"))
 
         acls = get_acls(activations=routed)
-        acl_names = {acl["vlan_id"]: acl["name"] for acl in acls}
+        acl_by_vlan = {acl["vlan_id"]: acl for acl in acls}
         for vlan in vlans:
-            vlan["acl_name"] = acl_names.get(vlan["vlan_id"])
+            acl = acl_by_vlan.get(vlan["vlan_id"]) or {}
+            vlan["acl_name"] = acl.get("name")
+            vlan["acl_family"] = acl.get("family")
 
         if self.device_role in BORDER_ROLES:
             self._refuse_unprotected_tenant_svis(self.device_role, platform_name, acls, leaf_pbr_rules)
@@ -641,6 +637,12 @@ class BaseDeviceTransform(InfrahubTransform):
         steered_vlans = {vlan for name in bindings if (vlan := svi_vlan_id(name)) is not None}
         refuse_unresolvable_contexts(set(bindings.values()), firewall_contexts, device_name=data.get("name", ""))
         rules = get_customer_pbr_rules(routed, firewall_contexts, steered_vlans=steered_vlans)
+        # The next hop of a firewall context is its IPv4 leg and the PBR ACLs are IPv4: an IPv6 segment that gets a
+        # rule is refused, never left unsteered (PBR in IPv6 form needs the contexts' IPv6 legs, a later change).
+        pbr_vlans = {rule["vlan_id"] for rule in rules}
+        for act in routed:
+            if act.get("vlan_id") in pbr_vlans:
+                refuse_ipv6_segment(act.get("segment") or {}, f"the {self.device_role} PBR to a firewall context")
         if self.device_role not in self._LEAF_ROLES:
             return rules, []
         return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))

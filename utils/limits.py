@@ -106,6 +106,11 @@ SEGMENT_PREFIX_LENGTH_MIN = 22
 SEGMENT_RESERVED_ADDRESSES = 3
 SEGMENT_HOST_COUNT_MAX = 2 ** (32 - SEGMENT_PREFIX_LENGTH_MIN) - SEGMENT_RESERVED_ADDRESSES
 
+# The routed range of one cloud virtual network (generators/topology/cloud_range.py): a slice of this length from the
+# cloud footprint's pool (``address_prefix_length`` of its tier, S /28 to XL /25), so a tier's block holds
+# ``max_virtual_networks`` slices (checks/customer_quota.py, tests/unit/test_customer_template_data.py).
+CLOUD_RANGE_PREFIX_LENGTH = 29
+
 # The host offsets inside a transit /29 (utils/exchange_transit.py, generators/firewall_transit.py,
 # transforms/helpers/ha.py, checks/common.py) and the tenant segment's anycast gateway: .1 the border-leaf / edge
 # anycast gateway, .2/.3 reserved, .4 the firewall or load-balancer VIP, .5/.6 the HA members. The largest offset

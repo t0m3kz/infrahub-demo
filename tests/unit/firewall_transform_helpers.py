@@ -139,7 +139,8 @@ def _make_fw() -> Firewall:
 
 
 # The smoke segment as a rule references it (PolicyRuleSegmentFields).
-_SMOKE_SEGMENT_REF: dict[str, Any] = {"id": "seg-smoke", "name": {"value": "seg-smoke"}}
+_SMOKE_GATEWAY: dict[str, Any] = {"node": {"ip_prefix": {"node": {"prefix": {"value": "10.10.10.0/24"}}}}}
+_SMOKE_SEGMENT_REF: dict[str, Any] = {"id": "seg-smoke", "name": {"value": "seg-smoke"}, "gateway": _SMOKE_GATEWAY}
 
 
 def _make_smoke_data(platform: str) -> dict[str, Any]:
@@ -158,7 +159,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
         "status": {"value": "active"},
         "arp_suppression": {"value": True},
         "segment_deployments": {"edges": [{"node": {"vlan_id": {"value": 100}, "vni": {"value": 10100}}}]},
-        "gateway": {"node": None},
+        "gateway": _SMOKE_GATEWAY,
         "prefix": {
             "edges": [
                 {

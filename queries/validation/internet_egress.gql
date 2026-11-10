@@ -26,6 +26,9 @@ query internet_egress {
             name {
               value
             }
+            ip_version {
+              value
+            }
           }
         }
         destination_zone {

@@ -30,7 +30,7 @@ from transforms.helpers.group_policy.model import (
     _entry_set,
 )
 from utils.limits import EOS_MSSG_MAX_SEGMENTS
-from utils.segment_addressing import classifier_prefix
+from utils.segment_addressing import own_prefix
 
 _COMPONENT_REASON = "a component group is not expressible by prefix (the row is not widened to its segment)"
 _ANY_REPLY_REASON = (
@@ -288,7 +288,7 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
     None when the device has no VRF with a segment to define.
     """
     who, contracts = scope.who, scope.contracts
-    prefixes = {str(segment.get("name")): classifier_prefix(segment) for segment in contracts.all_segments}
+    prefixes = {str(segment.get("name")): own_prefix(segment) for segment in contracts.all_segments}
     view = segment_security_view(contracts.all_groups, contracts.rows, prefixes, local=contracts.local_names)
     listed = {item["name"]: item for item in view["segments"] if item["vrf"] in scope.vrfs}
     if not listed:

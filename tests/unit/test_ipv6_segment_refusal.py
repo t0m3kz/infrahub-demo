@@ -1,11 +1,10 @@
-"""A transform refuses what it cannot render: the IPv6 segment gates (utils/segment_addressing.py).
+"""What a transform still refuses for an IPv6 segment (utils/segment_addressing.py).
 
-A segment has ONE gateway of ONE family. The SVI address line of an IPv6 gateway renders on every platform
-(transforms/helpers/segments.py ``get_vlans`` -> ``ipv6 address``), but not what a routed segment needs around it: the
-VRF's IPv6 address family, the IPv6 ACL, the PBR to the firewall, the zone members and rules of the firewall. Each
-consumer that would give a wrong or silently incomplete config raises ``Ipv6SegmentNotRenderedError`` naming the
-segment; the allowed path (the SVI address through the helpers) stays open. No demo segment is IPv6, so the rendered
-goldens do not change (tests/smoke).
+A segment has ONE gateway of ONE family. The fabric switches (all five leaf platforms) render it completely: SVI, the
+VRF's IPv6 family, the IPv6 ACL, the origination (tests/unit/test_ipv6_switch_rendering.py and the smoke goldens
+``*_ipv6_segments``). What stays refused with ``Ipv6SegmentNotRenderedError``, one gate per consumer: the PBR to a firewall
+context and the transit legs of a firewall context (their pools, VIPs and anycast next hops are IPv4). The firewall
+zones, rules and the office policy render IPv6 through the address table (transforms/helpers/address_table.py). No demo segment is IPv6, so the pre-existing goldens do not change (tests/smoke).
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ from tests.unit.cisco_xe_platform_helpers import _golden_input
 from tests.unit.segment_port_helpers import raw_port_segments
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
-from transforms.config.firewall import Firewall
+from transforms.config.firewall import Firewall, apply_context_routes
 from transforms.config.leaf import Leaf
 from transforms.helpers.policy import rule_endpoint
 from transforms.helpers.segments import get_vlans
@@ -102,24 +101,22 @@ class TestTheAllowedPath:
 class TestTheRuleResolver:
     """rule_endpoint is the one resolver behind the switch ACL, the firewall rule table and the office policy."""
 
-    def test_a_rule_endpoint_on_an_ipv6_segment_is_refused_on_both_sides(self) -> None:
-        """Without it the endpoint would resolve to no prefix and render as `any`: a widened rule."""
+    def test_a_rule_endpoint_on_an_ipv6_segment_resolves_to_its_prefix(self) -> None:
+        """The switch ACLs render either family: the segment's one prefix, whichever it is."""
         v6 = _segment()
         v4 = _segment("db", "10.2.0.1/24", "10.2.0.0/24")
-        with pytest.raises(Ipv6SegmentNotRenderedError, match="Segment 'web'"):
-            rule_endpoint({"source_segment": v6, "destination_segment": v4}, "source")
-        with pytest.raises(Ipv6SegmentNotRenderedError, match="Segment 'web'"):
-            rule_endpoint({"source_segment": v4, "destination_segment": v6}, "destination")
+        assert rule_endpoint({"source_segment": v6, "destination_segment": v4}, "source") == "fd5a:1760::/64"
         assert rule_endpoint({"source_segment": v6, "destination_segment": v4}, "destination") == "10.2.0.0/24"
 
     def test_a_rule_with_no_segment_on_a_side_is_untouched(self) -> None:
         """A prefix selector or `any` has no segment to refuse."""
         assert rule_endpoint({"destination_prefixes": [{"prefix": "10.9.0.0/16"}]}, "source") is None
 
-    def test_the_office_policy_refuses_an_ipv6_segment(self) -> None:
-        """The office policy artifact (JSON) lists each segment's prefix: an IPv6 one would be null."""
-        with pytest.raises(Ipv6SegmentNotRenderedError, match="the office firewall policy"):
-            build_office_policy({"name": "C005-OFFICE", "network_segments": [_segment()]})
+    def test_the_office_policy_renders_an_ipv6_segment_with_its_address_table(self) -> None:
+        """The office policy artifact lists the segment's IPv6 prefix and the table of the prefixes its rules name."""
+        office = build_office_policy({"name": "C005-OFFICE", "network_segments": [_segment()]})
+        assert office["segments"][0]["prefix"] == "fd5a:1760::/64"
+        assert office["addresses"] == []
 
 
 def _flip_to_ipv6(data: dict[str, Any]) -> None:
@@ -131,50 +128,70 @@ def _flip_to_ipv6(data: dict[str, Any]) -> None:
     gateway["ip_prefix"]["node"]["prefix"]["value"] = "fd5a:1760::/64"
 
 
-# (golden, transform): every platform of the fabric roles; the platform is in the message.
+# (golden, transform, expected text of the rendered IPv6 gateway): every platform of the fabric roles.
 _SWITCHES = [
-    ("leaf_cisco_nxos_ebgp_ebgp", Leaf, "cisco_nxos leaf"),
-    ("leaf_arista_eos_ebgp_ebgp", Leaf, "arista_eos leaf"),
-    ("leaf_sonic_ebgp_ebgp", Leaf, "sonic leaf"),
-    ("leaf_dell_sonic_ebgp_ebgp", Leaf, "dell_sonic leaf"),
-    ("leaf_cisco_xe_ebgp_ebgp", Leaf, "cisco_xe leaf"),
-    ("border_leaf_cisco_nxos_ebgp_ebgp", BorderLeaf, "cisco_nxos border-leaf"),
-    ("access_leaf_arista_eos_ebgp_ebgp", AccessLeaf, "arista_eos access-leaf"),
+    ("leaf_cisco_nxos_ebgp_ebgp", Leaf, "ipv6 address fd5a:1760::1/64"),
+    ("leaf_arista_eos_ebgp_ebgp", Leaf, "ipv6 address virtual fd5a:1760::1/64"),
+    ("leaf_sonic_ebgp_ebgp", Leaf, "Vlan100|fd5a:1760::1/64"),
+    ("leaf_dell_sonic_ebgp_ebgp", Leaf, "Vlan100|fd5a:1760::1/64"),
+    ("leaf_cisco_xe_ebgp_ebgp", Leaf, "ipv6 address fd5a:1760::1/64"),
+    ("border_leaf_cisco_nxos_ebgp_ebgp", BorderLeaf, "ipv6 address fd5a:1760::1/64"),
+    ("access_leaf_arista_eos_ebgp_ebgp", AccessLeaf, "ipv6 address virtual fd5a:1760::1/64"),
 ]
 
 
-class TestTheSwitchGate:
-    """BaseDeviceTransform._extra_config: a routed IPv6 segment on a fabric switch is refused, on every platform."""
+class TestTheSwitchRendersIpv6:
+    """A routed IPv6 segment renders on a fabric switch of every platform (SVI, VRF family, ACL); see tests/smoke goldens."""
 
-    @pytest.mark.parametrize(("golden", "transform", "consumer"), _SWITCHES, ids=[s[0] for s in _SWITCHES])
-    def test_a_switch_carrying_an_ipv6_segment_is_refused(self, golden: str, transform: type, consumer: str) -> None:
-        """The IPv4 golden renders; the same device with an IPv6 gateway on the segment raises, naming platform and role."""
+    @pytest.mark.parametrize(("golden", "transform", "expected"), _SWITCHES, ids=[s[0] for s in _SWITCHES])
+    def test_a_switch_carrying_an_ipv6_segment_renders_its_gateway(
+        self, golden: str, transform: type, expected: str
+    ) -> None:
+        """The IPv4 golden renders; the same device with an IPv6 gateway renders the IPv6 form of the SVI."""
         data = _golden_input(golden)
         assert run_transform(transform, copy.deepcopy(data))
         _flip_to_ipv6(data)
-        with pytest.raises(
-            Ipv6SegmentNotRenderedError,
-            match=rf"IPv6 segments are not rendered by the {consumer} \(VRF, ACL, PBR\) yet",
-        ):
-            run_transform(transform, data)
+        assert expected in run_transform(transform, data)
+
+    def test_a_segment_that_would_be_steered_to_a_firewall_context_is_refused(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """PBR needs the context's IPv4 leg: an IPv6 segment that gets a PBR rule is refused, never left unsteered."""
+        data = _golden_input("leaf_cisco_nxos_ebgp_ebgp")
+        _flip_to_ipv6(data)
+        monkeypatch.setattr(
+            "transforms.common.get_customer_pbr_rules",
+            lambda *args, **kwargs: [{"vlan_id": 100, "fw_nexthop": "1.1.1.1"}],
+        )
+        with pytest.raises(Ipv6SegmentNotRenderedError, match="PBR to a firewall context"):
+            run_transform(Leaf, data)
 
 
-class TestTheFirewallGate:
-    """The firewall transform: zone members, rules and context routes are IPv4 prefixes, an IPv6 segment is refused."""
+_FIREWALLS = [
+    "firewall_checkpoint_gaia_with_ha",
+    "firewall_checkpoint_gaia_with_policy",
+    "firewall_paloalto_panos_with_policy",
+]
 
-    @pytest.mark.parametrize(
-        "golden",
-        [
-            "firewall_checkpoint_gaia_with_ha",
-            "firewall_checkpoint_gaia_with_policy",
-            "firewall_paloalto_panos_with_policy",
-        ],
-    )
-    def test_a_firewall_serving_an_ipv6_segment_is_refused(self, golden: str) -> None:
-        """Every prefix of one served segment turned IPv6: the IPv4 golden renders, this one raises (zones or rules)."""
+
+class TestTheFirewallRendersIpv6:
+    """The firewall transform names every prefix through the address table; only the transit legs stay IPv4."""
+
+    @pytest.mark.parametrize("golden", _FIREWALLS)
+    def test_a_firewall_serving_an_ipv6_segment_renders_it(self, golden: str) -> None:
+        """Every prefix of one served segment turned IPv6: the IPv4 golden renders, this one names the IPv6 prefix."""
         text = json.dumps(_golden_input(golden))
         assert run_transform(Firewall, json.loads(text))
         assert "10.0.2.0/24" in text
         data = json.loads(text.replace("10.0.2.0/24", "fd5a:1760::/64"))
-        with pytest.raises(Ipv6SegmentNotRenderedError, match="IPv6 segments are not rendered by the"):
-            run_transform(Firewall, data)
+        rendered = run_transform(Firewall, data)
+        assert "addr-fd5a-1760---64" in rendered
+
+    def test_a_context_with_transit_legs_refuses_an_ipv6_segment(self) -> None:
+        """The legs, their VIPs and anycast next hops are IPv4: an IPv6 segment has no next hop to be routed through."""
+        context = {
+            "legs": [{"ns_type": "prod", "zone": "PROD", "anycast": "100.66.0.1", "interface": "e1.1", "vrf": "PROD"}],
+            "segments": [_segment()],
+        }
+        with pytest.raises(Ipv6SegmentNotRenderedError, match="transit legs of a firewall context"):
+            apply_context_routes(context, {})

@@ -9,11 +9,29 @@ from transforms.helpers.policy import (
     rule_zone,
     segment_flows,
 )
-from utils.internet_space import NON_INTERNET_PREFIXES
+from utils.internet_space import non_internet_prefixes
 from utils.limits import ACL_CLOSING_SEQ, ACL_INTERNET_BAND_SEQ_START, ACL_RETURN_LEG_SEQ_START
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import (
+    IPV4,
+    IPV6,
+    AddressFamilyMismatchError,
+    own_prefix,
+    prefix_family,
+    segment_family,
+)
 
-_PROTO_MAP = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
+# The ACL protocol keyword of a rule's protocol, per address family: `ip` / `ipv6` match every protocol of the family.
+# `icmp` is ICMPv6 in an IPv6 ACL on NX-OS and IOS XE; EOS spells it `icmpv6` (its template maps it).
+_PROTO_MAP = {
+    IPV4: {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"},
+    IPV6: {"any": "ipv6", "tcp": "tcp", "udp": "udp", "icmp": "icmp"},
+}
+
+
+def _acl_protocol(rule: dict[str, Any] | None, family: str) -> str:
+    """The ACL protocol keyword of ``rule`` (None: every protocol) in an ACL of ``family``."""
+    protocols = _PROTO_MAP[family]
+    return protocols.get((rule or {}).get("protocol") or "any", protocols["any"])
 
 
 def _port_match(rule: dict[str, Any], acl_proto: str) -> str | None:
@@ -32,17 +50,20 @@ def _port_match(rule: dict[str, Any], acl_proto: str) -> str | None:
 # ACL_RETURN_LEG_SEQ_START and ACL_INTERNET_BAND_SEQ_START of utils/limits.py.
 
 
-def _internet_band(rule: dict[str, Any], seen_denies: set[tuple[str, str]], seq: int) -> list[dict[str, Any]]:
+def _internet_band(
+    rule: dict[str, Any], seen_denies: set[tuple[str, str]], seq: int, family: str
+) -> list[dict[str, Any]]:
     """The ACL lines of a permit whose destination is the internet zone.
 
     `permit <proto> <src> any` alone would open every same-VRF destination at
     this leaf, the intra-zone enforcement point. First-match ACLs have no
-    "not": every NON_INTERNET_PREFIXES entry is denied for the source first
-    (once per source, the deny is protocol-less), then the permit to any.
+    "not": every non-internet prefix of the ACL's family (utils/internet_space.py ``non_internet_prefixes``: the
+    RFC 1918 family for IPv4, the ULA, link-local and other non-global space for IPv6) is denied for the source
+    first (once per source, the deny is protocol-less), then the permit to any.
     """
-    permit = _build_acl_rule(rule)
+    permit = _build_acl_rule(rule, family)
     lines: list[dict[str, Any]] = []
-    for prefix in NON_INTERNET_PREFIXES:
+    for prefix in non_internet_prefixes(family):
         if (permit["src"], prefix) in seen_denies:
             continue
         seen_denies.add((permit["src"], prefix))
@@ -50,7 +71,7 @@ def _internet_band(rule: dict[str, Any], seen_denies: set[tuple[str, str]], seq:
             {
                 **permit,
                 "action": "deny",
-                "protocol": "ip",
+                "protocol": _acl_protocol(None, family),
                 "dst": prefix,
                 "dst_port": None,
                 "log": False,
@@ -68,9 +89,9 @@ def _internet_band(rule: dict[str, Any], seen_denies: set[tuple[str, str]], seq:
     return lines
 
 
-def _build_acl_rule(rule: dict[str, Any]) -> dict[str, Any]:
-    """Convert a SecurityPolicyRule dict (from clean_data) into an ACL rule dict."""
-    acl_proto = _PROTO_MAP.get(rule.get("protocol") or "any", "ip")
+def _build_acl_rule(rule: dict[str, Any], family: str) -> dict[str, Any]:
+    """Convert a SecurityPolicyRule dict (from clean_data) into an ACL rule dict of an ACL of ``family``."""
+    acl_proto = _acl_protocol(rule, family)
     src_seg = rule.get("source_segment") or {}
     dst_seg = rule.get("destination_segment") or {}
 
@@ -102,7 +123,7 @@ def _build_acl_rule(rule: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_return_rule(
-    rule: dict[str, Any], own_prefix: str | None, own_name: str, own_environment: str | None
+    rule: dict[str, Any], own_prefix: str | None, own_name: str, own_environment: str | None, family: str
 ) -> dict[str, Any]:
     """The reply leg of an inbound permit, for this segment's own ingress ACL.
 
@@ -112,7 +133,7 @@ def _build_return_rule(
     on the strength of A's rule. udp has no such flag, and any/icmp have no
     port: those return legs are the plain reverse match.
     """
-    acl_proto = _PROTO_MAP.get(rule.get("protocol") or "any", "ip")
+    acl_proto = _acl_protocol(rule, family)
     src_seg = rule.get("source_segment") or {}
     peer_prefix = rule_endpoint(rule, "source")
     peer_name = src_seg.get("customer_name") or src_seg.get("name") or "any"
@@ -148,6 +169,22 @@ def _inbound_permits(seg: dict[str, Any]) -> list[dict[str, Any]]:
             r.get("name") or "",
         ),
     )
+
+
+def _refuse_cross_family(rules: list[dict[str, Any]], family: str, segment_name: str) -> None:
+    """Raise when a rule of the segment's ACL names an endpoint of the other address family.
+
+    A segment has one gateway of one family, so its ACL is of that family; a rule to (or a return leg from) a segment
+    or prefix of the other family can match nothing in it, and dropping the line would change what the policy says.
+    ``checks/segment_security.py`` reports such a rule before a transform meets it.
+    """
+    for rule in rules:
+        for end in (rule["src"], rule["dst"]):
+            if end != "any" and prefix_family(end) != family:
+                raise AddressFamilyMismatchError(
+                    f"Segment '{segment_name}': rule '{rule.get('name') or rule.get('seq')}' matches {end}, an "
+                    f"{prefix_family(end)} endpoint, in the {family} ACL of an {family} segment; no ACL can express it"
+                )
 
 
 def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -230,6 +267,9 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
             continue
         segment_name = seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}"
         segment_environment = seg.get("environment")
+        # The ACL is of the segment's one family: the SVI it is bound on has one gateway.
+        # An L2-only segment has no family and no address: its ACL is IPv4 by convention.
+        family = segment_family(seg) or IPV4
         egress, _ = segment_flows(seg)
 
         rules: list[dict[str, Any]] = []
@@ -249,15 +289,15 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
                 if not default_permit:
                     outside_permits.append(rule)
             else:
-                rules.append(_build_acl_rule(rule))
+                rules.append(_build_acl_rule(rule, family))
 
         # Return legs of the permits into this segment
-        own_prefix = segment_prefix(seg)
+        seg_prefix = own_prefix(seg)
         own_max_seq = max((r["seq"] or 0 for r in rules), default=0)
         seq = max(own_max_seq + 10, ACL_RETURN_LEG_SEQ_START)
         seen_returns: set[tuple[Any, ...]] = set()
         for inbound in _inbound_permits(seg):
-            ret = _build_return_rule(inbound, own_prefix, segment_name, segment_environment)
+            ret = _build_return_rule(inbound, seg_prefix, segment_name, segment_environment, family)
             key = (ret["protocol"], ret["src"], ret["src_port"], ret["dst"])
             if key in seen_returns:
                 continue
@@ -271,7 +311,8 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
         seen_denies: set[tuple[str, str]] = set()
         for rule in outside_permits:
             band_seq = max((r["seq"] or 0 for r in rules), default=0) + 10
-            rules.extend(_internet_band(rule, seen_denies, max(band_seq, ACL_INTERNET_BAND_SEQ_START)))
+            rules.extend(_internet_band(rule, seen_denies, max(band_seq, ACL_INTERNET_BAND_SEQ_START), family))
+        _refuse_cross_family(rules, family, segment_name)
 
         # Closing rule: the segment policy's default action (deny unless the
         # enabled policy says permit), for everything the rules above miss.
@@ -284,7 +325,7 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
             {
                 "seq": implicit_seq,
                 "action": "permit" if default_permit else "deny",
-                "protocol": "ip",
+                "protocol": _acl_protocol(None, family),
                 "src": "any",
                 "src_port": None,
                 "dst": "any",
@@ -305,6 +346,7 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
             {
                 "name": f"ACL-VLAN{vlan_id}-IN",
                 "vlan_id": vlan_id,
+                "family": family,
                 "segment_name": segment_name,
                 "isolation_mode": isolation_mode,
                 "rules": rules,

@@ -81,7 +81,7 @@
 {%- endif -%}
 {%- for entry in _origination -%}
 {%- set set_name = 'PL-ORIG-' ~ entry.name -%}
-{%- set _ = prefix_set.update({set_name: {'mode': 'IPv4'}}) -%}
+{%- set _ = prefix_set.update({set_name: {'mode': 'IPv6' if entry.family == 'ipv6' else 'IPv4'}}) -%}
 {%- set _ = prefix_table.update({set_name ~ '|10|' ~ entry.prefix ~ '|exact': {'action': 'permit'}}) -%}
 {%- set _ = route_map.update({('RM-VRF-CONN-2-EVPN|' ~ (loop.index * 10)): {
   'route_operation': 'permit',

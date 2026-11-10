@@ -21,3 +21,25 @@ NON_INTERNET_PREFIXES: tuple[str, ...] = (
     "224.0.0.0/4",  # multicast
     "240.0.0.0/4",  # reserved, incl. 255.255.255.255 broadcast
 )
+
+NON_INTERNET_PREFIXES_IPV6: tuple[str, ...] = (
+    "::/128",  # unspecified
+    "::1/128",  # loopback
+    "::ffff:0:0/96",  # IPv4-mapped
+    "64:ff9b::/96",  # NAT64 well-known prefix (translated IPv4 space)
+    "100::/64",  # discard-only
+    "2001:db8::/32",  # documentation (the IPv4 documentation ranges stay absent: the demo uses them as public space)
+    "fc00::/7",  # unique local (ULA), covers the tenant pools fd5a:1760::/32 and fd5a:1840::/32 and fd00::/8 pools
+    "fe80::/10",  # link-local
+    "ff00::/8",  # multicast
+)
+"""IPv6 space that is not the public internet: the IPv6 band of an internet permit denies these before ``permit ... any``.
+
+Documentation space (2001:db8::/32) IS in the list (owner decision; the IPv4 documentation ranges stay absent because
+the demo uses them as stand-in public space). Evidence I: the list follows the IANA IPv6 special-purpose registry (RFC 6890 / RFC 4291).
+"""
+
+
+def non_internet_prefixes(family: str) -> tuple[str, ...]:
+    """The non-internet prefixes of an address family (``ipv4`` or ``ipv6``)."""
+    return NON_INTERNET_PREFIXES_IPV6 if family == "ipv6" else NON_INTERNET_PREFIXES

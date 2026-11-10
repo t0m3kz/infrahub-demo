@@ -462,10 +462,18 @@ class TestRenderedContextShape:
             "l3_vni",
             "vrf_type",
             "svi_vlan_id",
+            "ipv6",
             "route_target",
             "import_route_targets",
         ]
-        assert list(mappings["PROD"]) == ["vrf_name", "l3_vni", "svi_vlan_id", "route_target", "import_route_targets"]
+        assert list(mappings["PROD"]) == [
+            "vrf_name",
+            "l3_vni",
+            "svi_vlan_id",
+            "ipv6",
+            "route_target",
+            "import_route_targets",
+        ]
 
 
 class TestPurity:

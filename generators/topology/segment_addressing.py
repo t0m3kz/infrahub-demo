@@ -228,18 +228,27 @@ class SegmentAddressingMixin:
                 f"Segment {segment_name} needs a /{length}, larger than the /{block_length} address block of design "
                 f"{design.get('name')} (footprint {footprint['name']}); give the footprint a larger design"
             )
+        return await self._allocate_customer_slice(segment_name, pool_name, global_pool_name, block_length, length)
+
+    async def _allocate_customer_slice(
+        self, name: str, pool_name: str, global_pool_name: str, block_length: int, length: int
+    ) -> Any:
+        """A prefix of ``length`` keyed by ``name`` from the customer's pool, created or grown by one block when needed.
+
+        The one draw from a customer pool, for a segment's subnet and for a cloud virtual network's routed range.
+        """
         async with self.resource_lock(f"customer-pool-{pool_name}"):
             pool = await self._find_or_create_customer_pool(pool_name, global_pool_name, block_length)
             try:
-                prefix = await self._allocate_prefix(pool, segment_name, length)
+                prefix = await self._allocate_prefix(pool, name, length)
             except GraphQLError as exc:
-                self.logger.info(f"Customer pool {pool_name} cannot satisfy a /{length} for {segment_name}: {exc}")
+                self.logger.info(f"Customer pool {pool_name} cannot satisfy a /{length} for {name}: {exc}")
                 prefix = None
             if prefix is None:
                 await self._grow_customer_pool(pool, pool_name, global_pool_name, block_length)
-                prefix = await self._allocate_prefix(pool, segment_name, length)
+                prefix = await self._allocate_prefix(pool, name, length)
             if prefix is None:
-                self.fail(f"Segment {segment_name}: customer pool {pool_name} returned no prefix after growing")
+                self.fail(f"{name}: customer pool {pool_name} returned no prefix after growing")
         return prefix
 
     async def _grow_customer_pool(self, pool: Any, pool_name: str, global_pool_name: str, block_length: int) -> None:

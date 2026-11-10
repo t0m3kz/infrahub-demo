@@ -15,9 +15,12 @@
 {%- for acl in acls -%}
 
 {#- ACL_TABLE entry -#}
+{#- U: an IPv6 ACL is a table of type L3V6 whose rules match SRC_IPV6 / DST_IPV6 and IP_TYPE IPV6ANY (SONiC ACL
+    HLD); `icmp` is IP_PROTOCOL 58 (ICMPv6) there. No device has run it. -#}
+{%- set _v6 = acl.family == 'ipv6' -%}
 {%- set _ = acl_table.update({
   acl.name: {
-    'type': 'L3',
+    'type': 'L3V6' if _v6 else 'L3',
     'policy_desc': 'Zero-trust ACL for ' + acl.segment_name,
     'ports': ['Vlan' + acl.vlan_id|string],
     'stage': 'ingress'
@@ -29,20 +32,20 @@
 {%- set rule_key = acl.name + '|SEQ_' + rule.seq|string -%}
 {%- set rule_entry = {
   'PRIORITY': (10000 - rule.seq)|string,
-  'IP_TYPE': 'IPV4ANY',
+  'IP_TYPE': 'IPV6ANY' if _v6 else 'IPV4ANY',
   'PACKET_ACTION': 'FORWARD' if rule.action == 'permit' else 'DROP'
 } -%}
 
 {%- if rule.protocol in _proto_num -%}
-{%- set _ = rule_entry.update({'IP_PROTOCOL': _proto_num[rule.protocol]}) -%}
+{%- set _ = rule_entry.update({'IP_PROTOCOL': ('58' if _v6 and rule.protocol == 'icmp' else _proto_num[rule.protocol])}) -%}
 {%- endif -%}
 
 {%- if rule.src != 'any' -%}
-{%- set _ = rule_entry.update({'SRC_IP': rule.src}) -%}
+{%- set _ = rule_entry.update({('SRC_IPV6' if _v6 else 'SRC_IP'): rule.src}) -%}
 {%- endif -%}
 
 {%- if rule.dst != 'any' -%}
-{%- set _ = rule_entry.update({'DST_IP': rule.dst}) -%}
+{%- set _ = rule_entry.update({('DST_IPV6' if _v6 else 'DST_IP'): rule.dst}) -%}
 {%- endif -%}
 
 {%- if rule.dst_port and rule.protocol in ('tcp', 'udp') -%}

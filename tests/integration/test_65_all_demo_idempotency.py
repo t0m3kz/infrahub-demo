@@ -67,6 +67,7 @@ RERUN_GENERATORS = {
     "add_customer_deployment_dc": "customer_deployments_dc",
     "add_customer_deployment_colocation": "customer_deployments_colocation",
     "add_customer_deployment_cloud": "customer_deployments_cloud",
+    "add_cloud_attachment_range": "cloud_attachment_ranges",
     "add_application_orchestrator_routing": "app_applications",
     "add_customer_dc_orchestrator_routing": "customer_deployments_dc",
     "add_customer_colocation_orchestrator_routing": "customer_deployments_colocation",

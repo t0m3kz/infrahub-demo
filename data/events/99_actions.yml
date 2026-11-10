@@ -479,6 +479,22 @@ spec:
           - attribute_name: infrastructure_orchestrator
             value_match: any
 
+    # ── Cloud attachment: the routed range of the virtual network it targets ───
+    # generators/topology/cloud_attachment_range.py. The target is the attachment (a member of
+    # cloud_attachment_ranges: every attachment in the data declares the group). Retargeting an attachment to another
+    # virtual network gives that network its range; the generator writes only `allowed_prefixes`, never
+    # `virtual_network`, so it raises no event of this rule.
+    - name: trigger-cloud-attachment-range-on-network-updated
+      branch_scope: "other_branches"
+      node_kind: CloudGatewayAttachment
+      mutation_action: "updated"
+      action: run-cloud-attachment-range-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: virtual_network
+            modification_type: updated
+
     # ── Customer Deployment (FirewallContext/dedicated LB) ────────────────────
     # Same generator/query shape for both deployment kinds that still have
     # on-site fabric to provision a FirewallContext on (see

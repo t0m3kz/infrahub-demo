@@ -9,8 +9,8 @@
 {%- set rule_name = rule.name | replace(' ', '-') %}
 set {{ scope }}rulebase security rules {{ rule_name }} from {{ rule.src_zone or 'any' }}
 set {{ scope }}rulebase security rules {{ rule_name }} to {{ rule.dst_zone or 'any' }}
-set {{ scope }}rulebase security rules {{ rule_name }} source {{ rule.src or 'any' }}
-set {{ scope }}rulebase security rules {{ rule_name }} destination {{ rule.dst or 'any' }}
+set {{ scope }}rulebase security rules {{ rule_name }} source {{ rule.src_ref or rule.src or 'any' }}
+set {{ scope }}rulebase security rules {{ rule_name }} destination {{ rule.dst_ref or rule.dst or 'any' }}
 set {{ scope }}rulebase security rules {{ rule_name }} application any
 {%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
 {%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
@@ -69,16 +69,22 @@ set zone {{ iface.security_zone.name }} network layer3 {{ iface.name }}
 # --- Address Objects (one per zone member CIDR) ---
 {%- for zone in zones %}
 {%- for cidr in zone.member_cidrs %}
-{%- set addr_name = 'addr-' + cidr | replace('/', '-') | replace('.', '-') %}
+{%- set addr_name = 'addr-' + cidr | replace('/', '-') | replace('.', '-') | replace(':', '-') %}
 set address {{ addr_name }} ip-netmask {{ cidr }}
 set address {{ addr_name }} description "Zone: {{ zone.name }}"
 {%- endfor %}
+{%- endfor %}
+{#- The rule endpoints that are no zone member and are named by reference (IPv6 today; address_table). I: `set address <name>
+    ip-netmask <prefix>` takes an IPv6 prefix in the same object type (PAN-OS CLI). #}
+{%- for entry in address_table | default([]) if not entry.zones and entry.family == 6 %}
+set address {{ entry.name }} ip-netmask {{ entry.cidr }}
+set address {{ entry.name }} description "Rule endpoint"
 {%- endfor %}
 #
 # --- Address Groups (one per zone) ---
 {%- for zone in zones %}
 {%- if zone.member_cidrs %}
-set address-group ag-{{ zone.name }} static [ {% for cidr in zone.member_cidrs %}addr-{{ cidr | replace('/', '-') | replace('.', '-') }}{% if not loop.last %} {% endif %}{% endfor %} ]
+set address-group ag-{{ zone.name }} static [ {% for cidr in zone.member_cidrs %}addr-{{ cidr | replace('/', '-') | replace('.', '-') | replace(':', '-') }}{% if not loop.last %} {% endif %}{% endfor %} ]
 {%- else %}
 set address-group ag-{{ zone.name }} static [ any ]
 {%- endif %}
@@ -95,9 +101,11 @@ set network virtual-router default interface {{ iface_name }}
 #
 # --- Static Routes (return path to leaf per zone) ---
 {%- for route in static_routes %}
-set network virtual-router default routing-table ip static-route {{ route.vrf | replace(' ', '-') }}-{{ loop.index }} destination {{ route.destination }}
-set network virtual-router default routing-table ip static-route {{ route.vrf | replace(' ', '-') }}-{{ loop.index }} nexthop ip-address {{ route.nexthop }}
-set network virtual-router default routing-table ip static-route {{ route.vrf | replace(' ', '-') }}-{{ loop.index }} interface {{ route.interface }}
+{#- I: an IPv6 static route is `routing-table ipv6 static-route` with `nexthop ipv6-address` (PAN-OS CLI). #}
+{%- set rt = 'ipv6' if ':' in route.destination else 'ip' %}
+set network virtual-router default routing-table {{ rt }} static-route {{ route.vrf | replace(' ', '-') }}-{{ loop.index }} destination {{ route.destination }}
+set network virtual-router default routing-table {{ rt }} static-route {{ route.vrf | replace(' ', '-') }}-{{ loop.index }} nexthop {{ 'ipv6-address' if rt == 'ipv6' else 'ip-address' }} {{ route.nexthop }}
+set network virtual-router default routing-table {{ rt }} static-route {{ route.vrf | replace(' ', '-') }}-{{ loop.index }} interface {{ route.interface }}
 {%- endfor %}
 #
 {%- endif %}

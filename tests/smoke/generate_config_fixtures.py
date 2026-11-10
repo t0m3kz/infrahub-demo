@@ -25,6 +25,7 @@ from tests.smoke.fixture_builders import (
     fabric,
     firewall,
     group_policy,
+    ipv6,
     loadbalancer,
     mlag,
     office,
@@ -51,6 +52,7 @@ WRITERS: list[tuple[str | None, Callable[[], tuple[int, int]]]] = [
     (None, routing_identity.write_fixtures),
     (None, routing_protection.write_fixtures),
     (None, routing_policy.write_fixtures),
+    (None, ipv6.write_fixtures),
 ]
 
 
