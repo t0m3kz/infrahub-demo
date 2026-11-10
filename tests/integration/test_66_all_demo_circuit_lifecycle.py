@@ -686,7 +686,6 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
     @pytest.mark.dependency(
         scope="session",
         name="all_demo_interconnect_lifecycle",
-        depends=["all_demo_idempotent_topology_reruns"],
     )
     @pytest.mark.asyncio
     async def test_01_interconnect_follows_its_carrier(

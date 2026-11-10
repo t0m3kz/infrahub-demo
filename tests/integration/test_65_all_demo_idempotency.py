@@ -473,9 +473,7 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         assert not mismatched, "inbound_rules out of step with destination_segment:\n  " + "\n  ".join(mismatched)
 
     @pytest.mark.order(413)
-    @pytest.mark.dependency(
-        scope="session", name="all_demo_idempotent_topology_reruns", depends=["all_demo_idempotent_reruns"]
-    )
+    @pytest.mark.dependency(scope="session", depends=["all_demo_idempotent_reruns"])
     @pytest.mark.asyncio
     async def test_04_topology_reruns_change_nothing(
         self,
