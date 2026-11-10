@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
+from generators.helpers import name_to_asn_range
 from generators.helpers.routing import RoutingStrategy
 from generators.logger import GeneratorError
 from generators.protocols import RoutingAutonomousSystem
@@ -518,7 +519,10 @@ class TestGeneratePoolAllocation:
 
         gen._create_shared_routing_objects.assert_awaited_once()
         overlay_asn = gen._create_shared_routing_objects.call_args.kwargs["overlay_asn"]
-        assert isinstance(overlay_asn, int)
+        pool = gen.upsert_asn_pool.await_args.kwargs
+        assert overlay_asn == pool["end_range"] + 1
+        _, asn_end = name_to_asn_range(dc_name="DC1", max_pods=2, max_border_leafs_per_fabric=4)
+        assert overlay_asn == asn_end + 1
 
 
 class TestGenerateDCPoolAttachment:

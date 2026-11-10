@@ -46,3 +46,15 @@ def test_every_registered_query_renders_with_the_servers_fragment_resolution(roo
         spreads = Spreads()
         visit(document, spreads)
         assert spreads.names <= defined, f"{query['name']}: undefined {sorted(spreads.names - defined)}"
+
+
+def test_every_shared_fragment_is_defined_in_one_file_only(root_dir: Path) -> None:
+    """.infrahub.yml loads the whole queries/fragments/ directory: a fragment name defined twice there is ambiguous."""
+    seen: dict[str, str] = {}
+    for path in sorted((root_dir / "queries/fragments").glob("*.gql")):
+        for item in parse(path.read_text()).definitions:
+            if isinstance(item, FragmentDefinitionNode):
+                assert item.name.value not in seen, (
+                    f"{item.name.value} defined in {seen[item.name.value]} and {path.name}"
+                )
+                seen[item.name.value] = path.name

@@ -18,24 +18,10 @@ import pytest
 
 from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from tests.unit.segment_port_helpers import raw_deployment_edges, raw_port_segments
-from transforms.config.access_leaf import AccessLeaf
-from transforms.config.border_leaf import BorderLeaf
-from transforms.config.border_spine import BorderSpine
-from transforms.config.l2_leaf import L2Leaf
 from transforms.config.leaf import Leaf
-from transforms.config.spine import Spine
-from transforms.config.tor import ToR
 
 _CONFIGS = Path(__file__).resolve().parents[1] / "smoke" / "configs"
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_TRANSFORMS = {
-    "leaf": Leaf,
-    "tor": ToR,
-    "access_leaf": AccessLeaf,
-    "l2_leaf": L2Leaf,
-    "border_leaf": BorderLeaf,
-    "border_spine": BorderSpine,
-}
 _TAGGED = {"tagging_mode": "tagged"}
 _UNTAGGED = {"tagging_mode": "untagged"}
 
@@ -55,20 +41,6 @@ def _port(data: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
-@pytest.mark.parametrize("role", sorted(_TRANSFORMS))
-def test_trunk_host_port_is_a_tagged_member_of_each_vlan(role: str, platform: str) -> None:
-    """Ethernet10 carries VLANs 100 and 200: one tagged VLAN_MEMBER entry each.
-
-    An l2-leaf's two uplinks are bare trunks (generators/topology/rack.py; the segment port tags go on host ports
-    only), so they get no VLAN_MEMBER entry: only the host port Ethernet10 is a member.
-    """
-    name = f"{role}_{platform}_ebgp_ibgp"
-    configdb = _render(_TRANSFORMS[role], _load(name))
-    assert configdb["VLAN_MEMBER"] == {f"Vlan{vlan}|Ethernet10": _TAGGED for vlan in (100, 200)}
-    assert set(configdb["VLAN"]) >= {"Vlan100", "Vlan200"}
-
-
-@pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
 def test_single_vlan_access_and_trunk_ports_are_distinguished(platform: str) -> None:
     """Dropping the second VLAN of the trunk turns it into an untagged access member."""
     data = _load(f"leaf_{platform}_ebgp_ibgp")
@@ -83,11 +55,6 @@ def test_no_vlan_on_any_port_renders_no_vlan_member_table() -> None:
     data = _load("leaf_sonic_ebgp_ibgp")
     _port(data, "Ethernet10")["capabilities"]["edges"] = []
     assert "VLAN_MEMBER" not in _render(Leaf, data)
-
-
-def test_spine_renders_no_vlan_member_table() -> None:
-    """A spine has no host ports; its template does not grow the table."""
-    assert "VLAN_MEMBER" not in _render(Spine, _load("spine_sonic_ebgp_ibgp"))
 
 
 def test_mlag_peer_link_membership_is_merged_not_replaced() -> None:

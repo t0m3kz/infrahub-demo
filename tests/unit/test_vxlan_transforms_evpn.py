@@ -118,7 +118,7 @@ class TestGetVxlanConfigEvpn:
     def _data(self, capabilities: list | None = None) -> dict:
         return {
             "name": "dc1-leaf-1",
-            "interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.1/32"}]}],
+            "interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.1/32"}}],
             "capabilities": capabilities if capabilities is not None else [],
         }
 
@@ -237,7 +237,7 @@ class TestVtepRoleSpellings:
     def _data(self) -> dict:
         return {
             "name": "dev",
-            "interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.1/32"}]}],
+            "interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.1/32"}}],
             "capabilities": [_bgp_cap()],
         }
 
@@ -412,7 +412,7 @@ class TestAnycastMacPlumbing:
     def _data(self) -> dict:
         return {
             "name": "dc1-leaf-1",
-            "interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.1/32"}]}],
+            "interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.1/32"}}],
             "capabilities": [_bgp_cap()],
         }
 
@@ -507,7 +507,7 @@ class TestRtFallbackUnderEbgpOverlayIsLoudlyWrong:
     def _data(self, capabilities: list) -> dict:
         return {
             "name": "dc1-leaf-1",
-            "interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.1/32"}]}],
+            "interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.1/32"}}],
             "capabilities": capabilities,
         }
 

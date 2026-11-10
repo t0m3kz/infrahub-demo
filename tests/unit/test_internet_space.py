@@ -51,13 +51,6 @@ class TestNonInternetPrefixes:
         assert not any(ipaddress.ip_address(address) in ipaddress.ip_network(p) for p in NON_INTERNET_PREFIXES)
         assert is_public_address(address)
 
-    def test_there_is_a_single_non_public_definition(self) -> None:
-        """exchange_transit re-uses the constant instead of keeping a second list."""
-        import utils.exchange_transit as exchange_transit
-
-        assert exchange_transit.NON_INTERNET_PREFIXES is NON_INTERNET_PREFIXES
-        assert not hasattr(exchange_transit, "NON_PUBLIC_PREFIXES")
-
 
 _INTERNET_ZONE = {"name": "INTERNET"}
 

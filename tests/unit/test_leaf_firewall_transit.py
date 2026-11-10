@@ -236,7 +236,8 @@ class TestGetLeafFirewallTransits:
         assert [t["vlan_id"] for t in transits] == [3000]
 
     def test_two_contexts_give_two_transits_sorted_by_vlan(self) -> None:
-        """A leaf redirecting to a dedicated and a shared context holds both legs."""
+        """A leaf redirecting to a dedicated and a shared context holds both legs; AC7: shuffled contexts and rules
+        render the same transits."""
         shared = _context()
         dedicated = _context(
             name="dc1-fw-c1", ctx_id="ctx-2", vlan=3010, tenant="dep-b", legs=(("100.66.8.5/29", _PROD_NS),)
@@ -247,17 +248,7 @@ class TestGetLeafFirewallTransits:
             (3000, "dc1-fw-shared"),
             (3010, "dc1-fw-c1"),
         ]
-
-    def test_context_order_does_not_change_the_result(self) -> None:
-        """AC7: shuffled contexts and rules render the same transits."""
-        shared = _context()
-        dedicated = _context(
-            name="dc1-fw-c1", ctx_id="ctx-2", vlan=3010, tenant="dep-b", legs=(("100.66.8.5/29", _PROD_NS),)
-        )
-        rules = [_rule("100.66.0.4", vlan=100), _rule("100.66.8.4", vlan=200)]
-        forward = get_leaf_firewall_transits(rules, [shared, dedicated], device_name="l")
-        backward = get_leaf_firewall_transits(rules[::-1], [dedicated, shared], device_name="l")
-        assert forward == backward
+        assert get_leaf_firewall_transits(rules[::-1], [shared, dedicated], device_name="leaf-01") == transits
 
     def test_rules_to_one_vip_dedupe_to_one_transit(self) -> None:
         """Several segments redirected to the same VIP share one transit."""

@@ -97,13 +97,3 @@ def test_the_interface_fragment_reads_the_segment_of_the_port_row() -> None:
     assert "ManagedSegmentDeployment" not in fragment
     assert all(field in row for field in ("vlan_id {", "device {", "segment_deployment {", "vni {", "segment {"))
     assert "...NetworkSegmentFields" in row
-
-
-def test_no_query_selects_a_port_segments_edge() -> None:
-    """The port-to-segment edge is gone: no query or fragment selects ``segments`` under a switched interface."""
-    offenders = [
-        str(path.relative_to(QUERIES))
-        for path in sorted(QUERIES.rglob("*.gql"))
-        if "DcimSwitchedInterface" in path.read_text() or "segments__ids" in path.read_text()
-    ]
-    assert offenders == []

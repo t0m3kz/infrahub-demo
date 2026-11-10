@@ -1,4 +1,8 @@
-"""Unit tests for 4d: SNAT rendering per firewall vendor and the edge's public-space export."""
+"""Unit tests for 4d: SNAT rendering per firewall vendor and the edge's public-space export.
+
+The unmodified golden inputs (SNAT and MANAGEMENT NAT rendered per vendor) are guarded by the smoke golden diff;
+these tests cover the variants the goldens do not render.
+"""
 
 from __future__ import annotations
 
@@ -20,23 +24,7 @@ from utils.routing_domain import RoutingDomainError
 _ROOT = Path(__file__).parent.parent.parent
 _CONFIGS = _ROOT / "tests" / "smoke" / "configs"
 
-# vendor -> substrings that must appear for the shared context (SNAT 192.0.2.5, PROD + NONPROD tenants)
-_VENDOR_NAT = {
-    "paloalto_panos": [
-        "set vsys dc1-fw-shared rulebase nat rules snat-PROD to INTERNET",
-        "source-translation dynamic-ip-and-port translated-address 192.0.2.5",
-        "units ethernet1/1.3400 ip 192.0.2.5/32",
-    ],
-    "juniper_junos": [
-        "security nat source pool SNAT-POOL address 192.0.2.5/32",
-        "rule-set SNAT-PROD to zone INTERNET",
-        "then source-nat pool SNAT-POOL",
-    ],
-    "checkpoint_gaia": [
-        'mgmt_cli add host name "SNAT-dc1-fw-shared" ip-address "192.0.2.5"',
-        'original-source "PROD" original-destination "INTERNET" translated-source "SNAT-dc1-fw-shared"',
-    ],
-}
+_VENDORS = ("checkpoint_gaia", "juniper_junos", "paloalto_panos")
 _NAT_MARKERS = ("nat rules", "security nat", "add nat-rule")
 
 
@@ -63,14 +51,7 @@ def _firewall_input(vendor: str, *, snat: bool) -> dict[str, Any]:
     return data
 
 
-@pytest.mark.parametrize("vendor", sorted(_VENDOR_NAT))
-def test_vendor_renders_source_nat_to_the_context_snat_address(vendor: str) -> None:
-    output = _run(Firewall, _firewall_input(vendor, snat=True))
-    for expected in _VENDOR_NAT[vendor]:
-        assert expected in output
-
-
-@pytest.mark.parametrize("vendor", sorted(_VENDOR_NAT))
+@pytest.mark.parametrize("vendor", _VENDORS)
 def test_context_without_snat_address_renders_no_internet_nat(vendor: str) -> None:
     output = _run(Firewall, _firewall_input(vendor, snat=False))
     internet_nat = [
@@ -181,24 +162,11 @@ _VENDOR_MANAGEMENT_NAT = {
 
 
 @pytest.mark.parametrize("vendor", sorted(_VENDOR_MANAGEMENT_NAT))
-def test_vendor_renders_management_nat_behind_the_leg_vip(vendor: str) -> None:
-    output = _run(Firewall, _firewall_input(vendor, snat=True))
-    for expected in _VENDOR_MANAGEMENT_NAT[vendor]:
-        assert expected in output
-
-
-@pytest.mark.parametrize("vendor", sorted(_VENDOR_MANAGEMENT_NAT))
 def test_management_nat_survives_without_a_snat_address(vendor: str) -> None:
     output = _run(Firewall, _firewall_input(vendor, snat=False))
     for expected in _VENDOR_MANAGEMENT_NAT[vendor]:
         assert expected in output
     assert "192.0.2" not in output
-
-
-def test_panos_owns_no_secondary_ip_for_the_management_vip() -> None:
-    output = _run(Firewall, _firewall_input("paloalto_panos", snat=True))
-    assert "units ethernet1/1.3400 ip 192.0.2.5/32" in output
-    assert not [line for line in output.splitlines() if line.endswith("ip 100.66.48.4/32")]
 
 
 # --- edge ---------------------------------------------------------------------

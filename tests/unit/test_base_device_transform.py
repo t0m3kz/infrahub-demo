@@ -102,20 +102,11 @@ class TestExtraConfig:
         for key in ("vlans", "vxlan", "acls", "vrf_routes"):
             assert key in result
 
-    def test_no_activations_yields_empty_vlans(self) -> None:
+    @pytest.mark.parametrize("key", ["vlans", "acls", "vrf_routes"])
+    def test_no_activations_yields_an_empty_list(self, key: str) -> None:
         t = _make_transform(device_role="leaf")
         result = t._extra_config(_device_data(), "arista_eos")
-        assert result["vlans"] == []
-
-    def test_no_activations_yields_empty_acls(self) -> None:
-        t = _make_transform(device_role="leaf")
-        result = t._extra_config(_device_data(), "arista_eos")
-        assert result["acls"] == []
-
-    def test_no_activations_vrf_routes_empty(self) -> None:
-        t = _make_transform(device_role="leaf")
-        result = t._extra_config(_device_data(), "arista_eos")
-        assert result["vrf_routes"] == []
+        assert result[key] == []
 
 
 # ---------------------------------------------------------------------------
@@ -299,27 +290,20 @@ class TestCollectActivationsOwnRow:
 
 
 class TestToRClassAttributes:
-    def test_device_role_is_tor(self) -> None:
-        assert ToR.device_role == "tor"
+    @pytest.mark.parametrize(
+        ("attribute", "value"),
+        [("device_role", "tor"), ("template_subdir", "leafs"), ("query", "leaf_config")],
+    )
+    def test_class_attribute(self, attribute: str, value: str) -> None:
+        assert getattr(ToR, attribute) == value
 
-    def test_template_subdir_is_leafs(self) -> None:
-        assert ToR.template_subdir == "leafs"
-
-    def test_query_is_leaf_config(self) -> None:
-        assert ToR.query == "leaf_config"
-
-    def test_extra_config_includes_vxlan_keys(self) -> None:
-        """ToR uses device_role='tor' so _extra_config returns vxlan/vlans/acls."""
+    def test_extra_config_includes_vxlan_keys_and_no_vlans_without_activations(self) -> None:
+        """ToR uses device_role='tor' so _extra_config returns vxlan/vlans/acls; no segment_deployments, no VLANs."""
         t = _make_tor()
         result = t._extra_config(_device_data(), "arista_eos")
         assert "vlans" in result
         assert "vxlan" in result
         assert "acls" in result
-
-    def test_extra_config_empty_activations_no_vlans(self) -> None:
-        t = _make_tor()
-        data = _device_data()  # no segment_deployments
-        result = t._extra_config(data, "arista_eos")
         assert result["vlans"] == []
 
     @pytest.mark.asyncio

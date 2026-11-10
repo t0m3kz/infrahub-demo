@@ -20,7 +20,7 @@ class TestValidateInterfaces:
                     {
                         "name": "Loopback0",
                         "role": "loopback",
-                        "ip_addresses": [],
+                        "ip_address": None,
                     }
                 ]
             }

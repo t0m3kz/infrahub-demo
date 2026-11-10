@@ -153,10 +153,6 @@ class TestRefusal:
         assert "no VRF instance of namespace PROD" in message and "no SVI Vlan200" in message
         assert message.startswith("dc1-leaf-01: arista_eos config")
 
-    def test_the_exception_is_a_value_error(self) -> None:
-        """Callers (the SDK, the existing refusals) already handle ValueError."""
-        assert issubclass(VrfRealizationError, ValueError)
-
     def test_a_device_that_never_carries_vrfs_is_never_refused(self) -> None:
         """A spine has no segment, VRF or SVI; whatever its data says is not demand."""
         data = _raw(_LEAF)

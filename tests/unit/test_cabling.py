@@ -136,22 +136,24 @@ class TestCablingPlannerCore:
 class TestCablingScenarios:
     """Test different cabling deployment scenarios."""
 
-    def test_standard_leaf_to_spine(self) -> None:
-        """Test standard RACK scenario (leaf to spine cabling)."""
+    @pytest.mark.parametrize(
+        "spine_ports",
+        [
+            pytest.param(["Ethernet1/1", "Ethernet1/2"], id="symmetric"),
+            pytest.param(["Ethernet1/1"], id="asymmetric"),
+        ],
+    )
+    def test_one_leaf_to_one_spine_is_one_link_on_the_first_ports(self, spine_ports: list[str]) -> None:
+        """RACK scenario, one leaf (two uplinks) and one spine: one link per spine, first port to first port,
+        whether the spine has as many ports as the leaf or fewer."""
         bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
-        top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
+        top = create_mock_interfaces("spine-01", spine_ports)
 
-        planner = CablingPlanner(bottom, top)
-        plan = _build_strategy_plan(planner, "rack")
+        plan = _build_strategy_plan(CablingPlanner(cast(list, bottom), cast(list, top)), "rack")
 
-        assert len(plan) >= 1
-        assert all(isinstance(conn, tuple) for conn in plan)
-        # Verify tuple structure
-        for connection in plan:
-            assert len(connection) == 2
-            src, dst = connection
-            assert hasattr(src, "name") and hasattr(src, "device")
-            assert hasattr(dst, "name") and hasattr(dst, "device")
+        assert [
+            (src.device.display_label, src.name.value, dst.device.display_label, dst.name.value) for src, dst in plan
+        ] == [("leaf-01", "Ethernet1/1", "spine-01", "Ethernet1/1")]
 
     def test_rack_gives_every_spine_its_own_bottom_port(self) -> None:
         """One leaf, four spines: four DISTINCT leaf uplinks, never a reused one.
@@ -396,17 +398,6 @@ class TestCablingIdempotency:
 
 class TestCablingEdgeCases:
     """Test essential edge cases and error conditions."""
-
-    def test_asymmetric_interface_counts(self) -> None:
-        """Test with different interface counts between devices."""
-        bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
-        top = create_mock_interfaces("spine-01", ["Ethernet1/1"])
-
-        planner = CablingPlanner(cast(list, bottom), cast(list, top))
-        cabling_plan = _build_strategy_plan(planner, "rack")
-
-        assert isinstance(cabling_plan, list)
-        assert len(cabling_plan) >= 1
 
     def test_insufficient_interfaces_raises(self) -> None:
         """A ToR uplink with no spine port left fails the plan instead of being skipped."""

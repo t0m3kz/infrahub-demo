@@ -7,9 +7,11 @@ Covers:
 
 from __future__ import annotations
 
+from ipaddress import AddressValueError
 from pathlib import Path
 
 import jinja2
+import pytest
 
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 
@@ -62,51 +64,50 @@ def _uplink_iface(name: str = "Ethernet1/1") -> dict:
 
 
 class TestGetMlagNoDomain:
-    def test_empty_capabilities_returns_none(self) -> None:
-        assert get_mlag([]) is None
-
-    def test_none_capabilities_returns_none(self) -> None:
-        assert get_mlag(None) is None
-
-    def test_no_mlag_typename_returns_none(self) -> None:
-        caps = [{"typename": "ManagedBGP"}, {"typename": "ManagedOSPF"}]
+    @pytest.mark.parametrize(
+        "caps",
+        [
+            pytest.param([], id="empty"),
+            pytest.param(None, id="none"),
+            pytest.param([{"typename": "ManagedBGP"}, {"typename": "ManagedOSPF"}], id="no-mlag-typename"),
+        ],
+    )
+    def test_no_mlag_capability_returns_none(self, caps: list[dict] | None) -> None:
         assert get_mlag(caps) is None
 
 
 class TestGetMlagDomainExtraction:
-    def test_returns_domain_name(self) -> None:
-        result = get_mlag([_mlag_cap(name="DC1-POD1-L1-L2-MLAG")])
-        assert result is not None
-        assert result["name"] == "DC1-POD1-L1-L2-MLAG"
-
-    def test_returns_domain_id(self) -> None:
-        result = get_mlag([_mlag_cap(domain_id=42)])
-        assert result is not None
-        assert result["domain_id"] == 42
-
-    def test_returns_reload_delays(self) -> None:
-        result = get_mlag([_mlag_cap(reload_delay=200, reload_delay_non_mlag=250)])
-        assert result is not None
-        assert result["reload_delay"] == 200
-        assert result["reload_delay_non_mlag"] == 250
-
-    def test_default_reload_delays_when_missing(self) -> None:
-        cap = {"typename": "ManagedMLAG", "name": "TEST-MLAG", "domain_id": 1}
+    @pytest.mark.parametrize(
+        ("cap", "expected"),
+        [
+            pytest.param(_mlag_cap(name="DC1-POD1-L1-L2-MLAG"), {"name": "DC1-POD1-L1-L2-MLAG"}, id="name"),
+            pytest.param(_mlag_cap(domain_id=42), {"domain_id": 42}, id="domain-id"),
+            pytest.param(
+                _mlag_cap(reload_delay=200, reload_delay_non_mlag=250),
+                {"reload_delay": 200, "reload_delay_non_mlag": 250},
+                id="reload-delays",
+            ),
+            pytest.param(
+                {"typename": "ManagedMLAG", "name": "TEST-MLAG", "domain_id": 1},
+                {"reload_delay": 300, "reload_delay_non_mlag": 330},
+                id="default-reload-delays",
+            ),
+            pytest.param(
+                _mlag_cap(devices=["DC1-POD1-L1", "DC1-POD1-L2"]),
+                {"devices": ["DC1-POD1-L1", "DC1-POD1-L2"]},
+                id="device-names",
+            ),
+            pytest.param(
+                {"typename": "ManagedMLAG", "name": "X", "domain_id": 1, "devices": []},
+                {"devices": []},
+                id="no-devices",
+            ),
+        ],
+    )
+    def test_returns_the_domain_fields(self, cap: dict, expected: dict) -> None:
         result = get_mlag([cap])
         assert result is not None
-        assert result["reload_delay"] == 300
-        assert result["reload_delay_non_mlag"] == 330
-
-    def test_returns_device_names(self) -> None:
-        result = get_mlag([_mlag_cap(devices=["DC1-POD1-L1", "DC1-POD1-L2"])])
-        assert result is not None
-        assert result["devices"] == ["DC1-POD1-L1", "DC1-POD1-L2"]
-
-    def test_empty_devices_list(self) -> None:
-        cap = {"typename": "ManagedMLAG", "name": "X", "domain_id": 1, "devices": []}
-        result = get_mlag([cap])
-        assert result is not None
-        assert result["devices"] == []
+        assert {key: result[key] for key in expected} == expected
 
     def test_control_addresses_come_from_mlag_control_svi(self) -> None:
         """Control IPs come from the role=mlag-control SVI; management IPs stay separate."""
@@ -188,11 +189,39 @@ class TestGetMlagDomainExtraction:
 class TestGetMlagPeerLink:
     """The peer-link is read from the domain's own listed interfaces of the rendering device."""
 
-    def test_peer_link_is_the_listed_interface_of_the_device(self) -> None:
-        listed = _domain_with(_uplink_iface("Ethernet1/1"), _peer_link_iface("Port-Channel100"))
-        result = get_mlag(listed, device_name="DC1-POD1-L1")
+    @pytest.mark.parametrize(
+        ("caps", "expected"),
+        [
+            pytest.param(
+                _domain_with(_uplink_iface("Ethernet1/1"), _peer_link_iface("Port-Channel100")),
+                "Port-Channel100",
+                id="listed-interface-of-the-device",
+            ),
+            pytest.param(
+                _domain_with(
+                    {"name": "Ethernet1/33", "role": "mlag-peer", "typename": "DcimPhysicalInterface"},
+                    {"name": "Port-Channel100", "role": "mlag-peer", "typename": "DcimLAGInterface", "lag_id": 100},
+                ),
+                "Port-Channel100",
+                id="port-channel-wins-over-ports",
+            ),
+            pytest.param(
+                # A vPC authored without a port-channel: the lowest listed mlag-peer port is the peer-link.
+                _domain_with(
+                    {"name": "Ethernet1/34", "role": "mlag-peer"}, {"name": "Ethernet1/33", "role": "mlag-peer"}
+                ),
+                "Ethernet1/33",
+                id="first-port-by-name-without-port-channel",
+            ),
+            pytest.param(_domain_with(_peer_link_iface(), device="DC1-POD1-L2"), None, id="the-peers-interface"),
+            pytest.param(_domain_with(_uplink_iface("Ethernet1/1")), None, id="no-listed-peer-interface"),
+            pytest.param([_mlag_cap()], None, id="nothing-listed"),
+        ],
+    )
+    def test_peer_link(self, caps: list[dict], expected: str | None) -> None:
+        result = get_mlag(caps, device_name="DC1-POD1-L1")
         assert result is not None
-        assert result["peer_link"] == "Port-Channel100"
+        assert result["peer_link"] == expected
 
     def test_device_interface_with_the_peer_role_is_not_found_unless_listed(self) -> None:
         """Nothing is found on the device by role: an unlisted mlag-peer port is not the peer-link."""
@@ -200,48 +229,19 @@ class TestGetMlagPeerLink:
         assert result is not None
         assert result["peer_link"] is None
 
-    def test_the_peers_listed_interface_is_not_the_peer_link(self) -> None:
-        result = get_mlag(_domain_with(_peer_link_iface(), device="DC1-POD1-L2"), device_name="DC1-POD1-L1")
+    @pytest.mark.parametrize(
+        "listed",
+        [
+            pytest.param({**_peer_link_iface(), "typename": "DcimLAGInterface", "lag_id": 100}, id="lag"),
+            pytest.param(_peer_link_iface(), id="untyped"),
+            pytest.param(_uplink_iface(), id="no-peer-link"),
+        ],
+    )
+    def test_physical_or_no_peer_link_is_not_virtual(self, listed: dict) -> None:
+        """A DcimLAGInterface peer-link (and an untyped one) is a physical port-channel; no peer-link is not virtual."""
+        result = get_mlag(_domain_with(listed), device_name="DC1-POD1-L1")
         assert result is not None
-        assert result["peer_link"] is None
-
-    def test_no_listed_peer_interface_returns_none_peer_link(self) -> None:
-        result = get_mlag(_domain_with(_uplink_iface("Ethernet1/1")), device_name="DC1-POD1-L1")
-        assert result is not None
-        assert result["peer_link"] is None
-
-    def test_peer_link_none_when_nothing_is_listed(self) -> None:
-        result = get_mlag([_mlag_cap()], device_name="DC1-POD1-L1")
-        assert result is not None
-        assert result["peer_link"] is None
-
-    def test_port_channel_wins_over_listed_ports(self) -> None:
-        listed = _domain_with(
-            {"name": "Ethernet1/33", "role": "mlag-peer", "typename": "DcimPhysicalInterface"},
-            {"name": "Port-Channel100", "role": "mlag-peer", "typename": "DcimLAGInterface", "lag_id": 100},
-        )
-        result = get_mlag(listed, device_name="DC1-POD1-L1")
-        assert result is not None
-        assert result["peer_link"] == "Port-Channel100"
-
-    def test_first_listed_port_by_name_when_there_is_no_port_channel(self) -> None:
-        """A vPC authored without a port-channel: the lowest listed mlag-peer port is the peer-link."""
-        listed = _domain_with(
-            {"name": "Ethernet1/34", "role": "mlag-peer"}, {"name": "Ethernet1/33", "role": "mlag-peer"}
-        )
-        result = get_mlag(listed, device_name="DC1-POD1-L1")
-        assert result is not None
-        assert result["peer_link"] == "Ethernet1/33"
-
-    def test_physical_peer_link_is_not_virtual(self) -> None:
-        """A DcimLAGInterface peer-link (and an untyped one) is a physical port-channel."""
-        for iface in (
-            {**_peer_link_iface(), "typename": "DcimLAGInterface", "lag_id": 100},
-            _peer_link_iface(),
-        ):
-            result = get_mlag(_domain_with(iface), device_name="DC1-POD1-L1")
-            assert result is not None
-            assert result["virtual_peer_link"] is False
+        assert result["virtual_peer_link"] is False
 
     def test_virtual_interface_peer_link_is_flagged_virtual(self) -> None:
         """mlag_create: virtual leaves a member-less DcimVirtualInterface (loopback100) as the peer-link."""
@@ -287,11 +287,6 @@ class TestGetMlagPeerLink:
         assert result is not None
         assert result["mclag_interfaces"] == [{"name": "Port-Channel10", "members": ["Ethernet1/2"]}]
 
-    def test_no_peer_link_is_not_virtual(self) -> None:
-        result = get_mlag(_domain_with(_uplink_iface()), device_name="DC1-POD1-L1")
-        assert result is not None
-        assert result["virtual_peer_link"] is False
-
 
 def _sonic_mlag(**overrides: object) -> dict:
     return {
@@ -335,35 +330,34 @@ class TestSonicMlagConfig:
         assert config["VLAN_MEMBER"] == {"Vlan4094|PortChannel100": {"tagging_mode": "tagged"}}
         assert config["VLAN_INTERFACE"] == {"Vlan4094": {}, "Vlan4094|10.254.0.0/31": {}}
 
-    def test_ipv6_control_address_fails(self) -> None:
-        """SONiC ICCP only accepts IPv4 — an IPv6 control address is rejected."""
-        from ipaddress import AddressValueError
-
-        import pytest
-
-        with pytest.raises(AddressValueError):
-            get_sonic_mlag_config(
-                _sonic_mlag(local_address="fd00:2400::/127", local_ip="fd00:2400::", peer_ip="fd00:2400::1")
-            )
-
-    def test_missing_control_addresses_or_physical_peer_link_fails(self) -> None:
-        """Missing control addresses or a virtual peer-link are rejected."""
-        import pytest
-
-        with pytest.raises(ValueError, match="requires a domain"):
-            get_sonic_mlag_config({"domain_id": 1, "peer_link": "Loopback100"})
-        with pytest.raises(ValueError, match="requires a domain"):
-            get_sonic_mlag_config(_sonic_mlag(peer_link_lag_id=None))
-
-    def test_duplicate_addresses_and_out_of_range_domain_fail(self) -> None:
-        """Identical peer IPs and out-of-range domain IDs are rejected."""
-        import pytest
-
-        config = _sonic_mlag(peer_ip="10.254.0.0")
-        with pytest.raises(ValueError, match="distinct control IPs"):
+    @pytest.mark.parametrize(
+        ("config", "error", "match"),
+        [
+            pytest.param(
+                # SONiC ICCP only accepts IPv4.
+                _sonic_mlag(local_address="fd00:2400::/127", local_ip="fd00:2400::", peer_ip="fd00:2400::1"),
+                AddressValueError,
+                None,
+                id="ipv6-control-address",
+            ),
+            pytest.param(
+                {"domain_id": 1, "peer_link": "Loopback100"}, ValueError, "requires a domain", id="no-control"
+            ),
+            pytest.param(_sonic_mlag(peer_link_lag_id=None), ValueError, "requires a domain", id="virtual-peer-link"),
+            pytest.param(_sonic_mlag(peer_ip="10.254.0.0"), ValueError, "distinct control IPs", id="same-peer-ips"),
+            pytest.param(
+                _sonic_mlag(peer_ip="10.254.0.0", domain_id=4096),
+                ValueError,
+                "between 1 and 4095",
+                id="domain-id-range",
+            ),
+        ],
+    )
+    def test_an_unrenderable_domain_is_refused(self, config: dict, error: type[Exception], match: str | None) -> None:
+        """An IPv6 control address, missing control addresses, a virtual peer-link, identical peer IPs and an
+        out-of-range domain ID are rejected."""
+        with pytest.raises(error, match=match):
             get_sonic_mlag_config(config)
-        with pytest.raises(ValueError, match="between 1 and 4095"):
-            get_sonic_mlag_config({**config, "domain_id": 4096})
 
 
 def _render_common(template_name: str, **context: object) -> str:
@@ -497,51 +491,37 @@ class TestGetMlagFirstCapabilityWins:
 
 
 # ---------------------------------------------------------------------------
-# Real pod topology: DC1-POD1 L1↔L2 MLAG pair
+# Real pod topology: DC1-POD1 L1-L2 MLAG pair
 # ---------------------------------------------------------------------------
 
 
-class TestDC1Pod1MLAGScenario:
+def test_dc1_pod1_mlag_scenario() -> None:
     """Reflects the actual DC1-POD1-L1-L2-MLAG domain created in 06_lag_mlag.yml."""
-
-    def _l1_caps(self) -> list[dict]:
-        return [
-            {"typename": "ManagedBGP"},
-            _mlag_cap(
-                name="DC1-POD1-L1-L2-MLAG",
-                domain_id=1,
-                devices=["DC1-POD1-L1", "DC1-POD1-L2"],
-                interfaces=_on(
-                    "DC1-POD1-L1",
-                    {"name": "Ethernet1/33", "role": "mlag-peer"},
-                    {"name": "Ethernet1/34", "role": "mlag-peer"},
-                    {"name": "Port-Channel100", "role": "mlag-peer", "lag_id": 100},
-                ),
+    caps = [
+        {"typename": "ManagedBGP"},
+        _mlag_cap(
+            name="DC1-POD1-L1-L2-MLAG",
+            domain_id=1,
+            devices=["DC1-POD1-L1", "DC1-POD1-L2"],
+            interfaces=_on(
+                "DC1-POD1-L1",
+                {"name": "Ethernet1/33", "role": "mlag-peer"},
+                {"name": "Ethernet1/34", "role": "mlag-peer"},
+                {"name": "Port-Channel100", "role": "mlag-peer", "lag_id": 100},
             ),
-        ]
-
-    def _l1_interfaces(self) -> list[dict]:
-        return [
-            {"name": "Ethernet1/1", "role": "uplink"},
-            {"name": "Ethernet1/2", "role": "uplink"},
-            {"name": "Ethernet1/33", "role": "mlag-peer"},
-            {"name": "Ethernet1/34", "role": "mlag-peer"},
-            {"name": "Port-Channel100", "role": "mlag-peer", "lag_id": 100},
-        ]
-
-    def test_mlag_domain_extracted(self) -> None:
-        result = get_mlag(self._l1_caps(), self._l1_interfaces(), device_name="DC1-POD1-L1")
-        assert result is not None
-        assert result["name"] == "DC1-POD1-L1-L2-MLAG"
-        assert result["domain_id"] == 1
-
-    def test_peer_link_is_port_channel100(self) -> None:
-        result = get_mlag(self._l1_caps(), self._l1_interfaces(), device_name="DC1-POD1-L1")
-        assert result is not None
-        assert result["peer_link"] == "Port-Channel100"
-
-    def test_peer_devices_include_both_leaves(self) -> None:
-        result = get_mlag(self._l1_caps(), self._l1_interfaces(), device_name="DC1-POD1-L1")
-        assert result is not None
-        assert "DC1-POD1-L1" in result["devices"]
-        assert "DC1-POD1-L2" in result["devices"]
+        ),
+    ]
+    interfaces = [
+        {"name": "Ethernet1/1", "role": "uplink"},
+        {"name": "Ethernet1/2", "role": "uplink"},
+        {"name": "Ethernet1/33", "role": "mlag-peer"},
+        {"name": "Ethernet1/34", "role": "mlag-peer"},
+        {"name": "Port-Channel100", "role": "mlag-peer", "lag_id": 100},
+    ]
+    result = get_mlag(caps, interfaces, device_name="DC1-POD1-L1")
+    assert result is not None
+    assert result["name"] == "DC1-POD1-L1-L2-MLAG"
+    assert result["domain_id"] == 1
+    assert result["peer_link"] == "Port-Channel100"
+    assert "DC1-POD1-L1" in result["devices"]
+    assert "DC1-POD1-L2" in result["devices"]

@@ -235,7 +235,7 @@ def l2_instance(act: dict[str, Any]) -> L2Instance:
 
 
 def _interface_address(iface: dict[str, Any]) -> str | None:
-    ip_address = (iface.get("ip_addresses") or [None])[0] or iface.get("ip_address")
+    ip_address = iface.get("ip_address")
     if isinstance(ip_address, dict) and ip_address.get("address"):
         return host_ip(ip_address["address"])
     return None

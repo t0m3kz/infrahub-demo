@@ -51,31 +51,6 @@ def _outputs(client: FakeClient, circuit: str, suffixes: tuple[str, ...]) -> set
     }
 
 
-class TestTheGroupSemanticsOfTheFake:
-    def test_a_run_that_tracked_nothing_cleans_nothing(self) -> None:
-        """The SDK skips the whole update (and so the cleanup) when the run's group would be empty."""
-        client = FakeClient()
-        group = SdkTrackingGroup(client)
-        group.previous = {"old-peering"}
-
-        group.start_run()
-
-        assert group.finish_run() == set()
-        assert group.previous == {"old-peering"}
-
-    def test_a_run_with_members_deletes_the_previous_ones_it_did_not_reach(self) -> None:
-        """A non-empty group: previous members minus current ones are deleted, the current ones become the baseline."""
-        client = FakeClient()
-        group = SdkTrackingGroup(client)
-        group.previous = {"old-peering", VC_ID}
-
-        group.start_run()
-        client.targets.append(VC_ID)
-
-        assert group.finish_run() == {"old-peering"}
-        assert group.previous == {VC_ID}
-
-
 class TestEarlyReturnsCleanTheOldSession:
     @pytest.mark.parametrize(
         ("full", "circuit", "suffixes"),

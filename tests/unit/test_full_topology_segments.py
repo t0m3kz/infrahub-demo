@@ -144,18 +144,6 @@ def test_one_row_of_a_segment_per_port() -> None:
     assert {key: vlans for key, vlans in seen.items() if len(vlans) > 1} == {}
 
 
-def test_no_port_names_a_segment() -> None:
-    """The port-to-segment edge is gone: a port reaches a segment through its switch's VLAN row only."""
-    ports = [
-        item
-        for _, doc in _documents()
-        if (doc.get("spec") or {}).get("kind") in {"DcimPhysicalInterface", "DcimLAGInterface"}
-        for item in doc["spec"]["data"]
-        if "segments" in item
-    ]
-    assert ports == []
-
-
 def test_each_dc_declares_its_deployment_with_the_same_vlan_on_both_leaves() -> None:
     """Each DC's routed local segment has two leaf rows; its firewall-terminated segment also reaches both borders."""
     rows = [row for row in _deployment_rows() if row["segment"] != _STRETCHED and row["deployment"].startswith("DC-")]

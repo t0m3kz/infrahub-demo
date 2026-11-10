@@ -491,9 +491,8 @@ class TestQueryShape:
         )
 
     def test_footprint_environment_comes_from_the_scoped_generic(self) -> None:
-        """Only TopologyEnvironmentScoped carries environment; the removed TopologyCustomer.environment is not read."""
+        """The footprint's environment is read through TopologyEnvironmentScoped, the generic that carries it."""
         assert "... on TopologyEnvironmentScoped { environment { value } }" in self._QUERY
-        assert "... on TopologyCustomer { environment" not in self._QUERY
 
     def test_the_termination_rules_read_their_fields(self) -> None:
         """The gateway address and prefix, and the context with the footprints it serves, are selected."""

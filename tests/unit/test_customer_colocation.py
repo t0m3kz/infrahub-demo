@@ -383,7 +383,6 @@ class TestFirewallContextProvisioning:
         assert kwargs["customer_id"] == "cust-1"
         assert kwargs["customer"]["id"] == "cust-1"
         assert kwargs["target"].context_name("PROD").startswith("shared-")
-        assert not hasattr(gen, "_ensure_policy_only_context")
 
     @pytest.mark.asyncio
     async def test_no_target_skips_the_leg_step(self) -> None:

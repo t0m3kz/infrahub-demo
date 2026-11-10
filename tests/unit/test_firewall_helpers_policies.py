@@ -1,5 +1,7 @@
 """Unit tests for get_zone_policies() in transforms/helpers/firewall.py."""
 
+import pytest
+
 from tests.unit.firewall_helpers_shared import _make_segment_with_prefix
 from transforms.helpers.firewall import get_zone_policies
 
@@ -138,24 +140,29 @@ class TestGetZonePolicies:
         assert result[0]["default_action"] == "deny"
 
     def test_implicit_deny_always_appended(self) -> None:
-        policy = _make_policy(rules=[])
-        result = get_zone_policies([policy])
-        last = result[0]["rules"][-1]
-        assert last["name"] == "implicit-deny-all"
-        assert last["action"] == "deny"
-        assert last["protocol"] == "ip"
-        assert last["log"] is True
+        """An empty policy still ends in the deny-all: logged, any protocol, no ports, zones or selectors."""
+        last = get_zone_policies([_make_policy(rules=[])])[0]["rules"][-1]
+        assert {key: last[key] for key in ("name", "action", "protocol", "log", "raw_protocol")} == {
+            "name": "implicit-deny-all",
+            "action": "deny",
+            "protocol": "ip",
+            "log": True,
+            "raw_protocol": "any",
+        }
+        assert [last[key] for key in ("port_start", "port_end", "src_zone", "dst_zone", "src", "dst")] == [None] * 6
 
-    def test_implicit_deny_seq_min_9990_when_no_rules(self) -> None:
-        policy = _make_policy(rules=[])
-        result = get_zone_policies([policy])
-        assert result[0]["rules"][-1]["seq"] == 9990
-
-    def test_implicit_deny_seq_above_last_rule(self) -> None:
-        policy = _make_policy(rules=[_make_rule(index=100)])
-        result = get_zone_policies([policy])
-        last_seq = result[0]["rules"][-1]["seq"]
-        assert last_seq >= 110
+    @pytest.mark.parametrize(
+        ("indexes", "expected"),
+        [
+            pytest.param([], 9990, id="no-rules"),
+            pytest.param([100], 9990, id="one-rule"),
+            pytest.param(list(range(1, 1001)), 10010, id="long-table"),
+        ],
+    )
+    def test_implicit_deny_seq(self, indexes: list[int], expected: int) -> None:
+        """At least 9990, and always above the last renumbered rule (seq 10 per rule)."""
+        rules = [_make_rule(index=i, name=f"r{i}") for i in indexes]
+        assert get_zone_policies([_make_policy(rules=rules)])[0]["rules"][-1]["seq"] == expected
 
     def test_disabled_rule_is_skipped(self) -> None:
         rules = [_make_rule(index=10), _make_rule(index=20, disabled=True)]
@@ -196,11 +203,6 @@ class TestGetZonePolicies:
         assert [p["name"] for p in result] == ["a"]
         assert result[0]["rules"][-1]["name"] == "implicit-deny-all"
 
-    def test_implicit_deny_seq_stays_above_a_long_table(self) -> None:
-        rules = [_make_rule(index=i, name=f"r{i}") for i in range(1, 1001)]
-        result = get_zone_policies([_make_policy(rules=rules)])
-        assert result[0]["rules"][-1]["seq"] == 10010
-
     def test_rule_tcp_with_single_port(self) -> None:
         rule = _make_rule(protocol="tcp", port_start=443, port_end=None)
         result = get_zone_policies([_make_policy(rules=[rule])])
@@ -225,14 +227,6 @@ class TestGetZonePolicies:
         r = result[0]["rules"][0]
         assert r["protocol"] == "ip"
         assert r["raw_protocol"] == "any"
-
-    def test_implicit_deny_rule_has_no_raw_protocol_or_ports(self) -> None:
-        policy = _make_policy(rules=[])
-        result = get_zone_policies([policy])
-        last = result[0]["rules"][-1]
-        assert last["raw_protocol"] == "any"
-        assert last["port_start"] is None
-        assert last["port_end"] is None
 
     def test_rule_tcp_with_port_range(self) -> None:
         rule = _make_rule(protocol="tcp", port_start=8080, port_end=8090)
@@ -371,15 +365,6 @@ class TestGetZonePolicies:
         result = get_zone_policies(policies)
         assert len(result) == 1
         assert result[0]["name"] == "active"
-
-    def test_implicit_deny_has_null_zones(self) -> None:
-        policy = _make_policy(rules=[])
-        result = get_zone_policies([policy])
-        deny = result[0]["rules"][-1]
-        assert deny["src_zone"] is None
-        assert deny["dst_zone"] is None
-        assert deny["src"] is None
-        assert deny["dst"] is None
 
     def test_rule_port_range_same_start_end_uses_eq(self) -> None:
         """When port_end equals port_start the result is 'eq X', not 'range X X'."""
