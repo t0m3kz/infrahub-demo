@@ -33,7 +33,6 @@ spec:
       bandwidth: 10000
       locations:
         - PAR-COLO1
-        - ISP-B
       capabilities:
         - ["par-colo1-edge-01", "Ethernet1/14"]
         - ["EXT-ISP-B-PE1", "et-0/0/1"]
@@ -72,7 +71,6 @@ spec:
       bandwidth: 1000
       locations:
         - C900-OFFICE
-        - ISP-A
       capabilities:
         - ["bcn-office-edge-01", "GE1"]
         - ["EXT-ISP-A-PE1", "et-0/0/1"]
@@ -85,7 +83,6 @@ spec:
       bandwidth: 1000
       locations:
         - C901-OFFICE
-        - ISP-A
       capabilities:
         - ["lis-office-edge-01", "GE1"]
         - ["EXT-ISP-A-PE1", "et-0/0/2"]
@@ -98,7 +95,6 @@ spec:
       bandwidth: 1000
       locations:
         - C901-OFFICE
-        - ISP-B
       capabilities:
         - ["lis-office-edge-02", "GE1"]
         - ["EXT-ISP-B-PE1", "et-0/0/2"]

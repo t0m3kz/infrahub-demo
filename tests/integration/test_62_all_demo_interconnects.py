@@ -56,7 +56,6 @@ from .all_demo_circuit_constants import (
     ALL_DEMO_GATEWAY_ACCESS_LOCATIONS,
     ALL_DEMO_INTERNET_BUS,
     ALL_DEMO_ISP_ACCESS_DEVICE,
-    ALL_DEMO_ISP_ACCESS_LOCATION,
     ALL_DEMO_ISP_ACCESS_PORTS,
     ALL_DEMO_SDWAN_EDGE_UPLINK,
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
@@ -179,7 +178,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
     @staticmethod
     def _placement_errors(physical: list[dict]) -> list[str]:
-        """Two distinct facilities, each the deployment of one end's device (an on-ramp edge: its zone).
+        """At most two distinct facilities, one per end that has a place (an on-ramp edge: its zone).
 
         A facility is a TopologyFacility kind (DC, colocation zone, cloud region,
         ISP, SaaS region, office); a pod, a metro or a footprint is never one, and an
@@ -191,9 +190,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         for circuit in sorted(physical, key=lambda c: c["circuit_id"]):
             circuit_id = circuit["circuit_id"]
             locations = circuit["location_nodes"]
-            if len({location["id"] for location in locations}) != 2:
+            location_ids = {location["id"] for location in locations}
+            if len(location_ids) != len(locations) or len(locations) > 2:
                 errors.append(
-                    f"{circuit_id}: terminates at {circuit['locations']}, expected exactly 2 distinct locations"
+                    f"{circuit_id}: terminates at {circuit['locations']}, expected at most 2 distinct locations"
                 )
                 continue
             for location in locations:
@@ -206,19 +206,17 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         f"{circuit_id}: a {circuit['circuit_type']} circuit ends at office {location['name']}"
                     )
             devices = circuit["end_devices"]
-            if len(devices) != 2 or any(not device["deployment_id"] for device in devices):
-                errors.append(f"{circuit_id}: end devices {_deployments(circuit)}, expected 2, each with a deployment")
+            if len(devices) != 2:
+                errors.append(f"{circuit_id}: end devices {_deployments(circuit)}, expected 2")
                 continue
-            (first, second), (left, right) = locations, devices
-            # Exact, like checks/circuit_placement.py's _end_at: a carrier circuit's location IS the end device's
-            # deployment (an on-ramp edge's zone), never a sibling cage of the same metro.
-            if not (
-                (first["id"] == left["deployment_id"] and second["id"] == right["deployment_id"])
-                or (first["id"] == right["deployment_id"] and second["id"] == left["deployment_id"])
-            ):
+            # Exact, like checks/circuit_placement.py: the locations ARE the places of the ends that have one (a
+            # deployment, region, SaaS region, provider connect location or THE INTERNET), never a sibling cage of the
+            # same metro. A provider's own router has no place and no location.
+            placed = {device["deployment_id"] for device in devices if device["deployment_id"]}
+            if placed != location_ids:
                 errors.append(
                     f"{circuit_id}: locations {[_label(location) for location in locations]} are not where its ends "
-                    f"sit {_deployments(circuit)} (each end's deployment)"
+                    f"sit {_deployments(circuit)} (each placed end's deployment)"
                 )
         return errors
 
@@ -293,7 +291,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if len(isp_ends) != 1:
                 errors.append(f"{circuit_id}: {len(isp_ends)} end(s) on {ALL_DEMO_ISP_ACCESS_DEVICE}, expected 1")
             isp_ports.extend(isp_ends)
-            expected_locations = sorted([office, ALL_DEMO_ISP_ACCESS_LOCATION])
+            expected_locations = [office]
             if circuit["locations"] != expected_locations:
                 errors.append(f"{circuit_id}: locations {circuit['locations']}, expected {expected_locations}")
         if set(isp_ports) != ALL_DEMO_ISP_ACCESS_PORTS or len(isp_ports) != len(ALL_DEMO_ISP_ACCESS_PORTS):

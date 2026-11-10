@@ -9,7 +9,6 @@ spec:
       object_template: MX204_ISP_PE
       owner: P023
       description: "Second ISP router: far end of the internet carrier on Ethernet1/1, uplink to INTERNET"
-      deployment: ISP-B
       interfaces:
         - kind: DcimPhysicalInterface
           data:

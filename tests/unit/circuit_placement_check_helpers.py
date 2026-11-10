@@ -31,8 +31,6 @@ FR6 = _place("FR6", "TopologyColocationZone")
 PA4 = _place("PA4", "TopologyColocationZone")
 AM_NE = _place("AM-NE", "TopologyVirtualColocation")
 EUC1 = _place("eu-central-1", "TopologyCloudRegion")
-ORANGE = _place("ISP-ORANGE", "TopologyExternalProviders")
-LUMEN = _place("ISP-LUMEN", "TopologyExternalProviders")
 C001_OFFICE = _place("C001-OFFICE", "TopologyCustomerOffice", owner="C001")
 C002_OFFICE = _place("C002-OFFICE", "TopologyCustomerOffice", owner="C002")
 
@@ -42,14 +40,14 @@ def _edges(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     return {"edges": [{"node": node} for node in nodes]}
 
 
-def _end(device: str, name: str, deployment: dict[str, Any] | None) -> dict[str, Any]:
-    """An end port of a carrier circuit, with the device's deployment (id, kind and name only)."""
+def _end(device: str, name: str, deployment: dict[str, Any] | None, owner: str | None = None) -> dict[str, Any]:
+    """An end port of a carrier circuit, with the device's deployment (id, kind and name only) and, for a router a
+    provider owns, its owner (``id-<owner>``, an OrganizationProvider)."""
     deployment = {key: deployment[key] for key in ("id", "__typename", "name")} if deployment else None
-    return {
-        "id": f"id-{device}:{name}",
-        "name": {"value": name},
-        "device": {"node": {"id": f"id-{device}", "name": {"value": device}, "deployment": {"node": deployment}}},
-    }
+    node: dict[str, Any] = {"id": f"id-{device}", "name": {"value": device}, "deployment": {"node": deployment}}
+    if owner is not None:
+        node["owner"] = {"node": {"id": f"id-{owner}", "__typename": "OrganizationProvider"}}
+    return {"id": f"id-{device}:{name}", "name": {"value": name}, "device": {"node": node}}
 
 
 BL10_END = _end("bl-dc101101", "Ethernet1/35", DC10)
@@ -63,8 +61,8 @@ AWS_END = _end("EXT-AWS-DX-FR2", "et-0/0/0", EUC1)
 GW_END = _end("EQX-FR2-SDWAN-GW1", "eth1", FR2)  # the gateway's public port
 GW_ETH0_END = _end("EQX-FR2-SDWAN-GW1", "eth0", FR2)
 OFFICE_EDGE_END = _end("C001-OFFICE-EDGE1", "GE1", C001_OFFICE)
-ORANGE_PE_END = _end("EXT-ORANGE-1", "ge-0/0/1", ORANGE)
-LUMEN_PE_END = _end("EXT-LUMEN-1", "ge-0/0/1", LUMEN)
+ORANGE_PE_END = _end("EXT-ORANGE-1", "ge-0/0/1", None, owner="ORANGE")  # a provider's router: no place
+LUMEN_PE_END = _end("EXT-LUMEN-1", "ge-0/0/1", None, owner="LUMEN")
 
 
 def _transport_end(device: str, name: str, region: dict[str, Any], *, saas: bool = False) -> dict[str, Any]:
@@ -88,11 +86,15 @@ def _carrier_circuit(
     name: str,
     locations: list[dict[str, Any]],
     ends: list[dict[str, Any]],
+    provider: str | None = None,
+    circuit_type: str = "fiber",
 ) -> dict[str, Any]:
     """A carrier circuit as the query selects it: its locations and the end ports it terminates on."""
     return {
         "id": f"id-{name}",
         "name": {"value": name},
+        "circuit_type": {"value": circuit_type},
+        "provider": {"node": {"id": f"id-{provider}"}} if provider else {"node": None},
         "locations": _edges(locations),
         "capabilities": _edges(ends),
     }
@@ -102,8 +104,12 @@ DF10 = _carrier_circuit("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END, EG_FR_DF10_END
 DF11 = _carrier_circuit("DF-DC11-EQXFR2", [DC11, FR2], [BL11_END, EG_FR_DF11_END])
 XC = _carrier_circuit("XC-EQXFR2-AWS-EUC1", [FR2, EUC1], [EG_FR_END, AWS_END])
 XC_AM_NE = _carrier_circuit("XC-EQXAMNE-AWS-EUC1", [AM_NE, EUC1], [EG_AM_NE_END, AWS_END])
-INET_OFFICE = _carrier_circuit("INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE_END, ORANGE_PE_END])
-INET_GW = _carrier_circuit("INET-LUMEN-EQXFR2-GW", [FR2, LUMEN], [GW_END, LUMEN_PE_END])
+INET_OFFICE = _carrier_circuit(
+    "INET-C001-OFFICE", [C001_OFFICE], [OFFICE_EDGE_END, ORANGE_PE_END], provider="ORANGE", circuit_type="internet"
+)
+INET_GW = _carrier_circuit(
+    "INET-LUMEN-EQXFR2-GW", [FR2], [GW_END, LUMEN_PE_END], provider="LUMEN", circuit_type="internet"
+)
 
 
 def _decommissioned(circuit: dict[str, Any]) -> dict[str, Any]:
@@ -119,6 +125,7 @@ def _carrier(circuit: dict[str, Any]) -> dict[str, Any]:
         "id": circuit["id"],
         "name": circuit["name"],
         "status": circuit.get("status", {"value": "active"}),
+        "circuit_type": circuit.get("circuit_type", {"value": "fiber"}),
         "locations": _edges(
             [{key: edge["node"][key] for key in ("id", "__typename", "name")} for edge in circuit["locations"]["edges"]]
         ),
@@ -333,7 +340,9 @@ def _run(
 
 
 # A VPN tunnel from the border leaf of DC10 (its uplink rides the Orange internet circuit) to the AWS side.
-INET_DC10 = _carrier_circuit("INET-ORANGE-DC10", [DC10, ORANGE], [BL10_END, ORANGE_PE_END])
+INET_DC10 = _carrier_circuit(
+    "INET-ORANGE-DC10", [DC10], [BL10_END, ORANGE_PE_END], provider="ORANGE", circuit_type="internet"
+)
 BL10_TUNNEL = _vport("bl-dc101101", "Tunnel1", parent=("Ethernet1/36", (INET_DC10,)))
 AWS_TUNNEL = _vport("EXT-AWS-VPN-EUC1", "Tunnel1")
 VPN_CIRCUIT = _vpn("PC-VPN-L1", [DC10, EUC1], [BL10_TUNNEL, AWS_TUNNEL])

@@ -22,6 +22,7 @@ _PHYSICAL_READS = [
     "name",
     "status",
     "circuit_type",
+    "provider.id",
     "locations.id",
     "locations.__typename",
     "locations.name",
@@ -47,6 +48,9 @@ _PHYSICAL_READS = [
     "capabilities.device.location.id",
     "capabilities.device.location.__typename",
     "capabilities.device.location.name",
+    # a provider's own router has no place: its owner is the circuit's provider
+    "capabilities.device.owner.id",
+    "capabilities.device.owner.__typename",
 ]
 
 # What it reads from the end ports of a virtual circuit (the shared VirtualPort fragment): the port, the physical
@@ -86,6 +90,7 @@ _PORT_READS = [
             "id",
             "name",
             "status",
+            "circuit_type",
             "locations.id",
             "locations.__typename",
             "locations.name",

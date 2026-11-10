@@ -431,6 +431,102 @@ class TestR9Placement:
         assert len(errors) == 1 and "not of a transport" in errors[0]
 
 
+class TestR10R11PublicEndpoints:
+    """A public endpoint has one provider connect of its provider at its place, attached to THE INTERNET."""
+
+    @staticmethod
+    def _endpoint(**overrides: Any) -> dict[str, Any]:
+        endpoint = {
+            "id": "pub",
+            "name": _v("pub"),
+            "status": _v("active"),
+            "access": _v("public"),
+            "provider": _node("aws"),
+            "saas_region": _node(None),
+            "virtual_network": _node("vnet", region=_node("euc1")),
+            "segments": _edges(),
+        }
+        endpoint.update(overrides)
+        return endpoint
+
+    @staticmethod
+    def _connect(name: str = "ext", provider: str = "aws", location: str = "euc1", circuits: Any = None) -> dict:
+        internet_end = {"__typename": "DcimInterface", "device": _node("inet", __typename="TopologyInternet")}
+        carrier = {
+            "__typename": "TopologyCarrierCircuit",
+            "id": "c1",
+            "status": _v("active"),
+            "circuit_type": _v("internet"),
+            "capabilities": _edges(
+                {"__typename": "DcimPhysicalInterface", "device": _node(name, __typename="TopologyProviderConnect")},
+                internet_end,
+            ),
+        }
+        port = {"id": "p", "capabilities": _edges(carrier if circuits is None else circuits)}
+        return {
+            "id": name,
+            "name": _v(name),
+            "provider": _node(provider),
+            "location": _node(location),
+            "interfaces": _edges(port),
+        }
+
+    def test_a_connect_at_the_place_attached_to_the_internet_passes(self) -> None:
+        """Provider and region match, the port is an end of an internet carrier to THE INTERNET."""
+        assert _run(CloudServiceEndpoint=[self._endpoint()], TopologyProviderConnect=[self._connect()]) == []
+
+    def test_a_saas_endpoint_is_placed_by_its_saas_region(self) -> None:
+        """A SaaS endpoint has no virtual network: its saas_region is its place."""
+        endpoint = self._endpoint(provider=_node("webex"), saas_region=_node("fra"), virtual_network=_node(None))
+        connect = self._connect("ext-webex", "webex", "fra")
+        assert _run(CloudServiceEndpoint=[endpoint], TopologyProviderConnect=[connect]) == []
+
+    def test_no_connect_at_the_place_fails(self) -> None:
+        """A connect of the provider in another region does not count."""
+        errors = _run(CloudServiceEndpoint=[self._endpoint()], TopologyProviderConnect=[self._connect(location="x")])
+        assert len(errors) == 1 and "R10" in errors[0] and "'pub'" in errors[0] and "no provider connect" in errors[0]
+
+    def test_a_connect_of_another_provider_fails(self) -> None:
+        """The provider must match."""
+        errors = _run(CloudServiceEndpoint=[self._endpoint()], TopologyProviderConnect=[self._connect(provider="gcp")])
+        assert len(errors) == 1 and "R10" in errors[0]
+
+    def test_two_connects_fail(self) -> None:
+        """Two connects attached to THE INTERNET: exactly one is the public side."""
+        connects = [self._connect("a"), self._connect("b")]
+        errors = _run(CloudServiceEndpoint=[self._endpoint()], TopologyProviderConnect=connects)
+        assert len(errors) == 1 and "R10" in errors[0] and "2 provider connects attached" in errors[0]
+
+    def test_a_private_port_at_the_same_place_is_ignored(self) -> None:
+        """A private port of the provider at the place has no internet carrier: the attached one is the public side."""
+        private = self._connect("private", circuits=[])
+        errors = _run(
+            CloudServiceEndpoint=[self._endpoint()], TopologyProviderConnect=[private, self._connect("pub-side")]
+        )
+        assert errors == []
+
+    def test_a_connect_with_no_internet_carrier_fails(self) -> None:
+        """The device exists but no carrier reaches THE INTERNET."""
+        connect = self._connect()
+        connect["interfaces"] = _edges({"id": "p", "capabilities": _edges()})
+        errors = _run(CloudServiceEndpoint=[self._endpoint()], TopologyProviderConnect=[connect])
+        assert len(errors) == 1 and "R11" in errors[0] and "'pub'" in errors[0] and "(ext)" in errors[0]
+
+    def test_a_carrier_to_another_place_fails(self) -> None:
+        """An internet carrier whose other end is no THE INTERNET does not attach the device."""
+        connect = self._connect()
+        carrier = connect["interfaces"]["edges"][0]["node"]["capabilities"]["edges"][0]["node"]
+        carrier["capabilities"] = _edges({"__typename": "DcimPhysicalInterface", "device": _node("pe")})
+        errors = _run(CloudServiceEndpoint=[self._endpoint()], TopologyProviderConnect=[connect])
+        assert len(errors) == 1 and "R11" in errors[0]
+
+    def test_a_private_or_decommissioned_endpoint_is_not_judged(self) -> None:
+        """Only an enabled public endpoint needs a connect."""
+        private = self._endpoint(access=_v("route"))
+        gone = self._endpoint(status=_v("decommissioned"))
+        assert _run(CloudServiceEndpoint=[private, gone]) == []
+
+
 def test_the_check_is_registered_with_its_query_and_a_smoke_entry() -> None:
     """.infrahub.yml names the class, the file and the query; the smoke file lists the query."""
     config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())

@@ -56,8 +56,12 @@ VRF_ROLES = frozenset(
 )
 """Device roles that route tenant VRFs. Spines, L2 leaves, firewalls and load balancers never carry one."""
 
-PARTY_DEPLOYMENT_KINDS = frozenset({"TopologyCloudRegion", "TopologyExternalProviders"})
-"""A device deployed into one of these is the party's (a cloud provider's service-edge appliance, an ISP PE)."""
+PARTY_DEPLOYMENT_KINDS = frozenset({"TopologyCloudRegion"})
+"""A device deployed into one of these is the party's (a cloud provider's service-edge appliance)."""
+
+PARTY_OWNER_KINDS = frozenset({"OrganizationProvider"})
+"""A device with no deployment whose owner is of one of these kinds is a provider's own (an ISP or partner router: it
+has no place object, its provider is its owner)."""
 
 PARTY_GROUPS = frozenset({GROUP_PROVIDER_STUBS})
 """A provider stub modelled inside our colocation zone (an Equinix Fabric port, a Megaport MCR) is the party's too."""
@@ -73,6 +77,7 @@ def carries_vrfs(
     groups: frozenset[str] = frozenset(),
     deployment_kind: str | None = None,
     status: str | None = None,
+    owner_kind: str | None = None,
 ) -> bool:
     """Whether a device can carry VRF instances: one of our routing devices in service, not a party's.
 
@@ -85,6 +90,7 @@ def carries_vrfs(
         and role in VRF_ROLES
         and groups.isdisjoint(PARTY_GROUPS)
         and deployment_kind not in PARTY_DEPLOYMENT_KINDS
+        and not (deployment_kind is None and owner_kind in PARTY_OWNER_KINDS)
     )
 
 
@@ -161,6 +167,7 @@ class VrfDemandInputs:
     groups: frozenset[str] = frozenset()
     deployment_kind: str | None = None
     status: str | None = None
+    owner_kind: str | None = None
     row_namespaces: frozenset[str] = frozenset()
     svi_namespaces: frozenset[str] = frozenset()
     address_namespaces: frozenset[str] = frozenset()
@@ -169,7 +176,9 @@ class VrfDemandInputs:
 
 def vrf_demand(inputs: VrfDemandInputs) -> frozenset[str]:
     """The namespace names the device needs an instance of; empty for a device that never carries one."""
-    if not carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind, inputs.status):
+    if not carries_vrfs(
+        inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind, inputs.status, inputs.owner_kind
+    ):
         return frozenset()
     used = inputs.row_namespaces | inputs.svi_namespaces | inputs.address_namespaces | inputs.leg_namespaces
     return frozenset(name for name in used if name and name != DEFAULT_NAMESPACE)
@@ -262,7 +271,9 @@ class DeviceVrfFacts:
     def carries_vrfs(self) -> bool:
         """Whether the device can carry instances and SVIs at all (in service, one of our routing devices)."""
         inputs = self.inputs
-        return carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind, inputs.status)
+        return carries_vrfs(
+            inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind, inputs.status, inputs.owner_kind
+        )
 
     def desired_l3vni_svis(self, namespaces: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
         """``Vlan<slot>`` -> the namespace whose L3 VNI the device terminates, for a device that carries VRFs.
@@ -423,6 +434,7 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
         groups=frozenset(group["name"] for group in device.get("member_of_groups") or [] if group.get("name")),
         deployment_kind=(device.get("deployment") or {}).get("typename"),
         status=device.get("status"),
+        owner_kind=(device.get("owner") or {}).get("typename"),
         row_namespaces=frozenset(row.namespace for row in routed),
         svi_namespaces=frozenset(svi.vrf_namespace for svi in svis if svi.vrf_namespace),
         # An interface in two VRFs is reported (checks/vrf_instances.py), not read: its routing table is ambiguous.

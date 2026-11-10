@@ -1,0 +1,50 @@
+---
+version: "1.0"
+
+# The reverse of the edges that name a provider or an owner. Each forward edge is declared on one side only (the device,
+# the circuit, the port, the endpoint), so the provider lists nothing by itself; these reverses give the UI and the
+# readers one place to look at an ISP's routers and circuits. Each reuses the forward edge's identifier and peer kind
+# (tests/unit/test_provider_links_schema.py). Nothing is stored twice: a reverse edge is the same edge.
+extensions:
+  nodes:
+    - kind: OrganizationEntity
+      relationships:
+        - name: owned_devices
+          label: "Owned Devices"
+          peer: DcimDeviceManaged
+          cardinality: many
+          kind: Generic
+          optional: true
+          identifier: "device__owner"
+          order_weight: 1700
+          description: "The devices this customer or provider owns (a provider's own routers have no deployment)"
+
+    - kind: OrganizationProvider
+      relationships:
+        - name: circuits
+          label: "Circuits"
+          peer: TopologyCircuit
+          cardinality: many
+          kind: Generic
+          optional: true
+          identifier: "circuit__provider"
+          order_weight: 1710
+          description: "The carrier and session circuits this provider serves"
+        - name: provider_ports
+          label: "Provider Ports"
+          peer: DcimProviderPort
+          cardinality: many
+          kind: Generic
+          optional: true
+          identifier: "dcim_provider_port__provider"
+          order_weight: 1720
+          description: "The ports this provider operates (cloud transports, provider connect devices)"
+        - name: service_endpoints
+          label: "Service Endpoints"
+          peer: CloudServiceEndpoint
+          cardinality: many
+          kind: Generic
+          optional: true
+          identifier: "cloud_service_endpoint__provider"
+          order_weight: 1730
+          description: "The cloud and SaaS services this provider offers"

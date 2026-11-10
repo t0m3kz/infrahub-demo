@@ -1,6 +1,6 @@
 """The topology diagram of data/demos/00_full_topology/README.md is the circuits of the data, drawn between topologies.
 
-One node per location a circuit lists (a DC, a cage, the office, an ISP, THE INTERNET, a cloud or SaaS region), one
+One node per location a circuit lists (a DC, a cage, the office, THE INTERNET, a cloud or SaaS region), one
 edge per pair of locations: the count of each circuit type between them, solid when a carrier joins them, dashed when
 only session circuits do. No device is drawn. Print the block to paste with
 ``uv run python -m tests.unit.test_full_topology_diagram``.
@@ -26,7 +26,7 @@ _GROUPS: dict[str, tuple[str, list[str]]] = {
         "Our sites",
         ["DC-KTW1", "DC-WAW1", "DC-GDN1", "PAR-COLO1", "FRA-COLO1", "AMS-COLO1", "C900-OFFICE", "C901-OFFICE"],
     ),
-    "NET": ("Internet", ["ISP-A", "ISP-B", "INTERNET"]),
+    "NET": ("Internet", ["INTERNET"]),
     "CLOUD": ("Cloud and SaaS", ["eu-central-1", "westeurope", "europe-west3", "WEBEX-FRANKFURT", "ZSCALER-MUNICH I"]),
 }
 _LABELS = {

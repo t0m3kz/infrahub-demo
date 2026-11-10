@@ -58,8 +58,6 @@ _ZONE_KINDS = frozenset({"TopologyColocationZone", "TopologyVirtualColocation"})
 
 _OFFICE_KIND = "TopologyCustomerOffice"
 
-_ISP_KIND = "TopologyExternalProviders"
-
 _DECOMMISSIONED = "decommissioned"
 
 
@@ -201,7 +199,7 @@ def _contiguous(hops: list[list[str]], start: str, finish: str) -> bool:
 
 def _tunnel_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, Any]]) -> list[str]:
     """A Tunnel: owned by its office's owner, one end on the gateway's public port in the gateway's zone, and every
-    end on a live internet carrier circuit of its own (one with an end on an ISP): no shared path to be contiguous."""
+    end on a live internet carrier circuit of its own (a carrier of circuit_type internet): no shared path to be contiguous."""
     name = circuit["name"]
     errors: list[str] = []
     locations = circuit["location_nodes"]
@@ -228,9 +226,7 @@ def _tunnel_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, 
     for end in circuit["end_nodes"]:
         live = _live(end["carriers"])
         internet = any(
-            location["kind"] == _ISP_KIND
-            for carrier in live
-            for location in physical_by_id.get(carrier["circuit_id"], {}).get("location_nodes", [])
+            physical_by_id.get(carrier["circuit_id"], {}).get("circuit_type") == "internet" for carrier in live
         )
         if not internet:
             errors.append(

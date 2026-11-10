@@ -47,9 +47,9 @@ from tests.unit.circuit_placement_check_helpers import (
     HANDOFF,
     INET_GW,
     INET_OFFICE,
+    LUMEN_PE_END,
     OFFICE_EDGE,
     OFFICE_EDGE_END,
-    ORANGE,
     ORANGE_PE_END,
     PA4,
     TUNNEL,
@@ -96,12 +96,40 @@ class TestCarrierCircuitPlacement:
         assert _run(carrier=[circuit]) == []
 
     @pytest.mark.parametrize("locations", [[FR2], []], ids=["only-the-authored-cage", "none"])
-    def test_not_two_locations_fails(self, locations: list[dict[str, Any]]) -> None:
-        """A carrier circuit with fewer than two distinct locations (a derived end missing) is an error."""
+    def test_a_placed_end_without_its_location_fails(self, locations: list[dict[str, Any]]) -> None:
+        """Two placed ends need two locations (a derived end missing) and each must be the end's deployment."""
         messages = _run(carrier=[_carrier_circuit("DF-DC10-EQXFR2", locations, [BL10_END, EG_FR_END])])
         assert len(messages) == 1
         assert "Carrier circuit 'DF-DC10-EQXFR2' terminates on" in messages[0]
-        assert "exactly 2 distinct locations" in messages[0]
+        assert "its placed ends are" in messages[0]
+
+    def test_three_locations_fail(self) -> None:
+        """At most two locations."""
+        messages = _run(carrier=[_carrier_circuit("X", [DC10, DC11, FR2], [BL10_END, EG_FR_END])])
+        assert len(messages) == 1 and "at most 2 distinct locations" in messages[0]
+
+    def test_a_provider_router_end_has_no_location(self) -> None:
+        """The ISP router is placed nowhere: one location (ours), the circuit's provider owns the router."""
+        assert _run(carrier=[INET_OFFICE]) == []
+
+    def test_a_router_not_owned_by_the_circuit_provider_fails(self) -> None:
+        """The circuit's provider must name the router end."""
+        circuit = _carrier_circuit(
+            "X", [C001_OFFICE], [OFFICE_EDGE_END, ORANGE_PE_END], provider="LUMEN", circuit_type="internet"
+        )
+        messages = _run(carrier=[circuit])
+        assert len(messages) == 1 and "none is owned by the circuit's provider" in messages[0]
+
+    def test_two_provider_routers_need_no_location(self) -> None:
+        """A partner's access from its ISP: both ends are provider routers, the circuit has no location."""
+        partner = _end("EXT-ACME-EDGE1", "et-0/0/0", None, owner="ACME")
+        circuit = _carrier_circuit("X", [], [partner, LUMEN_PE_END], provider="LUMEN", circuit_type="internet")
+        assert _run(carrier=[circuit]) == []
+
+    def test_a_router_with_a_location_that_matches_no_end_fails(self) -> None:
+        """A location with no placed end behind it is drift."""
+        circuit = _carrier_circuit("X", [C001_OFFICE, FR2], [OFFICE_EDGE_END, ORANGE_PE_END], provider="ORANGE")
+        assert len(_run(carrier=[circuit])) == 1
 
     def test_end_device_without_deployment_fails(self) -> None:
         """An end on a device with no deployment cannot place its end: error naming the port."""
@@ -209,7 +237,9 @@ class TestTunnelCircuit:
     def test_tunnels_sharing_a_gateway_port_pass(self) -> None:
         """One gateway port serves many tunnels: a tunnel is exempt from the one-session-per-port rule."""
         other_edge = _vport(
-            "C002-OFFICE-EDGE1", "GE1", (_carrier_circuit("INET-C002-OFFICE", [C002_OFFICE, ORANGE], []),)
+            "C002-OFFICE-EDGE1",
+            "GE1",
+            (_carrier_circuit("INET-C002-OFFICE", [C002_OFFICE], [], circuit_type="internet"),),
         )
         other = _tunnel("C002-OFFICE-SDWAN-FR2", [C002_OFFICE, FR2], [other_edge, GW_PUBLIC])
         assert _run(tunnels=[TUNNEL, other]) == []

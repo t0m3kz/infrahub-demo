@@ -67,7 +67,6 @@ spec:
       bandwidth: 1000
       locations:
         - DC-KTW1
-        - ISP-A
       capabilities:
         - ["ktw1-edge-01", "Ethernet1/2"]
         - ["EXT-ISP-A-PE1", "et-0/0/0"]

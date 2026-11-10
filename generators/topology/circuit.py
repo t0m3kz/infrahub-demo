@@ -2,9 +2,10 @@
 
 A carrier circuit is a pure carrier (fibre, cross-connect, internet access): it has no role and no session. This
 generator's one job is its placement. An endpoint device whose ``deployment`` is itself a facility
-(TopologyDataCenter, TopologyExternalProviders, TopologyCloudRegion, TopologySaasRegion, TopologyColocationZone,
+(TopologyDataCenter, TopologyCloudRegion, TopologySaasRegion, TopologyColocationZone,
 TopologyVirtualColocation) places that end, so the circuit's locations are the authored ones plus these derived
-ones, exactly two distinct. An on-ramp edge deploys to its zone or virtual colocation, which is the facility the
+ones, at most two distinct. A provider's own router (an ISP or partner PE) has no deployment and no place object: its
+end has no location, the circuit's own ``provider`` names it (checks/circuit_placement.py judges that). An on-ramp edge deploys to its zone or virtual colocation, which is the facility the
 circuit ends on. A derived facility that contradicts an authored one of the same kind, or anything but two
 locations, fails the run before any write; the missing derived ones are added with one RelationshipAdd, so an
 already complete circuit writes nothing. THE INTERNET is a device and a facility at once (it has no ``deployment``):
@@ -47,6 +48,7 @@ from typing import Any
 
 from utils.circuit_underlay import INTERNET_KIND, session_circuits_on
 from utils.data_cleaning import clean_data
+from utils.limits import CIRCUIT_ENDS
 
 from ..common import CommonGenerator
 from ..helpers.vrf import VrfMixin
@@ -64,7 +66,6 @@ VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
 _DERIVABLE_FACILITY_KINDS = frozenset(
     {
         "TopologyDataCenter",
-        "TopologyExternalProviders",
         "TopologyCloudRegion",
         "TopologySaasRegion",
         "TopologyColocationZone",
@@ -176,11 +177,11 @@ def plan_locations(
     current_ids = {location.id for location in current}
     missing = [location for location, _ in derived.values() if location.id not in current_ids]
     placed = current + missing
-    if len(placed) != 2:
+    if len(placed) > CIRCUIT_ENDS:
         labels = ", ".join(location.label for location in placed) or "none"
         return [], (
-            f"needs exactly 2 distinct locations (authored, plus a DC, ISP, cloud region or colocation derived from an "
-            f"endpoint device's deployment), found {len(placed)}: {labels}"
+            f"needs at most 2 distinct locations (authored, plus a DC, cloud region or colocation derived from an "
+            f"endpoint device's deployment; none for a provider's router), found {len(placed)}: {labels}"
         )
     return missing, None
 

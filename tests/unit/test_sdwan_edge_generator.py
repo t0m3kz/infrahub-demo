@@ -121,21 +121,18 @@ def _providers(internet_id: str = "provider-inet", overlay_id: str = "provider-o
     """The OrganizationProvider lookup's answer: the ISP (P019) and the SD-WAN operator (P035)."""
     internet = MagicMock(id=internet_id)
     internet.org_id.value = "P019"
+    internet.name.value = "Orange"
     overlay = MagicMock(id=overlay_id)
     overlay.org_id.value = "P035"
     return [internet, overlay]
 
 
-_ISP_ID = "isp-1"
 _ISP_DEVICE_ID = "isp-pe-1"
 
 
-def _isp_topology(*, isp_id: str = _ISP_ID, device_ids: tuple[str, ...] = (_ISP_DEVICE_ID,)) -> Any:
-    """The internet provider's TopologyExternalProviders, with its devices as ``include=["devices"]`` returns them."""
-    isp = MagicMock(id=isp_id)
-    isp.name.value = "Orange"
-    isp.devices = MagicMock(peers=[MagicMock(id=device_id) for device_id in device_ids])
-    return isp
+def _isp_devices(*device_ids: str) -> list[Any]:
+    """The devices the internet provider owns (the lookup by ``owner__ids``): by default its one access PE."""
+    return [MagicMock(id=device_id) for device_id in (device_ids or (_ISP_DEVICE_ID,))]
 
 
 def _port(port_id: str, name: str, *, held_by: str | None = None) -> Any:
@@ -154,8 +151,8 @@ def _existing_circuit(*port_ids: str) -> Any:
 
 
 def _isp_lookups(*, ports: list[Any] | None = None, circuits: list[Any] | None = None) -> list[Any]:
-    """The three lookups after the edge uplink: ISP topology, INET-<office> by circuit_id, the PE's customer ports."""
-    return [[_isp_topology()], circuits or [], ports if ports is not None else [_port("port-1", "xe-0/1/0")]]
+    """The three lookups after the edge uplink: the provider's devices, INET-<office> by circuit_id, the PE's ports."""
+    return [_isp_devices(), circuits or [], ports if ports is not None else [_port("port-1", "xe-0/1/0")]]
 
 
 def _node(node_id: str, **extra: Any) -> Any:
@@ -348,16 +345,16 @@ class TestGenerateHappyPath:
     @pytest.mark.asyncio
     async def test_circuits_use_real_ids_for_locations_not_names(self) -> None:
         """locations peers TopologyConnectableLocation — it must be given
-        real resolved ids (office_id, ISP location id, gateway_zone_id), never
+        real resolved ids (office_id, gateway_zone_id), never
         a *name* string wrapped in {"id": ...}, which would silently fail to
-        resolve against a real backend. The underlay sits in the office and
-        the ISP; the tunnel the office and the gateway's zone."""
+        resolve against a real backend. The underlay sits in the office
+        alone (the ISP's router has no place); the tunnel the office and the gateway's zone."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload(office_id="office-1"))
 
         internet_call = gen.client.create.call_args_list[1]
-        assert internet_call.kwargs["data"]["locations"] == [{"id": "office-1"}, {"id": _ISP_ID}]
+        assert internet_call.kwargs["data"]["locations"] == [{"id": "office-1"}]
         tunnel_call = gen.client.create.call_args_list[2]
         assert tunnel_call.kwargs["data"]["locations"] == [{"id": "office-1"}, {"id": "zone-1"}]
 
@@ -502,25 +499,24 @@ class TestIspAccessPort:
 
     @pytest.mark.asyncio
     async def test_circuit_is_created_with_both_ends_and_office_and_isp_locations(self) -> None:
-        """A carrier circuit needs both ends at creation: edge uplink + ISP port, in the office and the ISP."""
+        """A carrier circuit needs both ends at creation: edge uplink + ISP port, with the office as the one location (the ISP router has no place)."""
         gen = TestGenerateHappyPath()._wire_full_success(ports=[_port("port-1", "xe-0/1/0")])
 
         await gen.generate(_office_payload())
 
         data = gen.client.create.call_args_list[1].kwargs["data"]
         assert data["capabilities"] == [{"id": "edge-uplink-1"}, {"id": "port-1"}]
-        assert data["locations"] == [{"id": "office-1"}, {"id": _ISP_ID}]
+        assert data["locations"] == [{"id": "office-1"}]
 
     @pytest.mark.asyncio
     async def test_isp_and_port_lookups_are_scoped_to_the_provider_and_its_access_device(self) -> None:
-        """One topology lookup by provider (devices included), then the circuit by circuit_id and the PE's ports."""
+        """One device lookup by owner, then the circuit by circuit_id and the PE's ports."""
         gen = TestGenerateHappyPath()._wire_full_success()
 
         await gen.generate(_office_payload())
 
         isp_call, circuit_call, port_call = (call.kwargs for call in gen.client.filters.call_args_list[4:7])
-        assert isp_call["provider__ids"] == ["provider-inet"]
-        assert isp_call["include"] == ["devices"]
+        assert isp_call["owner__ids"] == ["provider-inet"]
         assert circuit_call["circuit_id__value"] == "INET-C002-OFFICE"
         assert circuit_call["include"] == ["capabilities"]
         assert port_call["device__ids"] == [_ISP_DEVICE_ID]
@@ -597,20 +593,12 @@ class TestIspAccessPort:
     @pytest.mark.parametrize(
         ("isp_lookup", "message"),
         [
-            pytest.param([], "found 0", id="no-isp-topology"),
-            pytest.param(
-                [_isp_topology(isp_id="isp-1"), _isp_topology(isp_id="isp-2")], "found 2", id="two-isp-topologies"
-            ),
-            pytest.param([_isp_topology(device_ids=())], "exactly 1 access device, found 0", id="no-isp-device"),
-            pytest.param(
-                [_isp_topology(device_ids=("pe-1", "pe-2"))], "exactly 1 access device, found 2", id="two-isp-devices"
-            ),
+            pytest.param([], "found 0", id="no-isp-device"),
+            pytest.param(_isp_devices("pe-1", "pe-2"), "found 2", id="two-isp-devices"),
         ],
     )
     @pytest.mark.asyncio
-    async def test_isp_that_is_not_exactly_one_topology_with_one_device_fails(
-        self, isp_lookup: list[Any], message: str
-    ) -> None:
+    async def test_isp_that_does_not_own_exactly_one_device_fails(self, isp_lookup: list[Any], message: str) -> None:
         """The far end must be unambiguous: any other ISP shape fails before the circuit (and any lock) is touched."""
         gen = _make_gen()
         gen.client.create = AsyncMock(return_value=_node("edge-1"))
@@ -653,7 +641,7 @@ class TestIspAccessPort:
             "filters:DcimPhysicalInterface",
             "create:TopologyCarrierCircuit",
         ]
-        assert events.index("filters:TopologyExternalProviders") < events.index("lock")
+        assert events.index("filters:DcimPhysicalDevice") < events.index("lock")
 
 
 class TestGenerateFailurePaths:

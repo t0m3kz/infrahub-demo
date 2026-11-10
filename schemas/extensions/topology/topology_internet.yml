@@ -6,7 +6,7 @@ nodes:
   # DcimDevice (the slim one: name and interfaces, nothing of DcimDeviceManaged) and a TopologyFacility, so a carrier
   # circuit can name it as a location (add_circuit derives the location of its end from the device itself, it has no
   # `deployment`). It is a TopologyDeployment like every place, so it lives in the topology tree: the singleton
-  # `INTERNET` sits under the label "Internet" next to the ISPs (TopologyExternalProviders). It has no role, platform,
+  # `INTERNET` sits under the label "Internet". It has no role, platform,
   # address, VRF, routing or artifact: the addresses and prefixes live in the INTERNET namespace. It has ONE
   # interface, a TopologyInternetInterface (utils/internet_object.py, held by checks/circuit_placement.py).
   - name: Internet

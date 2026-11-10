@@ -155,8 +155,6 @@ flowchart LR
     C901_OFFICE["C901-OFFICE"]
   end
   subgraph NET["Internet"]
-    ISP_A["ISP-A"]
-    ISP_B["ISP-B"]
     INTERNET["INTERNET"]
   end
   subgraph CLOUD["Cloud and SaaS"]
@@ -173,8 +171,6 @@ flowchart LR
   DC_KTW1 ---|"2x dark fiber, 2x dci"| AMS_COLO1
   DC_KTW1 -.-|"1x tunnel"| C900_OFFICE
   DC_KTW1 -.-|"2x tunnel"| C901_OFFICE
-  DC_KTW1 ---|"1x internet"| ISP_A
-  DC_KTW1 ---|"1x internet"| ISP_B
   DC_KTW1 -.-|"2x vpn"| eu_central_1
   DC_WAW1 ---|"2x dark fiber, 2x dci"| DC_GDN1
   DC_WAW1 ---|"2x dark fiber, 2x dci"| PAR_COLO1
@@ -185,7 +181,6 @@ flowchart LR
   DC_GDN1 ---|"2x dark fiber, 2x dci"| AMS_COLO1
   PAR_COLO1 ---|"1x dark fiber, 1x dci"| FRA_COLO1
   PAR_COLO1 ---|"1x dark fiber, 1x dci"| AMS_COLO1
-  PAR_COLO1 ---|"1x internet"| ISP_B
   PAR_COLO1 -.-|"2x handoff"| eu_central_1
   PAR_COLO1 ---|"2x virtual connection, 2x handoff"| westeurope
   PAR_COLO1 ---|"1x virtual connection, 2x handoff"| europe_west3
@@ -193,12 +188,7 @@ flowchart LR
   FRA_COLO1 ---|"1x dark fiber, 1x dci"| AMS_COLO1
   FRA_COLO1 ---|"1x internet"| INTERNET
   AMS_COLO1 ---|"1x internet"| INTERNET
-  C900_OFFICE ---|"1x internet"| ISP_A
   C900_OFFICE -.-|"1x tunnel"| ZSCALER_MUNICH_I
-  C901_OFFICE ---|"1x internet"| ISP_A
-  C901_OFFICE ---|"1x internet"| ISP_B
-  ISP_A ---|"1x internet"| INTERNET
-  ISP_B ---|"1x internet"| INTERNET
   INTERNET ---|"2x internet"| eu_central_1
   INTERNET ---|"1x internet"| westeurope
   INTERNET ---|"1x internet"| europe_west3
@@ -671,16 +661,16 @@ not model (somewhere out there, in a rack nobody documents).
 **Internet through the ISP** (`90_bindings/90_internet`): INTERNET is one shared object (the whole internet as a single device; ambition has limits) that every internet connection goes
 through, "a kind of cable or switch for everyone". `TopologyInternet` (the singleton `INTERNET`, with the interface `bus`
 in the startup data: `data/bootstrap/03b_internet.yml`, because it does not change) sits in the topology tree under the
-label "Internet", next to the ISPs (`TopologyExternalProviders`; the label is a grouping place and INTERNET is the
-meeting point under it). It is a lean `DcimDevice` (only `name` and `interfaces`) and a `TopologyFacility`, so it is the
+label "Internet" (the label is a grouping place and INTERNET is the meeting point under it). The ISPs have no place
+object of their own: an ISP router has no `deployment` and its provider is its `owner`. It is a lean `DcimDevice` (only `name` and `interfaces`) and a `TopologyFacility`, so it is the
 location of a carrier circuit, but it has no role, platform, address, VRF or artifact and routes nothing: addresses and
 prefixes stay in the `INTERNET` space. It has ONE interface `bus` of its own kind `TopologyInternetInterface`, and the
 kind lets many carrier circuits end on the same interface (`checks/carrier_circuit_ports.py` exempts it from "a port is
 the end of at most one carrier" by kind, not by name). Each attachment has its own carrier circuit (the graph says who is
 attached): the uplink of an ISP router (`isp-a-upl-48001-internet`, `isp-b-upl-77001-internet`) and the public side of a service
 (`webex-fra-pub-13445-internet`, `aws-euc1-pub-16509-internet`), and the public side is a port of the provider's `TopologyProviderConnect` of the region
-(`EXT-WEBEX-FRA`, `EXT-AWS-EUC1`, `EXT-AZURE-WEU`, `EXT-GCP-EUW3`). Two ISPs: `ISP-A` (router `EXT-ISP-A-PE1`, edge port
-`Ethernet1/2`, carrier `ktw1-ispa-48211-isp-a` from the base sample) and `ISP-B` (`EXT-ISP-B-PE1`, `Ethernet1/1`,
+(`EXT-WEBEX-FRA`, `EXT-AWS-EUC1`, `EXT-AZURE-WEU`, `EXT-GCP-EUW3`). Two ISPs: ISP A (router `EXT-ISP-A-PE1`, edge port
+`Ethernet1/2`, carrier `ktw1-ispa-48211-isp-a` from the base sample) and ISP B (`EXT-ISP-B-PE1`, `Ethernet1/1`,
 `ktw1-ispb-77301-isp-b`):
 
 ```text

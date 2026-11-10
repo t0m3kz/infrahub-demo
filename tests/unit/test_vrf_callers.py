@@ -329,7 +329,7 @@ class TestCarrierCircuit:
             "capabilities": {
                 "edges": [
                     {"node": _endpoint("if-1", "dev-1", "TopologyColocationZone", "z1")},
-                    {"node": _endpoint("if-2", "dev-2", "TopologyExternalProviders", "isp")},
+                    {"node": _endpoint("if-2", "dev-2", "TopologyCloudRegion", "isp")},
                 ]
             },
         }

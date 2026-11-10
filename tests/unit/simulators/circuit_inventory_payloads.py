@@ -79,7 +79,6 @@ def inventory_payload(
     for edge in payloads[CARRIER]["edges"]:
         circuit = edge["node"]
         circuit["circuit_id"] = circuit["name"]
-        circuit["circuit_type"] = {"value": "dark_fiber"}
         circuit["status"] = {"value": status[circuit["name"]["value"]]}
         circuit["provider"] = {"node": {"name": {"value": "P016"}}}
         named_owners(circuit)

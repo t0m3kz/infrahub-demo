@@ -21,7 +21,7 @@ generics:
   # A place a CARRIER circuit can terminate on: the facility itself, never a
   # pod, rack, metro, cloud zone or tenant footprint. Inherited alongside
   # TopologyConnectableLocation by DataCenter, ColocationZone, CloudRegion,
-  # ExternalProviders, SaasRegion and CustomerOffice.
+  # SaasRegion and CustomerOffice.
   - name: Facility
     namespace: Topology
     description: "A facility a carrier circuit can terminate on"
@@ -102,8 +102,9 @@ generics:
         description: "Service provider for this connectivity"
 
       # Data authors only the end that cannot be derived (the colocation cage); add_circuit adds each
-      # endpoint device's deployment that is a facility (DC, ISP, or the region of an appliance end). So one location
-      # is valid on load: no min_count (it is enforced on update only; the checks hold the count).
+      # endpoint device's deployment that is a facility (DC, or the region of an appliance end; a provider's own
+      # router has none). So one location is valid on load: no min_count (it is enforced on update only; the checks
+      # hold the count).
       - name: locations
         label: "Endpoint Locations"
         peer: TopologyFacility

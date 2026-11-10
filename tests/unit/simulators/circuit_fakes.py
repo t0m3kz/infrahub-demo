@@ -41,7 +41,6 @@ CAGE = place("TopologyColocationZone", "FR2")
 SIBLING_CAGE = place("TopologyColocationZone", "FR6")
 VIRTUAL_COLOCATION = place("TopologyVirtualColocation", "AM-NE")
 METRO = place("TopologyColocationMetro", "FR", "dep-metro")
-ISP = place("TopologyExternalProviders", "ORANGE-FR")
 REGION = place("TopologyCloudRegion", "eu-central-1")
 SAAS_REGION = place("TopologySaasRegion", "webex-eu")
 

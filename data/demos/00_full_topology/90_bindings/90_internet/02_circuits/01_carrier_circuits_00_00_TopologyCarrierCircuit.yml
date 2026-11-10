@@ -38,7 +38,6 @@ spec:
       bandwidth: 1000
       locations:
         - DC-KTW1
-        - ISP-B
       capabilities:
         - ["ktw1-edge-01", "Ethernet1/1"]
         - ["EXT-ISP-B-PE1", "et-0/0/0"]
@@ -50,7 +49,6 @@ spec:
       status: active
       bandwidth: 100000
       locations:
-        - ISP-A
         - INTERNET
       capabilities:
         - ["EXT-ISP-A-PE1", "xe-0/1/0"]
@@ -63,7 +61,6 @@ spec:
       status: active
       bandwidth: 100000
       locations:
-        - ISP-B
         - INTERNET
       capabilities:
         - ["EXT-ISP-B-PE1", "xe-0/1/0"]

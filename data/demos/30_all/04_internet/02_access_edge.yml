@@ -11,4 +11,3 @@ spec:
       object_template: MX204_ISP_ACCESS
       owner: "P019"
       description: "Orange access PE (far end of the SD-WAN offices' internet access)"
-      deployment: "ISP-ORANGE"

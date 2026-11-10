@@ -8,6 +8,5 @@ spec:
     - name: Cloud
     - name: Colocation
     - name: Campus and Office
-    - name: Partners
     - name: SaaS
     - name: Internet

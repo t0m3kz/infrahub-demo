@@ -141,6 +141,7 @@ class DcimEndpoint(CoreNode):
 
 class OrganizationEntity(CoreNode):
     org_id: StringOptional
+    owned_devices: RelationshipManager[DcimDeviceManaged]
 
 
 class TopologyExchangeGateway(CoreNode):
@@ -209,6 +210,11 @@ class DcimSubInterface(CoreNode):
     inner_vlan_id: IntegerOptional
     vlan_id: IntegerOptional
     parent_interface: RelationshipAttribute[DcimInterface]
+
+
+class DcimProviderPort(CoreNode):
+    bandwidth: IntegerOptional
+    provider: RelationshipAttribute[OrganizationProvider]
 
 
 class DcimHasIPAddress(CoreNode):
@@ -617,13 +623,6 @@ class TopologyElement(CoreNode):
     template: RelationshipAttribute[CoreObjectTemplate]
 
 
-class TopologyExternalProviders(
-    TopologyDeployment, TopologyConnectableLocation, TopologyFacility, TopologyDeviceHosting
-):
-    status: Dropdown
-    provider: RelationshipAttribute[OrganizationProvider]
-
-
 class TopologyInternet(DcimDevice, TopologyDeployment, TopologyConnectableLocation, TopologyFacility):
     description: StringOptional
 
@@ -947,6 +946,9 @@ class IpamPrefix(BuiltinIPPrefix):
 
 class OrganizationProvider(OrganizationGeneric, OrganizationEntity):
     connection_profile: DropdownOptional
+    circuits: RelationshipManager[TopologyCircuit]
+    provider_ports: RelationshipManager[DcimProviderPort]
+    service_endpoints: RelationshipManager[CloudServiceEndpoint]
 
 
 class LocationRack(LocationGeneric, CoreArtifactTarget):

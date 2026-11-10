@@ -162,7 +162,6 @@ Once stage 4 has settled, the branch should contain at least the following (more
 | `TopologyCustomerOffice` | 5 |
 | `ManagedVxlanSegment` | 5 |
 | `AppApplication` | 9 |
-| `TopologyExternalProviders` | 4 |
 | `TopologyCarrierCircuit` (`internet`) | 16 |
 | `TopologySessionCircuit` (`dci`, `handoff` and `tunnel` types) | 18 |
 
@@ -261,8 +260,8 @@ hosted AWS leg have a transport and a carrier but no handoff yet. They are the w
 
 ### Internet Transit
 
-`04_internet` (foundation stage) declares three ISPs under the `Internet` label, each a
-`TopologyExternalProviders`: Lumen and Cogent sell transit to the colocation cages, Orange is the access ISP of the
+`04_internet` (foundation stage) holds Orange's access PE. The ISPs have no place object: a provider's router has no
+`deployment`, its provider is its `owner`. Lumen and Cogent sell transit to the colocation cages, Orange is the access ISP of the
 SD-WAN offices (the one that sells you the internet and calls it a partnership). Orange's access PE (`EXT-ORANGE`, template `MX204_ISP_ACCESS`) is the far end of every office's
 `INET-<office>` circuit: `add_sdwan_edge` takes a free `customer` port on it per office, so a new office adds no
 data row. `08_interconnects/06_internet` connects the cages to the transit ISPs, whose provider edges
@@ -288,8 +287,8 @@ simplification (a polite phrase, admit it): no addressing or BGP is modelled for
 sits in its own folder because `06_internet` pairs every circuit with a transit peering.
 
 C001's partner extranet is a `tunnel` `TopologySessionCircuit`, `C001-PARTNER-ACME-FR2`
-(`07_zone_policies/01_partner_tunnel.yml`): `eth1` of the gateway to the partner's stub router `EXT-ACME-EDGE1`, deployed to the new
-`TopologyExternalProviders` `PARTNER-ACME` and reaching the internet over `INET-ACME-COGENT` (a free `customer` port of
+(`07_zone_policies/01_partner_tunnel.yml`): `eth1` of the gateway to the partner's stub router `EXT-ACME-EDGE1`, (owned by ACME, no
+deployment) reaching the internet over `INET-ACME-COGENT` (a free `customer` port of
 `EXT-COGENT-FRA1`).
 
 C001's egress policy (`07_zone_policies/05_security_policy.yml`, segment `c001-nordix-prod-p`) only aims at destinations
