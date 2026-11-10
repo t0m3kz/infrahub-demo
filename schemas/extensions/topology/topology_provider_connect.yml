@@ -6,7 +6,7 @@ version: "1.0"
 #                              region, the public port of a SaaS region. Never in a `deployment`; its place is its
 #                              `location`, one facility.
 #   TopologyProviderInterface  the end of ONE provider connection on a port of it (an Equinix Fabric connection, an
-#                              Internet Access service): the S-tag, the C-tag and the bandwidth of that connection. The
+#                              Internet Access service): the S-tag and the bandwidth of that connection. The
 #                              circuit of the connection ends on it, so a port is not shared between connections.
 # It has no account and no owner: it is one per place, not per customer. The private connections of a cloud (Direct
 # Connect, ExpressRoute, Interconnect, a VPN) stay in their own kinds (CloudDirectConnect, CloudVPNConnection): they
@@ -64,14 +64,14 @@ nodes:
         order_weight: 750
 
   # The end of ONE provider connection on a port of a provider connect, the counterpart of CloudPeeringInterface: it
-  # rides on a port of the same device (`parent_interface`), carries the S-tag, the C-tag and the connection's
+  # rides on a port of the same device (`parent_interface`), carries the S-tag and the connection's
   # bandwidth, and the virtual_connection or internet carrier circuit ends on it. L2 only: no address, no routing (the
   # cloud peering holds those).
   - name: ProviderInterface
     namespace: Topology
     label: Provider Interface
     icon: mdi:ethernet
-    description: "The end of one provider connection on a provider port: S-tag, C-tag and bandwidth"
+    description: "The end of one provider connection on a provider port: S-tag and bandwidth"
     include_in_menu: false
     inherit_from:
       - DcimInterface

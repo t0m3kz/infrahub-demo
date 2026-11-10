@@ -124,7 +124,7 @@ def test_a_peering_is_an_interface_of_its_transport_and_keeps_no_transport_edges
     assert "parent_interface" not in _names(peering, "relationships")  # the marker DcimSubInterface holds it
     assert not {"transport", "account", "region", "saas_region", "owner"} & _names(peering, "relationships")
     assert "mtu" not in _names(peering, "attributes")
-    assert not {"vlan_id", "inner_vlan_id"} & _names(peering, "attributes")  # the marker DcimSubInterface holds them
+    assert not {"vlan_id"} & _names(peering, "attributes")  # the marker DcimSubInterface holds them
 
 
 def test_virtual_network_peers_are_symmetric_on_one_identifier() -> None:

@@ -209,7 +209,6 @@ class DcimHasSubInterface(CoreNode):
 
 
 class DcimSubInterface(CoreNode):
-    inner_vlan_id: IntegerOptional
     vlan_id: IntegerOptional
     parent_interface: RelationshipAttribute[DcimInterface]
 

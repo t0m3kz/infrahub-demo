@@ -329,8 +329,8 @@ class MyCheck(InfrahubCheck):
     `checks/carrier_circuit_ports.py`: a port is an end of at most one carrier and both ends
     are physical ports, EXCEPT a `virtual_connection` (a provider port hosts one connection per S-tag, and an end may be
     the `DcimVirtualInterface` NIC of a provider-hosted appliance, or a `TopologyProviderInterface`: the end of ONE
-    Fabric connection on the provider's port, unshared, with its S-tag `vlan_id`, C-tag `inner_vlan_id` and
-    `bandwidth`, riding on that port through `parent_interface`; the port is a `TopologyProviderConnect`, placed by
+    Fabric connection on the provider's port, unshared, with its S-tag `vlan_id` and
+    `bandwidth` (no C-tag is modelled: nothing reads it), riding on that port through `parent_interface`; the port is a `TopologyProviderConnect`, placed by
     its `location`, the zone, so that zone is the circuit's location); the other types on
     the same port still hold both. A carrier whose far end is such a NIC is a provider-delivered
     `virtual_connection`; a physical `cross_connect` joins physical ports only (our cage edge and a Fabric port or a
@@ -843,7 +843,7 @@ class MyCheck(InfrahubCheck):
   on another device is an ERROR unless the interface is a NIC of a `DcimVirtualDevice` pinned to a port of its
   `hosting_device`, a NIC's parent is a physical port, and an uplink's host port is cabled. The transforms render a
   `parent_interface` only for a parent on the interface's own device (`transforms/helpers/addressing.py` `sub_interface_parent`; the
-  queries select both `device` ids). The VLAN tag of a sub-interface is its `vlan_id` and `inner_vlan_id` (QinQ C-tag), declared once on
+  queries select both `device` ids). The VLAN tag of a sub-interface is its `vlan_id`, declared once on
   `DcimSubInterface` (unset: untagged); `<parent>.<vlan>` is only the default name the generators give, nothing parses it.
   `common_parent: device` stays on the LAG pair `lag` / `member_interfaces` and `common_parent: panel` on the patch panel
   ports (see **Patch panels**), the only two uses; it works only on a node with a `kind: Parent` relationship and a peer
