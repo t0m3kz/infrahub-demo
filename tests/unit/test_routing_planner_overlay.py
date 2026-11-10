@@ -743,14 +743,12 @@ class TestNoOverlayPlan:
 
         assert sorted(p["name"] for p in plan.ospf_processes) == ["leaf-1-ospf-underlay", "spine-1-ospf-underlay"]
         assert len(plan.ospf_peerings) == 1
-        # The peering is off the interface edge: its interfaces are those of its ospf_interface settings, each a child
-        # of the device of its interface.
+        # The peering is off the interface edge: its interfaces are those of its ospf_interface settings, each on the
+        # standard interface edge and with no device field of its own.
         assert "capabilities" not in plan.ospf_peerings[0]
         assert len(plan.ospf_peerings[0]["ospf_interface"]) == 2
-        assert sorted((s["capabilities"][0]["id"], s["device"]["id"]) for s in plan.ospf_interfaces) == [
-            ("if1", "s1"),
-            ("if2", "l1"),
-        ]
+        assert sorted(s["capabilities"][0]["id"] for s in plan.ospf_interfaces) == ["if1", "if2"]
+        assert all("device" not in s for s in plan.ospf_interfaces)
         assert plan.bgp_processes == []
         assert plan.bgp_peerings == []
         assert plan.autonomous_systems == []

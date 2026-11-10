@@ -199,6 +199,57 @@ query interface_layers {
       }
     }
   }
+  # R7 to R9: every OSPF interface setting with its interfaces (all of one device), and through its peering the devices
+  # of the OSPF processes that run it. The setting has no device of its own.
+  RoutingOSPFInterface {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        capabilities {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              device {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        peering {
+          node {
+            ospf_process {
+              edges {
+                node {
+                  name {
+                    value
+                  }
+                  capabilities {
+                    edges {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   # R3: every segment deployment with the ports assigned to it (the request), any kind.
   ManagedSegmentDeployment {
     edges {

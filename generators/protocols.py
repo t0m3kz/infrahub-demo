@@ -802,8 +802,6 @@ class RoutingOSPFInterface(ManagedGeneric, ManagedGenericInterfaces):
     metric: IntegerOptional
     mode: Dropdown
     name: String
-    device: RelationshipAttribute[DcimPhysicalDevice]
-    capabilities: RelationshipManager[DcimInterface]
     password: RelationshipAttribute[RoutingPassword]
 
 
@@ -832,7 +830,6 @@ class TopologyCarrierCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
 
 class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppInstance):
     vlans: RelationshipManager[ManagedSegmentVlan]
-    ospf_interfaces: RelationshipManager[RoutingOSPFInterface]
     position: IntegerOptional
     rack_face: Dropdown
     serial: StringOptional

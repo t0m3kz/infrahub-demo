@@ -55,6 +55,7 @@ def _run(
     rows: list[dict[str, Any]] | None = None,
     components: list[dict[str, Any]] | None = None,
     deployments: list[dict[str, Any]] | None = None,
+    ospf: list[dict[str, Any]] | None = None,
 ) -> tuple[list[str], list[str]]:
     """(errors, warnings) of the check on raw data."""
     check = cast(Any, CheckInterfaceLayers.__new__(CheckInterfaceLayers))
@@ -69,6 +70,7 @@ def _run(
             "ManagedSegmentVlan": {"edges": [{"node": node} for node in rows or []]},
             "AppComponent": {"edges": [{"node": node} for node in components or []]},
             "ManagedSegmentDeployment": {"edges": [{"node": node} for node in deployments or []]},
+            "RoutingOSPFInterface": {"edges": [{"node": node} for node in ospf or []]},
         }
     )
     return errors, warnings
@@ -161,6 +163,8 @@ def test_the_fixtures_emit_only_fields_the_query_selects_and_the_layer_fields_ar
         assert unselected(_row_with(member), row) == []
     assert unselected(_component("web", "srv-1"), tree["AppComponent"]["edges"]["node"]) == []
     assert unselected(_assigned("DcimVirtualInterface"), tree["ManagedSegmentDeployment"]["edges"]["node"]) == []
+    setting = _ospf("ospf-a", ("leaf-1", "E1"), peer_processes=(("p1", "leaf-1"),))
+    assert unselected(setting, tree["RoutingOSPFInterface"]["edges"]["node"]) == []
 
 
 def _assigned(*kinds: str) -> dict[str, Any]:
@@ -297,3 +301,85 @@ def test_r5_a_member_nobody_asked_for_is_a_warning() -> None:
     )
     assert errors == [] and len(warnings) == 3
     assert all("rule R5" in warning and "VLAN row 100 of segment 'web' on 'leaf-1'" in warning for warning in warnings)
+
+
+def _other_device(member: dict[str, Any], device: str) -> dict[str, Any]:
+    return {**member, "device": {"node": {"name": {"value": device}}}}
+
+
+def test_r6_a_row_lists_only_ports_of_its_own_switch() -> None:
+    """R6: a port of another device in a row is an ERROR naming the row and the port; the row's own ports pass."""
+    assert (
+        _errors(
+            rows=[_row_with(_member("E1", host="srv-1"), _member("E2", host="srv-1"))],
+            components=[_component("web", "srv-1")],
+        )
+        == []
+    )
+    stray = _other_device(_member("E9", host="srv-1"), "leaf-2")
+    errors = _errors(rows=[_row_with(_member("E1", host="srv-1"), stray)], components=[_component("web", "srv-1")])
+    assert len(errors) == 1
+    assert (
+        "rule R6" in errors[0]
+        and "VLAN row 100 of segment 'web' on 'leaf-1'" in errors[0]
+        and "'leaf-2' E9" in errors[0]
+    )
+
+
+def _ospf(
+    name: str,
+    *ports: tuple[str, str],
+    peer_processes: tuple[tuple[str, str], ...] | None = None,
+) -> dict[str, Any]:
+    """A raw RoutingOSPFInterface listing ``ports`` (device, interface); ``peer_processes``: (process, device) of its
+    peering (no peering for None)."""
+    peering = None
+    if peer_processes is not None:
+        peering = {
+            "node": {
+                "ospf_process": {
+                    "edges": [
+                        {
+                            "node": {
+                                "name": {"value": proc},
+                                "capabilities": {"edges": [{"node": {"name": {"value": dev}}}]},
+                            }
+                        }
+                        for proc, dev in peer_processes
+                    ]
+                }
+            }
+        }
+    return {
+        "id": f"ospf-{name}",
+        "name": {"value": name},
+        "capabilities": {
+            "edges": [
+                {"node": {"id": f"{dev}-{ifc}", "name": {"value": ifc}, "device": {"node": {"name": {"value": dev}}}}}
+                for dev, ifc in ports
+            ]
+        },
+        "peering": {"node": peering["node"]} if peering else {"node": None},
+    }
+
+
+def test_r7_the_interfaces_of_an_ospf_setting_are_on_one_device() -> None:
+    """R7: interfaces of two devices in one setting are an ERROR naming both devices."""
+    assert _run(ospf=[_ospf("ospf-a", ("leaf-1", "E1"), ("leaf-1", "E2"))]) == ([], [])
+    errors = _errors(ospf=[_ospf("ospf-a", ("leaf-1", "E1"), ("leaf-2", "E1"))])
+    assert len(errors) == 1 and "rule R7" in errors[0] and "leaf-1, leaf-2" in errors[0] and "'ospf-a'" in errors[0]
+
+
+def test_r8_an_ospf_setting_with_no_interface_is_a_warning() -> None:
+    """R8: a setting nothing applies (its device or interface went) is a WARNING, not an ERROR."""
+    errors, warnings = _run(ospf=[_ospf("ospf-orphan")])
+    assert errors == [] and len(warnings) == 1 and "rule R8" in warnings[0] and "'ospf-orphan'" in warnings[0]
+
+
+def test_r9_an_ospf_setting_is_on_a_device_of_its_peering() -> None:
+    """R9: with a peering whose processes run on other devices, the setting is an ERROR; no peering, no judgment."""
+    ok = _ospf("ospf-a", ("leaf-1", "E1"), peer_processes=(("p1", "leaf-1"), ("p2", "spine-1")))
+    assert _run(ospf=[ok]) == ([], [])
+    assert _run(ospf=[_ospf("ospf-a", ("leaf-1", "E1"))]) == ([], [])
+    errors = _errors(ospf=[_ospf("ospf-a", ("leaf-3", "E1"), peer_processes=(("p1", "leaf-1"), ("p2", "spine-1")))])
+    assert len(errors) == 1 and "rule R9" in errors[0] and "leaf-1, spine-1" in errors[0]

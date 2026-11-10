@@ -24,9 +24,16 @@ Rules:
   segment. Only the segment reconcile writes a membership, and its next run removes this one: a hand edit is visible
   here until then.
 
-That a row lists only ports of its own switch is the schema's (``common_parent: device`` on the row's
-``capabilities``, schemas/extensions/service/segment.yml): the server refuses another device's port. A segment itself
-cannot sit in the ``capabilities`` of a port: it does not inherit the interface-edge generic
+* R6 a row lists only ports of its own switch (its ``device``): the interface edge holds no same-device rule in the
+  schema (no ``common_parent``), so this check does;
+* R7 the interfaces of an OSPF interface setting (``RoutingOSPFInterface``) are all on ONE device: the setting has no
+  device of its own, so that is all the check can judge of the setting by itself;
+* R8 (WARNING) an OSPF interface setting lists no interface: it no longer goes with a device, so a setting left behind
+  by a deleted device or interface shows here (the generator's next run does not reclaim it);
+* R9 an OSPF interface setting that is part of a peering is on a device that one of the peering's processes runs on
+  (``ManagedOSPF.capabilities``). A setting with no peering, or a peering with no process, is not judged.
+
+A segment itself cannot sit in the ``capabilities`` of a port: it does not inherit the interface-edge generic
 (tests/unit/test_capability_edge_names.py).
 """
 
@@ -195,10 +202,53 @@ def unrequested_members(row: dict[str, Any], hosts: dict[str, set[str]]) -> list
     ]
 
 
+def row_device_errors(row: dict[str, Any]) -> list[str]:
+    """R6 of one cleaned ManagedSegmentVlan node: its ports that are on another device than the row's."""
+    owner = (row.get("device") or {}).get("name")
+    return [
+        f"{_row_where(row)} lists '{(port.get('device') or {}).get('name')}' {port.get('name')}, a port of another "
+        "device (rule R6: a row lists only ports of its own switch)."
+        for port in row.get("capabilities") or []
+        if isinstance(port, dict) and (port.get("device") or {}).get("name") != owner
+    ]
+
+
+def _device_names(ports: list[Any]) -> set[str]:
+    return {str((port.get("device") or {}).get("name")) for port in ports if isinstance(port, dict)}
+
+
+def ospf_setting_issues(setting: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """(errors, warnings) of one cleaned RoutingOSPFInterface node: R7, R8 and R9."""
+    where = f"OSPF interface setting '{setting.get('name')}'"
+    ports = [port for port in setting.get("capabilities") or [] if isinstance(port, dict)]
+    if not ports:
+        return [], [f"{where} lists no interface (rule R8: nothing applies it; delete it)."]
+    devices = _device_names(ports)
+    if len(devices) > 1:
+        return [
+            f"{where} lists interfaces of {len(devices)} devices ({', '.join(sorted(devices))}) "
+            "(rule R7: the interfaces of one setting are all on one device)."
+        ], []
+    processes = [
+        process for process in (setting.get("peering") or {}).get("ospf_process") or [] if isinstance(process, dict)
+    ]
+    run_on = {
+        str(device.get("name")) for process in processes for device in process.get("capabilities") or [] if device
+    }
+    (device,) = devices
+    if run_on and device not in run_on:
+        return [
+            f"{where} is on '{device}', which runs none of the OSPF processes of its peering "
+            f"({', '.join(sorted(run_on))}) (rule R9)."
+        ], []
+    return [], []
+
+
 class CheckInterfaceLayers(WarningCheck):
     """A port is a switchport or a routed port, a LAG member carries neither (R1, R2); a segment deployment or a row
     lists only switch ports (R3); one row of a segment per port (R4); a row member nobody asked for is a WARNING
-    (R5)."""
+    (R5); a row lists ports of its own switch (R6); an OSPF interface setting is on one device (R7), lists an
+    interface (R8, WARNING) and is on a device of its peering (R9)."""
 
     query = "interface_layers"
 
@@ -216,7 +266,13 @@ class CheckInterfaceLayers(WarningCheck):
                 self.log_error(message=message, object_id=deployment.get("id"))
         hosts = component_hosts(cleaned.get("AppComponent") or [])
         for row in cleaned.get("ManagedSegmentVlan") or []:
-            for message in kind_errors(_row_where(row), row.get("capabilities") or []):
+            for message in kind_errors(_row_where(row), row.get("capabilities") or []) + row_device_errors(row):
                 self.log_error(message=message, object_id=row.get("id"))
             for message in unrequested_members(row, hosts):
+                self.log_warning(message=message)
+        for setting in cleaned.get("RoutingOSPFInterface") or []:
+            errors, warnings = ospf_setting_issues(setting)
+            for message in errors:
+                self.log_error(message=message, object_id=setting.get("id"))
+            for message in warnings:
                 self.log_warning(message=message)
