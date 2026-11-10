@@ -542,8 +542,8 @@ async def test_a_lifecycle_that_starts_without_a_session_refuses_to_run(monkeypa
 # ---------------------------------------------------------------------------
 
 
-def test_the_module_runs_after_the_optional_test_65_in_the_30_all_task() -> None:
-    """The 30_all invoke task adds test_65 only with --idempotency and always before test_66 (which mutates the branch)."""
+def test_the_module_runs_after_test_65_in_the_30_all_task() -> None:
+    """The 30_all invoke task lists test_66 after test_65 (it mutates the branch test_65 snapshots); no marker ties them."""
     root = Path(__file__).resolve().parents[2]
     source = (root / "tests/integration/test_66_all_demo_circuit_lifecycle.py").read_text()
     assert "all_demo_idempotent_topology_reruns" not in source

@@ -1256,15 +1256,15 @@ stack at a time. Two loops:
   the stack stays up on :8100 with the sample on `main`. Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
   against the live schema, so a field the schema rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict")
   fails there, where the full subset costs tens of minutes (the task worker log names the field).
-- **Full 30_all subset**: `test_01, 02, 59, 60, 61, 62, 64, 66` (`62` is `test_62`, `62b`, `62c`; `64` is `test_64`,
-  `64b`, `64c`), `uv run invoke test-integration-all-demo`. `test_65` (idempotency, the last ~20 of ~55 minutes) is
-  optional: `--idempotency` adds it before `test_66` (circuit lifecycle, mutates the branch, runs last). The fast loop loads its topology onto the stack's `main`: `uv run invoke clean-testcontainers` first.
+- **Full 30_all subset**: `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`; `64` is `test_64`,
+  `64b`, `64c`). `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the
+  branch) runs last. The fast loop loads its topology onto the stack's `main`: `uv run invoke clean-testcontainers` first.
 
 | Change touches | Run |
 | --- | --- |
 | Schema, queries, checks of the model, `data/demos/00_full_topology` | Fast: `test-integration-fast` (`01, 02, 03`) |
-| Generators (including their helpers), `data/bootstrap`, `data/demos/30_all`, queries used by generators | Fast, then the full subset **including `test_66`** (a generator's cleanup is only proven by `test_66`; add `--idempotency` for `test_65`) |
-| Templates, transforms, checks and their validation queries | Fast, then subset `01, 02, 59–64` (no `test_66`) plus the smoke golden diff |
+| Generators (including their helpers), `data/bootstrap`, `data/demos/30_all`, queries used by generators | Fast, then the full subset **including `test_65` and `test_66`** (a generator's cleanup is only proven by `test_66`) |
+| Templates, transforms, checks and their validation queries | Fast, then subset `01, 02, 59–64` (no `test_65` or `test_66`) plus the smoke golden diff |
 | Docs, tests only | Unit + smoke |
 
 Queries are validated by the smoke tests: every query under `queries/` has a `syntax_check` entry in
@@ -1273,7 +1273,7 @@ The test stack serves on port 8100 (`--server-port` moves it).
 
 Always, after any run that registers a new check or transform query: run that query against the settled stack
 (`KEEP_STACK`) and simulate the check or transform on the real data. Unit tests with canned responses do not catch
-schema-invalid queries or false positives on real data. Run the all-demo task with `--idempotency` once on `main` before every release. Clean the
+schema-invalid queries or false positives on real data. Run `test_65` once on `main` before every release. Clean the
 previous stack (`uv run invoke clean-testcontainers`) before starting a run, and confirm a merged PR's `state` is
 `MERGED` before relying on it.
 
