@@ -16,21 +16,29 @@ def _v(value: Any) -> dict[str, Any]:
 def _segment(
     seg_id: str = "seg-a",
     kind: str = "ManagedVxlanSegment",
-    namespace_type: str | None = "prod",
-    zone: str = "PROD-ZONE",
+    vrf_type: str | None = "prod",
+    zone: str = "PROD",
     policy: dict[str, Any] | None = None,
     deployments: list[str] | None = None,
 ) -> dict[str, Any]:
     """One ManagedNetworkSegment edge in the raw query shape."""
     gateway: dict[str, Any] = {"node": None}
-    if namespace_type:
-        namespace = {"node": {"name": _v("NS"), "namespace_type": _v(namespace_type)}}
-        gateway = {"node": {"ip_prefix": {"node": {"prefix": _v("10.0.0.0/24"), "ip_namespace": namespace}}}}
+    if vrf_type:
+        gateway = {
+            "node": {
+                "ip_prefix": {
+                    "node": {
+                        "prefix": _v("10.0.0.0/24"),
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
+                    }
+                }
+            }
+        }
     node: dict[str, Any] = {
         "__typename": kind,
         "id": seg_id,
         "name": _v(seg_id),
-        "security_zone": {"node": {"name": _v(zone)}},
+        "security_zone": {"node": {"name": _v(zone), "vrf_type": _v(vrf_type)}},
         "gateway": gateway,
         "security_policy": {"node": policy},
     }
@@ -74,10 +82,10 @@ def _run(segments: list[dict[str, Any]], contexts: list[dict[str, Any]] | None =
 class TestProtected:
     """Segments the check accepts."""
 
-    @pytest.mark.parametrize("namespace_type", ["prod", "non_prod"])
-    def test_segment_with_an_acl_bearing_policy_passes(self, namespace_type: str) -> None:
+    @pytest.mark.parametrize("vrf_type", ["prod", "non_prod"])
+    def test_segment_with_an_acl_bearing_policy_passes(self, vrf_type: str) -> None:
         """An enabled policy with a default action renders the SVI ACL."""
-        assert _run([_segment(namespace_type=namespace_type, policy=_policy())]) == []
+        assert _run([_segment(vrf_type=vrf_type, policy=_policy())]) == []
 
     def test_segment_with_rules_and_no_default_action_passes(self) -> None:
         """Rules alone also make the policy ACL-bearing."""
@@ -94,16 +102,16 @@ class TestProtected:
     @pytest.mark.parametrize(
         "segment",
         [
-            _segment(namespace_type="internet"),
-            _segment(namespace_type="management"),
-            _segment(namespace_type=None),
-            _segment(zone="INTERNET-ZONE"),
+            _segment(vrf_type="internet"),
+            _segment(vrf_type="management"),
+            _segment(vrf_type=None),
+            _segment(zone="INTERNET"),
             _segment(kind="CloudNetworkSegment"),
         ],
         ids=["internet-vrf", "management-vrf", "l2-only", "exchange-zone", "cloud"],
     )
     def test_non_tenant_or_non_routed_segments_are_exempt(self, segment: dict[str, Any]) -> None:
-        """Only routed PROD/NON-PROD tenant SVIs are in scope."""
+        """Only routed PROD/NONPROD tenant SVIs are in scope."""
         assert _run([segment]) == []
 
 
@@ -132,7 +140,5 @@ class TestUnprotected:
 
     def test_each_unprotected_segment_is_reported(self) -> None:
         """One error per offending segment; protected neighbours stay clean."""
-        errors = _run(
-            [_segment("one"), _segment("two", policy=_policy()), _segment("three", namespace_type="non_prod")]
-        )
+        errors = _run([_segment("one"), _segment("two", policy=_policy()), _segment("three", vrf_type="non_prod")])
         assert len(errors) == 2

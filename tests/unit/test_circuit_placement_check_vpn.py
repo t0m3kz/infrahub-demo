@@ -42,7 +42,7 @@ class TestVpnCircuit:
     def test_no_namespace_fails(self) -> None:
         """The session runs in an environment namespace."""
         messages = _run(vpns=[_vpn("V", [DC10, EUC1], [BL10_TUNNEL, AWS_TUNNEL], namespace=None)])
-        assert messages == ["Vpn circuit 'V' has no ip_namespace: its session runs in an environment namespace."]
+        assert messages == ["Vpn circuit 'V' has no vrf: its session runs in an environment routing domain."]
 
     def test_registered_prefixes_fail(self) -> None:
         """Only a tunnel registers prefixes."""
@@ -64,7 +64,7 @@ class TestVpnCircuit:
         prod = VPN_CIRCUIT
         near = _vport("bl-dc101101", "Tunnel2", parent=("Ethernet1/36", (INET_DC10,)))
         far = _vport("EXT-AWS-VPN-EUC1", "Tunnel2")
-        non_prod = _vpn("V2", [DC10, EUC1], [near, far], namespace=("NON-PROD", "non_prod"))
+        non_prod = _vpn("V2", [DC10, EUC1], [near, far], namespace=("NONPROD", "non_prod"))
         messages = _run(vpns=[prod, non_prod])
         assert len(messages) == 2 and all("different environments" in message for message in messages)
 

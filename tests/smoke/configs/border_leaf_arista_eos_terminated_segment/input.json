@@ -840,9 +840,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -936,9 +933,6 @@
                       }
                     }
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -970,9 +964,6 @@
                   },
                   "cable": {
                     "node": null
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -1006,95 +997,111 @@
                   "cable": {
                     "node": null
                   },
-                  "segments": {
+                  "capabilities": {
                     "edges": [
                       {
                         "node": {
-                          "id": "seg-seg-terminated-150",
-                          "__typename": "ManagedVxlanSegment",
-                          "name": {
-                            "value": "seg-terminated-150"
-                          },
-                          "customer_name": {
-                            "value": "Customer-A"
-                          },
-                          "arp_suppression": {
-                            "value": true
-                          },
-                          "security_zone": {
-                            "node": null
-                          },
-                          "gateway": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "sv-seg-seg-terminated-150",
+                          "segment_deployment": {
                             "node": {
-                              "address": {
-                                "value": "10.150.0.1/24"
-                              },
-                              "ip_prefix": {
+                              "id": "sd-seg-seg-terminated-150",
+                              "segment": {
                                 "node": {
-                                  "prefix": {
-                                    "value": "10.150.0.0/24"
+                                  "id": "seg-seg-terminated-150",
+                                  "__typename": "ManagedVxlanSegment",
+                                  "name": {
+                                    "value": "seg-terminated-150"
                                   },
-                                  "ip_namespace": {
+                                  "customer_name": {
+                                    "value": "Customer-A"
+                                  },
+                                  "arp_suppression": {
+                                    "value": true
+                                  },
+                                  "security_zone": {
                                     "node": {
+                                      "id": "fixture-zone-PROD",
                                       "name": {
-                                        "value": "VRF_A"
+                                        "value": "PROD"
+                                      },
+                                      "vrf_type": {
+                                        "value": "prod"
                                       },
                                       "l3_vni": {
-                                        "value": 50001
+                                        "value": 60000
                                       }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.150.0.1/24"
+                                      },
+                                      "ip_prefix": {
+                                        "node": {
+                                          "prefix": {
+                                            "value": "10.150.0.0/24"
+                                          },
+                                          "ip_namespace": {
+                                            "node": {
+                                              "name": {
+                                                "value": "default"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "segment_deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vni": {
+                                            "value": 10150
+                                          },
+                                          "vlans": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "vlan_id": {
+                                                    "value": 150
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "id": "dev-dc1-border-leaf-01"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "fake-dc-0"
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "terminated_on": {
+                                    "node": {
+                                      "id": "ctx-dc1-fw-prod"
                                     }
                                   }
                                 }
                               }
                             }
-                          },
-                          "segment_deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "vni": {
-                                    "value": 10150
-                                  },
-                                  "vlans": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "vlan_id": {
-                                            "value": 150
-                                          },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-dc1-border-leaf-01"
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  }
-                                }
-                              }
-                            ]
-                          },
-                          "deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "fake-dc-0"
-                                }
-                              }
-                            ]
-                          },
-                          "terminated_on": {
-                            "node": {
-                              "id": "ctx-dc1-fw-prod"
-                            }
                           }
                         }
                       }
                     ]
-                  },
-                  "capabilities": {
-                    "edges": []
                   }
                 }
               }
@@ -1153,7 +1160,18 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": null
+                            "node": {
+                              "id": "fixture-zone-PROD",
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              }
+                            }
                           },
                           "gateway": {
                             "node": {
@@ -1168,10 +1186,7 @@
                                   "ip_namespace": {
                                     "node": {
                                       "name": {
-                                        "value": "VRF_A"
-                                      },
-                                      "l3_vni": {
-                                        "value": 50001
+                                        "value": "default"
                                       }
                                     }
                                   }
@@ -1227,6 +1242,49 @@
                 ]
               }
             }
+          }
+        }
+      }
+    ]
+  },
+  "DeviceServices": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-dc1-border-leaf-01",
+          "name": {
+            "value": "dc1-border-leaf-01"
+          },
+          "role": {
+            "value": "border-leaf"
+          },
+          "member_of_groups": {
+            "edges": []
+          },
+          "deployment": {
+            "node": {
+              "__typename": "TopologyPod",
+              "id": "fixture-pod",
+              "name": {
+                "value": "fixture-pod"
+              },
+              "parent": {
+                "node": {
+                  "__typename": "TopologyDataCenter",
+                  "id": "fixture-dc",
+                  "name": {
+                    "value": "fixture-dc"
+                  }
+                }
+              }
+            }
+          },
+          "service_ports": {
+            "edges": []
+          },
+          "vlans": {
+            "edges": []
           }
         }
       }

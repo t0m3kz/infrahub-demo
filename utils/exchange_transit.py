@@ -36,6 +36,7 @@ from utils.limits import (
     TRANSIT_VLAN_BAND,
     TRANSIT_VNI_BASE,
 )
+from utils.routing_domain import interface_security_zone
 from utils.segment_addressing import routed_segment_namespace
 
 PROD_TYPE = "prod"
@@ -81,19 +82,31 @@ SERVICE_CONTEXT_ROLES: dict[str, str] = {
 }
 """The role of the PORT (an interface role) that faces the members of each kind of service context."""
 
-SERVICE_MEMBER_ROLES = frozenset({INTERNAL_FIREWALL_ROLE, EXTERNAL_FIREWALL_ROLE, "load-balancer"})
+BORDER_ROLE_FOR_SERVICES: dict[str, str] = {
+    INTERNAL_FIREWALL_ROLE: "firewall",
+    EXTERNAL_FIREWALL_ROLE: "firewall",
+    "load-balancer": "load-balancer",
+}
+"""Device role of an HA member -> the interface role of the border service port facing it.
+
+Every bootstrap border tier (N9K-C9336C-FX2_BORDER_LEAF's Ethernet1/[25-28]/[29-32], border-spine's equivalent blocks,
+N9K-C9316D-GX_EDGE's Ethernet1/[15-16]) names its firewall-facing and load-balancer-facing port blocks after the
+service role itself, so the border-facing role and the service role are the same string. Shared by the generators that
+cable the border tiers (dc.py, pod.py, colocation_fabric.py), the context generator and the readers that derive the
+ports of a context (utils/service_contexts.py): a caller whose border tier uses a different port-naming convention
+builds and passes its own dict instead of reusing this one."""
+
+SERVICE_MEMBER_ROLES = frozenset(BORDER_ROLE_FOR_SERVICES)
 """The DEVICE roles of the HA members a service context's legs sit on (any firewall pair, or a load-balancer pair)."""
-"""Context kind -> the role of the border service port it is tagged on, which is also the role of the HA
-members holding its legs (generators/connections.py BORDER_ROLE_FOR_SERVICES)."""
 
 ROUTED_SEGMENT_KINDS = frozenset({"ManagedVxlanSegment"})
 """Segment kinds the fabric routes with an anycast SVI (a Cloud segment never is)."""
 
 ZONE_BY_NS_TYPE: dict[str, str] = {
-    PROD_TYPE: "PROD-ZONE",
-    "non_prod": "NONPROD-ZONE",
-    INTERNET_TYPE: "INTERNET-ZONE",
-    MANAGEMENT_TYPE: "MANAGEMENT-ZONE",
+    PROD_TYPE: "PROD",
+    "non_prod": "NONPROD",
+    INTERNET_TYPE: "INTERNET",
+    MANAGEMENT_TYPE: "MANAGEMENT",
 }
 
 INTERNET_ZONE = ZONE_BY_NS_TYPE[INTERNET_TYPE]
@@ -165,57 +178,36 @@ def zone_name_for_namespace_type(ns_type: str) -> str:
 
 
 def exchange_peer_zones() -> frozenset[str]:
-    """Zone names of every namespace type a tenant VRF exchanges with (INTERNET-ZONE, MANAGEMENT-ZONE, ...)."""
+    """Zone names of every namespace type a tenant VRF exchanges with (INTERNET, MANAGEMENT, ...)."""
     return frozenset(ZONE_BY_NS_TYPE[ns_type] for peers in EXCHANGE_PEERS.values() for ns_type in peers)
 
 
 def is_exchange_zone(zone: str | None) -> bool:
-    """Whether ``zone`` is an exchange zone (INTERNET-ZONE, MANAGEMENT-ZONE).
+    """Whether ``zone`` is an exchange zone (INTERNET, MANAGEMENT).
 
     The one exchange-zone predicate. A segment in an exchange zone is a shared
     service by design (e.g. the DC-local MANAGEMENT services), so its zone is
-    authored data, not f(environment): ensure_security_zone keeps it, the
-    segment_security check exempts it from the environment rules, RulesPlanner
-    governs its flows by EXCHANGE_PEERS, and it is never a routed tenant segment.
+    authored data, not f(environment): the segment_security check exempts it
+    from the environment rules, RulesPlanner governs its flows by
+    EXCHANGE_PEERS, and it is never a routed tenant segment.
     """
     return zone in exchange_peer_zones()
 
 
 def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
-    """A VLAN/VXLAN segment the fabric routes with a gateway in a PROD/NON-PROD namespace, outside the exchange zones.
+    """A VLAN/VXLAN segment the fabric routes in a tenant SecurityZone, outside the exchange zones.
 
     A segment a firewall context terminates (``terminated_on``) has no SVI and is not one.
     The one definition of a tenant SVI in a shared VRF: the L0 SVI protection
     check and the segment group tags (generators/helpers/security_tag.py,
     transforms/helpers/group_policy/) read it. ``segment`` is cleaned query
-    data with ``typename``, ``gateway.ip_prefix.ip_namespace.namespace_type``
-    and ``security_zone.name``.
+    data with ``typename``, ``gateway``, ``security_zone.vrf_type`` and ``security_zone.name``.
     """
     if segment.get("typename") not in ROUTED_SEGMENT_KINDS:
         return False
-    namespace_type = routed_segment_namespace(segment).get("namespace_type")
+    namespace_type = routed_segment_namespace(segment).get("vrf_type")
     zone = (segment.get("security_zone") or {}).get("name")
     return namespace_type in TENANT_NAMESPACE_TYPES and not is_exchange_zone(zone)
-
-
-def service_context_caps(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """The service-context capabilities on a device's service ports (SERVICE_CONTEXT_ROLES).
-
-    On a border leaf these are the ports facing the HA members: a firewall-role
-    port is tagged with the firewall contexts, a load-balancer-role port with the
-    load-balancer contexts whose legs the leaf has to carry. De-duplicated by id.
-    ``interfaces`` is cleaned query data (config queries, queries/validation/vrf_instances.gql).
-    """
-    found: dict[str, dict[str, Any]] = {}
-    for iface in interfaces or []:
-        for cap in iface.get("capabilities") or []:
-            role = SERVICE_CONTEXT_ROLES.get(cap.get("typename") or "")
-            if role is None or role != iface.get("role"):
-                continue
-            key = cap.get("id") or cap.get("name")
-            if key:
-                found.setdefault(key, cap)
-    return list(found.values())
 
 
 def transit_leg_namespace(context_vlan: int | None, leg: dict[str, Any]) -> dict[str, Any] | None:
@@ -224,13 +216,13 @@ def transit_leg_namespace(context_vlan: int | None, leg: dict[str, Any]) -> dict
     A transit leg is a sub-interface of an HA member (a firewall or a load balancer) with an address in a
     non-default namespace whose type has a slot, on a context with a VLAN. The one rule for the transform's
     transit legs (transforms/helpers/firewall.py transit_legs) and the border device's VRF demand
-    (utils/vrf_demand.py); ``leg`` is a cleaned interface of the context's ``capabilities``.
+    (utils/vrf_demand.py); ``leg`` is a cleaned leg interface (utils/service_contexts.py ``leg_interfaces``).
     """
     if (leg.get("device") or {}).get("role") not in SERVICE_MEMBER_ROLES:
         return None
     ip_address = leg.get("ip_address") or {}
-    namespace = ip_address.get("ip_namespace") or {}
-    name, ns_type = namespace.get("name"), namespace.get("namespace_type")
+    namespace = interface_security_zone(leg, required=bool(ip_address.get("address") and context_vlan))
+    name, ns_type = namespace.get("name"), namespace.get("vrf_type")
     if (
         not ip_address.get("address")
         or not context_vlan

@@ -14,22 +14,33 @@ from generators.protocols import DcimPhysicalInterface, DcimVirtualInterface
 from generators.virtual_nics import PINNED_ROLES, VirtualNicMixin, pair_nics_with_host_ports
 
 
-def _port(port_id: str, name: str, role: str, *, device_id: str = "vm-1", parent_id: str | None = None) -> Any:
-    return SimpleNamespace(
+def _port(
+    port_id: str,
+    name: str,
+    role: str,
+    *,
+    device_id: str = "vm-1",
+    parent_id: str | None = None,
+    cabled: bool = False,
+) -> Any:
+    port = SimpleNamespace(
         id=port_id,
         name=SimpleNamespace(value=name),
         role=SimpleNamespace(value=role),
         device=SimpleNamespace(id=device_id),
         parent_interface=SimpleNamespace(id=parent_id),
     )
+    if device_id == "host":
+        port.cable = SimpleNamespace(id=f"cable-{port_id}" if cabled else None)
+    return port
 
 
 def _host_ports() -> list[Any]:
     """A physical firewall: management MGMT, uplinks eth1 / eth2, downlink eth3, ha sync."""
     return [
         _port("h-mgmt", "MGMT", "management", device_id="host"),
-        _port("h-eth2", "eth2", "uplink", device_id="host"),
-        _port("h-eth1", "eth1", "uplink", device_id="host"),
+        _port("h-eth2", "eth2", "uplink", device_id="host", cabled=True),
+        _port("h-eth1", "eth1", "uplink", device_id="host", cabled=True),
         _port("h-eth3", "eth3", "downlink", device_id="host"),
         _port("h-sync", "sync", "ha", device_id="host"),
     ]
@@ -100,7 +111,7 @@ def _client(nics_by_call: list[list[Any]], host_ports: list[Any]) -> Any:
         node.save = AsyncMock(side_effect=lambda **kwargs: saved.append((data, kwargs)))
         return node
 
-    return SimpleNamespace(filters=filters, create=create, saved=saved)
+    return SimpleNamespace(filters=filters, create=create, saved=saved, execute_graphql=AsyncMock())
 
 
 @pytest.mark.asyncio
@@ -128,6 +139,23 @@ async def test_pin_is_idempotent_when_the_nics_are_already_pinned() -> None:
     await _Gen(client)._pin_virtual_nics([SimpleNamespace(id="vm-1", name=SimpleNamespace(value="vm"))], "host")
 
     assert client.saved == []
+
+
+@pytest.mark.asyncio
+async def test_uncabled_uplink_is_not_pinned_and_its_previous_generated_pin_is_removed() -> None:
+    """An unused chassis uplink must not become a false path from a dedicated appliance."""
+    ports = _host_ports()
+    next(port for port in ports if port.id == "h-eth2").cable.id = None
+    nics = _nics(eth0="h-mgmt", eth1="h-eth1", eth2="h-eth2", eth7="h-sync")
+    client = _client([nics], ports)
+
+    await _Gen(client)._pin_virtual_nics([SimpleNamespace(id="vm-1", name=SimpleNamespace(value="vm"))], "host")
+
+    assert client.saved == []
+    client.execute_graphql.assert_awaited_once()
+    assert client.execute_graphql.await_args.kwargs["variables"] == {
+        "data": {"id": "vm-1-eth2", "name": "parent_interface", "nodes": [{"id": "h-eth2"}]}
+    }
 
 
 @pytest.mark.asyncio

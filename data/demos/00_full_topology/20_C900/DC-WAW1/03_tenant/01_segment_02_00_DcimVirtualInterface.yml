@@ -1,0 +1,20 @@
+# DcimVirtualInterface declarations in recursive dependency order.
+# The SVIs of the segment c900-app-p on both leaves (VLAN 200, in the PROD VRF of DC-WAW1). Each carries the segment's
+# anycast gateway 10.92.1.1/24 as its address (the address object of 01_segment_00_00, referenced, not a new one), so
+# they load after the segment. An SVI has no link to its row: it is the leaf's Vlan200, the row's VLAN id. The
+# rows of both leaves are nested under the deployment of the segment (01_segment_01_00).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: Vlan200
+      device: waw1-leaf-01
+      role: svi
+      status: active
+      ip_address: ["10.92.1.1/24", "default"]
+    - name: Vlan200
+      device: waw1-leaf-02
+      role: svi
+      status: active
+      ip_address: ["10.92.1.1/24", "default"]

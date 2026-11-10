@@ -1,0 +1,13 @@
+# ManagedPortGroup declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedPortGroup
+  data:
+    - name: nsx-uplink
+      description: "Uplink VLAN of the NSX Edge nodes towards the fabric (transit, no tenant segment)"
+      virtual_switch: ktw1-dvs-01
+      vlan_id: 900
+      nics:
+        - ["ktw1-nsx-edge-01", "fp-eth0"]
+        - ["ktw1-nsx-edge-02", "fp-eth0"]

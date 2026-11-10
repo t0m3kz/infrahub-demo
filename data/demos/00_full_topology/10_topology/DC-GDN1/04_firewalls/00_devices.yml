@@ -1,0 +1,20 @@
+# Minimal internal firewall pair in free units 10-13 of the existing GDN1 border rack; ports come from the template.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: gdn1-fw-01
+      object_template: PA-5260_FIREWALL
+      description: Internal firewall 1, uplink to GDN1 border leaf 1
+      deployment: DC-GDN1
+      rack: gdn1-rack-01
+      position: 10
+      rack_face: front
+    - name: gdn1-fw-02
+      object_template: PA-5260_FIREWALL
+      description: Internal firewall 2, uplink to GDN1 border leaf 2
+      deployment: DC-GDN1
+      rack: gdn1-rack-01
+      position: 12
+      rack_face: front

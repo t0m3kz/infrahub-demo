@@ -1,0 +1,17 @@
+# ManagedSegmentDeployment declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSegmentDeployment
+  data:
+    - segment: c900-sync-p
+      deployment: DC-KTW1
+      vni: 40000
+      vlans:
+        data:
+          - device: ktw1-leaf-01
+            vlan_id: 2500
+          - device: ktw1-leaf-02
+            vlan_id: 2500
+          - {device: ktw1-bl-01, vlan_id: 2500}
+          - {device: ktw1-bl-02, vlan_id: 2500}

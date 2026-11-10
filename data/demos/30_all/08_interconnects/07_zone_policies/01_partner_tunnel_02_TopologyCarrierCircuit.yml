@@ -1,0 +1,19 @@
+# TopologyCarrierCircuit declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - circuit_id: "INET-ACME-COGENT"
+      member_of_groups: [carrier_circuits]
+      name: "INET-ACME-COGENT"
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      provider: "P023"
+      description: "Cogent internet access of the partner Acme Logistics, 1G"
+      locations:
+        - "ISP-COGENT"
+      capabilities:
+        - ["EXT-ACME-EDGE1", "et-0/0/0"]
+        - ["EXT-COGENT-FRA1", "et-0/0/1"]

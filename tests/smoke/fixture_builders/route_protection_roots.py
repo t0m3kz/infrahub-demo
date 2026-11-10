@@ -8,19 +8,20 @@ the EVPN filters adds these roots next to its device root.
 from __future__ import annotations
 
 from tests.smoke.fixture_builders.common import _edges, _node, _v
+from tests.smoke.fixture_builders.vrf import routing_vrf, routing_zone
 
-# The routed space of the fixtures: the segment 10.100.0.0/24 in VRF_A (a tenant namespace of the fixtures), one more
+# The routed space of the fixtures: the segment 10.100.0.0/24 in PROD, one more
 # prefix registered there, and the public aggregate in INTERNET.
-TENANT_NAMESPACE = "VRF_A"
+TENANT_NAMESPACE = "PROD"
 TENANT_PREFIXES = ("10.100.0.0/24", "10.100.8.0/24")
 INTERNET_PREFIXES = ("203.0.113.0/24",)
 
 
-def prefix_node(prefix: str, namespace: str, namespace_type: str) -> dict:
+def prefix_node(prefix: str, namespace: str, vrf_type: str) -> dict:
     """One ``IpamPrefix`` node of an ``environment_prefixes_*`` root."""
     return {
         "prefix": _v(prefix),
-        "ip_namespace": _node({"name": _v(namespace), "namespace_type": _v(namespace_type)}),
+        "ip_namespace": {"node": {"name": {"value": "default"}}},
     }
 
 
@@ -38,18 +39,43 @@ def add_environment_roots(
     their roles by name (a device not named is a leaf).
     """
     roles = roles or {}
-    data["environment_prefixes_prod"] = _edges([prefix_node(p, TENANT_NAMESPACE, "prod") for p in TENANT_PREFIXES])
-    data["environment_prefixes_non_prod"] = _edges([])
-    data["environment_prefixes_internet"] = _edges([prefix_node(p, "INTERNET", "internet") for p in INTERNET_PREFIXES])
-    data["environment_prefixes_management"] = _edges([])
+    data["environment_zones"] = _edges(
+        [
+            {
+                **routing_zone(name),
+                "vrfs": _edges(
+                    [
+                        {
+                            **routing_vrf(name),
+                            "session_circuits": _edges(
+                                [
+                                    {
+                                        "name": _v(f"fixture-registration-{name}"),
+                                        "vrf": _node(routing_vrf(name)),
+                                        "registered_prefixes": _edges(
+                                            [prefix_node(prefix, name, purpose) for prefix in prefixes]
+                                        ),
+                                    }
+                                ]
+                            ),
+                        }
+                    ]
+                ),
+            }
+            for name, purpose, prefixes in (
+                (TENANT_NAMESPACE, "prod", TENANT_PREFIXES),
+                ("INTERNET", "internet", INTERNET_PREFIXES),
+            )
+        ]
+    )
     data["ManagedVRF"] = _edges(
         [
             {
-                "namespace": _node({"name": _v(TENANT_NAMESPACE), "namespace_type": _v("prod")}),
+                "security_zone": _node(routing_zone(TENANT_NAMESPACE)),
                 "shared_devices": _members(tenant_members, roles),
             },
             {
-                "namespace": _node({"name": _v("INTERNET"), "namespace_type": _v("internet")}),
+                "security_zone": _node(routing_zone("INTERNET")),
                 "shared_devices": _members(internet_members, roles),
             },
         ]

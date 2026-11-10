@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
+from generators.firewall_context import EDGE_CONTEXT, FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from generators.lb_vip import load_balanced_components_in
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 from tests.unit.customer_generator_helpers import make_generator
@@ -106,6 +106,17 @@ class TestDCDeployment:
         await gen.generate({"TopologyCustomerColocation": [{"id": "x"}]})
 
         gen.client.filters.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_target_is_related_before_a_zero_output_return(self) -> None:
+        """Even a footprint with no hosting facility leaves a nonempty tracking context for SDK cleanup."""
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen.client.group_context.related_node_ids = []
+
+        await gen.generate(_dc_payload())
+
+        assert gen.client.group_context.related_node_ids == ["cust-1"]
+        gen.client.create.assert_not_called()
 
 
 class TestWaitsForParentDcGenerator:
@@ -272,8 +283,9 @@ class TestFirewallContextProvisioning:
         target = kwargs["target"]
         assert target.spec is FIREWALL_CONTEXT
         assert target.context_name("PROD") == f"shared-{cluster.name.value}-prod"
-        assert target.context_name("NON-PROD") == f"shared-{cluster.name.value}-non-prod"
-        assert (target.cluster_id, target.tenant_id, target.track) == (cluster.id, None, False)
+        assert target.context_name("NONPROD") == f"shared-{cluster.name.value}-nonprod"
+        assert (target.deployment_id, target.tenant_id, target.track) == ("dc10-id", None, False)
+        assert target.devices == [fw_device]
         assert kwargs["customer"]["environment"] == "p"
 
     @pytest.mark.asyncio
@@ -291,7 +303,8 @@ class TestFirewallContextProvisioning:
         assert target.context_name("PROD") == "c005-DC10-FW1-DC10-FW2-prod"
         # The HA domain and its context are two nodes of one generic: they never share a name.
         assert target.context_name("PROD") != dedicated_cluster.name.value
-        assert (target.cluster_id, target.tenant_id, target.track) == ("dedicated-cluster-1", "cust-1", True)
+        # A dedicated context lives in the same DC as the shared one; its members are the dedicated pair.
+        assert (target.deployment_id, target.tenant_id, target.track) == ("dc10-id", "cust-1", True)
         assert target.devices == dedicated_fws
 
     @pytest.mark.asyncio
@@ -342,32 +355,53 @@ class TestLinkServingContext:
     """The deployment records the context of each kind that serves it."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("spec", "field"),
-        [(FIREWALL_CONTEXT, "serving_firewall_context"), (LOADBALANCER_CONTEXT, "serving_loadbalancer_context")],
-    )
-    async def test_link_is_saved_untracked(self, spec: Any, field: str) -> None:
+    async def test_lb_link_is_saved_untracked(self) -> None:
         """The deployment is the generator's target; tracking it would let
         delete_unused_nodes remove it on a later run."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         deployment = MagicMock()
-        getattr(deployment, field).id = None
+        deployment.serving_loadbalancer_context.id = None
+        deployment.save = AsyncMock()
+        gen.client.get = AsyncMock(return_value=deployment)
+
+        await gen.link_serving_context(LOADBALANCER_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_ids=[])
+
+        assert gen.client.get.call_args.kwargs == {"kind": "TopologyCustomerDC", "id": "cust-1"}
+        assert deployment.serving_loadbalancer_context == "ctx-1"
+        deployment.save.assert_awaited_once_with(update_group_context=False)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("spec", [FIREWALL_CONTEXT, EDGE_CONTEXT])
+    async def test_firewall_link_is_added_to_the_list(self, spec: Any) -> None:
+        """The internal and the Internet edge context are both added to the one list, edge by edge, never saved."""
+        gen = make_generator(CustomerDeploymentDCExchangeGenerator)
+        deployment = MagicMock()
+        deployment.add_relationships = AsyncMock()
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
         await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-1", current_ids=[])
 
-        assert gen.client.get.call_args.kwargs == {"kind": "TopologyCustomerDC", "id": "cust-1"}
-        assert getattr(deployment, field) == "ctx-1"
-        deployment.save.assert_awaited_once_with(update_group_context=False)
+        deployment.add_relationships.assert_awaited_once_with("serving_firewall_contexts", ["ctx-1"])
+        deployment.save.assert_not_awaited()
 
-    def test_a_dc_footprint_has_one_serving_context_of_each_kind(self) -> None:
-        """Only the colocation footprint (one context per zone) has the many relationship."""
+    def test_a_dc_footprint_lists_its_firewall_contexts_and_has_one_lb_context(self) -> None:
+        """The firewall contexts (internal and edge) are one many relationship, the load-balancer context one."""
+        assert FIREWALL_CONTEXT.serving_field == EDGE_CONTEXT.serving_field == "serving_firewall_contexts"
+        assert FIREWALL_CONTEXT.serving_many and EDGE_CONTEXT.serving_many
+        assert LOADBALANCER_CONTEXT.serving_field == "serving_loadbalancer_context"
+        assert not LOADBALANCER_CONTEXT.serving_many
+
+    def test_each_spec_owns_the_links_of_its_role(self) -> None:
+        """The boarding query lists both kinds of firewall context: a spec converges only the ones of its role."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
+        internal = {"id": "ctx-int", "shared_devices": [{"role": "internal-firewall"}]}
+        edge = {"id": "ctx-edge", "shared_devices": [{"role": "external-firewall"}]}
+        customer = {"serving_firewall_contexts": [internal, edge], "serving_loadbalancer_context": {"id": "lb-1"}}
 
-        assert CustomerDeploymentDCExchangeGenerator._serving_many is False
-        assert gen._serving_field(FIREWALL_CONTEXT) == "serving_firewall_context"
-        assert gen._serving_field(LOADBALANCER_CONTEXT) == "serving_loadbalancer_context"
+        assert gen.serving_context_ids(customer, FIREWALL_CONTEXT) == ["ctx-int"]
+        assert gen.serving_context_ids(customer, EDGE_CONTEXT) == ["ctx-edge"]
+        assert gen.serving_context_ids(customer, LOADBALANCER_CONTEXT) == ["lb-1"]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("spec", [FIREWALL_CONTEXT, LOADBALANCER_CONTEXT])
@@ -384,11 +418,11 @@ class TestLinkServingContext:
         """A payload without the link (a stale or older query) falls back to reading the deployment: still no write."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         deployment = MagicMock()
-        deployment.serving_firewall_context.id = "ctx-1"
+        deployment.serving_loadbalancer_context.id = "ctx-1"
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_ids=[])
+        await gen.link_serving_context(LOADBALANCER_CONTEXT, customer_id="cust-1", context_id="ctx-1", current_ids=[])
 
         gen.client.get.assert_awaited_once()
         deployment.save.assert_not_awaited()
@@ -398,12 +432,12 @@ class TestLinkServingContext:
         """The query shows another context: the deployment is read (the server decides the previous one) and saved."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         deployment = MagicMock()
-        deployment.serving_firewall_context.id = "ctx-old"
+        deployment.serving_loadbalancer_context.id = "ctx-old"
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
         await gen.link_serving_context(
-            FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-new", current_ids=["ctx-old"]
+            LOADBALANCER_CONTEXT, customer_id="cust-1", context_id="ctx-new", current_ids=["ctx-old"]
         )
 
         gen.client.get.assert_awaited_once()
@@ -485,11 +519,14 @@ class TestServingContextRelink:
     @pytest.mark.asyncio
     async def test_firewall_relink_re_runs_nothing(self) -> None:
         """The firewall rules are placed by the transform at render time: nothing to re-run."""
-        gen, deployment = self._gen("serving_firewall_context", "fw-dedicated")
+        gen, deployment = self._gen("serving_loadbalancer_context", None)
+        deployment.add_relationships = AsyncMock()
 
-        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="fw-shared", current_ids=[])
+        await gen.link_serving_context(
+            FIREWALL_CONTEXT, customer_id="cust-1", context_id="fw-shared", current_ids=["fw-dedicated"]
+        )
 
-        deployment.save.assert_awaited_once()
+        deployment.add_relationships.assert_awaited_once()
         gen.run_generator.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -658,7 +695,7 @@ class TestEnsureDedicatedDevicePair:
         gen.client.filters = AsyncMock(
             side_effect=[[MagicMock(id="tmpl-1")], [virt1, virt2], [MagicMock(id="dedicated-cluster-1")]]
         )
-        gen.create_devices = AsyncMock(side_effect=[["c005-DC10-FW1-non-prod"], ["c005-DC10-FW2-non-prod"]])
+        gen.create_devices = AsyncMock(side_effect=[["c005-DC10-FW1-nonprod"], ["c005-DC10-FW2-nonprod"]])
 
         await gen._ensure_dedicated_device_pair(
             role="internal-firewall",
@@ -667,14 +704,14 @@ class TestEnsureDedicatedDevicePair:
             parent_id="dc-1",
             parent_name="DC10",
             dc_design="M",
-            name_parts=("c005", "non-prod"),
+            name_parts=("c005", "nonprod"),
         )
 
         assert [call.kwargs["options"]["name_override"] for call in gen.create_devices.await_args_list] == [
-            "c005-DC10-FW1-non-prod",
-            "c005-DC10-FW2-non-prod",
+            "c005-DC10-FW1-nonprod",
+            "c005-DC10-FW2-nonprod",
         ]
-        assert gen._ensure_ha_pairs.call_args.kwargs["ha_name"] == "c005-DC10-FW1-DC10-FW2-ha-non-prod"
+        assert gen._ensure_ha_pairs.call_args.kwargs["ha_name"] == "c005-DC10-FW1-DC10-FW2-ha-nonprod"
 
     @pytest.mark.asyncio
     async def test_load_balancer_pair_uses_the_lb_template_and_ha_kind(self) -> None:
@@ -747,9 +784,9 @@ class TestLoadbalancerContextTarget:
         await gen.generate(_dc_payload_with_parent(fw_devices=[], lb_devices=self._LBS))
 
         (target,) = self._lb_targets(gen)
-        assert (target.cluster_id, target.tenant_id, target.track) == ("lb-cluster-1", None, False)
+        assert (target.deployment_id, target.tenant_id, target.track) == ("dc10-id", None, False)
         assert target.context_name("PROD") == "shared-DC10-LB1-LB2-prod"
-        assert target.context_name("NON-PROD") == "shared-DC10-LB1-LB2-non-prod"
+        assert target.context_name("NONPROD") == "shared-DC10-LB1-LB2-nonprod"
         assert gen.client.filters.call_args.kwargs["capabilities__ids"] == ["lb-1"]
         assert gen.client.filters.call_args.kwargs["kind"].__name__ == "ManagedLoadbalancerHA"
 
@@ -784,7 +821,7 @@ class TestLoadbalancerContextTarget:
             name_parts=("c005", "prod"),
         )
         (target,) = self._lb_targets(gen)
-        assert (target.cluster_id, target.tenant_id, target.track) == ("ded-lb-cluster", "cust-1", True)
+        assert (target.deployment_id, target.tenant_id, target.track) == ("dc10-id", "cust-1", True)
         assert target.context_name("PROD") == "c005-DC10-LB1-DC10-LB2-prod"
         assert target.context_name("PROD") != dedicated_cluster.name.value
         assert target.devices == dedicated_lbs
@@ -903,12 +940,14 @@ class TestGetOrCreateContext:
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
-        await gen._get_or_create_context(spec, "dc10-shared", "cluster-1", None)
+        await gen._get_or_create_context(spec, "dc10-shared", "dc10-id", ["fw-1", "fw-2"], None)
 
         assert gen.client.create.call_args.kwargs["kind"] is spec.context_kind
         data = gen.client.create.call_args.kwargs["data"]
-        assert data["cluster"] == {"id": "cluster-1"}
-        assert "tenant" not in data
+        # The hosting deployment is the context's Parent; the members are the pair that enforces it.
+        assert data["deployment"] == {"id": "dc10-id"}
+        assert data["shared_devices"] == [{"id": "fw-1"}, {"id": "fw-2"}]
+        assert "cluster" not in data and "tenant" not in data
         created.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
@@ -918,7 +957,9 @@ class TestGetOrCreateContext:
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
-        await gen._get_or_create_context(FIREWALL_CONTEXT, "dc10-shared", "cluster-1", None, track=False)
+        await gen._get_or_create_context(
+            FIREWALL_CONTEXT, "dc10-shared", "dc10-id", ["fw-1", "fw-2"], None, track=False
+        )
 
         created.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
@@ -928,7 +969,9 @@ class TestGetOrCreateContext:
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
-        await gen._get_or_create_context(LOADBALANCER_CONTEXT, "dc10-cust-1-dedicated", "cluster-1", "cust-1")
+        await gen._get_or_create_context(
+            LOADBALANCER_CONTEXT, "dc10-cust-1-dedicated", "dc10-id", ["lb-1", "lb-2"], "cust-1"
+        )
 
         data = gen.client.create.call_args.kwargs["data"]
         assert data["tenant"] == {"id": "cust-1"}

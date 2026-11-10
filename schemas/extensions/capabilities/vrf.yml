@@ -1,51 +1,44 @@
 ---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
 # ============================================================================
 # Routing — VRF instance schema
-# A ManagedVRF is one environment namespace (IpamNamespace is this project's VRF) realized in one topology: the
+# A ManagedVRF is one global SecurityZone routing domain realized in one topology: the
 # hosting deployment (a DC, a colocation metro or an office, TopologySegmentHosting) its member devices sit in, the
 # same level as a segment's realization (ManagedSegmentDeployment) and the scope of the route-target
-# (`{evpn_rt_as}:{l3_vni}`). One per (deployment, namespace), named `{deployment lower}-vrf-{namespace lower}`
-# (dc10-vrf-prod). Its members are the devices of the topology that route in the namespace, demand-driven
+# (`{evpn_rt_as}:{l3_vni}`). One per (deployment, security_zone), named `{deployment lower}-vrf-{zone name lower}`
+# (dc10-vrf-prod, dc10-vrf-nonprod). Its members are the devices that route in the zone, demand-driven
 # (utils/vrf_demand.py, the one derivation), written edge by edge by generators/helpers/vrf.py and checked by
 # checks/vrf_instances.py. Nothing else is stored: the RD, the RT, the L3 VNI SVI VLAN and whether a member realizes
-# it as EVPN or VRF-lite are derived (transforms/helpers/overlay.py); the L3 VNI stays on the namespace and is only
-# shown here. A firewall or a load balancer is never a member: its VRF is the context.
+# it as EVPN or VRF-lite are derived (transforms/helpers/overlay.py); the L3 VNI stays on SecurityZone.
+# A firewall or a load balancer is never a member: its VRF is the context.
+# Its interfaces (an SVI, a handoff sub-interface, a service leg) are its `capabilities` (ManagedGenericInterfaces, the
+# interface edge); an interface is in at most one VRF (checks/vrf_instances.py).
 # ============================================================================
 
 nodes:
   - name: VRF
     namespace: Managed
-    description: "One environment namespace realized in one topology (DC, metro, office); its members route in it"
+    description: "One security-zone routing domain realized in a topology (DC, metro, office); its members route in it"
     label: VRF Instance
     icon: "mdi:routes"
     include_in_menu: false
-    # The shared device edge, not ManagedGenericDevice: that one (DcimCapabilities.capabilities) cascades, and deleting
+    # The shared device edge, not ManagedGenericDevice: that one (DcimDeviceManaged.capabilities) cascades, and deleting
     # one member would delete the topology's VRF. Membership is `shared_devices` (reverse
-    # `DcimCapabilities.shared_capabilities`), with no cascade.
+    # `DcimDeviceManaged.shared_capabilities`), with no cascade. Its interfaces are its interface `capabilities`.
     inherit_from:
       - ManagedGeneric
       - ManagedGenericSharedDevice
+      - ManagedGenericInterfaces
     human_friendly_id:
       - "deployment__name__value"
-      - "namespace__name__value"
+      - "security_zone__name__value"
     uniqueness_constraints:
-      - ["deployment", "namespace"]
+      - ["deployment", "security_zone"]
     display_label: "{{ name__value }}"
     order_by:
       - name__value
-    attributes:
-      # Display only, derived by the server from the namespace (the one source; nothing in code reads it).
-      - name: l3_vni
-        kind: Text
-        label: L3 VNI
-        read_only: true
-        optional: true
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ namespace__l3_vni__value }}"
-        order_weight: 1100
     relationships:
       - name: deployment
         peer: TopologySegmentHosting
@@ -56,18 +49,24 @@ nodes:
         kind: Parent
         identifier: vrf__deployment
         order_weight: 1000
-      # Not `ip_namespace`: that field name already peers two different kinds (BuiltinIPNamespace on the IPAM nodes,
-      # IpamNamespace on TopologySessionCircuit), and a third would risk a GraphQL "Fields ... conflict".
-      - name: namespace
-        peer: IpamNamespace
-        label: Namespace
-        description: "The environment namespace (VRF) this instance realizes in its topology"
+      - name: security_zone
+        peer: SecurityZone
+        label: Security Zone
+        description: "Global routing domain this instance realizes; the zone's name is the CLI VRF name"
         cardinality: one
         optional: false
         kind: Attribute
         on_delete: no-action
-        identifier: vrf__namespace
+        identifier: vrf__security_zone
         order_weight: 1050
+      - name: session_circuits
+        peer: TopologySessionCircuit
+        cardinality: many
+        optional: true
+        kind: Generic
+        on_delete: no-action
+        identifier: session_circuit__vrf
+        order_weight: 1150
 
 extensions:
   nodes:
@@ -83,28 +82,4 @@ extensions:
           on_delete: cascade
           identifier: vrf__deployment
           order_weight: 7900
-          description: "The environment namespaces realized in this topology"
-    # So the namespace page lists its instances; written from the VRF side (ManagedVRF.namespace).
-    - kind: IpamNamespace
-      relationships:
-        - name: vrfs
-          label: VRF Instances
-          peer: ManagedVRF
-          cardinality: many
-          optional: true
-          kind: Generic
-          on_delete: no-action
-          identifier: vrf__namespace
-          order_weight: 5000
-          description: "The topologies this namespace is realized in"
-    - kind: DcimVirtualInterface
-      relationships:
-        - name: vrf
-          peer: ManagedVRF
-          label: "VRF Instance"
-          description: "VRF instance this SVI routes in (role svi only); the transform renders `vrf member` from it"
-          cardinality: one
-          optional: true
-          kind: Attribute
-          identifier: vrf__svis
-          order_weight: 1440
+          description: "The security-zone routing domains realized in this topology"

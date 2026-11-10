@@ -1,0 +1,20 @@
+---
+# The INTERNET routing instance of each office: the WAN exit of its SD-WAN edge(s), where the internet access port and
+# its transit address live. It loads before the routed ports (02_circuits) that name it. The office is PROD inside;
+# only its border devices are members here.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "c900-office-vrf-internet"
+      security_zone: "INTERNET"
+      deployment: "C900-OFFICE"
+      shared_devices:
+        - "bcn-office-edge-01"
+    - name: "c901-office-vrf-internet"
+      security_zone: "INTERNET"
+      deployment: "C901-OFFICE"
+      shared_devices:
+        - "lis-office-edge-01"
+        - "lis-office-edge-02"

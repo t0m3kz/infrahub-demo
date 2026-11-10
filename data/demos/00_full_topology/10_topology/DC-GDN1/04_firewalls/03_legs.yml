@@ -1,0 +1,34 @@
+# PROD transit legs on the existing uplink shape: .37/.38 members, derived .36 VIP and .33 fabric gateway.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: ethernet1/1.3000
+      vlan_id: 3000
+      device: gdn1-fw-01
+      parent_interface: ["gdn1-fw-01", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.0.37/29"
+          ip_namespace: "default"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "100.66.0.32/29"
+              ip_namespace: "default"
+              status: active
+              description: GDN1 internal firewall PROD transit
+    - name: ethernet1/1.3000
+      vlan_id: 3000
+      device: gdn1-fw-02
+      parent_interface: ["gdn1-fw-02", "ethernet1/1"]
+      role: service
+      status: active
+      ip_address:
+        data:
+          address: "100.66.0.38/29"
+          ip_namespace: "default"
+          ip_prefix: ["100.66.0.32/29", "default"]

@@ -1,0 +1,19 @@
+# RoutingPolicy declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPolicy
+  data:
+    - name: "isp-a-prepend-object-store"
+      description: "Announce the object store range to ISP A with two extra hops"
+      origin: manual
+      priority: 50
+      default_action: deny
+      export_peerings:
+        - "BGP-KTW1-EDGE01-ISP-A"
+      terms:
+        data:
+          - seq: 10
+            action: permit
+            prepend_count: 2
+            match_prefix_list: "PL-OBJECT-STORE-PUBLIC"

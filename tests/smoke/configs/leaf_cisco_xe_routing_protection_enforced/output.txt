@@ -101,13 +101,13 @@ route-map RM-CONN-2-BGP permit 10
 !
 ! Tenant VRFs (symmetric IRB — one L3 VNI per tenant)
 ! unverified-no-lab: `route-target ... stitching` is how the guide imports and exports a VRF into L2VPN EVPN
-vrf definition VRF_A
- rd 10.0.0.1:50001
+vrf definition PROD
+ rd 10.0.0.1:60000
  address-family ipv4
-  route-target export 65000:50001
-  route-target import 65000:50001
-  route-target export 65000:50001 stitching
-  route-target import 65000:50001 stitching
+  route-target export 65000:60000
+  route-target import 65000:60000
+  route-target export 65000:60000 stitching
+  route-target import 65000:60000 stitching
  exit-address-family
 !
 !
@@ -144,14 +144,14 @@ vlan configuration 200
 ! unverified-no-lab: `vlan configuration <vlan>` / `member vni <l3vni>` binds the L3 VNI to its SVI VLAN
 ! unverified-no-lab: `ip unnumbered Loopback0` and `no autostate` on the L3 VNI SVI
 vlan 3900
- name L3VNI_VRF_A
+ name L3VNI_PROD
 !
 vlan configuration 3900
- member vni 50001
+ member vni 60000
 !
 interface Vlan3900
- description L3VNI transit SVI for VRF VRF_A
- vrf forwarding VRF_A
+ description L3VNI transit SVI for VRF PROD
+ vrf forwarding PROD
  ip unnumbered Loopback0
  no autostate
  no shutdown
@@ -166,7 +166,7 @@ interface nve1
  host-reachability protocol bgp
  member vni 10100 ingress-replication
  member vni 10200 ingress-replication
- member vni 50001 vrf VRF_A
+ member vni 60000 vrf PROD
  no shutdown
 !
 !
@@ -177,7 +177,7 @@ router bgp 65001
  address-family l2vpn evpn
   neighbor EVPN-OVERLAY send-community both
  exit-address-family
- address-family ipv4 vrf VRF_A
+ address-family ipv4 vrf PROD
   advertise l2vpn evpn
   redistribute connected
  exit-address-family
@@ -188,7 +188,7 @@ router bgp 65001
 ! unverified-no-lab: `mac-address <anycast mac>` and `no autostate` on the tenant gateway SVIs
 interface Vlan100
  description Customer-A
- vrf forwarding VRF_A
+ vrf forwarding PROD
  ip address 10.100.0.1 255.255.255.0
  mac-address 001c.7300.dc01
  no autostate
@@ -196,6 +196,7 @@ interface Vlan100
 !
 interface Vlan200
  description Customer-A
+ vrf forwarding PROD
  ip address 10.200.0.1 255.255.255.0
  mac-address 001c.7300.dc01
  no autostate

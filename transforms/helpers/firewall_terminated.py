@@ -6,7 +6,7 @@ sub-interface is not an object. It is derived here, per member, from three facts
 
 - the trunk: the ``parent_interface`` of the context's transit legs (every leg of a context rides on the same
   ``uplink`` trunk, utils/exchange_transit.py);
-- the facing leaf: the device at the far end of the trunk's cable;
+- the facing leaf: the device at the far end of the trunk's cable (or its physical host port's cable for a VM NIC);
 - the VLAN: the segment's VLAN row on that leaf, the tag both ends of the cable use.
 
 The result is shaped like the firewall interfaces ``transforms/config/firewall.py`` builds, with the VIP as
@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
+from utils.circuit_underlay import cabled_port
 
 _log = logging.getLogger(__name__)
 
@@ -29,15 +31,17 @@ def _trunk_name(context: dict[str, Any]) -> str | None:
 
 
 def _facing_device_ids(interfaces: list[dict[str, Any]], trunk_name: str, device_id: str | None) -> set[str]:
-    """The ids of the devices at the far end of the trunk's cable (the endpoints that are not this device).
-
-    A trunk that is not cabled (a virtual NIC of a hosted firewall rides on its host's cabled port) or ends on a
-    patch panel port has none.
-    """
+    """The facing devices of a physical trunk or the cabled host port a virtual trunk rides on."""
     trunk = next((iface for iface in interfaces if iface.get("name") == trunk_name), {})
-    endpoints = (trunk.get("cable") or {}).get("endpoints") or []
+    port = cabled_port(trunk)
+    if port is None:
+        return set()
+    own_device_id = (port.get("device") or {}).get("id")
+    if port is not trunk and not own_device_id:
+        return set()
+    endpoints = (port.get("cable") or {}).get("endpoints") or []
     device_ids = {(endpoint.get("device") or {}).get("id") for endpoint in endpoints}
-    return {identifier for identifier in device_ids if identifier and identifier != device_id}
+    return {identifier for identifier in device_ids if identifier and identifier != (own_device_id or device_id)}
 
 
 def _row_vlan(segment: dict[str, Any], device_ids: set[str]) -> int | None:

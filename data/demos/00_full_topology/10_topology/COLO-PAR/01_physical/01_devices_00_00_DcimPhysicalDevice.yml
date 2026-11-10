@@ -1,0 +1,60 @@
+# DcimPhysicalDevice declarations in recursive dependency order.
+# The cage edge (the on-ramp router, eg-fr201 of 30_all) and the Fabric port of the cage, from bootstrap templates
+# (their interfaces come with them). Nothing generated.
+#
+#   par-colo1-edge-01  our edge, deployed to the zone PAR-COLO1. Ethernet1/1 (partner) is patched to the Fabric
+#                      port, Ethernet1/3-4 the AWS Direct Connect cross-connects, Ethernet1/5 the Google
+#                      Dedicated Interconnect, Ethernet1/6 the Webex cross-connect, Ethernet1/14 the internet
+#                      access. The DCI mesh (90_bindings/20_dci/01_colo_mesh): Ethernet1/10-11 the fibres from the
+# DC-KTW1 border
+#                      leaves, 1/9 and 1/12 DC-WAW1, 1/15-16 DC-GDN1, 1/8 FRA-COLO1, 1/7 AMS-COLO1 (the four
+#                      outside the template's dci range 1/9-12 are nested with role dci).
+#   EXT-FABRIC-PAR     the provider's Fabric port of the cage (a TopologyProviderConnect, second document
+#                      below): the start of the Equinix Fabric virtual connections to ExpressRoute and the
+#                      Google Partner Interconnect. It is reached by a cable through the patch panel, not by a
+#                      circuit.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: par-colo1-edge-01
+      object_template: N9K-C9316D-GX_EDGE
+      # yamllint disable-line rule:line-length
+      description: "Cage edge of PAR-COLO1: cloud and SaaS cross-connects, Fabric, dark fibres to the DC, internet access"
+      deployment: PAR-COLO1
+      rack: par-colo1-rack-01
+      position: 40
+      rack_face: front
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            # A routed port: Ethernet1/5 carries the address of the link itself (no VLAN, no sub-interface).
+            name: Ethernet1/5
+            role: cloud
+            status: active
+            description: "GCP Dedicated Interconnect, routed port (no VLAN)"
+            ip_address:
+              data:
+                address: "169.254.30.2/29"
+                ip_namespace: "default"
+        - kind: DcimPhysicalInterface
+          data:
+            name: Ethernet1/7
+            role: dci
+            description: "DCI: dark fibre to AMS1"
+        - kind: DcimPhysicalInterface
+          data:
+            name: Ethernet1/8
+            role: dci
+            description: "DCI: dark fibre to FRA1"
+        - kind: DcimPhysicalInterface
+          data:
+            name: Ethernet1/15
+            role: dci
+            description: "DCI: dark fibre to GDN1"
+        - kind: DcimPhysicalInterface
+          data:
+            name: Ethernet1/16
+            role: dci
+            description: "DCI: dark fibre to GDN1"

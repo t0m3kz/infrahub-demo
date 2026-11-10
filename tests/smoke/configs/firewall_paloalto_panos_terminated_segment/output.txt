@@ -5,25 +5,25 @@ set deviceconfig system hostname dc1-fw-01
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.101 tag 101
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.101 ipv4 addr 10.9.0.1/24
 set network interface ethernet ethernet1/1.101 comment "seg-term"
-set zone PROD-ZONE network layer3 ethernet1/1.101
+set vsys dc1-fw-shared zone PROD network layer3 ethernet1/1.101
 #
 #
 # --- Address Objects (one per zone member CIDR) ---
 set address addr-10-1-0-0-24 ip-netmask 10.1.0.0/24
-set address addr-10-1-0-0-24 description "Zone: PROD-ZONE"
+set address addr-10-1-0-0-24 description "Zone: PROD"
 set address addr-10-3-0-0-24 ip-netmask 10.3.0.0/24
-set address addr-10-3-0-0-24 description "Zone: PROD-ZONE"
+set address addr-10-3-0-0-24 description "Zone: PROD"
 set address addr-10-9-0-0-24 ip-netmask 10.9.0.0/24
-set address addr-10-9-0-0-24 description "Zone: PROD-ZONE"
+set address addr-10-9-0-0-24 description "Zone: PROD"
 set address addr-10-2-0-0-24 ip-netmask 10.2.0.0/24
-set address addr-10-2-0-0-24 description "Zone: NONPROD-ZONE"
+set address addr-10-2-0-0-24 description "Zone: NONPROD"
 set address addr-10-250-0-0-24 ip-netmask 10.250.0.0/24
-set address addr-10-250-0-0-24 description "Zone: MANAGEMENT-ZONE"
+set address addr-10-250-0-0-24 description "Zone: MANAGEMENT"
 #
 # --- Address Groups (one per zone) ---
-set address-group ag-PROD-ZONE static [ addr-10-1-0-0-24 addr-10-3-0-0-24 addr-10-9-0-0-24 ]
-set address-group ag-NONPROD-ZONE static [ addr-10-2-0-0-24 ]
-set address-group ag-MANAGEMENT-ZONE static [ addr-10-250-0-0-24 ]
+set address-group ag-PROD static [ addr-10-1-0-0-24 addr-10-3-0-0-24 addr-10-9-0-0-24 ]
+set address-group ag-NONPROD static [ addr-10-2-0-0-24 ]
+set address-group ag-MANAGEMENT static [ addr-10-250-0-0-24 ]
 #
 #
 # --- Firewall Contexts (VDOM/vsys) — one per tenant, per ManagedFirewallContext ---
@@ -33,17 +33,17 @@ set vsys dc1-fw-acme display-name "Acme"
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3001 tag 3001
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3001 ip 100.66.0.12/29
 set vsys dc1-fw-acme import network interface ethernet1/1.3001
-set vsys dc1-fw-acme zone PROD-ZONE network layer3 ethernet1/1.3001
+set vsys dc1-fw-acme zone PROD network layer3 ethernet1/1.3001
 set network virtual-router vr-dc1-fw-acme interface ethernet1/1.3001
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3401 tag 3401
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3401 ip 100.66.32.12/29
 set vsys dc1-fw-acme import network interface ethernet1/1.3401
-set vsys dc1-fw-acme zone INTERNET-ZONE network layer3 ethernet1/1.3401
+set vsys dc1-fw-acme zone INTERNET network layer3 ethernet1/1.3401
 set network virtual-router vr-dc1-fw-acme interface ethernet1/1.3401
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3601 tag 3601
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3601 ip 100.66.48.12/29
 set vsys dc1-fw-acme import network interface ethernet1/1.3601
-set vsys dc1-fw-acme zone MANAGEMENT-ZONE network layer3 ethernet1/1.3601
+set vsys dc1-fw-acme zone MANAGEMENT network layer3 ethernet1/1.3601
 set network virtual-router vr-dc1-fw-acme interface ethernet1/1.3601
 set vsys dc1-fw-acme import network virtual-router vr-dc1-fw-acme
 set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-1 destination 10.3.0.0/24
@@ -56,38 +56,40 @@ set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-3 des
 set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-3 nexthop ip-address 100.66.32.9
 set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-3 interface ethernet1/1.3401
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3401 ip 192.0.2.6/32
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE from PROD-ZONE
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE to INTERNET-ZONE
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE source any
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE destination any
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE service any
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE source-translation dynamic-ip-and-port translated-address 192.0.2.6
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE-MANAGEMENT from PROD-ZONE
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE-MANAGEMENT to MANAGEMENT-ZONE
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE-MANAGEMENT source any
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE-MANAGEMENT destination any
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE-MANAGEMENT service any
-set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE-MANAGEMENT source-translation dynamic-ip-and-port translated-address 100.66.48.12
+set vsys dc1-fw-acme rulebase nat rules snat-PROD from PROD
+set vsys dc1-fw-acme rulebase nat rules snat-PROD to INTERNET
+set vsys dc1-fw-acme rulebase nat rules snat-PROD source any
+set vsys dc1-fw-acme rulebase nat rules snat-PROD destination any
+set vsys dc1-fw-acme rulebase nat rules snat-PROD service any
+set vsys dc1-fw-acme rulebase nat rules snat-PROD source-translation dynamic-ip-and-port translated-address 192.0.2.6
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-MANAGEMENT from PROD
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-MANAGEMENT to MANAGEMENT
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-MANAGEMENT source any
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-MANAGEMENT destination any
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-MANAGEMENT service any
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-MANAGEMENT source-translation dynamic-ip-and-port translated-address 100.66.48.12
 set vsys dc1-fw-shared
+set vsys dc1-fw-shared import network interface ethernet1/1.101
+set network virtual-router vr-dc1-fw-shared interface ethernet1/1.101
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3000 tag 3000
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3000 ip 100.66.0.4/29
 set vsys dc1-fw-shared import network interface ethernet1/1.3000
-set vsys dc1-fw-shared zone PROD-ZONE network layer3 ethernet1/1.3000
+set vsys dc1-fw-shared zone PROD network layer3 ethernet1/1.3000
 set network virtual-router vr-dc1-fw-shared interface ethernet1/1.3000
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3200 tag 3200
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3200 ip 100.66.16.4/29
 set vsys dc1-fw-shared import network interface ethernet1/1.3200
-set vsys dc1-fw-shared zone NONPROD-ZONE network layer3 ethernet1/1.3200
+set vsys dc1-fw-shared zone NONPROD network layer3 ethernet1/1.3200
 set network virtual-router vr-dc1-fw-shared interface ethernet1/1.3200
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3400 tag 3400
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3400 ip 100.66.32.4/29
 set vsys dc1-fw-shared import network interface ethernet1/1.3400
-set vsys dc1-fw-shared zone INTERNET-ZONE network layer3 ethernet1/1.3400
+set vsys dc1-fw-shared zone INTERNET network layer3 ethernet1/1.3400
 set network virtual-router vr-dc1-fw-shared interface ethernet1/1.3400
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3600 tag 3600
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3600 ip 100.66.48.4/29
 set vsys dc1-fw-shared import network interface ethernet1/1.3600
-set vsys dc1-fw-shared zone MANAGEMENT-ZONE network layer3 ethernet1/1.3600
+set vsys dc1-fw-shared zone MANAGEMENT network layer3 ethernet1/1.3600
 set network virtual-router vr-dc1-fw-shared interface ethernet1/1.3600
 set vsys dc1-fw-shared import network virtual-router vr-dc1-fw-shared
 set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-1 destination 10.1.0.0/24
@@ -103,74 +105,74 @@ set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-4 d
 set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-4 nexthop ip-address 100.66.32.1
 set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-4 interface ethernet1/1.3400
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3400 ip 192.0.2.5/32
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE from PROD-ZONE
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE to INTERNET-ZONE
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE source any
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE destination any
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE service any
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE source-translation dynamic-ip-and-port translated-address 192.0.2.5
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE from NONPROD-ZONE
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE to INTERNET-ZONE
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE source any
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE destination any
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE service any
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE source-translation dynamic-ip-and-port translated-address 192.0.2.5
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE-MANAGEMENT from PROD-ZONE
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE-MANAGEMENT to MANAGEMENT-ZONE
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE-MANAGEMENT source any
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE-MANAGEMENT destination any
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE-MANAGEMENT service any
-set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE-MANAGEMENT source-translation dynamic-ip-and-port translated-address 100.66.48.4
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE-MANAGEMENT from NONPROD-ZONE
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE-MANAGEMENT to MANAGEMENT-ZONE
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE-MANAGEMENT source any
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE-MANAGEMENT destination any
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE-MANAGEMENT service any
-set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE-MANAGEMENT source-translation dynamic-ip-and-port translated-address 100.66.48.4
+set vsys dc1-fw-shared rulebase nat rules snat-PROD from PROD
+set vsys dc1-fw-shared rulebase nat rules snat-PROD to INTERNET
+set vsys dc1-fw-shared rulebase nat rules snat-PROD source any
+set vsys dc1-fw-shared rulebase nat rules snat-PROD destination any
+set vsys dc1-fw-shared rulebase nat rules snat-PROD service any
+set vsys dc1-fw-shared rulebase nat rules snat-PROD source-translation dynamic-ip-and-port translated-address 192.0.2.5
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD from NONPROD
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD to INTERNET
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD source any
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD destination any
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD service any
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD source-translation dynamic-ip-and-port translated-address 192.0.2.5
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-MANAGEMENT from PROD
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-MANAGEMENT to MANAGEMENT
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-MANAGEMENT source any
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-MANAGEMENT destination any
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-MANAGEMENT service any
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-MANAGEMENT source-translation dynamic-ip-and-port translated-address 100.66.48.4
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-MANAGEMENT from NONPROD
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-MANAGEMENT to MANAGEMENT
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-MANAGEMENT source any
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-MANAGEMENT destination any
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-MANAGEMENT service any
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-MANAGEMENT source-translation dynamic-ip-and-port translated-address 100.66.48.4
 #
-# --- Zone isolation (PROD <-> NON-PROD, MANAGEMENT -> tenants) in vsys dc1-fw-acme ---
-set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE from MANAGEMENT-ZONE
-set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE to PROD-ZONE
-set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE source any
-set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE destination any
-set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE application any
-set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE service any
-set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE action deny
-set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE log-end yes
+# --- Zone isolation (PROD <-> NONPROD, MANAGEMENT -> tenants) in vsys dc1-fw-acme ---
+set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-to-PROD from MANAGEMENT
+set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-to-PROD to PROD
+set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-to-PROD source any
+set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-to-PROD destination any
+set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-to-PROD application any
+set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-to-PROD service any
+set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-to-PROD action deny
+set vsys dc1-fw-acme rulebase security rules deny-MANAGEMENT-to-PROD log-end yes
 #
-# --- Zone isolation (PROD <-> NON-PROD, MANAGEMENT -> tenants) in vsys dc1-fw-shared ---
-set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE from PROD-ZONE
-set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE to NONPROD-ZONE
-set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE source any
-set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE destination any
-set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE application any
-set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE service any
-set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE action deny
-set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE log-end yes
-set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE from NONPROD-ZONE
-set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE to PROD-ZONE
-set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE source any
-set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE destination any
-set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE application any
-set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE service any
-set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE action deny
-set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE log-end yes
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE from MANAGEMENT-ZONE
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE to PROD-ZONE
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE source any
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE destination any
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE application any
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE service any
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE action deny
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-PROD-ZONE log-end yes
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-NONPROD-ZONE from MANAGEMENT-ZONE
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-NONPROD-ZONE to NONPROD-ZONE
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-NONPROD-ZONE source any
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-NONPROD-ZONE destination any
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-NONPROD-ZONE application any
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-NONPROD-ZONE service any
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-NONPROD-ZONE action deny
-set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-ZONE-to-NONPROD-ZONE log-end yes
+# --- Zone isolation (PROD <-> NONPROD, MANAGEMENT -> tenants) in vsys dc1-fw-shared ---
+set vsys dc1-fw-shared rulebase security rules deny-PROD-to-NONPROD from PROD
+set vsys dc1-fw-shared rulebase security rules deny-PROD-to-NONPROD to NONPROD
+set vsys dc1-fw-shared rulebase security rules deny-PROD-to-NONPROD source any
+set vsys dc1-fw-shared rulebase security rules deny-PROD-to-NONPROD destination any
+set vsys dc1-fw-shared rulebase security rules deny-PROD-to-NONPROD application any
+set vsys dc1-fw-shared rulebase security rules deny-PROD-to-NONPROD service any
+set vsys dc1-fw-shared rulebase security rules deny-PROD-to-NONPROD action deny
+set vsys dc1-fw-shared rulebase security rules deny-PROD-to-NONPROD log-end yes
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-to-PROD from NONPROD
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-to-PROD to PROD
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-to-PROD source any
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-to-PROD destination any
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-to-PROD application any
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-to-PROD service any
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-to-PROD action deny
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-to-PROD log-end yes
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-PROD from MANAGEMENT
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-PROD to PROD
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-PROD source any
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-PROD destination any
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-PROD application any
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-PROD service any
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-PROD action deny
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-PROD log-end yes
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-NONPROD from MANAGEMENT
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-NONPROD to NONPROD
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-NONPROD source any
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-NONPROD destination any
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-NONPROD application any
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-NONPROD service any
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-NONPROD action deny
+set vsys dc1-fw-shared rulebase security rules deny-MANAGEMENT-to-NONPROD log-end yes
 #
 #
 # --- High Availability ---

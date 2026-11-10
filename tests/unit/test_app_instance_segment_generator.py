@@ -3,9 +3,10 @@
 Covers generate() guard clauses and its per-segment reconcile under the
 segment lock (a VXLAN segment's tags then VLAN domains, nothing for a cloud
 segment), _resolve_physical_device_id (physical vs virtual vs
-unresolvable AppInstance kinds), _reconcile_segment_interface_tags (union
-over every component on the segment; add and remove via relationship
-mutations, never a tracked save), _customer_facing_target_ids (uplink vs
+unresolvable AppInstance kinds), _derived_segment_port_ids (union over every
+component on the segment) and _port_devices, _reconcile_segment_port_rows
+(each desired port, derived or requested, joined to its switch's VLAN row; add and remove via
+relationship mutations, never a tracked save), _customer_facing_target_ids (uplink vs
 bonded/lag far ends, dedup, one batch for all the devices) and
 _customer_facing_target_id.
 
@@ -54,7 +55,13 @@ def _component_response(
     }
 
 
-_VXLAN_SEGMENT: dict[str, Any] = {"id": "seg-1", "name": "seg", "typename": "ManagedVxlanSegment"}
+_VXLAN_SEGMENT: dict[str, Any] = {
+    "id": "seg-1",
+    "name": "seg",
+    "typename": "ManagedVxlanSegment",
+    "environment": "p",
+    "security_zone": {"id": "zone-prod", "name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
+}
 
 
 def _iface(name: str, *, role: str = "uplink", cabled: bool = True, iface_id: str | None = None) -> MagicMock:
@@ -90,16 +97,19 @@ def _gen_with_lock() -> Any:
 
 class TestGenerate:
     """generate() reconciles the component's SEGMENT under the segment lock:
-    interface tags first, then VLAN domain activations; it saves nothing tracked."""
+    the VLAN rows first, then the port tags on them; it saves nothing tracked."""
 
     @staticmethod
-    def _ready(*, added: int = 0, removed: int = 0) -> Any:
+    def _ready(*, added: int = 0, removed: int = 0, rows_changed: bool = False) -> Any:
         gen = _gen_with_lock()
         gen._fetch_segment_vlan_state = AsyncMock(
-            return_value={"segment": {"id": "seg-1", "ports": []}, "activations": {}}
+            return_value={"segment": {"id": "seg-1", "ports": []}, "deployments": []}
         )
-        gen._reconcile_segment_interface_tags = AsyncMock(return_value=(added, removed))
-        gen._reconcile_segment_vlans_locked = AsyncMock(return_value=False)
+        gen._derived_segment_port_ids = AsyncMock(return_value=set())
+        gen._port_devices = AsyncMock(return_value={})
+        gen._reconcile_segment_port_rows = AsyncMock(return_value=(added, removed))
+        gen._reconcile_segment_vlans_locked = AsyncMock(return_value=rows_changed)
+        gen.ensure_segment_addressing = AsyncMock()
         # The VRF pass over the domains' devices has its own tests (test_vrf_callers.py).
         gen.reconcile_vrfs = AsyncMock()
         gen._domain_member_device_ids = AsyncMock(return_value=[])
@@ -125,7 +135,7 @@ class TestGenerate:
 
         asyncio.run(gen.generate(data))
 
-        gen._reconcile_segment_interface_tags.assert_awaited_once()
+        gen._reconcile_segment_port_rows.assert_awaited_once()
         gen._reconcile_segment_vlans_locked.assert_awaited_once()
         gen.logger.error.assert_not_called()
 
@@ -139,7 +149,7 @@ class TestGenerate:
 
         asyncio.run(gen.generate(data))
 
-        gen._reconcile_segment_interface_tags.assert_not_awaited()
+        gen._reconcile_segment_port_rows.assert_not_awaited()
         gen._reconcile_segment_vlans_locked.assert_not_awaited()
         gen.client.get.assert_not_awaited()
         gen.logger.error.assert_not_called()
@@ -155,13 +165,16 @@ class TestGenerate:
         asyncio.run(gen.generate(data))
 
         gen.client.get.assert_not_awaited()
-        gen._reconcile_segment_interface_tags.assert_not_awaited()
+        gen._reconcile_segment_port_rows.assert_not_awaited()
         gen.logger.error.assert_not_called()
         assert gen.locked_keys == []
 
-    def test_reconciles_tags_then_domains_under_the_segment_lock(self) -> None:
-        """Tags and activations are reconciled for the segment, holding its lock."""
-        gen = self._ready(added=1)
+    def test_reconciles_rows_then_tags_under_the_segment_lock(self) -> None:
+        """Rows and tags are reconciled for the segment, holding its lock: rows first, then the tags on them."""
+        gen = self._ready(added=1, rows_changed=True)
+        order: list[str] = []
+        gen._reconcile_segment_vlans_locked.side_effect = lambda *_a: order.append("rows") or True
+        gen._reconcile_segment_port_rows.side_effect = lambda **_k: order.append("tags") or (1, 0)
         data = _component_response(
             segment={**_VXLAN_SEGMENT, "name": "c001-web-p"},
             instances=[{"id": "dev-1", "typename": "DcimPhysicalDevice"}],
@@ -170,16 +183,15 @@ class TestGenerate:
         asyncio.run(gen.generate(data))
 
         assert gen.locked_keys == ["segment-vlan-domains-seg-1"]
-        kwargs = gen._reconcile_segment_interface_tags.call_args.kwargs
-        assert kwargs["segment_id"] == "seg-1"
-        assert kwargs["ports"] == []
-        # Tags changed: the state is re-read before the domains are reconciled.
+        assert order == ["rows", "tags"]
+        assert gen._derived_segment_port_ids.call_args.args[:2] == ("seg-1", "c001-web-p")
+        # Rows changed: the state is re-read before the tags are reconciled against the rows.
         assert gen._fetch_segment_vlan_state.await_count == 2
-        gen._reconcile_segment_vlans_locked.assert_awaited_once()
         assert gen._reconcile_segment_vlans_locked.call_args.args[:2] == ("seg-1", "c001-web-p")
+        assert gen._reconcile_segment_port_rows.call_args.kwargs["ports"] == []
 
-    def test_unchanged_tags_reuse_the_state(self) -> None:
-        """No tag change: one state read serves both reconciliations."""
+    def test_unchanged_rows_reuse_the_state(self) -> None:
+        """No row change: one state read serves both reconciliations."""
         gen = self._ready()
         data = _component_response(
             segment=_VXLAN_SEGMENT, instances=[{"id": "dev-1", "typename": "DcimPhysicalDevice"}]
@@ -237,7 +249,7 @@ class TestResolvePhysicalDeviceId:
 
 
 # ===========================================================================
-# _reconcile_segment_interface_tags / _customer_facing_target_ids
+# _derived_segment_ports / _port_devices / _reconcile_segment_port_rows
 # ===========================================================================
 
 
@@ -255,103 +267,164 @@ def _components(*instance_lists: list[dict[str, Any]]) -> dict[str, Any]:
     return {"AppComponent": {"edges": edges}}
 
 
-class TestReconcileSegmentInterfaceTags:
-    """Desired tags = union of every component's instances' targets on the segment; the edge is the port's."""
+class TestDerivedSegmentPorts:
+    """The derived ports = the union of every component's instances' targets plus the terminated service ports."""
+
+    def test_union_across_components(self) -> None:
+        """Ports of every component's instances, deduped across shared hosts."""
+        gen = _make_gen()
+        gen.client.execute_graphql = AsyncMock(
+            return_value=_components(
+                [{"id": "dev-1", "typename": "DcimPhysicalDevice"}],
+                [
+                    {"id": "vm-1", "typename": "DcimVirtualDevice", "host": "dev-1"},
+                    {"id": "dev-2", "typename": "DcimPhysicalDevice"},
+                ],
+            )
+        )
+        gen._customer_facing_target_ids = AsyncMock(return_value={"if-a", "po-b"})
+
+        assert asyncio.run(gen._derived_segment_port_ids("seg-1", "seg", {})) == {"if-a", "po-b"}
+        # One resolution for every host of the segment (a VM resolves to its host, deduped).
+        gen._customer_facing_target_ids.assert_awaited_once_with(["dev-1", "dev-2"])
+        assert gen.client.execute_graphql.call_args.kwargs["variables"] == {"segment_id": "seg-1"}
+
+    def test_cloud_instances_contribute_nothing(self) -> None:
+        """An unresolvable instance has no port."""
+        gen = _make_gen()
+        gen.client.execute_graphql = AsyncMock(
+            return_value=_components([{"id": "cloud-1", "typename": "CloudInstance"}])
+        )
+        gen._customer_facing_target_ids = AsyncMock(return_value=set())
+
+        assert asyncio.run(gen._derived_segment_port_ids("seg-1", "seg", {})) == set()
+        gen._customer_facing_target_ids.assert_awaited_once_with([])
+
+
+class TestPortDevices:
+    def test_no_port_reads_nothing(self) -> None:
+        """No derived port: no query."""
+        gen = _make_gen()
+        gen.client.execute_graphql = AsyncMock()
+
+        assert asyncio.run(gen._port_devices(set())) == {}
+        gen.client.execute_graphql.assert_not_awaited()
+
+    def test_one_read_maps_each_port_to_its_device(self) -> None:
+        """One query for every port; a port the server does not return has no device."""
+        gen = _make_gen()
+        gen.client.execute_graphql = AsyncMock(
+            return_value={"DcimInterface": {"edges": [{"node": {"id": "if-a", "device": {"node": {"id": "sw-1"}}}}]}}
+        )
+
+        assert asyncio.run(gen._port_devices({"if-a", "if-gone"})) == {"if-a": "sw-1", "if-gone": None}
+        gen.client.execute_graphql.assert_awaited_once()
+        assert gen.client.execute_graphql.call_args.kwargs["variables"] == {"ids": ["if-a", "if-gone"]}
+
+
+class TestReconcileSegmentPortRows:
+    """Desired edges = each desired port joined to its device's row; every port edge of the segment is the reconcile's."""
 
     @staticmethod
-    def _gen(response: dict[str, Any], targets_by_device: dict[str, list[str]]) -> tuple[Any, list[dict[str, Any]]]:
-        """A generator whose component query answers ``response``; the mutations are recorded in the returned list."""
+    def _gen() -> tuple[Any, list[dict[str, Any]]]:
+        """A generator whose mutations are recorded in the returned list."""
         gen = _make_gen()
         mutations: list[dict[str, Any]] = []
 
         async def _execute(query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
-            if "AccountProfile" in query:
-                return {"AccountProfile": {"id": "acct-gen"}}
             if variables and "data" in variables:
                 mutations.append(variables["data"] | {"mutation": query.split("{")[1].split("(")[0].strip()})
                 return {}
-            return response
+            raise AssertionError(f"unexpected query {query}")
 
         gen.client.execute_graphql = AsyncMock(side_effect=_execute)
-        gen._customer_facing_target_ids = AsyncMock(
-            side_effect=lambda device_ids: {t for device_id in device_ids for t in targets_by_device.get(device_id, [])}
-        )
+        gen.client.get = AsyncMock()
         return gen, mutations
 
     @staticmethod
-    def _reconcile(gen: Any, current: dict[str, str | None]) -> tuple[int, int]:
-        """Reconcile with ports on the segment today, ``{port id: source account id}``."""
-        ports = [{"id": port_id, "device_id": "dev", "source_id": source} for port_id, source in current.items()]
+    def _reconcile(
+        gen: Any,
+        port_devices: dict[str, str | None],
+        current: dict[str, str],
+        rows: dict[str, tuple[str, str]] | None = None,
+        requested: dict[str, str] | None = None,
+    ) -> tuple[int, int]:
+        """Reconcile with ``current`` port edges ``{port id: row id}`` and the rows ``{device id: (row id,
+        deployment id)}`` (default: sw-1 -> row-1, sw-2 -> row-2, both under sd-1)."""
+        ports = [{"id": port_id, "device_id": "sw-1", "row_id": row_id} for port_id, row_id in current.items()]
         return asyncio.run(
-            gen._reconcile_segment_interface_tags(
-                segment_id="seg-1", segment_name="seg", ports=ports, terminated_port_ids=set()
+            gen._reconcile_segment_port_rows(
+                segment_name="seg",
+                ports=ports,
+                port_devices=port_devices,
+                requested=requested or {},
+                rows_by_device=rows if rows is not None else {"sw-1": ("row-1", "sd-1"), "sw-2": ("row-2", "sd-1")},
             )
         )
 
-    def test_union_across_components_tags_missing_ports(self) -> None:
-        """Ports of every component's instances are tagged, deduped across shared hosts."""
-        response = _components(
-            [{"id": "dev-1", "typename": "DcimPhysicalDevice"}],
-            [
-                {"id": "vm-1", "typename": "DcimVirtualDevice", "host": "dev-1"},
-                {"id": "dev-2", "typename": "DcimPhysicalDevice"},
-            ],
-        )
-        gen, mutations = self._gen(response, {"dev-1": ["if-a"], "dev-2": ["po-b"]})
+    def test_missing_ports_are_joined_to_their_switch_row(self) -> None:
+        """Each desired port gets an edge to its own device's row."""
+        gen, mutations = self._gen()
 
-        result = self._reconcile(gen, {})
-
-        assert result == (2, 0)
-        # One resolution for every host of the segment (a VM resolves to its host, deduped).
-        gen._customer_facing_target_ids.assert_awaited_once_with(["dev-1", "dev-2"])
+        assert self._reconcile(gen, {"if-a": "sw-1", "po-b": "sw-2"}, {}) == (2, 0)
         assert [(m["mutation"], m["id"], m["name"], m["nodes"]) for m in mutations] == [
-            ("RelationshipAdd", port, "segments", [{"id": "seg-1", "_relation__source": "acct-gen"}])
-            for port in ("if-a", "po-b")
+            ("RelationshipAdd", "if-a", "capabilities", [{"id": "row-1"}]),
+            ("RelationshipAdd", "po-b", "capabilities", [{"id": "row-2"}]),
         ]
-        component_call = next(c for c in gen.client.execute_graphql.await_args_list if "variables" in c.kwargs)
-        assert component_call.kwargs["variables"] == {"segment_id": "seg-1"}
+        gen.client.get.assert_not_awaited()
 
     def test_port_no_instance_lands_on_is_untagged(self) -> None:
-        """An instance that moved leaves its old generated port: the edge is removed, the new one added."""
-        response = _components([{"id": "dev-1", "typename": "DcimPhysicalDevice"}])
-        gen, mutations = self._gen(response, {"dev-1": ["if-new"]})
+        """An instance that moved leaves its old port: the edge is removed, the new one added."""
+        gen, mutations = self._gen()
 
-        result = self._reconcile(gen, {"if-old": "acct-gen"})
-
-        assert result == (1, 1)
+        assert self._reconcile(gen, {"if-new": "sw-1"}, {"if-old": "row-1"}) == (1, 1)
         assert [(m["mutation"], m["id"]) for m in mutations] == [
             ("RelationshipAdd", "if-new"),
             ("RelationshipRemove", "if-old"),
         ]
 
-    def test_port_still_used_by_another_component_is_kept(self) -> None:
-        """A port another component's instance still lands on keeps the tag."""
-        response = _components([], [{"id": "dev-2", "typename": "DcimPhysicalDevice"}])
-        gen, mutations = self._gen(response, {"dev-2": ["if-shared"]})
+    def test_a_port_already_tagged_is_left_alone(self) -> None:
+        """A port still desired keeps its edge: nothing written."""
+        gen, mutations = self._gen()
 
-        assert self._reconcile(gen, {"if-shared": "acct-gen"}) == (0, 0)
+        assert self._reconcile(gen, {"if-shared": "sw-1"}, {"if-shared": "row-1"}) == (0, 0)
         assert mutations == []
 
-    def test_no_port_node_is_read_to_write_an_edge(self) -> None:
-        """The edge is written with the raw mutation on the port id: no client.get of the port or the segment."""
-        response = _components([{"id": "dev-1", "typename": "DcimPhysicalDevice"}])
-        gen, _mutations = self._gen(response, {"dev-1": ["if-new"]})
-        gen.client.get = AsyncMock()
+    def test_a_requested_port_is_joined_to_its_switch_row(self) -> None:
+        """A port only a deployment requests joins its switch's row when the row is under that deployment."""
+        gen, mutations = self._gen()
 
-        assert self._reconcile(gen, {"if-old": "acct-gen"}) == (1, 1)
+        assert self._reconcile(gen, {"if-r": "sw-1"}, {}, requested={"if-r": "sd-1"}) == (1, 0)
+        assert [(m["mutation"], m["id"], m["nodes"]) for m in mutations] == [
+            ("RelationshipAdd", "if-r", [{"id": "row-1"}])
+        ]
 
-        gen.client.get.assert_not_awaited()
+    def test_a_withdrawn_request_has_its_edge_removed(self) -> None:
+        """The port is no longer requested (nor derived): its edge goes."""
+        gen, mutations = self._gen()
 
-    def test_cloud_instances_contribute_nothing(self) -> None:
-        """An unresolvable instance has no port; with nothing desired every generated edge goes."""
-        response = _components([{"id": "cloud-1", "typename": "CloudInstance"}])
-        gen, mutations = self._gen(response, {})
+        assert self._reconcile(gen, {}, {"if-r": "row-1"}) == (0, 1)
+        assert [(m["mutation"], m["id"], m["nodes"]) for m in mutations] == [
+            ("RelationshipRemove", "if-r", [{"id": "row-1"}])
+        ]
 
-        result = self._reconcile(gen, {"if-1": "acct-gen", "if-by-hand": None})
+    def test_a_requested_port_whose_row_is_under_another_deployment_is_skipped(self) -> None:
+        """The switch's row is under another deployment than the one requesting the port: a WARNING, no edge."""
+        gen, mutations = self._gen()
 
-        assert result == (0, 1)
-        gen._customer_facing_target_ids.assert_awaited_once_with([])
-        assert [(m["mutation"], m["id"]) for m in mutations] == [("RelationshipRemove", "if-1")]
+        assert self._reconcile(gen, {"if-r": "sw-1"}, {}, requested={"if-r": "sd-other"}) == (0, 0)
+        assert mutations == []
+        gen.logger.warning.assert_called_once()
+        assert "if-r" in gen.logger.warning.call_args.args[0]
+
+    def test_a_port_whose_device_has_no_row_is_reported_and_skipped(self) -> None:
+        """No row of the segment on the port's device (no deployment there), or no device: a WARNING each, no edge."""
+        gen, mutations = self._gen()
+
+        assert self._reconcile(gen, {"if-x": "sw-9", "if-y": None}, {}) == (0, 0)
+        assert mutations == []
+        warnings = " ".join(str(call.args[0]) for call in gen.logger.warning.call_args_list)
+        assert "if-x" in warnings and "if-y" in warnings
 
 
 class TestCustomerFacingTargets:

@@ -86,10 +86,12 @@ def _address(interface: dict[str, Any]) -> str | None:
     return (((interface.get("ip_address") or {}).get("node")) or {}).get("address", {}).get("value")
 
 
-def _address_namespace(interface: dict[str, Any]) -> str | None:
-    """The namespace of the address on an interface node of SESSIONS_QUERY, None when unaddressed."""
-    address = ((interface.get("ip_address") or {}).get("node")) or {}
-    return (((address.get("ip_namespace") or {}).get("node")) or {}).get("name", {}).get("value")
+def _interface_zone(interface: dict[str, Any]) -> str | None:
+    """The explicit routing owner of an interface node of SESSIONS_QUERY."""
+    from utils.data_cleaning import clean_data
+    from utils.routing_domain import interface_security_zone
+
+    return interface_security_zone(clean_data(interface)).get("name")
 
 
 def _process_nodes(session: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -302,7 +304,7 @@ def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
             f"{name}: locations {circuit['locations']} are not where its ends are deployed "
             f"{sorted(str(device['deployment_name']) for device in circuit['end_devices'])}"
         )
-    if not circuit["ip_namespace"]:
+    if not circuit["security_zone"]:
         errors.append(f"{name}: no ip_namespace")
     if not any(_live(end["carriers"]) or end["cabled"] for end in circuit["end_nodes"]):
         errors.append(f"{name}: no end is on a live carrier circuit or a cable (at the port or its parent)")
@@ -348,7 +350,7 @@ def _session_port_errors(virtual: list[dict[str, Any]]) -> list[str]:
 
 
 def _environment_errors(virtual: list[dict[str, Any]]) -> list[str]:
-    """Prod and non-prod never connect: circuits meeting at a device share an environment class. A Tunnel is PROD (its
+    """Prod and nonprod never connect: circuits meeting at a device share an environment class. A Tunnel is PROD (its
     office is always production), a Handoff takes the type of its namespace (INTERNET and MANAGEMENT state none), an
     Interconnect runs in the underlay and states none."""
     by_device: dict[str, tuple[str, list[tuple[str, str]]]] = {}
@@ -356,9 +358,9 @@ def _environment_errors(virtual: list[dict[str, Any]]) -> list[str]:
         env_class: str | None = None
         if circuit["circuit_type"] == TUNNEL_TYPE:
             env_class = PROD_TYPE
-        elif circuit["circuit_type"] in (HANDOFF_TYPE,) and circuit["ip_namespace"]:
-            namespace_type = transit_namespace_type(circuit["ip_namespace"])
-            env_class = namespace_type if namespace_type in TENANT_NAMESPACE_TYPES else None
+        elif circuit["circuit_type"] in (HANDOFF_TYPE,) and circuit["security_zone"]:
+            vrf_type = transit_namespace_type(circuit["security_zone"])
+            env_class = vrf_type if vrf_type in TENANT_NAMESPACE_TYPES else None
         if env_class is None:
             continue
         for end in circuit["end_nodes"]:
@@ -403,8 +405,8 @@ def _expectation_errors(virtual: list[dict[str, Any]]) -> list[str]:
                 f"{name}: carrier {circuit['carrier']}, expected {sorted(expected['carrier'])} — "
                 "the carrier is derived: the carrier circuits on the circuit's own ports (or their parents)"
             )
-        if circuit["ip_namespace"] != expected["ip_namespace"]:
-            errors.append(f"{name}: ip_namespace '{circuit['ip_namespace']}', expected '{expected['ip_namespace']}'")
+        if circuit["security_zone"] != expected["security_zone"]:
+            errors.append(f"{name}: ip_namespace '{circuit['security_zone']}', expected '{expected['security_zone']}'")
     return errors
 
 
@@ -417,7 +419,7 @@ def _deployments(circuit: dict[str, Any]) -> list[str]:
 
 
 def _exchange_ends(exchange_name: str, context_name: str) -> tuple[str, ...]:
-    """The namespaces `{context}-{A}-{Z}` joins; namespace names may contain '-' (NON-PROD), so match known ones."""
+    """The namespaces `{context}-{A}-{Z}` joins; namespace names may contain '-' (NONPROD), so match known ones."""
     rest = exchange_name.removeprefix(f"{context_name}-")
     return tuple(
         ns for ns in ALL_DEMO_TRANSIT_RESOURCES if rest == ns or rest.startswith(f"{ns}-") or rest.endswith(f"-{ns}")

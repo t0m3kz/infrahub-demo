@@ -1,0 +1,20 @@
+# DcimLAGInterface declarations in recursive dependency order.
+# The virtual switch of waw1-proxmox-cl01: the Proxmox Linux bridge vmbr0, the L2 element between the VM NICs and the
+# host ports (schemas/extensions/service/virtual_switch.yml). The cluster is hypervisor-neutral and so is this: a
+# distributed switch, a Linux bridge and an Open vSwitch are one kind with a different `switch_type`. Its uplinks are
+# the host's bond0 (waw1-srv-01) and the single port eno1 (waw1-srv-02); the segment deployments of an uplink (its
+# `capabilities`, 90_bindings/96_segment_ports) are its allowed VLAN list, so each trunks the segment of the port group
+# (checks/virtual_switch.py, rule VS3). The port group is VLAN 200 of the switch and the fabric segment c900-app-p; the
+# VM NIC eth0 is in it. The VLAN of the leaf port is the fabric's own (a VLAN is local to a switch), the port group
+# carries the one the host side uses.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - device: waw1-srv-01
+      name: bond0
+      status: active
+      lag_id: 1
+      lacp_mode: active
+      minimum_links: 1

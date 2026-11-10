@@ -1,0 +1,22 @@
+---
+# One authored ManagedMLAG over the two leaves (the vPC domain).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedMLAG
+  data:
+    - name: "gdn1-mlag-01"
+      description: "vPC domain of the leaf pair"
+      status: active
+      peer_devices: "gdn1-leaf-01,gdn1-leaf-02"
+      domain_id: 1
+      capabilities:
+        - "gdn1-leaf-01"
+        - "gdn1-leaf-02"
+      # The peer-link ports of both leaves (the template's mlag-peer ports, cabled 33 to 33): the domain lists the
+      # interfaces it configures.
+      interfaces:
+        - ["gdn1-leaf-01", "Ethernet1/33"]
+        - ["gdn1-leaf-01", "Ethernet1/34"]
+        - ["gdn1-leaf-02", "Ethernet1/33"]
+        - ["gdn1-leaf-02", "Ethernet1/34"]

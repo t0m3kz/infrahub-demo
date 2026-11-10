@@ -56,7 +56,7 @@ Handoff circuit (``circuit_type`` handoff: our edge port to a party device port,
        circuit, or by a DcimCable (a hop inside one facility, such as the gateway and the cage edge in one cage, is a
        cable, not a circuit; a cable has no status). A routed physical port is carried at the port itself. An end on a
        Network Edge appliance, a cloud transport or other virtual device has none and is not required to,
-    3. each end is a sub-interface named ``<port>.<vlan>`` (a VLAN), a routed physical port (a DcimPhysicalInterface
+    3. each end is a sub-interface (a virtual interface on a ``parent_interface``, its VLAN its ``vlan_id``), a routed physical port (a DcimPhysicalInterface
        with an IP address and no VLAN) or, on the cloud side, a CloudPeeringInterface (its ``vlan_id`` is optional).
        The two ends are of one shape, a cloud peering interface excepted, and the VLANs that are set are equal. A
        physical port with no IP address and no VLAN is neither and is refused.
@@ -125,7 +125,6 @@ from utils.circuit_underlay import (
     overlay_processes,
     port_cabled,
     port_underlay,
-    subinterface_vlan,
 )
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, TENANT_NAMESPACE_TYPES
@@ -142,13 +141,14 @@ VPN = VPN_TYPE
 CIRCUIT_TYPES = (TUNNEL, INTERCONNECT, HANDOFF, VPN)
 NOUNS = {TUNNEL: "Tunnel", INTERCONNECT: "Interconnect", HANDOFF: "Handoff", VPN: "Vpn"}
 # The fields a handoff (and a vpn, for the namespace) carries; the schema leaves them optional on the one session kind.
-HANDOFF_ONLY_FIELDS = ("ip_namespace", "password")
+HANDOFF_ONLY_FIELDS = ("vrf", "password")
 
 INTERNET = "TopologyExternalProviders"
 OFFICE = "TopologyCustomerOffice"
 PHYSICAL_DEVICE = "DcimPhysicalDevice"
 PHYSICAL_PORT = "DcimPhysicalInterface"
-# The shape of a handoff end: a <port>.<vlan> sub-interface, a routed physical port, a cloud peering interface.
+VIRTUAL_PORT = "DcimVirtualInterface"
+# The shape of a handoff end: a sub-interface, a routed physical port, a cloud peering interface.
 SUB_INTERFACE = "sub-interface"
 ROUTED_PORT = "routed port"
 CLOUD_PEERING = "cloud peering interface"
@@ -247,14 +247,14 @@ def _carriers_label(carriers: list[dict[str, Any]]) -> str:
 def _end_shape(port: dict[str, Any]) -> tuple[str | None, int | None]:
     """(shape, VLAN) of a handoff end; the shape is None when the end is none of the three.
 
-    A cloud peering interface carries its VLAN as ``vlan_id`` (optional). Any other port named ``<port>.<vlan>`` is a
-    sub-interface; a physical port with an IP address and no VLAN is a routed port.
+    A cloud peering interface carries its VLAN as ``vlan_id`` (optional). A virtual interface riding on a
+    ``parent_interface`` is a sub-interface, its tag its ``vlan_id`` (None: untagged); a physical port with an IP
+    address and no VLAN is a routed port.
     """
     if port.get("typename") == CLOUD_PEERING_KIND:
         return CLOUD_PEERING, port.get("vlan_id")
-    vlan = subinterface_vlan(str(port.get("name") or ""))
-    if vlan is not None:
-        return SUB_INTERFACE, vlan
+    if port.get("typename") == VIRTUAL_PORT and port.get("parent_interface"):
+        return SUB_INTERFACE, port.get("vlan_id")
     if port.get("typename") == PHYSICAL_PORT and port.get("ip_address"):
         return ROUTED_PORT, None
     return None, None
@@ -299,9 +299,9 @@ def _environment_class(circuit_type: str, circuit: dict[str, Any]) -> tuple[str,
         office = next((location for location in _locations(circuit) if location.get("typename") == OFFICE), None)
         return (PROD_TYPE, f"office '{office.get('name')}'") if office else None
     if circuit_type in (HANDOFF, VPN):
-        namespace = circuit.get("ip_namespace") or {}
-        if namespace.get("namespace_type") in TENANT_NAMESPACE_TYPES:
-            return namespace["namespace_type"], f"namespace '{namespace.get('name')}'"
+        namespace = (circuit.get("vrf") or {}).get("security_zone") or {}
+        if namespace.get("vrf_type") in TENANT_NAMESPACE_TYPES:
+            return namespace["vrf_type"], f"namespace '{namespace.get('name')}'"
     return None
 
 
@@ -439,7 +439,13 @@ class CheckCircuitPlacement(InfrahubCheck):
         locations = _locations(circuit)
         ports = _ports(circuit)
         self._validate_shape(circuit, TUNNEL, locations, ports, CIRCUIT_ENDS)
-        self._validate_fields(circuit, TUNNEL, HANDOFF_ONLY_FIELDS)
+        self._validate_fields(circuit, TUNNEL, ("password",))
+        if circuit.get("registered_prefixes") and not (circuit.get("vrf") or {}).get("id"):
+            self._error(
+                circuit,
+                TUNNEL,
+                f"Tunnel circuit '{name}' registers prefixes but has no routing VRF.",
+            )
 
         self._validate_owner(circuit, TUNNEL, locations)
 
@@ -537,11 +543,11 @@ class CheckCircuitPlacement(InfrahubCheck):
         self._validate_shape(circuit, HANDOFF, locations, ports, 1)
         self._validate_fields(circuit, HANDOFF, ("registered_prefixes",))
         self._validate_owner(circuit, HANDOFF, locations)
-        if not (circuit.get("ip_namespace") or {}).get("name"):
+        if not ((circuit.get("vrf") or {}).get("security_zone") or {}).get("name"):
             self._error(
                 circuit,
                 HANDOFF,
-                f"Handoff circuit '{name}' has no ip_namespace: its /31 is allocated and its session runs in an "
+                f"Handoff circuit '{name}' has no vrf: its /31 is allocated and its session runs in an "
                 "environment namespace.",
             )
         self._validate_handoff_placement(circuit, name, locations)
@@ -568,9 +574,9 @@ class CheckCircuitPlacement(InfrahubCheck):
             self._error(
                 circuit,
                 HANDOFF,
-                f"Handoff circuit '{name}' end '{_port_label(port)}' is neither a VLAN sub-interface (named "
-                "<port>.<vlan>) nor a routed physical port (an IP address, no VLAN) nor a cloud peering interface: a "
-                "physical port with no IP address and no VLAN cannot carry a handoff.",
+                f"Handoff circuit '{name}' end '{_port_label(port)}' is neither a sub-interface (a "
+                "virtual interface on a parent_interface) nor a routed physical port (an IP address, no VLAN) nor a "
+                "cloud peering interface: a physical port with no IP address and no VLAN cannot carry a handoff.",
             )
         if unshaped:
             return
@@ -627,11 +633,11 @@ class CheckCircuitPlacement(InfrahubCheck):
         self._validate_shape(circuit, VPN, locations, ports, 1)
         self._validate_fields(circuit, VPN, ("registered_prefixes",))
         self._validate_owner(circuit, VPN, locations)
-        if not (circuit.get("ip_namespace") or {}).get("name"):
+        if not ((circuit.get("vrf") or {}).get("security_zone") or {}).get("name"):
             self._error(
                 circuit,
                 VPN,
-                f"Vpn circuit '{name}' has no ip_namespace: its session runs in an environment namespace.",
+                f"Vpn circuit '{name}' has no vrf: its session runs in an environment routing domain.",
             )
 
     # ------------------------------------------------------------------

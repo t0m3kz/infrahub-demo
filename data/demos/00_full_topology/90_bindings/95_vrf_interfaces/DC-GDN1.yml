@@ -1,0 +1,22 @@
+---
+# The interfaces of each VRF instance of DC-GDN1: an interface is in a VRF as one of the instance's
+# `capabilities` (the interface edge, schemas/extensions/capabilities/vrf.yml). An upsert of that list replaces
+# it, so each instance's whole list is here, once, after every interface it names is loaded (90_bindings loads
+# last). The instances themselves and their members are declared with the topology.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc-gdn1-vrf-prod"
+      deployment: "DC-GDN1"
+      security_zone: "PROD"
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: gdn1-fw-01, name: "ethernet1/1.3000"}
+        - kind: DcimVirtualInterface
+          data: {device: gdn1-fw-02, name: "ethernet1/1.3000"}
+        - kind: DcimVirtualInterface
+          data: {device: gdn1-leaf-01, name: "Vlan300"}
+        - kind: DcimVirtualInterface
+          data: {device: gdn1-leaf-02, name: "Vlan300"}

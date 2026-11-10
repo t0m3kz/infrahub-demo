@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability
 from transforms.config.loadbalancer import LoadBalancer
 
 # ===========================================================================
@@ -59,25 +60,13 @@ def _onprem_data(
     lb_type: str | None = None,
 ) -> dict:
     """Raw query data of LB-01 (first member of LB-01/LB-02) with a shared PROD context on eth1.3100."""
-    leg = {
-        "__typename": "DcimVirtualInterface",
-        "name": _v("eth1.3100"),
-        "device": {"node": {"name": _v("LB-01"), "role": _v("load-balancer")}},
-        "parent_interface": {"node": {"name": _v("eth1")}},
-        "ip_address": {
-            "node": {
-                "address": _v("100.66.64.5/29"),
-                "ip_namespace": {"node": {"name": _v("PROD"), "namespace_type": _v("prod"), "l3_vni": _v(60000)}},
-            }
-        },
-    }
     context = {
+        "__typename": "ManagedLoadbalancerContext",
         "id": "ctx-prod",
         "name": _v("LB-01-LB-02-ha-PROD"),
         "vlan_id": _v(3100),
         "tenant": {"node": None},
         "vip_prefix": {"node": {"prefix": _v("100.66.96.0/26")}},
-        "capabilities": _edges([leg]),
         "vips": _edges([_onprem_vip()] if vips is None else vips),
     }
     ha = {
@@ -95,7 +84,6 @@ def _onprem_data(
                 {"name": _v("LB-02"), "primary_address": {"node": {"address": _v("192.168.2.2/32")}}},
             ]
         ),
-        "contexts": _edges([context] if with_context else []),
     }
     interfaces = [
         {
@@ -106,12 +94,35 @@ def _onprem_data(
             "capabilities": _edges([]),
         },
         {
+            "__typename": "DcimPhysicalInterface",
+            "name": _v("eth1"),
+            "role": _v("uplink"),
+            "ip_address": {"node": None},
+            "capabilities": _edges([]),
+        },
+        {
+            # the leg: `<uplink>.<transit VLAN>` of the context, addressed in the tenant VRF
+            **interface_vrf_capability(
+                {
+                    "id": "vrf-dc10-prod",
+                    "security_zone": {
+                        "node": {"id": "zone-prod", "name": _v("PROD"), "vrf_type": _v("prod"), "l3_vni": _v(60000)}
+                    },
+                }
+            ),
             "__typename": "DcimVirtualInterface",
             "name": _v("eth1.3100"),
-            "role": _v("uplink"),
-            "ip_address": {"node": {"address": _v("100.66.64.5/29")}},
-            "parent_interface": {"node": {"name": _v("eth1")}},
-            "capabilities": _edges([{"__typename": "ManagedLoadbalancerContext"}]),
+            "vlan_id": _v(3100),
+            "role": _v("service"),
+            "ip_address": {
+                "node": {
+                    "address": _v("100.66.64.5/29"),
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
+                }
+            },
+            "parent_interface": {"node": {"name": _v("eth1"), "device": {"node": {"id": "dev-lb-01"}}}},
+            "device": {"node": {"id": "dev-lb-01"}},
+            "capabilities": _edges([]),
         },
     ]
     device = {
@@ -119,6 +130,7 @@ def _onprem_data(
         "role": _v("load-balancer"),
         "platform": {"node": {"name": _v(platform)}},
         "capabilities": _edges([ha]),
+        "shared_capabilities": _edges([context] if with_context else []),
         "interfaces": _edges(interfaces),
     }
     # Both roots, in the query's order: the one not matching the device name is empty.

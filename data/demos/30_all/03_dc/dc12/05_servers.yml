@@ -1,11 +1,11 @@
 ---
 # DC12 POD-1 application hosts — see ../dc10/05_servers.yml for the pattern.
 #
-# server-1/2 are owned by P027 (Technology Partner): shared non-prod hosts that
+# server-1/2 are owned by P027 (Technology Partner): shared nonprod hosts that
 # several customers' dev VMs run on (C008, C010), unlike the DC10/DC11 hosts
 # that belong to one customer. server-3/4 are C005's own hosts for its DC12
 # prod tier (06_customer_boarding/c005/dc/dc12/02_instances.yml), one per row
-# like every other pair. Prod and non-prod never share a hypervisor:
+# like every other pair. Prod and nonprod never share a hypervisor:
 # checks/hypervisor_environment.py holds that rule on the placement.
 apiVersion: infrahub.app/v1
 kind: Object

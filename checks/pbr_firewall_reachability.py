@@ -7,10 +7,10 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import TENANT_NAMESPACE_TYPES
+from utils.exchange_transit import FIREWALL_CONTEXT_KIND, TENANT_NAMESPACE_TYPES
 from utils.fabric_roles import CARRIER_ROLES, INTERNAL_FIREWALL_ROLE
-
-PORT_KEYS = ("FirewallPhysicalPorts", "FirewallVirtualPorts")
+from utils.routing_domain import interface_security_zone
+from utils.service_contexts import contexts_with_legs, port_contexts
 
 
 class CheckPbrFirewallReachability(InfrahubCheck):
@@ -28,9 +28,14 @@ class CheckPbrFirewallReachability(InfrahubCheck):
 
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
-        carried = self._carried_context_ids([port for key in PORT_KEYS for port in cleaned.get(key) or []])
+        carried = self._carried_context_ids(cleaned.get("CarrierDevices") or [])
+        legs = {
+            ctx["id"]: ctx["legs"]
+            for ctx in contexts_with_legs(cleaned.get("FirewallMembers") or [])
+            if ctx.get("typename") == FIREWALL_CONTEXT_KIND
+        }
         for ctx in cleaned.get("ManagedFirewallContext") or []:
-            vrfs = self._tenant_vrfs(ctx)
+            vrfs = self._tenant_vrfs(legs.get(ctx.get("id"), []))
             served = self._served(ctx)
             if not vrfs or not served or ctx.get("id") in carried:
                 continue
@@ -43,26 +48,26 @@ class CheckPbrFirewallReachability(InfrahubCheck):
             )
 
     @staticmethod
-    def _carried_context_ids(ports: list[dict[str, Any]]) -> set[str]:
-        """Ids of the contexts tagged on a firewall-role port of a border-leaf or edge."""
+    def _carried_context_ids(devices: list[dict[str, Any]]) -> set[str]:
+        """Ids of the contexts behind a firewall-role port of a border-leaf or edge (``port_contexts``)."""
         return {
-            cap["id"]
-            for port in ports
-            if ((port.get("device") or {}).get("role")) in CARRIER_ROLES
-            for cap in port.get("capabilities") or []
-            if cap.get("typename") == "ManagedFirewallContext" and cap.get("id")
+            context_id
+            for device in devices
+            if device.get("role") in CARRIER_ROLES
+            for contexts in port_contexts(device).values()
+            for context_id, ctx in contexts.items()
+            if ctx.get("typename") == FIREWALL_CONTEXT_KIND
         }
 
     @staticmethod
-    def _tenant_vrfs(ctx: dict[str, Any]) -> list[str]:
+    def _tenant_vrfs(legs: list[dict[str, Any]]) -> list[str]:
         """Names of the PROD/NON-PROD VRFs the context has a firewall-member leg in."""
         return sorted(
             {
-                leg["ip_address"]["ip_namespace"]["name"]
-                for leg in ctx.get("capabilities") or []
+                interface_security_zone(leg)["name"]
+                for leg in legs
                 if (leg.get("device") or {}).get("role") == INTERNAL_FIREWALL_ROLE
-                and ((leg.get("ip_address") or {}).get("ip_namespace") or {}).get("namespace_type")
-                in TENANT_NAMESPACE_TYPES
+                and interface_security_zone(leg).get("vrf_type") in TENANT_NAMESPACE_TYPES
             }
         )
 

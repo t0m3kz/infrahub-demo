@@ -17,7 +17,6 @@ import pytest
 import yaml
 
 from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
-from generators.topology.segment import tenant_pool_name
 from generators.topology.virtual_circuit import handoff_pool_name
 from tests.integration.demo_data import attribute
 from utils import limits
@@ -31,6 +30,7 @@ from utils.exchange_transit import (
     lb_vip_pool_name,
     transit_pool_name,
 )
+from utils.segment_addressing import tenant_pool_name
 
 BOOTSTRAP = "data/bootstrap"
 # NX-OS reserves 3968-4094 for itself (system vlan reserve); the L3 VNI SVI band must end below it.
@@ -84,9 +84,9 @@ def group_names(root_dir: Path) -> set[str]:
 
 
 @pytest.fixture(scope="module")
-def namespaces(root_dir: Path) -> list[dict[str, Any]]:
-    """The fixed VRF namespaces of data/bootstrap/22_namespaces.yml."""
-    return _bootstrap_objects(root_dir, "IpamNamespace")
+def security_zones(root_dir: Path) -> list[dict[str, Any]]:
+    """The fixed routing identities of data/bootstrap/24_security_zones.yml."""
+    return _bootstrap_objects(root_dir, "SecurityZone")
 
 
 def _range(pool: dict[str, Any]) -> tuple[int, int]:
@@ -126,12 +126,12 @@ class TestRangesMirrorTheData:
 
     def test_the_transit_prefix_lengths_are_the_pool_defaults(self, prefix_pools: dict[str, dict[str, Any]]) -> None:
         """Change ``TRANSIT_PREFIXLEN``/``LB_VIP_PREFIXLEN`` in utils/limits.py, or default_prefix_length in 23_transit_pools.yml."""
-        for namespace in ("PROD", "NON-PROD", "INTERNET", "MANAGEMENT"):
+        for namespace in ("PROD", "NONPROD", "INTERNET", "MANAGEMENT"):
             pool = prefix_pools[transit_pool_name(namespace)]
             assert pool["default_prefix_length"] == limits.TRANSIT_PREFIXLEN, (
                 f"utils/limits.py TRANSIT_PREFIXLEN differs from data/bootstrap/23_transit_pools.yml {pool['name']}"
             )
-        for namespace in ("PROD", "NON-PROD"):
+        for namespace in ("PROD", "NONPROD"):
             assert prefix_pools[lb_leg_pool_name(namespace)]["default_prefix_length"] == limits.TRANSIT_PREFIXLEN, (
                 f"utils/limits.py TRANSIT_PREFIXLEN differs from data/bootstrap/23_transit_pools.yml "
                 f"{lb_leg_pool_name(namespace)}"
@@ -183,29 +183,29 @@ class TestSetupDataNames:
             ("TENANT_POOL_TEMPLATE", {"prod", "non_prod"}),
         ],
     )
-    def test_every_namespace_has_the_pool_its_template_names(
+    def test_every_security_zone_has_the_pool_its_template_names(
         self,
         template: str,
         namespace_types: set[str] | None,
-        namespaces: list[dict[str, Any]],
+        security_zones: list[dict[str, Any]],
         pool_names: set[str],
     ) -> None:
-        """One pool per fixed namespace (``None``: all four) or per tenant namespace (PROD, NON-PROD)."""
+        """One default-IPAM pool per fixed security zone (all four) or tenant zone (PROD, NONPROD)."""
         pattern: str = getattr(limits, template)
         expected = {
-            ns["name"] for ns in namespaces if namespace_types is None or ns["namespace_type"] in namespace_types
+            zone["name"] for zone in security_zones if namespace_types is None or zone["vrf_type"] in namespace_types
         }
-        assert expected, "no namespace in data/bootstrap/22_namespaces.yml"
+        assert expected, "no security zone in data/bootstrap/24_security_zones.yml"
 
         for namespace in sorted(expected):
             assert pattern.format(namespace=namespace) in pool_names, (
                 f"utils/limits.py {template} yields {pattern.format(namespace=namespace)!r} for the {namespace} "
-                "namespace, which data/bootstrap does not define"
+                "security zone, which data/bootstrap does not define"
             )
         regex = re.compile("^" + re.escape(pattern).replace(re.escape("{namespace}"), "(?P<namespace>.+)") + "$")
         defined = {m["namespace"] for name in pool_names if (m := regex.match(name))}
         assert defined == expected, (
-            f"data/bootstrap defines {template} pools for {sorted(defined)}, the namespaces say {sorted(expected)}"
+            f"data/bootstrap defines {template} pools for {sorted(defined)}, the zones say {sorted(expected)}"
         )
 
     @pytest.mark.parametrize(
@@ -280,11 +280,18 @@ class TestBandsDoNotOverlap:
         assert l3vni_svi_vlan(None) is None
 
     def test_vni_bands_are_ordered_and_encodable(
-        self, number_pools: dict[str, dict[str, Any]], namespaces: list[dict[str, Any]]
+        self, number_pools: dict[str, dict[str, Any]], security_zones: list[dict[str, Any]]
     ) -> None:
         """site pool < GLOBAL-L2VNI < fixed L3 VNIs < transit VNIs, all within a 16-bit RD/RT field."""
         global_start, global_end = _range(number_pools[limits.STRETCHED_VNI_POOL])
-        fixed = [ns["l3_vni"] for ns in namespaces]
+        routing = {zone["name"]: (zone["vrf_type"], zone["l3_vni"]) for zone in security_zones}
+        assert routing == {
+            "PROD": ("prod", 60000),
+            "NONPROD": ("non_prod", 60001),
+            "INTERNET": ("internet", 60002),
+            "MANAGEMENT": ("management", 60003),
+        }
+        fixed = [vni for _, vni in routing.values()]
 
         assert limits.SITE_VNI_START <= limits.SITE_VNI_END < global_start <= global_end
         assert global_end < min(fixed)
@@ -320,7 +327,7 @@ class TestTransitOffsets:
     def test_the_largest_offset_is_a_host_of_the_transit_prefix(self, prefix_pools: dict[str, dict[str, Any]]) -> None:
         """Change ``OFFSET_*`` or ``TRANSIT_PREFIXLEN`` in utils/limits.py, or default_prefix_length in 23_transit_pools.yml."""
         offsets = (limits.OFFSET_ANYCAST, limits.OFFSET_VIP, limits.OFFSET_MEMBER_A, limits.OFFSET_MEMBER_B)
-        for namespace in ("PROD", "NON-PROD", "INTERNET", "MANAGEMENT"):
+        for namespace in ("PROD", "NONPROD", "INTERNET", "MANAGEMENT"):
             prefix_length = prefix_pools[transit_pool_name(namespace)]["default_prefix_length"]
             hosts = 2 ** (32 - prefix_length) - 2
             assert max(offsets) <= hosts, (

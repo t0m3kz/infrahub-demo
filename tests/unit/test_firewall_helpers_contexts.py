@@ -1,9 +1,11 @@
-"""Unit tests for get_firewall_contexts() and place_policies_in_contexts() in transforms/helpers/firewall_contexts.py."""
+"""Unit tests for fw_contexts() and place_policies_in_contexts() in transforms/helpers/firewall_contexts.py."""
 
-from transforms.helpers.firewall_contexts import get_firewall_contexts, place_policies_in_contexts
+from tests.unit.firewall_helpers_shared import fw_contexts
+from tests.unit.routing_helpers import in_vrf, make_vrf
+from transforms.helpers.firewall_contexts import place_policies_in_contexts
 
 # ===========================================================================
-# get_firewall_contexts()
+# fw_contexts()
 # ===========================================================================
 
 
@@ -44,23 +46,23 @@ def _make_fw_context_interface(
 class TestGetFirewallContexts:
     def test_snat_is_the_host_ip_or_none(self) -> None:
         plain = _make_fw_context_interface()
-        assert get_firewall_contexts([plain])[0]["snat"] is None
+        assert fw_contexts([plain])[0]["snat"] is None
         with_snat = _make_fw_context_interface()
         with_snat["capabilities"][0]["snat_address"] = {"address": "192.0.2.5/32"}
-        assert get_firewall_contexts([with_snat])[0]["snat"] == "192.0.2.5"
+        assert fw_contexts([with_snat])[0]["snat"] == "192.0.2.5"
 
     def test_none_returns_empty(self) -> None:
-        assert get_firewall_contexts(None) == []
+        assert fw_contexts(None) == []
 
     def test_empty_list_returns_empty(self) -> None:
-        assert get_firewall_contexts([]) == []
+        assert fw_contexts([]) == []
 
     def test_interface_without_context_capability_ignored(self) -> None:
         iface = {"name": "eth0", "capabilities": [{"typename": "ManagedVxlanSegment"}]}
-        assert get_firewall_contexts([iface]) == []
+        assert fw_contexts([iface]) == []
 
     def test_single_context_extracted(self) -> None:
-        result = get_firewall_contexts([_make_fw_context_interface()])
+        result = fw_contexts([_make_fw_context_interface()])
         assert len(result) == 1
         assert result[0]["name"] == "dc10-shared"
         assert result[0]["vlan_id"] == 3000
@@ -68,17 +70,17 @@ class TestGetFirewallContexts:
         assert result[0]["legs"] == []
 
     def test_dedicated_context_carries_tenant_name(self) -> None:
-        result = get_firewall_contexts([_make_fw_context_interface(tenant_name="C005-P-DC10")])
+        result = fw_contexts([_make_fw_context_interface(tenant_name="C005-P-DC10")])
         assert result[0]["tenant_name"] == "C005-P-DC10"
 
     def test_context_carries_its_id(self) -> None:
         """place_policies_in_contexts keys its tables by context id."""
-        result = get_firewall_contexts([_make_fw_context_interface(context_id="ctx-9")])
+        result = fw_contexts([_make_fw_context_interface(context_id="ctx-9")])
         assert result[0]["id"] == "ctx-9"
 
     def test_context_without_ip_still_extracted(self) -> None:
         """inline connectivity_mode contexts have no addressed leg."""
-        result = get_firewall_contexts([_make_fw_context_interface(ip_addr=None)])
+        result = fw_contexts([_make_fw_context_interface(ip_addr=None)])
         assert len(result) == 1
         assert result[0]["legs"] == []
 
@@ -86,22 +88,22 @@ class TestGetFirewallContexts:
         """A colocation context has no interface on a member: it comes from the cluster."""
         served = [{"id": "dep-a", "network_segments": [{"id": "s1"}]}]
         cluster = [{"id": "ctx-colo", "name": "fr-fw-shared", "served_deployments": served}]
-        result = get_firewall_contexts([], None, cluster)
+        result = fw_contexts([], None, cluster)
         assert [(c["id"], c["name"], c["legs"]) for c in result] == [("ctx-colo", "fr-fw-shared", [])]
         assert [seg["id"] for seg in result[0]["segments"]] == ["s1"]
 
     def test_cluster_context_is_not_duplicated_by_its_interface(self) -> None:
         iface = _make_fw_context_interface(context_id="ctx-1")
-        result = get_firewall_contexts([iface], None, [{"id": "ctx-1", "name": "dup"}])
+        result = fw_contexts([iface], None, [{"id": "ctx-1", "name": "complete-ha-context"}])
         assert len(result) == 1
-        assert result[0]["name"] == "dc10-shared"
+        assert result[0]["name"] == "complete-ha-context"
 
     def test_duplicate_context_id_deduplicated(self) -> None:
         ifaces = [
             _make_fw_context_interface(context_id="ctx-1"),
             _make_fw_context_interface(context_id="ctx-1", iface_name="ethernet1/2.3000"),
         ]
-        assert len(get_firewall_contexts(ifaces)) == 1
+        assert len(fw_contexts(ifaces)) == 1
 
     def test_segments_of_served_deployments_collected(self) -> None:
         """Every segment of every served deployment, once; entries without an id are skipped."""
@@ -110,24 +112,25 @@ class TestGetFirewallContexts:
             {"id": "dep-b", "network_segments": [{"id": "s2"}, {"id": "s3"}]},
         ]
         iface = _make_fw_context_interface(served=served)
-        assert [seg["id"] for seg in get_firewall_contexts([iface])[0]["segments"]] == ["s1", "s2", "s3"]
+        assert [seg["id"] for seg in fw_contexts([iface])[0]["segments"]] == ["s1", "s2", "s3"]
 
     def test_no_served_deployments_yields_no_segments(self) -> None:
-        assert get_firewall_contexts([_make_fw_context_interface()])[0]["segments"] == []
+        assert fw_contexts([_make_fw_context_interface()])[0]["segments"] == []
 
     def test_multiple_contexts_sorted_by_name(self) -> None:
         ifaces = [
             _make_fw_context_interface(context_id="ctx-b", context_name="dc10-b-dedicated"),
             _make_fw_context_interface(context_id="ctx-a", context_name="dc10-a-dedicated"),
         ]
-        result = get_firewall_contexts(ifaces)
+        result = fw_contexts(ifaces)
         assert [c["name"] for c in result] == ["dc10-a-dedicated", "dc10-b-dedicated"]
 
 
 def _leg_iface(ns_type: str, address: str, *, vlan: int = 3000, ns_name: str | None = None) -> dict:
-    """A context sub-interface in a VRF namespace (an exchange transit leg)."""
+    """A context sub-interface explicitly assigned to its routing instance."""
     iface = _make_fw_context_interface(iface_name=f"eth1.{vlan}", ip_addr=address, parent_name="eth1", vlan_id=vlan)
-    iface["ip_address"]["ip_namespace"] = {"name": ns_name or ns_type.upper(), "namespace_type": ns_type}
+    iface.update(in_vrf(make_vrf({"name": ns_name or ns_type.upper().replace("_", ""), "vrf_type": ns_type})))
+    iface["ip_address"]["ip_namespace"] = {"name": "default"}
     return iface
 
 
@@ -137,7 +140,7 @@ _HA = {"name": "fw-ha", "members": ["fw-01", "fw-02"]}
 class TestGetFirewallContextsLegs:
     def test_namespaced_sub_interfaces_become_legs_ordered_by_slot(self) -> None:
         ifaces = [_leg_iface("internet", "100.66.32.5/29"), _leg_iface("prod", "100.66.0.5/29")]
-        legs = get_firewall_contexts(ifaces)[0]["legs"]
+        legs = fw_contexts(ifaces)[0]["legs"]
         assert [leg["ns_type"] for leg in legs] == ["prod", "internet"]
 
     def test_leg_vlan_is_the_transit_vlan_of_the_context_vlan(self) -> None:
@@ -146,42 +149,42 @@ class TestGetFirewallContextsLegs:
             _leg_iface("non_prod", "100.66.16.5/29"),
             _leg_iface("internet", "100.66.32.5/29"),
         ]
-        legs = get_firewall_contexts(ifaces)[0]["legs"]
+        legs = fw_contexts(ifaces)[0]["legs"]
         assert [leg["vlan"] for leg in legs] == [3000, 3200, 3400]
 
     def test_leg_carries_zone_nameif_vrf_and_anycast(self) -> None:
-        leg = get_firewall_contexts([_leg_iface("non_prod", "100.66.16.5/29", ns_name="NON-PROD")])[0]["legs"][0]
-        assert leg["zone"] == "NONPROD-ZONE"
+        leg = fw_contexts([_leg_iface("non_prod", "100.66.16.5/29", ns_name="NONPROD")])[0]["legs"][0]
+        assert leg["zone"] == "NONPROD"
         assert leg["nameif"] == "nonprod"
-        assert leg["vrf"] == "NON-PROD"
+        assert leg["vrf"] == "NONPROD"
         assert leg["anycast"] == "100.66.16.1"
         assert leg["own_ip"] == "100.66.16.5/29"
-        assert leg["interface"] == "eth1.3000"
+        assert leg["interface"] == "eth1.3200"  # the non-prod slot of context VLAN 3000
 
     def test_ha_pair_gets_the_vip(self) -> None:
-        leg = get_firewall_contexts([_leg_iface("prod", "100.66.0.5/29")], _HA)[0]["legs"][0]
+        leg = fw_contexts([_leg_iface("prod", "100.66.0.5/29")], _HA)[0]["legs"][0]
         assert leg["virtual_ip"] == "100.66.0.4/29"
 
     def test_standalone_firewall_has_no_vip(self) -> None:
-        leg = get_firewall_contexts([_leg_iface("prod", "100.66.0.5/29")])[0]["legs"][0]
+        leg = fw_contexts([_leg_iface("prod", "100.66.0.5/29")])[0]["legs"][0]
         assert leg["virtual_ip"] is None
 
     def test_one_context_over_several_interfaces_is_one_context(self) -> None:
-        ifaces = [_leg_iface("prod", "100.66.0.5/29"), _leg_iface("internet", "100.66.32.5/29", vlan=3400)]
-        contexts = get_firewall_contexts(ifaces)
+        ifaces = [_leg_iface("prod", "100.66.0.5/29"), _leg_iface("internet", "100.66.32.5/29")]
+        contexts = fw_contexts(ifaces)
         assert len(contexts) == 1
         assert len(contexts[0]["legs"]) == 2
 
     def test_default_namespace_sub_interface_is_not_a_leg(self) -> None:
         iface = _make_fw_context_interface()
         iface["ip_address"]["ip_namespace"] = {"name": "default"}
-        assert get_firewall_contexts([iface])[0]["legs"] == []
+        assert fw_contexts([iface])[0]["legs"] == []
 
     def test_ipv6_sub_interface_is_not_a_leg(self) -> None:
-        assert get_firewall_contexts([_leg_iface("prod", "fd00::5/127")])[0]["legs"] == []
+        assert fw_contexts([_leg_iface("prod", "fd00::5/127")])[0]["legs"] == []
 
     def test_legacy_context_has_no_legs(self) -> None:
-        assert get_firewall_contexts([_make_fw_context_interface()])[0]["legs"] == []
+        assert fw_contexts([_make_fw_context_interface()])[0]["legs"] == []
 
 
 # ===========================================================================
@@ -349,10 +352,10 @@ class TestFootprintServedByTwoColocationZones:
 
     @staticmethod
     def _zone_firewall(context_id: str, segments: list[dict]) -> list[dict]:
-        """get_firewall_contexts() of one zone's firewall: its cluster's context, serving the footprint."""
+        """fw_contexts() of one zone's firewall: the context it is a member of, serving the footprint."""
         served = [{"id": "footprint-1", "network_segments": segments}]
         cap = {"typename": "ManagedFirewallContext", "id": context_id, "name": f"shared-{context_id}", "vlan_id": None}
-        return get_firewall_contexts([], cluster_contexts=[{**cap, "served_deployments": served}])
+        return fw_contexts([], cluster=[{**cap, "served_deployments": served}])
 
     def test_each_zones_context_holds_the_same_rules_in_its_own_table(self) -> None:
         segs = _segments(_placement_rule("a-to-b", "s1", "s2"), _placement_rule("b-to-a", "s2", "s1", index=20))

@@ -105,7 +105,7 @@ def _vrf_handoffs(device: dict[str, Any]) -> list[dict[str, Any]]:
     (transforms/helpers/bgp.py), so both ends of a handoff agree on addresses
     and ASNs; only VRF sessions qualify (the local address sits in a non-default
     IpamNamespace). The VLAN is the handoff sub-interface's dot1q tag
-    (`eth0.1900` → 1900); None when the interface is not a sub-interface.
+    (its `vlan_id`, 1900 for `eth0.1900`); None when the interface is untagged.
     """
     handoffs: list[dict[str, Any]] = []
     device_name = device.get("name") or ""
@@ -114,12 +114,11 @@ def _vrf_handoffs(device: dict[str, Any]) -> list[dict[str, Any]]:
             if not session.get("vrf"):
                 continue
             interface = session.get("local_interface") or ""
-            _, dot, tag = interface.rpartition(".")
             handoffs.append(
                 {
                     "segment": session["vrf"],
                     "interface": interface or None,
-                    "vlan": int(tag) if dot and tag.isdigit() else None,
+                    "vlan": session.get("local_vlan"),
                     "local-address": (session.get("local_ip") or {}).get("address"),
                     "bgp": {
                         "local-asn": (session.get("local_as_override") or session.get("local_as") or {}).get("asn"),

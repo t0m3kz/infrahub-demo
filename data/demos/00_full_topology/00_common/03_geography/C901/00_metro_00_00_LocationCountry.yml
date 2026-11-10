@@ -1,0 +1,12 @@
+# LocationCountry declarations in recursive dependency order.
+# The second office: Lisbon, a branch of the customer C901. Portugal is not in the bootstrap countries (Spain is), so
+# it is
+# declared here, under the EMEA region, next to the metro that needs it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationCountry
+  data:
+    - name: Portugal
+      shortname: pt
+      parent: emea

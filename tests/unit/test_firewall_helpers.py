@@ -3,13 +3,14 @@
 from unittest.mock import patch
 
 from tests.unit.firewall_helpers_shared import _make_pbr_activation, _make_segment_with_prefix
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.helpers.firewall import (
     get_exchange_transits,
     get_firewall_static_routes,
     get_firewall_zones,
 )
 from transforms.helpers.firewall_pbr import get_customer_pbr_rules
-from utils.exchange_transit import EXCHANGE_PEERS, exchange_peer_zones, service_context_caps
+from utils.exchange_transit import EXCHANGE_PEERS, exchange_peer_zones
 
 # ---------------------------------------------------------------------------
 # Helpers — zone data
@@ -44,19 +45,13 @@ def _make_fw_interface(
     name: str = "eth0.10",
     zone_name: str | None = "internal",
     ip_addr: str | None = "10.0.0.1/30",
-    ns_name: str | None = "VRF-INTERNAL",
 ) -> dict:
     """Build a cleaned DcimFirewallInterface dict."""
     iface: dict = {"name": name}
     if zone_name is not None:
-        iface["security_zone"] = {"name": zone_name}
-    if ip_addr is not None or ns_name is not None:
-        ip_obj: dict = {}
-        if ip_addr is not None:
-            ip_obj["address"] = ip_addr
-        if ns_name is not None:
-            ip_obj["ip_namespace"] = {"name": ns_name}
-        iface["ip_address"] = ip_obj
+        iface.update(in_vrf(make_vrf({"name": zone_name})))
+    if ip_addr is not None:
+        iface["ip_address"] = {"address": ip_addr, "ip_namespace": {"name": "default"}}
     return iface
 
 
@@ -130,6 +125,24 @@ class TestGetFirewallZones:
         # sorted() on CIDR strings — "10..." < "192..."
         assert result[0]["member_cidrs"] == ["10.0.0.0/8", "192.168.0.0/24"]
 
+    def test_partial_projections_of_one_prefix_do_not_duplicate_routes(self) -> None:
+        """A served segment and its policy endpoint project one zone member CIDR, not two."""
+        segment = _make_segment_with_prefix("192.0.2.0/24")
+        zones = get_firewall_zones(
+            [_make_zone(network_segments=[segment, {**segment, "security_policy": {"id": "policy"}}])]
+        )
+        interfaces = [
+            _make_fw_interface(name="eth0.10", ip_addr="10.0.0.1/30"),
+            _make_fw_interface(name="eth1.20", ip_addr="10.0.1.1/30"),
+        ]
+
+        assert zones[0]["member_cidrs"] == ["192.0.2.0/24"]
+        routes = get_firewall_static_routes(interfaces, zones)
+        assert [(route["interface"], route["nexthop"]) for route in routes] == [
+            ("eth0.10", "10.0.0.2"),
+            ("eth1.20", "10.0.1.2"),
+        ]
+
     def test_zones_sorted_by_trust_level_descending(self) -> None:
         zones = [
             _make_zone(name="untrust", trust_level=0),
@@ -191,14 +204,15 @@ class TestGetFirewallStaticRoutes:
         zone = {"name": "internal", "trust_level": 100, "member_cidrs": ["10.0.0.0/8"]}
         assert get_firewall_static_routes([iface], [zone]) == []
 
-    def test_interface_missing_ns_name_is_skipped(self) -> None:
+    def test_address_without_ipam_metadata_uses_the_explicit_vrf(self) -> None:
+        """Routing is resolved from the interface's VRF, not the address namespace."""
         iface = {
             "name": "eth0.10",
-            "security_zone": {"name": "internal"},
+            **in_vrf(make_vrf({"name": "internal"})),
             "ip_address": {"address": "10.0.0.1/30"},
         }
         zone = {"name": "internal", "trust_level": 100, "member_cidrs": ["10.0.0.0/8"]}
-        assert get_firewall_static_routes([iface], [zone]) == []
+        assert get_firewall_static_routes([iface], [zone])[0]["vrf"] == "internal"
 
     def test_single_interface_with_zone_cidr(self) -> None:
         """FW on .1/30 → leaf nexthop is .2."""
@@ -206,7 +220,6 @@ class TestGetFirewallStaticRoutes:
             name="eth0.10",
             zone_name="internal",
             ip_addr="10.99.99.1/30",
-            ns_name="VRF-INTERNAL",
         )
         zone = {
             "name": "internal",
@@ -215,7 +228,7 @@ class TestGetFirewallStaticRoutes:
         }
         result = get_firewall_static_routes([iface], [zone])
         assert len(result) == 1
-        assert result[0]["vrf"] == "VRF-INTERNAL"
+        assert result[0]["vrf"] == "internal"
         assert result[0]["destination"] == "10.0.1.0/24"
         assert result[0]["nexthop"] == "10.99.99.2"
         assert result[0]["interface"] == "eth0.10"
@@ -226,7 +239,6 @@ class TestGetFirewallStaticRoutes:
             name="eth0.20",
             zone_name="dmz",
             ip_addr="172.16.0.2/30",
-            ns_name="VRF-DMZ",
         )
         zone = {"name": "dmz", "trust_level": 50, "member_cidrs": ["192.168.1.0/24"]}
         result = get_firewall_static_routes([iface], [zone])
@@ -238,7 +250,6 @@ class TestGetFirewallStaticRoutes:
             name="eth0.10",
             zone_name="internal",
             ip_addr="10.99.99.1/30",
-            ns_name="VRF-INTERNAL",
         )
         zone = {
             "name": "internal",
@@ -252,8 +263,8 @@ class TestGetFirewallStaticRoutes:
 
     def test_multiple_interfaces_produce_independent_routes(self) -> None:
         ifaces = [
-            _make_fw_interface(name="eth0.10", zone_name="internal", ip_addr="10.0.0.1/30", ns_name="VRF-A"),
-            _make_fw_interface(name="eth0.20", zone_name="dmz", ip_addr="10.0.1.1/30", ns_name="VRF-B"),
+            _make_fw_interface(name="eth0.10", zone_name="internal", ip_addr="10.0.0.1/30"),
+            _make_fw_interface(name="eth0.20", zone_name="dmz", ip_addr="10.0.1.1/30"),
         ]
         zones = [
             {"name": "internal", "trust_level": 100, "member_cidrs": ["10.10.0.0/24"]},
@@ -262,26 +273,29 @@ class TestGetFirewallStaticRoutes:
         result = get_firewall_static_routes(ifaces, zones)
         assert len(result) == 2
         vrfs = {r["vrf"] for r in result}
-        assert vrfs == {"VRF-A", "VRF-B"}
+        assert vrfs == {"internal", "dmz"}
 
     def test_routes_sorted_by_vrf_then_destination(self) -> None:
         ifaces = [
-            _make_fw_interface(name="eth0.30", zone_name="external", ip_addr="10.2.0.1/30", ns_name="VRF-A"),
-            _make_fw_interface(name="eth0.10", zone_name="internal", ip_addr="10.0.0.1/30", ns_name="VRF-A"),
+            _make_fw_interface(name="eth0.30", zone_name="external", ip_addr="10.2.0.1/30"),
+            _make_fw_interface(name="eth0.10", zone_name="internal", ip_addr="10.0.0.1/30"),
         ]
         zones = [
-            {"name": "internal", "trust_level": 100, "member_cidrs": ["10.10.1.0/24"]},
+            {"name": "internal", "trust_level": 100, "member_cidrs": ["10.10.2.0/24", "10.10.1.0/24"]},
             {"name": "external", "trust_level": 0, "member_cidrs": ["10.20.1.0/24"]},
         ]
         result = get_firewall_static_routes(ifaces, zones)
-        # Both VRF-A — sorted by destination
-        assert result[0]["destination"] < result[1]["destination"]
+        assert [(route["vrf"], route["destination"]) for route in result] == [
+            ("external", "10.20.1.0/24"),
+            ("internal", "10.10.1.0/24"),
+            ("internal", "10.10.2.0/24"),
+        ]
 
     def test_interface_with_invalid_ip_is_skipped(self) -> None:
         iface = {
             "name": "eth0.bad",
             "security_zone": {"name": "internal"},
-            "ip_address": {"address": "not-an-ip", "ip_namespace": {"name": "VRF-INTERNAL"}},
+            "ip_address": {"address": "not-an-ip", "ip_namespace": {"node": {"name": {"value": "default"}}}},
         }
         zone = {"name": "internal", "trust_level": 100, "member_cidrs": ["10.0.0.0/8"]}
         result = get_firewall_static_routes([iface], [zone])
@@ -300,19 +314,20 @@ class TestGetFirewallStaticRoutes:
 
 
 def _ns(name: str, ns_type: str, l3_vni: int) -> dict:
-    return {"name": name, "namespace_type": ns_type, "l3_vni": l3_vni}
+    return {"name": name, "vrf_type": ns_type, "l3_vni": l3_vni}
 
 
-_PROD = _ns("PROD", "prod", 50001)
-_INET = _ns("INTERNET", "internet", 50003)
-_NONPROD = _ns("NON-PROD", "non_prod", 50002)
+_PROD = _ns("PROD", "prod", 60000)
+_INET = _ns("INTERNET", "internet", 60002)
+_NONPROD = _ns("NONPROD", "non_prod", 60001)
 
 
 def _leg(address: str, namespace: dict, exchanges: list[dict] | None = None, name: str = "eth1.3000") -> dict:
     return {
+        **in_vrf(make_vrf(namespace)),
         "name": name,
         "device": {"name": "dc-fw-1", "role": "internal-firewall"},
-        "ip_address": {"address": address, "ip_namespace": namespace},
+        "ip_address": {"address": address, "ip_namespace": {"node": {"name": {"value": "default"}}}},
         "capabilities": exchanges or [],
     }
 
@@ -332,12 +347,8 @@ def _context(legs: list[dict], *, tenant: str | None = None, served: list[str] |
         "vlan_id": vlan,
         "tenant": {"id": tenant} if tenant else None,
         "served_deployments": [{"id": d} for d in served or []],
-        "capabilities": legs,
+        "legs": legs,
     }
-
-
-def _bl_port(ctx: dict, role: str = "firewall") -> list[dict]:
-    return [{"name": "Ethernet1/10", "role": role, "capabilities": [ctx]}]
 
 
 def _shared_context(*, tenant: str | None = None, served: list[str] | None = None) -> dict:
@@ -352,40 +363,37 @@ def _shared_context(*, tenant: str | None = None, served: list[str] | None = Non
     return _context(legs, tenant=tenant, served=served)
 
 
-def _border_transits(interfaces: list[dict] | None) -> list[dict]:
-    """The transits a border device derives from the contexts on its firewall-role ports."""
-    return get_exchange_transits(service_context_caps(interfaces))
+def _border_transits(contexts: list[dict]) -> list[dict]:
+    """The transits a border device derives from the contexts behind its firewall-role ports."""
+    return get_exchange_transits(contexts)
 
 
 class TestGetExchangeTransits:
-    def test_no_interfaces_returns_empty(self) -> None:
-        assert _border_transits(None) == []
-
-    def test_port_without_firewall_role_is_ignored(self) -> None:
-        assert _border_transits(_bl_port(_shared_context(), role="uplink")) == []
+    def test_no_contexts_returns_empty(self) -> None:
+        assert _border_transits([]) == []
 
     def test_one_transit_per_leg_namespace_with_band_vlan_and_vni(self) -> None:
-        transits = _border_transits(_bl_port(_shared_context()))
+        transits = _border_transits([_shared_context()])
         assert [t["vlan_id"] for t in transits] == [3001, 3401]
         assert [t["vni"] for t in transits] == [64001, 64401]
         assert all(t["transit_context"] == "dc11-fw-shared" for t in transits)
 
     def test_gateway_is_the_anycast_offset_of_the_slash29(self) -> None:
-        prod = _border_transits(_bl_port(_shared_context()))[0]["segment"]
+        prod = _border_transits([_shared_context()])[0]["segment"]
         assert prod["name"] == "XCHG-dc11-fw-shared-PROD"
         assert prod["gateway"]["address"] == "100.66.0.1/29"
         assert prod["gateway"]["ip_prefix"] == {
             "prefix": "100.66.0.0/29",
-            "ip_namespace": {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"},
+            "ip_namespace": {"name": "default"},
         }
+        assert prod["security_zone"] == _PROD
 
     def test_default_namespace_legacy_leg_is_skipped(self) -> None:
-        legacy = _context([_leg("10.65.0.1/30", {"name": "default", "namespace_type": None, "l3_vni": None})])
-        assert _border_transits(_bl_port(legacy)) == []
+        legacy = _context([_leg("10.65.0.1/30", {"name": "default", "vrf_type": None, "l3_vni": None})])
+        assert _border_transits([legacy]) == []
 
-    def test_same_context_on_two_ports_is_counted_once(self) -> None:
-        ports = _bl_port(_shared_context()) + _bl_port(_shared_context())
-        assert len(_border_transits(ports)) == 2
+    def test_same_context_twice_is_counted_once(self) -> None:
+        assert len(_border_transits([_shared_context(), _shared_context()])) == 2
 
 
 def _three_leg_context(*, tenant: str | None = None, served: list[str] | None = None) -> dict:
@@ -403,34 +411,32 @@ def _three_leg_context(*, tenant: str | None = None, served: list[str] | None = 
 
 class TestManagementExchangeOnTheBorderLeaf:
     def test_management_leg_becomes_a_transit_in_its_own_vrf_slot(self) -> None:
-        transits = _border_transits(_bl_port(_three_leg_context()))
+        transits = _border_transits([_three_leg_context()])
         assert [(t["vlan_id"], t["vni"]) for t in transits] == [(3001, 64001), (3401, 64401), (3601, 64601)]
         segment = transits[-1]["segment"]
         assert segment["name"] == "XCHG-dc11-fw-shared-MANAGEMENT"
         assert segment["gateway"]["address"] == "100.66.48.1/29"
-        assert segment["gateway"]["ip_prefix"]["ip_namespace"] == {
-            "name": "MANAGEMENT",
-            "l3_vni": 50004,
-            "namespace_type": "management",
-        }
+        assert segment["gateway"]["ip_prefix"]["ip_namespace"] == {"name": "default"}
+        assert segment["security_zone"]["name"] == "MANAGEMENT"
 
 
 class TestExchangePeerZones:
     def test_peer_zones_are_the_zones_of_the_exchange_peer_types(self) -> None:
-        assert exchange_peer_zones() == {"INTERNET-ZONE", "MANAGEMENT-ZONE"}
+        assert exchange_peer_zones() == {"INTERNET", "MANAGEMENT"}
 
     def test_follows_exchange_peers(self) -> None:
         with patch.dict(EXCHANGE_PEERS, {"prod": ("internet",), "non_prod": ("internet",)}):
-            assert exchange_peer_zones() == {"INTERNET-ZONE"}
+            assert exchange_peer_zones() == {"INTERNET"}
 
 
 class TestLeafPbrSkipsManagementSegments:
     def _management_activation(self) -> dict:
         act = _make_pbr_activation(deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}])
+        act["segment"]["security_zone"] = {"name": "MANAGEMENT", "vrf_type": "management", "l3_vni": 60003}
         act["segment"]["gateway"] = {
             "ip_prefix": {
                 "prefix": "10.250.0.0/24",
-                "ip_namespace": {"name": "MANAGEMENT", "namespace_type": "management"},
+                "ip_namespace": {"name": "default"},
             }
         }
         return act
@@ -445,7 +451,11 @@ class TestLeafPbrSkipsManagementSegments:
             vlan_id=101, deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}]
         )
         tenant["segment"]["gateway"] = {
-            "ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "PROD", "namespace_type": "prod"}}
+            "ip_prefix": {
+                "security_zone": {"name": "PROD", "vrf_type": "prod"},
+                "prefix": "10.0.1.0/24",
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
         }
         rules = get_customer_pbr_rules([self._management_activation(), tenant], [ctx])
         assert [r["vlan_id"] for r in rules] == [101]
@@ -455,12 +465,25 @@ class TestLeafPbrNexthopIsContextLegVip:
     def test_nexthop_is_the_vip_of_the_leg_in_the_segment_namespace(self) -> None:
         ctx = _shared_context(served=["dep-a"])
         act = _make_pbr_activation(deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}])
-        act["segment"]["gateway"] = {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "PROD"}}}
+        act["segment"]["gateway"] = {
+            "ip_prefix": {
+                "security_zone": {"name": "PROD"},
+                "prefix": "10.0.1.0/24",
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
+        }
         rules = get_customer_pbr_rules([act], [ctx])
         assert rules[0]["fw_nexthop"] == "100.66.0.4"
 
     def test_segment_without_a_leg_in_its_namespace_gets_no_rule(self) -> None:
         ctx = _shared_context(served=["dep-a"])
         act = _make_pbr_activation(deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}])
-        act["segment"]["gateway"] = {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "NON-PROD"}}}
+        act["segment"]["security_zone"] = _NONPROD
+        act["segment"]["gateway"] = {
+            "ip_prefix": {
+                "security_zone": {"name": "NONPROD"},
+                "prefix": "10.0.1.0/24",
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
+        }
         assert get_customer_pbr_rules([act], [ctx]) == []

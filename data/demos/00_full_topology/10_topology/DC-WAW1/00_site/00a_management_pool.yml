@@ -1,0 +1,21 @@
+# Management-IPv4 reserved this /22 for dc-waw1-management-pool; no fabric generator is required.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreIPAddressPool
+  data:
+    - name: dc-waw1-management-pool
+      description: "Management addresses for virtual appliances on WAW's authored firewall chassis"
+      default_address_type: IpamIPAddress
+      default_prefix_length: 32
+      ip_namespace: default
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 172.16.0.0/22
+            ip_namespace: default
+            description: "WAW dedicated appliance management addresses"
+            role: management
+            status: active
+            is_pool: true
+            member_type: address

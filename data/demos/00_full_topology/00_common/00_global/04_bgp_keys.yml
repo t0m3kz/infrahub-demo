@@ -1,0 +1,25 @@
+---
+# Demo-only BGP keys (like the API token in the README). A peering interface points at one with `auth`.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPassword
+  data:
+    - name: "c900-aws-dx-bgp-key"
+      description: "BGP auth key of the AWS Direct Connect virtual interfaces"
+      password: "demo-c900-aws-dx"
+    - name: "c900-webex-bgp-key"
+      description: "BGP auth key of the Webex private peering"
+      password: "demo-c900-webex"
+    - name: "c900-aws-vpn-t1-key"
+      description: "Pre-shared key of the AWS VPN tunnel 1 (IPsec)"
+      password: "demo-c900-aws-vpn-1"
+    - name: "c900-aws-vpn-t2-key"
+      description: "Pre-shared key of the AWS VPN tunnel 2 (IPsec)"
+      password: "demo-c900-aws-vpn-2"
+    - name: "C900-OFFICE-lisp-site-key"
+      description: "Shared LISP map-server site key of the C900 office fabric (written by the office-fabric generator)"
+      password: "demo-c900-lisp-site"
+    - name: "C901-OFFICE-lisp-site-key"
+      description: "Shared LISP map-server site key of the C901 office fabric (written by the office-fabric generator)"
+      password: "demo-c901-lisp-site"

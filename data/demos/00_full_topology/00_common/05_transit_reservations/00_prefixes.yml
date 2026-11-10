@@ -1,0 +1,43 @@
+# Reserve the legacy /29 legs before any customer boarding allocates from the global firewall pools.
+# GDN's 100.66.0.32/29 already has an explicit prefix in its original legs file.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: 100.66.0.0/29
+      ip_namespace: "default"
+      description: "KTW internal firewall PROD transit"
+      status: active
+      member_type: address
+      is_pool: false
+    - prefix: 100.66.0.8/29
+      ip_namespace: "default"
+      description: "KTW external firewall PROD transit"
+      status: active
+      member_type: address
+      is_pool: false
+    - prefix: 100.66.0.16/29
+      ip_namespace: "default"
+      description: "WAW shared internal firewall PROD transit"
+      status: active
+      member_type: address
+      is_pool: false
+    - prefix: 100.66.0.24/29
+      ip_namespace: "default"
+      description: "PAR external firewall PROD transit"
+      status: active
+      member_type: address
+      is_pool: false
+    - prefix: 100.66.32.0/29
+      ip_namespace: "default"
+      description: "KTW external firewall INTERNET transit"
+      status: active
+      member_type: address
+      is_pool: false
+    - prefix: 100.66.32.24/29
+      ip_namespace: "default"
+      description: "PAR external firewall INTERNET transit"
+      status: active
+      member_type: address
+      is_pool: false

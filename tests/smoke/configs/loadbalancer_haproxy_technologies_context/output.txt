@@ -117,36 +117,36 @@ backend be_SHARED-PROD_web_c001_example_com_tcp_443
     server 10.10.1.10 10.10.1.10:443 track chk_SHARED-PROD_web_c001_example_com_tcp_443/10.10.1.10
     server 10.10.1.11 10.10.1.11:443 track chk_SHARED-PROD_web_c001_example_com_tcp_443/10.10.1.11
 #
-# --- LB context DC3-LB-01-DC3-LB-02-ha-NON-PROD (shared, SHARED-NON-PROD): VRF vrf-NON-PROD table 60001 ---
+# --- LB context DC3-LB-01-DC3-LB-02-ha-NONPROD (shared, SHARED-NONPROD): VRF vrf-NONPROD table 60001 ---
 # documented-not-lab-verified: Linux VRF with `bind ... interface <vrf>` and `source ... interface <vrf>`, checks in a tracked backend; `ca-file @system-ca` needs HAProxy 2.6+
 # leg eth1.3301: VLAN 3301 (border VNI 64301), gateway 100.66.80.1; VIP range 100.66.112.0/26 routed to 100.66.80.4
 # Host networking (iproute2, outside haproxy.cfg):
-#   ip link add vrf-NON-PROD type vrf table 60001
-#   ip link set dev vrf-NON-PROD up
+#   ip link add vrf-NONPROD type vrf table 60001
+#   ip link set dev vrf-NONPROD up
 #   ip link add link eth1 name eth1.3301 type vlan id 3301
-#   ip link set dev eth1.3301 master vrf-NON-PROD up
+#   ip link set dev eth1.3301 master vrf-NONPROD up
 #   ip address add 100.66.80.5/29 dev eth1.3301
 #   ip route add table 60001 default via 100.66.80.1
 #   sysctl -w net.ipv4.ip_nonlocal_bind=1   (the backends source 100.66.80.4, which only the VRRP master holds)
-#   ip address add 100.66.112.10/32 dev vrf-NON-PROD
+#   ip address add 100.66.112.10/32 dev vrf-NONPROD
 
 # api.c002.example.com
-frontend fe_SHARED-NON-PROD_api_c002_example_com_tcp_8080
-    bind 100.66.112.10:8080 interface vrf-NON-PROD
+frontend fe_SHARED-NONPROD_api_c002_example_com_tcp_8080
+    bind 100.66.112.10:8080 interface vrf-NONPROD
     mode tcp
     option tcplog
-    default_backend be_SHARED-NON-PROD_api_c002_example_com_tcp_8080
+    default_backend be_SHARED-NONPROD_api_c002_example_com_tcp_8080
 
-backend chk_SHARED-NON-PROD_api_c002_example_com_tcp_8080
+backend chk_SHARED-NONPROD_api_c002_example_com_tcp_8080
     mode tcp
-    source 100.66.80.5 interface vrf-NON-PROD
+    source 100.66.80.5 interface vrf-NONPROD
     timeout check 1000ms
     server 10.20.1.10 10.20.1.10:8080 check inter 5s rise 3 fall 3
     server 10.20.1.11 10.20.1.11:8080 check inter 5s rise 3 fall 3
 
-backend be_SHARED-NON-PROD_api_c002_example_com_tcp_8080
+backend be_SHARED-NONPROD_api_c002_example_com_tcp_8080
     mode tcp
     balance roundrobin
-    source 100.66.80.4 interface vrf-NON-PROD
-    server 10.20.1.10 10.20.1.10:8080 track chk_SHARED-NON-PROD_api_c002_example_com_tcp_8080/10.20.1.10
-    server 10.20.1.11 10.20.1.11:8080 track chk_SHARED-NON-PROD_api_c002_example_com_tcp_8080/10.20.1.11
+    source 100.66.80.4 interface vrf-NONPROD
+    server 10.20.1.10 10.20.1.10:8080 track chk_SHARED-NONPROD_api_c002_example_com_tcp_8080/10.20.1.10
+    server 10.20.1.11 10.20.1.11:8080 track chk_SHARED-NONPROD_api_c002_example_com_tcp_8080/10.20.1.11

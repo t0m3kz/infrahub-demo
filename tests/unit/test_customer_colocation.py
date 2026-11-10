@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.firewall_context import FIREWALL_CONTEXT
+from generators.firewall_transit import _dev_id
 from generators.topology.customer_colocation import CustomerDeploymentColocationExchangeGenerator
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 from tests.unit.customer_generator_helpers import make_generator
@@ -175,10 +176,10 @@ class TestWaitsForZoneGenerators:
 
         await gen.generate(_colo_payload_with_parent(zones=[_zone("z-1", "FR2"), _zone("z-2", "FR3")]))
 
-        assert [c.kwargs["target"].cluster_id for c in gen._ensure_transit_legs.await_args_list] == [
-            "cluster-1",
-            "cluster-3",
-        ]
+        targets = [c.kwargs["target"] for c in gen._ensure_transit_legs.await_args_list]
+        # Each zone's context is enforced by that zone's pair and owned by the metro (a zone is no hosting kind).
+        assert [[_dev_id(d) for d in t.devices] for t in targets] == [["fw-1"], ["fw-3"]]
+        assert {t.deployment_id for t in targets} == {"fr-metro-id"}
 
     @pytest.mark.asyncio
     async def test_refetch_without_the_customer_is_a_hard_error(self) -> None:
@@ -328,9 +329,9 @@ class TestFirewallContextProvisioning:
         await gen.generate(_colo_payload_with_parent(dedicated_firewall=False, fw_devices=[fw_device]))
 
         target = gen._ensure_transit_legs.await_args_list[-1].kwargs["target"]
-        assert (target.context_name("PROD"), target.cluster_id, target.tenant_id, target.track) == (
+        assert (target.context_name("PROD"), target.deployment_id, target.tenant_id, target.track) == (
             f"shared-{cluster.name.value}-prod",
-            cluster.id,
+            "fr-metro-id",
             None,
             False,
         )
@@ -349,9 +350,9 @@ class TestFirewallContextProvisioning:
         await gen.generate(_colo_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
         target = gen._ensure_transit_legs.await_args_list[-1].kwargs["target"]
-        assert (target.context_name("PROD"), target.cluster_id, target.tenant_id, target.track) == (
+        assert (target.context_name("PROD"), target.deployment_id, target.tenant_id, target.track) == (
             "c005-fw-fr201-fw-fr202-prod",
-            "dedicated-cluster-1",
+            "fr-metro-id",
             "cust-1",
             True,
         )
@@ -401,8 +402,9 @@ class TestLinkServingFirewallContext:
     def test_the_colocation_footprint_is_the_one_with_the_many_relationship(self) -> None:
         gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
 
-        assert CustomerDeploymentColocationExchangeGenerator._serving_many is True
-        assert gen._serving_field(FIREWALL_CONTEXT) == "serving_firewall_contexts"
+        assert FIREWALL_CONTEXT.serving_many
+        assert FIREWALL_CONTEXT.serving_field == "serving_firewall_contexts"
+        assert gen._relinks_terminated_segments is False
 
     @pytest.mark.asyncio
     async def test_context_is_added_without_a_save(self) -> None:
@@ -566,9 +568,9 @@ class TestEveryFirewallZoneServesTheFootprint:
         await gen.generate(self._two_zone_payload())
 
         targets = [call.kwargs["target"] for call in gen._ensure_transit_legs.await_args_list]
-        assert [(t.parent_name, t.cluster_id, t.context_name("PROD")) for t in targets] == [
-            ("FR2", "cluster-2", "shared-fw-fr201-fw-fr202-prod"),
-            ("FR3", "cluster-3", "shared-fw-fr301-fw-fr302-prod"),
+        assert [(t.parent_name, t.deployment_id, t.context_name("PROD")) for t in targets] == [
+            ("FR2", "fr-metro-id", "shared-fw-fr201-fw-fr202-prod"),
+            ("FR3", "fr-metro-id", "shared-fw-fr301-fw-fr302-prod"),
         ]
         assert {call.kwargs["customer_id"] for call in gen._ensure_transit_legs.await_args_list} == {"cust-1"}
         gen.logger.error.assert_not_called()

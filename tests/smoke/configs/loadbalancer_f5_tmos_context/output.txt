@@ -138,7 +138,7 @@ ltm virtual /SHARED-PROD/web_c001_example_com_tcp_443 {
     translate-port enabled
 }
 #
-# --- LB context DC3-LB-01-DC3-LB-02-ha-NON-PROD (shared): partition SHARED-NON-PROD, VRF NON-PROD = route domain 60001 ---
+# --- LB context DC3-LB-01-DC3-LB-02-ha-NONPROD (shared): partition SHARED-NONPROD, VRF NONPROD = route domain 60001 ---
 # documented-not-lab-verified: /Common VLAN and strict route domain per VRF, partition default-route-domain, partition-local self IPs/route
 # leg eth1.3301: VLAN 3301 (border VNI 64301), gateway 100.66.80.1; VIP range 100.66.112.0/26 routed to 100.66.80.4
 net vlan /Common/vlan3301 {
@@ -157,52 +157,52 @@ net route-domain /Common/rd60001 {
         /Common/vlan3301
     }
 }
-auth partition SHARED-NON-PROD {
+auth partition SHARED-NONPROD {
     default-route-domain 60001
-    description "DC3-LB-01-DC3-LB-02-ha-NON-PROD"
+    description "DC3-LB-01-DC3-LB-02-ha-NONPROD"
 }
-net self /SHARED-NON-PROD/self3301 {
+net self /SHARED-NONPROD/self3301 {
     address 100.66.80.5/29
     allow-service none
     traffic-group /Common/traffic-group-local-only
     vlan /Common/vlan3301
 }
-net self /SHARED-NON-PROD/float3301 {
+net self /SHARED-NONPROD/float3301 {
     address 100.66.80.4/29
     allow-service none
     floating enabled
     traffic-group /Common/traffic-group-1
     vlan /Common/vlan3301
 }
-net route /SHARED-NON-PROD/default {
+net route /SHARED-NONPROD/default {
     gw 100.66.80.1
     network default
 }
-ltm monitor tcp /SHARED-NON-PROD/api_c002_example_com_tcp_8080_mon1 {
+ltm monitor tcp /SHARED-NONPROD/api_c002_example_com_tcp_8080_mon1 {
     defaults-from /Common/tcp
     interval 5
     time-until-up 15
     timeout 16
 }
-ltm pool /SHARED-NON-PROD/api_c002_example_com_tcp_8080_pool {
+ltm pool /SHARED-NONPROD/api_c002_example_com_tcp_8080_pool {
     load-balancing-mode round-robin
     members {
-        /SHARED-NON-PROD/10.20.1.10:8080 {
+        /SHARED-NONPROD/10.20.1.10:8080 {
             address 10.20.1.10
         }
-        /SHARED-NON-PROD/10.20.1.11:8080 {
+        /SHARED-NONPROD/10.20.1.11:8080 {
             address 10.20.1.11
         }
     }
-    monitor /SHARED-NON-PROD/api_c002_example_com_tcp_8080_mon1
+    monitor /SHARED-NONPROD/api_c002_example_com_tcp_8080_mon1
 }
-ltm virtual /SHARED-NON-PROD/api_c002_example_com_tcp_8080 {
+ltm virtual /SHARED-NONPROD/api_c002_example_com_tcp_8080 {
     description "api.c002.example.com"
-    destination /SHARED-NON-PROD/100.66.112.10:8080
+    destination /SHARED-NONPROD/100.66.112.10:8080
     enabled
     ip-protocol tcp
     mask 255.255.255.255
-    pool /SHARED-NON-PROD/api_c002_example_com_tcp_8080_pool
+    pool /SHARED-NONPROD/api_c002_example_com_tcp_8080_pool
     profiles {
         /Common/tcp { }
     }

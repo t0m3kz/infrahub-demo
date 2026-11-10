@@ -72,7 +72,7 @@ class TestSessionPorts:
 
 
 class TestEnvironmentSeparation:
-    """Circuits with a port on the same device are of one environment class: prod never meets non-prod."""
+    """Circuits with a port on the same device are of one environment class: prod never meets nonprod."""
 
     @staticmethod
     def _on_edge(name: str, namespace: tuple[str, str | None] | None, vlan: int = 3101) -> dict[str, Any]:
@@ -89,40 +89,40 @@ class TestEnvironmentSeparation:
     def test_prod_and_non_prod_on_one_device_fail_once(self) -> None:
         """One finding for the device, naming it and both circuits with their namespaces, whatever the order."""
         prod = self._on_edge("HO-P", ("PROD", "prod"), 3101)
-        non_prod = self._on_edge("HO-N", ("NON-PROD", "non_prod"), 3102)
+        non_prod = self._on_edge("HO-N", ("NONPROD", "non_prod"), 3102)
         for circuits in ([prod, non_prod], [non_prod, prod]):
             messages = _run(handoffs=circuits)
             assert len(messages) == 1
             assert "Device 'eg-fr201' carries virtual circuits of different environments" in messages[0]
             assert "'HO-P' (namespace 'PROD', prod)" in messages[0]
-            assert "'HO-N' (namespace 'NON-PROD', non_prod)" in messages[0]
+            assert "'HO-N' (namespace 'NONPROD', non_prod)" in messages[0]
 
     def test_conflict_among_many_circuits_is_one_finding_per_device(self) -> None:
-        """Three circuits on one device with prod and non-prod among them give a single finding for the device."""
+        """Three circuits on one device with prod and nonprod among them give a single finding for the device."""
         circuits = [
             self._on_edge("HO-P1", ("PROD", "prod"), 3101),
             self._on_edge("HO-P2", ("PROD", "prod"), 3102),
-            self._on_edge("HO-N", ("NON-PROD", "non_prod"), 3103),
+            self._on_edge("HO-N", ("NONPROD", "non_prod"), 3103),
         ]
         assert len(_run(handoffs=circuits)) == 1
 
     def test_each_conflicting_device_is_reported(self) -> None:
-        """A prod and a non-prod handoff sharing both of their devices: one finding for each device."""
+        """A prod and a nonprod handoff sharing both of their devices: one finding for each device."""
         gateway = _vport("EQX-FR2-SDWAN-GW1", "eth2.3101", parent=("eth2", (XC,)))
         edge = _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", (XC,)))
         prod = _handoff("HO-P", None, [edge, gateway], namespace=("PROD", "prod"))
-        non_prod = _handoff("HO-N", None, [edge, gateway], namespace=("NON-PROD", "non_prod"))
+        non_prod = _handoff("HO-N", None, [edge, gateway], namespace=("NONPROD", "non_prod"))
         messages = _run(handoffs=[prod, non_prod])
         env_messages = [message for message in messages if "different environments" in message]
         assert sorted(message.split("'")[1] for message in env_messages) == ["EQX-FR2-SDWAN-GW1", "eg-fr201"]
 
     @pytest.mark.parametrize(
         ("namespace", "expected"),
-        [(("PROD", "prod"), 0), (("NON-PROD", "non_prod"), 1)],
-        ids=["tunnel-meets-prod", "tunnel-meets-non-prod"],
+        [(("PROD", "prod"), 0), (("NONPROD", "non_prod"), 1)],
+        ids=["tunnel-meets-prod", "tunnel-meets-nonprod"],
     )
     def test_tunnel_counts_as_prod(self, namespace: tuple[str, str], expected: int) -> None:
-        """An office is always PROD: its tunnel meets a prod handoff on the gateway, conflicts with a non-prod one."""
+        """An office is always PROD: its tunnel meets a prod handoff on the gateway, conflicts with a nonprod one."""
         edge = _vport("eg-fr201", "Ethernet1/13.3101", parent=("Ethernet1/13", (XC,)))
         gateway = _vport("EQX-FR2-SDWAN-GW1", "eth2.3101", parent=("eth2", (XC,)))
         handoff = _handoff("HO", None, [edge, gateway], namespace=namespace)
@@ -146,18 +146,18 @@ class TestEnvironmentSeparation:
         assert _run(handoffs=[prod, other]) == []
 
     def test_circuits_alone_on_their_devices_pass(self) -> None:
-        """A non-prod handoff on its own edge does not meet the prod one on eg-fr201."""
+        """A nonprod handoff on its own edge does not meet the prod one on eg-fr201."""
         edge = _vport("eg-pa401", "Ethernet1/13.3101", parent=("Ethernet1/13", (XC,)))
         stub = _vport("EXT-NONPROD-PA", "et-0/0/0.3101", parent=("et-0/0/0", (XC,)))
-        non_prod = _handoff("HO-N", None, [edge, stub], namespace=("NON-PROD", "non_prod"))
+        non_prod = _handoff("HO-N", None, [edge, stub], namespace=("NONPROD", "non_prod"))
         assert _run(handoffs=[self._on_edge("HO-P", ("PROD", "prod")), non_prod]) == []
 
     def test_interconnect_states_no_class(self) -> None:
-        """A DCI runs in the underlay: a non-prod handoff on the same edge does not conflict with it."""
+        """A DCI runs in the underlay: a nonprod handoff on the same edge does not conflict with it."""
         circuit = _interconnect("DCI", [DC10, FR2], [BL10, EG_FR_DF10])
         edge = _vport("eg-fr201", "Ethernet1/10.3101", parent=("Ethernet1/10", (DF10,)))
         stub = _vport("EXT-NONPROD", "et-0/0/0.3101", parent=("et-0/0/0", (XC,)))
-        handoff = _handoff("HO-N", None, [edge, stub], namespace=("NON-PROD", "non_prod"))
+        handoff = _handoff("HO-N", None, [edge, stub], namespace=("NONPROD", "non_prod"))
         messages = _run(interconnects=[circuit], handoffs=[handoff])
         assert not any("environments" in message for message in messages)
 
@@ -247,16 +247,16 @@ class TestDecommissionedSessionCircuits:
         assert not any("all terminate on" in m for m in _run(interconnects=[dead], handoffs=[handoff]))
 
     def test_decommissioned_prod_handoff_meeting_a_live_non_prod_one_is_not_reported(self) -> None:
-        """A dead prod handoff meets nothing, so the live non-prod one on the same device is not a conflict."""
+        """A dead prod handoff meets nothing, so the live nonprod one on the same device is not a conflict."""
         prod = TestEnvironmentSeparation._on_edge("HO-P", ("PROD", "prod"), 3101)
-        non_prod = TestEnvironmentSeparation._on_edge("HO-N", ("NON-PROD", "non_prod"), 3102)
+        non_prod = TestEnvironmentSeparation._on_edge("HO-N", ("NONPROD", "non_prod"), 3102)
         dead = {**prod, "status": {"value": "decommissioned"}}
         assert _run(handoffs=[dead, non_prod]) == []
 
     def test_active_prod_handoff_meeting_a_non_prod_one_is_still_reported(self) -> None:
-        """With an explicit active status the prod and non-prod handoffs on one device still conflict."""
+        """With an explicit active status the prod and nonprod handoffs on one device still conflict."""
         prod = {**TestEnvironmentSeparation._on_edge("HO-P", ("PROD", "prod"), 3101), "status": {"value": "active"}}
-        non_prod = TestEnvironmentSeparation._on_edge("HO-N", ("NON-PROD", "non_prod"), 3102)
+        non_prod = TestEnvironmentSeparation._on_edge("HO-N", ("NONPROD", "non_prod"), 3102)
         messages = _run(handoffs=[prod, non_prod])
         assert len(messages) == 1
         assert "different environments" in messages[0]

@@ -1,8 +1,33 @@
-"""Builders of the SDK interface and loopback mocks the routing planner tests share."""
+"""Shared routing planner mocks and raw-query-derived VRF fixtures."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
 from unittest.mock import MagicMock
+
+from utils.data_cleaning import clean_data
+
+
+def make_vrf(zone: Mapping[str, Any], deployment: str = "fixture-deployment") -> dict[str, Any]:
+    """Build a scoped routing owner through the same raw GraphQL shape as production."""
+    return clean_data(
+        {
+            "__typename": "ManagedVRF",
+            "id": f"vrf-{deployment}-{zone.get('id') or zone.get('name') or 'unclassified'}",
+            "deployment": {"node": {"id": deployment, "name": {"value": deployment}}},
+            "security_zone": {"node": {key: value if key == "id" else {"value": value} for key, value in zone.items()}},
+        }
+    )
+
+
+def in_vrf(vrf: Mapping[str, Any], *circuits: Mapping[str, Any]) -> dict[str, Any]:
+    """The cleaned capabilities that put an interface in ``vrf`` (a ``make_vrf`` dict), with any session ``circuits``.
+
+    An interface's VRF is the ManagedVRF among its capabilities, selected under the alias ``zone_capabilities``
+    (queries/fragments/routing_zone.gql); utils/routing_domain.py ``interface_vrf`` reads it. Spread it into an
+    interface dict: ``{"name": ..., **in_vrf(make_vrf(zone))}``."""
+    return {"zone_capabilities": [{**vrf, "typename": "ManagedVRF"}, *circuits]}
 
 
 def make_loopback(name: str, device_id: str, role: str, ip: str, lb_id: str | None = None) -> MagicMock:

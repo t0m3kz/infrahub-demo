@@ -10,6 +10,7 @@ import pytest
 
 from generators.exchange_routes import route_name
 from generators.topology.context_routes import ContextRoutesGenerator
+from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
 
 
 def _value(value: Any) -> dict[str, Any]:
@@ -17,34 +18,83 @@ def _value(value: Any) -> dict[str, Any]:
 
 
 def _namespace(name: str, ns_type: str, vni: int) -> dict[str, Any]:
-    return {
-        "node": {"id": f"ns-{name}", "name": _value(name), "namespace_type": _value(ns_type), "l3_vni": _value(vni)}
-    }
+    return {"node": {"id": f"ns-{name}", "name": _value(name), "vrf_type": _value(ns_type), "l3_vni": _value(vni)}}
 
 
-def _leg(address: str, namespace: dict[str, Any]) -> dict[str, Any]:
+def _leg(address: str, namespace: dict[str, Any], vlan: int) -> dict[str, Any]:
+    """A leg: a sub-interface of the member's uplink tagged with the transit VLAN, in the VRF of its namespace."""
+    vrf = {"__typename": "ManagedVRF", "id": f"vrf-{namespace['node']['id']}", "security_zone": namespace}
     return {
         "node": {
             "__typename": "DcimVirtualInterface",
             "id": f"leg-{address}",
-            "device": {"node": {"id": "fw-1", "name": _value("fw-1"), "role": _value("internal-firewall")}},
-            "ip_address": {"node": {"address": _value(address), "ip_namespace": namespace}},
+            "name": _value(f"ethernet1/1.{vlan}"),
+            "role": _value("service"),
+            "vlan_id": _value(vlan),
+            "parent_interface": {"node": {"id": "up", "name": _value("ethernet1/1")}},
+            "zone_capabilities": {"edges": [{"node": vrf}]},
+            "ip_address": {"node": {"address": _value(address)}},
         }
     }
 
 
-def _port(device_id: str) -> dict[str, Any]:
+def _uplink(member: str, port: str | None, port_role: str) -> dict[str, Any]:
+    """The member's uplink, cabled (when ``port`` is given) to the firewall-role service port of border device ``port``."""
+    far = {
+        "__typename": "DcimPhysicalInterface",
+        "id": f"port-{port}",
+        "role": _value(port_role),
+        "device": {"node": {"id": port, "name": _value(port)}},
+    }
     return {
         "node": {
             "__typename": "DcimPhysicalInterface",
-            "id": f"port-{device_id}",
-            "device": {"node": {"id": device_id, "name": _value(device_id), "role": _value("border-leaf")}},
+            "id": f"up-{member}",
+            "name": _value("ethernet1/1"),
+            "role": _value("uplink"),
+            "cable": {"node": {"id": f"cable-{member}", "endpoints": {"edges": [{"node": far}]}}}
+            if port
+            else {"node": None},
         }
     }
 
 
-PROD = _namespace("PROD", "prod", 50001)
-INTERNET = _namespace("INTERNET", "internet", 50003)
+def _members(
+    kind: str,
+    context_id: str,
+    vlan: int,
+    role: str,
+    legs: list[tuple[str, dict[str, Any], int]],
+    ports: tuple[str, ...],
+) -> dict[str, Any]:
+    """The context's members (``shared_devices``): one per border port it faces (at least one), each with its legs."""
+    names = [f"m-{index}" for index in range(max(len(ports), 1))]
+    return {
+        "edges": [
+            {
+                "node": {
+                    "__typename": "DcimPhysicalDevice",
+                    "id": name,
+                    "name": _value(name),
+                    "role": _value(role),
+                    "shared_capabilities": {
+                        "edges": [{"node": {"__typename": kind, "id": context_id, "vlan_id": _value(vlan)}}]
+                    },
+                    "interfaces": {
+                        "edges": [
+                            _uplink(name, ports[index] if index < len(ports) else None, BORDER_ROLE_FOR_SERVICES[role]),
+                            *(_leg(f"{address}{5 + index}/29", namespace, tag) for address, namespace, tag in legs),
+                        ]
+                    },
+                }
+            }
+            for index, name in enumerate(names)
+        ]
+    }
+
+
+PROD = _namespace("PROD", "prod", 60000)
+INTERNET = _namespace("INTERNET", "internet", 60002)
 
 
 def _firewall(
@@ -59,10 +109,14 @@ def _firewall(
                         "name": _value("shared-fw-prod"),
                         "tenant": {"node": {"id": tenant} if tenant else None},
                         "snat_address": {"node": {"address": _value(snat)} if snat else None},
-                        "capabilities": {
-                            "edges": [_leg("100.66.0.5/29", PROD), _leg("100.66.32.5/29", INTERNET)]
-                            + [_port(p) for p in ports]
-                        },
+                        "shared_devices": _members(
+                            "ManagedFirewallContext",
+                            "ctx-1",
+                            3000,
+                            "internal-firewall",
+                            [("100.66.0.", PROD, 3000), ("100.66.32.", INTERNET, 3400)],
+                            ports,
+                        ),
                     }
                 }
             ]
@@ -81,7 +135,14 @@ def _loadbalancer(*, vip_prefix: str | None = "100.68.0.0/26") -> dict:
                         "id": "lb-1",
                         "name": _value("shared-lb-prod"),
                         "vip_prefix": {"node": {"prefix": _value(vip_prefix)} if vip_prefix else None},
-                        "capabilities": {"edges": [_leg("100.66.64.5/29", PROD), _port("bl-1")]},
+                        "shared_devices": _members(
+                            "ManagedLoadbalancerContext",
+                            "lb-1",
+                            3100,
+                            "load-balancer",
+                            [("100.66.64.", PROD, 3100)],
+                            ("bl-1",),
+                        ),
                     }
                 }
             ]
@@ -112,13 +173,16 @@ class _Gen(ContextRoutesGenerator):
         self.resource_lock.return_value.__aexit__ = AsyncMock(return_value=False)
 
         async def filters(kind: Any, **_: Any) -> list[Any]:
-            if kind.__name__ == "DcimDevice":
+            if kind.__name__ == "DcimDeviceManaged":
                 return self.devices
+            if kind.__name__ == "DcimDevice":
+                # The slim generic has no role, as on the server: an edge read through it looks like a border leaf.
+                return [SimpleNamespace(id=d.id, name=d.name) for d in self.devices]
             return [
                 SimpleNamespace(
                     id=f"vrf-{d.id}-{ns}",
                     shared_devices=SimpleNamespace(peers=[SimpleNamespace(id=d.id)]),
-                    namespace=SimpleNamespace(peer=SimpleNamespace(name=SimpleNamespace(value=ns))),
+                    security_zone=SimpleNamespace(peer=SimpleNamespace(name=SimpleNamespace(value=ns))),
                 )
                 for d in self.devices
                 for ns in self.vrf_namespaces

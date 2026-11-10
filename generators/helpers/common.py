@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from infrahub_sdk.exceptions import GraphQLError
@@ -40,9 +41,25 @@ async def save_with_node_not_found_retry(
     """
     name = getattr(getattr(obj, "name", None), "value", obj.id)
     kwargs = save_kwargs or {"allow_upsert": True}
+    await call_with_node_not_found_retry(
+        lambda: obj.save(**kwargs), logger, f"saving {name}", max_attempts=max_attempts, base_delay=base_delay
+    )
+
+
+async def call_with_node_not_found_retry(
+    call: Callable[[], Awaitable[Any]],
+    logger: logging.Logger,
+    label: str,
+    *,
+    max_attempts: int = NODE_SAVE_RETRY.attempts,
+    base_delay: float = NODE_SAVE_RETRY.delay,
+) -> None:
+    """Await ``call()``, retrying on a NODE_NOT_FOUND write race (``save_with_node_not_found_retry``'s loop, for any
+    write: a save, or a RelationshipAdd naming a node another request created a moment before). ``label`` names the
+    write in the log. Any other error is raised at once."""
     for attempt in range(max_attempts):
         try:
-            await obj.save(**kwargs)
+            await call()
             return
         except GraphQLError as exc:
             if not any(e.get("extensions", {}).get("code") == "NODE_NOT_FOUND" for e in exc.errors):
@@ -51,7 +68,7 @@ async def save_with_node_not_found_retry(
                 raise
             delay = retry_delay(base_delay, attempt)
             logger.info(
-                f"  NODE_NOT_FOUND saving {name} (referenced node not yet visible — "
+                f"  NODE_NOT_FOUND {label} (referenced node not yet visible — "
                 f"likely concurrent write contention on a shared node) — "
                 f"retrying in {delay:.2f}s (attempt {attempt + 1}/{max_attempts})"
             )

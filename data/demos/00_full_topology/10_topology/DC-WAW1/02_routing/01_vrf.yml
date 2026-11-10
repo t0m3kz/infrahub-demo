@@ -1,0 +1,24 @@
+---
+# The VRF of DC-WAW1 (PROD) with its routing devices: the leaves, the border leaves and the edge.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc-waw1-vrf-prod"
+      security_zone: "PROD"
+      deployment: "DC-WAW1"
+      shared_devices:
+        - "waw1-leaf-01"
+        - "waw1-leaf-02"
+        - "waw1-bl-01"
+        - "waw1-bl-02"
+        - "waw1-edge-01"
+    - name: "dc-waw1-vrf-internet"
+      security_zone: "INTERNET"
+      deployment: DC-WAW1
+      shared_devices: ["waw1-bl-01", "waw1-bl-02"]
+    - name: "dc-waw1-vrf-management"
+      security_zone: "MANAGEMENT"
+      deployment: DC-WAW1
+      shared_devices: ["waw1-bl-01", "waw1-bl-02"]

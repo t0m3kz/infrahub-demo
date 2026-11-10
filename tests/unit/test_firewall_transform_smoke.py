@@ -105,11 +105,23 @@ class TestFirewallTransformNoPlatform:
         assert "my-fw-01" in result
 
 
+def _destination_prefixes() -> dict[str, Any]:
+    """A routing-neutral IPAM prefix used as a rule selector."""
+    return {
+        "edges": [
+            {
+                "node": {
+                    "id": "px-1",
+                    "prefix": {"value": "10.40.0.0/16"},
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
+                }
+            }
+        ]
+    }
+
+
 def _make_destination_prefix_policy_data(platform: str) -> dict[str, Any]:
-    """Smoke data for a rule with NO destination_segment/zone — only a
-    destination_prefixes selector, the shape a colocation-hosted cloud/
-    partner/SaaS interconnect rule uses (see data/demos/30_all/
-    08_interconnects/07_zone_policies/05_security_policy.yml)."""
+    """A standalone prefix selector whose policy rule supplies its destination zone."""
     base = _make_smoke_data(platform)
 
     prefix_rule_node: dict[str, Any] = {
@@ -126,8 +138,9 @@ def _make_destination_prefix_policy_data(platform: str) -> dict[str, Any]:
         "description": {"value": "Nordix web/app tier to AWS transit hub"},
         "source_segment": {"node": _SMOKE_SEGMENT_REF},
         "destination_segment": {"node": None},
+        "destination_zone": {"node": {"name": {"value": "PROD"}}},
         "source_prefixes": {"edges": []},
-        "destination_prefixes": {"edges": [{"node": {"id": "px-1", "prefix": {"value": "10.40.0.0/16"}}}]},
+        "destination_prefixes": _destination_prefixes(),
         "source_ip_addresses": {"edges": []},
         "destination_ip_addresses": {"edges": []},
         "security_profile": {"node": None},
@@ -158,8 +171,9 @@ def _make_protocol_port_policy_data(
         "description": {"value": ""},
         "source_segment": {"node": _SMOKE_SEGMENT_REF},
         "destination_segment": {"node": None},
+        "destination_zone": {"node": {"name": {"value": "PROD"}}},
         "source_prefixes": {"edges": []},
-        "destination_prefixes": {"edges": [{"node": {"id": "px-1", "prefix": {"value": "10.40.0.0/16"}}}]},
+        "destination_prefixes": _destination_prefixes(),
         "source_ip_addresses": {"edges": []},
         "destination_ip_addresses": {"edges": []},
         "security_profile": {"node": None},
@@ -386,7 +400,7 @@ class TestFirewallTransformSmoke:
         result = await fw.transform(data)
         matched = [line for line in result.splitlines() if "policy proto-port-rule match application" in line]
         assert matched == [
-            "set security policies from-zone any to-zone any policy proto-port-rule match application any"
+            "set security policies from-zone any to-zone PROD policy proto-port-rule match application any"
         ]
 
     @pytest.mark.asyncio
@@ -415,8 +429,11 @@ class TestFirewallTransformSmoke:
         data = _make_protocol_port_policy_data("checkpoint_gaia", protocol="icmp", port_start=None, port_end=None)
         result = await fw.transform(data)
         matched = [line for line in result.splitlines() if 'name "proto-port-rule"' in line]
-        assert len(matched) == 1
-        assert "service Any" in matched[0]
+        assert len(matched) == 2
+        service_lines = [line for line in matched if line.startswith("add access-rule ")]
+        assert len(service_lines) == 1
+        assert "service Any" in service_lines[0]
+        assert 'set access-rule layer "Network" name "proto-port-rule" destination PROD' in matched
 
     @pytest.mark.parametrize(
         "platform",

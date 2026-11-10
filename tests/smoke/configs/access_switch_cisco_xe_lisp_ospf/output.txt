@@ -56,7 +56,7 @@ interface Ethernet2
 !
 ! Tenant VRFs (the EID tables of the L3 instance-ids)
 ! unverified-no-lab: a plain `vrf definition` with an IPv4 address family is all the EID table and the SVIs need
-vrf definition VRF_A
+vrf definition PROD
  address-family ipv4
  exit-address-family
 !
@@ -92,14 +92,14 @@ router lisp
   itr
   etr
   exit-service-ethernet
- ! unverified-no-lab: L3 instance-id 50001 for VRF VRF_A: dynamic-eid with the gateway subnets, IPv4 EID table, default map-request
- instance-id 50001
-  dynamic-eid VRF_A-IPV4
+ ! unverified-no-lab: L3 instance-id 60000 for VRF PROD: dynamic-eid with the gateway subnets, IPv4 EID table, default map-request
+ instance-id 60000
+  dynamic-eid PROD-IPV4
    database-mapping 10.100.0.0/24 locator-set RLOC
    database-mapping 10.200.0.0/24 locator-set RLOC
    exit-dynamic-eid
   service ipv4
-   eid-table vrf VRF_A
+   eid-table vrf PROD
    map-cache 0.0.0.0/0 map-request
    exit-service-ipv4
   exit-instance-id
@@ -125,18 +125,18 @@ router lisp
 ! unverified-no-lab: `lisp mobility <VRF>-IPV4` binds the SVI to the dynamic-eid of its VRF
 interface Vlan100
  description Customer-A
- vrf forwarding VRF_A
+ vrf forwarding PROD
  ip address 10.100.0.1 255.255.255.0
- lisp mobility VRF_A-IPV4
+ lisp mobility PROD-IPV4
  mac-address 001c.7300.dc01
  no autostate
  no shutdown
 !
 interface Vlan200
  description Customer-A
- vrf forwarding VRF_A
+ vrf forwarding PROD
  ip address 10.200.0.1 255.255.255.0
- lisp mobility VRF_A-IPV4
+ lisp mobility PROD-IPV4
  mac-address 001c.7300.dc01
  no autostate
  no shutdown

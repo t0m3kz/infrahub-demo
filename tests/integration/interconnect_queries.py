@@ -3,6 +3,9 @@
 SCENARIO_NAME = "Scenario 30_all: Interconnects"
 
 
+# The colocation footprints, the firewalls of their metro's zones and the contexts that serve them. A context is a
+# shared capability with no HA or interface edge: its members and legs come from the transit inventory
+# (service_inventory_helpers.fetch_transit_inventory, derived by utils/service_contexts.py), matched by id.
 COLOCATION_CONTEXTS_QUERY = """
 query {
   TopologyCustomerColocation {
@@ -28,11 +31,10 @@ query {
         serving_firewall_contexts {
           edges {
             node {
+              id
               name { value }
               vlan_id { value }
               tenant { node { id } }
-              cluster { node { ... on ManagedFirewallHA { capabilities { edges { node { id } } } } } }
-              capabilities { edges { node { name { value } } } }
             }
           }
         }
@@ -76,6 +78,20 @@ query ($names: [String]) {
             node {
               name { value }
               device { node { name { value } } }
+              # The interface's VRF instance and its session circuits (with theirs): its routing zone
+              # (utils/routing_domain.py interface_security_zone).
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    ... on ManagedVRF { id security_zone { node { id name { value } vrf_type { value } l3_vni { value } } } }
+                    ... on TopologySessionCircuit {
+                      circuit_type { value }
+                      vrf { node { id security_zone { node { id name { value } vrf_type { value } l3_vni { value } } } } }
+                    }
+                  }
+                }
+              }
               ... on DcimPhysicalInterface {
                 description { value }
                 status { value }
@@ -160,7 +176,8 @@ query ($ids: [ID]) {
 
 
 # The office WAN exit sessions add_office_fabric builds toward the SD-WAN edge (the VCO describes the edge's side
-# from the same peering): processes with their AS, the key, and the two dot1q sub-interfaces with their addresses.
+# from the same peering): processes with their AS, the key, and the two dot1q sub-interfaces with their addresses
+# and their VRF instance (the routing zone; the address itself is in the builtin IPAM namespace).
 WAN_EXIT_SESSIONS_QUERY = """
 query ($names: [String]) {
   ManagedBGPPeering(name__values: $names) {
@@ -180,9 +197,12 @@ query ($names: [String]) {
             node {
               name { value }
               device { node { name { value } } }
+              capabilities {
+                edges { node { __typename ... on ManagedVRF { security_zone { node { name { value } } } } } }
+              }
               ... on DcimVirtualInterface {
                 parent_interface { node { name { value } } }
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                ip_address { node { address { value } } }
               }
             }
           }
@@ -225,7 +245,8 @@ query ($devices: [String]) {
 """
 
 
-# The ISP transit sessions: which edge each runs on, and the namespace of its local address.
+# The ISP transit sessions: which edge each runs on, and the routing zone of the interface's VRF instance (the
+# SecurityZone is the routing authority: IPAM allocates in the builtin `default` namespace).
 TRANSIT_SESSIONS_QUERY = """
 query ($names: [String]) {
   ManagedBGPPeering(name__values: $names) {
@@ -238,8 +259,8 @@ query ($names: [String]) {
             node {
               name { value }
               device { node { name { value } } }
-              ... on DcimPhysicalInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+              capabilities {
+                edges { node { __typename ... on ManagedVRF { security_zone { node { name { value } vrf_type { value } } } } } }
               }
             }
           }
@@ -310,7 +331,8 @@ query ($names: [String]) {
 """
 
 
-# Every location with its reverse `circuits`: the same circuit__location edge as a circuit's `locations`.
+# Every location with its reverse `circuits`: the same circuit__location edge as a circuit's `locations`. The
+# generic has no `name`: every location is a TopologyDeployment.
 CIRCUIT_LOCATIONS_QUERY = """
 query {
   TopologyConnectableLocation {
@@ -318,7 +340,7 @@ query {
       node {
         id
         __typename
-        name { value }
+        ... on TopologyDeployment { name { value } }
         circuits { edges { node { id __typename } } }
       }
     }

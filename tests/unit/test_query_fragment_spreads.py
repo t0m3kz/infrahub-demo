@@ -15,7 +15,7 @@ QUERIES = Path(__file__).resolve().parents[2] / "queries"
 
 ALLOWED: dict[tuple[str, str], str] = {
     ("fragments/device_capabilities.gql", "DeviceCapabilitiesFields"): (
-        "unchanged since HEAD (`... on DcimCapabilities { ...DeviceCapabilitiesFields }` in DeviceCapabilitiesOnDeviceFields), "
+        "unchanged since HEAD (`... on DcimDeviceManaged { ...DeviceCapabilitiesFields }` in DeviceCapabilitiesOnDeviceFields), "
         "which the integration runs resolve with real values; the VRF branch does not touch the spread"
     ),
     ("validation/circuit_placement.gql", "Carrier"): (

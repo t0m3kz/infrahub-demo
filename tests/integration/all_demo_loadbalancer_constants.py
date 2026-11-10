@@ -46,7 +46,7 @@ _DC_FOOTPRINT_SITES = {
 
 
 def loadbalancer_context_key(deployment: str) -> LoadbalancerContextKey:
-    """The key of the load-balancer context serving a DC footprint (`C010-D-DC12` -> (DC12, NON-PROD, None))."""
+    """The key of the load-balancer context serving a DC footprint (`C010-D-DC12` -> (DC12, NONPROD, None))."""
     tenant = deployment if deployment in ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS else None
     return _DC_FOOTPRINT_SITES[deployment], deployment_namespace(deployment), tenant
 
@@ -98,9 +98,9 @@ ALL_DEMO_DC_LOADBALANCER_PLATFORMS: dict[str, str] = {
 }
 
 
-# Namespace name -> its L3 VNI (data/bootstrap): the F5 route-domain id and the Linux VRF table of a context.
+# Security zone name -> its L3 VNI: the F5 route-domain id and Linux VRF table of a context.
 ALL_DEMO_NAMESPACE_L3_VNI: dict[str, int] = {
-    name(namespace): int(namespace.item["l3_vni"]) for namespace in declared("IpamNamespace", _BOOTSTRAP_ROOT)
+    name(zone): int(zone.item["l3_vni"]) for zone in declared("SecurityZone", _BOOTSTRAP_ROOT)
 }
 
 
@@ -152,7 +152,7 @@ _LOAD_BALANCED = [component for component in _all_demo("AppComponent") if compon
 
 # fqdn -> expectation, for every on-prem component 30_all declares
 # load_balanced (c005 web-frontend on DC10's shared PROD context, c010
-# portal-ui on DC12's shared NON-PROD one).
+# portal-ui on DC12's shared NONPROD one).
 ALL_DEMO_LOAD_BALANCED_COMPONENTS: dict[str, LoadBalancedComponent] = {
     str(component.item["fqdn"]): {
         "segment": str(component.item["network_segment"]),

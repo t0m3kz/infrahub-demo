@@ -175,6 +175,7 @@ def test_a_static_lag_renders_on_never_static_in_every_channel_group_line() -> N
                 "name": "pair",
                 "domain_id": 1,
                 "devices": [{"name": "a"}, {"name": "b"}],
+                "interfaces": [{**peer_link, "device": {"name": "a"}}],
             }
         ],
         [peer_link],

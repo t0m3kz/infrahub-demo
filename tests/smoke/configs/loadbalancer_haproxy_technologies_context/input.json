@@ -74,70 +74,80 @@
                         }
                       }
                     ]
+                  }
+                }
+              }
+            ]
+          },
+          "shared_capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedLoadbalancerContext",
+                  "id": "ctx-PROD",
+                  "name": {
+                    "value": "DC3-LB-01-DC3-LB-02-ha-PROD"
                   },
-                  "contexts": {
+                  "vlan_id": {
+                    "value": 3100
+                  },
+                  "tenant": {
+                    "node": null
+                  },
+                  "vip_prefix": {
+                    "node": {
+                      "prefix": {
+                        "value": "100.66.96.0/26"
+                      }
+                    }
+                  },
+                  "vips": {
                     "edges": [
                       {
                         "node": {
-                          "id": "ctx-PROD",
-                          "name": {
-                            "value": "DC3-LB-01-DC3-LB-02-ha-PROD"
+                          "hostname": {
+                            "value": "web.c001.example.com"
                           },
-                          "vlan_id": {
-                            "value": 3100
+                          "description": {
+                            "value": null
                           },
-                          "tenant": {
-                            "node": null
+                          "status": {
+                            "value": "active"
                           },
-                          "vip_prefix": {
+                          "protocol": {
+                            "value": "tcp"
+                          },
+                          "port": {
+                            "value": 443
+                          },
+                          "load_balancing_algorithm": {
+                            "value": "least_connections"
+                          },
+                          "session_persistence": {
+                            "value": "source_ip"
+                          },
+                          "ssl_certificate": {
+                            "value": null
+                          },
+                          "vip_ip": {
                             "node": {
-                              "prefix": {
-                                "value": "100.66.96.0/26"
+                              "address": {
+                                "value": "100.66.96.10/32"
                               }
                             }
                           },
-                          "capabilities": {
+                          "pool_members": {
                             "edges": [
                               {
                                 "node": {
-                                  "__typename": "DcimVirtualInterface",
+                                  "__typename": "DcimVirtualDevice",
                                   "name": {
-                                    "value": "eth1.3100"
+                                    "value": "srv-10-10-1-11"
                                   },
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "DC3-LB-01"
-                                      },
-                                      "role": {
-                                        "value": "load-balancer"
-                                      }
-                                    }
-                                  },
-                                  "parent_interface": {
-                                    "node": {
-                                      "name": {
-                                        "value": "eth1"
-                                      }
-                                    }
-                                  },
-                                  "ip_address": {
+                                  "primary_address": {
                                     "node": {
                                       "address": {
-                                        "value": "100.66.64.5/29"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "PROD"
-                                          },
-                                          "namespace_type": {
-                                            "value": "prod"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60000
-                                          }
-                                        }
+                                        "value": "10.10.1.11/24"
                                       }
                                     }
                                   }
@@ -145,59 +155,14 @@
                               },
                               {
                                 "node": {
-                                  "__typename": "DcimVirtualInterface",
+                                  "__typename": "DcimVirtualDevice",
                                   "name": {
-                                    "value": "eth1.3100"
+                                    "value": "srv-10-10-1-10"
                                   },
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "DC3-LB-02"
-                                      },
-                                      "role": {
-                                        "value": "load-balancer"
-                                      }
-                                    }
-                                  },
-                                  "parent_interface": {
-                                    "node": {
-                                      "name": {
-                                        "value": "eth1"
-                                      }
-                                    }
-                                  },
-                                  "ip_address": {
+                                  "primary_address": {
                                     "node": {
                                       "address": {
-                                        "value": "100.66.64.6/29"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "PROD"
-                                          },
-                                          "namespace_type": {
-                                            "value": "prod"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60000
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "node": {
-                                  "__typename": "DcimPhysicalInterface",
-                                  "name": {
-                                    "value": "Ethernet1/10"
-                                  },
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc3-border-leaf-01"
+                                        "value": "10.10.1.10/24"
                                       }
                                     }
                                   }
@@ -205,162 +170,99 @@
                               }
                             ]
                           },
-                          "vips": {
+                          "health_checks": {
                             "edges": [
                               {
                                 "node": {
-                                  "hostname": {
-                                    "value": "web.c001.example.com"
+                                  "check": {
+                                    "value": "http"
                                   },
-                                  "description": {
-                                    "value": null
+                                  "rise": {
+                                    "value": 2
                                   },
-                                  "status": {
-                                    "value": "active"
+                                  "fall": {
+                                    "value": 3
                                   },
-                                  "protocol": {
-                                    "value": "tcp"
-                                  },
-                                  "port": {
-                                    "value": 443
-                                  },
-                                  "load_balancing_algorithm": {
-                                    "value": "least_connections"
-                                  },
-                                  "session_persistence": {
-                                    "value": "source_ip"
-                                  },
-                                  "ssl_certificate": {
-                                    "value": null
-                                  },
-                                  "vip_ip": {
-                                    "node": {
-                                      "address": {
-                                        "value": "100.66.96.10/32"
-                                      }
-                                    }
-                                  },
-                                  "pool_members": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "__typename": "DcimVirtualDevice",
-                                          "name": {
-                                            "value": "srv-10-10-1-11"
-                                          },
-                                          "primary_address": {
-                                            "node": {
-                                              "address": {
-                                                "value": "10.10.1.11/24"
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "__typename": "DcimVirtualDevice",
-                                          "name": {
-                                            "value": "srv-10-10-1-10"
-                                          },
-                                          "primary_address": {
-                                            "node": {
-                                              "address": {
-                                                "value": "10.10.1.10/24"
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  },
-                                  "health_checks": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "check": {
-                                            "value": "http"
-                                          },
-                                          "rise": {
-                                            "value": 2
-                                          },
-                                          "fall": {
-                                            "value": 3
-                                          },
-                                          "timeout": {
-                                            "value": 2000
-                                          }
-                                        }
-                                      }
-                                    ]
+                                  "timeout": {
+                                    "value": 2000
                                   }
                                 }
                               }
                             ]
                           }
                         }
-                      },
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ManagedLoadbalancerContext",
+                  "id": "ctx-NONPROD",
+                  "name": {
+                    "value": "DC3-LB-01-DC3-LB-02-ha-NONPROD"
+                  },
+                  "vlan_id": {
+                    "value": 3101
+                  },
+                  "tenant": {
+                    "node": null
+                  },
+                  "vip_prefix": {
+                    "node": {
+                      "prefix": {
+                        "value": "100.66.112.0/26"
+                      }
+                    }
+                  },
+                  "vips": {
+                    "edges": [
                       {
                         "node": {
-                          "id": "ctx-NON-PROD",
-                          "name": {
-                            "value": "DC3-LB-01-DC3-LB-02-ha-NON-PROD"
+                          "hostname": {
+                            "value": "api.c002.example.com"
                           },
-                          "vlan_id": {
-                            "value": 3101
+                          "description": {
+                            "value": null
                           },
-                          "tenant": {
-                            "node": null
+                          "status": {
+                            "value": "active"
                           },
-                          "vip_prefix": {
+                          "protocol": {
+                            "value": "tcp"
+                          },
+                          "port": {
+                            "value": 8080
+                          },
+                          "load_balancing_algorithm": {
+                            "value": null
+                          },
+                          "session_persistence": {
+                            "value": "none"
+                          },
+                          "ssl_certificate": {
+                            "value": null
+                          },
+                          "vip_ip": {
                             "node": {
-                              "prefix": {
-                                "value": "100.66.112.0/26"
+                              "address": {
+                                "value": "100.66.112.10/32"
                               }
                             }
                           },
-                          "capabilities": {
+                          "pool_members": {
                             "edges": [
                               {
                                 "node": {
-                                  "__typename": "DcimVirtualInterface",
+                                  "__typename": "DcimVirtualDevice",
                                   "name": {
-                                    "value": "eth1.3301"
+                                    "value": "srv-10-20-1-10"
                                   },
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "DC3-LB-01"
-                                      },
-                                      "role": {
-                                        "value": "load-balancer"
-                                      }
-                                    }
-                                  },
-                                  "parent_interface": {
-                                    "node": {
-                                      "name": {
-                                        "value": "eth1"
-                                      }
-                                    }
-                                  },
-                                  "ip_address": {
+                                  "primary_address": {
                                     "node": {
                                       "address": {
-                                        "value": "100.66.80.5/29"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "NON-PROD"
-                                          },
-                                          "namespace_type": {
-                                            "value": "non_prod"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60001
-                                          }
-                                        }
+                                        "value": "10.20.1.10/24"
                                       }
                                     }
                                   }
@@ -368,59 +270,14 @@
                               },
                               {
                                 "node": {
-                                  "__typename": "DcimVirtualInterface",
+                                  "__typename": "DcimVirtualDevice",
                                   "name": {
-                                    "value": "eth1.3301"
+                                    "value": "srv-10-20-1-11"
                                   },
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "DC3-LB-02"
-                                      },
-                                      "role": {
-                                        "value": "load-balancer"
-                                      }
-                                    }
-                                  },
-                                  "parent_interface": {
-                                    "node": {
-                                      "name": {
-                                        "value": "eth1"
-                                      }
-                                    }
-                                  },
-                                  "ip_address": {
+                                  "primary_address": {
                                     "node": {
                                       "address": {
-                                        "value": "100.66.80.6/29"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "NON-PROD"
-                                          },
-                                          "namespace_type": {
-                                            "value": "non_prod"
-                                          },
-                                          "l3_vni": {
-                                            "value": 60001
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "node": {
-                                  "__typename": "DcimPhysicalInterface",
-                                  "name": {
-                                    "value": "Ethernet1/10"
-                                  },
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc3-border-leaf-01"
+                                        "value": "10.20.1.11/24"
                                       }
                                     }
                                   }
@@ -428,94 +285,21 @@
                               }
                             ]
                           },
-                          "vips": {
+                          "health_checks": {
                             "edges": [
                               {
                                 "node": {
-                                  "hostname": {
-                                    "value": "api.c002.example.com"
-                                  },
-                                  "description": {
-                                    "value": null
-                                  },
-                                  "status": {
-                                    "value": "active"
-                                  },
-                                  "protocol": {
+                                  "check": {
                                     "value": "tcp"
                                   },
-                                  "port": {
-                                    "value": 8080
-                                  },
-                                  "load_balancing_algorithm": {
+                                  "rise": {
                                     "value": null
                                   },
-                                  "session_persistence": {
-                                    "value": "none"
-                                  },
-                                  "ssl_certificate": {
+                                  "fall": {
                                     "value": null
                                   },
-                                  "vip_ip": {
-                                    "node": {
-                                      "address": {
-                                        "value": "100.66.112.10/32"
-                                      }
-                                    }
-                                  },
-                                  "pool_members": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "__typename": "DcimVirtualDevice",
-                                          "name": {
-                                            "value": "srv-10-20-1-10"
-                                          },
-                                          "primary_address": {
-                                            "node": {
-                                              "address": {
-                                                "value": "10.20.1.10/24"
-                                              }
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "__typename": "DcimVirtualDevice",
-                                          "name": {
-                                            "value": "srv-10-20-1-11"
-                                          },
-                                          "primary_address": {
-                                            "node": {
-                                              "address": {
-                                                "value": "10.20.1.11/24"
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  },
-                                  "health_checks": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "check": {
-                                            "value": "tcp"
-                                          },
-                                          "rise": {
-                                            "value": null
-                                          },
-                                          "fall": {
-                                            "value": null
-                                          },
-                                          "timeout": {
-                                            "value": null
-                                          }
-                                        }
-                                      }
-                                    ]
+                                  "timeout": {
+                                    "value": null
                                   }
                                 }
                               }
@@ -603,21 +387,60 @@
                       }
                     }
                   },
+                  "device": {
+                    "node": {
+                      "id": "dev-lb"
+                    }
+                  },
                   "parent_interface": {
                     "node": {
                       "name": {
                         "value": "eth1"
+                      },
+                      "device": {
+                        "node": {
+                          "id": "dev-lb"
+                        }
                       }
                     }
                   },
                   "capabilities": {
+                    "edges": []
+                  },
+                  "zone_capabilities": {
                     "edges": [
                       {
                         "node": {
-                          "__typename": "ManagedLoadbalancerContext"
+                          "__typename": "ManagedVRF",
+                          "id": "fixture-vrf-fixture-deployment-PROD",
+                          "deployment": {
+                            "node": {
+                              "id": "fixture-deployment",
+                              "name": {
+                                "value": "fixture-deployment"
+                              }
+                            }
+                          },
+                          "security_zone": {
+                            "node": {
+                              "name": {
+                                "value": "PROD"
+                              },
+                              "vrf_type": {
+                                "value": "prod"
+                              },
+                              "l3_vni": {
+                                "value": 60000
+                              },
+                              "id": "fixture-zone-PROD"
+                            }
+                          }
                         }
                       }
                     ]
+                  },
+                  "vlan_id": {
+                    "value": 3100
                   }
                 }
               },
@@ -643,21 +466,60 @@
                       }
                     }
                   },
+                  "device": {
+                    "node": {
+                      "id": "dev-lb"
+                    }
+                  },
                   "parent_interface": {
                     "node": {
                       "name": {
                         "value": "eth1"
+                      },
+                      "device": {
+                        "node": {
+                          "id": "dev-lb"
+                        }
                       }
                     }
                   },
                   "capabilities": {
+                    "edges": []
+                  },
+                  "zone_capabilities": {
                     "edges": [
                       {
                         "node": {
-                          "__typename": "ManagedLoadbalancerContext"
+                          "__typename": "ManagedVRF",
+                          "id": "fixture-vrf-fixture-deployment-NONPROD",
+                          "deployment": {
+                            "node": {
+                              "id": "fixture-deployment",
+                              "name": {
+                                "value": "fixture-deployment"
+                              }
+                            }
+                          },
+                          "security_zone": {
+                            "node": {
+                              "name": {
+                                "value": "NONPROD"
+                              },
+                              "vrf_type": {
+                                "value": "non_prod"
+                              },
+                              "l3_vni": {
+                                "value": 60001
+                              },
+                              "id": "fixture-zone-NONPROD"
+                            }
+                          }
                         }
                       }
                     ]
+                  },
+                  "vlan_id": {
+                    "value": 3301
                   }
                 }
               }
@@ -669,5 +531,48 @@
   },
   "DcimVirtualDevice": {
     "edges": []
+  },
+  "DeviceServices": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "fixture-device",
+          "name": {
+            "value": "DC3-LB-01"
+          },
+          "role": {
+            "value": "load-balancer"
+          },
+          "member_of_groups": {
+            "edges": []
+          },
+          "deployment": {
+            "node": {
+              "__typename": "TopologyPod",
+              "id": "fixture-pod",
+              "name": {
+                "value": "fixture-pod"
+              },
+              "parent": {
+                "node": {
+                  "__typename": "TopologyDataCenter",
+                  "id": "fixture-dc",
+                  "name": {
+                    "value": "fixture-dc"
+                  }
+                }
+              }
+            }
+          },
+          "service_ports": {
+            "edges": []
+          },
+          "vlans": {
+            "edges": []
+          }
+        }
+      }
+    ]
   }
 }

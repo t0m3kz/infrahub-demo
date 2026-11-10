@@ -1,0 +1,27 @@
+# CloudNetworkSegment declarations in recursive dependency order.
+# Two more cloud segments. The spoke segment sits in the Azure spoke VNet, connected to the Virtual WAN hub
+# `vwan-hub-c900-weu` like the other spoke subscriptions: the DC reaches it through the hub's ExpressRoute association.
+# The isolated segment sits in a VPC with no attachment at all: nothing reaches it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNetworkSegment
+  data:
+    - owner: "C900"
+      customer_name: "spoke"
+      environment: "p"
+      security_zone: "PROD"
+      segment_type: "cloud_subnet"
+      virtual_network: "vnet-c900-weu-spoke"
+      availability_zone: ["westeurope", "westeurope-1"]
+      cidr_block: "10.203.1.0/24"
+      customer_deployment: "C900-P-DEMO-AZURE-WESTEUROPE"
+    - owner: "C900"
+      customer_name: "isolated"
+      environment: "p"
+      security_zone: "PROD"
+      segment_type: "cloud_subnet"
+      virtual_network: "vpc-c900-isolated"
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      cidr_block: "10.204.1.0/24"
+      customer_deployment: "C900-P-DEMO-AWS-EU-CENTRAL-1"

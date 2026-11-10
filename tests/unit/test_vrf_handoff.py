@@ -33,8 +33,17 @@ _TEMPLATES_CONFIGS_DIR = Path(__file__).parents[2] / "templates" / "configs"
 # ---------------------------------------------------------------------------
 
 
-def _ip(address: str, namespace: str = "default") -> dict[str, Any]:
-    return {"address": address, "ip_namespace": {"name": namespace}}
+def _ip(address: str) -> dict[str, Any]:
+    """An address: IPAM stays in the ``default`` namespace, the routing zone is the interface's VRF."""
+    return {"address": address, "ip_namespace": {"name": "default"}}
+
+
+def _vrf(namespace: str) -> dict[str, Any]:
+    """The VRF capability of an interface in the zone ``namespace`` (empty for ``default``: no instance)."""
+    if namespace == "default":
+        return {}
+    vrf = {"typename": "ManagedVRF", "id": f"vrf-{namespace}", "security_zone": {"name": namespace, "vrf_type": "prod"}}
+    return {"zone_capabilities": [vrf]}
 
 
 def _handoff_peering(*, remote_ip: dict[str, Any] | None = None, namespace: str = "PROD") -> dict[str, Any]:
@@ -52,7 +61,8 @@ def _handoff_peering(*, remote_ip: dict[str, Any] | None = None, namespace: str 
             {
                 "name": "Ethernet1/13.1900",
                 "device": {"name": "eg-fr201"},
-                "ip_address": _ip("10.255.5.0/31", namespace),
+                "ip_address": _ip("10.255.5.0/31"),
+                **_vrf(namespace),
             },
             remote,
         ],
@@ -85,9 +95,14 @@ def _stretched_segment(namespace: str | None = "PROD", scope: str = "global") ->
         ],
     }
     if namespace:
+        segment["security_zone"] = {"name": namespace, "l3_vni": 60000}
         segment["gateway"] = {
             "address": "10.5.50.1/24",
-            "ip_prefix": {"prefix": "10.5.50.0/24", "ip_namespace": {"name": namespace, "l3_vni": 60000}},
+            "ip_prefix": {
+                "security_zone": {"name": namespace, "l3_vni": 60000},
+                "prefix": "10.5.50.0/24",
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            },
         }
     return segment
 
@@ -101,7 +116,7 @@ class TestVrfSession:
     def test_tenant_namespace_makes_a_vrf_session(self) -> None:
         """A PROD local address yields a VRF session with the inline handoff addresses."""
         session = _build_session_from_peering(
-            _handoff_peering(remote_ip=_ip("10.255.5.1/31", "PROD")), "eg-fr201", {"asn": 4200000100}, []
+            _handoff_peering(remote_ip=_ip("10.255.5.1/31")), "eg-fr201", {"asn": 4200000100}, []
         )
         assert session is not None
         assert session["vrf"] == "PROD"
@@ -113,7 +128,7 @@ class TestVrfSession:
     def test_vrf_session_ignores_cable_on_parent_port(self) -> None:
         """ttl 1 normally prefers cable IPs; a VRF session must keep its own sub-interface's."""
         session = _build_session_from_peering(
-            _handoff_peering(remote_ip=_ip("10.255.5.1/31", "PROD")),
+            _handoff_peering(remote_ip=_ip("10.255.5.1/31")),
             "eg-fr201",
             {"asn": 4200000100},
             _parent_port_with_cable(),
@@ -177,7 +192,7 @@ class TestMultisiteVrfImports:
             "name": "eg-fr201",
             "interfaces": [{"name": "loopback1", "role": "loopback-vtep", "ip_address": {"address": "fd00::1/128"}}],
             "shared_capabilities": [
-                {"typename": "ManagedVRF", "namespace": {"name": "PROD", "l3_vni": 60000, "namespace_type": "prod"}}
+                {"typename": "ManagedVRF", "security_zone": {"name": "PROD", "l3_vni": 60000, "vrf_type": "prod"}}
             ],
         }
         acts = [{"vlan_id": 100, "vni": 10100, "segment": _stretched_segment()}]
@@ -194,17 +209,32 @@ class TestMultisiteVrfImports:
 
 
 class TestSubinterfaceDot1q:
-    def test_tag_comes_from_the_name_suffix(self) -> None:
+    def test_tag_is_the_vlan_id_not_the_name(self) -> None:
+        """The name says 1900, the field 200 (an IOS fa0/0.100 encapsulating dot1Q 200): the field is the tag."""
+        (iface,) = get_interfaces(
+            [
+                {
+                    "name": "Ethernet1/13.1900",
+                    "vlan_id": 200,
+                    "typename": "DcimVirtualInterface",
+                    "ip_address": _ip("10.255.5.0/31"),
+                    **_vrf("PROD"),
+                }
+            ]
+        )
+        assert iface["dot1q_vlan"] == 200
+
+    def test_a_sub_interface_without_vlan_id_is_untagged(self) -> None:
         (iface,) = get_interfaces(
             [
                 {
                     "name": "Ethernet1/13.1900",
                     "typename": "DcimVirtualInterface",
-                    "ip_address": _ip("10.255.5.0/31", "PROD"),
+                    "ip_address": _ip("10.255.5.0/31"),
                 }
             ]
         )
-        assert iface["dot1q_vlan"] == 1900
+        assert iface["dot1q_vlan"] is None
 
     @pytest.mark.parametrize(
         ("name", "typename"),
@@ -212,9 +242,10 @@ class TestSubinterfaceDot1q:
             ("loopback1", "DcimVirtualInterface"),
             ("Ethernet1/13", "DcimPhysicalInterface"),
             ("Vlan.abc", "DcimVirtualInterface"),
+            ("Ethernet1/13.1900", "DcimPhysicalInterface"),
         ],
     )
-    def test_no_tag_without_numeric_suffix(self, name: str, typename: str) -> None:
+    def test_no_tag_without_vlan_id(self, name: str, typename: str) -> None:
         (iface,) = get_interfaces([{"name": name, "typename": typename}])
         assert iface["dot1q_vlan"] is None
 
@@ -442,7 +473,8 @@ class TestEdgeTemplate:
             "name": "Ethernet1/13.1900",
             "status": "active",
             "dot1q_vlan": 1900,
-            "ip_addresses": [_ip("10.255.5.0/31", "PROD")],
+            "vrf": "PROD",
+            "ip_addresses": [_ip("10.255.5.0/31")],
         }
         rendered = self._render(env, interfaces=[iface])
         assert "interface Ethernet1/13.1900\n  encapsulation dot1q 1900\n" in rendered

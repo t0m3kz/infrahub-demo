@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from utils.graphql_queries import load_query
+
 # ======================================================================
 # DC topology and routing
 # ======================================================================
@@ -11,7 +13,7 @@ _QUERIES_DIR = Path(__file__).parent / "queries"
 
 def _load_query(filename: str) -> str:
     """Load a GraphQL query from tests/integration/queries."""
-    return (_QUERIES_DIR / filename).read_text(encoding="utf-8")
+    return load_query(_QUERIES_DIR / filename)
 
 
 QUERY_GET_DC_DEVICES = _load_query("get_dc_devices.gql")

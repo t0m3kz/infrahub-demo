@@ -5,7 +5,7 @@ query segment_placement {
         id
         name { value }
         # An exchange-zone segment may sit on a TopologyCustomerDC; a tenant one may not.
-        security_zone { node { name { value } } }
+        security_zone { node { ...RoutingZoneFields } }
         # environment/owner: the segment agrees with the footprint it names (environment ERROR, owner WARNING).
         environment { value }
         owner { node { id org_id { value } } }

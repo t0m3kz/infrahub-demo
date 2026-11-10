@@ -26,6 +26,7 @@ from utils.exchange_transit import SERVICE_CONTEXT_ROLES
 from .conftest import TestInfrahubDockerWithClient
 from .demo_data import ROOT, declared, name
 from .segment_helpers import fetch_segment_ports, fetch_segment_vlans
+from .service_inventory_helpers import fetch_transit_inventory
 from .snapshot_helpers import render_device_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -41,13 +42,7 @@ query TerminatedSegment($name: String!) {
       node {
         id
         gateway { node { address { value } } }
-        terminated_on {
-          node {
-            name { value }
-            cluster { node { capabilities { edges { node { name { value } } } } } }
-            capabilities { edges { node { __typename id role { value } } } }
-          }
-        }
+        terminated_on { node { id name { value } } }
       }
     }
   }
@@ -69,7 +64,11 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
 
     @staticmethod
     async def _segment(client: InfrahubClient, branch: str, segment_name: str) -> dict[str, Any]:
-        """The segment with its gateway, its context's name, firewall members and border service ports."""
+        """The segment with its gateway, its context's name, firewall members and border service ports.
+
+        A context is a shared capability with no HA or interface edge: its members are its `shared_devices` and its
+        border service ports the firewall-role ports their uplinks are cabled to, both from the transit inventory
+        (derived by utils/service_contexts.py)."""
         result = await client.execute_graphql(
             query=TERMINATED_SEGMENT_QUERY, variables={"name": segment_name}, branch_name=branch
         )
@@ -78,13 +77,15 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
         node = edges[0]["node"]
         context = node["terminated_on"]["node"]
         assert context, f"segment '{segment_name}' is terminated on no context on branch '{branch}'"
+        inventory = await fetch_transit_inventory(client=client, branch=branch)
+        served = next((c for c in inventory["contexts"] if c["id"] == context["id"]), None)
+        assert served, f"context {context['name']['value']} is not in the transit inventory on branch '{branch}'"
         service_port_ids = {
-            edge["node"]["id"]
-            for edge in context["capabilities"]["edges"]
-            if edge["node"]["__typename"] == "DcimPhysicalInterface"
-            and edge["node"]["role"]["value"] == SERVICE_CONTEXT_ROLES["ManagedFirewallContext"]
+            port["id"]
+            for port in served["border_ports"]
+            if port["role"] == SERVICE_CONTEXT_ROLES["ManagedFirewallContext"]
         }
-        members = sorted(edge["node"]["name"]["value"] for edge in context["cluster"]["node"]["capabilities"]["edges"])
+        members = list(served["members"])
         return {
             "id": node["id"],
             "name": segment_name,
@@ -102,10 +103,9 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
     async def test_00_the_border_service_ports_carry_the_segment(
         self, async_client_main: InfrahubClient, scenario_branch: str
     ) -> None:
-        """Exactly the border-leaf ports tagged with the context are on the segment, each written by a generator.
+        """Exactly the border-leaf ports tagged with the context are on the segment (members of their switch's row).
 
-        Nothing tags a customer port (the segment has no component), and every edge has an account as its source:
-        a person's edge would be left alone by the reconcile, a generated one is its to remove.
+        Nothing tags a customer port (the segment has no component and no port is assigned to its deployments).
         """
         names = _terminated_segment_names()
         assert names, "the 30_all data terminates no segment"
@@ -119,8 +119,6 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
                 f"border service ports of {segment['context']}"
             )
             assert all(port["device_role"] == "border-leaf" for port in ports), ports
-            sourceless = [(p["device"], p["name"]) for p in ports if not p["source_id"]]
-            assert not sourceless, f"{segment_name}: edge(s) with no generator as source: {sourceless}"
 
     @pytest.mark.order(402)
     @pytest.mark.dependency(scope="session", depends=["all_demo_terminated_ports"])

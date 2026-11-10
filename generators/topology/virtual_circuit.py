@@ -107,13 +107,14 @@ from utils.circuit_underlay import (
     overlay_processes,
     port_cabled,
     session_circuits_on,
-    subinterface_vlan,
 )
 from utils.data_cleaning import clean_data
 from utils.limits import DCI_TECHNICAL_IPV4_POOL, DCI_TECHNICAL_IPV6_POOL, HANDOFF_POOL_TEMPLATE, UNDERLAY_MTU
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..helpers.common import save_with_node_not_found_retry
+from ..helpers.interface_vrf import join_capabilities, leave_vrfs, vrf_ids
 from ..helpers.vrf import VrfMixin
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalInterface, DcimVirtualInterface
@@ -175,6 +176,9 @@ class SessionEnd:
     processes: tuple[tuple[str, str], ...]
     overlay_ids: tuple[str, ...]
     loopbacks: tuple[Loopback, ...]
+    # The interface this port rides on (None for a port that is not a sub-interface) and its VLAN tag (None: untagged).
+    parent_id: str | None = None
+    vlan_id: int | None = None
 
     @property
     def label(self) -> str:
@@ -239,6 +243,8 @@ class SessionEnd:
             ),
             overlay_ids=tuple(process["id"] for process in overlay_processes(device) if process.get("id")),
             loopbacks=tuple(loopbacks),
+            parent_id=(port.get("parent_interface") or {}).get("id"),
+            vlan_id=port.get("vlan_id"),
         )
 
 
@@ -496,8 +502,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
     def _plan_handoff(self, circuit: dict[str, Any], name: str, ends: list[SessionEnd]) -> SessionPlan:
         """One eBGP session over the circuit's link prefix; our end (overlay process) takes the lower address."""
         for end in ends:
-            if end.port_kind != DcimVirtualInterface.__name__ or subinterface_vlan(end.port_name) is None:
-                self.fail(f"{name}: {end.label} must be a DcimVirtualInterface named <parent>.<vlan>")
+            if end.port_kind != DcimVirtualInterface.__name__ or end.parent_id is None:
+                self.fail(f"{name}: {end.label} must be a DcimVirtualInterface riding on a parent_interface")
         return self._plan_routed_link(circuit, name, ends, label="Handoff")
 
     def _plan_vpn(self, circuit: dict[str, Any], name: str, ends: list[SessionEnd]) -> SessionPlan:
@@ -513,9 +519,9 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         self, circuit: dict[str, Any], name: str, ends: list[SessionEnd], *, label: str
     ) -> SessionPlan:
         """The shared plan of a handoff and a vpn: a /31 from the namespace's pool, one eBGP session."""
-        namespace = circuit.get("ip_namespace")
+        namespace = (circuit.get("vrf") or {}).get("security_zone")
         if not isinstance(namespace, dict) or not namespace.get("name"):
-            self.fail(f"{name}: a {label.lower()} circuit needs its ip_namespace")
+            self.fail(f"{name}: a {label.lower()} circuit needs its routing VRF")
         first, second = sorted(ends, key=lambda e: (e.overlay_process() is None, e.device_name, e.port_name))
         return SessionPlan(
             label=label,
@@ -639,7 +645,10 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         status: str = circuit.get("status") or ""
         async with self.resource_lock(f"vc-session-{circuit['id']}"):
             ports = [plan.first.port_id, plan.second.port_id]
-            nodes = {node.id: node for node in await self.client.filters(kind=plan.port_kind, ids=ports)}
+            nodes = {
+                node.id: node
+                for node in await self.client.filters(kind=plan.port_kind, ids=ports, include=["capabilities"])
+            }
             missing = [end.label for end in (plan.first, plan.second) if end.port_id not in nodes]
             if missing:
                 self.fail(f"{name}: interface(s) {', '.join(missing)} not found")
@@ -649,6 +658,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
             # pass must not see the instance without its demand.
             needs = {end.device_id: {plan.namespace} for end in (plan.first, plan.second)} if plan.namespace else {}
             async with self.vrfs_held(needs):
+                local_vrfs = await self.local_vrf_ids(needs, [plan.namespace]) if plan.namespace else {}
                 prefix = await self._link_prefix(name, circuit["id"], plan, pool)
                 addresses = await self.upsert_prefix_addresses(
                     prefix, offsets=plan.offsets, description=f"{plan.label} {name}"
@@ -664,6 +674,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                         description=f"{plan.label} {name} to {peer.device_name} {peer.port_name}",
                         status=interface_status,
                         mtu=plan.mtu,
+                        vrf_id=local_vrfs.get((end.device_id, plan.namespace or "")),
                     )
                     self.logger.info(f"  {end.label} = {address.address.value}")
 
@@ -721,14 +732,22 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         return prefix
 
     async def _update_interface(
-        self, node: Any, *, address_id: str, description: str, status: str, mtu: int | None
+        self, node: Any, *, address_id: str, description: str, status: str, mtu: int | None, vrf_id: str | None = None
     ) -> None:
-        """Address an end interface, untracked, and only if something changed.
+        """Address an end interface, untracked, and only if something changed; put it in the VRF instance ``vrf_id``.
 
         The interface comes from the device's template, not from this run: tracked, a later run that stopped
-        addressing it would delete the port. A plain save() on the fetched node sends only the modified fields.
+        addressing it would delete the port. A plain save() on the fetched node sends only the modified fields. The
+        VRF is the instance's interface edge, added and a stale one removed edge by edge, never in a saved list
+        (generators/helpers/interface_vrf.py). The node is read with its ``capabilities``.
         """
         changed = False
+        stale_vrfs: list[str] = []
+        join: list[str] = []
+        if vrf_id is not None:
+            peers = getattr(node, "capabilities").peers
+            stale_vrfs = [old for old in vrf_ids(peers) if old != vrf_id]
+            join = [] if vrf_id in {peer.id for peer in peers} else [vrf_id]
         if getattr(getattr(node, "ip_address", None), "id", None) != address_id:
             node.ip_address = address_id
             changed = True
@@ -742,4 +761,6 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
             node.mtu.value = mtu
             changed = True
         if changed:
-            await node.save(update_group_context=False)
+            await save_with_node_not_found_retry(node, self.logger, allow_upsert=False, update_group_context=False)
+        await join_capabilities(self.client, self.logger, node.id, join)
+        await leave_vrfs(self.client, node.id, stale_vrfs)

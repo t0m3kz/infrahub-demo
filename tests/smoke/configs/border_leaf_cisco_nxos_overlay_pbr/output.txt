@@ -174,28 +174,28 @@ router bgp 65000
 ! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
 !
 vrf context INTERNET
-  vni 50003
-  rd 10.0.0.1:50003
+  vni 60002
+  rd 10.0.0.1:60002
   ip route 192.0.2.5/32 100.66.32.4
   ip route 192.0.2.6/32 100.66.32.12
   address-family ipv4 unicast
-    route-target both 50003:50003
-    route-target both 50003:50003 evpn
+    route-target both 60002:60002
+    route-target both 60002:60002 evpn
 !
 vrf context MANAGEMENT
-  vni 50004
-  rd 10.0.0.1:50004
+  vni 60003
+  rd 10.0.0.1:60003
   address-family ipv4 unicast
-    route-target both 65000:50004
-    route-target both 65000:50004 evpn
+    route-target both 65000:60003
+    route-target both 65000:60003 evpn
 !
 vrf context PROD
-  vni 50001
-  rd 10.0.0.1:50001
+  vni 60000
+  rd 10.0.0.1:60000
   ip route 0.0.0.0/0 100.66.0.4
   address-family ipv4 unicast
-    route-target both 65000:50001
-    route-target both 65000:50001 evpn
+    route-target both 65000:60000
+    route-target both 65000:60000 evpn
 !
 interface nve1
   source-interface Loopback0
@@ -218,9 +218,9 @@ interface nve1
   member vni 64601
     suppress-arp
     ingress-replication protocol bgp
-  member vni 50003 associate-vrf
-  member vni 50004 associate-vrf
-  member vni 50001 associate-vrf
+  member vni 60002 associate-vrf
+  member vni 60003 associate-vrf
+  member vni 60000 associate-vrf
   no shutdown
 !
 !
@@ -272,7 +272,7 @@ vlan 3601
 !
 vlan 3902
   name L3VNI_INTERNET
-  vn-segment 50003
+  vn-segment 60002
 !
 interface Vlan3902
   description L3VNI transit SVI for VRF INTERNET
@@ -283,7 +283,7 @@ interface Vlan3902
 !
 vlan 3903
   name L3VNI_MANAGEMENT
-  vn-segment 50004
+  vn-segment 60003
 !
 interface Vlan3903
   description L3VNI transit SVI for VRF MANAGEMENT
@@ -294,7 +294,7 @@ interface Vlan3903
 !
 vlan 3900
   name L3VNI_PROD
-  vn-segment 50001
+  vn-segment 60000
 !
 ! PBR of the traffic that enters VRF PROD from the overlay: bound for a segment of a footprint, it goes to
 ! that footprint's firewall context (the prefixes of its segments only; the VRF is shared by every footprint).

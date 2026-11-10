@@ -66,7 +66,7 @@ def _gp_segment(
     *,
     prefix: str | None,
     namespace: tuple[str, str] = ("PROD", "prod"),
-    zone: str = "PROD-ZONE",
+    zone: str = "PROD",
     isolation_mode: str = "normal",
     rules: list[dict] | None = None,
     tag: tuple[str, int] | None = None,
@@ -79,14 +79,22 @@ def _gp_segment(
         "name": _v(name),
         "isolation_mode": _v(isolation_mode),
         "owner": _node({"org_id": _v(owner)}),
-        "security_zone": _node({"name": _v(zone)}),
+        "security_zone": _node(
+            {
+                "name": _v(zone),
+                "vrf_type": _v(namespace[1]),
+                "l3_vni": _v(
+                    {"prod": 60000, "non_prod": 60001, "internet": 60002, "management": 60003}.get(namespace[1])
+                ),
+            }
+        ),
         "security_tag": _node({"id": f"tag-{seg_id}", "name": _v(tag[0]), "group_id": _v(tag[1])} if tag else None),
         "gateway": _node(
             {
                 "ip_prefix": _node(
                     {
                         "prefix": _v(prefix),
-                        "ip_namespace": _node({"name": _v(namespace[0]), "namespace_type": _v(namespace[1])}),
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
                     }
                 )
             }
@@ -110,6 +118,15 @@ def _gp_segment(
         ]
     )
     return segment
+
+
+def _tag_memberships(segments: list[dict]) -> list[dict]:
+    """A far-end port's capability entries for the segments it is tagged with (HostNicFields: the VLAN row whose
+    deployment's segment it is)."""
+    return [
+        {"__typename": "ManagedSegmentVlan", "segment_deployment": _node({"segment": _node(segment)})}
+        for segment in segments
+    ]
 
 
 def _gp_nic(
@@ -139,8 +156,8 @@ def _gp_nic(
         "name": _v(port),
         "role": _v(far_role or ("lag" if lag else "server")),
         "device": _node({"name": _v(switch)}),
-        "segments": _edges([] if lag else tagged),
-        "lag": _node({"name": _v(lag), "segments": _edges(tagged)} if lag else None),
+        "capabilities": _edges([] if lag else _tag_memberships(tagged)),
+        "lag": _node({"name": _v(lag), "capabilities": _edges(_tag_memberships(tagged))} if lag else None),
     }
     return {"id": near["id"], "name": _v(nic), "cable": _node({"endpoints": _edges([near, far])})}
 
@@ -244,7 +261,7 @@ def _gpo_fleet_roots(
     microsegmented pay-p, whose web component calls its db component.
 
     ``lb`` load-balances web-np on tcp/9443: app-np calls its VIP (a /32 selector: app-np ->
-    UNCLASSIFIED), and the segment-less policy lb-dc1-lb-01-NON-PROD lets the leg reach web-np
+    UNCLASSIFIED), and the segment-less policy lb-dc1-lb-01-NONPROD lets the leg reach web-np
     (UNCLASSIFIED -> web-np), read from web-np's inbound_rules next to an inbound rule of app-np's own
     policy (already a row through app-np: not counted twice).
     """
@@ -280,7 +297,7 @@ def _gpo_fleet_roots(
             "C010",
             prefix="10.10.1.0/24",
             namespace=("NONPROD", "non_prod"),
-            zone="NONPROD-ZONE",
+            zone="NONPROD",
             rules=[
                 _gp_rule("web-np-to-app-np-tcp-443", "seg-app-np", 443),
                 _gp_rule("web-np-to-app-np-tcp-8000-8010", "seg-app-np", 8000, index=110, port_end=8010),
@@ -294,7 +311,7 @@ def _gpo_fleet_roots(
             "C010",
             prefix="10.10.2.0/24",
             namespace=("NONPROD", "non_prod"),
-            zone="NONPROD-ZONE",
+            zone="NONPROD",
             rules=[
                 _gp_rule("app-np-to-web-np-udp-5000", "seg-web-np", 5000, protocol="udp"),
                 _gp_rule("app-np-to-db-np-tcp-5432", "seg-db-np", 5432, index=110),
@@ -308,7 +325,7 @@ def _gpo_fleet_roots(
             "C010",
             prefix="10.10.3.0/24",
             namespace=("NONPROD", "non_prod"),
-            zone="NONPROD-ZONE",
+            zone="NONPROD",
             rules=[
                 _gp_rule("db-np-to-app-np-any", "seg-app-np", None, protocol="any"),
                 _gp_rule("db-np-to-web-np-icmp", "seg-web-np", None, protocol="icmp", index=110),

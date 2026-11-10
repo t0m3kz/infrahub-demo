@@ -10,7 +10,7 @@ version: "1.0"
 # (controller_type + managed_devices). The controller is itself compute —
 # not "attached to" a separate device via capabilities — so the two concrete
 # nodes below inherit the SAME generics DcimPhysicalDevice/DcimVirtualDevice
-# do (DcimDevice, DcimDeviceManaged, DcimCapabilities, AppInstance, CoreArtifactTarget) rather
+# do (DcimDevice, DcimDeviceManaged, AppInstance, CoreArtifactTarget) rather
 # than the concrete Dcim*Device kinds themselves (concrete nodes can't be
 # inherit_from targets — confirmed: "Unable to find the generic
 # DcimPhysicalDevice"). Physical/virtual-specific fields (position/serial/
@@ -126,7 +126,6 @@ nodes:
       - CoreArtifactTarget
       - DcimDevice
       - DcimDeviceManaged
-      - DcimCapabilities
       - AppInstance
       - DcimSoftwareRunner
     uniqueness_constraints:
@@ -173,7 +172,6 @@ nodes:
       - CoreArtifactTarget
       - DcimDevice
       - DcimDeviceManaged
-      - DcimCapabilities
       - AppInstance
       - DcimSoftwareRunner
     uniqueness_constraints:

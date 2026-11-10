@@ -98,7 +98,7 @@ def _good(roots: dict[str, Any] | None = None, **overrides: Any) -> dict[str, An
 def _clean_segment(**kwargs: Any) -> dict[str, Any]:
     """A cleaned ``_gp_segment`` (a local NONPROD segment of DC10 unless told otherwise)."""
     kwargs.setdefault("namespace", ("NONPROD", "non_prod"))
-    kwargs.setdefault("zone", "NONPROD-ZONE")
+    kwargs.setdefault("zone", kwargs["namespace"][0])
     segment = _gp_segment(**kwargs)
     return clean_data({"x": {"edges": [{"node": segment}]}})["x"][0]
 
@@ -962,6 +962,11 @@ class TestByteIdentity:
 
     def test_a_reference_leaf_carrying_no_contract_vrf_is_the_existing_golden(self, root_dir: Path) -> None:
         data = _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F")
+        data["ManagedNetworkSegment"]["edges"] = [
+            edge
+            for edge in data["ManagedNetworkSegment"]["edges"]
+            if edge["node"]["security_zone"]["node"]["name"]["value"] != "PROD"
+        ]
         assert run_transform(Leaf, data) == self._golden(root_dir)
 
     def test_the_base_transform_has_no_segment_security_without_the_fleet_roots(self, root_dir: Path) -> None:

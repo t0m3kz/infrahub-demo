@@ -1,24 +1,37 @@
-fragment FirewallContextLegFields on ManagedFirewallContext {
-  id
-  # Name and VLAN derive the context's transit VLAN; the namespace l3_vni is
-  # the VRF's L3 VNI. A leaf renders the transit leg locally from these
-  # (get_leaf_firewall_transits), border leaves/edges from their own ports.
-  name { value }
-  vlan_id { value }
-  tenant { node { id } }
-  # Deployments whose segments terminate here: a leaf sends a flow through
-  # the firewall only when both its segments are served by one context.
-  served_deployments { edges { node { id } } }
-  capabilities {
+# The firewalls of a hosting deployment and what their contexts' legs derive from: the contexts they are a member of and
+# their interfaces (utils/service_contexts.py contexts_with_legs).
+fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
+  # Both firewall roles: a footprint with no internal context is steered to its Internet edge one
+  # (transforms/helpers/firewall_contexts.py _steering_only).
+  devices(role__values: ["internal-firewall", "external-firewall"]) {
     edges {
       node {
-        name { value }
-        device { node { ... on DcimDeviceManaged { role { value } } } }
-        ... on DcimVirtualInterface {
-          ip_address {
-            node {
-              address { value }
-              ip_namespace { node { name { value } namespace_type { value } l3_vni { value } } }
+        __typename
+        id
+        name {
+          value
+        }
+        # The physical firewalls only, as this selection always was: a dedicated context hosted on virtual firewalls
+        # is not one a leaf redirects to (a virtual member answers with no role, so it holds no context here).
+        ... on DcimPhysicalDevice {
+          role {
+            value
+          }
+          shared_capabilities {
+            edges {
+              node {
+                __typename
+                ...ServiceContextFields
+                ...FirewallServedFields
+                ...LoadbalancerServedFields
+              }
+            }
+          }
+          interfaces {
+            edges {
+              node {
+                ...ServiceMemberInterfaceFields
+              }
             }
           }
         }
@@ -27,20 +40,246 @@ fragment FirewallContextLegFields on ManagedFirewallContext {
   }
 }
 
-fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
-  devices(role__value: "internal-firewall") {
+# The deployment of a fabric switch: its EVPN facts and the firewall contexts of its hosting facility, both read on the
+# deployment and, for a pod, on its DC. ONE `parent` hop per kind: a second `... on TopologyPod { parent }` selection
+# of the same field (two fragments each with their own) would be answered only for the first, the server drops the rest.
+fragment SwitchDeploymentFields on TopologyDeployment {
+  ...EvpnRtAsOnSegmentHostingFields
+  ...FirewallContextsOnDeviceHostingFields
+  ... on TopologyPod {
+    parent {
+      node {
+        ...EvpnRtAsOnSegmentHostingFields
+        ...FirewallContextsOnDeviceHostingFields
+      }
+    }
+  }
+  ... on TopologyColocationZone {
+    parent {
+      node {
+        ...EvpnRtAsOnSegmentHostingFields
+      }
+    }
+  }
+  ... on TopologyVirtualColocation {
+    parent {
+      node {
+        ...EvpnRtAsOnSegmentHostingFields
+      }
+    }
+  }
+}
+
+fragment FirewallContextConfigFields on ManagedFirewallContext {
+  id
+  name {
+    value
+  }
+  context_id {
+    value
+  }
+  # The devices that enforce the context: checks/common.py validate_context_members holds them to one HA pair. Their
+  # role is the context's (an Internet edge context stands on an external-firewall pair).
+  shared_devices {
     edges {
       node {
-        ... on DcimPhysicalDevice {
-          capabilities {
+        name {
+          value
+        }
+        role {
+          value
+        }
+      }
+    }
+  }
+  vlan_id {
+    value
+  }
+  # The exchanges of the context: their legs are the context's legs in their two VRFs (utils/service_contexts.py
+  # exchange_legs), held by checks/common.py validate_exchange_gateways.
+  exchanges {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        vrf_a {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        vrf_z {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+      }
+    }
+  }
+  snat_address {
+    node {
+      address {
+        value
+      }
+    }
+  }
+  tenant {
+    node {
+      id
+      ... on TopologyCustomerDC {
+        name {
+          value
+        }
+      }
+      ... on TopologyCustomerColocation {
+        name {
+          value
+        }
+      }
+    }
+  }
+  terminated_segments {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        security_zone {
+          node {
+            name {
+              value
+            }
+            trust_level {
+              value
+            }
+            description {
+              value
+            }
+            id
+            l3_vni {
+              value
+            }
+            vrf_type {
+              value
+            }
+          }
+        }
+        gateway {
+          node {
+            address {
+              value
+            }
+          }
+        }
+        segment_deployments {
+          edges {
+            node {
+              vlans {
+                edges {
+                  node {
+                    vlan_id {
+                      value
+                    }
+                    device {
+                      node {
+                        id
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  served_deployments {
+    edges {
+      node {
+        id
+        ... on TopologyCustomerDC {
+          name {
+            value
+          }
+          network_segments {
             edges {
               node {
-                __typename
-                ... on ManagedFirewallHA {
-                  contexts {
-                    edges {
-                      node {
-                        ...FirewallContextLegFields
+                id
+                ...ContextServedSegmentFields
+              }
+            }
+          }
+          # Every context the footprint lists, with its members' role: the share of the footprint's rules each one
+          # holds follows from the list (utils/firewall_split.py), and an Internet edge translates a footprint with a
+          # dedicated internal context to that context's public address.
+          serving_firewall_contexts {
+            edges {
+              node {
+                id
+                tenant {
+                  node {
+                    id
+                  }
+                }
+                snat_address {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
+                shared_devices {
+                  edges {
+                    node {
+                      role {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on TopologyCustomerColocation {
+          name {
+            value
+          }
+          network_segments {
+            edges {
+              node {
+                id
+                ...ContextServedSegmentFields
+              }
+            }
+          }
+          # Every context the footprint lists, with its members' role: the share of the footprint's rules each one
+          # holds follows from the list (utils/firewall_split.py), and an Internet edge translates a footprint with a
+          # dedicated internal context to that context's public address.
+          serving_firewall_contexts {
+            edges {
+              node {
+                id
+                tenant {
+                  node {
+                    id
+                  }
+                }
+                snat_address {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
+                shared_devices {
+                  edges {
+                    node {
+                      role {
+                        value
                       }
                     }
                   }
@@ -54,113 +293,78 @@ fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
   }
 }
 
-# A device's own `deployment` is the DC directly for DC-level tiers
-# (border-leaf, firewall, spine, super-spine) but the POD for pod-level
-# tiers (leaf, tor, access-leaf) — see generators/topology/rack.py's
-# deployment_id=self.data["pod"]["id"] vs generators/topology/dc.py's
-# deployment_id=dc_id. One extra `parent` hop covers the pod case; DC-level
-# devices' deployment has no `parent` fragment match, so only the direct
-# TopologyDeviceHosting fragment applies for them. A colocation firewall's
-# deployment is its zone, which is a TopologyDeviceHosting itself and holds the
-# firewall pair, so it takes the direct shape and needs no hop (the metro owns no
-# devices). A virtual colocation's firewalls are CloudNetworkAppliances, hosted
-# provider-side with no context of ours, so nothing here selects them.
-fragment FirewallContextsOnDeploymentFields on TopologyDeployment {
-  ...FirewallContextsOnDeviceHostingFields
-  ... on TopologyPod {
-    parent {
-      node {
-        ...FirewallContextsOnDeviceHostingFields
-      }
-    }
-  }
-}
-
-fragment FirewallContextConfigFields on ManagedFirewallContext {
-  id
-  name { value }
-  context_id { value }
-  vlan_id { value }
-  snat_address { node { address { value } } }
-  tenant {
+fragment ContextServedSegmentFields on ManagedNetworkSegment {
+  ...SegmentRulesFields
+  gateway {
     node {
-      id
-      ... on TopologyCustomerDC { name { value } }
-      ... on TopologyCustomerColocation { name { value } }
-    }
-  }
-  # The segments this context terminates (ManagedVxlanSegment.terminated_on): their gateway is the pair's floating
-  # VIP and the fabric only bridges them. The firewall transform derives each one's `<uplink trunk>.<vlan>`
-  # sub-interface from the VLAN row of the border leaf at the far end of the trunk
-  # (transforms/helpers/firewall_terminated.py).
-  terminated_segments {
-    edges {
-      node {
-        id
-        name { value }
-        security_zone { node { name { value } } }
-        gateway { node { address { value } } }
-        segment_deployments {
-          edges {
-            node {
-              vlans { edges { node { vlan_id { value } device { node { id } } } } }
-            }
+      ip_prefix {
+        node {
+          prefix {
+            value
           }
         }
       }
     }
   }
-  # The segments terminating on this context: every
-  # segment of a deployment it serves. Its rule table is
-  # their rules and the rules into them.
-  served_deployments {
-    edges {
-      node {
-        id
-        # network_segments is declared per footprint kind (schemas/extensions/service/segment.yml), not on the
-        # TopologyCustomer generic: a context serves a DC or a colocation footprint, both with VXLAN segments, so
-        # the two spreads select the same field of the same peer type.
-        ... on TopologyCustomerDC {
-          # The DC names its Internet edge when it has an external-firewall pair: this (internal) context then keeps no
-          # Internet rule (transforms/helpers/firewall_contexts.py).
-          parent { node { id ... on TopologySegmentHosting { internet_edge_contexts { edges { node { id } } } } } }
-          network_segments { edges { node { id ...ContextServedSegmentFields } } }
-        }
-        ... on TopologyCustomerColocation { network_segments { edges { node { id ...ContextServedSegmentFields } } } }
+  security_zone {
+    node {
+      name {
+        value
+      }
+      trust_level {
+        value
+      }
+      description {
+        value
+      }
+      id
+      l3_vni {
+        value
+      }
+      vrf_type {
+        value
       }
     }
   }
-  # The topologies whose Internet traffic this context enforces and translates (an external-firewall pair's context):
-  # their DC footprints, with the segments whose Internet rules it holds and the serving context whose public address a
-  # dedicated customer is translated to.
-  internet_edge_hostings {
+}
+
+fragment FirewallZoneFields on SecurityZone {
+  name {
+    value
+  }
+  trust_level {
+    value
+  }
+  description {
+    value
+  }
+  network_segments {
     edges {
       node {
         id
-        ... on TopologyDataCenter {
-          children {
-            edges {
-              node {
-                id
-                ... on TopologyCustomerDC {
-                  name { value }
-                  environment { value }
-                  network_segments { edges { node { id ...ContextServedSegmentFields } } }
-                  serving_firewall_context { node { id tenant { node { id } } snat_address { node { address { value } } } } }
+        ... on ManagedVxlanSegment {
+          security_zone {
+            node {
+              ...RoutingZoneFields
+            }
+          }
+          name {
+            value
+          }
+          gateway {
+            node {
+              ip_prefix {
+                node {
+                  prefix {
+                    value
+                  }
                 }
               }
             }
           }
         }
+        ...SegmentRulesFields
       }
     }
   }
-}
-
-# A segment a context serves: its rules, and its own gateway prefix and zone (the context's routes,
-# apply_context_routes, read these, not the SecurityZone root).
-fragment ContextServedSegmentFields on ManagedNetworkSegment {
-  ...SegmentRulesFields
-  gateway { node { ip_prefix { node { prefix { value } } } } }
-  security_zone { node { name { value } } }
 }

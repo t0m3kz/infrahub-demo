@@ -1,0 +1,10 @@
+# ManagedHypervisorCluster declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedHypervisorCluster
+  data:
+    - name: ktw1-vsphere-cl01
+      software_image: vsphere-8.0U3
+      deployment: DC-KTW1-9-POD-1
+      sdn: ktw1-nsx

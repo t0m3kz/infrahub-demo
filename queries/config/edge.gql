@@ -4,55 +4,105 @@ query edge_config($device: String!) {
       node {
         __typename
         id
-        name { value }
-        ... on DcimDeviceManaged {
-          role { value }
-          device_type { node { name { value } } }
-          platform { node { name { value } } }
-          primary_address { node { address { value } ip_namespace { node { name { value } } } } }
-          tags { edges { node { name { value } } } }
+        name {
+          value
         }
-
-        # Device Services (BGP, OSPF) with nested peerings
-        ...DeviceCapabilitiesOnDeviceFields
-
-        # EVPN Multi-Site: the colocation edge is its metro's border gateway, so it
-        # needs the metro's stretched segments and fabric RT ASN (site-id).
-        ... on DcimPhysicalDevice {
-          deployment {
+        ... on DcimDeviceManaged {
+          role {
+            value
+          }
+          device_type {
             node {
-              # An office edge is deployed to the SegmentHosting itself (direct spreads). A colocation edge
-              # is deployed to its zone and the metro above it is the site (a virtual colocation holds
-              # appliances, not a physical edge), so both SegmentHosting fragments are selected in ONE
-              # `parent { node { ... } }` block per kind: a
-              # second `parent` selection (as EvpnRtAsOnDeploymentFields adds) returns null for whichever
-              # SegmentHosting fragment comes second (see the ORDER MATTERS note in fragments/evpn_fabric.gql).
-              # Checked on the 30_all stack: eg-fr201 gets evpn_rt_as and segment_deployments from the metro.
-              ...SegmentDeploymentsOnDeploymentFields
-              ...EvpnRtAsOnSegmentHostingFields
-              ... on TopologyColocationZone {
-                parent { node { ...SegmentDeploymentsOnDeploymentFields ...EvpnRtAsOnSegmentHostingFields } }
+              name {
+                value
+              }
+            }
+          }
+          platform {
+            node {
+              name {
+                value
+              }
+            }
+          }
+          primary_address {
+            node {
+              address {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+          tags {
+            edges {
+              node {
+                name {
+                  value
+                }
               }
             }
           }
         }
-
-        # Interface Information
+        ...DeviceCapabilitiesOnDeviceFields
+        ...DeviceSegmentRowsFields
+        ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              ...SegmentDeploymentsOnDeploymentFields
+              ...EvpnRtAsOnSegmentHostingFields
+              ... on TopologyColocationZone {
+                parent {
+                  node {
+                    ...SegmentDeploymentsOnDeploymentFields
+                    ...EvpnRtAsOnSegmentHostingFields
+                  }
+                }
+              }
+            }
+          }
+        }
         interfaces {
           edges {
             node {
               __typename
-              name { value }
-              description { value }
-              status { value }
-              role { value }
+              name {
+                value
+              }
+              description {
+                value
+              }
+              status {
+                value
+              }
+              role {
+                value
+              }
+              ...InterfaceRoutingZoneFields
               ... on DcimPhysicalInterface {
-                interface_type { value }
-                mtu { value }
+                interface_type {
+                  value
+                }
+                mtu {
+                  value
+                }
                 ip_address {
                   node {
-                    address { value }
-                    ip_namespace { node { name { value } } }
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
                 cable {
@@ -62,16 +112,23 @@ query edge_config($device: String!) {
                       edges {
                         node {
                           __typename
+                          ...InterfaceRoutingZoneFields
                           ... on DcimPhysicalInterface {
-                            name { value }
+                            name {
+                              value
+                            }
                             ip_address {
                               node {
-                                address { value }
+                                address {
+                                  value
+                                }
                               }
                             }
                             device {
                               node {
-                                name { value }
+                                name {
+                                  value
+                                }
                               }
                             }
                           }
@@ -81,31 +138,58 @@ query edge_config($device: String!) {
                   }
                 }
               }
-
               ... on DcimVirtualInterface {
+                vlan_id {
+                  value
+                }
                 ip_address {
                   node {
-                    address { value }
-                    ip_namespace { node { name { value } } }
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
               }
-
               ... on DcimLAGInterface {
-                lag_id { value }
-                lacp_mode { value }
-                mtu { value }
-                minimum_links { value }
+                lag_id {
+                  value
+                }
+                lacp_mode {
+                  value
+                }
+                mtu {
+                  value
+                }
+                minimum_links {
+                  value
+                }
                 ip_address {
                   node {
-                    address { value }
-                    ip_namespace { node { name { value } } }
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
                 member_interfaces {
                   edges {
                     node {
-                      name { value }
+                      name {
+                        value
+                      }
                     }
                   }
                 }
@@ -117,36 +201,22 @@ query edge_config($device: String!) {
       }
     }
   }
-
-  # Public space of the INTERNET namespace: what the upstream transit session
-  # may be announced (aggregate + RM-TRANSIT-OUT). namespace_type is filtered
-  # in transforms/helpers/bgp_external.py (get_internet_prefixes).
-  IpamPrefix(role__value: "public") {
+  public_origins: TopologySessionCircuit {
     edges {
       node {
-        prefix { value }
-        ip_namespace { node { namespace_type { value } } }
-      }
-    }
-  }
-
-  # On-prem routed space per tenant VRF: what an external tenant-VRF peer (the
-  # SD-WAN gateway) may be announced. Grouped by namespace in
-  # transforms/helpers/bgp_external.py (get_onprem_prefixes).
-  # owner: who owns the announced prefix (only an OrganizationCustomer owner counts, so a
-  # session is announced only the prefixes of its own owner).
-  ManagedNetworkSegment {
-    edges {
-      node {
-        routing_tag { value }
-        owner { node { __typename org_id { value } display_label } }
-        gateway {
+        name {
+          value
+        }
+        vrf {
           node {
-            ip_prefix {
-              node {
-                prefix { value }
-                member_type { value }
-                ip_namespace { node { name { value } namespace_type { value } } }
+            ...RoutingVrfFields
+          }
+        }
+        originated_prefixes {
+          edges {
+            node {
+              prefix {
+                value
               }
             }
           }
@@ -154,27 +224,42 @@ query edge_config($device: String!) {
       }
     }
   }
-
-  # Office footprints and the SD-WAN gateway each sits behind: what the session
-  # facing that gateway may accept (the union of its offices' lan_prefixes and
-  # the prefixes of the segments they host themselves).
-  # Matched to the handoff through the BGP peering's far-end device in
-  # transforms/helpers/bgp_external.py (get_external_peer_prefixes).
-  # owner: who owns the office's lan_prefixes (only an OrganizationCustomer owner counts).
-  # segment.owner: who owns a hosted segment's prefix.
-  TopologyCustomerOffice {
+  ManagedNetworkSegment {
     edges {
       node {
-        owner { node { __typename org_id { value } display_label } }
-        sdwan_gateway { node { name { value } } }
-        lan_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
-        segment_deployments {
-          edges {
-            node {
-              segment {
-                node {
-                  owner { node { __typename org_id { value } display_label } }
-                  gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } } } } } } }
+        security_zone {
+          node {
+            ...RoutingZoneFields
+          }
+        }
+        routing_tag {
+          value
+        }
+        owner {
+          node {
+            __typename
+            org_id {
+              value
+            }
+            display_label
+          }
+        }
+        gateway {
+          node {
+            ip_prefix {
+              node {
+                prefix {
+                  value
+                }
+                member_type {
+                  value
+                }
+                ip_namespace {
+                  node {
+                    name {
+                      value
+                    }
+                  }
                 }
               }
             }
@@ -183,44 +268,280 @@ query edge_config($device: String!) {
       }
     }
   }
-
-  # Prefixes registered on a tunnel: reachable behind the SD-WAN gateway at one of its ends, accepted by the
-  # session facing that gateway like an office's lan_prefixes (registered_by_gateway in
-  # transforms/helpers/bgp_external.py). The tunnel's owner is derived, never stored: the owner of the
-  # TopologyCustomerOffice among its locations (session_circuit_owner; only an OrganizationCustomer counts).
-  # capabilities: the tunnel's end ports; the device name of each is matched to a gateway.
-  TopologySessionCircuit(circuit_type__value: "tunnel") {
+  TopologyCustomerOffice {
     edges {
       node {
-        locations { edges { node { ... on TopologyCustomerOffice { owner { node { __typename org_id { value } display_label } } } } } }
-        registered_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
-        capabilities { edges { node { device { node { name { value } } } } } }
+        sdwan_gateway {
+          node {
+            name {
+              value
+            }
+            ... on DcimDevice {
+              interfaces {
+                edges {
+                  node {
+                    ...InterfaceRoutingZoneFields
+                    capabilities {
+                      edges {
+                        node {
+                          __typename
+                          ... on TopologySessionCircuit {
+                            circuit_type {
+                              value
+                            }
+                            vrf {
+                              node {
+                                ...RoutingVrfFields
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        vrfs {
+          edges {
+            node {
+              ...RoutingVrfFields
+            }
+          }
+        }
+        owner {
+          node {
+            __typename
+            org_id {
+              value
+            }
+            display_label
+          }
+        }
+        sdwan_gateway {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        lan_prefixes {
+          edges {
+            node {
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        segment_deployments {
+          edges {
+            node {
+              segment {
+                node {
+                  security_zone {
+                    node {
+                      ...RoutingZoneFields
+                    }
+                  }
+                  owner {
+                    node {
+                      __typename
+                      org_id {
+                        value
+                      }
+                      display_label
+                    }
+                  }
+                  gateway {
+                    node {
+                      ip_prefix {
+                        node {
+                          prefix {
+                            value
+                          }
+                          ip_namespace {
+                            node {
+                              name {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
-
-  # The cloud side of an external session (transforms/helpers/bgp_cloud.py cloud_legs, shared with the checks): our
-  # sub-interface (or routed port) and the CloudPeeringInterface end the same handoff or vpn session circuit
-  # (capabilities of the peering -> circuit -> its other ends). The peering gives the neighbor (peer_ip, peer_asn), the
-  # BGP key (auth) and what we announce to the cloud (advertised_prefixes); its transport (device) gives the owner (the
-  # account's, else its own for a SaaS) and, for a VPN tunnel, the gateway. One root rather than a field per kind.
+  TopologySessionCircuit(circuit_type__value: "tunnel") {
+    edges {
+      node {
+        vrf {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        locations {
+          edges {
+            node {
+              ... on TopologyCustomerOffice {
+                owner {
+                  node {
+                    __typename
+                    org_id {
+                      value
+                    }
+                    display_label
+                  }
+                }
+              }
+            }
+          }
+        }
+        registered_prefixes {
+          edges {
+            node {
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              device {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   CloudPeeringInterface {
     edges {
       node {
-        name { value }
-        scope { value }
-        routing { value }
-        peer_ip { node { address { value } } }
-        peer_asn { node { asn { value } } }
-        auth { node { password { value } } }
-        gateway { node { id name { value } } }
-        advertised_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+        name {
+          value
+        }
+        scope {
+          value
+        }
+        routing {
+          value
+        }
+        peer_ip {
+          node {
+            address {
+              value
+            }
+          }
+        }
+        peer_asn {
+          node {
+            asn {
+              value
+            }
+          }
+        }
+        auth {
+          node {
+            password {
+              value
+            }
+          }
+        }
+        gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        advertised_prefixes {
+          edges {
+            node {
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
         device {
           node {
             __typename
-            name { value }
-            ... on CloudTransport { account { node { owner { node { __typename org_id { value } display_label } } } } owner { node { __typename org_id { value } display_label } } }
-            ... on CloudVPNConnection { gateway { node { id name { value } } } }
+            name {
+              value
+            }
+            ... on CloudTransport {
+              account {
+                node {
+                  owner {
+                    node {
+                      __typename
+                      org_id {
+                        value
+                      }
+                      display_label
+                    }
+                  }
+                }
+              }
+              owner {
+                node {
+                  __typename
+                  org_id {
+                    value
+                  }
+                  display_label
+                }
+              }
+            }
+            ... on CloudVPNConnection {
+              gateway {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+            }
           }
         }
         capabilities {
@@ -228,65 +549,33 @@ query edge_config($device: String!) {
             node {
               __typename
               ... on TopologySessionCircuit {
-                name { value }
-                circuit_type { value }
-                capabilities { edges { node { name { value } device { node { name { value } } } } } }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  # What a cloud gateway lets through, cloud to us (bgp_cloud.py reachable_prefixes): an attachment joins its gateway
-  # to a virtual network (its allowed_prefixes, else its CIDR blocks) or to a peer gateway (a hop to a hub, with the
-  # route table the hub receives it in).
-  CloudGatewayAttachment {
-    edges {
-      node {
-        name { value }
-        gateway { node { id name { value } } }
-        peer_gateway { node { id name { value } } }
-        virtual_network { node { id name { value } cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } } } }
-        allowed_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
-        associated_route_table { node { id name { value } } }
-        propagates_to_route_tables { edges { node { id name { value } } } }
-      }
-    }
-  }
-
-  # The customers' routing tags: an external session's inbound policy sets the community 64496:<tag> of the
-  # customer that registered each accepted prefix (transforms/helpers/bgp_external.py, utils/routing_identity.py).
-  # One root rather than a selection on every owner above (those are generic OrganizationEntity peers);
-  # keyed like utils/ownership.py customer_owner: org_id, else display_label.
-  OrganizationCustomer {
-    edges {
-      node {
-        org_id { value }
-        display_label
-        routing_tag { value }
-      }
-    }
-  }
-
-  # The EVPN Multi-Site VIPs of the model and the loopbacks of the border gateways that carry them: the far end
-  # of a fabric or DCI session and the VIPs every underlay session may carry
-  # (transforms/helpers/bgp_facts.py). A handful of interfaces, however large the fleet.
-  DcimVirtualInterface(role__value: "multisite-vip") {
-    edges {
-      node {
-        ip_address { node { address { value } } }
-        device {
-          node {
-            name { value }
-            ... on DcimDeviceManaged { role { value } }
-            interfaces(role__values: ["loopback", "loopback-vtep"]) {
-              edges {
-                node {
-                  role { value }
-                  ... on DcimVirtualInterface { ip_address { node { address { value } } } }
-                  ... on DcimPhysicalInterface { ip_address { node { address { value } } } }
+                name {
+                  value
+                }
+                circuit_type {
+                  value
+                }
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
+                }
+                capabilities {
+                  edges {
+                    node {
+                      ...InterfaceRoutingZoneFields
+                      name {
+                        value
+                      }
+                      device {
+                        node {
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -295,34 +584,223 @@ query edge_config($device: String!) {
       }
     }
   }
-
-  # Route protection (utils/bgp_expectation.py, transforms/helpers/bgp_facts.py): the EVPN type-5 routes of a VRF are
-  # prefixes of its namespace, so a device's EVPN filter is the prefixes of the namespaces it is a member of (a
-  # spine: all of them), the default route only from a default exit, and the L2 VNIs bound the route count.
-  # One aliased root per environment namespace type (the namespaces are data/bootstrap/22_namespaces.yml).
-  environment_prefixes_prod: IpamPrefix(ip_namespace__namespace_type__value: "prod") {
-    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  CloudGatewayAttachment {
+    edges {
+      node {
+        name {
+          value
+        }
+        gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        peer_gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        virtual_network {
+          node {
+            id
+            name {
+              value
+            }
+            cidr_blocks {
+              edges {
+                node {
+                  prefix {
+                    value
+                  }
+                  ip_namespace {
+                    node {
+                      name {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        allowed_prefixes {
+          edges {
+            node {
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        associated_route_table {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        propagates_to_route_tables {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
   }
-  environment_prefixes_non_prod: IpamPrefix(ip_namespace__namespace_type__value: "non_prod") {
-    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  OrganizationCustomer {
+    edges {
+      node {
+        org_id {
+          value
+        }
+        display_label
+        routing_tag {
+          value
+        }
+      }
+    }
   }
-  environment_prefixes_internet: IpamPrefix(ip_namespace__namespace_type__value: "internet") {
-    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  DcimVirtualInterface(role__value: "multisite-vip") {
+    edges {
+      node {
+        ...InterfaceRoutingZoneFields
+        ip_address {
+          node {
+            address {
+              value
+            }
+          }
+        }
+        device {
+          node {
+            name {
+              value
+            }
+            ... on DcimDeviceManaged {
+              role {
+                value
+              }
+            }
+            interfaces(role__values: ["loopback", "loopback-vtep"]) {
+              edges {
+                node {
+                  role {
+                    value
+                  }
+                  ...InterfaceRoutingZoneFields
+                  ... on DcimVirtualInterface {
+                    ip_address {
+                      node {
+                        address {
+                          value
+                        }
+                      }
+                    }
+                  }
+                  ... on DcimPhysicalInterface {
+                    ip_address {
+                      node {
+                        address {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
-  environment_prefixes_management: IpamPrefix(ip_namespace__namespace_type__value: "management") {
-    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  environment_segments: ManagedNetworkSegment {
+    edges {
+      node {
+        ...SegmentRoutingPrefixFields
+      }
+    }
   }
-  # The devices in each namespace's VRF instance: a border gateway in an internet one is the default exit, and a border
-  # in a tenant one originates the shared firewall context's default route (get_exchange_routes).
+  environment_zones: SecurityZone {
+    edges {
+      node {
+        ...EnvironmentRoutingZoneFields
+      }
+    }
+  }
   ManagedVRF {
     edges {
       node {
-        namespace { node { name { value } namespace_type { value } } }
-        shared_devices { edges { node { name { value } ... on DcimDeviceManaged { role { value } } } } }
+        security_zone {
+          node {
+            ...RoutingZoneFields
+          }
+        }
+        shared_devices {
+          edges {
+            node {
+              name {
+                value
+              }
+              ... on DcimDeviceManaged {
+                role {
+                  value
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
   ManagedVxlanSegment {
-    edges { node { id } }
+    edges {
+      node {
+        id
+        security_zone {
+          node {
+            ...RoutingZoneFields
+          }
+        }
+        gateway {
+          node {
+            ip_prefix {
+              node {
+                prefix {
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  DeviceServices: DcimDeviceManaged(name__value: $device) {
+    edges {
+      node {
+        ...DeviceServicesFields
+      }
+    }
   }
 }

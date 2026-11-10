@@ -1,0 +1,16 @@
+# Standalone keyed realization for reloads; all four switches bridge VLAN 350/VNI 10350, with no SVI.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSegmentDeployment
+  data:
+    - segment: c900-internal-fw-gdn1-p
+      deployment: DC-GDN1
+      vni: 10350
+      status: active
+      vlans:
+        data:
+          - {device: gdn1-leaf-01, vlan_id: 350}
+          - {device: gdn1-leaf-02, vlan_id: 350}
+          - {device: gdn1-bl-01, vlan_id: 350}
+          - {device: gdn1-bl-02, vlan_id: 350}

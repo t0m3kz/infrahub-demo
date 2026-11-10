@@ -1,0 +1,18 @@
+---
+# The sandbox VNet: plain VNet peering (the symmetric `peers` edge) to the spoke VNet only. Peering is not
+# transitive, so neither the hub, the other spokes nor on-prem reach it, and it reaches nothing beyond the spoke.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetwork
+  data:
+    - name: vnet-c900-sandbox-weu
+      account: c900-azure-sandbox
+      region: westeurope
+      cidr_blocks:
+        data:
+          - prefix: "10.211.0.0/16"
+            ip_namespace: "default"
+            status: active
+            description: Azure sandbox VNet block (no transit)
+      peers: ["vnet-c900-weu-spoke"]

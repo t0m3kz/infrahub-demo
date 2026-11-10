@@ -25,6 +25,7 @@ from typing import Any
 from generators.helpers.naming import sdwan_edge_name
 from generators.topology.circuit import CircuitEndpoint, CircuitLocation, plan_locations
 from tests.integration.demo_data import ROOT, Declared, declared, distinct, name
+from tests.unit.external_vrf_peers_helpers import _raw_vrf
 
 ALL_DEMO = ROOT / "data" / "demos" / "30_all"
 BOOTSTRAP = ROOT / "data" / "bootstrap"
@@ -84,19 +85,17 @@ class _Model:
     def __init__(self, without_cables: bool, without_circuits: frozenset[str]) -> None:
         self.without_circuits = without_circuits
         self.places = self._places()
-        self.namespaces = {
-            name(ns): str(ns.value("namespace_type")) for ns in distinct(declared("IpamNamespace", BOOTSTRAP))
-        }
+        self.namespaces = {name(ns): str(ns.value("vrf_type")) for ns in distinct(declared("SecurityZone", BOOTSTRAP))}
         self.sdwan_offices = [office for office in _all("TopologyCustomerOffice") if office.item.get("sdwan_gateway")]
         self.devices: dict[str, dict[str, Any]] = {}
         self._add_declared_devices()
         self._add_generated_devices()
         self.peerings = {(str(i.item["device"]), name(i)): i for i in _all(PEERING)}
-        self.parents = {
-            (str(i.item["device"]), name(i)): str(i.item["parent_interface"][1])
-            for i in _all("DcimVirtualInterface")
-            if i.item.get("parent_interface")
+        sub_interfaces = {
+            (str(i.item["device"]), name(i)): i for i in _all("DcimVirtualInterface") if i.item.get("parent_interface")
         }
+        self.parents = {key: str(i.item["parent_interface"][1]) for key, i in sub_interfaces.items()}
+        self.tags = {key: i.item.get("vlan_id") for key, i in sub_interfaces.items()}
         self.cabled: set[tuple[str, str]] = set()
         if not without_cables:
             for cable in _all("DcimCable"):
@@ -306,8 +305,11 @@ class _Model:
         if parent is None:
             node["cable"] = {"node": {"id": f"cable-{device}:{port}"} if (device, port) in self.cabled else None}
         else:
+            node["__typename"] = "DcimVirtualInterface"
+            node["vlan_id"] = {"value": self.tags[(device, port)]}
             node["parent_interface"] = {
                 "node": {
+                    "id": f"id-{device}:{parent}",
                     "cable": {"node": {"id": f"cable-{device}:{parent}"} if (device, parent) in self.cabled else None},
                     "capabilities": _edges(self.carriers_on(device, parent)),
                 }
@@ -373,9 +375,16 @@ def _handoff(
     """A handoff as the query selects it: a circuit has no owner."""
     payload = model.virtual_payload(circuit_name, locations, ends, facility_only=True)
     del payload["owner"]
-    payload["ip_namespace"] = {
-        "node": {"name": {"value": namespace}, "namespace_type": {"value": model.namespaces[namespace]}}
-    }
+    payload["vrf"] = {"node": _raw_vrf(namespace)}
+    for edge in payload["capabilities"]["edges"]:
+        port = edge["node"]
+        device = port["device"]["node"]
+        if any(
+            process["node"].get("process_role", {}).get("value") == "overlay"
+            for process in device.get("capabilities", {}).get("edges", [])
+        ):
+            # The end is in the instance: the ManagedVRF among its capabilities (alias zone_capabilities).
+            port["zone_capabilities"] = {"edges": [{"node": {"__typename": "ManagedVRF", **payload["vrf"]["node"]}}]}
     return payload
 
 
@@ -423,7 +432,7 @@ def build_payloads(without_cables: bool = False, without_circuits: Iterable[str]
                 name(circuit),
                 [str(p) for p in circuit.item["locations"]],
                 [(str(d), str(p)) for d, p in circuit.item["capabilities"]],
-                str(circuit.item["ip_namespace"]),
+                str(circuit.item["vrf"][1]),
             )
         )
 

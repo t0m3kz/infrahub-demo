@@ -68,8 +68,10 @@ class TestFreshSharedBoarding:
         await _run(gen, world, _payload())
 
         by_namespace: dict[str, list[str]] = {}
-        for address, namespace_id in world.addresses:
-            by_namespace.setdefault(namespace_id, []).append(address)
+        for (address, ipam_id), ip in world.addresses.items():
+            assert ipam_id == "default"
+            assert not hasattr(ip.ip_prefix, "security_zone")
+            by_namespace.setdefault(world.leg_zone(ip.ip_prefix), []).append(address)
         assert sorted(by_namespace) == ["ns-internet", "ns-management", "ns-prod"]
         assert sorted(by_namespace["ns-prod"]) == ["100.66.0.1/29", "100.66.0.4/29", "100.66.0.5/29", "100.66.0.6/29"]
         assert sorted(by_namespace["ns-internet"]) == [
@@ -85,13 +87,15 @@ class TestFreshSharedBoarding:
             "100.66.48.6/29",
         ]
         member_ips = {(device, name): sub.ip_address.id for (device, name), sub in world.sub_interfaces.items()}
-        fw1 = world.addresses[("100.66.0.5/29", "ns-prod")].id
-        fw2 = world.addresses[("100.66.0.6/29", "ns-prod")].id
+        fw1 = world.addresses[("100.66.0.5/29", "default")].id
+        fw2 = world.addresses[("100.66.0.6/29", "default")].id
         assert member_ips[("fw-1", "Ethernet1/25.3000")] == fw1
         assert member_ips[("fw-2", "Ethernet1/25.3000")] == fw2
 
     @pytest.mark.asyncio
-    async def test_one_exchange_per_peer_joins_the_legs_and_names_its_gateway(self) -> None:
+    async def test_one_exchange_per_peer_names_its_gateway_and_the_vrfs_of_its_legs(self) -> None:
+        """An exchange names its context and its two VRFs; its legs are derived (the context's legs in those VRFs), so a
+        leg carries its VRF instance and nothing else: no exchange, no context."""
         world = _World()
         gen, _ = _make_gen(world)
 
@@ -102,29 +106,30 @@ class TestFreshSharedBoarding:
         for peer, namespace_id in (("INTERNET", "ns-internet"), ("MANAGEMENT", "ns-management")):
             exchange = world.exchanges[f"{_SHARED}-PROD-{peer}"]
             assert exchange.data["gateway"] == {"id": context.id}
-            assert exchange.data["namespace_a"] == {"id": "ns-prod"}
-            assert exchange.data["namespace_z"] == {"id": namespace_id}
+            a = world.routing.store.vrfs[exchange.data["vrf_a"]["id"]]
+            z = world.routing.store.vrfs[exchange.data["vrf_z"]["id"]]
+            assert a.security_zone.id == "ns-prod"
+            assert z.security_zone.id == namespace_id
+            assert a.deployment.id == z.deployment.id == "dc10-id"
         vlan = context.vlan_id.value
-        for ns_type, expected in (
-            ("prod", {f"{_SHARED}-PROD-INTERNET", f"{_SHARED}-PROD-MANAGEMENT"}),
-            ("internet", {f"{_SHARED}-PROD-INTERNET"}),
-            ("management", {f"{_SHARED}-PROD-MANAGEMENT"}),
-        ):
+        for ns_type in ("prod", "internet", "management"):
             sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(vlan, ns_type)}")]
-            assert {peer.id for peer in sub.capabilities.peers} == {
-                context.id,
-                *(world.exchanges[name].id for name in expected),
-            }, ns_type
+            assert _sub_names(world)[("fw-1", sub.name.value)] == [], ns_type
+            assert world.routing.store.vrfs[str(world.vrf_of(sub))].security_zone.peer.vrf_type.value == ns_type
 
     @pytest.mark.asyncio
-    async def test_border_service_ports_are_tagged_with_the_context_additively(self) -> None:
+    async def test_the_context_joins_service_contexts_once_its_legs_are_written(self) -> None:
+        """No port is tagged (the border ports are derived from the members' cables); the context joins the target
+        group of add_context_routes after its legs, so that generator starts on a complete context."""
         world = _World()
         gen, _ = _make_gen(world)
 
         await _run(gen, world, _payload())
 
         context = world.contexts[_SHARED]
-        assert world.tags == [(context.id, ["bl-port-fw-1", "bl-port-fw-2"])]
+        assert world.group_adds == [(context.id, ["group-service-contexts"])]
+        assert all(not port.capabilities.peers for port in world.bl_ports.values())
+        assert all(world.vrf_of(sub) for sub in world.sub_interfaces.values())
 
     @pytest.mark.asyncio
     async def test_shared_context_writes_are_all_untracked(self) -> None:
@@ -150,12 +155,24 @@ class TestFreshSharedBoarding:
         await _run(gen, world, _payload())
 
         assert events == [f"acquire:fw-context-{_SHARED}", "release"]
+        held: set[str] = set()
+        context_key = f"fw-context-{_SHARED}"
+        for operation, key in world.lock_events:
+            if operation == "acquire":
+                if key == context_key:
+                    assert {"vrf-device-bl-fw-1", "vrf-device-bl-fw-2"} <= held
+                    assert not any(lock.startswith("vrf-dc10-id-") for lock in held)
+                held.add(key)
+            else:
+                held.remove(key)
+        assert held == set()
+        assert len(world.routing.store.vrfs) == 3
+        assert all(vrf.members == {"bl-fw-1", "bl-fw-2"} for vrf in world.routing.store.vrfs.values())
         gen.link_serving_context.assert_awaited_once_with(
             FIREWALL_CONTEXT,
             customer_id="cust-1",
             context_id=world.contexts[_SHARED].id,
             current_ids=[],
-            parent_id="dc10-id",
         )
 
     @pytest.mark.asyncio
@@ -168,16 +185,16 @@ class TestFreshSharedBoarding:
         assert events == [f"acquire:fw-context-{_SHARED}", "release"]
 
 
-class TestDcServingLinkIsReplacedNotPruned:
-    """A DC footprint has one serving firewall context: link_serving_context replaces it, nothing is unlinked."""
+class TestDcServingLinkConverges:
+    """A DC footprint lists its firewall contexts: the new one is added and a stale internal one is unlinked."""
 
     @pytest.mark.asyncio
-    async def test_a_previous_context_is_never_removed_by_a_relationship_mutation(self) -> None:
+    async def test_a_previous_internal_context_is_unlinked_after_the_new_one_is_added(self) -> None:
         world = _World()
         gen, _ = _make_gen(world)
         gen.unlink_stale_serving_contexts = AsyncMock()
         payload = _payload()
-        payload["TopologyCustomerDC"][0]["serving_firewall_context"] = {"node": {"id": "ctx-dedicated"}}
+        payload["TopologyCustomerDC"][0]["serving_firewall_contexts"] = {"edges": [{"node": {"id": "ctx-dedicated"}}]}
 
         await _run(gen, world, payload)
 
@@ -186,9 +203,13 @@ class TestDcServingLinkIsReplacedNotPruned:
             customer_id="cust-1",
             context_id=world.contexts[_SHARED].id,
             current_ids=["ctx-dedicated"],
-            parent_id="dc10-id",
         )
-        gen.unlink_stale_serving_contexts.assert_not_awaited()
+        calls = {call.args[0].role: call.kwargs for call in gen.unlink_stale_serving_contexts.await_args_list}
+        assert calls[FIREWALL_CONTEXT.role] == {
+            "customer_id": "cust-1",
+            "current_ids": ["ctx-dedicated"],
+            "served_ids": [world.contexts[_SHARED].id],
+        }
 
     @pytest.mark.asyncio
     async def test_the_leg_step_returns_the_context_it_built_and_the_one_it_found(self) -> None:
@@ -217,10 +238,12 @@ class TestRerunAndSecondCustomer:
         await _run(gen, world, _payload())
         events.clear()
         before = world.writes
+        routing_before = (list(world.routing.created), list(world.routing.saves), list(world.routing.edge_ops))
 
         await _run(gen, world, _payload())
 
         assert world.writes == before
+        assert (world.routing.created, world.routing.saves, world.routing.edge_ops) == routing_before
         assert events == []
         assert gen.link_serving_context.await_count == 2
 
@@ -241,7 +264,6 @@ class TestRerunAndSecondCustomer:
             customer_id="cust-2",
             context_id=world.contexts[_SHARED].id,
             current_ids=[],
-            parent_id="dc10-id",
         )
 
     @pytest.mark.asyncio
@@ -254,13 +276,15 @@ class TestRerunAndSecondCustomer:
 
         assert {_SHARED, _SHARED_NON_PROD} <= set(world.contexts)
         assert sorted(world.exchanges) == [
-            f"{_SHARED_NON_PROD}-NON-PROD-INTERNET",
-            f"{_SHARED_NON_PROD}-NON-PROD-MANAGEMENT",
+            f"{_SHARED_NON_PROD}-NONPROD-INTERNET",
+            f"{_SHARED_NON_PROD}-NONPROD-MANAGEMENT",
             f"{_SHARED}-PROD-INTERNET",
             f"{_SHARED}-PROD-MANAGEMENT",
         ]
         for name, exchange in world.exchanges.items():
-            assert {exchange.data["namespace_a"]["id"], exchange.data["namespace_z"]["id"]} in (
+            assert {
+                world.routing.store.vrfs[exchange.data[end]["id"]].security_zone.id for end in ("vrf_a", "vrf_z")
+            } in (
                 {"ns-prod", "ns-internet"},
                 {"ns-prod", "ns-management"},
                 {"ns-nonprod", "ns-internet"},
@@ -273,12 +297,15 @@ class TestRerunAndSecondCustomer:
         non_prod_internet_sub = world.sub_interfaces[
             ("fw-1", f"Ethernet1/25.{transit_vlan(non_prod_vlan, 'internet')}")
         ]
-        prod_exchange = world.exchanges[f"{_SHARED}-PROD-INTERNET"].id
-        non_prod_exchange = world.exchanges[f"{_SHARED_NON_PROD}-NON-PROD-INTERNET"].id
-        prod_peers = {peer.id for peer in prod_internet_sub.capabilities.peers}
-        non_prod_peers = {peer.id for peer in non_prod_internet_sub.capabilities.peers}
-        assert prod_exchange in prod_peers and non_prod_exchange not in prod_peers
-        assert non_prod_exchange in non_prod_peers and prod_exchange not in non_prod_peers
+        # Each INTERNET leg is in the INTERNET VRF its own context's exchange names (the legs are derived from it).
+        for context_name, tenant, sub in (
+            (_SHARED, "PROD", prod_internet_sub),
+            (_SHARED_NON_PROD, "NONPROD", non_prod_internet_sub),
+        ):
+            exchange = world.exchanges[f"{context_name}-{tenant}-INTERNET"]
+            assert exchange.data["gateway"] == {"id": world.contexts[context_name].id}
+            assert str(world.vrf_of(sub)) == exchange.data["vrf_z"]["id"]
+            assert _sub_names(world)[("fw-1", sub.name.value)] == []
         # Each context takes its own INTERNET and MANAGEMENT /29: nothing is shared across the two environments.
         assert len([k for k in world.allocated if k.endswith("-INTERNET-transit")]) == 2
         assert len([k for k in world.allocated if k.endswith("-MANAGEMENT-transit")]) == 2
@@ -291,10 +318,15 @@ class TestRerunAndSecondCustomer:
         await _run(gen, world, _payload(environment="t"))
 
         assert sorted(world.exchanges) == [
-            f"{_SHARED_NON_PROD}-NON-PROD-INTERNET",
-            f"{_SHARED_NON_PROD}-NON-PROD-MANAGEMENT",
+            f"{_SHARED_NON_PROD}-NONPROD-INTERNET",
+            f"{_SHARED_NON_PROD}-NONPROD-MANAGEMENT",
         ]
-        assert {ns for _, ns in world.addresses} == {"ns-nonprod", "ns-internet", "ns-management"}
+        assert {ns for _, ns in world.addresses} == {"default"}
+        assert {world.leg_zone(ip.ip_prefix) for ip in world.addresses.values()} == {
+            "ns-nonprod",
+            "ns-internet",
+            "ns-management",
+        }
         assert {name for _, name in world.sub_interfaces} == {
             "Ethernet1/25.3200",
             "Ethernet1/25.3400",
@@ -350,7 +382,8 @@ class TestHealingAndFailures:
         await _run(gen, world, _payload())
 
         assert len(world.sub_interfaces) == 6
-        assert all(len(caps) == (3 if name.endswith(".3000") else 2) for (_, name), caps in _sub_names(world).items())
+        assert all(caps == [] for caps in _sub_names(world).values())
+        assert all(world.vrf_of(sub) for sub in world.sub_interfaces.values())
         gen.logger.error.assert_not_called()
         before = world.writes
 
@@ -359,18 +392,20 @@ class TestHealingAndFailures:
         assert world.writes == before
 
     @pytest.mark.asyncio
-    async def test_untagged_port_alone_is_healed_without_touching_the_rest(self) -> None:
+    async def test_a_leg_out_of_its_vrf_alone_is_healed(self) -> None:
+        """A leg that lost its VRF edge makes the context incomplete: the next run puts it back, edge by edge."""
         world = _World()
         gen, _ = _make_gen(world)
         await _run(gen, world, _payload())
-        world.bl_ports["fw-2"].capabilities.peers.clear()
-        saves_before = len(world.saves)
+        sub = world.sub_interfaces[("fw-2", "Ethernet1/25.3000")]
+        vrf_id = world.vrf_of(sub)
+        sub.capabilities.peers = [peer for peer in sub.capabilities.peers if peer.typename != "ManagedVRF"]
+        edges_before = len(world.vrf_edges)
 
         await _run(gen, world, _payload())
 
-        assert world.tags[-1] == (world.contexts[_SHARED].id, ["bl-port-fw-2"])
-        # The heal path re-upserts, but the port tag is a relationship add, not a save.
-        assert len(world.saves) >= saves_before
+        assert world.vrf_of(sub) == vrf_id
+        assert world.vrf_edges[edges_before:] == [("add", vrf_id, [sub.id])]
 
     @pytest.mark.asyncio
     async def test_missing_namespace_is_an_error_without_writes(self) -> None:
@@ -418,7 +453,7 @@ class TestHealingAndFailures:
 
         assert {device for device, _ in world.sub_interfaces} == {"fw-2"}
         fw2_ip = world.sub_interfaces[("fw-2", "Ethernet1/25.3000")].ip_address.id
-        assert fw2_ip == world.addresses[("100.66.0.6/29", "ns-prod")].id
+        assert fw2_ip == world.addresses[("100.66.0.6/29", "default")].id
 
 
 class TestSnatAddress:
@@ -516,7 +551,7 @@ class TestTransitMemberResolution:
 
         assert world.uplink_lookups == [["fw-1", "fw-2"], ["lb-1", "lb-2"]]
         assert world.executed_filters.count("DcimCable") == 2
-        assert world.executed_filters.count("IpamNamespace") == 1
+        assert world.executed_filters.count("SecurityZone") == 1
         assert "DcimCable" not in world.gets
         assert "DcimPhysicalInterface" not in world.gets
         assert sorted(world.contexts) == [_SHARED, _LB_PROD]
@@ -561,7 +596,7 @@ class TestTransitMemberResolution:
             ("vfw-1", "eth1.3000"),
             ("vfw-2", "eth1.3000"),
         }
-        assert world.tags == [(context.id, ["bl-port-fw-1", "bl-port-fw-2"])]
+        assert world.group_adds == [(context.id, ["group-service-contexts"])]
         gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio

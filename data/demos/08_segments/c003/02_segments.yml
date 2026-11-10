@@ -7,13 +7,14 @@ spec:
     - owner: "C003"
       customer_name: "web-frontend"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C003", "p"]]
       gateway:
         data:
           address: "10.3.10.1/24"
           description: "Anycast GW — C003 prod web-frontend (DC6)"
-          ip_namespace: "C003-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -21,20 +22,21 @@ spec:
               description: "C003 prod web-frontend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C003-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
     - owner: "C003"
       customer_name: "app-backend"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C003", "p"]]
       gateway:
         data:
           address: "10.3.20.1/24"
           description: "Anycast GW — C003 prod app-backend (DC6)"
-          ip_namespace: "C003-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -42,20 +44,21 @@ spec:
               description: "C003 prod app-backend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C003-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
     - owner: "C003"
       customer_name: "database"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C003", "p"]]
       gateway:
         data:
           address: "10.3.30.1/24"
           description: "Anycast GW — C003 prod database (DC6)"
-          ip_namespace: "C003-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -63,20 +66,21 @@ spec:
               description: "C003 prod database subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C003-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
     - owner: "C003"
       customer_name: "cache"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C003", "p"]]
       gateway:
         data:
           address: "10.3.40.1/24"
           description: "Anycast GW — C003 prod cache (DC6)"
-          ip_namespace: "C003-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -84,20 +88,21 @@ spec:
               description: "C003 prod cache subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C003-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
     - owner: "C003"
       customer_name: "message-queue"
       environment: "p"
+      security_zone: "PROD"
       arp_suppression: true
       customer_deployments: [["C003", "p"]]
       gateway:
         data:
           address: "10.3.50.1/24"
           description: "Anycast GW — C003 prod message-queue (DC6)"
-          ip_namespace: "C003-P"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -105,7 +110,7 @@ spec:
               description: "C003 prod message-queue subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C003-P"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
@@ -114,13 +119,14 @@ spec:
     - owner: "C003"
       customer_name: "web-frontend"
       environment: "s"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C003", "s"]]
       gateway:
         data:
           address: "10.3.110.1/24"
           description: "Anycast GW — C003 staging web-frontend (DC6)"
-          ip_namespace: "C003-S"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -128,20 +134,21 @@ spec:
               description: "C003 staging web-frontend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C003-S"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
     - owner: "C003"
       customer_name: "app-backend"
       environment: "s"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C003", "s"]]
       gateway:
         data:
           address: "10.3.120.1/24"
           description: "Anycast GW — C003 staging app-backend (DC6)"
-          ip_namespace: "C003-S"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -149,20 +156,21 @@ spec:
               description: "C003 staging app-backend subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C003-S"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
     - owner: "C003"
       customer_name: "database"
       environment: "s"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C003", "s"]]
       gateway:
         data:
           address: "10.3.130.1/24"
           description: "Anycast GW — C003 staging database (DC6)"
-          ip_namespace: "C003-S"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -170,20 +178,21 @@ spec:
               description: "C003 staging database subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C003-S"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
     - owner: "C003"
       customer_name: "cache"
       environment: "s"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C003", "s"]]
       gateway:
         data:
           address: "10.3.140.1/24"
           description: "Anycast GW — C003 staging cache (DC6)"
-          ip_namespace: "C003-S"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -191,20 +200,21 @@ spec:
               description: "C003 staging cache subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C003-S"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments
 
     - owner: "C003"
       customer_name: "message-queue"
       environment: "s"
+      security_zone: "NONPROD"
       arp_suppression: true
       customer_deployments: [["C003", "s"]]
       gateway:
         data:
           address: "10.3.150.1/24"
           description: "Anycast GW — C003 staging message-queue (DC6)"
-          ip_namespace: "C003-S"
+          ip_namespace: "default"
           ip_prefix:
             kind: IpamPrefix
             data:
@@ -212,6 +222,6 @@ spec:
               description: "C003 staging message-queue subnet (DC6)"
               status: active
               role: customer
-              ip_namespace: "C003-S"
+              ip_namespace: "default"
       member_of_groups:
         - vxlan_segments

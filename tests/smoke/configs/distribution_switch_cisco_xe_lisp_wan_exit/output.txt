@@ -30,7 +30,7 @@ interface GigabitEthernet1/0/26
 interface GigabitEthernet1/0/26.3800
  ! unverified-no-lab: routed dot1q sub-interface (an office's WAN exit handoff to its SD-WAN edge) in the tenant VRF
  encapsulation dot1Q 3800
- vrf forwarding VRF_A
+ vrf forwarding PROD
  ip address 100.66.0.0 255.255.255.254
  no shutdown
 !
@@ -62,7 +62,7 @@ router bgp 4200000001
   address-family ipv4 unicast
   exit-address-family
   !
-  address-family ipv4 vrf VRF_A
+  address-family ipv4 vrf PROD
     ! unverified-no-lab: the EID prefixes registered with this border (route-export site-registrations) go to the WAN edge
     redistribute lisp metric 10
     neighbor 100.66.0.1 remote-as 4200000002
@@ -77,9 +77,9 @@ router bgp 4200000001
 !
 ! Tenant VRFs (the EID tables of the L3 instance-ids)
 ! unverified-no-lab: a plain `vrf definition` with an IPv4 address family is all the EID table and the SVIs need
-vrf definition VRF_A
+vrf definition PROD
  ! unverified-no-lab: the eBGP session to the WAN edge runs in this VRF, and a BGP address-family in a VRF needs a route distinguisher
- rd 10.250.5.1:50001
+ rd 10.250.5.1:60000
  address-family ipv4
  exit-address-family
 !
@@ -122,10 +122,10 @@ router lisp
   itr
   etr
   exit-service-ethernet
- ! unverified-no-lab: L3 instance-id 50001 for VRF VRF_A: dynamic-eid with the gateway subnets, IPv4 EID table, default map-request
- instance-id 50001
+ ! unverified-no-lab: L3 instance-id 60000 for VRF PROD: dynamic-eid with the gateway subnets, IPv4 EID table, default map-request
+ instance-id 60000
   service ipv4
-   eid-table vrf VRF_A
+   eid-table vrf PROD
    map-cache 0.0.0.0/0 map-request
    ! unverified-no-lab: the site registrations of this VRF into its RIB, where BGP redistributes them to the WAN edge
    route-export site-registrations
@@ -136,8 +136,8 @@ router lisp
  ! unverified-no-lab: site C005-OFFICE: authentication key and the EID records the edges may register
  site C005-OFFICE
   authentication-key 0ff1c3-k3y
-  eid-record instance-id 50001 10.100.0.0/24 accept-more-specifics
-  eid-record instance-id 50001 10.200.0.0/24 accept-more-specifics
+  eid-record instance-id 60000 10.100.0.0/24 accept-more-specifics
+  eid-record instance-id 60000 10.200.0.0/24 accept-more-specifics
   eid-record instance-id 10100 any-mac
   eid-record instance-id 10200 any-mac
   exit-site

@@ -8,7 +8,7 @@ version: "1.0"
 # so the relationship is inbound here (device_capabilities is the owner side).
 # The pair is written from the MLAG side (generators/devices.py MLAG upsert), and
 # the min/max count of 2 holds only on that side: a write from the device side
-# (DcimCapabilities.capabilities, peer = generic ManagedGenericDevice) resolves the
+# (DcimDeviceManaged.capabilities, peer = generic ManagedGenericDevice) resolves the
 # generic's uncapped declaration and is not capped. Runtime guards in the
 # generators therefore remain.
 # ============================================================================
@@ -34,7 +34,7 @@ nodes:
       # Re-declares the generic's `capabilities` (same name, peer, kind, direction and
       # identifier) to cap it at exactly two member devices.
       - name: capabilities
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: "Member Devices"
         description: "The two member devices of this MLAG domain"
         cardinality: many
@@ -45,6 +45,20 @@ nodes:
         direction: inbound
         identifier: capabilities
         order_weight: 1000
+      # The interfaces the domain configures: each member's peer-link (the LAG, or the virtual peer-link) and the
+      # EOS/SONiC control SVI. NOT the ManagedGenericInterfaces edge: a node inheriting both device-edge and
+      # interface-edge generics would get two relationships called `capabilities`
+      # (tests/unit/test_capability_edge_names.py), so the interface side is a relationship of its own, one-sided
+      # (an interface has no setting of its own for the domain). Written by generators/mlag.py with RelationshipAdd.
+      - name: interfaces
+        peer: DcimInterface
+        label: "Domain Interfaces"
+        description: "Peer-link and control interfaces of both members"
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: "mlag__interfaces"
+        order_weight: 1400
     attributes:
       - name: peer_devices
         kind: Text

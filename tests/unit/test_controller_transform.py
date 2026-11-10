@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
 from transforms.config.controller import ControllerPayload
 
 
@@ -204,12 +205,17 @@ class TestVelocloudVcoPayload:
         assert payload["edges"][0]["branch-to-branch"] is None
 
 
-def _raw_iface(device: str, name: str, address: str, namespace: str) -> dict:
+def _raw_iface(device: str, name: str, address: str, namespace: str, vlan_id: int | None = -1) -> dict:
+    """A peering's interface; its tag is ``vlan_id`` (by default the number a ``<port>.<vlan>`` name ends in)."""
+    suffix = name.rsplit(".", 1)[-1]
+    tag = int(suffix) if "." in name and suffix.isdigit() else None
     return {
         "node": {
+            **(interface_vrf_capability(routing_vrf(namespace)) if namespace != "default" else {}),
             "name": {"value": name},
+            "vlan_id": {"value": tag if vlan_id == -1 else vlan_id},
             "ip_address": {
-                "node": {"address": {"value": address}, "ip_namespace": {"node": {"name": {"value": namespace}}}}
+                "node": {"address": {"value": address}, "ip_namespace": {"node": {"name": {"value": "default"}}}}
             },
             "device": {"node": {"name": {"value": device}}},
         }
@@ -227,7 +233,10 @@ def _raw_bgp_proc(device: str, asn: int) -> dict:
 
 
 def _gateway_with_handoff(
-    namespace: str = "PROD", local_iface: str = "eth0.1900", password: str | None = "demo-handoff-secret"
+    namespace: str = "PROD",
+    local_iface: str = "eth0.1900",
+    password: str | None = "demo-handoff-secret",
+    local_vlan: int | None = -1,
 ) -> dict:
     """GW1 as data/demos/30_all/08_interconnects/04_sdwan/06_vrf_handoff.yml loads it.
 
@@ -246,7 +255,7 @@ def _gateway_with_handoff(
             "capabilities": {
                 "edges": [
                     _raw_iface("eg-fr201", "Ethernet1/13.1900", "10.255.5.0/31", namespace),
-                    _raw_iface("EQX-FR2-SDWAN-GW1", local_iface, "10.255.5.1/31", namespace),
+                    _raw_iface("EQX-FR2-SDWAN-GW1", local_iface, "10.255.5.1/31", namespace, local_vlan),
                 ]
             },
             "bgp_processes": {
@@ -298,6 +307,13 @@ class TestVelocloudVrfHandoffs:
                 },
             }
         ]
+
+    def test_the_handoff_vlan_is_the_interface_tag_not_its_name(self) -> None:
+        """eth0.1900 tagged 200 is VLAN 200; an untagged sub-interface has none, whatever its name says."""
+        retagged = _gateway_with_handoff(local_vlan=200)
+        assert self._payload(retagged)["edges"][0]["handoffs"][0]["vlan"] == 200
+        untagged = _gateway_with_handoff(local_vlan=None)
+        assert self._payload(untagged)["edges"][0]["handoffs"][0]["vlan"] is None
 
     def test_handoff_carries_the_peering_password(self) -> None:
         """The Orchestrator configures the session's BGP key, so it is the peering's RoutingPassword value."""

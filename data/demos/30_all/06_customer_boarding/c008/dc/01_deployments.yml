@@ -27,8 +27,8 @@ spec:
       member_of_groups: [customer_deployments_dc]
     # Development footprint next to the production one (C008-P-DC12). The
     # inventory-sync dev VMs run on the shared DC12 hosts owned by the
-    # technology partner (P027), which only carry non-prod workloads: C005's
-    # DC12 prod VMs run on its own server-3/4, so prod and non-prod never share
+    # technology partner (P027), which only carry nonprod workloads: C005's
+    # DC12 prod VMs run on its own server-3/4, so prod and nonprod never share
     # a hypervisor (checks/hypervisor_environment.py).
     - owner: "C008"
       environment: "d"

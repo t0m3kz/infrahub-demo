@@ -1,0 +1,22 @@
+# One VM on an existing cluster host: eth0 rides on its cabled host uplink, not on a firewall.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: ktw1-vm-fw-01
+      object_template: LINUX-SVC
+      description: C900 workload behind the internal firewall gateway in DC-KTW1
+      hosting_device: ktw1-srv-02
+      deployment: C900-P-DC-KTW1
+      interfaces:
+        - kind: DcimVirtualInterface
+          data:
+            name: eth0
+            role: uplink
+            status: active
+            parent_interface: ["ktw1-srv-02", "eno1"]
+            ip_address:
+              data:
+                address: "10.90.2.11/24"
+                ip_namespace: "default"

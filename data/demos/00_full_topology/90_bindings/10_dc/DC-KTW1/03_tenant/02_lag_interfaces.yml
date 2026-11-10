@@ -1,0 +1,27 @@
+---
+# The vPC: one port-channel per leaf (same lag_id), each with its own Ethernet1/2 as the member. Both are members of
+# the segment's deployment in the DC (90_bindings/96_segment_ports), so the segment reaches the server through the
+# LAGs. The server's bond0 is nested under the server (10_topology).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - device: ktw1-leaf-01
+      name: Port-Channel10
+      description: vPC to ktw1-srv-01 (bond0)
+      status: active
+      lag_id: 10
+      lacp_mode: active
+      minimum_links: 1
+      member_interfaces:
+        - ["ktw1-leaf-01", "Ethernet1/2"]
+    - device: ktw1-leaf-02
+      name: Port-Channel10
+      description: vPC to ktw1-srv-01 (bond0)
+      status: active
+      lag_id: 10
+      lacp_mode: active
+      minimum_links: 1
+      member_interfaces:
+        - ["ktw1-leaf-02", "Ethernet1/2"]

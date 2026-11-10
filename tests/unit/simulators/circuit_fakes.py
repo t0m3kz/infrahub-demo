@@ -204,8 +204,11 @@ def session_port(
     cabled: bool = False,
     parent_cabled: bool = False,
     device_kind: str = "DcimPhysicalDevice",
+    vlan_id: int | None = None,
 ) -> dict[str, Any]:
     """One end of a session circuit, as virtual_circuit.gql selects it (raw GraphQL).
+
+    A sub-interface (``kind="DcimVirtualInterface"``) states its tag as ``vlan_id``; its name is only a label.
 
     ``device_kind`` is the device's ``__typename`` (a cloud transport is a CloudDirectConnect).
 
@@ -215,8 +218,10 @@ def session_port(
     """
     port: dict[str, Any] = {"id": port_id, "__typename": kind, "name": {"value": name}}
     if kind == "DcimVirtualInterface":
+        port["vlan_id"] = {"value": vlan_id}
         port["parent_interface"] = {
             "node": {
+                "id": f"parent-{port_id}",
                 "cable": {"node": {"id": f"cable-{port_id}"} if parent_cabled else None},
                 "capabilities": _capabilities(parent_circuits or []),
             }
@@ -272,6 +277,7 @@ def handoff_edge_port(**kwargs: Any) -> dict[str, Any]:
     """Our end of a handoff: the VLAN 1900 sub-interface of the cage edge's port, whose parent has the carrier."""
     kwargs.setdefault("where", deployment("TopologyColocationZone", "FR2"))
     kwargs.setdefault("parent_circuits", [underlay_circuit("XC-FR2-AWS")])
+    kwargs.setdefault("vlan_id", 1900)
     return session_port("if-hs", "Ethernet1/10.1900", "eg-fr201", kind="DcimVirtualInterface", **kwargs)
 
 
@@ -279,6 +285,7 @@ def handoff_party_port(**kwargs: Any) -> dict[str, Any]:
     """The party's end of a handoff: a sub-interface of the provider router, one ManagedBGP (its remote ASN)."""
     kwargs.setdefault("where", deployment("TopologyCloudRegion", "eu-central-1"))
     kwargs.setdefault("roles", ("regular",))
+    kwargs.setdefault("vlan_id", 1900)
     return session_port("if-aws", "Ethernet1.1900", "EXT-AWS-DX-FR2", kind="DcimVirtualInterface", **kwargs)
 
 
@@ -312,7 +319,22 @@ def session_payload(
         "circuit_type": {"value": circuit_type},
     }
     if circuit_type in ("handoff", "vpn"):
-        node["ip_namespace"] = {"node": {"name": {"value": namespace}} if namespace else None}
+        node["vrf"] = {
+            "node": {
+                "id": f"vrf-FR-{namespace}",
+                "deployment": {"node": {"id": "dep-FR", "name": {"value": "FR"}}},
+                "security_zone": {
+                    "node": {
+                        "id": f"zone-{namespace}",
+                        "name": {"value": namespace},
+                        "vrf_type": {"value": "prod" if namespace == "PROD" else "non_prod"},
+                        "l3_vni": {"value": 10001 if namespace == "PROD" else 10002},
+                    }
+                },
+            }
+            if namespace
+            else None
+        }
         node["password"] = {"node": {"id": password} if password else None}
     node["capabilities"] = {"edges": [{"node": port} for port in ends]}
     return {"TopologySessionCircuit": {"edges": [{"node": node}]}}
@@ -501,6 +523,9 @@ class FakeClient:
             if not self.address_families:
                 return []
             return [MagicMock(id=f"af-{kwargs['afi__value']}-{kwargs['safi__value']}")]
+        if name == "ManagedVRF":
+            # VRF provisioning is stubbed by make_generator; no native provider instance is invented here.
+            return []
         if name in ("DcimPhysicalInterface", "DcimVirtualInterface"):
             if "parent_interface__ids" in kwargs:
                 return [self.interface_node(iface_id) for iface_id in self.sub_interfaces]

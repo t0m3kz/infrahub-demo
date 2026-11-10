@@ -1,0 +1,73 @@
+# The VPCs and VNets with their address blocks. A block that only this network names is nested under it; a block that
+# a gateway attachment also names is a flat prefix in 00_common/00_global/03_prefixes.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetwork
+  data:
+    - name: vpc-c900-prod
+      account: c900-aws-prod
+      region: eu-central-1
+      cidr_blocks:
+        - ["10.200.0.0/16", "default"]
+    - name: vnet-c900-weu
+      account: c900-azure-prod
+      region: westeurope
+      cidr_blocks:
+        - ["10.201.0.0/16", "default"]
+    - name: vpc-c900-gcp
+      account: c900-gcp-prod
+      region: europe-west3
+      cidr_blocks:
+        data:
+          - prefix: "10.202.0.0/16"
+            ip_namespace: "default"
+            status: active
+            description: GCP VPC block
+    - name: vnet-c900-weu-spoke
+      account: c900-azure-prod
+      region: westeurope
+      cidr_blocks:
+        - ["10.203.0.0/16", "default"]
+    # A VPC with no attachment at all: nothing reaches it, and the traversal check must say so.
+    - name: vpc-c900-isolated
+      account: c900-aws-prod
+      region: eu-central-1
+      cidr_blocks:
+        data:
+          - prefix: "10.204.0.0/16"
+            ip_namespace: "default"
+            status: active
+            description: AWS isolated VPC block (no attachment)
+    # The spoke accounts. AWS: a VPC in its own account, attached to the transit gateway of c900-aws-prod
+    # (05_gateway_attachments.yml).
+    - name: vpc-c900-payments
+      account: c900-aws-payments
+      region: eu-central-1
+      cidr_blocks:
+        - ["10.205.0.0/16", "default"]
+    - name: vpc-c900-analytics
+      account: c900-aws-analytics
+      region: eu-central-1
+      cidr_blocks:
+        - ["10.206.0.0/16", "default"]
+    - name: vpc-c900-shared
+      account: c900-aws-shared
+      region: eu-central-1
+      cidr_blocks:
+        - ["10.207.0.0/16", "default"]
+    - name: vnet-c900-payments-weu
+      account: c900-azure-payments
+      region: westeurope
+      cidr_blocks:
+        - ["10.208.0.0/16", "default"]
+    - name: vnet-c900-analytics-weu
+      account: c900-azure-analytics
+      region: westeurope
+      cidr_blocks:
+        - ["10.209.0.0/16", "default"]
+    - name: vnet-c900-identity-weu
+      account: c900-azure-identity
+      region: westeurope
+      cidr_blocks:
+        - ["10.210.0.0/16", "default"]

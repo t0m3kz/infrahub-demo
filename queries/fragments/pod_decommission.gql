@@ -1,0 +1,124 @@
+fragment DecommissionDeviceFields on DcimDevice {
+  id
+  name {
+    value
+  }
+  ... on DcimDeviceManaged {
+    role {
+      value
+    }
+    status {
+      value
+    }
+    primary_address {
+      node {
+        id
+      }
+    }
+  }
+  interfaces {
+    edges {
+      node {
+        __typename
+        id
+        description {
+          value
+        }
+        status {
+          value
+        }
+        ...InterfaceRoutingZoneFields
+        ... on DcimPhysicalInterface {
+          ip_address {
+            node {
+              id
+              address {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+              ip_prefix {
+                node {
+                  id
+                  prefix {
+                    value
+                  }
+                }
+              }
+            }
+          }
+          cable {
+            node {
+              id
+              endpoints {
+                edges {
+                  node {
+                    id
+                    ...InterfaceRoutingZoneFields
+                    ... on DcimPhysicalInterface {
+                      name {
+                        value
+                      }
+                      status {
+                        value
+                      }
+                      ip_address {
+                        node {
+                          id
+                          ip_prefix {
+                            node {
+                              id
+                            }
+                          }
+                        }
+                      }
+                      device {
+                        node {
+                          ... on DcimDeviceManaged {
+                            role {
+                              value
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on DcimVirtualInterface {
+          role {
+            value
+          }
+          ip_address {
+            node {
+              id
+              address {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+              ip_prefix {
+                node {
+                  id
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

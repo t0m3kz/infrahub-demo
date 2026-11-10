@@ -82,8 +82,8 @@ def _component(tag_id: str | None = None) -> dict[str, Any]:
 def _segment(
     *,
     kind: str = "ManagedVxlanSegment",
-    namespace_type: str | None = "prod",
-    zone: str | None = "PROD-ZONE",
+    vrf_type: str | None = "prod",
+    zone: str | None = "PROD",
     tag_id: str | None = None,
 ) -> dict[str, Any]:
     """A cleaned segment as vxlan_segment.gql / application.gql select it (routed PROD tenant by default)."""
@@ -91,11 +91,11 @@ def _segment(
         "id": "seg-1",
         "typename": kind,
         "name": SEGMENT,
-        "security_zone": {"name": zone} if zone else None,
+        "security_zone": {"name": zone, "vrf_type": vrf_type} if zone else None,
         "security_tag": {"id": tag_id} if tag_id else None,
     }
-    if namespace_type:
-        segment["gateway"] = {"ip_prefix": {"ip_namespace": {"name": "PROD", "namespace_type": namespace_type}}}
+    if vrf_type:
+        segment["gateway"] = {"ip_prefix": {"ip_namespace": {"name": "default"}}}
     return segment
 
 
@@ -235,12 +235,12 @@ class TestEnsureSecurityTag:
 class TestEnsureSegmentTag:
     """Every routed tenant segment, and nothing else, gets the group named after it."""
 
-    @pytest.mark.parametrize("namespace_type", ["prod", "non_prod"])
-    def test_routed_tenant_segment_is_tagged_with_its_name(self, namespace_type: str) -> None:
-        """PROD and NON-PROD alike; attached on the segment's own kind."""
+    @pytest.mark.parametrize("vrf_type", ["prod", "non_prod"])
+    def test_routed_tenant_segment_is_tagged_with_its_name(self, vrf_type: str) -> None:
+        """PROD and NONPROD alike; attached on the segment's own kind."""
         client, lock = _client(), _Lock()
 
-        assert _tag_segment(client, lock, _segment(namespace_type=namespace_type)) == "tag-new"
+        assert _tag_segment(client, lock, _segment(vrf_type=vrf_type)) == "tag-new"
 
         assert lock.keys == [f"sgt-{SEGMENT}"]
         (tag_kind, tag_data, _tag), (seg_kind, seg_data, seg) = client.created
@@ -260,10 +260,10 @@ class TestEnsureSegmentTag:
     @pytest.mark.parametrize(
         "segment",
         [
-            _segment(namespace_type="management", zone="MANAGEMENT-ZONE"),
-            _segment(namespace_type="internet", zone="INTERNET-ZONE"),
-            _segment(zone="MANAGEMENT-ZONE"),
-            _segment(namespace_type=None),
+            _segment(vrf_type="management", zone="MANAGEMENT"),
+            _segment(vrf_type="internet", zone="INTERNET"),
+            _segment(zone="MANAGEMENT"),
+            _segment(vrf_type=None),
             _segment(kind="CloudNetworkSegment"),
         ],
         ids=["management-vrf", "internet-vrf", "exchange-zone", "no-gateway", "cloud"],

@@ -64,11 +64,22 @@ class TestMlagCapabilitiesCount:
         assert "max_count" not in generic
 
     def test_mlag_no_longer_inherits_capabilities(self, root_dir: Path) -> None:
-        """The MLAG-to-interface edge was write-only and is gone; MLAG is a device capability only."""
+        """MLAG does not inherit the interface-edge generic (two `capabilities` fields on one kind)."""
         node = _capability_node(root_dir, "mlag.yml", "MLAG")
 
         assert "ManagedGenericInterfaces" not in node["inherit_from"]
         assert "ManagedGenericDevice" in node["inherit_from"]
+
+    def test_mlag_lists_its_interfaces_on_an_edge_of_its_own(self, root_dir: Path) -> None:
+        """The peer-links and control SVIs are `interfaces` (peer DcimInterface), with an identifier no other kind uses."""
+        node = _capability_node(root_dir, "mlag.yml", "MLAG")
+        rel = _relationship(node, "interfaces")
+
+        assert rel["peer"] == "DcimInterface"
+        assert rel["cardinality"] == "many"
+        assert rel["identifier"] == "mlag__interfaces"
+        weights = [item["order_weight"] for item in node["attributes"] + node["relationships"]]
+        assert len(weights) == len(set(weights))
 
 
 class TestRoutingProcessesStayMany:

@@ -394,7 +394,7 @@ class TestEnvironmentAgreement:
         assert len(check._captured_errors) == 1
 
     def test_office_segment_must_be_prod(self) -> None:
-        """An office has no environment: it is PROD, so a non-prod segment on it is an error."""
+        """An office has no environment: it is PROD, so a nonprod segment on it is an error."""
         check = _check()
         office = {"typename": "TopologyCustomerOffice", "name": "C005-OFFICE", "owner": _owner("C005")}
 
@@ -451,7 +451,7 @@ class TestOwnerAgreement:
         """The DC-local MANAGEMENT services of another owner are shared by design."""
         check = _check()
 
-        check.validate(_vxlan("p", "INFRA", [self._DC], zone="MANAGEMENT-ZONE"))
+        check.validate(_vxlan("p", "INFRA", [self._DC], zone="MANAGEMENT"))
 
         assert check._captured_warnings == []
 
@@ -465,10 +465,10 @@ class TestOwnerAgreement:
         assert check._captured_warnings == []
 
     def test_tenant_zone_is_not_exempt(self) -> None:
-        """A PROD-ZONE segment of another owner still warns."""
+        """A PROD segment of another owner still warns."""
         check = _check()
 
-        check.validate(_vxlan("p", "C005", [self._DC], zone="PROD-ZONE"))
+        check.validate(_vxlan("p", "C005", [self._DC], zone="PROD"))
 
         assert len(check._captured_warnings) == 1
 
@@ -483,7 +483,12 @@ class TestQueryShape:
         block = self._QUERY[self._QUERY.index("ManagedVxlanSegment") : self._QUERY.index("CloudNetworkSegment")]
         assert "environment { value }" in block
         assert "owner { node { id org_id { value } } }" in block
-        assert "security_zone { node { name { value } } }" in block
+        from tests.unit.query_shape_helpers import query_tree
+
+        fields = query_tree(Path(__file__).parents[2] / "queries/validation/segment_placement.gql")
+        assert {"id", "name", "vrf_type", "l3_vni"} <= set(
+            fields["ManagedVxlanSegment"]["edges"]["node"]["security_zone"]["node"]
+        )
 
     def test_footprint_environment_comes_from_the_scoped_generic(self) -> None:
         """Only TopologyEnvironmentScoped carries environment; the removed TopologyCustomer.environment is not read."""

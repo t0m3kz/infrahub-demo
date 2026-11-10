@@ -70,9 +70,6 @@
                                 "value": "172.16.0.1/32"
                               }
                             }
-                          },
-                          "interfaces": {
-                            "edges": []
                           }
                         }
                       },
@@ -90,9 +87,166 @@
                                 "value": "172.16.0.2/32"
                               }
                             }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "DcimLAGInterface",
+                          "name": {
+                            "value": "port-channel100"
                           },
-                          "interfaces": {
-                            "edges": []
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "lag_id": {
+                            "value": 100
+                          },
+                          "lacp_mode": {
+                            "value": "active"
+                          },
+                          "member_interfaces": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "Ethernet1/33"
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "Ethernet1/34"
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L1"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet1/33"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L1"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet1/34"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L1"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimLAGInterface",
+                          "name": {
+                            "value": "port-channel100"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "lag_id": {
+                            "value": 100
+                          },
+                          "lacp_mode": {
+                            "value": "active"
+                          },
+                          "member_interfaces": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "Ethernet1/33"
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "Ethernet1/34"
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L2"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet1/33"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L2"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "DcimPhysicalInterface",
+                          "name": {
+                            "value": "Ethernet1/34"
+                          },
+                          "role": {
+                            "value": "mlag-peer"
+                          },
+                          "device": {
+                            "node": {
+                              "name": {
+                                "value": "DC1-POD1-L2"
+                              }
+                            }
                           }
                         }
                       }
@@ -176,9 +330,6 @@
                   "cable": {
                     "node": null
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -221,9 +372,6 @@
                   },
                   "cable": {
                     "node": null
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -318,9 +466,6 @@
                   "cable": {
                     "node": null
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -352,9 +497,6 @@
                   },
                   "cable": {
                     "node": null
-                  },
-                  "segments": {
-                    "edges": []
                   },
                   "capabilities": {
                     "edges": []
@@ -411,64 +553,83 @@
                     ]
                   },
                   "capabilities": {
-                    "edges": []
-                  },
-                  "segments": {
                     "edges": [
                       {
                         "node": {
-                          "id": "seg-seg-100",
-                          "__typename": "ManagedVxlanSegment",
-                          "name": {
-                            "value": "seg-100"
-                          },
-                          "customer_name": {
-                            "value": "Customer-A"
-                          },
-                          "arp_suppression": {
-                            "value": true
-                          },
-                          "security_zone": {
-                            "node": null
-                          },
-                          "gateway": {
-                            "node": null
-                          },
-                          "segment_deployments": {
-                            "edges": [
-                              {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "sv-seg-seg-100",
+                          "segment_deployment": {
+                            "node": {
+                              "id": "sd-seg-seg-100",
+                              "segment": {
                                 "node": {
-                                  "vni": {
-                                    "value": 10100
+                                  "id": "seg-seg-100",
+                                  "__typename": "ManagedVxlanSegment",
+                                  "name": {
+                                    "value": "seg-100"
                                   },
-                                  "vlans": {
+                                  "customer_name": {
+                                    "value": "Customer-A"
+                                  },
+                                  "arp_suppression": {
+                                    "value": true
+                                  },
+                                  "security_zone": {
+                                    "node": {
+                                      "id": "fixture-zone-PROD",
+                                      "name": {
+                                        "value": "PROD"
+                                      },
+                                      "vrf_type": {
+                                        "value": "prod"
+                                      },
+                                      "l3_vni": {
+                                        "value": 60000
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": null
+                                  },
+                                  "segment_deployments": {
                                     "edges": [
                                       {
                                         "node": {
-                                          "vlan_id": {
-                                            "value": 100
+                                          "vni": {
+                                            "value": 10100
                                           },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-DC1-POD1-L1"
-                                            }
+                                          "vlans": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "vlan_id": {
+                                                    "value": 100
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "id": "dev-DC1-POD1-L1"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
                                           }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "fake-dc-0"
                                         }
                                       }
                                     ]
                                   }
                                 }
                               }
-                            ]
-                          },
-                          "deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "id": "fake-dc-0"
-                                }
-                              }
-                            ]
+                            }
                           }
                         }
                       }
@@ -503,9 +664,6 @@
                   "cable": {
                     "node": null
                   },
-                  "segments": {
-                    "edges": []
-                  },
                   "capabilities": {
                     "edges": []
                   }
@@ -523,6 +681,49 @@
                 "edges": []
               }
             }
+          }
+        }
+      }
+    ]
+  },
+  "DeviceServices": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-DC1-POD1-L1",
+          "name": {
+            "value": "DC1-POD1-L1"
+          },
+          "role": {
+            "value": "tor"
+          },
+          "member_of_groups": {
+            "edges": []
+          },
+          "deployment": {
+            "node": {
+              "__typename": "TopologyPod",
+              "id": "fixture-pod",
+              "name": {
+                "value": "fixture-pod"
+              },
+              "parent": {
+                "node": {
+                  "__typename": "TopologyDataCenter",
+                  "id": "fixture-dc",
+                  "name": {
+                    "value": "fixture-dc"
+                  }
+                }
+              }
+            }
+          },
+          "service_ports": {
+            "edges": []
+          },
+          "vlans": {
+            "edges": []
           }
         }
       }

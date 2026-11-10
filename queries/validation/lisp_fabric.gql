@@ -17,7 +17,7 @@ query lisp_fabric {
               name { value }
               role { value }
               platform { node { name { value } } }
-              ... on DcimCapabilities {
+              ... on DcimDeviceManaged {
                 capabilities { edges { node { __typename } } }
               }
             }
@@ -29,13 +29,15 @@ query lisp_fabric {
               vni { value }
               segment {
                 node {
+ security_zone { node { ...RoutingZoneFields } }
+
                   name { value }
                   gateway {
                     node {
                       id
                       ip_prefix {
                         node {
-                          ip_namespace { node { name { value } l3_vni { value } } }
+                          ip_namespace { node { name { value }  } }
                         }
                       }
                     }

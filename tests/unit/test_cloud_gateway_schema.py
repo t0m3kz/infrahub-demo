@@ -119,7 +119,7 @@ def test_a_transport_is_a_slim_device_with_its_place_on_the_transport_generic() 
     for kind in ("CloudDirectConnect", "CloudVPNConnection"):
         inherited = nodes[kind]["inherit_from"]
         assert "CloudTransport" in inherited and "DcimDevice" in inherited
-        assert "DcimDeviceManaged" not in inherited and "DcimCapabilities" not in inherited
+        assert "DcimDeviceManaged" not in inherited
     assert _names(transport, "relationships") == {"account", "region", "saas_region", "owner"}
     assert all(_field(transport, "relationships", name)["optional"] for name in _names(transport, "relationships"))
 
@@ -131,7 +131,8 @@ def test_a_peering_is_an_interface_of_its_transport_and_keeps_no_transport_edges
     assert {"DcimInterface", "DcimSubInterface", "DcimHasIPAddress"} <= set(peering["inherit_from"])
     assert "parent_interface" not in _names(peering, "relationships")  # the marker DcimSubInterface holds it
     assert not {"transport", "account", "region", "saas_region", "owner"} & _names(peering, "relationships")
-    assert "mtu" not in _names(peering, "attributes") and "vlan_id" in _names(peering, "attributes")
+    assert "mtu" not in _names(peering, "attributes")
+    assert not {"vlan_id", "inner_vlan_id"} & _names(peering, "attributes")  # the marker DcimSubInterface holds them
 
 
 def test_virtual_network_peers_are_symmetric_on_one_identifier() -> None:

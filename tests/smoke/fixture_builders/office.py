@@ -13,6 +13,7 @@ from tests.smoke.fixture_builders.common import (
     _write_data_fixture,
 )
 from tests.smoke.fixture_builders.fabric import build_device_data
+from tests.smoke.fixture_builders.vrf import routing_zone
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.distribution_switch import DistributionSwitch
 
@@ -110,11 +111,11 @@ def write_office_lisp_fixtures() -> tuple[int, int]:
 # routed port with a dot1q sub-interface in the tenant VRF, an eBGP session to the edge, proxy-ETR/ITR) and the
 # access-switch uses it (use-petr). Same inputs as the two fixtures above plus what the generator writes: the edge on the
 # deployment, and on the border the port, its sub-interface and the BGP process with its peering. The tenant VRF is the
-# fixture's own (VRF_A, L3 instance-id 50001), the one its segment is in.
+# fixture's own (PROD, L3 instance-id 60000), the one its segment is in.
 OFFICE_EDGE_NAME = "C005-OFFICE-EDGE1"
 OFFICE_EXIT_PORT = "GigabitEthernet1/0/26"
 OFFICE_EXIT_VLAN = 3800
-OFFICE_EXIT_VRF = "VRF_A"
+OFFICE_EXIT_VRF = "PROD"
 OFFICE_EXIT_SWITCH_ASN = 4200000001
 OFFICE_EXIT_EDGE_ASN = 4200000002
 OFFICE_EXIT_SWITCH_ADDRESS = "100.66.0.0/31"
@@ -130,12 +131,10 @@ def build_office_wan_exit_data(*, device_name: str, role: str) -> dict:
     if role != "distribution-switch":
         return data
 
-    namespace = _node(
-        {"name": _v(OFFICE_EXIT_VRF), "l3_vni": _v(50001), "namespace_type": _v("prod")},
-    )
+    zone = _node(routing_zone(OFFICE_EXIT_VRF))
     # Loopback0 is the RLOC the edges register toward and the map-server address the other switches use.
     loopback_address = _node(
-        {"address": _v(OFFICE_EXIT_LOOPBACK), "ip_namespace": _node({"name": _v("default")})},
+        {"address": _v(OFFICE_EXIT_LOOPBACK), "ip_namespace": {"node": {"name": {"value": "default"}}}},
     )
     for edge in node["interfaces"]["edges"]:
         if edge["node"]["name"]["value"] == "Loopback0":
@@ -154,11 +153,21 @@ def build_office_wan_exit_data(*, device_name: str, role: str) -> dict:
     node["interfaces"]["edges"].append(
         {
             "node": {
+                "security_zone": zone,
                 **_make_interface(
                     name=sub_interface, device_name=device_name, role="uplink", typename="DcimVirtualInterface"
                 ),
-                "parent_interface": _node({"name": _v(OFFICE_EXIT_PORT)}),
-                "ip_address": _node({"address": _v(OFFICE_EXIT_SWITCH_ADDRESS), "ip_namespace": namespace}),
+                "device": _node({"id": f"dev-{device_name}"}),
+                "vlan_id": _v(OFFICE_EXIT_VLAN),
+                "parent_interface": _node(
+                    {"name": _v(OFFICE_EXIT_PORT), "device": _node({"id": f"dev-{device_name}"})}
+                ),
+                "ip_address": _node(
+                    {
+                        "address": _v(OFFICE_EXIT_SWITCH_ADDRESS),
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
+                    }
+                ),
             }
         }
     )
@@ -179,7 +188,7 @@ def build_office_wan_exit_data(*, device_name: str, role: str) -> dict:
     peering["peering_role"] = _v("regular")
     peering["address_families"] = _af_edges(("ipv4", "unicast"))
     for iface_edge in peering["capabilities"]["edges"]:
-        iface_edge["node"]["ip_address"]["node"]["ip_namespace"] = namespace
+        iface_edge["node"]["security_zone"] = zone
     node["capabilities"]["edges"].append(
         {
             "node": {

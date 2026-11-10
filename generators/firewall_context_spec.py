@@ -62,14 +62,12 @@ class ContextSpec:
     facility (the DC, or a zone of the metro) and returns why it gets no
     context of this kind, or None. vip_pool_name, when set, gives the context
     a VIP prefix from that pool of the tenant namespace. serving_field names the
-    deployment's relationship to the context serving it (the many one of a
-    colocation footprint, served by each zone of its metro, takes an `s`: the
-    host's ``_serving_many``). relink_consumers, when set, lists the nodes whose generated output sits on the context a
+    deployment's relationship to the context(s) serving it: ``serving_many`` when it is a list (the firewall contexts
+    of a footprint, internal and Internet edge alike, one list: a spec converges the ones of its ``role``), else the
+    one context of the kind. relink_consumers, when set, lists the nodes whose generated output sits on the context a
     deployment is served by (client, deployment id -> node ids):
     link_serving_context runs relink_generator for them when the deployment
-    moves from one context to another. link_on_parent, when set, points the hosting facility (the DC) at the context
-    through ``TopologySegmentHosting.internet_edge_contexts`` and not the deployment (the Internet edge serves the
-    whole facility, never one footprint).
+    moves from one context to another (a single serving field only).
     """
 
     label: str
@@ -80,6 +78,7 @@ class ContextSpec:
     context_kind: type[Any]
     key: str
     serving_field: str
+    serving_many: bool
     leg_types: Callable[[str], tuple[str, ...]]
     leg_pool_name: Callable[[str], str]
     leg_identifier: str
@@ -88,7 +87,6 @@ class ContextSpec:
     vip_pool_name: Callable[[str], str] | None = None
     relink_consumers: Callable[[Any, str], Awaitable[list[str]]] | None = None
     relink_generator: str = ""
-    link_on_parent: bool = False
 
 
 FIREWALL_CONTEXT = ContextSpec(
@@ -99,7 +97,8 @@ FIREWALL_CONTEXT = ContextSpec(
     ha_kind=ManagedFirewallHA,
     context_kind=ManagedFirewallContext,
     key="fw-context",
-    serving_field="serving_firewall_context",
+    serving_field="serving_firewall_contexts",
+    serving_many=True,
     leg_types=_firewall_leg_types,
     leg_pool_name=transit_pool_name,
     leg_identifier="transit",
@@ -116,12 +115,13 @@ EDGE_CONTEXT = ContextSpec(
     # The VLAN pool and the lock prefix are the firewall contexts': an edge context takes its transit VLAN from the
     # same pool of the DC, so no two contexts of a DC share one.
     key="fw-context",
-    serving_field="internet_edge_contexts",
+    # The footprint lists its Internet edge context next to its internal one (utils/firewall_split.py).
+    serving_field="serving_firewall_contexts",
+    serving_many=True,
     leg_types=_edge_leg_types,
     leg_pool_name=transit_pool_name,
     leg_identifier="transit",
     vlan_range=(FW_CONTEXT_VLAN_START, FW_CONTEXT_VLAN_END),
-    link_on_parent=True,
 )
 
 LOADBALANCER_CONTEXT = ContextSpec(
@@ -133,6 +133,7 @@ LOADBALANCER_CONTEXT = ContextSpec(
     context_kind=ManagedLoadbalancerContext,
     key="lb-context",
     serving_field="serving_loadbalancer_context",
+    serving_many=False,
     leg_types=lambda tenant_type: (tenant_type,),
     leg_pool_name=lb_leg_pool_name,
     leg_identifier="lb-leg",
@@ -153,12 +154,12 @@ class _ContextTarget:
 
     spec: ContextSpec
     name_base: str
-    cluster_id: str
+    # The hosting deployment (a DC, or the metro of a zone): the context's mandatory Parent.
+    deployment_id: str
     tenant_id: str | None
     track: bool
     devices: list[Any]
     parent_name: str
-    parent_id: str = ""
     # The hosting facility has an external-firewall pair: its customer contexts keep no INTERNET leg (the Internet edge
     # context has it), and a dedicated one only its own public address.
     edge_hosted: bool = False
@@ -182,7 +183,7 @@ class _TransitMember:
 
     offset is the member's /29 host offset: members sorted by name take
     .5 / .6, the order transforms/helpers/ha.py uses. bl_port is the border
-    service port its uplink is cabled to, fetched with its capabilities.
+    service port its uplink is cabled to.
     """
 
     name: str
@@ -198,7 +199,6 @@ class _TransitState:
 
     context: Any | None
     complete: bool
-    untagged_port_ids: list[str]
 
 
 # (physical template's platform name, device_role) -> matching virtual

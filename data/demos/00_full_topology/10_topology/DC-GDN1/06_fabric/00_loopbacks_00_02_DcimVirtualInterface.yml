@@ -1,0 +1,37 @@
+# DcimVirtualInterface declarations in recursive dependency order.
+# The existing BGP router IDs are real VTEP loopbacks in the global table, not tenant interfaces.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: Loopback0
+      device: gdn1-edge-01
+      role: loopback
+      status: active
+      ip_address: ["10.93.255.1/32", "default"]
+    - name: Loopback0
+      device: gdn1-leaf-01
+      role: loopback
+      status: active
+      ip_address: ["10.93.255.2/32", "default"]
+    - name: Loopback0
+      device: gdn1-leaf-02
+      role: loopback
+      status: active
+      ip_address: ["10.93.255.3/32", "default"]
+    - name: Loopback0
+      device: gdn1-spine-01
+      role: loopback
+      status: active
+      ip_address: ["10.93.255.4/32", "default"]
+    - name: Loopback0
+      device: gdn1-bl-01
+      role: loopback
+      status: active
+      ip_address: ["10.93.255.5/32", "default"]
+    - name: Loopback0
+      device: gdn1-bl-02
+      role: loopback
+      status: active
+      ip_address: ["10.93.255.6/32", "default"]

@@ -20,6 +20,7 @@ the integration run.
 
 from __future__ import annotations
 
+import copy
 import ipaddress
 from collections import Counter
 from collections.abc import Callable
@@ -40,6 +41,7 @@ from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_VIRTUAL_CIRCUITS,
 )
 from tests.integration.demo_data import BOOTSTRAP, attribute, declared, name
+from tests.unit.external_vrf_peers_helpers import _raw_vrf
 from tests.unit.simulators.circuit_fakes import FakeClient, session_generator
 from tests.unit.simulators.circuit_inventory_payloads import inventory_payload
 
@@ -56,6 +58,11 @@ def _value(value: Any) -> dict[str, Any]:
     return {"value": value}
 
 
+def _in_vrf(vrf: dict[str, Any]) -> dict[str, Any]:
+    """The raw ``zone_capabilities`` of an interface in ``vrf`` (a raw ManagedVRF node)."""
+    return {"edges": [{"node": {"__typename": "ManagedVRF", **copy.deepcopy(vrf)}}]}
+
+
 def _interface(
     device: str,
     name: str,
@@ -70,12 +77,13 @@ def _interface(
 ) -> dict[str, Any]:
     """An interface node of SESSIONS_QUERY: a physical one with an MTU, or a virtual one with a role (and a parent)."""
     node: dict[str, Any] = {
+        "zone_capabilities": {"edges": []},
         "name": _value(name),
         "device": {"node": {"name": _value(device)}},
         "description": _value(description),
         "status": _value(status),
         "ip_address": {
-            "node": {"address": _value(address), "ip_namespace": {"node": {"name": _value(namespace)}}}
+            "node": {"address": _value(address), "ip_namespace": {"node": {"name": {"value": "default"}}}}
             if address
             else None
         },
@@ -136,7 +144,7 @@ def _prefix(prefix: str, description: str, role: str, namespace: str) -> dict[st
         "prefix": _value(prefix),
         "description": _value(description),
         "role": _value(role),
-        "ip_namespace": {"node": {"name": _value(namespace)}},
+        "ip_namespace": {"node": {"name": {"value": "default"}}},
     }
 
 
@@ -215,7 +223,7 @@ class _Devices:
             deployment["underlay_protocol"] = _value(_underlay_protocol())
         selected: dict[str, Any] = {
             key: port[key]
-            for key in ("id", "__typename", "name", "capabilities", "cable", "parent_interface")
+            for key in ("id", "__typename", "name", "capabilities", "cable", "parent_interface", "zone_capabilities")
             if key in port
         }
         selected["device"] = {
@@ -238,7 +246,7 @@ class _Devices:
     def circuit(self, circuit: dict[str, Any]) -> dict[str, Any]:
         """The virtual_circuit.gql response for one circuit of the inventory; a tunnel is only named, like the query."""
         selected: dict[str, Any] = {
-            key: circuit[key] for key in ("id", "__typename", "name", "circuit_type", "ip_namespace") if key in circuit
+            key: circuit[key] for key in ("id", "__typename", "name", "circuit_type", "vrf") if key in circuit
         }
         selected["status"] = _value("active")
         if "password" in circuit:
@@ -382,6 +390,29 @@ class FakeStack:
                 role=template.role if template.parent else None,
                 parent=template.parent,
             )
+        for edge in inventory_payload()["TopologySessionCircuit"]["edges"]:
+            circuit = edge["node"]
+            for end in circuit["capabilities"]["edges"]:
+                interface_id = end["node"]["id"]
+                if interface_id in nodes:
+                    nodes[interface_id]["capabilities"] = {
+                        "edges": [
+                            {
+                                "node": {
+                                    "__typename": "TopologySessionCircuit",
+                                    "circuit_type": circuit["circuit_type"],
+                                    "vrf": circuit.get("vrf") or {"node": None},
+                                }
+                            }
+                        ]
+                    }
+                    # The interface's VRF is the ManagedVRF among its capabilities (alias zone_capabilities).
+                    if (end["node"].get("zone_capabilities") or {}).get("edges"):
+                        nodes[interface_id]["zone_capabilities"] = end["node"]["zone_capabilities"]
+                    elif interface_id in devices.interfaces and (circuit.get("vrf") or {}).get("node"):
+                        # The generator gives the end it writes its device's instance of the circuit's zone
+                        # (local_vrf_ids); the fake VRF provisioning is stubbed, so the circuit's instance stands in.
+                        nodes[interface_id]["zone_capabilities"] = _in_vrf(circuit["vrf"]["node"])
         for data, _ in client.created_of("ManagedBGPPeering"):
             self.sessions[data["name"]] = _session(
                 data["name"],
@@ -539,10 +570,10 @@ async def test_the_handoff_sessions_the_generator_plans_pass(stack: FakeStack) -
         (lambda s: s.prefixes.pop("Handoff HANDOFF-FR2-SDWAN-GW1-PROD"), "0 prefix object(s)"),
         (lambda s: s.pool_resources.update({"Handoff-PROD-IPv4": ["10.0.0.0/20"]}), "is not a /31 from"),
         (
-            lambda s: _addresses(s, "HANDOFF-FR2-SDWAN-GW1-PROD-bgp")[0]["ip_address"]["node"]["ip_namespace"]["node"][
-                "name"
-            ].update(value="NON-PROD"),
-            "is addressed in 'NON-PROD', expected 'PROD'",
+            lambda s: _addresses(s, "HANDOFF-FR2-SDWAN-GW1-PROD-bgp")[0].update(
+                zone_capabilities=_in_vrf(_raw_vrf("NONPROD"))
+            ),
+            "conflicting security zones",
         ),
     ],
 )
@@ -681,7 +712,7 @@ def _drift_plan(kind: str, rewrite: Callable[[SessionPlan], SessionPlan]) -> Cal
         ),
         pytest.param(
             lambda monkeypatch: monkeypatch.setattr(
-                virtual_circuit, "handoff_pool_name", lambda namespace: "Handoff-NON-PROD-IPv4"
+                virtual_circuit, "handoff_pool_name", lambda namespace: "Handoff-NONPROD-IPv4"
             ),
             "test_06b_verify_handoff_sessions",
             "is not a /31 from",

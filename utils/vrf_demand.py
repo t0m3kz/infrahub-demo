@@ -4,8 +4,9 @@ An instance is one namespace realized in one topology: the device's hosting depl
 an office, utils/segment_addressing.py ``hosting_deployment``). A device is a member of its topology's instance of
 exactly the non-``default`` namespaces it routes in (demand-driven, never pre-provisioned):
 
-- the gateway namespace of each ROUTED segment row on its VLAN domain (a gateway-less or firewall-terminated segment,
-  ``terminated_on``, is pure L2 on the fabric), border gateways' stretched rows included;
+- the gateway namespace of each ROUTED segment row of the device (its ``vlans``; a
+  gateway-less or firewall-terminated segment, ``terminated_on``, is pure L2 on the fabric, and so is a stretched
+  segment on a border leaf, utils/segment_addressing.py ``l2_only_on``), border gateways' stretched rows included;
 - the VRF of each of its SVI objects (an instance is never removed while an SVI still routes in it);
 - the namespace of each address on its own interfaces (handoff /31s, WAN exit sub-interfaces, the upstream
   transit address of a border gateway: a BGP session's local address is one of them);
@@ -29,18 +30,18 @@ from functools import cached_property
 from typing import Any
 
 from utils.exchange_transit import (
-    FIREWALL_CONTEXT_KIND,
     INTERNET_TYPE,
-    TENANT_NAMESPACE_TYPES,
     l3vni_svi_vlan,
-    service_context_caps,
     transit_leg_namespace,
 )
 from utils.fabric_roles import BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE, GROUP_PROVIDER_STUBS
-from utils.segment_addressing import hosting_deployment, routed_segment_namespace
+from utils.routing_domain import VRF_KIND, interface_security_zone, interface_vrfs
+from utils.segment_addressing import hosting_deployment, l2_only_on, routed_segment_namespace
+from utils.service_contexts import border_contexts, service_footprints
 
-VRF_KIND = "ManagedVRF"
+PBR_KIND = "ManagedPBR"
+"""The individual device capability whose presence says the device steers its tenant SVIs to the firewall."""
 SVI_ROLE = "svi"
 L3VNI_ROLE = "l3vni"
 """DcimInterface role of a segment SVI (schemas/base/dcim.yml)."""
@@ -107,21 +108,25 @@ def svi_vlan_id(name: str | None) -> int | None:
 def address_namespaces(interfaces: Iterable[dict[str, Any]]) -> frozenset[str]:
     """The namespace names of the addresses on a device's own interfaces (cleaned query data).
 
-    A BGP session's local address is one of them, so a session's VRF needs no source of its own.
+    A BGP session's local address is one of them, so a session's VRF needs no source of its own. A segment SVI is not
+    read: its address is the segment's anycast gateway, and its VRF is a source of its own (``svi_namespaces``).
     """
     return frozenset(
         name
         for iface in interfaces
-        if (name := ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name"))
+        if iface.get("role") != SVI_ROLE and (iface.get("ip_address") or {}).get("address")
+        if (name := interface_security_zone(iface).get("name"))
     )
 
 
-def leg_namespaces(interfaces: list[dict[str, Any]]) -> frozenset[str]:
-    """The namespace names of the transit legs of the contexts tagged on a device's service ports."""
+def leg_namespaces(contexts: list[dict[str, Any]]) -> frozenset[str]:
+    """The namespace names of the transit legs of the contexts tagged on a device's service ports.
+
+    ``contexts`` are the device's ``utils.service_contexts.border_contexts`` (each with its ``legs``)."""
     return frozenset(
         namespace["name"]
-        for ctx in service_context_caps(interfaces)
-        for leg in ctx.get("capabilities") or []
+        for ctx in contexts
+        for leg in ctx.get("legs") or []
         if (namespace := transit_leg_namespace(ctx.get("vlan_id"), leg))
     )
 
@@ -144,7 +149,7 @@ def internet_exits(namespaces: Iterable[Mapping[str, Any]], *, border_gateway: b
     """The VXLAN default exits: an EVPN Multi-Site border gateway's internet-type instances (none elsewhere)."""
     if not border_gateway:
         return frozenset()
-    return frozenset(ns["name"] for ns in namespaces if ns.get("namespace_type") == INTERNET_TYPE and ns.get("name"))
+    return frozenset(ns["name"] for ns in namespaces if ns.get("vrf_type") == INTERNET_TYPE and ns.get("name"))
 
 
 @dataclass(frozen=True)
@@ -173,7 +178,7 @@ def vrf_demand(inputs: VrfDemandInputs) -> frozenset[str]:
 @dataclass(frozen=True)
 class Footprint:
     """A customer footprint of a segment: where it stands (``parent_id``, its DC or metro) and whether a firewall
-    context serves it (the pbr policy steers to that context)."""
+    context serves it (an SVI of the segment is steered to that context)."""
 
     id: str
     name: str | None
@@ -183,38 +188,29 @@ class Footprint:
 
 @dataclass(frozen=True)
 class RoutedRow:
-    """A routed segment row of the device's VLAN domain: the device needs its SVI and (unless default) its VRF."""
+    """A routed segment row of the device: the device needs its SVI and (unless default) its VRF."""
 
     id: str
     vlan_id: int
     namespace: str
     segment_name: str | None
     footprints: tuple[Footprint, ...] = ()
-
-
-@dataclass(frozen=True)
-class SviPolicy:
-    """A pbr policy applied on an SVI (the SVI's ``capabilities``)."""
-
-    id: str
-    kind: str | None
-    origin: str | None
-    customer_id: str | None
+    # The segment's anycast gateway (``segment.gateway``, an IpamIPAddress): the address its SVI carries.
+    gateway_id: str | None = None
 
 
 @dataclass(frozen=True)
 class SviFacts:
-    """One role-svi interface of the device."""
+    """One role-svi interface of the device. It has no link to its row: the row it realizes is the routed row of
+    the device whose ``svi_name`` it bears (``DeviceVrfFacts.desired_svis``)."""
 
     id: str
     name: str
     vrf_id: str | None
     vrf_namespace: str | None
     vrf_deployment_id: str | None
-    row_id: str | None
-    has_address: bool
+    address_id: str | None
     has_capabilities: bool
-    policies: tuple[SviPolicy, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -237,9 +233,7 @@ class DeviceVrfFacts:
     id: str
     name: str
     inputs: VrfDemandInputs
-    row_ids: frozenset[str]
     routed_rows: tuple[RoutedRow, ...]
-    unrouted_row_ids: frozenset[str]
     svis: tuple[SviFacts, ...]
     # The instances the device is a member of (``device.shared_capabilities``, the shared device edge), of its own topology or, after a move, another one.
     instances: tuple[InstanceFacts, ...] = field(default=())
@@ -247,13 +241,17 @@ class DeviceVrfFacts:
     hosting_id: str | None = None
     hosting_name: str | None = None
     # The footprints served by the firewall contexts tagged on the device's service ports, per tenant VRF of their legs:
-    # (namespace name, namespace type, footprint ids). The pbr policy of each is applied on the L3 VNI SVI of that VRF.
+    # (namespace name, namespace type, footprint ids). The L3 VNI SVI of that VRF steers the traffic of each.
     service_footprints: tuple[tuple[str, str, frozenset[str]], ...] = field(default=())
     # The role-l3vni interfaces of the device (the L3 VNI SVI of each VRF it terminates; none when the writer has not run).
     l3vni_svis: tuple[SviFacts, ...] = field(default=())
     # Interface name -> role of every interface that is not a segment SVI: an SVI name must not collide with one
     # (the MLAG control SVI Vlan4094, a hand-made VlanN).
     other_interfaces: Mapping[str, str | None] = field(default_factory=dict)
+    # The ids of the device's ManagedPBR capabilities (its individual ``capabilities``): one when it steers.
+    pbr_ids: tuple[str, ...] = field(default=())
+    # Interface name -> its instances, for an interface in more than one VRF (``vrf_conflicts``).
+    vrf_conflicts: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
     @cached_property
     def demand(self) -> frozenset[str]:
@@ -278,7 +276,7 @@ class DeviceVrfFacts:
         desired: dict[str, str] = {}
         for name in sorted((self.inputs.row_namespaces | self.inputs.leg_namespaces) - {DEFAULT_NAMESPACE}):
             namespace = namespaces.get(name) or {}
-            vlan = l3vni_svi_vlan(namespace.get("namespace_type"))
+            vlan = l3vni_svi_vlan(namespace.get("vrf_type"))
             if namespace.get("l3_vni") and vlan is not None:
                 desired[svi_name(vlan)] = name
         return desired
@@ -299,7 +297,7 @@ class DeviceVrfFacts:
         return result
 
     def pbr_footprints_by_name(self) -> dict[str, str | None]:
-        """``Vlan<id>`` -> the footprint whose pbr policy the SVI of that name belongs to, None when it is not steered.
+        """``Vlan<id>`` -> the footprint the SVI of that name is steered for (to its firewall), None when it is not.
 
         An SVI is steered for the footprint of its segment that stands in the device's hosting deployment (its DC or
         metro) and has a firewall context; none, or no such footprint, means no steering. The lowest id decides when a
@@ -307,8 +305,8 @@ class DeviceVrfFacts:
         has no id in these facts.
 
         A border leaf or border spine steers nothing: its templates render no PBR (and its transform refuses a PBR rule,
-        transforms/common.py), so a policy on its SVI would say the segment is steered while the config does not. The
-        segment SVI of a border leaf is steered once those templates render it."""
+        transforms/common.py), so it gets no ``ManagedPBR``. The segment SVI of a border leaf is steered once those
+        templates render it."""
         if self.inputs.role in BORDER_ROLES:
             return dict.fromkeys(self.desired_svis())
         return {
@@ -318,11 +316,9 @@ class DeviceVrfFacts:
             for name, row in self.desired_svis().items()
         }
 
-    def pbr_footprints(self) -> dict[str, str | None]:
-        """SVI id -> the footprint whose pbr policy it belongs to (see ``pbr_footprints_by_name``), for the SVIs that
-        exist; one that is no longer desired is not steered."""
-        by_name = self.pbr_footprints_by_name()
-        return {svi.id: by_name.get(svi.name) for svi in self.svis}
+    def steers(self) -> bool:
+        """Whether the device steers a tenant SVI to a firewall, so it must have a ``ManagedPBR``."""
+        return any(self.pbr_footprints_by_name().values())
 
     def desired_svis(self) -> dict[str, RoutedRow]:
         """``Vlan<id>`` -> the routed row it realizes; empty for a device that carries no VRF."""
@@ -331,9 +327,12 @@ class DeviceVrfFacts:
         return {svi_name(row.vlan_id): row for row in sorted(self.routed_rows, key=lambda row: row.vlan_id)}
 
 
-def _routed_row(row: dict[str, Any]) -> RoutedRow | None:
-    """The row as a RoutedRow, or None when the fabric does not route its segment (no gateway, or terminated)."""
+def _routed_row(row: dict[str, Any], role: str | None) -> RoutedRow | None:
+    """The row as a RoutedRow, or None when the device of ``role`` does not route its segment (no gateway, terminated,
+    or a stretched segment on a border leaf: ``l2_only_on``)."""
     segment = (row.get("segment_deployment") or {}).get("segment") or {}
+    if l2_only_on(role, segment):
+        return None
     namespace = routed_segment_namespace(segment).get("name")
     if not namespace or not row.get("id") or not isinstance(row.get("vlan_id"), int):
         return None
@@ -342,12 +341,13 @@ def _routed_row(row: dict[str, Any]) -> RoutedRow | None:
         vlan_id=row["vlan_id"],
         namespace=namespace,
         segment_name=segment.get("name"),
+        gateway_id=(segment.get("gateway") or {}).get("id"),
         footprints=tuple(
             Footprint(
                 id=fp["id"],
                 name=fp.get("name"),
                 parent_id=(fp.get("parent") or {}).get("id"),
-                has_context=bool(fp.get("serving_firewall_context") or fp.get("serving_firewall_contexts")),
+                has_context=bool(fp.get("serving_firewall_contexts")),
             )
             for fp in segment.get("customer_deployments") or []
             if fp.get("id")
@@ -355,33 +355,33 @@ def _routed_row(row: dict[str, Any]) -> RoutedRow | None:
     )
 
 
-PBR_POLICY_KIND = "pbr"
+def _vrf_label(vrf: Mapping[str, Any]) -> str:
+    """An instance as a person reads it: ``<deployment>/<zone>`` (its HFID), else its id."""
+    deployment, zone = (vrf.get("deployment") or {}).get("name"), (vrf.get("security_zone") or {}).get("name")
+    return f"{deployment}/{zone}" if deployment and zone else str(vrf.get("id") or "?")
+
+
+def vrf_conflicts(interfaces: Iterable[dict[str, Any]]) -> dict[str, tuple[str, ...]]:
+    """Interface name -> the instances of an interface that is in more than one VRF (an interface is in at most one)."""
+    return {
+        str(iface.get("name")): tuple(sorted(_vrf_label(vrf) for vrf in vrfs))
+        for iface in interfaces
+        if len(vrfs := interface_vrfs(iface)) > 1
+    }
 
 
 def _svi(iface: dict[str, Any]) -> SviFacts:
-    vrf = iface.get("vrf") or {}
+    vrf = next(iter(interface_vrfs(iface)), {})
     capabilities = iface.get("capabilities") or []
-    policies = tuple(
-        SviPolicy(
-            id=cap.get("id") or "",
-            kind=cap.get("kind"),
-            origin=cap.get("origin"),
-            customer_id=(cap.get("customer_deployment") or {}).get("id"),
-        )
-        for cap in capabilities
-        if cap.get("typename") == "RoutingPolicy"
-    )
     return SviFacts(
         id=iface.get("id") or "",
         name=iface.get("name") or "",
         vrf_id=vrf.get("id"),
-        vrf_namespace=(vrf.get("namespace") or {}).get("name"),
+        vrf_namespace=(vrf.get("security_zone") or {}).get("name"),
         vrf_deployment_id=(vrf.get("deployment") or {}).get("id"),
-        row_id=(iface.get("segment_vlan") or {}).get("id"),
-        has_address=bool((iface.get("ip_address") or {}).get("address")),
-        # A pbr policy is the only capability an SVI may have (rule S4 judges the rest).
-        has_capabilities=any(cap.get("typename") != "RoutingPolicy" for cap in capabilities),
-        policies=policies,
+        address_id=(iface.get("ip_address") or {}).get("id"),
+        # Its VRF instance is the only capability an SVI may have (rule S4 judges the rest).
+        has_capabilities=any(cap.get("typename") != VRF_KIND for cap in capabilities),
     )
 
 
@@ -396,44 +396,24 @@ def device_memberships(node: dict[str, Any]) -> list[dict[str, Any]]:
 
 def instance_facts(vrf: dict[str, Any]) -> InstanceFacts:
     """One cleaned ManagedVRF node (a ``shared_capabilities`` entry of a device, or the ``ManagedVRF`` root of vrf_instances.gql)."""
-    namespace = vrf.get("namespace") or {}
+    namespace = vrf.get("security_zone") or {}
     return InstanceFacts(
         id=vrf.get("id") or "",
         name=vrf.get("name"),
         namespace=namespace.get("name"),
         l3_vni=namespace.get("l3_vni"),
-        namespace_type=namespace.get("namespace_type"),
+        namespace_type=namespace.get("vrf_type"),
         deployment_id=(vrf.get("deployment") or {}).get("id"),
         member_ids=frozenset(device["id"] for device in vrf.get("shared_devices") or [] if device.get("id")),
     )
 
 
-def _service_footprints(interfaces: list[dict[str, Any]]) -> tuple[tuple[str, str, frozenset[str]], ...]:
-    """(tenant namespace, its type, footprint ids) of each firewall context on a service port.
-
-    A context serves the footprints in ``served_deployments`` (a shared one) and its ``tenant`` (a dedicated one); the
-    tenant VRF is the namespace of its legs whose type is a tenant type (the exchange peers are not)."""
-    found: dict[str, tuple[str, frozenset[str]]] = {}
-    for ctx in service_context_caps(interfaces):
-        if ctx.get("typename") != FIREWALL_CONTEXT_KIND:
-            continue
-        footprints = {fp["id"] for fp in ctx.get("served_deployments") or [] if fp.get("id")}
-        if (ctx.get("tenant") or {}).get("id"):
-            footprints.add(ctx["tenant"]["id"])
-        for leg in ctx.get("capabilities") or []:
-            namespace = transit_leg_namespace(ctx.get("vlan_id"), leg)
-            if namespace and namespace.get("namespace_type") in TENANT_NAMESPACE_TYPES:
-                kind, merged = found.get(namespace["name"], (namespace["namespace_type"], frozenset()))
-                found[namespace["name"]] = (kind, merged | frozenset(footprints))
-    return tuple((name, kind, footprints) for name, (kind, footprints) in sorted(found.items()))
-
-
 def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
     """The facts of one cleaned ``DcimDevice`` node of queries/validation/vrf_instances.gql."""
     interfaces = device.get("interfaces") or []
+    conflicts = vrf_conflicts(interfaces)
     rows = device.get("vlans") or []
-    row_facts = [(row, _routed_row(row)) for row in rows]
-    routed = [routed_row for _, routed_row in row_facts if routed_row]
+    routed = [routed_row for row in rows if (routed_row := _routed_row(row, device.get("role")))]
     svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == SVI_ROLE)
     l3vni_svis = tuple(_svi(iface) for iface in interfaces if iface.get("role") == L3VNI_ROLE)
     hosting = hosting_deployment(device.get("deployment")) or {}
@@ -445,25 +425,32 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
         status=device.get("status"),
         row_namespaces=frozenset(row.namespace for row in routed),
         svi_namespaces=frozenset(svi.vrf_namespace for svi in svis if svi.vrf_namespace),
-        address_namespaces=address_namespaces(interfaces),
-        leg_namespaces=leg_namespaces(interfaces),
+        # An interface in two VRFs is reported (checks/vrf_instances.py), not read: its routing table is ambiguous.
+        address_namespaces=address_namespaces(iface for iface in interfaces if str(iface.get("name")) not in conflicts),
+        leg_namespaces=leg_namespaces(border_contexts(device)),
     )
     return DeviceVrfFacts(
         id=device.get("id") or "",
         name=device.get("name") or "",
         inputs=inputs,
-        row_ids=frozenset(row["id"] for row in rows if row.get("id")),
         routed_rows=tuple(routed),
-        unrouted_row_ids=frozenset(row["id"] for row, routed_row in row_facts if row.get("id") and routed_row is None),
         svis=svis,
         l3vni_svis=l3vni_svis,
-        service_footprints=_service_footprints(interfaces),
+        service_footprints=service_footprints(device),
         other_interfaces={
             iface["name"]: iface.get("role")
             for iface in interfaces
             if iface.get("name") and iface.get("role") not in (SVI_ROLE, L3VNI_ROLE)
         },
         instances=tuple(instance_facts(vrf) for vrf in device_memberships(device)),
+        vrf_conflicts=conflicts,
+        pbr_ids=tuple(
+            sorted(
+                cap["id"]
+                for cap in device.get("capabilities") or []
+                if cap.get("typename") == PBR_KIND and cap.get("id")
+            )
+        ),
         hosting_id=hosting.get("id"),
         hosting_name=hosting.get("name"),
     )
@@ -475,5 +462,5 @@ def all_instances(cleaned: dict[str, Any]) -> tuple[InstanceFacts, ...]:
 
 
 def namespaces_by_name(cleaned: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """The ``IpamNamespace`` root of the query, by name."""
-    return {ns["name"]: ns for ns in cleaned.get("IpamNamespace") or [] if ns.get("name")}
+    """The authoritative ``SecurityZone`` root of the query, by name."""
+    return {ns["name"]: ns for ns in cleaned.get("SecurityZone") or [] if ns.get("name")}

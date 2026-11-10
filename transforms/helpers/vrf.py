@@ -20,7 +20,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from utils.limits import DEFAULT_NAMESPACE
+from utils.routing_domain import interface_vrf
 from utils.segment_addressing import routed_segment_namespace
+from utils.service_contexts import border_contexts, device_services
 from utils.vrf_demand import (
     SVI_ROLE,
     VrfDemandInputs,
@@ -51,7 +53,7 @@ class VrfRequirements:
 
 def device_vrfs(data: dict[str, Any]) -> list[dict[str, Any]]:
     """The namespace dicts (name, l3_vni, namespace_type) of the ManagedVRF instances the device is a member of."""
-    return [vrf["namespace"] for vrf in device_memberships(data) if vrf.get("namespace")]
+    return [vrf["security_zone"] for vrf in device_memberships(data) if vrf.get("security_zone")]
 
 
 def l3_vrf_names(lisp: dict[str, Any] | None, vxlan: dict[str, Any] | None) -> list[str]:
@@ -80,7 +82,7 @@ def svi_vrfs(interfaces: list[dict[str, Any]] | None) -> dict[int, str | None]:
     for iface in interfaces or []:
         vlan_id = svi_vlan_id(iface.get("name"))
         if iface.get("role") == SVI_ROLE and vlan_id is not None:
-            found[vlan_id] = ((iface.get("vrf") or {}).get("namespace") or {}).get("name")
+            found[vlan_id] = (interface_vrf(iface).get("security_zone") or {}).get("name")
     return found
 
 
@@ -89,7 +91,7 @@ def vrf_requirements(data: dict[str, Any]) -> VrfRequirements:
 
     ``data`` is the cleaned device with its ``segment_deployments`` (segment activations) set, as
     ``BaseDeviceTransform.prepared_device`` leaves it. The demand is ``utils.vrf_demand.vrf_demand`` over the same
-    inputs the generators read (``address_namespaces``, ``leg_namespaces`` of the contexts on its service ports); the
+    inputs the generators read (``address_namespaces``, ``leg_namespaces`` of the contexts behind its service ports); the
     rows are its routed segment activations, the config's view of the routed rows of the device.
     """
     deployment = data.get("deployment") if isinstance(data.get("deployment"), dict) else {}
@@ -107,7 +109,7 @@ def vrf_requirements(data: dict[str, Any]) -> VrfRequirements:
         row_namespaces=frozenset(routed.values()),
         svi_namespaces=frozenset(name for name in svi_vrfs(interfaces).values() if name),
         address_namespaces=address_namespaces(interfaces),
-        leg_namespaces=leg_namespaces(interfaces),
+        leg_namespaces=leg_namespaces(border_contexts(device_services(data))),
     )
     if not carries_vrfs(inputs.kind, inputs.role, inputs.groups, inputs.deployment_kind):
         return VrfRequirements()

@@ -8,7 +8,7 @@ from transforms.helpers.vrf import plain_vrf_names
 
 
 def _device(*names: str) -> dict[str, Any]:
-    return {"shared_capabilities": [{"typename": "ManagedVRF", "namespace": {"name": name}} for name in names]}
+    return {"shared_capabilities": [{"typename": "ManagedVRF", "security_zone": {"name": name}} for name in names]}
 
 
 def _bgp(*vrfs: str) -> list[dict[str, Any]]:
@@ -17,9 +17,9 @@ def _bgp(*vrfs: str) -> list[dict[str, Any]]:
 
 def test_session_vrfs_first_in_session_order_then_the_rest_by_name() -> None:
     """Today's order (the sessions') is kept; an instance with no session follows, sorted."""
-    names = plain_vrf_names(_device("A", "NON-PROD", "PROD", "Z"), _bgp("PROD", "NON-PROD", "PROD"), None)
+    names = plain_vrf_names(_device("A", "NONPROD", "PROD", "Z"), _bgp("PROD", "NONPROD", "PROD"), None)
 
-    assert names == ["PROD", "NON-PROD", "A", "Z"]
+    assert names == ["PROD", "NONPROD", "A", "Z"]
 
 
 def test_an_instance_with_an_l3_vni_is_left_to_the_vxlan_block() -> None:

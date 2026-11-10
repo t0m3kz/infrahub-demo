@@ -13,9 +13,10 @@ from typing import Any
 
 import pytest
 
+from tests.unit.firewall_helpers_shared import fw_contexts
+from tests.unit.routing_helpers import in_vrf
 from transforms.config.firewall import apply_context_routes
 from transforms.helpers.firewall import get_firewall_static_routes
-from transforms.helpers.firewall_contexts import get_firewall_contexts
 from transforms.helpers.firewall_terminated import terminated_interfaces
 
 DEVICE_ID = "fw-1"
@@ -28,7 +29,7 @@ def _segment(
     *,
     gateway: str | None = "10.9.0.1/24",
     rows: list[tuple[str, int]] | None = None,
-    zone: str | None = "PROD-ZONE",
+    zone: str | None = "PROD",
 ) -> dict[str, Any]:
     """A terminated segment as FirewallContextConfigFields returns it, its rows being ``(device id, vlan id)``."""
     return {
@@ -44,7 +45,11 @@ def _segment(
 
 def _context(*segments: dict[str, Any], trunk: str | None = "eth1") -> dict[str, Any]:
     """A context in the shape get_firewall_contexts returns, with one leg on ``trunk`` (None: no leg)."""
-    legs = [{"interface": f"{trunk}.3000", "parent_interface": {"name": trunk}}] if trunk else []
+    legs = (
+        [{"interface": f"{trunk}.3000", "parent_interface": {"name": trunk, "device": {"id": "dev-fw"}}}]
+        if trunk
+        else []
+    )
     return {
         "id": "ctx-1",
         "name": "shared-fw-prod",
@@ -75,7 +80,7 @@ class TestTerminatedInterfaces:
             "vlan_id": 101,
             "parent_interface": {"name": "eth1"},
             "ip_address": {"address": "10.9.0.1/24"},
-            "security_zone": {"name": "PROD-ZONE"},
+            "security_zone": {"name": "PROD"},
             "virtual_ip": "10.9.0.1/24",
         }
 
@@ -166,20 +171,27 @@ class TestContextShape:
             "served_deployments": [{"id": "dep", "network_segments": [{"id": segment["id"]}]}],
         }
         leg = {
+            **in_vrf(
+                {
+                    "id": "vrf-prod",
+                    "security_zone": {"id": "zone-prod", "name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
+                }
+            ),
             "name": "eth1.3000",
-            "parent_interface": {"name": "eth1"},
-            "ip_address": {"address": "10.0.0.5/29", "ip_namespace": {"name": "PROD", "namespace_type": "prod"}},
+            "device": {"id": "dev-fw"},
+            "parent_interface": {"name": "eth1", "device": {"id": "dev-fw"}},
+            "ip_address": {"address": "10.0.0.5/29", "ip_namespace": {"node": {"name": {"value": "default"}}}},
             "capabilities": [capability],
         }
 
-        (context,) = get_firewall_contexts([leg], HA)
+        (context,) = fw_contexts([leg], HA)
 
         assert context["terminated_segments"] == [segment]
-        assert context["legs"][0]["parent_interface"] == {"name": "eth1"}
+        assert context["legs"][0]["parent_interface"] == {"name": "eth1", "device": {"id": "dev-fw"}}
 
     def test_a_context_without_the_field_terminates_nothing(self) -> None:
         """A cluster context (colocation) read by a query that has no terminated_segments."""
-        (context,) = get_firewall_contexts([], HA, [{"id": "ctx-1", "name": "c"}])
+        (context,) = fw_contexts([], HA, [{"id": "ctx-1", "name": "c"}])
 
         assert context["terminated_segments"] == []
 
@@ -193,7 +205,7 @@ class TestRoutes:
             "interface": "eth1.3000",
             "vlan": 3000,
             "ns_type": "prod",
-            "zone": "PROD-ZONE",
+            "zone": "PROD",
             "nameif": "prod",
             "vrf": "PROD",
             "anycast": "10.0.0.1",
@@ -205,12 +217,12 @@ class TestRoutes:
         routed = {
             "id": "id-routed",
             "gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}},
-            "security_zone": {"name": "PROD-ZONE"},
+            "security_zone": {"name": "PROD"},
         }
         terminated = {
             "id": "id-seg-a",
             "gateway": {"ip_prefix": {"prefix": "10.9.0.0/24"}},
-            "security_zone": {"name": "PROD-ZONE"},
+            "security_zone": {"name": "PROD"},
         }
         context = {
             "legs": [self._leg()],
@@ -226,13 +238,12 @@ class TestRoutes:
 
     def test_an_interface_with_a_virtual_ip_gets_no_static_route(self) -> None:
         """get_firewall_static_routes derives a leaf next hop in a /30; a VIP interface has no leaf behind it."""
-        namespace = {"name": "PROD"}
         base = {
             "name": "eth1.101",
-            "ip_address": {"address": "10.9.0.1/30", "ip_namespace": namespace},
-            "security_zone": {"name": "PROD-ZONE"},
+            "ip_address": {"address": "10.9.0.1/30", "ip_namespace": {"node": {"name": {"value": "default"}}}},
+            **in_vrf({"id": "vrf-prod", "security_zone": {"id": "zone-prod", "name": "PROD"}}),
         }
-        zones = [{"name": "PROD-ZONE", "member_cidrs": ["10.1.0.0/24"]}]
+        zones = [{"name": "PROD", "member_cidrs": ["10.1.0.0/24"]}]
 
         assert len(get_firewall_static_routes([base], zones)) == 1
         assert get_firewall_static_routes([base | {"virtual_ip": "10.9.0.1/30"}], zones) == []

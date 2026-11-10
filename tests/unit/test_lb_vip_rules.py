@@ -28,6 +28,8 @@ from tests.unit.lb_vip_helpers import (
     _vip_gen,
     _web,
 )
+from tests.unit.query_shape_helpers import fragment_tree
+from utils.graphql_queries import load_query
 
 # ===========================================================================
 # AppApplicationGenerator: R_client and the run's errors
@@ -39,7 +41,6 @@ def _app_gen(lb_vips: dict[str, Any], lb_errors: list[str] | None = None) -> Any
     gen.client = AsyncMock()
     gen._init_client = AsyncMock()
     gen.logger = MagicMock()
-    gen._ensure_segment_zones = AsyncMock()
     gen._ensure_segment_isolation_mode = AsyncMock()
     gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
     gen._reconcile_load_balancing = AsyncMock(return_value=(lb_vips, list(lb_errors or [])))
@@ -71,6 +72,8 @@ class TestClientRule:
         data = rules["portal-to-web-tcp-443-vip-dc10-lb-prod"]
         assert data["destination_ip_addresses"] == [{"id": "vip-a"}]
         assert "destination_segment" not in data
+        # The VIP has no segment: the target's tenant zone (the context's VIP range is in it) qualifies it.
+        assert data["destination_zone"] == {"hfid": ["PROD"]}
         assert data["source_segment"] == {"id": "seg-portal"}
         assert (data["protocol"], data["port_start"]) == ("tcp", 443)
         # Looked up by name in the policy's rules, which are read once with their selectors (_read_policy_rules).
@@ -163,7 +166,6 @@ def _tracked_run(web_load_balanced: bool) -> set[tuple[str, str]]:
     gen.client = _TrackingClient()
     del gen._get_or_create_by_name
     del gen._upsert_policy_rule
-    gen._ensure_segment_zones = AsyncMock()
     gen._ensure_segment_isolation_mode = AsyncMock()
     gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
     gen._get_profile = AsyncMock(return_value=None)
@@ -245,10 +247,15 @@ class TestCloudClientRule:
 
 
 def test_application_query_reads_the_cloud_placement_of_instances(root_dir: Path) -> None:
-    """A cloud instance's private_ip and its subnet's virtual network with the CIDR blocks' namespaces."""
-    query = (root_dir / "queries/topology/add/application.gql").read_text()
+    """A cloud instance's private IP, virtual network and CIDR blocks (neutral IPAM, no routing zone)."""
+    query = load_query(root_dir / "queries/topology/add/application.gql")
     fragment = query.split("fragment AppInstanceFields", 1)[1].split("fragment AppComponentSecurityFields", 1)[0]
-    cloud = fragment.split("... on CloudInstance {", 1)[1]
+    cloud = " ".join(fragment.split("... on CloudInstance {", 1)[1].split())
     assert "private_ip { value }" in cloud
     assert "virtual_network {" in cloud
-    assert "cidr_blocks { edges { node { prefix { value } ip_namespace { node { id } } } } }" in cloud
+    fields = fragment_tree(root_dir / "queries/topology/add/application.gql", "AppInstanceFields")
+    prefix = fields["network_segment"]["node"]["virtual_network"]["node"]["cidr_blocks"]["edges"]["node"]
+    assert {"prefix", "ip_namespace"} <= set(prefix)
+    assert "id" in prefix["ip_namespace"]["node"]
+    # IPAM is neutral: a prefix carries no routing zone, the segment's security_zone does.
+    assert "security_zone" not in prefix

@@ -17,7 +17,7 @@ from typing import Any
 from utils.exchange_transit import exchange_route_specs
 
 from .connections import tracked_save_kwargs
-from .protocols import DcimDevice, ManagedStaticRoute, ManagedVRF
+from .protocols import DcimDeviceManaged, ManagedStaticRoute, ManagedVRF
 
 EDGE_ROLE = "edge"
 """A colocation edge keeps the tenant default a local static: it resolves the VIP over its own transit L2VNI, and
@@ -71,7 +71,8 @@ class ExchangeRoutesMixin:
 
         A device in no instance of a route's VRF fails the run: the instance follows the legs, so it is a defect to
         report, not a route to skip."""
-        devices = await self.client.filters(kind=DcimDevice, ids=device_ids)
+        # DcimDeviceManaged, not the slim DcimDevice: the role (an edge keeps its tenant default local) is on it.
+        devices = await self.client.filters(kind=DcimDeviceManaged, ids=device_ids)
         instances = await self._vrf_instances([d.id for d in devices])
         for device in devices:
             is_edge = getattr(getattr(device, "role", None), "value", None) == EDGE_ROLE
@@ -109,6 +110,8 @@ class ExchangeRoutesMixin:
     async def _vrf_instances(self, device_ids: list[str]) -> dict[tuple[str, str], str]:
         """(device id, namespace name) -> id of the VRF instance the device is a member of, one read."""
         found = await self.client.filters(
-            kind=ManagedVRF, shared_devices__ids=device_ids, include=["shared_devices", "namespace"]
+            kind=ManagedVRF, shared_devices__ids=device_ids, include=["shared_devices", "security_zone"]
         )
-        return {(peer.id, vrf.namespace.peer.name.value): vrf.id for vrf in found for peer in vrf.shared_devices.peers}
+        return {
+            (peer.id, vrf.security_zone.peer.name.value): vrf.id for vrf in found for peer in vrf.shared_devices.peers
+        }

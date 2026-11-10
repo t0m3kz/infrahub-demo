@@ -121,6 +121,7 @@ def _activation() -> dict[str, Any]:
         "vni": 10100,
         "status": "active",
         "segment": {
+            "security_zone": {"name": "PROD", "l3_vni": 50001},
             "name": "Owner - production - seg-100",
             "customer_name": "seg-100",
             "arp_suppression": True,

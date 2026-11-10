@@ -15,11 +15,12 @@ from utils.exchange_transit import (
 )
 from utils.fabric_roles import FIREWALL_ROLES
 from utils.limits import ACL_CLOSING_SEQ, DEFAULT_NAMESPACE, VLAN_NAME_MAX
+from utils.routing_domain import interface_security_zone, interface_vrf
 from utils.segment_addressing import segment_prefix
 
 
 def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-    """Build the zone list (address objects, static routes) from the SecurityZone root.
+    """Build the zone list and address objects from context-scoped zone data.
 
     Args:
         zones_data: List of cleaned SecurityZone dicts.
@@ -53,7 +54,7 @@ def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[d
                 "name": name,
                 "trust_level": zone.get("trust_level") or 0,
                 "description": zone.get("description") or "",
-                "member_cidrs": sorted(member_cidrs),
+                "member_cidrs": sorted(set(member_cidrs)),
             }
         )
     return sorted(zones, key=lambda z: z.get("trust_level") or 0, reverse=True)
@@ -71,7 +72,7 @@ def get_firewall_static_routes(
 
     Args:
         fw_interfaces: List of DcimFirewallInterface dicts (already cleaned, with
-                       security_zone.namespace and ip_address populated).
+                       vrf.security_zone and ip_address populated).
         zones:         Output of get_firewall_zones() — used to look up member_cidrs
                        per zone name.
 
@@ -92,11 +93,11 @@ def get_firewall_static_routes(
 
     routes: list[dict[str, Any]] = []
     for iface in fw_interfaces:
-        zone_ref = iface.get("security_zone") or {}
+        zone_ref = interface_vrf(iface).get("security_zone") or {}
         zone_name = zone_ref.get("name")
         ip_obj = iface.get("ip_address") or {}
         ip_addr = ip_obj.get("address")
-        ns_name = (ip_obj.get("ip_namespace") or {}).get("name")
+        ns_name = interface_security_zone(iface).get("name")
         iface_name = iface.get("name")
 
         if not (zone_name and ns_name and ip_addr and iface_name):
@@ -139,7 +140,7 @@ def _transit_names(ctx: dict[str, Any], namespace: str) -> tuple[str, str]:
     shared context's name already ends in its namespace, so its leg is ``LB-<context>``; past
     VLAN_NAME_MAX the VLAN name is cut to fit with a 4-hex digest of the full name (deterministic, and
     two long names sharing a stem still differ), and the full name stays in the SVI description. A
-    leaf's contexts come from the firewall HA traversal (FirewallContextLegFields, no typename): they
+    leaf's contexts come from the firewall HA traversal (utils/service_contexts.py contexts_with_legs): they
     are firewall contexts.
     """
     if (ctx.get("typename") or FIREWALL_CONTEXT_KIND) == FIREWALL_CONTEXT_KIND:
@@ -158,18 +159,18 @@ def transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
     Each carries the namespace type/l3_vni, the transit /29, the transit VLAN and
     VNI, and the fixed addresses (anycast .1, VIP .4, members .5/.6), all by the
     utils.exchange_transit rules. A leg is a sub-interface of an HA member (a
-    firewall or a load balancer); the border ports tagged with the context and
-    legs in the default namespace are skipped.
+    firewall or a load balancer); ``ctx["legs"]``
+    (utils/service_contexts.py); legs in the default namespace are skipped.
     """
     legs: dict[str, dict[str, Any]] = {}
     context_vlan = ctx.get("vlan_id")
-    for leg in ctx.get("capabilities") or []:
+    for leg in ctx.get("legs") or []:
         namespace = transit_leg_namespace(context_vlan, leg)
         if (
             namespace is None or context_vlan is None
         ):  # a transit leg has a context VLAN: the narrowing for the type checker
             continue
-        ns_name, ns_type = namespace["name"], namespace["namespace_type"]
+        ns_name, ns_type = namespace["name"], namespace["vrf_type"]
         network = ip_interface(leg["ip_address"]["address"]).network
         addresses = transit_addresses(str(network))
         legs.setdefault(
@@ -197,7 +198,7 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
     fixed offset (utils.exchange_transit); the members' own addresses are never the
     nexthop. None without a transit leg in ``namespace``.
     """
-    for leg in ctx.get("capabilities") or []:
+    for leg in ctx.get("legs") or []:
         if (leg.get("device") or {}).get("role") not in FIREWALL_ROLES:
             continue
         ip_obj = leg.get("ip_address") or {}
@@ -208,7 +209,7 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
             interface = ip_interface(address)
         except ValueError:
             continue
-        ns_name = (ip_obj.get("ip_namespace") or {}).get("name")
+        ns_name = interface_security_zone(leg).get("name")
         if namespace and ns_name == namespace and ns_name != DEFAULT_NAMESPACE:
             return transit_addresses(str(interface.network))["vip"]
     return None
@@ -248,14 +249,17 @@ def get_exchange_transits(
                         "name": name,
                         "customer_name": vlan_name,
                         "vlan_description": name,
+                        "security_zone": {
+                            "name": leg["namespace"],
+                            "l3_vni": leg["l3_vni"],
+                            "vrf_type": leg["ns_type"],
+                        },
                         "gateway": {
                             "address": f"{leg['anycast']}/{leg['prefixlen']}",
                             "ip_prefix": {
                                 "prefix": leg["prefix"],
                                 "ip_namespace": {
-                                    "name": leg["namespace"],
-                                    "l3_vni": leg["l3_vni"],
-                                    "namespace_type": leg["ns_type"],
+                                    "name": DEFAULT_NAMESPACE,
                                 },
                             },
                         },
@@ -288,7 +292,7 @@ def get_leaf_firewall_transits(
     held = {
         (ns["name"], transit_addresses(t["segment"]["gateway"]["ip_prefix"]["prefix"])["vip"])
         for t in transits
-        for ns in [t["segment"]["gateway"]["ip_prefix"]["ip_namespace"]]
+        for ns in [t["segment"]["security_zone"]]
         if t["transit_context"] and ns["l3_vni"]
     }
     for rule in pbr_rules:

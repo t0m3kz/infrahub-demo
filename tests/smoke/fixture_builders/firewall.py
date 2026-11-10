@@ -16,6 +16,7 @@ from tests.smoke.fixture_builders.common import (
     write_data_fixtures,
 )
 from tests.smoke.fixture_builders.fabric import FIREWALL_PLATFORMS, build_device_data
+from tests.smoke.fixture_builders.vrf import routing_zone
 from transforms.config.firewall import Firewall
 from transforms.config.leaf import Leaf
 
@@ -30,59 +31,39 @@ def _make_firewall_interface(
     vlan_id: int | None = None,
     parent_interface_name: str | None = None,
     namespace_name: str | None = None,
-    zone_members: list[dict] | None = None,
 ) -> dict:
-    """A firewall leg carrying its zone's segment. ``zone_members`` are the
-    zone's segments with their rules (queries/config/firewall.gql's
-    security_zone.network_segments): where a context-less firewall gets the
-    rules of the zone it routes through this leg."""
-    seg_name = f"seg-{zone_name}"
+    """A firewall sub-interface with one explicit routing/policy zone.
+
+    Virtual interfaces cannot carry ``segments``. The global zone is routing
+    identity; policies belong to an explicitly served footprint.
+    """
     zone_node = {
-        "name": _v(zone_name),
+        **routing_zone(zone_name),
         "trust_level": _v(trust_level),
-        "network_segments": _edges(zone_members or []),
     }
-    seg_node = {
-        "__typename": "ManagedVxlanSegment",
-        "id": seg_name,
-        "name": _v(seg_name),
-        "status": _v("active"),
-        "arp_suppression": _v(True),
-        "segment_deployments": _edges([{"vlan_id": _v(vlan_id), "vni": _v(None)}]),
-        "security_zone": _node(zone_node),
-        # queries/config/firewall.gql reads the segment subnet from
-        # gateway.ip_prefix.prefix — a flat `prefix` key (which this used to
-        # emit) is read by nothing, so zone address-object rendering was never
-        # covered. The firewall's own leg address is the segment gateway here.
-        "gateway": _node(
-            {
-                "address": _v(ip_address),
-                "ip_prefix": _node(
-                    {
-                        "prefix": _v(str(ipaddress.ip_interface(ip_address).network)),
-                        "ip_namespace": _node({"name": _v(namespace_name), "l3_vni": _v(None)}),
-                    }
-                ),
-            }
-        ),
-        "security_policy": _node(None),
-        "inbound_rules": _edges([]),
-    }
+    if namespace_name is not None and routing_zone(namespace_name)["name"] != zone_node["name"]:
+        raise ValueError(f"Firewall leg {name}: routing and policy zones disagree")
+    if vlan_id is not None and parent_interface_name is not None and name != f"{parent_interface_name}.{vlan_id}":
+        raise ValueError(f"Firewall leg {name}: explicit VLAN does not match its sub-interface")
     return {
+        "security_zone": _node(zone_node),
         "__typename": "DcimVirtualInterface",
         "name": _v(name),
         "description": _v(description),
         "status": _v("active"),
         "role": _v("uplink"),
-        "parent_interface": _node({"name": _v(parent_interface_name)} if parent_interface_name else None),
+        "device": _node({"id": "dev-fw"}),
+        "vlan_id": _v(int(name.rsplit(".", 1)[1]) if parent_interface_name else None),
+        "parent_interface": _node(
+            {"name": _v(parent_interface_name), "device": _node({"id": "dev-fw"})} if parent_interface_name else None
+        ),
         "ip_address": _node(
             {
                 "address": _v(ip_address),
-                "ip_namespace": _node({"name": _v(namespace_name)}),
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         ),
         "ha_domain": _node(None),
-        "segments": _edges([seg_node]),
         "capabilities": _edges([]),
     }
 
@@ -95,6 +76,9 @@ def _make_zone(
     cidrs: list[str] | None = None,
     namespace_name: str | None = None,
 ) -> dict:
+    zone = routing_zone(name)
+    if namespace_name is not None and routing_zone(namespace_name)["name"] != zone["name"]:
+        raise ValueError(f"Firewall zone {name}: routing and policy zones disagree")
     segments = []
     for cidr in cidrs or []:
         seg_name = f"seg-{cidr.replace('/', '-').replace('.', '-')}"
@@ -103,11 +87,12 @@ def _make_zone(
                 "id": seg_name,
                 "__typename": "ManagedVxlanSegment",
                 "name": _v(seg_name),
+                "security_zone": _node(zone),
                 "gateway": _node({"ip_prefix": _node({"prefix": _v(cidr)})}),
             }
         )
     return {
-        "name": _v(name),
+        **zone,
         "trust_level": _v(trust_level),
         "description": _v(description),
         "network_segments": _edges(segments),
@@ -120,7 +105,7 @@ def _make_rule_segment(*, cidr: str, zone_name: str) -> dict:
         "id": f"seg-{cidr.replace('/', '-').replace('.', '-')}",
         "__typename": "ManagedVxlanSegment",
         "name": _v(f"seg-{cidr.replace('/', '-').replace('.', '-')}"),
-        "security_zone": _node({"name": _v(zone_name)}),
+        "security_zone": _node(routing_zone(zone_name)),
         "gateway": _node({"ip_prefix": _node({"prefix": _v(cidr)})}),
         "customer_deployments": _edges([]),
     }
@@ -138,13 +123,15 @@ def _make_segment_rule(
     src_segment: dict | None,
     dst_segment: dict | None = None,
     dst_zone: str | None = None,
+    src_zone: str | None = None,
     log: bool = False,
     description: str = "",
     security_profile: str | None = None,
 ) -> dict:
     """A SecurityPolicyRule (SecurityPolicyRuleFields) of ``policy``, the policy of ``src_segment``.
 
-    ``dst_zone`` is the rule's own ``destination_zone`` (the internet), set instead of ``dst_segment``.
+    ``dst_zone`` is the rule's own ``destination_zone`` (the internet), set instead of ``dst_segment``; ``src_zone``
+    its ``source_zone`` (the internet), set instead of ``src_segment``.
     """
     return {
         "id": f"rule-{policy}-{name}",
@@ -166,6 +153,7 @@ def _make_segment_rule(
         "destination_ip_addresses": _edges([]),
         "security_profile": _node({"name": _v(security_profile)} if security_profile else None),
         **({"destination_zone": _node({"name": _v(dst_zone)})} if dst_zone else {}),
+        **({"source_zone": _node({"name": _v(src_zone)})} if src_zone else {}),
     }
 
 
@@ -185,7 +173,7 @@ def _make_rule_bearing_segments(endpoints: list[dict], policies: list[tuple[dict
     policy (the one whose header names it) with its rules, and the rules of
     every policy whose destination it is, each carrying its policy."""
     segments: dict[str, dict] = {
-        endpoint["id"]: {"id": endpoint["id"], "security_policy": _node(None), "inbound_rules": _edges([])}
+        endpoint["id"]: {**endpoint, "security_policy": _node(None), "inbound_rules": _edges([])}
         for endpoint in endpoints
     }
     for header, rules in policies:
@@ -198,16 +186,51 @@ def _make_rule_bearing_segments(endpoints: list[dict], policies: list[tuple[dict
     return segments
 
 
-def build_firewall_data(*, device_name: str, platform: str) -> dict:
-    """Build a complete multi-root GQL response for a firewall config query.
+def _attach_standalone_policy_context(device: dict, segments: list[dict]) -> None:
+    """Scope the historical /30 fixture's rules to explicit served footprints.
 
-    Includes:
-      - DcimPhysicalDevice with DcimFirewallInterface nodes (one per zone)
-      - SecurityZone nodes with member segment CIDRs
-      - the zones' member segments with their policies and inbound rules,
-        reached through the zone of each leg's segment: a firewall with no
-        contexts enforces the rules of the zones it routes
+    No base VLAN means no generated /29 transit legs, as in existing hosted
+    policy-only contexts. Keep the authored /30 addresses and VLANs intact.
     """
+    interfaces = [edge["node"] for edge in device["interfaces"]["edges"]]
+    zones = {
+        interface["security_zone"]["node"]["name"]["value"]: interface["security_zone"]["node"]
+        for interface in interfaces
+        if (interface.get("security_zone") or {}).get("node")
+    }
+    by_zone: dict[str, list[dict]] = {}
+    for segment in segments:
+        name = segment["security_zone"]["node"]["name"]["value"]
+        metadata = zones[name]
+        segment["security_zone"]["node"].update(
+            {key: metadata[key] for key in ("trust_level", "description") if key in metadata}
+        )
+        by_zone.setdefault(name, []).append(segment)
+    context = {
+        "__typename": "ManagedFirewallContext",
+        "id": f"fixture-policy-context-{device['id']}",
+        "name": _v(f"shared-{device['name']['value']}-policy"),
+        "context_id": _v(None),
+        "vlan_id": _v(None),
+        "tenant": _node(None),
+        "snat_address": _node(None),
+        "served_deployments": _edges(
+            [
+                {
+                    "__typename": "TopologyCustomerDC",
+                    "id": f"fixture-footprint-{device['id']}-{name.lower()}",
+                    "parent": _node({"id": "fixture-dc"}),
+                    "network_segments": _edges(members),
+                }
+                for name, members in sorted(by_zone.items())
+            ]
+        ),
+    }
+    device.setdefault("shared_capabilities", _edges([]))["edges"].append({"node": context})
+
+
+def build_firewall_data(*, device_name: str, platform: str) -> dict:
+    """Build direct zone-owned /30 interfaces with explicitly footprint-scoped policies."""
     dmz_segment = _make_rule_segment(cidr="10.0.2.0/24", zone_name="dmz")
     internal_segment = _make_rule_segment(cidr="10.0.1.0/24", zone_name="internal")
     internal_lan_segment = _make_rule_segment(cidr="10.0.10.0/24", zone_name="internal")
@@ -274,7 +297,6 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
             vlan_id=10,
             parent_interface_name="ethernet1/1",
             namespace_name="VRF-INTERNAL",
-            zone_members=[segments[internal_segment["id"]], segments[internal_lan_segment["id"]]],
         ),
         _make_firewall_interface(
             name="ethernet1/1.20",
@@ -285,7 +307,6 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
             vlan_id=20,
             parent_interface_name="ethernet1/1",
             namespace_name="VRF-DMZ",
-            zone_members=[segments[dmz_segment["id"]]],
         ),
         _make_firewall_interface(
             name="ethernet1/1.30",
@@ -341,10 +362,12 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
         ),
     ]
 
-    return {
-        "DcimPhysicalDevice": _edges([device_node]),
-        "SecurityZone": _edges(zones),
-    }
+    for interface in fw_interfaces:
+        zone = interface["security_zone"]["node"]
+        metadata = next(item for item in zones if item["name"] == zone["name"])
+        zone["description"] = metadata["description"]
+    _attach_standalone_policy_context(device_node, list(segments.values()))
+    return {"DcimPhysicalDevice": _edges([device_node]), "SecurityZone": _edges([])}
 
 
 def build_leaf_internet_permit_data(*, device_name: str, platform: str) -> dict:
@@ -365,14 +388,14 @@ def build_leaf_internet_permit_data(*, device_name: str, platform: str) -> dict:
         "id": "seg-seg-100",
         "__typename": "ManagedVxlanSegment",
         "name": _v("seg-100"),
-        "security_zone": _node({"name": _v("PROD-ZONE")}),
+        "security_zone": _node({"name": _v("PROD")}),
         "gateway": _node({"ip_prefix": _node({"prefix": _v("10.100.0.0/24")})}),
     }
     dest = {
         "id": "seg-seg-200",
         "__typename": "ManagedVxlanSegment",
         "name": _v("seg-200"),
-        "security_zone": _node({"name": _v("PROD-ZONE")}),
+        "security_zone": _node({"name": _v("PROD")}),
         "gateway": _node({"ip_prefix": _node({"prefix": _v("10.200.0.0/24")})}),
     }
     # An intra-zone permit first, to show it is not shadowed by the band, then the Internet permit.
@@ -381,7 +404,7 @@ def build_leaf_internet_permit_data(*, device_name: str, platform: str) -> dict:
     intra["destination_segment"] = _node(dest)
     rule = _make_policy_rule(index=20, name="allow-internet-https", protocol="tcp", port_start=443)
     rule["source_segment"] = _node(source)
-    rule["destination_zone"] = _node({"name": _v("INTERNET-ZONE")})
+    rule["destination_zone"] = _node({"name": _v("INTERNET")})
     patched: set[int] = set()
     stack: list[Any] = [data]
     while stack:
@@ -411,18 +434,20 @@ def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
     net = ipaddress.ip_network("100.66.0.0/29")
     legs = [
         {
+            "security_zone": _node({"name": _v("VRF_A"), "vrf_type": _v("prod"), "l3_vni": _v(50001)}),
             "name": _v("ethernet1/1.3000"),
             "device": _node({"name": _v(member), "role": _v("internal-firewall")}),
             "ip_address": _node(
                 {
                     "address": _v(f"{net[host]}/{net.prefixlen}"),
-                    "ip_namespace": _node({"name": _v("VRF_A"), "namespace_type": _v("prod"), "l3_vni": _v(50001)}),
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
                 }
             ),
         }
         for member, host in (("dc1-fw-01", 5), ("dc1-fw-02", 6))
     ]
     context = {
+        "__typename": "ManagedFirewallContext",
         "id": "ctx-shared",
         "name": _v("dc1-fw-shared"),
         "vlan_id": _v(3000),
@@ -432,7 +457,7 @@ def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
     }
     firewall = {
         "node": {
-            "capabilities": _edges([{"__typename": "ManagedFirewallHA", "contexts": _edges([context])}]),
+            "shared_capabilities": _edges([context]),
         }
     }
     data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]["devices"] = {"edges": [firewall]}
@@ -458,13 +483,28 @@ def _lb_rule(
         src_segment=src_segment,
         dst_segment=dst_segment,
     )
-    namespace = _node({"name": _v("VRF_A")})
     if src_prefix:
+        rule["source_zone"] = _node(routing_zone("PROD"))
         rule["source_prefixes"] = _edges(
-            [{"id": f"pfx-{src_prefix}", "prefix": _v(src_prefix), "ip_namespace": namespace}]
+            [
+                {
+                    "id": f"pfx-{src_prefix}",
+                    "prefix": _v(src_prefix),
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
+                }
+            ]
         )
     if vip:
-        rule["destination_ip_addresses"] = _edges([{"id": f"ip-{vip}", "address": _v(vip), "ip_namespace": namespace}])
+        rule["destination_zone"] = _node(routing_zone("PROD"))
+        rule["destination_ip_addresses"] = _edges(
+            [
+                {
+                    "id": f"ip-{vip}",
+                    "address": _v(vip),
+                    "ip_prefix": _node(None),
+                }
+            ]
+        )
     return rule
 
 
@@ -546,7 +586,7 @@ def build_leaf_lb_client_data(*, device_name: str, platform: str) -> dict:
 def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
     """A firewall whose internal zone (10.0.1.0/24) permits https to the internet zone.
 
-    The rule table renders it to INTERNET-ZONE with destination any (the zone names no address).
+    The rule table renders it to INTERNET with destination any (the zone names no address).
     """
     data = build_firewall_data(device_name=device_name, platform=platform)
     internal = _make_rule_segment(cidr="10.0.1.0/24", zone_name="internal")
@@ -564,7 +604,7 @@ def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
                         protocol="tcp",
                         port_start=443,
                         src_segment=internal,
-                        dst_zone="INTERNET-ZONE",
+                        dst_zone="INTERNET",
                         description="Allow HTTPS from Internal to the Internet",
                     )
                 ],
@@ -583,12 +623,11 @@ def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
                 vlan_id=10,
                 parent_interface_name="ethernet1/1",
                 namespace_name="VRF-INTERNAL",
-                zone_members=[segments[internal["id"]]],
             ),
             _make_firewall_interface(
                 name="ethernet1/1.30",
                 ip_address="10.0.3.1/30",
-                zone_name="INTERNET-ZONE",
+                zone_name="INTERNET",
                 trust_level=0,
                 description="Internet link",
                 vlan_id=30,
@@ -597,12 +636,8 @@ def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
             ),
         ]
     )
-    data["SecurityZone"] = _edges(
-        [
-            _make_zone(name="internal", trust_level=100, cidrs=["10.0.1.0/24"], namespace_name="VRF-INTERNAL"),
-            _make_zone(name="INTERNET-ZONE", trust_level=0, cidrs=[], namespace_name="VRF-EXTERNAL"),
-        ]
-    )
+    _attach_standalone_policy_context(device, list(segments.values()))
+    data["SecurityZone"] = _edges([])
     return data
 
 
@@ -655,7 +690,7 @@ def write_fixtures() -> tuple[int, int]:
     generated = errors = 0
 
     # A permit to the internet zone: the leaf denies every
-    # internal range before `permit ... any`, the firewall renders INTERNET-ZONE / any.
+    # internal range before `permit ... any`, the firewall renders INTERNET / any.
     print("\nGenerating internet-permit fixtures (leaf, firewall):")
     g, e = write_data_fixtures(
         [

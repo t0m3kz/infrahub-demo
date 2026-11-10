@@ -22,15 +22,16 @@ ip access-list extended ACL-VLAN100-IN
  20 permit tcp any any eq 443
  30 remark Rule: allow-http
  40 permit tcp any any eq 80
- 50 remark Zone: any -> web
+ 50 remark Zone: any -> PROD
  60 remark Rule: allow-rtp
  70 permit udp any 10.200.0.0 0.0.0.255 range 5000 5010
  80 remark Rule: allow-ping
  90 permit icmp any any
- 100 remark Rule: allow-db-logged
- 110 permit tcp any host 10.9.9.9 eq 5432 log
- 120 remark Rule: implicit-deny-all
- 130 deny ip any any log
+ 100 remark Zone: any -> PROD
+ 110 remark Rule: allow-db-logged
+ 120 permit tcp any host 10.9.9.9 eq 5432 log
+ 130 remark Rule: implicit-deny-all
+ 140 deny ip any any log
 !
 ip access-list extended ACL-VLAN200-IN
  10 remark Rule: allow-ssh
@@ -83,7 +84,7 @@ interface Ethernet2
 !
 ! Tenant VRFs (the EID tables of the L3 instance-ids)
 ! unverified-no-lab: a plain `vrf definition` with an IPv4 address family is all the EID table and the SVIs need
-vrf definition VRF_A
+vrf definition PROD
  address-family ipv4
  exit-address-family
 !
@@ -119,14 +120,14 @@ router lisp
   itr
   etr
   exit-service-ethernet
- ! unverified-no-lab: L3 instance-id 50001 for VRF VRF_A: dynamic-eid with the gateway subnets, IPv4 EID table, default map-request
- instance-id 50001
-  dynamic-eid VRF_A-IPV4
+ ! unverified-no-lab: L3 instance-id 60000 for VRF PROD: dynamic-eid with the gateway subnets, IPv4 EID table, default map-request
+ instance-id 60000
+  dynamic-eid PROD-IPV4
    database-mapping 10.100.0.0/24 locator-set RLOC
    database-mapping 10.200.0.0/24 locator-set RLOC
    exit-dynamic-eid
   service ipv4
-   eid-table vrf VRF_A
+   eid-table vrf PROD
    map-cache 0.0.0.0/0 map-request
    exit-service-ipv4
   exit-instance-id
@@ -153,20 +154,20 @@ router lisp
 ! unverified-no-lab: `lisp mobility <VRF>-IPV4` binds the SVI to the dynamic-eid of its VRF
 interface Vlan100
  description Customer-A
- vrf forwarding VRF_A
+ vrf forwarding PROD
  ip address 10.100.0.1 255.255.255.0
  ip access-group ACL-VLAN100-IN in
- lisp mobility VRF_A-IPV4
+ lisp mobility PROD-IPV4
  mac-address 001c.7300.dc01
  no autostate
  no shutdown
 !
 interface Vlan200
  description Customer-A
- vrf forwarding VRF_A
+ vrf forwarding PROD
  ip address 10.200.0.1 255.255.255.0
  ip access-group ACL-VLAN200-IN in
- lisp mobility VRF_A-IPV4
+ lisp mobility PROD-IPV4
  mac-address 001c.7300.dc01
  no autostate
  no shutdown

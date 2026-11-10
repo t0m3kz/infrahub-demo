@@ -1,5 +1,6 @@
 """The Internet edge in the DC customer flow: the contexts of a DC with an external-firewall pair keep no INTERNET leg,
-and the context spec of the edge is linked to the hosting DC (generators/firewall_context.py, firewall_context_spec.py)."""
+and the footprint lists the edge context next to its internal one (generators/firewall_context.py,
+firewall_context_spec.py)."""
 
 from __future__ import annotations
 
@@ -30,10 +31,10 @@ def _edge_hosted(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def test_the_edge_spec_is_for_the_external_pair_and_links_the_hosting() -> None:
+def test_the_edge_spec_is_for_the_external_pair_and_is_listed_by_the_footprint() -> None:
     assert EDGE_CONTEXT.role == "external-firewall"
     assert EDGE_CONTEXT.devices_key == "external_firewall_devices"
-    assert EDGE_CONTEXT.link_on_parent and not FIREWALL_CONTEXT.link_on_parent
+    assert EDGE_CONTEXT.serving_field == FIREWALL_CONTEXT.serving_field == "serving_firewall_contexts"
     assert EDGE_CONTEXT.leg_types("prod") == ("prod", "internet")
     assert EDGE_CONTEXT.key == FIREWALL_CONTEXT.key  # one VLAN pool per DC, no two contexts share a transit VLAN
 
@@ -43,42 +44,55 @@ def test_the_edge_runs_after_the_customer_firewall_context_in_the_dc_flow() -> N
     assert specs.index(FIREWALL_CONTEXT) < specs.index(EDGE_CONTEXT)
 
 
-def test_the_hosting_links_of_the_edge_are_read_from_the_parent() -> None:
+def _linked(context_id: str, role: str) -> dict[str, Any]:
+    return {"id": context_id, "shared_devices": [{"role": role}]}
+
+
+def test_the_edge_link_is_read_from_the_footprint_list() -> None:
     gen = CustomerDeploymentDCExchangeGenerator.__new__(CustomerDeploymentDCExchangeGenerator)
-    customer = {"parent": {"id": "dc10-id", "internet_edge_contexts": [{"id": "edge-1"}]}}
+    customer = {
+        "serving_firewall_contexts": [
+            _linked("ctx-1", "internal-firewall"),
+            _linked("edge-1", "external-firewall"),
+        ]
+    }
     assert gen.serving_context_ids(customer, EDGE_CONTEXT) == ["edge-1"]
-    assert gen.serving_context_ids({"parent": {"id": "dc10-id"}}, EDGE_CONTEXT) == []
+    assert gen.serving_context_ids({"serving_firewall_contexts": []}, EDGE_CONTEXT) == []
 
 
-class TestLinkOnParent:
-    @pytest.mark.asyncio
-    async def test_the_context_is_added_to_the_hosting_additively(self) -> None:
-        gen = CustomerDeploymentDCExchangeGenerator.__new__(CustomerDeploymentDCExchangeGenerator)
-        gen.logger = MagicMock()
-        hosting = MagicMock()
-        hosting.add_relationships = AsyncMock()
-        gen.client = MagicMock()
-        gen.client.filters = AsyncMock(return_value=[hosting])
-
-        await gen.link_serving_context(
-            EDGE_CONTEXT, customer_id="cust-1", context_id="edge-1", current_ids=[], parent_id="dc10-id"
-        )
-
-        gen.client.filters.assert_awaited_once_with(kind="TopologySegmentHosting", ids=["dc10-id"])
-        hosting.add_relationships.assert_awaited_once_with("internet_edge_contexts", ["edge-1"])
+class TestEdgeLinkConverges:
+    """The edge link sits in the footprint's firewall list; a run prunes only the links of each spec's own role."""
 
     @pytest.mark.asyncio
-    async def test_a_context_already_named_is_not_written_again(self) -> None:
+    async def test_a_stale_edge_is_removed_and_the_internal_link_stays(self) -> None:
         gen = CustomerDeploymentDCExchangeGenerator.__new__(CustomerDeploymentDCExchangeGenerator)
         gen.logger = MagicMock()
+        gen._customer_kind = "TopologyCustomerDC"
+        deployment = MagicMock()
+        deployment.remove_relationships = AsyncMock()
         gen.client = MagicMock()
-        gen.client.filters = AsyncMock()
+        gen.client.get = AsyncMock(return_value=deployment)
+        customer = {
+            "serving_firewall_contexts": [
+                _linked("ctx-1", "internal-firewall"),
+                _linked("edge-old", "external-firewall"),
+            ]
+        }
 
-        await gen.link_serving_context(
-            EDGE_CONTEXT, customer_id="cust-1", context_id="edge-1", current_ids=["edge-1"], parent_id="dc10-id"
+        await gen.unlink_stale_serving_contexts(
+            EDGE_CONTEXT,
+            customer_id="cust-1",
+            current_ids=gen.serving_context_ids(customer, EDGE_CONTEXT),
+            served_ids=["edge-new"],
+        )
+        await gen.unlink_stale_serving_contexts(
+            FIREWALL_CONTEXT,
+            customer_id="cust-1",
+            current_ids=gen.serving_context_ids(customer, FIREWALL_CONTEXT),
+            served_ids=["ctx-1"],
         )
 
-        gen.client.filters.assert_not_awaited()
+        deployment.remove_relationships.assert_awaited_once_with("serving_firewall_contexts", ["edge-old"])
 
 
 class TestCustomerContextsOfAnEdgeHostedDc:

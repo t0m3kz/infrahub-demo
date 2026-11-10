@@ -13,12 +13,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.protocols import CoreNumberPool
 
-from generators.helpers.routing_tag import (
-    ensure_routing_tag,
-    ensure_segment_routing_tag,
-)
+from generators.helpers.routing_tag import ensure_routing_tag, ensure_segment_routing_tag
 from generators.logger import GeneratorError
 from generators.topology.customer_routing_tag import CustomerRoutingTagGenerator
+from tests.unit.query_shape_helpers import compact
+from utils.graphql_queries import load_query
 from utils.limits import CUSTOMER_ROUTING_TAG_POOL, SEGMENT_ROUTING_TAG_POOL
 
 
@@ -41,7 +40,7 @@ def _client(*, pool: bool = True, drawn: int = 41) -> Any:
 
 
 def _segment(
-    *, routing_tag: int | None = None, namespace_type: str | None = "prod", kind: str = "ManagedVxlanSegment"
+    *, routing_tag: int | None = None, vrf_type: str | None = "prod", kind: str = "ManagedVxlanSegment"
 ) -> dict[str, Any]:
     """A cleaned segment as vxlan_segment.gql / application.gql select it (routed PROD tenant by default)."""
     segment: dict[str, Any] = {
@@ -49,10 +48,10 @@ def _segment(
         "typename": kind,
         "name": "c005-web-p",
         "routing_tag": routing_tag,
-        "security_zone": {"name": "PROD-ZONE"},
+        "security_zone": {"name": "PROD", "vrf_type": vrf_type, "l3_vni": 60000},
     }
-    if namespace_type:
-        segment["gateway"] = {"ip_prefix": {"ip_namespace": {"name": "PROD", "namespace_type": namespace_type}}}
+    if vrf_type:
+        segment["gateway"] = {"ip_prefix": {"ip_namespace": {"name": "default"}}}
     return segment
 
 
@@ -165,19 +164,19 @@ class TestEnsureSegmentRoutingTag:
         client.create.assert_not_awaited()
 
     @pytest.mark.parametrize(
-        ("namespace_type", "kind", "zone"),
+        ("vrf_type", "kind", "zone"),
         [
-            pytest.param(None, "ManagedVxlanSegment", "PROD-ZONE", id="no-gateway"),
-            pytest.param("management", "ManagedVxlanSegment", "PROD-ZONE", id="management-namespace"),
-            pytest.param("prod", "ManagedVxlanSegment", "MANAGEMENT-ZONE", id="exchange-zone"),
-            pytest.param("prod", "CloudNetworkSegment", "PROD-ZONE", id="cloud-segment"),
+            pytest.param(None, "ManagedVxlanSegment", "PROD", id="no-gateway"),
+            pytest.param("management", "ManagedVxlanSegment", "PROD", id="management-namespace"),
+            pytest.param("prod", "ManagedVxlanSegment", "MANAGEMENT", id="exchange-zone"),
+            pytest.param("prod", "CloudNetworkSegment", "PROD", id="cloud-segment"),
         ],
     )
     def test_segment_that_is_not_a_routed_tenant_segment_is_never_tagged(
-        self, namespace_type: str | None, kind: str, zone: str
+        self, vrf_type: str | None, kind: str, zone: str
     ) -> None:
         client = _client()
-        segment = _segment(namespace_type=namespace_type, kind=kind)
+        segment = _segment(vrf_type=vrf_type, kind=kind)
         segment["security_zone"] = {"name": zone}
 
         assert asyncio.run(ensure_segment_routing_tag(client, segment=segment)) is None
@@ -253,6 +252,6 @@ class TestCustomerRoutingTagGenerator:
 
     def test_application_query_selects_the_segment_tag(self, root_dir: Path) -> None:
         """SegmentSecurityFields feeds the application generator's segments to the same helper."""
-        query = (root_dir / "queries/topology/add/application.gql").read_text()
+        query = compact(load_query(root_dir / "queries/topology/add/application.gql"))
         fragment = query.split("fragment SegmentSecurityFields", 1)[1].split("\nfragment ", 1)[0]
         assert "routing_tag { value }" in fragment

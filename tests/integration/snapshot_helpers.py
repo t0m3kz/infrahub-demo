@@ -42,8 +42,8 @@ async def render_device_config(
 # changed value or a deleted-and-added id. The kinds after the generator
 # outputs are mostly data-loaded or owned by another generator: an id lost
 # there is a foreign deletion, i.e. a generator cleaned up a node it does not
-# own. A switch port's segment tags are its typed `segments` (the tag reconcile's output); capabilities carries the
-# circuits, contexts and sessions on it.
+# own. A switch port's segment tags are the VLAN rows among its capabilities (the tag reconcile's output),
+# next to the circuits, VRFs and sessions on it.
 TOPOLOGY_SNAPSHOT_KINDS = {
     "DcimDevice": "name { value }",
     # ip_address is declared on each concrete interface kind, not on the generic: a rerun that re-pointed a port
@@ -51,10 +51,10 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     # addresses add_virtual_circuit puts on the DCI ports and the handoff sub-interfaces.
     "DcimInterface": (
         "name { value } capabilities { edges { node { id } } } "
-        "... on DcimPhysicalInterface { ip_address { node { id address { value } } } segments { edges { node { id } } } } "
+        "... on DcimPhysicalInterface { ip_address { node { id address { value } } } } "
         "... on DcimVirtualInterface { ip_address { node { id address { value } } } "
-        "role { value } vrf { node { id } } segment_vlan { node { id } } } "
-        "... on DcimLAGInterface { ip_address { node { id address { value } } } segments { edges { node { id } } } }"
+        "role { value } } "
+        "... on DcimLAGInterface { ip_address { node { id address { value } } } }"
     ),
     # cable_id, color and length_cm are derived by the cabling, HA and MLAG sites from the endpoints, the type and
     # the suite layout: a rerun that rewrote one is a diff.
@@ -77,12 +77,13 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     ),
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value }",
-    "ManagedSegmentVlan": "vlan_id { value } device { node { id } } svi { node { id } }",
-    # The VRF instances (one per hosting deployment and namespace) and the segment SVIs are untracked and converged by
-    # generators/helpers/vrf.py: a rerun that rebuilt an instance (new id), moved it to another topology or namespace,
-    # changed its members, or re-pointed an SVI is a diff.
+    "ManagedSegmentVlan": "vlan_id { value } device { node { id } }",
+    # The VRF instances (one per hosting deployment and security zone) and the segment SVIs are untracked and converged by
+    # generators/helpers/vrf.py: a rerun that rebuilt an instance (new id), moved it to another topology or zone,
+    # changed its members, or re-pointed an SVI (its address, the segment gateway, is in DcimInterface) is a diff.
     "ManagedVRF": (
-        "name { value } deployment { node { id } } namespace { node { id } } shared_devices { edges { node { id } } }"
+        "name { value } deployment { node { id } } security_zone { node { id } } "
+        "shared_devices { edges { node { id } } }"
     ),
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",
@@ -95,7 +96,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "TopologySessionCircuit": (
         "name { value } circuit_type { value } locations { edges { node { id } } } "
         "capabilities { edges { node { id capabilities { edges { node { id } } } } } } "
-        "ip_namespace { node { id } } password { node { id } } "
+        "vrf { node { id } } password { node { id } } "
         "link_prefix { node { id } } registered_prefixes { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",

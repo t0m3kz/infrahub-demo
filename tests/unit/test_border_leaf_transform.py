@@ -18,6 +18,7 @@ import pytest
 
 from tests.smoke.fixture_builders.transit import _static_route_node, spec_vni
 from tests.smoke.fixture_builders.vrf import with_vrf_objects
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.config.border_leaf import BorderLeaf
 from utils.exchange_transit import exchange_route_specs
 
@@ -43,14 +44,15 @@ def _edges(nodes: list[dict]) -> dict:
 
 
 def _ns(name: str, ns_type: str, l3_vni: int) -> dict:
-    return _node({"name": _v(name), "namespace_type": _v(ns_type), "l3_vni": _v(l3_vni)})
+    return _node({"name": _v(name), "vrf_type": _v(ns_type), "l3_vni": _v(l3_vni)})
 
 
 def _leg(address: str, ns: dict, exchange: dict) -> dict:
     return {
+        **in_vrf(make_vrf(ns)),
         "name": _v("eth1.3001"),
         "device": _node({"name": _v("dc-fw-1"), "role": _v("internal-firewall")}),
-        "ip_address": _node({"address": _v(address), "ip_namespace": ns}),
+        "ip_address": _node({"address": _v(address), "ip_namespace": {"node": {"name": {"value": "default"}}}}),
         "capabilities": _edges([exchange]),
     }
 
@@ -98,6 +100,7 @@ def _transit_device_data(platform: str) -> dict:
     ):
         node["capabilities"]["edges"].append({"node": _static_route_node(spec, spec_vni(spec, legs_by_type))})
     segment = {
+        "security_zone": _ns("PROD", "prod", 50001),
         "id": "seg-a",
         "__typename": "ManagedVxlanSegment",
         "name": _v("seg-a"),
@@ -106,7 +109,13 @@ def _transit_device_data(platform: str) -> dict:
         "gateway": _node(
             {
                 "address": _v("10.1.0.1/24"),
-                "ip_prefix": _node({"prefix": _v("10.1.0.0/24"), "ip_namespace": _ns("PROD", "prod", 50001)}),
+                "ip_prefix": _node(
+                    {
+                        "security_zone": _ns("PROD", "prod", 50001),
+                        "prefix": _v("10.1.0.0/24"),
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
+                    }
+                ),
             }
         ),
     }

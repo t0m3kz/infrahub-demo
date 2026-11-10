@@ -1,121 +1,387 @@
-# Every segment kind (Vxlan, Cloud) with what the security
-# invariants read: zone, environment, address (gateway prefix with its
-# namespace, or cidr_block), isolation mode, the policy rules that name a
-# segment (with their component group tags), the segment and tag of each app
-# component, every group tag with the components and segments it groups, the
-# band of the tag pool the group-policy profile rows name (the tags are drawn
-# from it) and their reserved groups, and what the group contract builder
-# reads of each segment (SegmentGroupPolicyFields: its group tag and its own
-# rules). Read at check time, so gateways allocated asynchronously by the
-# generators are settled.
-#
-# The destination-prefix rule reads where a rule's destination_prefixes can be
-# reached: the on-prem segments (gateway prefix), and what is registered
-# behind an external session, selected as transforms/helpers/bgp_external.py
-# registered_by_gateway reads it (the same fields as routing_invariants.gql,
-# with each prefix's namespace_type): an office's lan_prefixes and hosted
-# segments, a tunnel's registered_prefixes (with the end ports' devices; its owner is
-# derived from the office among its locations).
-#
-# A registered destination must belong to the owner of the rule's source segment (the
-# edge announces an owner's prefixes only to that owner's sessions), so the segments
-# carry their owner (`owner`, merged with the fragment's own selection).
 query segment_security {
   ManagedNetworkSegment {
     edges {
       node {
-        # The fragment already selects the id, name, isolation mode, zone name
-        # and gateway prefix; only what it lacks is added here.
         ...SegmentGroupPolicyFields
-        environment { value }
-        owner { node { __typename org_id { value } display_label } }
-        security_zone { node { id } }
-        gateway { node { ip_prefix { node { id } } } }
-        ... on CloudNetworkSegment {
-          cidr_block { value }
-          customer_deployment { node { id name { value } } }
+        environment {
+          value
         }
-      }
-    }
-  }
-
-  SecurityPolicyRule {
-    edges {
-      node {
-        id
-        name { value }
-        disabled { value }
-        policy { node { id name { value } enabled { value } } }
-        source_segment { node { id name { value } } }
-        destination_segment { node { id name { value } } }
-        destination_zone { node { name { value } } }
-        source_prefixes { edges { node { id } } }
-        destination_prefixes { edges { node { id prefix { value } } } }
-        source_ip_addresses { edges { node { id } } }
-        destination_ip_addresses { edges { node { id } } }
-        source_security_tag { node { id name { value } } }
-        destination_security_tag { node { id name { value } } }
-      }
-    }
-  }
-
-  AppComponent {
-    edges {
-      node {
-        id
-        name { value }
-        fqdn { value }
-        network_segment { node { id name { value } environment { value } } }
-        security_tag { node { id } }
-        parent {
+        owner {
           node {
-            ... on AppApplication {
+            __typename
+            org_id {
+              value
+            }
+            display_label
+          }
+        }
+        security_zone {
+          node {
+            ...RoutingZoneFields
+          }
+        }
+        gateway {
+          node {
+            ip_prefix {
+              node {
+                id
+              }
+            }
+          }
+        }
+        ... on CloudNetworkSegment {
+          cidr_block {
+            value
+          }
+          customer_deployment {
+            node {
               id
-              name { value }
-              environment { value }
+              name {
+                value
+              }
             }
           }
         }
       }
     }
   }
-
+  SecurityPolicyRule {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        disabled {
+          value
+        }
+        policy {
+          node {
+            id
+            name {
+              value
+            }
+            enabled {
+              value
+            }
+          }
+        }
+        source_segment {
+          node {
+            id
+            name {
+              value
+            }
+            security_zone {
+              node {
+                ...RoutingZoneFields
+              }
+            }
+          }
+        }
+        destination_segment {
+          node {
+            id
+            name {
+              value
+            }
+            security_zone {
+              node {
+                ...RoutingZoneFields
+              }
+            }
+          }
+        }
+        source_zone {
+          node {
+            ...RoutingZoneFields
+          }
+        }
+        destination_zone {
+          node {
+            ...RoutingZoneFields
+          }
+        }
+        source_prefixes {
+          edges {
+            node {
+              id
+              prefix {
+                value
+              }
+            }
+          }
+        }
+        destination_prefixes {
+          edges {
+            node {
+              id
+              prefix {
+                value
+              }
+            }
+          }
+        }
+        source_ip_addresses {
+          edges {
+            node {
+              id
+              address {
+                value
+              }
+            }
+          }
+        }
+        destination_ip_addresses {
+          edges {
+            node {
+              id
+              address {
+                value
+              }
+            }
+          }
+        }
+        source_security_tag {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        destination_security_tag {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  AppComponent {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        fqdn {
+          value
+        }
+        network_segment {
+          node {
+            id
+            name {
+              value
+            }
+            environment {
+              value
+            }
+          }
+        }
+        security_tag {
+          node {
+            id
+          }
+        }
+        parent {
+          node {
+            ... on AppApplication {
+              id
+              name {
+                value
+              }
+              environment {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   SecurityTag {
     edges {
       node {
         id
-        name { value }
-        group_id { value }
-        components { edges { node { id fqdn { value } network_segment { node { id } } } } }
-        network_segments { edges { node { id name { value } } } }
+        name {
+          value
+        }
+        group_id {
+          value
+        }
+        components {
+          edges {
+            node {
+              id
+              fqdn {
+                value
+              }
+              network_segment {
+                node {
+                  id
+                }
+              }
+            }
+          }
+        }
+        network_segments {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+        }
       }
     }
   }
-
   DcimGroupPolicyProfile {
     edges {
       node {
-        name { value }
-        unclassified_group_id { value }
-        unaware_group_id { value }
-        tag_pool { node { id name { value } start_range { value } end_range { value } } }
+        name {
+          value
+        }
+        unclassified_group_id {
+          value
+        }
+        unaware_group_id {
+          value
+        }
+        tag_pool {
+          node {
+            id
+            name {
+              value
+            }
+            start_range {
+              value
+            }
+            end_range {
+              value
+            }
+          }
+        }
       }
     }
   }
-
   TopologyCustomerOffice {
     edges {
       node {
-        owner { node { __typename org_id { value } display_label } }
-        sdwan_gateway { node { name { value } } }
-        lan_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
+        sdwan_gateway {
+          node {
+            name {
+              value
+            }
+            ... on DcimDevice {
+              interfaces {
+                edges {
+                  node {
+                    ...InterfaceRoutingZoneFields
+                    capabilities {
+                      edges {
+                        node {
+                          __typename
+                          ... on TopologySessionCircuit {
+                            circuit_type {
+                              value
+                            }
+                            vrf {
+                              node {
+                                ...RoutingVrfFields
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        vrfs {
+          edges {
+            node {
+              ...RoutingVrfFields
+            }
+          }
+        }
+        owner {
+          node {
+            __typename
+            org_id {
+              value
+            }
+            display_label
+          }
+        }
+        sdwan_gateway {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        lan_prefixes {
+          edges {
+            node {
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
         segment_deployments {
           edges {
             node {
               segment {
                 node {
-                  owner { node { __typename org_id { value } display_label } }
-                  gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } } }
+                  security_zone {
+                    node {
+                      ...RoutingZoneFields
+                    }
+                  }
+                  owner {
+                    node {
+                      __typename
+                      org_id {
+                        value
+                      }
+                      display_label
+                    }
+                  }
+                  gateway {
+                    node {
+                      ip_prefix {
+                        node {
+                          prefix {
+                            value
+                          }
+                          ip_namespace {
+                            node {
+                              name {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -124,49 +390,56 @@ query segment_security {
       }
     }
   }
-
   TopologySessionCircuit(circuit_type__value: "tunnel") {
     edges {
       node {
-        locations { edges { node { ... on TopologyCustomerOffice { owner { node { __typename org_id { value } display_label } } } } } }
-        registered_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
-        capabilities { edges { node { device { node { name { value } } } } } }
-      }
-    }
-  }
-
-  # The cloud side of an external session (transforms/helpers/bgp_cloud.py cloud_legs, shared with the checks): our
-  # sub-interface (or routed port) and the CloudPeeringInterface end the same handoff or vpn session circuit
-  # (capabilities of the peering -> circuit -> its other ends). The peering gives the neighbor (peer_ip, peer_asn), the
-  # BGP key (auth) and what we announce to the cloud (advertised_prefixes); its transport (device) gives the owner (the
-  # account's, else its own for a SaaS) and, for a VPN tunnel, the gateway. One root rather than a field per kind.
-  CloudPeeringInterface {
-    edges {
-      node {
-        name { value }
-        scope { value }
-        routing { value }
-        peer_ip { node { address { value } } }
-        peer_asn { node { asn { value } } }
-        auth { node { password { value } } }
-        gateway { node { id name { value } } }
-        advertised_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
-        device {
+        vrf {
           node {
-            __typename
-            name { value }
-            ... on CloudTransport { account { node { owner { node { __typename org_id { value } display_label } } } } owner { node { __typename org_id { value } display_label } } }
-            ... on CloudVPNConnection { gateway { node { id name { value } } } }
+            ...RoutingVrfFields
+          }
+        }
+        locations {
+          edges {
+            node {
+              ... on TopologyCustomerOffice {
+                owner {
+                  node {
+                    __typename
+                    org_id {
+                      value
+                    }
+                    display_label
+                  }
+                }
+              }
+            }
+          }
+        }
+        registered_prefixes {
+          edges {
+            node {
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
           }
         }
         capabilities {
           edges {
             node {
-              __typename
-              ... on TopologySessionCircuit {
-                name { value }
-                circuit_type { value }
-                capabilities { edges { node { name { value } device { node { name { value } } } } } }
+              device {
+                node {
+                  name {
+                    value
+                  }
+                }
               }
             }
           }
@@ -174,20 +447,225 @@ query segment_security {
       }
     }
   }
-
-  # What a cloud gateway lets through, cloud to us (bgp_cloud.py reachable_prefixes): an attachment joins its gateway
-  # to a virtual network (its allowed_prefixes, else its CIDR blocks) or to a peer gateway (a hop to a hub, with the
-  # route table the hub receives it in).
+  CloudPeeringInterface {
+    edges {
+      node {
+        name {
+          value
+        }
+        scope {
+          value
+        }
+        routing {
+          value
+        }
+        peer_ip {
+          node {
+            address {
+              value
+            }
+          }
+        }
+        peer_asn {
+          node {
+            asn {
+              value
+            }
+          }
+        }
+        auth {
+          node {
+            password {
+              value
+            }
+          }
+        }
+        gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        advertised_prefixes {
+          edges {
+            node {
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        device {
+          node {
+            __typename
+            name {
+              value
+            }
+            ... on CloudTransport {
+              account {
+                node {
+                  owner {
+                    node {
+                      __typename
+                      org_id {
+                        value
+                      }
+                      display_label
+                    }
+                  }
+                }
+              }
+              owner {
+                node {
+                  __typename
+                  org_id {
+                    value
+                  }
+                  display_label
+                }
+              }
+            }
+            ... on CloudVPNConnection {
+              gateway {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              __typename
+              ... on TopologySessionCircuit {
+                name {
+                  value
+                }
+                circuit_type {
+                  value
+                }
+                vrf {
+                  node {
+                    ...RoutingVrfFields
+                  }
+                }
+                capabilities {
+                  edges {
+                    node {
+                      ...InterfaceRoutingZoneFields
+                      name {
+                        value
+                      }
+                      device {
+                        node {
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   CloudGatewayAttachment {
     edges {
       node {
-        name { value }
-        gateway { node { id name { value } } }
-        peer_gateway { node { id name { value } } }
-        virtual_network { node { id name { value } cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } } } }
-        allowed_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } }
-        associated_route_table { node { id name { value } } }
-        propagates_to_route_tables { edges { node { id name { value } } } }
+        name {
+          value
+        }
+        gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        peer_gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        virtual_network {
+          node {
+            id
+            name {
+              value
+            }
+            cidr_blocks {
+              edges {
+                node {
+                  prefix {
+                    value
+                  }
+                  ip_namespace {
+                    node {
+                      name {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        allowed_prefixes {
+          edges {
+            node {
+              prefix {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        associated_route_table {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        propagates_to_route_tables {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+        }
       }
     }
   }

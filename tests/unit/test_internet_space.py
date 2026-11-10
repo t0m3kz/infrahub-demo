@@ -59,17 +59,17 @@ class TestNonInternetPrefixes:
         assert not hasattr(exchange_transit, "NON_PUBLIC_PREFIXES")
 
 
-_INTERNET_ZONE = {"name": "INTERNET-ZONE"}
+_INTERNET_ZONE = {"name": "INTERNET"}
 
 
 class TestIsInternetDestination:
-    """The internet is the zone INTERNET-ZONE named by `destination_zone`, never a segment."""
+    """The internet is the zone INTERNET named by `destination_zone`, never a segment."""
 
     def test_the_internet_zone_is_the_internet(self) -> None:
         assert is_internet_destination({"destination_zone": _INTERNET_ZONE})
 
     def test_another_zone_is_not_the_internet(self) -> None:
-        assert not is_internet_destination({"destination_zone": {"name": "PROD-ZONE"}})
+        assert not is_internet_destination({"destination_zone": {"name": "PROD"}})
 
     def test_a_segment_in_the_internet_zone_is_not_the_internet(self) -> None:
         """A segment is addressed: the zone of a segment never makes it the outside."""

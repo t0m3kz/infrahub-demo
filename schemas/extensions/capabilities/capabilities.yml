@@ -52,7 +52,7 @@ generics:
     include_in_menu: false
     relationships:
       - name: capabilities
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: Assigned Compute
         cardinality: many
         kind: Generic
@@ -74,19 +74,22 @@ generics:
     include_in_menu: false
     relationships:
       - name: shared_devices
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: Members
         cardinality: many
         kind: Generic
         optional: true
         identifier: shared_capabilities
-        order_weight: 9500
+        order_weight: 9600
 
-  # Capabilities attached to device interfaces (segments, circuits, peerings, firewall-context legs, VIPs)
+  # Capabilities attached to device interfaces, the interface edge (an interface's `capabilities`): the VRF instance
+  # (ManagedVRF), the segment deployment a port is asked for and the VLAN row it is a member of
+  # (ManagedSegmentDeployment, ManagedSegmentVlan), the circuits (TopologyCarrierCircuit, TopologySessionCircuit), the
+  # BGP peering, the OSPF interface and peering, and the routed exchange.
   - name: GenericInterfaces
     namespace: Managed
     description: "Capabilities attached to multiple device interfaces"
-    label: "Segment Resource (Many Interfaces)"
+    label: "Interface Capability"
     include_in_menu: false
     relationships:
       - name: capabilities
@@ -100,7 +103,7 @@ generics:
 
 extensions:
   nodes:
-    - kind: DcimCapabilities
+    - kind: DcimDeviceManaged
       relationships:
         - name: capabilities
           peer: ManagedGenericDevice

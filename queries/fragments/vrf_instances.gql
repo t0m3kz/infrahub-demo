@@ -1,0 +1,16 @@
+fragment VrfDemandInstanceFields on ManagedVRF {
+  id
+  name {
+    value
+  }
+  deployment {
+    node {
+      id
+    }
+  }
+  security_zone {
+    node {
+      ...RoutingZoneFields
+    }
+  }
+}

@@ -11,6 +11,7 @@ from utils.circuit_underlay import NETWORK_APPLIANCE_KIND, OVERLAY_ROLE
 from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE
 from utils.fabric_roles import RR_ROLES
 from utils.limits import DEFAULT_NAMESPACE
+from utils.routing_domain import interface_security_zone
 
 _log = logging.getLogger(__name__)
 
@@ -197,14 +198,15 @@ def _build_session_from_peering(
     # peering's own handoff sub-interfaces: a cable or circuit on the parent
     # port would resolve the parent's default-namespace address instead.
     local_ip_obj = local_iface.get("ip_address") or {}
-    local_ns = local_ip_obj.get("ip_namespace") or {}
+    full_iface = next((iface for iface in interfaces or [] if iface.get("name") == local_iface.get("name")), {})
+    local_ns = interface_security_zone({**full_iface, **local_iface})
     vrf = local_ns.get("name")
 
     if vrf and vrf != DEFAULT_NAMESPACE:
         session["vrf"] = vrf
         # Upstream transit (namespace_type internet): the session gets the
         # default-only inbound / deny-all outbound route-maps (edges template).
-        ns_type = local_ns.get("namespace_type")
+        ns_type = local_ns.get("vrf_type")
         if ns_type == INTERNET_TYPE:
             session["transit"] = True
         # INTERNAL vs EXTERNAL. A regular session in a prod/non_prod namespace
@@ -223,9 +225,10 @@ def _build_session_from_peering(
         ):
             session["external"] = True
         session["local_ip"] = local_ip_obj
-        # The handoff sub-interface — the VCO payload (transforms/config/
-        # controller.py) reads the dot1q tag off its name.
+        # The handoff sub-interface and its dot1q tag (its vlan_id, None: untagged) — the VCO payload
+        # (transforms/config/controller.py) reads the tag from the field, never from the name.
         session["local_interface"] = local_iface.get("name")
+        session["local_vlan"] = local_iface.get("vlan_id")
         if remote_iface.get("ip_address"):
             session["remote_ip"] = remote_iface["ip_address"]
         else:

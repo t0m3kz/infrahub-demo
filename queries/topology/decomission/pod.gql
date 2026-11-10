@@ -1,81 +1,47 @@
-fragment DecommissionDeviceFields on DcimDevice {
-  id
-  name { value }
-  ... on DcimDeviceManaged { role { value } status { value } primary_address { node { id } } }
-  interfaces {
-    edges {
-      node {
-        __typename
-        id
-        description { value }
-        status { value }
-        ... on DcimPhysicalInterface {
-          ip_address {
-            node {
-              id
-              address { value }
-              ip_namespace { node { name { value } } }
-              ip_prefix {node{id prefix { value } } }
-            }
-          }
-          cable {
-            node {
-              id
-              endpoints {
-                edges {
-                  node {
-                    id
-                    ... on DcimPhysicalInterface {
-                      name { value }
-                      status { value }
-                      ip_address {
-                        node {
-                          id
-                          ip_prefix { node { id } }
-                        }
-                      }
-
-                      device { node { ... on DcimDeviceManaged { role { value } } } }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        ... on DcimVirtualInterface {
-          role { value }
-          ip_address {
-            node {
-              id
-              address { value }
-              ip_namespace { node { name { value } } }
-              ip_prefix {node{id }}
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
 query pod_decommission($name: String!) {
   TopologyPod(name__value: $name) {
     edges {
       node {
         id
-        name { value }
-        index { value }
-        # The pod's pools and the prefixes they were sliced into from the DC pools.
-        loopback_pool { node { id resources { edges { node { id } } } } }
-        prefix_pool { node { id resources { edges { node { id } } } } }
-        # Spine-slot entries: a border-spine pod's border-spines are deployed to
-        # the DC, so they are resolved by name (pod_spine_slot_device_names).
+        name {
+          value
+        }
+        index {
+          value
+        }
+        loopback_pool {
+          node {
+            id
+            resources {
+              edges {
+                node {
+                  id
+                }
+              }
+            }
+          }
+        }
+        prefix_pool {
+          node {
+            id
+            resources {
+              edges {
+                node {
+                  id
+                }
+              }
+            }
+          }
+        }
         fabric_templates {
           edges {
             node {
-              role { value }
-              quantity { value }
+              role {
+                value
+              }
+              quantity {
+                value
+              }
             }
           }
         }
@@ -83,9 +49,15 @@ query pod_decommission($name: String!) {
           node {
             ... on TopologyDataCenter {
               id
-              name { value }
-              index { value }
-              naming_convention { value }
+              name {
+                value
+              }
+              index {
+                value
+              }
+              naming_convention {
+                value
+              }
               border_spines: devices(role__value: "border-spine") {
                 edges {
                   node {

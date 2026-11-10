@@ -8,7 +8,7 @@ RP2  a prefix list entry is a prefix of the family of its list, and its length r
      size of the address, minimum not above maximum
 RP3  a community a policy term adds is a standard, well-known or large community
 RP4  a term after a term that matches every route is never reached (an ERROR: the policy does not do what it reads)
-RP5  a policy that no peering imports or exports (bgp), or no interface applies (pbr), applies to nothing (WARNING)
+RP5  a policy that no peering imports or exports applies to nothing (WARNING)
 RP6  a prefix list or community list that no term names is not used (WARNING)
 
 The guard derived from the model is not a rule here: it is added to every user map by the transform, enforced or not
@@ -77,12 +77,7 @@ def routing_policy_warnings(cleaned: dict[str, Any]) -> list[str]:
     used_prefix: set[str] = set()
     used_community: set[str] = set()
     for policy in cleaned.get("RoutingPolicy") or []:
-        if policy.get("kind") == "pbr":
-            if not policy.get("capabilities"):
-                warnings.append(f"RP5: policy '{policy.get('name')}' is applied on no interface.")
-            if not policy.get("customer_deployment"):
-                warnings.append(f"RP5: pbr policy '{policy.get('name')}' names no customer deployment.")
-        elif not policy.get("import_peerings") and not policy.get("export_peerings"):
+        if not policy.get("import_peerings") and not policy.get("export_peerings"):
             warnings.append(f"RP5: policy '{policy.get('name')}' is attached to no peering.")
         for term in policy.get("terms") or []:
             if term.get("match_prefix_list"):

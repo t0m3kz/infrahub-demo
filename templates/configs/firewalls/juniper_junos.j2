@@ -29,25 +29,32 @@ set system host-name {{ name }}
 #
 # --- Interfaces & Zone Assignments ---
 {%- for iface in fw_interfaces %}
+{%- set scope = ('tenants ' ~ iface.context_name ~ ' ') if iface.get('context_name') else '' %}
 {%- if iface.vlan_id and iface.parent_interface %}
 {%- set iface_ref = iface.parent_interface.name + '.' + iface.vlan_id | string %}
-set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} vlan-id {{ iface.vlan_id }}
+set {{ scope }}interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} vlan-id {{ iface.vlan_id }}
 {%- if iface.ip_address %}
-set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} family {{ 'inet6' if ':' in (iface.virtual_ip or iface.ip_address.address) else 'inet' }} address {{ (iface.virtual_ip or iface.ip_address.address) }}
+set {{ scope }}interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} family {{ 'inet6' if ':' in (iface.virtual_ip or iface.ip_address.address) else 'inet' }} address {{ (iface.virtual_ip or iface.ip_address.address) }}
 {%- endif %}
 {%- if iface.description %}
-set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} description "{{ iface.description }}"
+set {{ scope }}interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} description "{{ iface.description }}"
 {%- endif %}
 {%- if iface.security_zone %}
-set security zones security-zone {{ iface.security_zone.name }} interfaces {{ iface_ref }}
+set {{ scope }}security zones security-zone {{ iface.security_zone.name }} interfaces {{ iface_ref }}
+{%- endif %}
+{%- if iface.get('context_name') %}
+set {{ scope }}routing-instances ri-{{ iface.context_name }} interface {{ iface_ref }}
 {%- endif %}
 {%- else %}
-set interfaces {{ iface.name }} unit 0 description "{{ iface.description }}"
+set {{ scope }}interfaces {{ iface.name }} unit 0 description "{{ iface.description }}"
 {%- if iface.ip_address %}
-set interfaces {{ iface.name }} unit 0 family {{ 'inet6' if ':' in (iface.virtual_ip or iface.ip_address.address) else 'inet' }} address {{ (iface.virtual_ip or iface.ip_address.address) }}
+set {{ scope }}interfaces {{ iface.name }} unit 0 family {{ 'inet6' if ':' in (iface.virtual_ip or iface.ip_address.address) else 'inet' }} address {{ (iface.virtual_ip or iface.ip_address.address) }}
 {%- endif %}
 {%- if iface.security_zone %}
-set security zones security-zone {{ iface.security_zone.name }} interfaces {{ iface.name }}.0
+set {{ scope }}security zones security-zone {{ iface.security_zone.name }} interfaces {{ iface.name }}.0
+{%- endif %}
+{%- if iface.get('context_name') %}
+set {{ scope }}routing-instances ri-{{ iface.context_name }} interface {{ iface.name }}.0
 {%- endif %}
 {%- endif %}
 {%- endfor %}
@@ -78,7 +85,7 @@ set routing-instances {{ route.vrf | replace(' ', '-') }} routing-options static
     zone and to the tenant's own routing-instance, which holds the routes. The
     HA pair's VIP is the unit address (cluster config sync gives both members
     it). #}
-{%- for context in contexts if context.legs %}
+{%- for context in contexts if context.legs or context.get('authored_interfaces') %}
 {%- set ri = 'ri-' + context.name %}
 #
 # --- Interfaces, zones and routes in tenant system {{ context.name }} ---

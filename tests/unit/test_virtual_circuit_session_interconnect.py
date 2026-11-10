@@ -22,6 +22,7 @@ from tests.unit.simulators.circuit_fakes import (
 from tests.unit.virtual_circuit_session_helpers import (
     DCI,
     DCI_KEY,
+    INTERFACE_UPDATE,
     UNTRACKED,
     _assert_refused,
     _interface_saves,
@@ -273,7 +274,7 @@ class TestInterconnectSession:
 
         for port in ("if-eg", "if-bl"):
             assert client.interfaces[port].mtu.value == 9214
-            assert client.saves()[port] == UNTRACKED
+            assert client.saves()[port] == INTERFACE_UPDATE
         assert client.interfaces["if-eg"].description.value == f"DCI {DCI} to bl-dc101101 Ethernet1/35"
 
     @pytest.mark.asyncio

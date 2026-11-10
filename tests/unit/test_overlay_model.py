@@ -47,8 +47,8 @@ _MODEL_CLASSES = (Locator, AnycastGateway, L2Instance, L3Instance, OverlayNode)
 # A name token that ties a field or parameter to BGP/EVPN. Matched per underscore-separated word,
 # so `address` or `arp_suppression` are fine but `rt_anchor` / `local_asn` / `rd_format` are not.
 _CONTROL_PLANE_TOKENS = {"rt", "rd", "asn", "as", "evpn", "bgp", "capabilities", "capability", "peering", "peerings"}
-_INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "namespace_type": "internet"}
-_PROD_NS = {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}
+_INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "vrf_type": "internet"}
+_PROD_NS = {"name": "PROD", "l3_vni": 50001, "vrf_type": "prod"}
 
 
 def _tokens(name: str) -> set[str]:
@@ -64,7 +64,8 @@ def _segment(
 ) -> dict[str, Any]:
     seg: dict[str, Any] = {"name": f"Owner - prod - {name}", "customer_name": name, "arp_suppression": True}
     if gateway or namespace:
-        gw: dict[str, Any] = {"ip_prefix": {"ip_namespace": namespace or {"name": "default"}}}
+        seg["security_zone"] = namespace or {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000}
+        gw: dict[str, Any] = {"ip_prefix": {"ip_namespace": {"name": "default"}}}
         if gateway:
             gw["address"] = gateway
         seg["gateway"] = gw
@@ -93,7 +94,7 @@ def _bgp_cap(asn: int = 4245880501, router_id: str = "10.0.0.7/32", role: str = 
 
 def _vrf(namespace: dict[str, Any]) -> dict[str, Any]:
     """A ManagedVRF membership of the device (``device.shared_capabilities``), as the cleaned config query returns it."""
-    return {"typename": "ManagedVRF", "namespace": namespace}
+    return {"typename": "ManagedVRF", "security_zone": namespace}
 
 
 def _leaf(capabilities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -135,9 +136,10 @@ def _transit_peering() -> dict[str, Any]:
         "peering_role": "regular",
         "capabilities": [
             {
+                "security_zone": _INTERNET_NS,
                 "name": "Ethernet1/14",
                 "device": {"name": "eg-fr201"},
-                "ip_address": {"address": "203.0.113.0/31", "ip_namespace": _INTERNET_NS},
+                "ip_address": {"address": "203.0.113.0/31", "ip_namespace": {"node": {"name": {"value": "default"}}}},
             }
         ],
     }
@@ -180,7 +182,7 @@ def _compose(
     """The documented composition get_vxlan_config is a thin wrapper around."""
     vrfs = device_vrfs(data)
     exits = (
-        frozenset(ns["name"] for ns in vrfs if ns["namespace_type"] == "internet")
+        frozenset(ns["name"] for ns in vrfs if ns["vrf_type"] == "internet")
         if _is_bgw(data, fabric_rt_asn)
         else frozenset()
     )
@@ -318,7 +320,7 @@ class TestBuildOverlayNode:
         assert [i.svi_vlan_id for i in only_internet.l3] == [3902]
 
     def test_a_namespace_type_without_a_slot_has_no_svi_vlan(self, caplog: pytest.LogCaptureFixture) -> None:
-        odd = {"name": "ODD", "l3_vni": 50009, "namespace_type": "lab"}
+        odd = {"name": "ODD", "l3_vni": 50009, "vrf_type": "lab"}
         activation = _activation(100, 10100, _segment(name="web", gateway="10.0.100.1/24", namespace=odd))
         node = self._build(activations=[activation], vrfs=[odd])
         assert node is not None
@@ -344,8 +346,8 @@ class TestBuildOverlayNode:
         assert node.l3 == ()
 
     def test_the_default_namespace_and_a_namespace_without_l3_vni_are_never_l3_instances(self) -> None:
-        no_vni = {"name": "NOVNI", "l3_vni": None, "namespace_type": "prod"}
-        default = {"name": "default", "l3_vni": 1, "namespace_type": "prod"}
+        no_vni = {"name": "NOVNI", "l3_vni": None, "vrf_type": "prod"}
+        default = {"name": "default", "l3_vni": 1, "vrf_type": "prod"}
         node = self._build(vrfs=[no_vni, default], exits=frozenset({"NOVNI", "default"}))
         assert node is not None
         assert node.l3 == ()
@@ -450,15 +452,15 @@ class TestRenderedContextShape:
 
     def test_namespace_type_is_present_only_on_the_internet_vrf(self) -> None:
         mappings = {m["vrf_name"]: m for m in self._result("bgw-with-segments")["l3_vni_mappings"]}
-        assert mappings["INTERNET"]["namespace_type"] == "internet"
-        assert "namespace_type" not in mappings["PROD"]
+        assert mappings["INTERNET"]["vrf_type"] == "internet"
+        assert "vrf_type" not in mappings["PROD"]
 
     def test_l3_mapping_keys_keep_their_order(self) -> None:
         mappings = {m["vrf_name"]: m for m in self._result("bgw-with-segments")["l3_vni_mappings"]}
         assert list(mappings["INTERNET"]) == [
             "vrf_name",
             "l3_vni",
-            "namespace_type",
+            "vrf_type",
             "svi_vlan_id",
             "route_target",
             "import_route_targets",

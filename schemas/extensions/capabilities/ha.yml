@@ -16,6 +16,47 @@ generics:
     label: Tenant-Scoped Deployment
     include_in_menu: false
 
+  # The base of the service contexts (firewall, load balancer): one slice of the devices that enforce it, with its own
+  # VLAN on the uplink trunk and, when dedicated, its tenant. It carries only what every context shares. The members
+  # are the devices (`shared_devices`, the shared device edge: nothing cascades, so swapping one firewall of a pair
+  # keeps the context); they are written edge by edge. The lifecycle owner is the hosting deployment, so a
+  # decommissioned DC or metro takes its contexts with it. The HA pair is NOT a field of the context: a firewall
+  # finds its HA through its own capabilities, and a check holds that the members of a context are one pair.
+  - name: SecurityContext
+    namespace: Managed
+    description: "Base of the service contexts (firewall, load balancer) of the devices that enforce them"
+    label: Security Context
+    include_in_menu: false
+    attributes:
+      - name: vlan_id
+        kind: Number
+        label: "Uplink VLAN ID"
+        description: "802.1Q tag of the context's leg on the uplink trunk; allocated from the topology's context pool"
+        optional: true
+        order_weight: 1450
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: deployment
+        peer: TopologySegmentHosting
+        label: "Hosting Deployment"
+        description: "The DC, colocation metro or office whose devices enforce this context; it owns the lifecycle"
+        cardinality: one
+        kind: Parent
+        optional: false
+        identifier: security_context__deployment
+        order_weight: 900
+      - name: tenant
+        peer: ManagedTenantScoped
+        label: "Dedicated Tenant"
+        description: "Customer this context is dedicated to; unset means a shared context"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: security_context__tenant
+        order_weight: 950
+
   - name: ProxyService
     namespace: Managed
     description: "Abstract type anchor for proxy services (cloud/SASE)"
@@ -100,7 +141,7 @@ nodes:
       # exactly two devices, as ManagedMLAG does; domain_pairing creates the domain with both members in one save.
       # The cap holds when the domain is written; a write from the device side skips it.
       - name: capabilities
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: "Peer Devices"
         description: "The two peer devices of this HA domain"
         cardinality: many
@@ -145,15 +186,14 @@ nodes:
             color: "#2ECC71"
         order_weight: 1500
 
-  # ── Firewall Context (VDOM/vsys) — tenant-scoped slice of a shared cluster ─
-  # One ManagedFirewallHA cluster hosts many contexts: one dedicated context
-  # per customer whose design sets dedicated_firewall, plus a
-  # shared context (tenant unset) for everyone else — see
-  # docs/firewall_service_insertion.md's namespace-per-zone pattern, now with
-  # an explicit node instead of an implicit VDOM name.
+  # ── Firewall Context (VDOM/vsys) — tenant-scoped slice of the firewalls that enforce it ─
+  # One dedicated context per customer whose design sets dedicated_firewall, plus a shared context (tenant unset)
+  # for everyone else. Its members are the firewalls of one HA pair (or one standalone firewall); the legs are the
+  # sub-interfaces of its VLAN on their uplink trunk. The VLAN is allocated from FW-CONTEXT-VLAN-POOL. A context has no
+  # interface edge: its legs and the border ports facing its members are derived (utils/service_contexts.py).
   - name: FirewallContext
     namespace: Managed
-    description: "Tenant-scoped firewall context (VDOM/vsys) on a shared FirewallHA cluster"
+    description: "Tenant-scoped firewall context (VDOM/vsys) enforced by the firewalls that are its members"
     label: Firewall Context
     icon: "mdi:shield-account"
     include_in_menu: false
@@ -161,7 +201,8 @@ nodes:
       - "name__value"
     inherit_from:
       - ManagedGeneric
-      - ManagedGenericInterfaces
+      - ManagedSecurityContext
+      - ManagedGenericSharedDevice
     uniqueness_constraints:
       - ["name__value"]
     display_label: "{{name__value}}"
@@ -174,38 +215,12 @@ nodes:
         description: "Vendor-side VDOM/vsys/context identifier"
         optional: true
         order_weight: 1400
-      - name: vlan_id
-        kind: Number
-        label: "Sub-interface VLAN ID"
-        description: "802.1Q tag for this context's sub-interface on the cluster's trunk uplink — allocated from FW-CONTEXT-VLAN-POOL"  # yamllint disable-line rule:line-length
-        optional: true
-        order_weight: 1450
-        parameters:
-          min_value: 1
-          max_value: 4094
     relationships:
-      - name: cluster
-        peer: ManagedFirewallHA
-        label: "Firewall Cluster"
-        description: "Physical HA pair hosting this context"
-        cardinality: one
-        kind: Attribute
-        optional: false
-        identifier: firewall_context__cluster
-        order_weight: 900
-      - name: tenant
-        peer: ManagedTenantScoped
-        label: "Dedicated Tenant"
-        description: "Customer this context is dedicated to; unset means a shared low-risk context"
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: firewall_context__tenant
-        order_weight: 950
-      # Every deployment this context filters for, dedicated (the tenant) and
-      # shared alike. Written only from the deployment side (its own
-      # serving_firewall_context(s), set by customer_dc.py/customer_colocation.py),
-      # so concurrent boardings onto one shared context never race on a list.
+      # Every deployment this context filters for, dedicated (the tenant), shared and Internet edge alike. Written
+      # only from the deployment side (its own serving_firewall_contexts, set by customer_dc.py /
+      # customer_colocation.py), so concurrent boardings onto one shared context never race on a list. Whether the
+      # context holds a footprint's internet rules follows from the role of its pair and the footprint's other
+      # contexts (transforms/helpers/firewall_contexts.py).
       - name: served_deployments
         peer: ManagedTenantScoped
         label: "Served Deployments"
@@ -235,17 +250,6 @@ nodes:
         optional: true
         identifier: firewall_context__snat_address
         order_weight: 1100
-      # Reverse of TopologySegmentHosting.internet_edge_contexts (extensions below): the DCs and colocation metros
-      # whose Internet traffic this context enforces and translates. Written only from the hosting side.
-      - name: internet_edge_hostings
-        peer: TopologySegmentHosting
-        label: "Internet Edge For"
-        description: "Topologies whose Internet traffic this context enforces and translates (it may stand elsewhere)"
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: topology_hosting__internet_edge_contexts
-        order_weight: 1150
 
   # ── Load Balancer HA domain (on-prem, physical devices) ───────────────────
   - name: LoadbalancerHA
@@ -271,7 +275,7 @@ nodes:
       # exactly two devices, as ManagedMLAG does; domain_pairing creates the domain with both members in one save.
       # The cap holds when the domain is written; a write from the device side skips it.
       - name: capabilities
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: "Peer Devices"
         description: "The two peer devices of this HA domain"
         cardinality: many
@@ -283,27 +287,17 @@ nodes:
         identifier: capabilities
         order_weight: 500
 
-      - name: contexts
-        label: "Load Balancer Contexts"
-        peer: ManagedLoadbalancerContext
-        kind: Generic
-        cardinality: many
-        optional: true
-        identifier: loadbalancer_context__cluster
-        order_weight: 1700
-        description: "LoadbalancerContexts hosted on this HA cluster"
-
-  # ── Load Balancer Context — tenant-scoped slice of a shared LB cluster ────
-  # One ManagedLoadbalancerHA cluster hosts one context per tenant namespace
-  # (PROD, NON-PROD: the LB never joins them, so each gets its own routing
-  # table on the box) plus one dedicated context per customer whose design
-  # sets dedicated_loadbalancer. The LB is one-arm: one /29 leg per context in
+  # ── Load Balancer Context — tenant-scoped slice of the load balancers that serve it ────
+  # One context per tenant namespace (PROD, NON-PROD: the LB never joins them, so each gets its own routing
+  # table on the box) plus one dedicated context per customer whose design sets dedicated_loadbalancer. Its
+  # members are the load balancers of one HA pair. The VLAN is the base tag of the leg on the uplink (+200 in
+  # NON-PROD), allocated from the DC's lb-context-vlan-pool. The LB is one-arm: one /29 leg per context in
   # the tenant VRF facing the border leaf, SNAT automap on the floating .4, so
   # replies return to the LB with no PBR. VIPs are a routed /26 behind .4.
   # The context is the load_balancer of its LoadbalancerVIP nodes.
   - name: LoadbalancerContext
     namespace: Managed
-    description: "Tenant-scoped load balancer context (partition/route domain) on a LoadbalancerHA cluster"
+    description: "Tenant-scoped load balancer context (partition/route domain) served by its member load balancers"
     label: Load Balancer Context
     icon: "mdi:scale-balance"
     include_in_menu: false
@@ -311,42 +305,15 @@ nodes:
       - "name__value"
     inherit_from:
       - ManagedGeneric
-      - ManagedGenericInterfaces
+      - ManagedSecurityContext
+      - ManagedGenericSharedDevice
       - ManagedLoadBalancer
     uniqueness_constraints:
       - ["name__value"]
     display_label: "{{name__value}}"
     order_by:
       - name__value
-    attributes:
-      - name: vlan_id
-        kind: Number
-        label: "Leg VLAN ID"
-        description: "Base 802.1Q tag of the leg on the cluster's uplink (+200 in NON-PROD), allocated from the DC's lb-context-vlan-pool"  # yamllint disable-line rule:line-length
-        optional: true
-        order_weight: 1450
-        parameters:
-          min_value: 1
-          max_value: 4094
     relationships:
-      - name: cluster
-        peer: ManagedLoadbalancerHA
-        label: "Load Balancer Cluster"
-        description: "HA pair hosting this context"
-        cardinality: one
-        kind: Attribute
-        optional: false
-        identifier: loadbalancer_context__cluster
-        order_weight: 900
-      - name: tenant
-        peer: ManagedTenantScoped
-        label: "Dedicated Tenant"
-        description: "Customer this context is dedicated to; unset means a shared context"
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: loadbalancer_context__tenant
-        order_weight: 950
       # Written only from the deployment side (serving_loadbalancer_context),
       # so concurrent boardings onto one shared context never race on a list.
       - name: served_deployments
@@ -464,22 +431,20 @@ nodes:
 
 extensions:
   nodes:
-    # The firewall context at the Internet edge of a DC, colocation metro or office, one per environment (PROD,
-    # NON-PROD: checks/internet_egress.py): it enforces the Internet policy and performs the final SNAT. It stands on
-    # an external-firewall pair that may be in another topology (a colocation shared by several DCs) and is meant for
-    # both directions; only the outbound one is built. A hosting with none keeps the Internet leg and SNAT of each
-    # serving context. Chosen in the data; nothing picks one by discovery order.
     - kind: TopologySegmentHosting
       relationships:
-        - name: internet_edge_contexts
-          label: Internet Edge Contexts
-          peer: ManagedFirewallContext
+        # The contexts this topology owns (SecurityContext.deployment, a Parent): a decommissioned DC, colocation
+        # metro or office takes its contexts with it. The members are the devices; they never cascade.
+        - name: security_contexts
+          peer: ManagedSecurityContext
+          label: "Security Contexts"
+          description: "The firewall and load balancer contexts enforced by this topology's devices"
           cardinality: many
-          kind: Generic
+          kind: Component
           optional: true
-          identifier: topology_hosting__internet_edge_contexts
-          order_weight: 7960
-          description: "Firewall contexts at the Internet edge of this topology (policy and final SNAT), one per environment"  # yamllint disable-line rule:line-length
+          on_delete: cascade
+          identifier: security_context__deployment
+          order_weight: 7950
 
     # A segment the firewall pair terminates: its `gateway` is the pair's floating VIP (no per-member address) and the
     # fabric only bridges it (VLAN row and L2 VNI, no SVI, VRF or ACL). The firewall transform derives the
@@ -497,25 +462,14 @@ extensions:
           identifier: firewall_context__terminated_segments
           description: "Firewall context whose pair owns this segment's gateway as a floating VIP (the fabric only bridges it)."  # yamllint disable-line rule:line-length
 
-    # Reverse lookup for FirewallContext.cluster (above) — lets a device
-    # query find every context (shared + dedicated) on its own cluster in
-    # one hop, without a name-based lookup.
-    - kind: ManagedFirewallHA
-      relationships:
-        - name: contexts
-          label: "Firewall Contexts"
-          peer: ManagedFirewallContext
-          kind: Generic
-          cardinality: many
-          optional: true
-          identifier: firewall_context__cluster
-          order_weight: 1700
-          description: "FirewallContexts (VDOMs/vsys) hosted on this HA cluster"
-
-    # Deployment side of FirewallContext.served_deployments (above), declared per kind because the cardinality
-    # differs (the identifier is shared): a DC footprint has ONE serving context (its dedicated one, else the shared
-    # one), a colocation footprint one per zone of its metro that has a firewall pair. Lets a footprint query find
-    # the FirewallContexts its segments terminate on in one hop.
+    # Deployment side of FirewallContext.served_deployments (above): EVERY firewall context that enforces the
+    # footprint's policy, internal and external (Internet edge) alike. Declared per kind (the identifier is shared):
+    # only the footprints with a firewall service have it (a cloud footprint and an office do not). A DC footprint
+    # lists its internal context (its dedicated one, else the shared one) and, when its DC has one, the Internet edge
+    # context on the DC's external-firewall pair; a colocation footprint the context of each zone of its metro that
+    # has a firewall pair. Which context holds which rules follows from the list (transforms/helpers/
+    # firewall_contexts.py): with an internal and an external context, the external one holds the internet rules and
+    # the internal one the rest; a single context holds them all.
     - kind: TopologyCustomerColocation
       relationships:
         - name: serving_firewall_contexts
@@ -526,21 +480,21 @@ extensions:
           optional: true
           identifier: firewall_context__served_deployments
           order_weight: 925
-          description: "FirewallContexts its segments terminate on: the shared one of each zone with a firewall pair."
+          description: "Every FirewallContext enforcing its policy: the context of each zone with a firewall pair"
 
     # Deployment side of LoadbalancerContext.served_deployments. Only a DC footprint is load balanced:
     # a colocation metro has no LB uplinks (generators/topology/customer_colocation.py).
     - kind: TopologyCustomerDC
       relationships:
-        - name: serving_firewall_context
-          label: "Serving Firewall Context"
+        - name: serving_firewall_contexts
+          label: "Serving Firewall Contexts"
           peer: ManagedFirewallContext
-          kind: Attribute
-          cardinality: one
+          kind: Generic
+          cardinality: many
           optional: true
           identifier: firewall_context__served_deployments
           order_weight: 925
-          description: "FirewallContext its segments terminate on: its dedicated one, else the shared one."
+          description: "Every FirewallContext enforcing its policy: its internal one and the DC's Internet edge one"
         - name: serving_loadbalancer_context
           label: "Serving Load Balancer Context"
           peer: ManagedLoadbalancerContext

@@ -18,6 +18,7 @@ from tasks import ALL_DEMO_BRANCH
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_addresses, transit_vlan
 from utils.limits import (
+    DEFAULT_NAMESPACE,
     FW_CONTEXT_VLAN_END,
     FW_CONTEXT_VLAN_START,
     LB_CONTEXT_VLAN_END,
@@ -270,8 +271,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         )
                     elif address.ip not in (address.network[o] for o in TRANSIT_OFFSETS[2:]):
                         errors.append(f"{leg_id}: {leg['address']} is not a member offset (.5/.6) of its /29")
-                    if leg["namespace_type"] != ns_type:
-                        errors.append(f"{leg_id}: namespace_type '{leg['namespace_type']}', expected '{ns_type}'")
+                    if leg["vrf_type"] != ns_type:
+                        errors.append(f"{leg_id}: vrf_type '{leg['vrf_type']}', expected '{ns_type}'")
                     sub_vlan = str(leg["interface"]).rsplit(".", 1)[-1]
                     if sub_vlan != str(transit_vlan(int(context_vlan), ns_type)):
                         errors.append(
@@ -287,7 +288,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     errors.append(f"{label}/{namespace}: members are in {sorted(map(str, networks))}, one /29 expected")
                 prefixes.setdefault(namespace, set()).update(networks)
 
-            # Exchanges: `{context}-{A}-{Z}`, gateway = this context, never PROD <-> NON-PROD.
+            # Exchanges: `{context}-{A}-{Z}`, gateway = this context, never PROD <-> NONPROD.
             actual_exchanges = exchanges_by_gateway.get(str(context["id"]), [])
             exchange_count += len(actual_exchanges)
             if sorted(str(e["name"]) for e in actual_exchanges) != sorted(expected_exchange_names):
@@ -375,7 +376,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     ) -> None:
         """Each context with an INTERNET leg owns exactly one public SNAT /32.
 
-        The address lives in the INTERNET namespace, inside the FW-SNAT-INTERNET-IPv4
+        The address is allocated in the builtin IPAM namespace (the SecurityZone, not IPAM, is the routing
+        authority), inside the FW-SNAT-INTERNET-IPv4
         block (ALL_DEMO_SNAT_POOL_PREFIX), is a /32 and is distinct per context, the
         FR2 colocation zone's included (it must not reuse a DC's address).
         """
@@ -407,7 +409,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{label}: snat_address {snat} is not a /32")
             if interface.ip not in pool:
                 errors.append(f"{label}: snat_address {snat} is outside {ALL_DEMO_SNAT_POOL_PREFIX}")
-            if context["snat_namespace"] != "INTERNET":
+            if context["snat_namespace"] != DEFAULT_NAMESPACE:
                 errors.append(f"{label}: snat_address {snat} is in namespace '{context['snat_namespace']}'")
             if str(interface.ip) in seen:
                 errors.append(f"{label}: snat_address {snat} is also the one of {seen[str(interface.ip)]}")
@@ -440,7 +442,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         a /29 of LB-Leg-<NS> with the members at .5/.6 in name order on
         `<uplink>.<transit_vlan>` sub-interfaces of the cluster's members; both
         members' border-leaf `load-balancer` ports tagged with it; a /26 VIP
-        range of LB-VIP-<NS> in the same namespace. Scoped to the 30_all DCs.
+        range of LB-VIP-<NS> (allocated in the builtin IPAM namespace). Scoped to the 30_all DCs.
         """
         logging.info("=== %s - Step 3d: Load-balancer contexts ===", SCENARIO_NAME)
 
@@ -533,10 +535,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                             f"is {expected_ip}"
                         )
             for leg in legs:
-                if leg["namespace_type"] != ns_type:
-                    errors.append(
-                        f"{label}: {leg['device']}:{leg['interface']} in namespace type {leg['namespace_type']}"
-                    )
+                if leg["vrf_type"] != ns_type:
+                    errors.append(f"{label}: {leg['device']}:{leg['interface']} in namespace type {leg['vrf_type']}")
                 if vlan and str(leg["interface"]).rsplit(".", 1)[-1] != str(transit_vlan(int(vlan), ns_type)):
                     errors.append(
                         f"{label}: {leg['device']}:{leg['interface']}, expected the leg VLAN "
@@ -565,7 +565,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(
                     f"{label}: VIP prefix {vip_range} is not a /{LB_VIP_PREFIXLEN} of {ALL_DEMO_LB_VIP_RESOURCES[namespace]}"
                 )
-            if context["vip_prefix_namespace"] != namespace:
+            # IPAM allocates in the builtin namespace; the tenant VRF of the range is its pool's (checked above).
+            if context["vip_prefix_namespace"] != DEFAULT_NAMESPACE:
                 errors.append(f"{label}: VIP prefix {vip_range} is in namespace '{context['vip_prefix_namespace']}'")
             if vip_range in vip_ranges:
                 errors.append(f"{label}: VIP prefix {vip_range} is also the one of {vip_ranges[vip_range]}")

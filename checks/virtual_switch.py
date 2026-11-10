@@ -5,8 +5,9 @@ VLANs of it and the fabric segments those are (schemas/extensions/service/virtua
 
 VS1  the uplinks are ports (or bonds) of the hosts of the switch's own cluster, and every host of the cluster has one
 VS2  a VLAN id is used by one port group of a switch only
-VS3  every uplink trunks every segment of the switch's port groups (the segment is in the uplink's ``segments``, its allowed
-     VLAN list), so a VM in the port group reaches the leaf whichever host it runs on
+VS3  the segment of every port group is realized (a segment deployment) in the hosting deployment of every uplink's
+     host: the uplinks trunk the port groups' VLANs (``vlan_id``; a server port carries no segment membership, its
+     allowed VLAN list is the port groups), so a VM in the port group reaches the fabric whichever host it runs on
 VS4  a VM NIC is in one port group, and the VM stands on a host of the switch's cluster
 """
 
@@ -18,6 +19,7 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
+from utils.segment_addressing import hosting_deployment
 
 CLUSTER = "ManagedHypervisorCluster"
 SWITCH = "ManagedVirtualSwitch"
@@ -87,18 +89,18 @@ class CheckVirtualSwitch(InfrahubCheck):
                 switch,
                 SWITCH,
             )
-        wanted = {
-            _ref(group.get("segment")): _name(group.get("segment"))
-            for group in _dicts(switch.get("port_groups"))
-            if _ref(group.get("segment"))
-        }
-        for uplink in uplinks:
-            trunked = {_ref(s) for s in _dicts(uplink.get("segments"))}
-            for segment_id, segment in wanted.items():
-                if segment_id not in trunked:
+        for group in _dicts(switch.get("port_groups")):
+            segment = group.get("segment")
+            if not isinstance(segment, dict) or not segment.get("id"):
+                continue
+            realized = {_ref(dep.get("deployment")) for dep in _dicts(segment.get("segment_deployments"))}
+            for uplink in uplinks:
+                hosting = hosting_deployment((uplink.get("device") or {}).get("deployment"))
+                if hosting and hosting.get("id") and str(hosting["id"]) not in realized:
                     self._error(
-                        f"VS3: uplink '{_name(uplink.get('device'))}:{_name(uplink)}' of switch '{_name(switch)}' does not "
-                        f"trunk segment '{segment}' of a port group (its `segments` list lacks it).",
+                        f"VS3: uplink '{_name(uplink.get('device'))}:{_name(uplink)}' of switch '{_name(switch)}' trunks "
+                        f"VLAN {group.get('vlan_id') or 'untagged'} of port group '{_name(group)}', but segment "
+                        f"'{_name(segment)}' has no deployment in '{_name(hosting)}', where the host stands.",
                         switch,
                         SWITCH,
                     )

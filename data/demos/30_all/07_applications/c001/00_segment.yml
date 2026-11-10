@@ -18,11 +18,12 @@ spec:
           data:
             customer_name: "nordix-prod"
             environment: "p"
+            security_zone: "PROD"
             gateway:
               data:
                 address: "10.1.101.1/24"
                 description: "c001-nordix-prod-p anycast gateway"
-                ip_namespace: "PROD"
+                ip_namespace: "default"
                 ip_prefix:
                   kind: IpamPrefix
                   data:
@@ -30,7 +31,7 @@ spec:
                     description: "c001-nordix-prod-p (C001, FR)"
                     status: active
                     role: customer
-                    ip_namespace: "PROD"
+                    ip_namespace: "default"
             customer_deployments:
               - "C001-P-FR"
             member_of_groups:

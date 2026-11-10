@@ -1,0 +1,25 @@
+# The session, authored (named like the hand-written peerings of the cloud model, not `<circuit>-bgp`: that name is
+# the generator's, and add_virtual_circuit builds none for a cloud end): our overlay process of the cage router and our
+# sub-interface. The other end is the
+# connector of the session circuit that has the same sub-interface as an end (the peer address and AS are the VIF's
+# peer_ip and peer_asn), so no provider stub device is needed.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "BGP-EG-FR201-AWS-DX-PROD"
+      description: "eBGP eg-fr201 <-> AWS Direct Connect private VIF (AS64512), PROD"
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-fr201-bgp-overlay"
+      password: "eqx-fr2-aws-euc1-key"
+      capabilities:
+        - ["eg-fr201", "Ethernet1/13.1000"]

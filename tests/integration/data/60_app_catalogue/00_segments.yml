@@ -14,6 +14,7 @@ spec:
           data:
             customer_name: "checkout-frontend"
             environment: p
+            security_zone: "PROD"
             customer_deployments:
               - "C005-P-DC10"
             member_of_groups:
@@ -22,6 +23,7 @@ spec:
           data:
             customer_name: "checkout-backend"
             environment: p
+            security_zone: "PROD"
             customer_deployments:
               - "C005-P-DC10"
             member_of_groups:

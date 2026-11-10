@@ -18,6 +18,7 @@ import pytest
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.vrf import vrf_requirements
 from utils.limits import DEFAULT_NAMESPACE
+from utils.service_contexts import SERVICE_PORTS_KEY, device_services
 from utils.vrf_demand import device_vrf_facts
 
 CONFIGS = Path(__file__).resolve().parents[1] / "smoke" / "configs"
@@ -41,7 +42,8 @@ def _as_vrf_instances_node(device: dict[str, Any]) -> dict[str, Any]:
         if act.get("vlan_id")
     ]
     capabilities = [dict(cap) for cap in device.get("capabilities") or []]
-    node = {**device, "capabilities": capabilities, "member_of_groups": [], "vlans": rows}
+    ports = device_services(device).get(SERVICE_PORTS_KEY) or []
+    node = {**device, "capabilities": capabilities, "member_of_groups": [], "vlans": rows, SERVICE_PORTS_KEY: ports}
     return node
 
 

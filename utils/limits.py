@@ -17,6 +17,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# PAN-OS HA pairs sharing a broadcast domain require distinct group IDs (1..63).
+FIREWALL_HA_GROUP_POOL = "Firewall-HA-Group-ID"
+FIREWALL_HA_GROUP_MIN = 1
+FIREWALL_HA_GROUP_MAX = 63
+
 # --- 1. Design ranges and limits -------------------------------------------------------------------------------
 
 # VLAN bands of a border leaf's VLAN table (get_vlans de-duplicates by VLAN ID, so no two bands may overlap):
@@ -190,6 +195,9 @@ GROUP_PATCH_PANELS = "patch_panels"
 # Every firewall and load-balancer context: the target group of add_context_routes. The context generators add each
 # context they build; the group trigger starts the route generator.
 GROUP_SERVICE_CONTEXTS = "service_contexts"
+# Every segment deployment add_vxlan_segment builds: the target group of add_segment_deployment_ports, which an
+# `updated` rule on the deployment's assigned ports (its `capabilities`) starts. No group trigger: joining runs nothing.
+GROUP_SEGMENT_DEPLOYMENTS = "segment_deployments"
 
 # device_role -> the group its devices join, for roles whose group does not follow the f"{device_role}s" convention.
 # One map for every create_devices() caller: a group created on a branch because a caller missed it collides with

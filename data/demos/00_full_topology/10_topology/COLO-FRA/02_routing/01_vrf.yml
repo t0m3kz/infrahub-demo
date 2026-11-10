@@ -1,0 +1,12 @@
+---
+# The VRF of the topology (PROD, hosted by the metro FRA) with the cage edge as its member.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "fra-vrf-prod"
+      security_zone: "PROD"
+      deployment: "FRA"
+      shared_devices:
+        - "fra-colo1-edge-01"

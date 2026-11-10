@@ -1,0 +1,48 @@
+# Full internal virtual appliance pair on the existing physical chassis; only NICs with extra pins are nested.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: c900-waw1-fw-01-prod
+      object_template: PA-VM_EDGE_CUSTOMER_S
+      hosting_device: waw1-fw-01
+      deployment: DC-WAW1
+      role: internal-firewall
+      status: active
+      owner: P027
+      primary_address: ["172.16.0.0/32", "default"]
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: eth1/1
+            role: uplink
+            parent_interface: ["waw1-fw-01", "ethernet1/1"]
+          - name: ha1
+            role: ha
+            status: active
+            parent_interface: ["waw1-fw-01", "HA1"]
+          - name: mgmt
+            role: management
+            parent_interface: ["waw1-fw-01", "MGT"]
+    - name: c900-waw1-fw-02-prod
+      object_template: PA-VM_EDGE_CUSTOMER_S
+      hosting_device: waw1-fw-02
+      deployment: DC-WAW1
+      role: internal-firewall
+      status: active
+      owner: P027
+      primary_address: ["172.16.0.1/32", "default"]
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: eth1/1
+            role: uplink
+            parent_interface: ["waw1-fw-02", "ethernet1/1"]
+          - name: ha1
+            role: ha
+            status: active
+            parent_interface: ["waw1-fw-02", "HA1"]
+          - name: mgmt
+            role: management
+            parent_interface: ["waw1-fw-02", "MGT"]

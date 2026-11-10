@@ -15,6 +15,7 @@ from transforms.common import UngovernedTransitError
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall, apply_context_routes
 from utils.internet_prefixes import get_internet_prefixes
+from utils.routing_domain import RoutingDomainError
 
 _ROOT = Path(__file__).parent.parent.parent
 _CONFIGS = _ROOT / "tests" / "smoke" / "configs"
@@ -22,18 +23,18 @@ _CONFIGS = _ROOT / "tests" / "smoke" / "configs"
 # vendor -> substrings that must appear for the shared context (SNAT 192.0.2.5, PROD + NONPROD tenants)
 _VENDOR_NAT = {
     "paloalto_panos": [
-        "set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE to INTERNET-ZONE",
+        "set vsys dc1-fw-shared rulebase nat rules snat-PROD to INTERNET",
         "source-translation dynamic-ip-and-port translated-address 192.0.2.5",
         "units ethernet1/1.3400 ip 192.0.2.5/32",
     ],
     "juniper_junos": [
         "security nat source pool SNAT-POOL address 192.0.2.5/32",
-        "rule-set SNAT-PROD-ZONE to zone INTERNET-ZONE",
+        "rule-set SNAT-PROD to zone INTERNET",
         "then source-nat pool SNAT-POOL",
     ],
     "checkpoint_gaia": [
         'mgmt_cli add host name "SNAT-dc1-fw-shared" ip-address "192.0.2.5"',
-        'original-source "PROD-ZONE" original-destination "INTERNET-ZONE" translated-source "SNAT-dc1-fw-shared"',
+        'original-source "PROD" original-destination "INTERNET" translated-source "SNAT-dc1-fw-shared"',
     ],
 }
 _NAT_MARKERS = ("nat rules", "security nat", "add nat-rule")
@@ -55,9 +56,10 @@ def _run(transform_cls: type, data: dict[str, Any]) -> str:
 def _firewall_input(vendor: str, *, snat: bool) -> dict[str, Any]:
     data = json.loads((_CONFIGS / f"firewall_{vendor}_exchange_transit" / "input.json").read_text())
     if not snat:
-        for edge in data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"]:
-            for cap in edge["node"].get("capabilities", {}).get("edges", []):
-                cap["node"].pop("snat_address", None)
+        device = data["DcimPhysicalDevice"]["edges"][0]["node"]
+        for edge in device["shared_capabilities"]["edges"]:
+            if edge["node"]["__typename"] == "ManagedFirewallContext":
+                edge["node"].pop("snat_address", None)
     return data
 
 
@@ -84,7 +86,7 @@ def _ctx(snat: str | None, *, internet: bool = True, management: bool = False) -
     legs = [
         {
             "ns_type": "prod",
-            "zone": "PROD-ZONE",
+            "zone": "PROD",
             "nameif": "prod",
             "anycast": "100.66.0.1",
             "interface": "e.3000",
@@ -95,7 +97,7 @@ def _ctx(snat: str | None, *, internet: bool = True, management: bool = False) -
         legs.append(
             {
                 "ns_type": "internet",
-                "zone": "INTERNET-ZONE",
+                "zone": "INTERNET",
                 "nameif": "internet",
                 "anycast": "100.66.32.1",
                 "interface": "e.3400",
@@ -106,7 +108,7 @@ def _ctx(snat: str | None, *, internet: bool = True, management: bool = False) -
         legs.append(
             {
                 "ns_type": "management",
-                "zone": "MANAGEMENT-ZONE",
+                "zone": "MANAGEMENT",
                 "nameif": "management",
                 "anycast": "100.66.48.1",
                 "vip": "100.66.48.4",
@@ -122,10 +124,10 @@ def test_internet_nat_entry_keeps_the_legacy_shape() -> None:
     apply_context_routes(context, {})
     [entry] = context["nat"]
     assert entry["address"] == "192.0.2.5"
-    assert entry["egress"]["zone"] == "INTERNET-ZONE"
+    assert entry["egress"]["zone"] == "INTERNET"
     assert entry["suffix"] == ""
     assert entry["own_address"] is True
-    assert [leg["zone"] for leg in entry["tenant_legs"]] == ["PROD-ZONE"]
+    assert [leg["zone"] for leg in entry["tenant_legs"]] == ["PROD"]
 
 
 def test_management_nat_entry_translates_to_the_leg_vip_and_owns_nothing() -> None:
@@ -134,16 +136,16 @@ def test_management_nat_entry_translates_to_the_leg_vip_and_owns_nothing() -> No
     internet, management = context["nat"]
     assert internet["address"] == "192.0.2.5"
     assert management["address"] == "100.66.48.4"
-    assert management["egress"]["zone"] == "MANAGEMENT-ZONE"
+    assert management["egress"]["zone"] == "MANAGEMENT"
     assert management["suffix"] == "-MANAGEMENT"
     assert management["own_address"] is False
-    assert [leg["zone"] for leg in management["tenant_legs"]] == ["PROD-ZONE"]
+    assert [leg["zone"] for leg in management["tenant_legs"]] == ["PROD"]
 
 
 def test_management_nat_needs_no_snat_address() -> None:
     context = _ctx(None, internet=False, management=True)
     apply_context_routes(context, {})
-    assert [entry["egress"]["zone"] for entry in context["nat"]] == ["MANAGEMENT-ZONE"]
+    assert [entry["egress"]["zone"] for entry in context["nat"]] == ["MANAGEMENT"]
 
 
 @pytest.mark.parametrize("snat, internet", [(None, True), ("192.0.2.5", False)])
@@ -164,16 +166,16 @@ def test_no_nat_entry_without_a_tenant_leg() -> None:
 
 _VENDOR_MANAGEMENT_NAT = {
     "paloalto_panos": [
-        "rulebase nat rules snat-PROD-ZONE-MANAGEMENT to MANAGEMENT-ZONE",
-        "rulebase nat rules snat-NONPROD-ZONE-MANAGEMENT source-translation dynamic-ip-and-port translated-address 100.66.48.4",
+        "rulebase nat rules snat-PROD-MANAGEMENT to MANAGEMENT",
+        "rulebase nat rules snat-NONPROD-MANAGEMENT source-translation dynamic-ip-and-port translated-address 100.66.48.4",
     ],
     "juniper_junos": [
         "security nat source pool SNAT-POOL-MANAGEMENT address 100.66.48.4/32",
-        "rule-set SNAT-NONPROD-ZONE-MANAGEMENT to zone MANAGEMENT-ZONE",
+        "rule-set SNAT-NONPROD-MANAGEMENT to zone MANAGEMENT",
     ],
     "checkpoint_gaia": [
         'mgmt_cli add host name "SNAT-dc1-fw-shared-MANAGEMENT" ip-address "100.66.48.4"',
-        'original-source "NONPROD-ZONE" original-destination "MANAGEMENT-ZONE" translated-source "SNAT-dc1-fw-shared-MANAGEMENT"',
+        'original-source "NONPROD" original-destination "MANAGEMENT" translated-source "SNAT-dc1-fw-shared-MANAGEMENT"',
     ],
 }
 
@@ -202,22 +204,64 @@ def test_panos_owns_no_secondary_ip_for_the_management_vip() -> None:
 # --- edge ---------------------------------------------------------------------
 
 
-def test_internet_prefixes_keep_only_public_ipv4_of_the_internet_namespace() -> None:
+def _origin(*prefixes: str, zone_type: str = "internet", name: str = "INET") -> dict[str, Any]:
+    """A cleaned TopologySessionCircuit of ``public_origins``: its VRF's zone and the prefixes it originates."""
+    return {
+        "name": name,
+        "vrf": {
+            "id": f"vrf-{name}",
+            "security_zone": {"id": f"zone-{zone_type}", "name": zone_type.upper(), "vrf_type": zone_type},
+        },
+        "originated_prefixes": [{"prefix": prefix} for prefix in prefixes],
+    }
+
+
+def test_internet_prefixes_keep_only_public_ipv4_origins_of_internet_circuits() -> None:
+    """IPv6 is dropped, duplicates collapse, and only an INTERNET circuit may originate."""
     roots = [
-        {"prefix": "192.0.2.0/24", "ip_namespace": {"namespace_type": "internet"}},
-        {"prefix": "198.51.100.0/24", "ip_namespace": {"namespace_type": "prod"}},
-        {"prefix": "2001:db8::/32", "ip_namespace": {"namespace_type": "internet"}},
-        {"prefix": "192.0.2.0/24", "ip_namespace": {"namespace_type": "internet"}},
+        _origin("192.0.2.0/24", "2001:db8::/32", name="a"),
+        _origin("192.0.2.0/24", name="b"),
+        _origin(name="no-origin", zone_type="prod"),
     ]
     assert get_internet_prefixes(roots) == ["192.0.2.0/24"]
     assert get_internet_prefixes(None) == []
 
 
+def test_originated_prefixes_of_a_non_internet_circuit_are_refused() -> None:
+    """A PROD circuit originating a prefix is a routing-domain error, never silently ignored."""
+    with pytest.raises(RoutingDomainError, match="require an INTERNET circuit"):
+        get_internet_prefixes([_origin("198.51.100.0/24", zone_type="prod")])
+
+
 def _edge_output(*, prefixes: bool) -> str:
     data = json.loads((_CONFIGS / "edge_cisco_nxos_internet_bgw" / "input.json").read_text())
     data = copy.deepcopy(data)
-    if not prefixes:
-        data.pop("IpamPrefix")
+    data.pop("IpamPrefix", None)
+    data.pop("public_origins", None)
+    if prefixes:
+        data["public_origins"] = {
+            "edges": [
+                {
+                    "node": {
+                        "name": {"value": "INET"},
+                        "vrf": {
+                            "node": {
+                                "id": "vrf-inet",
+                                "security_zone": {
+                                    "node": {
+                                        "id": "zone-INTERNET",
+                                        "name": {"value": "INTERNET"},
+                                        "vrf_type": {"value": "internet"},
+                                        "l3_vni": {"value": 60002},
+                                    }
+                                },
+                            }
+                        },
+                        "originated_prefixes": {"edges": [{"node": {"prefix": {"value": "192.0.2.0/24"}}}]},
+                    }
+                }
+            ]
+        }
     return _run(Edge, data)
 
 

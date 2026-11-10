@@ -1,9 +1,8 @@
-"""Unit tests for PoolMixin.allocate_resource_pools' namespace scoping
+"""Unit tests for PoolMixin.allocate_resource_pools' IPAM namespace scoping
 (generators/pools.py).
 
-"management" (true OOB) gets the MANAGEMENT VRF; "technical" (fabric P2P)
-and "loopback" stay in `default` (the global table) — EVPN-VXLAN VTEP
-loopbacks and underlay BGP peering can't depend on a VRF being provisioned.
+Management, technical and loopback pools all use builtin `default` for IPAM
+identity. Pool namespaces do not determine routing security zones.
 """
 
 from __future__ import annotations
@@ -47,7 +46,8 @@ def _ip_namespaces_by_pool(create_calls: list[Any]) -> dict[str, list[str]]:
 
 
 class TestAllocateResourcePoolsNamespaceScoping:
-    def test_management_pool_uses_management_namespace(self):
+    def test_management_pool_uses_default_namespace(self) -> None:
+        """The management address pool uses the same IPAM identity as every other pool."""
         gen = _make_gen()
         gen.client.get = AsyncMock(return_value=MagicMock(name__value="DC1-technical-pool"))
         gen._get_parent_pool_with_retry = AsyncMock(return_value=MagicMock())
@@ -65,7 +65,7 @@ class TestAllocateResourcePoolsNamespaceScoping:
         )
 
         namespaces = _ip_namespaces_by_pool(gen.client.create.await_args_list)
-        assert namespaces["DC1-management-pool"] == ["MANAGEMENT"]
+        assert namespaces["DC1-management-pool"] == ["default"]
 
     def test_technical_and_loopback_pools_stay_on_default(self):
         gen = _make_gen()

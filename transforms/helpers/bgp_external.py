@@ -20,7 +20,10 @@ from utils.ownership import (
     exchange_policies,
     ownership_conflicts,
 )
+from utils.routed_prefix import Registered, registrations
+from utils.routing_domain import RoutingDomainError, interface_security_zone, resolve_vrf
 from utils.routing_identity import customer_community, list_name_part
+from utils.segment_addressing import segment_namespace
 
 _log = logging.getLogger(__name__)
 
@@ -46,10 +49,12 @@ def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, dict
     for segment in segments or []:
         owner = customer_owner(segment.get("owner"))
         prefix = ((segment.get("gateway") or {}).get("ip_prefix")) or {}
-        namespace = prefix.get("ip_namespace") or {}
+        if prefix.get("member_type") == "prefix" or not _routable_ipv4(prefix.get("prefix")):
+            continue
+        namespace = segment_namespace(segment)
         if (
             owner
-            and namespace.get("namespace_type") in EXCHANGE_PEERS
+            and namespace.get("vrf_type") in EXCHANGE_PEERS
             and namespace.get("name")
             and prefix.get("member_type") != "prefix"
             and _routable_ipv4(prefix.get("prefix"))
@@ -88,7 +93,7 @@ def _far_end_devices(device_capabilities: list[dict[str, Any]] | None, device_na
     return far
 
 
-def office_registered(office: dict[str, Any]) -> list[tuple[str | None, dict[str, Any]]]:
+def office_registered(office: dict[str, Any]) -> list[Registered]:
     """The (owner, prefix) pairs one office footprint registers: its ``lan_prefixes`` and the hosted segments' prefixes.
 
     The ``lan_prefixes`` are owned by the office's owner. Derived, the gateway prefix of every segment the office
@@ -97,18 +102,41 @@ def office_registered(office: dict[str, Any]) -> list[tuple[str | None, dict[str
     ``office`` is one cleaned TopologyCustomerOffice.
     """
     office_owner = customer_owner(office.get("owner"))
-    registered = [(office_owner, lan) for lan in office.get("lan_prefixes") or []]
+    gateway = office.get("sdwan_gateway") or {}
+    instances = [
+        resolve_vrf([cap, iface], required=True, label=f"office {office.get('name')} gateway handoff")
+        for iface in gateway.get("interfaces") or []
+        for cap in iface.get("capabilities") or []
+        if cap.get("typename") == "TopologySessionCircuit" and cap.get("circuit_type") == "handoff"
+    ]
+    instances = [instance for instance in instances if instance["security_zone"].get("vrf_type") == "prod"]
+    if office.get("lan_prefixes") and not instances:
+        raise RoutingDomainError(f"office {office.get('name')}: missing PROD gateway handoff VRF")
+    registered = [
+        registration
+        for vrf in {instance["id"]: instance for instance in instances}.values()
+        for registration in registrations(office.get("lan_prefixes"), {"vrf": vrf}, customer=office_owner)
+    ]
     for deployment in office.get("segment_deployments") or []:
         segment = deployment.get("segment") or {}
         hosted = (segment.get("gateway") or {}).get("ip_prefix")
         if hosted:
-            registered.append((customer_owner(segment.get("owner")), hosted))
+            matching = [
+                instance
+                for instance in office.get("vrfs") or []
+                if (instance.get("security_zone") or {}).get("id") == (segment.get("security_zone") or {}).get("id")
+            ]
+            if len(matching) != 1:
+                raise RoutingDomainError(f"office {office.get('name')}: missing or ambiguous hosted segment VRF")
+            registered.extend(
+                registrations([hosted], {"vrf": matching[0]}, customer=customer_owner(segment.get("owner")))
+            )
     return registered
 
 
 def registered_by_gateway(
     offices: list[dict[str, Any]] | None, tunnels: list[dict[str, Any]] | None
-) -> dict[str, list[tuple[str | None, dict[str, Any]]]]:
+) -> dict[str, list[Registered]]:
     """SD-WAN gateway name -> the (owner, prefix) pairs registered behind it, by offices and by tunnels.
 
     An office footprint attached to the gateway registers what office_registered returns. A tunnel registers its
@@ -119,7 +147,7 @@ def registered_by_gateway(
     A gateway with offices but no registered prefix is present with an empty list; a gateway no office names
     is absent, so a tunnel registers behind a gateway only where an office sits behind it too.
     """
-    registered_by: dict[str, list[tuple[str | None, dict[str, Any]]]] = {}
+    registered_by: dict[str, list[Registered]] = {}
     for office in offices or []:
         gateway = (office.get("sdwan_gateway") or {}).get("name")
         if gateway:
@@ -132,7 +160,9 @@ def registered_by_gateway(
             tunnel_owner = None
         ends = {(port.get("device") or {}).get("name") for port in tunnel.get("capabilities") or []}
         for gateway in sorted(name for name in ends if name in registered_by):
-            registered_by[gateway].extend((tunnel_owner, prefix) for prefix in tunnel.get("registered_prefixes") or [])
+            registered_by[gateway].extend(
+                registrations(tunnel.get("registered_prefixes"), tunnel, customer=tunnel_owner)
+            )
     return registered_by
 
 
@@ -140,7 +170,7 @@ def registered_by_attachment(
     offices: list[dict[str, Any]] | None,
     tunnels: list[dict[str, Any]] | None,
     legs: Iterable[CloudLeg] | None,
-) -> dict[str, list[tuple[str | None, dict[str, Any]]]]:
+) -> dict[str, list[Registered]]:
     """Attachment point -> the (owner, prefix) pairs registered behind it, as the edge reads them.
 
     An attachment point is where an external session lands: an SD-WAN gateway (registered_by_gateway: its offices and
@@ -154,7 +184,7 @@ def registered_by_attachment(
     return points
 
 
-def registered_by_namespace(registered: list[tuple[str | None, dict[str, Any]]]) -> dict[str, dict[str, set[str]]]:
+def registered_by_namespace(registered: list[Registered]) -> dict[str, dict[str, set[str]]]:
     """Namespace name -> owner -> the routable IPv4 prefixes of the (owner, IpamPrefix) pairs registered there.
 
     A pair without a customer owner, a prefix without a namespace, the default route and IPv6 are dropped.
@@ -162,8 +192,9 @@ def registered_by_namespace(registered: list[tuple[str | None, dict[str, Any]]])
     "what an owner registered behind an attachment point" the same way.
     """
     found: dict[str, dict[str, set[str]]] = {}
-    for owner, prefix in registered:
-        namespace = (prefix.get("ip_namespace") or {}).get("name")
+    for registration in registered:
+        owner, prefix = registration.customer, registration.prefix
+        namespace = registration.zone.get("name")
         if owner and namespace and _routable_ipv4(prefix.get("prefix")):
             found.setdefault(namespace, {}).setdefault(owner, set()).add(prefix["prefix"])
     return found
@@ -213,7 +244,7 @@ def get_external_peer_prefixes(
             registered = list((cloud_legs or {})[name].registered)
         else:
             continue
-        namespace = ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
+        namespace = interface_security_zone(iface).get("name")
         by_owner = registered_by_namespace(registered).get(namespace or "", {})
         found[name] = {owner: sorted_prefixes(prefixes) for owner, prefixes in sorted(by_owner.items())}
     return found
@@ -256,10 +287,7 @@ def get_external_session_policies(
     prefix through the owner that registered it, so a session with several owners tags each correctly.
     Without ``routing_identity`` the policy is exactly the three fields above.
     """
-    namespaces = {
-        iface.get("name"): ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
-        for iface in interfaces or []
-    }
+    namespaces = {iface.get("name"): interface_security_zone(iface).get("name") for iface in interfaces or []}
     # One group per namespace; a session without one stands alone, it has no on-prem space to exchange.
     groups: dict[tuple[str | None, str | None], dict[str, dict[str, list[str]]]] = {}
     for name, by_owner in peer_prefixes.items():

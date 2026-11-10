@@ -72,5 +72,6 @@ fragment AddressPool on CoreIPAddressPool {
   id
   name { value }
   ip_namespace { node { name { value } } }
-  resources { edges { node { prefix { value } ip_namespace { node { name { value } } } ip_addresses { count } } } }
+  resources { edges { node {
+ prefix { value } ip_namespace { node { name { value } } } ip_addresses { count } } } }
 }

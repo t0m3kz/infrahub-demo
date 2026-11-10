@@ -1,0 +1,25 @@
+---
+# The loopbacks of the office distribution switches, the LISP map-servers of the office fabric: an access switch and the
+# SD-WAN edge register with them by address, so a map-server without a loopback is refused (transforms/helpers/lisp.py).
+# C901 office loopbacks come from 10.97.255.0/24 (00_common/00_global/03_prefixes.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: Loopback0
+      device: lis-office-ds-01
+      role: loopback
+      status: active
+      ip_address:
+        data:
+          address: "10.97.255.1/32"
+          ip_namespace: "default"
+    - name: Loopback0
+      device: lis-office-ds-02
+      role: loopback
+      status: active
+      ip_address:
+        data:
+          address: "10.97.255.2/32"
+          ip_namespace: "default"

@@ -1,0 +1,13 @@
+# ManagedFirewallContext declarations in recursive dependency order.
+# The firewall context of DC-WAW1 for C900 (production): east-west, with a leg in PROD only. Its legs (03_legs.yml)
+# and the firewall ports of the border leaves that face the pair are derived, never listed on the context
+# (utils/service_contexts.py). Data here; a generator builds the same objects on 30_all.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallContext
+  data:
+    - name: shared-waw1-fw-ha-prod
+      deployment: DC-WAW1
+      shared_devices: [waw1-fw-01, waw1-fw-02]
+      vlan_id: 3000

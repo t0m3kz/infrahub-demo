@@ -1,0 +1,19 @@
+---
+# The one overlay process of the cage edge: the DCI sessions of 90_bindings/20_dci/01_colo_mesh and the handoffs of
+# 90_bindings/50_connections/Cloud/01_sessions/02_bgp_sessions.yml and
+# 90_bindings/50_connections/SaaS/05_bgp_sessions.yml are built on it. Its loopback is nested.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: par-colo1-edge-01-bgp
+      status: active
+      process_role: overlay
+      local_as: AS4200091001
+      router_id:
+        data:
+          address: "10.91.255.1/32"
+          ip_namespace: default
+          description: par-colo1-edge-01 loopback
+      capabilities: ["par-colo1-edge-01"]

@@ -8,14 +8,17 @@ query lb_segment_gateways($ids: [ID!]!) {
   ManagedVxlanSegment(ids: $ids) {
     edges {
       node {
+ security_zone { node { ...RoutingZoneFields } }
+
         id
         gateway {
           node {
             ip_prefix {
               node {
+
                 id
                 prefix { value }
-                ip_namespace { node { id name { value } namespace_type { value } } }
+                ip_namespace { node { id name { value }  } }
               }
             }
           }

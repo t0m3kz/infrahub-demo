@@ -31,7 +31,7 @@
     "INTERNET|l2vpn_evpn": {
       "admin_status": "true",
       "advertise-ipv4-unicast": "true",
-      "route-distinguisher": "10.0.0.1:50003"
+      "route-distinguisher": "10.0.0.1:60002"
     },
     "MANAGEMENT|ipv4_unicast": {
       "admin_status": "true",
@@ -40,7 +40,7 @@
     "MANAGEMENT|l2vpn_evpn": {
       "admin_status": "true",
       "advertise-ipv4-unicast": "true",
-      "route-distinguisher": "10.0.0.1:50004"
+      "route-distinguisher": "10.0.0.1:60003"
     },
     "PROD|ipv4_unicast": {
       "admin_status": "true",
@@ -51,7 +51,7 @@
     "PROD|l2vpn_evpn": {
       "admin_status": "true",
       "advertise-ipv4-unicast": "true",
-      "route-distinguisher": "10.0.0.1:50001"
+      "route-distinguisher": "10.0.0.1:60000"
     },
     "default|ipv4_unicast": {
       "admin_status": "true",
@@ -69,13 +69,13 @@
     }
   },
   "BGP_GLOBALS_EVPN_RT": {
-    "INTERNET|l2vpn_evpn|50003:50003": {
+    "INTERNET|l2vpn_evpn|60002:60002": {
       "route-target-type": "both"
     },
-    "MANAGEMENT|l2vpn_evpn|65000:50004": {
+    "MANAGEMENT|l2vpn_evpn|65000:60003": {
       "route-target-type": "both"
     },
-    "PROD|l2vpn_evpn|65000:50001": {
+    "PROD|l2vpn_evpn|65000:60000": {
       "route-target-type": "both"
     }
   },
@@ -324,13 +324,13 @@
   },
   "VRF": {
     "INTERNET": {
-      "vni": "50003"
+      "vni": "60002"
     },
     "MANAGEMENT": {
-      "vni": "50004"
+      "vni": "60003"
     },
     "PROD": {
-      "vni": "50001"
+      "vni": "60000"
     }
   },
   "VXLAN_TUNNEL": {
@@ -343,17 +343,17 @@
       "vlan": "Vlan100",
       "vni": "10100"
     },
-    "vtep|map_50001_Vlan3900": {
+    "vtep|map_60000_Vlan3900": {
       "vlan": "Vlan3900",
-      "vni": "50001"
+      "vni": "60000"
     },
-    "vtep|map_50003_Vlan3902": {
+    "vtep|map_60002_Vlan3902": {
       "vlan": "Vlan3902",
-      "vni": "50003"
+      "vni": "60002"
     },
-    "vtep|map_50004_Vlan3903": {
+    "vtep|map_60003_Vlan3903": {
       "vlan": "Vlan3903",
-      "vni": "50004"
+      "vni": "60003"
     },
     "vtep|map_64000_Vlan3000": {
       "vlan": "Vlan3000",

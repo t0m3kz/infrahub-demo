@@ -176,19 +176,48 @@ def test_entries_of_a_range_and_a_host_stay_distinct() -> None:
     assert Entry(POOL, 32).longest == 32
 
 
-def _prefix(prefix: str, namespace: str, kind: str) -> dict[str, Any]:
-    return {"prefix": prefix, "ip_namespace": {"name": namespace, "namespace_type": kind}}
+def _zone(prefix: str, namespace: str, kind: str) -> dict[str, Any]:
+    """An ``environment_zones`` entry (queries/config/*.gql): a security zone and a segment gateway prefix routed in it.
+
+    IPAM keeps every prefix in the builtin ``default`` namespace; the zone alone says where it is routed.
+    """
+    return {
+        "name": namespace,
+        "vrf_type": kind,
+        "network_segments": [
+            {"gateway": {"ip_prefix": {"prefix": prefix, "ip_namespace": {"name": "default"}}}},
+        ],
+    }
 
 
 class TestEnvironmentFacts:
-    def test_prefixes_are_grouped_by_namespace_and_the_internet_is_matched_as_ranges(self) -> None:
-        """Every IpamPrefix of an environment namespace is a possible type-5 route; the default namespace is none."""
+    def test_segment_owned_prefixes_use_zones_instead_of_default_ipam_identity(self) -> None:
+        """Segment registrations in default IPAM remain distinct PROD and INTERNET routing facts."""
         roots = {
-            "environment_prefixes_prod": [
-                _prefix("10.20.0.0/24", "PROD", "prod"),
-                _prefix("10.9.0.0/31", "default", "x"),
+            "environment_segments": [
+                {
+                    "security_zone": {"name": zone, "vrf_type": kind},
+                    "gateway": {"ip_prefix": {"prefix": prefix, "ip_namespace": {"name": "default"}}},
+                }
+                for zone, kind, prefix in (
+                    ("PROD", "prod", "10.20.0.0/24"),
+                    ("INTERNET", "internet", "203.0.113.0/24"),
+                )
+            ]
+        }
+
+        fabric = build_fabric(_leaf(None), roots)
+
+        assert fabric.namespace_prefixes == {"PROD": {"10.20.0.0/24"}, "INTERNET": {"203.0.113.0/24"}}
+        assert fabric.range_namespaces == {"INTERNET"}
+
+    def test_prefixes_are_grouped_by_namespace_and_the_internet_is_matched_as_ranges(self) -> None:
+        """Every segment prefix of a security zone is a possible type-5 route of that zone."""
+        roots = {
+            "environment_zones": [
+                _zone("10.20.0.0/24", "PROD", "prod"),
+                _zone("203.0.113.0/24", "INTERNET", "internet"),
             ],
-            "environment_prefixes_internet": [_prefix("203.0.113.0/24", "INTERNET", "internet")],
             "ManagedVxlanSegment": [{"id": "a"}, {"id": "b"}, {"id": "c"}],
         }
         fabric = build_fabric(_leaf(None), roots)
@@ -204,11 +233,11 @@ class TestEnvironmentFacts:
             ],
             "ManagedVRF": [
                 {
-                    "namespace": {"name": "INTERNET", "namespace_type": "internet"},
+                    "security_zone": {"name": "INTERNET", "vrf_type": "internet"},
                     "shared_devices": [{"name": "bl1", "role": "border-leaf"}, {"name": "leaf9", "role": "leaf"}],
                 },
                 {
-                    "namespace": {"name": "PROD", "namespace_type": "prod"},
+                    "security_zone": {"name": "PROD", "vrf_type": "prod"},
                     "shared_devices": [
                         {"name": "bl1", "role": "border-leaf"},
                         {"name": "bs1", "role": "border-spine"},
@@ -216,7 +245,7 @@ class TestEnvironmentFacts:
                     ],
                 },
                 {
-                    "namespace": {"name": "MANAGEMENT", "namespace_type": "management"},
+                    "security_zone": {"name": "MANAGEMENT", "vrf_type": "management"},
                     "shared_devices": [{"name": "bl1", "role": "border-leaf"}],
                 },
             ],
@@ -228,9 +257,9 @@ class TestEnvironmentFacts:
         device = {
             **_leaf(None),
             "shared_capabilities": [
-                {"typename": "ManagedVRF", "namespace": {"name": "PROD"}},
-                {"typename": "ManagedVRF", "namespace": {"name": "default"}},
-                {"typename": "ManagedSnmp", "namespace": {"name": "OTHER"}},
+                {"typename": "ManagedVRF", "security_zone": {"name": "PROD"}},
+                {"typename": "ManagedVRF", "security_zone": {"name": "default"}},
+                {"typename": "ManagedSnmp", "security_zone": {"name": "OTHER"}},
             ],
         }
         assert build_device(device, local_only=["10.99.0.0/29"]).namespaces == {"PROD"}
@@ -249,10 +278,10 @@ class TestEnvironmentFacts:
         config: dict[str, Any] = {"bgp": [{"sessions": [first]}]}
         annotate_bgp_policy(config, _leaf(_pod(_dc())), {})
         assert first["policy"]["filters"] == []
-        roots = {"environment_prefixes_prod": [_prefix("10.20.0.0/24", "PROD", "prod")]}
+        roots = {"environment_zones": [_zone("10.20.0.0/24", "PROD", "prod")]}
         device = {
             **_leaf(_pod(_dc())),
-            "shared_capabilities": [{"typename": "ManagedVRF", "namespace": {"name": "PROD"}}],
+            "shared_capabilities": [{"typename": "ManagedVRF", "security_zone": {"name": "PROD"}}],
         }
         second: dict[str, Any] = dict(session)
         annotate_bgp_policy({"bgp": [{"sessions": [second]}]}, device, roots)

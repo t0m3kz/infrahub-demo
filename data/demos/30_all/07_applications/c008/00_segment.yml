@@ -19,6 +19,7 @@ spec:
           data:
             customer_name: "krafven-dev"
             environment: "d"
+            security_zone: "NONPROD"
             customer_deployments:
               - "C008-D-DC12"
             member_of_groups:
@@ -32,6 +33,7 @@ spec:
           data:
             customer_name: "trade-portal-local-dc10"
             environment: "p"
+            security_zone: "PROD"
             customer_deployments:
               - "C008-P-DC10"
             member_of_groups:

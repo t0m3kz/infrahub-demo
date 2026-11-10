@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from generators.topology.segment import VxlanSegmentGenerator
 
 # ---------------------------------------------------------------------------
@@ -33,17 +31,6 @@ def _make_gen() -> Any:
     # Tenant addressing has its own test class (TestEnsureSegmentAddressing).
     gen.ensure_segment_addressing = AsyncMock()
     return gen
-
-
-@pytest.fixture(autouse=True)
-def ensure_zone(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
-    """Stub the shared zone helper (own tests: test_security_zone_helper.py).
-
-    Keeps generate()-level tests focused on SegmentDeployment behavior; returned so tests can assert the call.
-    """
-    mock = AsyncMock(return_value="PROD-ZONE")
-    monkeypatch.setattr("generators.topology.segment.ensure_security_zone", mock)
-    return mock
 
 
 # ---------------------------------------------------------------------------

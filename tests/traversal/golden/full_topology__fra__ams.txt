@@ -1,7 +1,0 @@
-# DcimPhysicalDevice:fra-colo1-edge-01 -> DcimPhysicalDevice:ams-colo1-edge-01
-## plain
-L1 DcimPhysicalDevice:fra-colo1-edge-01 -> DcimPhysicalDevice:ams-colo1-edge-01: 1 equal-cost path(s), depth 4
-  DcimPhysicalDevice:fra-colo1-edge-01 -> DcimPhysicalInterface:fra-colo1-edge-01/Ethernet1/16 -> TopologyCarrierCircuit:DF10027 -> DcimPhysicalInterface:ams-colo1-edge-01/Ethernet1/16 -> DcimPhysicalDevice:ams-colo1-edge-01
-L3 DcimPhysicalDevice:fra-colo1-edge-01 -> DcimPhysicalDevice:ams-colo1-edge-01: 2 equal-cost path(s), depth 4
-  DcimPhysicalDevice:fra-colo1-edge-01 -> DcimPhysicalInterface:fra-colo1-edge-01/Ethernet1/16 -> TopologySessionCircuit:fra1-dci-a-ams1 -> DcimPhysicalInterface:ams-colo1-edge-01/Ethernet1/16 -> DcimPhysicalDevice:ams-colo1-edge-01
-  DcimPhysicalDevice:fra-colo1-edge-01 -> ManagedBGP:fra-colo1-edge-01-bgp -> ManagedBGPPeering:BGP-FRA1-EDGE01-AMS1-EDGE01-DCI-EVPN -> ManagedBGP:ams-colo1-edge-01-bgp -> DcimPhysicalDevice:ams-colo1-edge-01

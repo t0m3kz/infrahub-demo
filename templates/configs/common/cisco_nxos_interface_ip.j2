@@ -1,5 +1,5 @@
 {%- if interface.ip_addresses %}
-{%- set ns_name = interface.ip_addresses[0].get('ip_namespace', {}).get('name', 'default') %}
+{%- set ns_name = interface.get('vrf') or 'default' %}
 {%- if ns_name != 'default' %}
   vrf member {{ ns_name }}
 {%- endif %}

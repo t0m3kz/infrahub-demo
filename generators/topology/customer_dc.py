@@ -23,8 +23,12 @@ load-balancer pairs (FirewallContextMixin, generators/firewall_context.py):
   `shared-{cluster}-non-prod`, or a dedicated virtual pair when the design sets
   dedicated_loadbalancer; one-arm, so a single leg in the tenant VRF and a
   routed VIP /26 (context.vip_prefix);
-* the footprint's serving_firewall_context and serving_loadbalancer_context
-  links, which the firewall transform and the VIP producer read.
+* the footprint's serving_firewall_contexts (its internal context and, when the
+  DC has an external-firewall pair, the DC's Internet edge context on it, built
+  by EDGE_CONTEXT) and serving_loadbalancer_context links, which the firewall
+  transform and the VIP producer read. A re-run converges the firewall list (a
+  link to a context it no longer serves from is removed; the shared context
+  stays).
 
 A dedicated request that cannot be built (the DC has no design, not exactly two
 physical peers, no matching *_CUSTOMER_<design> virtual template) is an error,
@@ -57,3 +61,4 @@ class CustomerDeploymentDCExchangeGenerator(
     _parent_label = "Data Center"
     _parent_generators = DC_GENERATORS
     _context_specs = (FIREWALL_CONTEXT, EDGE_CONTEXT, LOADBALANCER_CONTEXT)
+    _relinks_terminated_segments = True

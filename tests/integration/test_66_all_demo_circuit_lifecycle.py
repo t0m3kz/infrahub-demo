@@ -58,6 +58,7 @@ from .circuit_lifecycle_helpers import (
     _namespace_name,
     _value,
     back_errors,
+    interface_vrf_node,
     parse_switch_vrf_state,
     precondition_errors,
     svis_gone_errors,
@@ -122,7 +123,7 @@ query ($peerings: [String], $keys: [String], $descriptions: [String], $devices: 
       node {
         id
         name { value }
-        namespace { node { name { value } } }
+        security_zone { node { name { value } } }
         shared_devices { edges { node { name { value } } } }
       }
     }
@@ -143,7 +144,9 @@ query ($peerings: [String], $keys: [String], $descriptions: [String], $devices: 
         role { value }
         device { node { name { value } } }
         ip_address { node { ip_namespace { node { name { value } } } } }
-        vrf { node { namespace { node { name { value } } } } }
+        zone_capabilities: capabilities {
+          edges { node { __typename ... on ManagedVRF { security_zone { node { name { value } } } } } }
+        }
       }
     }
   }
@@ -211,8 +214,8 @@ class Subject:
 
     @property
     def namespace(self) -> str | None:
-        """The IPAM namespace the circuit's /31 lives in (None for an Interconnect: ``default``, no instance)."""
-        return ALL_DEMO_VIRTUAL_CIRCUITS[self.circuit]["ip_namespace"]
+        """The circuit's logical routing zone (None for an unscoped Interconnect)."""
+        return ALL_DEMO_VIRTUAL_CIRCUITS[self.circuit]["security_zone"]
 
     @property
     def end_devices(self) -> tuple[str, ...]:
@@ -303,7 +306,7 @@ def parse_vrfs(result: dict[str, Any], subject: Subject) -> dict[str, Any]:
             str(_value(edge["node"], "name")) for edge in (node.get("shared_devices") or {}).get("edges", [])
         )
         instances[name] = {"id": node["id"], "devices": members}
-        if subject.namespace and _namespace_name(node, "namespace") == subject.namespace:
+        if subject.namespace and _namespace_name(node, "security_zone") == subject.namespace:
             memberships.update({device: name for device in members if device in subject.end_devices})
     other_demand: set[str] = set()
     for kind in ("addressed_physical", "addressed_virtual"):
@@ -314,7 +317,7 @@ def parse_vrfs(result: dict[str, Any], subject: Subject) -> dict[str, Any]:
             address_ns = (((node.get("ip_address") or {}).get("node") or {}).get("ip_namespace") or {}).get(
                 "node"
             ) or {}
-            vrf_ns = ((((node.get("vrf") or {}).get("node") or {}).get("namespace") or {}).get("node")) or {}
+            vrf_ns = ((interface_vrf_node(node).get("security_zone") or {}).get("node")) or {}
             if subject.namespace in (_value(address_ns, "name"), _value(vrf_ns, "name")):
                 other_demand.add(str(device))
     return {"all": instances, "memberships": memberships, "other_demand": sorted(other_demand)}
@@ -585,7 +588,7 @@ async def decommission_and_restore(
 
 # The segment under test: the MANAGEMENT-gateway segment of the Infrastructure Services pseudo-customer
 # (data/demos/30_all/07_applications/infra/00_segment.yml). Nothing else of 30_all routes in the MANAGEMENT namespace on
-# an access leaf (the tenant segments are PROD / NON-PROD, and the firewall MANAGEMENT legs sit on border leaves), so on
+# an access leaf (the tenant segments are PROD / NONPROD, and the firewall MANAGEMENT legs sit on border leaves), so on
 # the leaves of one host it is the ONLY demand of the MANAGEMENT instance. Its two components (dns, ntp) have the same
 # two VMs (07_applications/infra/01_application.yml) on two hosts racked in different rows, hence on different
 # access-leaf pairs (06_customer_boarding/c006/dc/dc11/02_instances.yml). Taking the second VM off both components

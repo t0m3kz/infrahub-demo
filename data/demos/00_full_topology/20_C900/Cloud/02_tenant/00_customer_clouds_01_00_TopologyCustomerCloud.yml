@@ -1,0 +1,13 @@
+# TopologyCustomerCloud declarations in recursive dependency order.
+# The footprint of C900 in the Azure account (the spoke and isolated segments for the extra pairs of the traversal
+# check).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner: "C900"
+      environment: "p"
+      account: "c900-azure-prod"
+      customer_name: "demo-azure"
+      parent: "westeurope"

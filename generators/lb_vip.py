@@ -26,6 +26,7 @@ from .helpers.lb_vip import (
     instance_footprint,
     is_cloud_component,
     leg_prefix_id,
+    leg_zone,
     listener_protocol,
     member_identifier,
     member_pool_name,
@@ -277,7 +278,9 @@ class LoadbalancerVipMixin:
         self.logger.info("Waiting for %s to write %s of %s", owner, field, ", ".join(node_ids))
         for node_id in node_ids:
             await self.wait_for_parent_generators((owner,), node_id)
-        text = query.read_text()
+        from utils.graphql_queries import load_query
+
+        text = load_query(query)
         pending = node_ids
         for attempt in range(LB_VIP_REREAD.attempts):
             if attempt:
@@ -568,6 +571,7 @@ class LoadbalancerVipMixin:
                                 component=component,
                                 segment=segment,
                                 leg_prefix_id=rules.leg_id,
+                                leg_zone=leg_zone(rules.context),
                                 port=port,
                             ),
                             rule_indexes=rule_indexes,

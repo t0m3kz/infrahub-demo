@@ -1,0 +1,133 @@
+fragment InternetEgressContext on ManagedFirewallContext {
+  id
+  name {
+    value
+  }
+  # A dedicated context (tenant set) behind an Internet edge needs its own public address (checks/internet_egress.py).
+  tenant {
+    node {
+      id
+    }
+  }
+  vlan_id {
+    value
+  }
+  snat_address {
+    node {
+      id
+      address {
+        value
+      }
+    }
+  }
+  # The member firewalls with what their legs and border ports derive from (utils/service_contexts.py): the contexts
+  # they are a member of, their interfaces (the legs: uplink sub-interfaces tagged with a transit VLAN, with their address
+  # and VRF: an exchange's legs are the ones in its two VRFs) and the cable of the first uplink (or of the host port a hosted member's NIC is pinned to).
+  shared_devices {
+    edges {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+        ... on DcimDeviceManaged {
+          role {
+            value
+          }
+          shared_capabilities {
+            edges {
+              node {
+                __typename
+                id
+                ... on ManagedSecurityContext {
+                  vlan_id {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on DcimDevice {
+          interfaces {
+            edges {
+              node {
+                __typename
+                id
+                name {
+                  value
+                }
+                role {
+                  value
+                }
+                ...InterfaceRoutingZoneFields
+                ...EgressPortCableFields
+                ... on DcimVirtualInterface {
+                  vlan_id {
+                    value
+                  }
+                  ip_address {
+                    node {
+                      id
+                      address {
+                        value
+                      }
+                      ip_namespace {
+                        node {
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                  parent_interface {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                      ...EgressPortCableFields
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# The cable of a physical port: its far end (the border service port) with the device it sits on.
+fragment EgressPortCableFields on DcimPhysicalInterface {
+  cable {
+    node {
+      id
+      endpoints {
+        edges {
+          node {
+            __typename
+            ... on DcimPhysicalInterface {
+              id
+              role {
+                value
+              }
+              device {
+                node {
+                  ... on DcimDeviceManaged {
+                    role {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

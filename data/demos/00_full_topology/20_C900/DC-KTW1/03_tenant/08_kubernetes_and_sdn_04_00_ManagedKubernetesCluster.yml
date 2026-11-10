@@ -1,0 +1,20 @@
+# ManagedKubernetesCluster declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedKubernetesCluster
+  data:
+    - name: ktw1-rke2-cl01
+      description: "C900 platform services of DC-KTW1: RKE2 on five VMs"
+      status: active
+      software_image: rke2-1.30
+      sdn: ktw1-cilium
+      control_plane_nodes:
+        - ktw1-k8s-cp-01
+        - ktw1-k8s-cp-02
+        - ktw1-k8s-cp-03
+      worker_nodes:
+        - ktw1-k8s-wk-01
+        - ktw1-k8s-wk-02
+      node_segments:
+        - c900-web-p

@@ -139,5 +139,5 @@ generics:
         order_weight: 3200
         identifier: network_segment__gateway
         description: >-
-          Anycast gateway (v4 or v6) for this SVI; also the only path to
-          subnet/VRF (gateway.ip_prefix). Absent if L2-only/inline-routed.
+          Anycast gateway (v4 or v6) for this SVI; gateway.ip_prefix gives
+          the subnet, security_zone gives its routing domain.

@@ -68,6 +68,29 @@ nodes:
         optional: true
         order_weight: 1225
     relationships:
+      # The settings are of interfaces of ONE device: the device is the Parent (they go with it) and the interface edge
+      # below is re-declared with common_parent, so the server refuses an interface of another device on create and
+      # on update (measured on 1.11.9).
+      - name: device
+        peer: DcimPhysicalDevice
+        label: "Device"
+        kind: Parent
+        cardinality: one
+        optional: false
+        identifier: "ospfinterface__device"
+        order_weight: 1050
+        description: "The device whose interfaces these OSPF settings apply to"
+      # Re-declares ManagedGenericInterfaces.capabilities (same peer, kind and identifier) to add common_parent.
+      - name: capabilities
+        peer: DcimInterface
+        label: Assigned Interfaces
+        cardinality: many
+        kind: Generic
+        optional: true
+        common_parent: device
+        identifier: interface_capabilities
+        order_weight: 9500
+        description: "The interfaces these settings apply to, all of the device"
       - name: password
         peer: RoutingPassword
         optional: true
@@ -159,7 +182,7 @@ nodes:
         order_weight: 1700
     relationships:
       - name: capabilities
-        peer: DcimCapabilities
+        peer: DcimDeviceManaged
         label: "Device"
         description: "The device this process runs on: one by construction (a many rel cannot be capped at 1)"  # yamllint disable-line rule:line-length
         cardinality: many
@@ -187,7 +210,8 @@ nodes:
 
   # Note: Interface-level OSPF config (metric, mode, authentication) is in
   # RoutingOSPFInterface; area/process/link-level settings (network_type, cost)
-  # live here instead, linked back to the interface via ospf_interface.
+  # live here instead. The peering is not on the interface edge: its interfaces
+  # are those of its ospf_interface settings.
   - name: OSPFPeering
     namespace: Managed
     description: "OSPF peering session — area, cost, and network type for P2P or broadcast links"
@@ -199,7 +223,6 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedPeering
-      - ManagedGenericInterfaces
     attributes:
       - name: network_type
         kind: Dropdown
@@ -254,6 +277,18 @@ nodes:
 
 extensions:
   nodes:
+    - kind: DcimPhysicalDevice
+      relationships:
+        - name: ospf_interfaces
+          label: OSPF Interface Configs
+          peer: RoutingOSPFInterface
+          kind: Component
+          cardinality: many
+          optional: true
+          on_delete: cascade
+          identifier: "ospfinterface__device"
+          order_weight: 7960
+          description: "The OSPF settings of this device's interfaces"
     - kind: RoutingOSPFInterface
       relationships:
         - name: peering

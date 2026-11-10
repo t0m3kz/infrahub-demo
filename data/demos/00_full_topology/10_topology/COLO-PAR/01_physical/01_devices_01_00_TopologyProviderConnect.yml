@@ -1,0 +1,23 @@
+# TopologyProviderConnect declarations in recursive dependency order.
+# The provider's port of the metro: a TopologyProviderConnect, a slim device of the provider placed by its
+# `location` (the cage), with no role, platform or template, that holds the physical Fabric port.
+# The port is patched to par-colo1-edge-01 Ethernet1/1
+# (02_cables.yml); the connections that start on it have an interface of their own (03_fabric_interfaces.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnect
+  data:
+    - name: EXT-FABRIC-PAR
+      description: Equinix Fabric port of the cage PAR, in the PAR-COLO1 cage (patched to par-colo1-edge-01 Eth1/1)
+      status: active
+      provider: P016
+      location: PAR-COLO1
+      bandwidth: 10000
+      external_id: a3d0c0f4-5b7e-4a13-9d52-0c1f6b2e8a77
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: et-0/0/0
+            description: Fabric port 10G, cross-connected to the cage edge through the patch panel
+            status: active

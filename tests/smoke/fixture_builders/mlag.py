@@ -7,6 +7,7 @@ from tests.smoke.fixture_builders.common import (
     _make_interface,
     _make_segment_node,
     _node,
+    _segment_memberships,
     _v,
     _write_data_fixture,
     write_data_fixtures,
@@ -43,22 +44,11 @@ def build_mlag_device_data(
     else:
         control_addresses = ("fd00:2400::/127", "fd00:2400::1/127")
 
-    def member(name: str, management_address: str, control_address: str | None) -> dict:
-        interfaces = []
-        if control_address:
-            interfaces.append(
-                {
-                    "__typename": "DcimVirtualInterface",
-                    "name": _v("Vlan4094"),
-                    "role": _v("mlag-control"),
-                    "ip_address": _node({"address": _v(control_address)}),
-                }
-            )
+    def member(name: str, management_address: str) -> dict:
         return {
             "name": _v(name),
             "role": _v(role),
             "primary_address": _node({"address": _v(management_address)}),
-            "interfaces": _edges(interfaces),
         }
 
     mlag_cap = {
@@ -70,8 +60,8 @@ def build_mlag_device_data(
         "reload_delay_non_mlag": _v(330),
         "capabilities": _edges(
             [
-                member(device_name, "172.16.0.1/32", control_addresses[0] if control_addresses else None),
-                member(peer_name, "172.16.0.2/32", control_addresses[1] if control_addresses else None),
+                member(device_name, "172.16.0.1/32"),
+                member(peer_name, "172.16.0.2/32"),
             ]
         ),
     }
@@ -87,6 +77,43 @@ def build_mlag_device_data(
     else:
         uplink1, uplink2, member1, member2 = "Ethernet1", "Ethernet2", "Ethernet33", "Ethernet34"
         lag_name, lag_id_val = "Port-Channel100", 100
+
+    def domain_interfaces(owner: str, control_address: str | None) -> list[dict]:
+        """What ManagedMLAG.interfaces lists for one member: the peer-link LAG, its ports and the control SVI."""
+        on_device = {"device": _node({"name": _v(owner)})}
+        listed: list[dict] = [
+            {
+                "__typename": "DcimLAGInterface",
+                "name": _v(lag_name),
+                "role": _v("mlag-peer"),
+                "lag_id": _v(lag_id_val),
+                "lacp_mode": _v("active"),
+                "member_interfaces": _edges([{"name": _v(member1)}, {"name": _v(member2)}]),
+                **on_device,
+            },
+            *(
+                {"__typename": "DcimPhysicalInterface", "name": _v(port), "role": _v("mlag-peer"), **on_device}
+                for port in (member1, member2)
+            ),
+        ]
+        if control_address:
+            listed.append(
+                {
+                    "__typename": "DcimVirtualInterface",
+                    "name": _v("Vlan4094"),
+                    "role": _v("mlag-control"),
+                    "ip_address": _node({"address": _v(control_address)}),
+                    **on_device,
+                }
+            )
+        return listed
+
+    mlag_cap["interfaces"] = _edges(
+        [
+            *domain_interfaces(device_name, control_addresses[0] if control_addresses else None),
+            *domain_interfaces(peer_name, control_addresses[1] if control_addresses else None),
+        ]
+    )
 
     loopback = _make_interface(
         name="Loopback0",
@@ -181,7 +208,7 @@ def build_mlag_device_data(
                 "role": _v("lag"),
                 "lag_id": _v(host_lag_id),
                 "member_interfaces": _edges([{"name": _v(host_member)}]),
-                "segments": _edges(host_segments),
+                "capabilities": _edges(_segment_memberships(host_segments)),
             },
             _make_interface(name=host_member, device_name=device_name, description="MLAG host member", role="customer"),
         ]
@@ -201,7 +228,7 @@ def build_mlag_device_data(
         "primary_address": _node(
             {
                 "address": _v("172.16.0.1/32"),
-                "ip_namespace": _node({"name": _v("default")}),
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         ),
         "tags": _edges([]),
@@ -245,6 +272,22 @@ def build_mlag_virtual_peer_link_data(*, device_name: str, peer_name: str, role:
         typename="DcimVirtualInterface",
     )
     node["interfaces"]["edges"] = [*kept, {"node": virtual}]
+    # The domain lists the loopbacks instead of the port-channels (and the unused ports stay listed).
+    mlag = node["capabilities"]["edges"][0]["node"]
+    listed = [edge for edge in mlag["interfaces"]["edges"] if edge["node"]["__typename"] != "DcimLAGInterface"]
+    for owner in (device_name, peer_name):
+        listed.append(
+            {
+                "node": {
+                    "__typename": "DcimVirtualInterface",
+                    "name": _v("loopback100"),
+                    "role": _v("mlag-peer"),
+                    "ip_address": _node(None),
+                    "device": _node({"name": _v(owner)}),
+                }
+            }
+        )
+    mlag["interfaces"]["edges"] = listed
     return data
 
 

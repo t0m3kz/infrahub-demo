@@ -1,0 +1,16 @@
+# CloudNetworkSegment declarations in recursive dependency order.
+# The subnet of the AWS VPC.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNetworkSegment
+  data:
+    - owner: "C900"
+      customer_name: "subnet"
+      environment: "p"
+      security_zone: "PROD"
+      segment_type: "cloud_subnet"
+      virtual_network: "vpc-c900-prod"
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      cidr_block: "10.200.1.0/24"
+      customer_deployment: "C900-P-DEMO-AWS-EU-CENTRAL-1"

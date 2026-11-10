@@ -3,28 +3,32 @@ query GetTransitInventory {
     edges {
       node {
         id
-        name { value }
-        vlan_id { value }
-        snat_address { node { address { value } ip_namespace { node { name { value } } } } }
+        name {
+          value
+        }
+        vlan_id {
+          value
+        }
+        snat_address {
+          node {
+            address {
+              value
+            }
+            ip_namespace {
+              node {
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
         tenant {
           node {
             id
-            ... on TopologyCustomerDC { name { value } }
-          }
-        }
-        cluster {
-          node {
-            name { value }
-            # Member firewalls' deployment: the DC the cluster sits in (empty
-            # for a colocation metro's cluster and for a dedicated cluster of
-            # virtual members).
-            capabilities {
-              edges {
-                node {
-                  ... on DcimPhysicalDevice {
-                    deployment { node { __typename name { value } } }
-                  }
-                }
+            ... on TopologyCustomerDC {
+              name {
+                value
               }
             }
           }
@@ -34,36 +38,200 @@ query GetTransitInventory {
             node {
               id
               ... on TopologyCustomer {
-                name { value }
+                name {
+                  value
+                }
               }
-              # Only DC and colocation footprints state an environment (TopologyEnvironmentScoped).
               ... on TopologyEnvironmentScoped {
-                environment { value }
+                environment {
+                  value
+                }
               }
             }
           }
         }
-        # Legs (the members' VLAN sub-interfaces) and the border-leaf service
-        # ports tagged with the context, told apart by __typename.
-        capabilities {
+        # The members: a context has no interface edge, its legs and border ports are derived from them
+        # (utils/service_contexts.py, tests/integration/service_inventory_helpers.py _context_legs_and_ports).
+        shared_devices {
           edges {
             node {
               __typename
               id
-              name { value }
-              device { node { id name { value } ... on DcimDeviceManaged { role { value } } } }
-              ... on DcimVirtualInterface {
-                ip_address {
+              name {
+                value
+              }
+              role {
+                value
+              }
+              # The HA pair of the member (a context holds no HA edge) and where it stands.
+              capabilities {
+                edges {
                   node {
-                    address { value }
-                    ip_namespace { node { name { value } namespace_type { value } } }
+                    __typename
+                    ... on ManagedFirewallHA {
+                      id
+                      name {
+                        value
+                      }
+                      capabilities {
+                        edges {
+                          node {
+                            id
+                          }
+                        }
+                      }
+                    }
+                    ... on ManagedLoadbalancerHA {
+                      id
+                      name {
+                        value
+                      }
+                      capabilities {
+                        edges {
+                          node {
+                            id
+                          }
+                        }
+                      }
+                    }
                   }
                 }
-                capabilities {
+              }
+              ... on DcimPhysicalDevice {
+                deployment {
+                  node {
+                    __typename
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+              shared_capabilities {
+                edges {
+                  node {
+                    __typename
+                    id
+                    ... on ManagedSecurityContext {
+                      vlan_id {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+              ... on DcimDevice {
+                interfaces {
                   edges {
                     node {
                       __typename
-                      ... on TopologyRoutedExchange { id name { value } }
+                      id
+                      name {
+                        value
+                      }
+                      role {
+                        value
+                      }
+                      ...InterfaceRoutingZoneFields
+                      ... on DcimPhysicalInterface {
+                        cable {
+                          node {
+                            id
+                            endpoints {
+                              edges {
+                                node {
+                                  __typename
+                                  ... on DcimPhysicalInterface {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                    role {
+                                      value
+                                    }
+                                    device {
+                                      node {
+                                        id
+                                        name {
+                                          value
+                                        }
+                                        ... on DcimDeviceManaged {
+                                          role {
+                                            value
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      ... on DcimVirtualInterface {
+                        vlan_id {
+                          value
+                        }
+                        parent_interface {
+                          node {
+                            id
+                            name {
+                              value
+                            }
+                            ... on DcimPhysicalInterface {
+                              cable {
+                                node {
+                                  id
+                                  endpoints {
+                                    edges {
+                                      node {
+                                        __typename
+                                        ... on DcimPhysicalInterface {
+                                          id
+                                          name {
+                                            value
+                                          }
+                                          role {
+                                            value
+                                          }
+                                          device {
+                                            node {
+                                              id
+                                              name {
+                                                value
+                                              }
+                                              ... on DcimDeviceManaged {
+                                                role {
+                                                  value
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                        ip_address {
+                          node {
+                            address {
+                              value
+                            }
+                            ip_namespace {
+                              node {
+                                name {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -78,10 +246,27 @@ query GetTransitInventory {
     edges {
       node {
         id
-        name { value }
-        namespace_a { node { name { value } namespace_type { value } } }
-        namespace_z { node { name { value } namespace_type { value } } }
-        gateway { node { id name { value } } }
+        name {
+          value
+        }
+        vrf_a {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        vrf_z {
+          node {
+            ...RoutingVrfFields
+          }
+        }
+        gateway {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
       }
     }
   }

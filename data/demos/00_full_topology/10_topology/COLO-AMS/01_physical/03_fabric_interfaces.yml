@@ -1,0 +1,17 @@
+---
+# The end of the Internet Access service of the cage on the Fabric port of the cage AMS: one
+# TopologyProviderInterface per connection, riding on the physical port (`parent_interface`) and named
+# <port>.<S-tag>. It carries the S-tag (`vlan_id`) and the bandwidth, and the internet carrier
+# (90_bindings/90_internet/02_circuits) ends on it and on THE INTERNET.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderInterface
+  data:
+    - device: EXT-FABRIC-AMS
+      name: et-0/0/0.1401
+      description: Equinix Internet Access of the AMS-COLO1 cage (8d3b6e41)
+      status: active
+      parent_interface: ["EXT-FABRIC-AMS", "et-0/0/0"]
+      vlan_id: 1401
+      bandwidth: 10000

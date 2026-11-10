@@ -13,6 +13,7 @@ from tests.smoke.fixture_builders.common import (
 from tests.smoke.fixture_builders.fabric import SCENARIOS, _write_fixture, build_device_data
 from tests.smoke.fixture_builders.firewall import _make_rule_segment, _make_segment_rule
 from tests.smoke.fixture_builders.transit import build_exchange_transit_bl_data
+from tests.smoke.fixture_builders.vrf import routing_zone
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
@@ -67,7 +68,15 @@ def _add_cisco_xe_acl_rules(segments: list[dict]) -> None:
         {
             "node": {
                 **_make_policy_rule(index=50, name="allow-db-logged", protocol="tcp", port_start=5432, log=True),
-                "destination_ip_addresses": _edges([{"address": _v("10.9.9.9/32")}]),
+                "destination_zone": _node(routing_zone("PROD")),
+                "destination_ip_addresses": _edges(
+                    [
+                        {
+                            "address": _v("10.9.9.9/32"),
+                            "ip_prefix": _node(None),
+                        }
+                    ]
+                ),
             }
         }
     )
@@ -87,7 +96,11 @@ def _interface_segments(data: dict, interface_name: str = "Ethernet10") -> list[
     """The segment nodes carried by one interface of the first device of a raw device response."""
     node = data["DcimDevice"]["edges"][0]["node"]
     port = next(e["node"] for e in node["interfaces"]["edges"] if e["node"]["name"]["value"] == interface_name)
-    return [edge["node"] for edge in port["segments"]["edges"]]
+    return [
+        edge["node"]["segment_deployment"]["node"]["segment"]["node"]
+        for edge in port["capabilities"]["edges"]
+        if edge["node"].get("__typename") == "ManagedSegmentVlan"
+    ]
 
 
 def build_cisco_xe_acl_data(*, device_name: str, role: str = "leaf") -> dict:

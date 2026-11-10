@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from checks.firewall import CheckFirewall
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability
 
 
 def _v(value: Any) -> dict[str, Any]:
@@ -31,9 +32,9 @@ def _check() -> Any:
     return check
 
 
-def _ref(seg_id: str, zone: str | None = "zone-a") -> dict[str, Any]:
+def _ref(seg_id: str, zone: str = "zone-a") -> dict[str, Any]:
     """A rule end (PolicyRuleSegmentFields)."""
-    return {"id": seg_id, "name": _v(seg_id), "security_zone": _node({"name": _v(zone)} if zone else None)}
+    return {"id": seg_id, "name": _v(seg_id), "security_zone": _node({"name": _v(zone)})}
 
 
 def _rule(name: str, src: str | None = "seg-a", dst: str | None = "seg-b", **extra: Any) -> dict[str, Any]:
@@ -79,13 +80,29 @@ def _payload(*capabilities: dict[str, Any]) -> dict[str, Any]:
     interfaces = [
         {
             "name": _v(f"eth0.{i}"),
-            # A carried segment is on the interface's segments; a context stays on its capabilities.
-            "segments": _edges([] if capability["__typename"] == "ManagedFirewallContext" else [capability]),
-            "capabilities": _edges([capability] if capability["__typename"] == "ManagedFirewallContext" else []),
+            # A carried segment is the segment of a VLAN row's deployment among the interface's capabilities; a context
+            # is a shared capability of the device.
+            "capabilities": _edges(
+                []
+                if capability["__typename"] == "ManagedFirewallContext"
+                else [
+                    {
+                        "__typename": "ManagedSegmentVlan",
+                        "segment_deployment": _node({"segment": _node(capability)}),
+                    }
+                ]
+            ),
         }
         for i, capability in enumerate(capabilities)
     ]
-    return {"DcimDevice": _edges([{"name": _v("fw-1"), "interfaces": _edges(interfaces)}])}
+    contexts = [capability for capability in capabilities if capability["__typename"] == "ManagedFirewallContext"]
+    device = {
+        "name": _v("fw-1"),
+        "role": _v("internal-firewall"),
+        "shared_capabilities": _edges(contexts),
+        "interfaces": _edges(interfaces),
+    }
+    return {"DcimDevice": _edges([device])}
 
 
 def _validate(*capabilities: dict[str, Any]) -> Any:
@@ -130,16 +147,14 @@ class TestFirewallCheck:
         assert "has no destination" in check._captured_errors[0]
 
     def test_apply_on_switch_to_the_internet_zone_raises_error(self) -> None:
-        rule = _rule(
-            "rule-1", dst=None, apply_on_switch=_v(True), destination_zone=_node({"name": _v("INTERNET-ZONE")})
-        )
+        rule = _rule("rule-1", dst=None, apply_on_switch=_v(True), destination_zone=_node({"name": _v("INTERNET")}))
         check = _validate(_carried("seg-a", _policy([rule])))
         assert len(check._captured_errors) == 1
         assert "apply_on_switch to the internet zone" in check._captured_errors[0]
 
     def test_rule_to_the_internet_zone_is_a_complete_destination(self) -> None:
         """A zone is a destination of its own: no segment, prefix or address needed."""
-        rule = _rule("rule-1", dst=None, destination_zone=_node({"name": _v("INTERNET-ZONE")}))
+        rule = _rule("rule-1", dst=None, destination_zone=_node({"name": _v("INTERNET")}))
         check = _validate(_carried("seg-a", _policy([rule])))
         assert check._captured_errors == []
 
@@ -149,9 +164,7 @@ class TestFirewallCheck:
         assert _validate(_carried("seg-a", _policy([rule])))._captured_errors == []
 
     def test_permit_to_the_internet_zone_without_apply_on_switch_passes(self) -> None:
-        rule = _rule(
-            "rule-1", dst=None, apply_on_switch=_v(False), destination_zone=_node({"name": _v("INTERNET-ZONE")})
-        )
+        rule = _rule("rule-1", dst=None, apply_on_switch=_v(False), destination_zone=_node({"name": _v("INTERNET")}))
         check = _validate(_carried("seg-a", _policy([rule])))
         assert check._captured_errors == []
 
@@ -163,14 +176,6 @@ class TestFirewallCheck:
         check = _validate(_carried("seg-a", _policy([rule])))
         assert check._captured_errors == []
         assert check._captured_infos == []
-
-    def test_segment_without_zone_is_an_error(self) -> None:
-        """A segment with no security_zone is an error: zone-based firewalls match any zone there."""
-        rule = {**_rule("rule-1"), "source_segment": _node(_ref("seg-a", zone=None))}
-        check = _validate(_carried("seg-a", _policy([rule])))
-        assert check._captured_infos == []
-        assert len(check._captured_errors) == 1
-        assert "source_segment 'seg-a' has no security_zone" in check._captured_errors[0]
 
     def test_disabled_policy_and_rule_are_skipped(self) -> None:
         bad = _rule("bad", src="seg-x", dst=None)
@@ -201,6 +206,7 @@ class TestFirewallCheck:
             "__typename": "ManagedFirewallContext",
             "id": "ctx-1",
             "name": _v("ctx-1"),
+            "shared_devices": _edges([{"name": _v("fw-1")}]),
             "served_deployments": _edges([{"id": "dep-1", "network_segments": _edges([])}]),
         }
         check = _validate(context)
@@ -216,6 +222,7 @@ class TestFirewallCheck:
             "__typename": "ManagedFirewallContext",
             "id": "ctx-1",
             "name": _v("ctx-1"),
+            "shared_devices": _edges([{"name": _v("fw-1")}]),
             "served_deployments": _edges([{"id": "dep-1", "network_segments": _edges([served])}]),
         }
         check = _validate(context)
@@ -223,14 +230,23 @@ class TestFirewallCheck:
         assert "has no destination" in check._captured_errors[0]
 
 
-def _leg_interface(name: str, address: str, namespace: str, ns_type: str, exchange: dict, context: dict) -> dict:
-    """A firewall sub-interface in the raw firewall_config shape (leg of one exchange)."""
+def _vrf(namespace: str, ns_type: str) -> dict:
+    """A VRF instance in the raw RoutingVrfFields shape."""
     return {
+        "id": f"vrf-{namespace.lower()}",
+        "security_zone": _node({"id": f"zone-{namespace.lower()}", "name": _v(namespace), "vrf_type": _v(ns_type)}),
+    }
+
+
+def _leg_interface(name: str, address: str, namespace: str, ns_type: str) -> dict:
+    """A firewall sub-interface in the raw firewall_config shape (a leg of the context in a VRF)."""
+    return {
+        **interface_vrf_capability(_vrf(namespace, ns_type)),
         "name": _v(name),
-        "ip_address": _node(
-            {"address": _v(address), "ip_namespace": _node({"name": _v(namespace), "namespace_type": _v(ns_type)})}
-        ),
-        "capabilities": _edges([context, exchange]),
+        "vlan_id": _v(int(name.rsplit(".", 1)[-1])),
+        "parent_interface": _node({"name": _v("eth1"), "device": _node({"id": "dev-fw-1"})}),
+        "device": _node({"id": "dev-fw-1"}),
+        "ip_address": _node({"address": _v(address), "ip_namespace": {"node": {"name": {"value": "default"}}}}),
     }
 
 
@@ -240,23 +256,38 @@ def _exchange_payload(internet_vlan: str, snat: str | None = "192.0.2.5/32") -> 
         "id": "ctx-1",
         "name": _v("ctx-1"),
         "vlan_id": _v(3005),
+        "shared_devices": _edges([{"name": _v("fw-1")}]),
         "snat_address": _node({"address": _v(snat)}) if snat else {"node": None},
+        # The exchange of the context: its legs are the context's legs in its two VRFs (derived).
+        "exchanges": _edges(
+            [
+                {
+                    "id": "xchg-1",
+                    "name": _v("ctx-1-PROD-INTERNET"),
+                    "vrf_a": _node(_vrf("PROD", "prod")),
+                    "vrf_z": _node(_vrf("INTERNET", "internet")),
+                }
+            ]
+        ),
     }
-    exchange = {
-        "__typename": "TopologyRoutedExchange",
-        "id": "xchg-1",
-        "name": _v("ctx-1-PROD-INTERNET"),
-        # The exchange's own namespace_a / namespace_z come back null through capabilities;
-        # the check reads the namespaces off the legs' addresses instead.
-        "namespace_a": {"node": None},
-        "namespace_z": {"node": None},
-        "gateway": _node({"id": "ctx-1"}),
+    uplink = {
+        "__typename": "DcimPhysicalInterface",
+        "name": _v("eth1"),
+        "role": _v("uplink"),
+        "device": _node({"id": "dev-fw-1"}),
     }
     interfaces = [
-        _leg_interface("eth1.3005", "100.66.0.5/29", "PROD", "prod", exchange, context),
-        _leg_interface(f"eth1.{internet_vlan}", "100.66.32.5/29", "INTERNET", "internet", exchange, context),
+        uplink,
+        _leg_interface("eth1.3005", "100.66.0.5/29", "PROD", "prod"),
+        _leg_interface(f"eth1.{internet_vlan}", "100.66.32.5/29", "INTERNET", "internet"),
     ]
-    return {"DcimDevice": _edges([{"name": _v("fw-1"), "interfaces": _edges(interfaces)}])}
+    device = {
+        "name": _v("fw-1"),
+        "role": _v("internal-firewall"),
+        "shared_capabilities": _edges([context]),
+        "interfaces": _edges(interfaces),
+    }
+    return {"DcimDevice": _edges([device])}
 
 
 class TestFirewallExchangeLegs:
@@ -267,7 +298,7 @@ class TestFirewallExchangeLegs:
 
     def test_wrong_transit_vlan_is_logged_as_error(self) -> None:
         check = _check()
-        check.validate(_exchange_payload("3005"))
+        check.validate(_exchange_payload("3205"))  # the NON-PROD slot of the context
         assert len(check._captured_errors) == 1
         assert "expected 3405" in check._captured_errors[0]
 
@@ -292,7 +323,7 @@ class TestContextRoutesUseSegmentOwnGateway:
     def _context(segment: dict[str, Any]) -> dict[str, Any]:
         leg = {
             "ns_type": "prod",
-            "zone": "PROD-ZONE",
+            "zone": "PROD",
             "anycast": "100.66.0.1",
             "interface": "eth1.3005",
             "vrf": "PROD",
@@ -305,17 +336,17 @@ class TestContextRoutesUseSegmentOwnGateway:
         segment = {
             "id": "s1",
             "gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}},
-            "security_zone": {"name": "PROD-ZONE"},
+            "security_zone": {"name": "PROD"},
         }
         context = self._context(segment)
-        apply_context_routes(context, {"s1": ("PROD-ZONE", "10.9.9.0/24")})
+        apply_context_routes(context, {"s1": ("PROD", "10.9.9.0/24")})
         assert [r["destination"] for r in context["routes"]] == ["10.1.0.0/24"]
 
     def test_root_fills_a_segment_without_gateway(self) -> None:
         from transforms.config.firewall import apply_context_routes
 
         context = self._context({"id": "s1"})
-        apply_context_routes(context, {"s1": ("PROD-ZONE", "10.9.9.0/24")})
+        apply_context_routes(context, {"s1": ("PROD", "10.9.9.0/24")})
         assert [r["destination"] for r in context["routes"]] == ["10.9.9.0/24"]
 
     def test_no_root_needed_when_segment_carries_its_own(self) -> None:
@@ -324,7 +355,7 @@ class TestContextRoutesUseSegmentOwnGateway:
         segment = {
             "id": "s1",
             "gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}},
-            "security_zone": {"name": "PROD-ZONE"},
+            "security_zone": {"name": "PROD"},
         }
         context = self._context(segment)
         apply_context_routes(context, {})
@@ -337,10 +368,10 @@ class TestContextRoutesTenantLegsAreExchangeTenants:
     def test_zoneless_segment_with_a_management_leg_still_takes_the_only_tenant_leg(self) -> None:
         from transforms.config.firewall import apply_context_routes
 
-        prod = {"ns_type": "prod", "zone": "PROD-ZONE", "anycast": "100.66.0.1", "interface": "e.3000", "vrf": "PROD"}
+        prod = {"ns_type": "prod", "zone": "PROD", "anycast": "100.66.0.1", "interface": "e.3000", "vrf": "PROD"}
         mgmt = {
             "ns_type": "management",
-            "zone": "MANAGEMENT-ZONE",
+            "zone": "MANAGEMENT",
             "anycast": "100.66.48.1",
             "interface": "e.3600",
             "vrf": "MANAGEMENT",
@@ -355,10 +386,10 @@ class TestContextRoutesTenantLegsAreExchangeTenants:
     def test_segment_in_the_management_zone_is_routed_to_the_management_leg_not_as_a_tenant_prefix(self) -> None:
         from transforms.config.firewall import apply_context_routes
 
-        prod = {"ns_type": "prod", "zone": "PROD-ZONE", "anycast": "100.66.0.1", "interface": "e.3000", "vrf": "PROD"}
+        prod = {"ns_type": "prod", "zone": "PROD", "anycast": "100.66.0.1", "interface": "e.3000", "vrf": "PROD"}
         mgmt = {
             "ns_type": "management",
-            "zone": "MANAGEMENT-ZONE",
+            "zone": "MANAGEMENT",
             "anycast": "100.66.48.1",
             "interface": "e.3600",
             "vrf": "MANAGEMENT",
@@ -366,7 +397,7 @@ class TestContextRoutesTenantLegsAreExchangeTenants:
         segment = {
             "id": "s1",
             "gateway": {"ip_prefix": {"prefix": "10.9.0.0/24"}},
-            "security_zone": {"name": "MANAGEMENT-ZONE"},
+            "security_zone": {"name": "MANAGEMENT"},
         }
         context = {"legs": [prod, mgmt], "segments": [segment]}
         apply_context_routes(context, {})
@@ -379,10 +410,10 @@ class TestContextRoutesTenantLegsAreExchangeTenants:
 
 def _legs(*ns_types: str) -> list[dict]:
     zones = {
-        "prod": "PROD-ZONE",
-        "non_prod": "NONPROD-ZONE",
-        "internet": "INTERNET-ZONE",
-        "management": "MANAGEMENT-ZONE",
+        "prod": "PROD",
+        "non_prod": "NONPROD",
+        "internet": "INTERNET",
+        "management": "MANAGEMENT",
     }
     return [
         {
@@ -408,11 +439,11 @@ class TestManagementPeerRoutesAndIsolation:
         segment = {
             "id": "s1",
             "gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}},
-            "security_zone": {"name": "PROD-ZONE"},
+            "security_zone": {"name": "PROD"},
         }
         context = {"legs": legs, "segments": [segment]}
-        roots = {"infra-b": ("MANAGEMENT-ZONE", "10.251.0.0/24"), "infra-a": ("MANAGEMENT-ZONE", "10.250.0.0/24")}
-        apply_context_routes(context, {**roots, "other": ("PROD-ZONE", "10.77.0.0/24")})
+        roots = {"infra-b": ("MANAGEMENT", "10.251.0.0/24"), "infra-a": ("MANAGEMENT", "10.250.0.0/24")}
+        apply_context_routes(context, {**roots, "other": ("PROD", "10.77.0.0/24")})
         assert [(r["destination"], r["nexthop"], r["vrf"]) for r in context["routes"]] == [
             ("10.1.0.0/24", "100.66.0.1", "PROD"),
             ("10.250.0.0/24", "100.66.2.1", "MANAGEMENT"),
@@ -425,7 +456,7 @@ class TestManagementPeerRoutesAndIsolation:
         from transforms.config.firewall import apply_context_routes
 
         context = {"legs": _legs("prod", "internet"), "segments": []}
-        apply_context_routes(context, {"infra": ("MANAGEMENT-ZONE", "10.250.0.0/24")})
+        apply_context_routes(context, {"infra": ("MANAGEMENT", "10.250.0.0/24")})
         assert [r["destination"] for r in context["routes"]] == ["0.0.0.0/0"]
         assert context["isolation"] == []
 
@@ -435,10 +466,10 @@ class TestManagementPeerRoutesAndIsolation:
         context = {"legs": _legs("prod", "non_prod", "internet", "management"), "segments": []}
         apply_context_routes(context, {})
         assert context["isolation"] == [
-            {"src_zone": "PROD-ZONE", "dst_zone": "NONPROD-ZONE"},
-            {"src_zone": "NONPROD-ZONE", "dst_zone": "PROD-ZONE"},
-            {"src_zone": "MANAGEMENT-ZONE", "dst_zone": "PROD-ZONE"},
-            {"src_zone": "MANAGEMENT-ZONE", "dst_zone": "NONPROD-ZONE"},
+            {"src_zone": "PROD", "dst_zone": "NONPROD"},
+            {"src_zone": "NONPROD", "dst_zone": "PROD"},
+            {"src_zone": "MANAGEMENT", "dst_zone": "PROD"},
+            {"src_zone": "MANAGEMENT", "dst_zone": "NONPROD"},
         ]
 
     def test_single_tenant_context_denies_only_management_towards_it(self) -> None:
@@ -446,7 +477,7 @@ class TestManagementPeerRoutesAndIsolation:
 
         context = {"legs": _legs("prod", "internet", "management"), "segments": []}
         apply_context_routes(context, {})
-        assert context["isolation"] == [{"src_zone": "MANAGEMENT-ZONE", "dst_zone": "PROD-ZONE"}]
+        assert context["isolation"] == [{"src_zone": "MANAGEMENT", "dst_zone": "PROD"}]
 
     def test_prod_non_prod_pair_is_unchanged_without_a_management_leg(self) -> None:
         from transforms.config.firewall import apply_context_routes
@@ -454,6 +485,6 @@ class TestManagementPeerRoutesAndIsolation:
         context = {"legs": _legs("prod", "non_prod", "internet"), "segments": []}
         apply_context_routes(context, {})
         assert context["isolation"] == [
-            {"src_zone": "PROD-ZONE", "dst_zone": "NONPROD-ZONE"},
-            {"src_zone": "NONPROD-ZONE", "dst_zone": "PROD-ZONE"},
+            {"src_zone": "PROD", "dst_zone": "NONPROD"},
+            {"src_zone": "NONPROD", "dst_zone": "PROD"},
         ]

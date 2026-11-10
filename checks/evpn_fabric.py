@@ -45,6 +45,9 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import MANAGEMENT_TYPE, TRANSIT_VNI_MAX, TRANSIT_VNI_MIN
 from utils.fabric_roles import VTEP_ROLES
 from utils.limits import MAX_ENCODABLE_VNI
+from utils.routing_domain import RoutingDomainError, interface_vrf
+from utils.segment_addressing import segment_namespace
+from utils.service_contexts import border_contexts
 from utils.vrf_demand import SVI_ROLE, internet_exits, leg_namespaces, realized_l3
 
 # A type-2 route-target (4-byte admin ASN + 2-byte assigned number) and a type-1
@@ -88,8 +91,14 @@ def stretched_management_errors(segments: list[dict[str, Any]]) -> list[str]:
     errors = []
     for segment in segments:
         scope = segment.get("stretch_scope") or _LOCAL_SCOPE
-        namespace = ((segment.get("gateway") or {}).get("ip_prefix") or {}).get("ip_namespace") or {}
-        if scope != _LOCAL_SCOPE and namespace.get("namespace_type") == MANAGEMENT_TYPE:
+        if not segment.get("security_zone") and not segment.get("gateway"):
+            continue
+        try:
+            namespace = segment_namespace(segment)
+        except RoutingDomainError as exc:
+            errors.append(str(exc))
+            continue
+        if scope != _LOCAL_SCOPE and namespace.get("vrf_type") == MANAGEMENT_TYPE:
             errors.append(
                 f"Segment '{segment.get('name')}' has stretch_scope '{scope}' but its gateway is in the MANAGEMENT "
                 f"namespace '{namespace.get('name')}'. MANAGEMENT is DC-local and is never stretched: set "
@@ -120,8 +129,8 @@ def _has_l3_instance(device: dict[str, Any]) -> bool:
     routed = {
         name
         for iface in interfaces
-        if iface.get("role") == SVI_ROLE and (name := ((iface.get("vrf") or {}).get("namespace") or {}).get("name"))
-    } | leg_namespaces(interfaces)
+        if iface.get("role") == SVI_ROLE and (name := (interface_vrf(iface).get("security_zone") or {}).get("name"))
+    } | leg_namespaces(border_contexts(device))
     border_gateway = bool(_site_rt_asn(device)) and any(iface.get("role") == _MULTISITE_ROLE for iface in interfaces)
     exits = internet_exits(namespaces, border_gateway=border_gateway)
     return any(realized_l3(namespace, routed, exits) for namespace in namespaces)
@@ -188,7 +197,7 @@ class CheckEvpnFabric(InfrahubCheck):
             self.log_error(message=message)
         self._validate_vni_uniqueness(
             segments=segments,
-            namespaces=cleaned.get("IpamNamespace") or [],
+            namespaces=cleaned.get("SecurityZone") or [],
         )
 
     # ------------------------------------------------------------------

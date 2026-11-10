@@ -1,141 +1,84 @@
 query evpn_fabric {
-  # Fabric-wide EVPN constants. routing_strategy exists only on TopologyDataCenter
-  # (schemas/extensions/topology/topology_dc.yml) — TopologyColocationMetro has no
-  # strategy attribute yet, so it is queried separately and only for evpn_rt_as.
   TopologyDataCenter {
     edges {
       node {
         id
-        name { value }
-        routing_strategy { value }
+        name {
+          value
+        }
+        routing_strategy {
+          value
+        }
         evpn_rt_as {
           node {
-            asn { value }
+            asn {
+              value
+            }
           }
         }
       }
     }
   }
-
   TopologyColocationMetro {
     edges {
       node {
         id
-        name { value }
+        name {
+          value
+        }
         evpn_rt_as {
           node {
-            asn { value }
+            asn {
+              value
+            }
           }
         }
       }
     }
   }
-
-  # L2 VNIs: allocated per SegmentDeployment, so the same segment stretched across
-  # two fabrics legitimately holds two different VNIs and uniqueness has to be
-  # judged per deployment, not per segment.
   ManagedVxlanSegment {
     edges {
       node {
+        security_zone {
+          node {
+            ...RoutingZoneFields
+          }
+        }
         id
-        name { value }
-        stretch_scope { value }
-        gateway { node { ip_prefix { node { ip_namespace { node { name { value } namespace_type { value } } } } } } }
+        name {
+          value
+        }
+        stretch_scope {
+          value
+        }
+        gateway {
+          node {
+            ip_prefix {
+              node {
+                ip_namespace {
+                  node {
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         segment_deployments {
           edges {
             node {
               id
-              vni { value }
+              vni {
+                value
+              }
               deployment {
                 node {
                   id
                   __typename
-                  name { value }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  # L3 VNIs: one per VRF namespace, fixed by hand in
-  # data/bootstrap/22_namespaces.yml (no pool allocates them), so these are global
-  # and must not collide with each other or with any L2 VNI — on the wire a VNI is
-  # a single 24-bit field with no L2/L3 discriminator.
-  IpamNamespace {
-    edges {
-      node {
-        id
-        name { value }
-        l3_vni { value }
-      }
-    }
-  }
-
-  # VTEPs with an instance realized as an L3 VNI (utils/vrf_demand.py realized_l3): the RD is <router_id>:<l3_vni>, so
-  # an overlay router_id must exist and be unique among them. The overlay process is picked by the transform's own
-  # selector (_select_evpn_bgp_process); a device with no such process renders no RD: an access-leaf is skipped, any other VTEP role is an error. Realization
-  # needs what the overlay transform reads: the namespaces of the device's instances (`shared_capabilities`, its memberships),
-  # the anycast SVIs (SVI vrf namespace, transit legs of the contexts on the service ports) and whether the device is
-  # a Multi-Site border gateway (multisite-vip interface, site evpn_rt_as through the deployment).
-  # Managed devices only (a cloud transport is a DcimDevice with no role or platform); the alias keeps the result key.
-  DcimDevice: DcimDeviceManaged {
-    edges {
-      node {
-        id
-        name { value }
-        role { value }
-        ... on DcimPhysicalDevice {
-          deployment { node { ...EvpnRtAsOnDeploymentFields } }
-        }
-        ... on DcimCapabilities {
-          shared_capabilities {
-            edges {
-              node {
-                __typename
-                ... on ManagedVRF { namespace { node { name { value } l3_vni { value } namespace_type { value } } } }
-              }
-            }
-          }
-          capabilities {
-            edges {
-              node {
-                __typename
-                ... on ManagedBGP {
-                  name { value }
-                  process_role { value }
-                  router_id { node { address { value } } }
-                }
-              }
-            }
-          }
-        }
-        ... on DcimDevice {
-          interfaces {
-            edges {
-              node {
-                __typename
-                id
-                role { value }
-                ... on DcimVirtualInterface {
-                  vrf { node { namespace { node { name { value } } } } }
-                }
-                capabilities {
-                  edges {
-                    node {
-                      __typename
-                      id
-                      ... on ManagedFirewallContext {
-                        vlan_id { value }
-                        capabilities { edges { node { ...EvpnFabricLegFields } } }
-                      }
-                      ... on ManagedLoadbalancerContext {
-                        vlan_id { value }
-                        capabilities { edges { node { ...EvpnFabricLegFields } } }
-                      }
-                    }
+                  name {
+                    value
                   }
                 }
               }
@@ -145,12 +88,90 @@ query evpn_fabric {
       }
     }
   }
-}
-
-# A leg of a firewall or load-balancer context: a member's sub-interface and its address namespace.
-fragment EvpnFabricLegFields on DcimInterface {
-  device { node { ... on DcimDeviceManaged { role { value } } } }
-  ... on DcimVirtualInterface {
-    ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  SecurityZone {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        l3_vni {
+          value
+        }
+      }
+    }
+  }
+  DcimDevice: DcimDeviceManaged {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        role {
+          value
+        }
+        ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              ...EvpnRtAsOnDeploymentFields
+            }
+          }
+        }
+        ... on DcimDeviceManaged {
+          shared_capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedVRF {
+                  security_zone {
+                    node {
+                      ...RoutingZoneFields
+                    }
+                  }
+                }
+              }
+            }
+          }
+          capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedBGP {
+                  name {
+                    value
+                  }
+                  process_role {
+                    value
+                  }
+                  router_id {
+                    node {
+                      address {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ...ServiceBorderPortsFields
+        ... on DcimDevice {
+          interfaces {
+            edges {
+              node {
+                ...InterfaceRoutingZoneFields
+                __typename
+                id
+                role {
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }

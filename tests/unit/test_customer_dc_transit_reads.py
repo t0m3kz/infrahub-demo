@@ -7,7 +7,6 @@ allocations that the lock-time read already holds, and the serving link the boar
 
 from __future__ import annotations
 
-import copy
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -19,6 +18,14 @@ from generators.firewall_context import FIREWALL_CONTEXT
 from tests.unit.customer_dc_transit_helpers import _SHARED, _dedicated, _make_gen, _payload, _run, _World
 
 _COMPLETENESS_KINDS = ("TopologyRoutedExchange", "DcimVirtualInterface")
+
+
+def _take_leg_out_of_its_vrf(world: _World) -> tuple[Any, list[Any]]:
+    """Make the shared context incomplete: fw-2's tenant leg loses its VRF edge. Returns the leg and the removed edge."""
+    sub = world.sub_interfaces[("fw-2", "Ethernet1/25.3000")]
+    removed = [peer for peer in sub.capabilities.peers if peer.typename == "ManagedVRF"]
+    sub.capabilities.peers = [peer for peer in sub.capabilities.peers if peer.typename != "ManagedVRF"]
+    return sub, removed
 
 
 def _create_nodes_that_know_only_what_they_wrote(world: _World) -> None:
@@ -36,10 +43,11 @@ def _create_nodes_that_know_only_what_they_wrote(world: _World) -> None:
 
 
 class TestTrackedContextSkipsTheCompletenessReads:
-    """A dedicated context re-saves every leg whatever it finds: it only needs the context and its ports."""
+    """Dedicated contexts skip full completeness checks but preflight each leg's existing addressing."""
 
     @pytest.mark.asyncio
-    async def test_dedicated_rerun_reads_no_exchange_sub_interface_or_address(self) -> None:
+    async def test_dedicated_rerun_reads_leg_addressing_but_no_exchange_completeness(self) -> None:
+        """One subinterface preflight per leg prevents reallocating an authored prefix."""
         world = _World()
         gen, _ = _make_gen(world)
         _dedicated(gen)
@@ -50,7 +58,8 @@ class TestTrackedContextSkipsTheCompletenessReads:
         await _run(gen, world, _payload(dedicated=True))
 
         assert world.saved("ManagedFirewallContext") == ["DC10-ded-prod"]
-        assert not set(_COMPLETENESS_KINDS) & set(world.executed_filters)
+        assert "TopologyRoutedExchange" not in world.executed_filters
+        assert world.executed_filters.count("DcimVirtualInterface") == 3
         assert "ManagedFirewallContext" in world.executed_filters  # the context itself is still read
 
     @pytest.mark.asyncio
@@ -58,19 +67,19 @@ class TestTrackedContextSkipsTheCompletenessReads:
         world = _World()
         gen, events = _make_gen(world)
         await _run(gen, world, _payload())
-        world.bl_ports["fw-2"].capabilities.peers.clear()
+        sub, removed = _take_leg_out_of_its_vrf(world)
         world.executed_filters.clear()
 
         await _run(gen, world, _payload())
 
-        # Pre-lock: the untagged port is seen at once; under the lock the check runs in full.
-        assert world.tags[-1] == (world.contexts[_SHARED].id, ["bl-port-fw-2"])
+        # Pre-lock: the leg out of its VRF is seen at once; under the lock the check runs in full and heals it.
+        assert world.vrf_edges[-1] == ("add", removed[0].id, [sub.id])
         assert events[-2:] == [f"acquire:fw-context-{_SHARED}", "release"]
         assert world.executed_filters.count("ManagedFirewallContext") == 2
 
 
 class TestBorderPortsAreReadOncePerCheck:
-    """The ports come with the members; only the check under the lock reads them again."""
+    """The ports come with the members and are read once: nothing is tagged on them, they are derived."""
 
     @pytest.mark.asyncio
     async def test_complete_rerun_reads_the_border_ports_once(self) -> None:
@@ -87,38 +96,28 @@ class TestBorderPortsAreReadOncePerCheck:
         assert world.executed_filters.count("DcimPhysicalInterface") == 2
 
     @pytest.mark.asyncio
-    async def test_a_port_tagged_by_a_concurrent_run_is_seen_under_the_lock(self) -> None:
-        """The pre-lock check works on the ports as fetched with the members; the lock-time check reads them again."""
+    async def test_a_leg_healed_by_a_concurrent_run_is_seen_under_the_lock(self) -> None:
+        """The pre-lock check finds the context incomplete; the check under the lock reads it again and writes nothing."""
         world = _World()
         gen, events = _make_gen(world)
         await _run(gen, world, _payload())
-        context_id = world.contexts[_SHARED].id
-        tags_before = list(world.tags)
-        live_peers = world.bl_ports["fw-2"].capabilities.peers
-        tagged = list(live_peers)
-        live_peers.clear()  # the port is untagged when the run reads its members ...
-        original_filters = world.filters
+        sub, removed = _take_leg_out_of_its_vrf(world)  # the leg is out of its VRF when the run checks ...
+        edges_before = list(world.vrf_edges)
+        original_acquire = gen.acquire_resource_lock
 
-        async def filters(*, kind: Any, **kwargs: Any) -> list[Any]:
-            found = await original_filters(kind=kind, **kwargs)
-            # ... the members hold a snapshot, as fetched nodes do, not the live port.
-            return copy.deepcopy(found) if kind.__name__ == "DcimPhysicalInterface" and "ids" in kwargs else found
+        async def another_run_heals_the_leg(key: str) -> str:
+            lock_id = await original_acquire(key)
+            if key == f"fw-context-{_SHARED}":
+                sub.capabilities.peers.extend(removed)  # ... and back in it by a concurrent run while this one waits
+            return lock_id
 
-        world.filters = filters  # ty: ignore[invalid-assignment]
-
-        async def another_run_tags_the_port(key: str) -> str:
-            events.append(f"acquire:{key}")
-            live_peers.extend(tagged)  # ... and tagged by a concurrent run while this one waits for the lock
-            return "lock-id"
-
-        gen.acquire_resource_lock = AsyncMock(side_effect=another_run_tags_the_port)
+        gen.acquire_resource_lock = AsyncMock(side_effect=another_run_heals_the_leg)
         events.clear()
 
         await _run(gen, world, _payload())
 
         assert events == [f"acquire:fw-context-{_SHARED}", "release"]
-        assert world.tags == tags_before  # nothing tagged twice: the lock-time check found the port done
-        assert any(peer.id == context_id for peer in live_peers)
+        assert world.vrf_edges == edges_before  # nothing written twice: the lock-time check found the leg done
 
 
 class TestContextReadUnderTheLockIsReused:
@@ -145,7 +144,7 @@ class TestContextReadUnderTheLockIsReused:
         context = world.contexts[_SHARED]
         vlan, snat = context.vlan_id.value, context.snat_address.id
         allocations = world.allocate_calls
-        world.bl_ports["fw-2"].capabilities.peers.clear()  # an incomplete context: the run goes through its writes
+        _take_leg_out_of_its_vrf(world)  # an incomplete context: the run goes through its writes
         world.vlan_pool_reads.clear()
         world.gets.clear()
         _create_nodes_that_know_only_what_they_wrote(world)
@@ -156,8 +155,8 @@ class TestContextReadUnderTheLockIsReused:
         assert "ManagedFirewallContext" not in world.gets
         assert context.vlan_id.value == vlan
         assert context.snat_address.id == snat
-        # The legs' /29 allocations are keyed per context and repeat; the SNAT one is not asked again.
-        assert world.allocate_calls == allocations + 3
+        # Addressed legs reuse their actual /29s; neither transit nor SNAT needs a fresh allocator mutation.
+        assert world.allocate_calls == allocations
         assert world.saved("ManagedFirewallContext")[-1] == _SHARED
         gen.logger.error.assert_not_called()
 
@@ -185,8 +184,8 @@ class TestServingLinkComesFromTheBoardingQuery:
     @pytest.mark.parametrize(
         ("serving", "expected"),
         [
-            ({"node": {"id": "ctx-found"}}, ["ctx-found"]),
-            ({"node": None}, []),  # an empty optional relationship
+            ({"edges": [{"node": {"id": "ctx-found"}}]}, ["ctx-found"]),
+            ({"edges": []}, []),  # an empty optional relationship
             ({}, []),
             (None, []),
         ],
@@ -196,7 +195,7 @@ class TestServingLinkComesFromTheBoardingQuery:
         world = _World()
         gen, _ = _make_gen(world)
         payload = _payload()
-        payload["TopologyCustomerDC"][0]["serving_firewall_context"] = serving
+        payload["TopologyCustomerDC"][0]["serving_firewall_contexts"] = serving
 
         await _run(gen, world, payload)
 
@@ -205,7 +204,6 @@ class TestServingLinkComesFromTheBoardingQuery:
             customer_id="cust-1",
             context_id=world.contexts[_SHARED].id,
             current_ids=expected,
-            parent_id="dc10-id",
         )
 
     @pytest.mark.asyncio
@@ -222,9 +220,17 @@ class TestServingLinkComesFromTheBoardingQuery:
         [
             (
                 "customer_dc.gql",
-                ["serving_firewall_context { node { id } }", "serving_loadbalancer_context { node { id } }"],
+                [
+                    "serving_firewall_contexts { edges { node { id shared_devices { edges { node { role { value } } } } } } }",
+                    "serving_loadbalancer_context { node { id } }",
+                ],
             ),
-            ("customer_colocation.gql", ["serving_firewall_contexts { edges { node { id } } }"]),
+            (
+                "customer_colocation.gql",
+                [
+                    "serving_firewall_contexts { edges { node { id shared_devices { edges { node { role { value } } } } } } }"
+                ],
+            ),
         ],
     )
     def test_the_boarding_queries_select_the_serving_links(self, root_dir: Path, query: str, fields: list[str]) -> None:

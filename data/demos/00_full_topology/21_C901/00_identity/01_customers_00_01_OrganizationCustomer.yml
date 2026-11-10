@@ -1,0 +1,12 @@
+# OrganizationCustomer declarations in recursive dependency order.
+# The tenants of the sample: C900 (DC, cloud, SaaS and the Barcelona office) and C901 (the Lisbon office only); their
+# segments and footprints are in the facility folders.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "Lusitana Retail Lda"
+      org_id: "C901"
+      member_of_groups:
+        - customers

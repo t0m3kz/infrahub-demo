@@ -69,6 +69,7 @@ from netutils.interface import sort_interface_list
 
 from utils.data_cleaning import clean_data
 from utils.limits import GROUP_CARRIER_CIRCUITS, GROUP_VIRTUAL_CIRCUITS
+from utils.segment_addressing import tenant_pool_name
 
 from ..common import CommonGenerator
 from ..helpers.naming import sdwan_edge_name
@@ -83,7 +84,6 @@ from ..protocols import (
     TopologyExternalProviders,
     TopologySessionCircuit,
 )
-from .segment import tenant_pool_name
 
 # Who sells each office its internet access. Not modelled per office (no
 # "chosen ISP" signal on TopologyCustomerOffice), so every office's underlay
@@ -388,7 +388,11 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
                 kind=IpamPrefix,
                 identifier=f"office-lan__{office_name}",
                 member_type="address",
-                data={"role": "customer", "status": "active", "description": f"{office_name} LAN"},
+                data={
+                    "role": "customer",
+                    "status": "active",
+                    "description": f"{office_name} LAN",
+                },
             )
             if prefix is None:
                 self.fail(f"{office_name}: tenant pool {pool_name} returned no prefix")

@@ -15,6 +15,7 @@ from infrahub_sdk.checks import InfrahubCheck
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import SERVICE_CONTEXT_ROLES, is_exchange_zone
 from utils.interface_speed import InterfaceSpeedMatcher
+from utils.segment_vlan import port_segments
 
 from .common import deployment_scope_ids
 
@@ -29,7 +30,8 @@ class CheckCustomerQuota(InfrahubCheck):
 
     - segments: the ManagedVxlanSegments (customer_deployments) that name the footprint, against ``max_segments``. A segment stretched over two DCs counts for each
       footprint it names.
-    - host-facing ports: the switch ports tagged with those segments (their `segments` edge, read from the port: add_app_component_segment
+    - host-facing ports: the switch ports tagged with those segments (a deployment of the segment among the port's
+      `capabilities`, read from the port: add_app_component_segment
       tags the far end of the uplink NICs of every AppComponent instance's physical host, a role=lag NIC's far end
       through its port-channel), grouped by speed, against ``ports_<speed>g``. A port counts once per footprint
       however many of its segments tag it, and once for each footprint that has a segment on it (a host serving
@@ -56,7 +58,7 @@ class CheckCustomerQuota(InfrahubCheck):
         ports_by_segment: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for kind in SWITCHED_KINDS:
             for port in cleaned.get(kind) or []:
-                for tagged in port.get("segments") or []:
+                for tagged in port_segments(port):
                     ports_by_segment[tagged["id"]].append(port)
 
         for segment in cleaned.get("ManagedVxlanSegment") or []:

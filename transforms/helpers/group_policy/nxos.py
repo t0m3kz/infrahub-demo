@@ -36,6 +36,7 @@ from transforms.helpers.group_policy.model import (
 from utils.app_instances import HOSTED_INSTANCE_TYPENAMES, physical_host
 from utils.exchange_transit import is_routed_tenant_segment
 from utils.group_policy import reserved_groups
+from utils.segment_vlan import port_segments
 
 
 def vxlan_gpo_view(
@@ -226,8 +227,9 @@ class ComponentCoverage:
 
 
 def _segment_ids(interface: dict[str, Any]) -> set[str]:
-    """The ids of the segments a switch port or LAG carries (``segments``; a sub-interface is never a host port)."""
-    return {str(item["id"]) for item in interface.get("segments") or [] if item.get("id")}
+    """The ids of the segments a switch port or LAG carries (through its VLAN rows; a sub-interface is never a host
+    port)."""
+    return {str(item["id"]) for item in port_segments(interface) if item.get("id")}
 
 
 def _place_instance(

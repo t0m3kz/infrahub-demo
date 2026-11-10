@@ -1,0 +1,12 @@
+---
+# The routing domain of the Azure Virtual WAN hub (its default route table), as rt-c900-prod is the AWS hub's.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGatewayRouteTable
+  data:
+    - name: "rt-c900-weu"
+      description: "Default routing domain of the Virtual WAN hub"
+      status: active
+      is_default: true
+      gateway: "vwan-hub-c900-weu"

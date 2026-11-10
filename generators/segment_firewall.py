@@ -10,7 +10,6 @@ from utils.limits import RULE_SAVE_ATTEMPTS
 from utils.ports import PortSpec
 
 from .helpers.rules import RulesPlanner
-from .helpers.security_zone import ensure_security_zone
 from .named_objects import GetOrCreateByNameMixin
 from .protocols import SecurityPolicy, SecurityPolicyRule, SecuritySecurityProfile
 
@@ -25,6 +24,8 @@ RULE_INDEX_STEP = 10
 RULE_DEFAULT_VALIDITY_DAYS = 180
 # The cardinality-many selectors a generated rule sets: R_client's VIPs, R_server's leg.
 _SELECTOR_FIELDS = ("destination_ip_addresses", "source_prefixes")
+# The zones that qualify those selectors: R_client's destination, R_server's source.
+_ZONE_FIELDS = ("source_zone", "destination_zone")
 
 
 def _default_expiry_iso() -> str:
@@ -269,6 +270,14 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             if current != wanted:
                 setattr(rule, field, {"id": wanted} if wanted else None)
                 changed.append(field)
+        # The zone of a selector side is written by HFID (generators/helpers/rules.py zone_ref), so it is compared by HFID.
+        for field in _ZONE_FIELDS:
+            wanted_hfid = (rule_data.get(field) or {}).get("hfid")
+            peer = getattr(rule, field)
+            current_hfid = (list(peer.hfid or []) or None) if peer.initialized else None
+            if current_hfid != wanted_hfid:
+                setattr(rule, field, {"hfid": wanted_hfid} if wanted_hfid else None)
+                changed.append(field)
         for field in _SELECTOR_FIELDS:
             if field not in rule_data:
                 continue
@@ -281,26 +290,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
                 manager.extend(sorted(wanted_ids - current_ids))
                 changed.append(field)
         return changed
-
-    async def _ensure_segment_zones(self, segments: list[dict[str, Any]]) -> None:
-        """Zone each segment from its own environment and record it in the dict.
-
-        The in-memory ``security_zone`` is updated here, before any rule is
-        planned: otherwise the first run reads a stale missing zone and treats
-        every flow as cross-zone. A segment without an id is skipped (a component with no segment).
-        """
-        for segment in segments:
-            if not segment.get("id"):
-                continue
-            zone_name = await ensure_security_zone(
-                self.client,
-                kind=segment.get("typename"),
-                segment_id=segment["id"],
-                environment=segment.get("environment"),
-                current_zone=(segment.get("security_zone") or {}).get("name"),
-            )
-            if zone_name:
-                segment["security_zone"] = {**(segment.get("security_zone") or {}), "name": zone_name}
 
     async def _segment_policy(self, segment: dict[str, Any], policy_name: str) -> Any | None:
         """The source segment's one SecurityPolicy: the one it already has
@@ -453,6 +442,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         except Exception as exc:
             self.logger.warning("  Could not set isolation_mode on segment %s: %s", segment.get("name", seg_id), exc)
             return
-        # Recorded like the zone: the component tags and rules of this same run
+        # Recorded in the dict: the component tags and rules of this same run
         # are planned against the mode just written, not the one read.
         segment["isolation_mode"] = derived

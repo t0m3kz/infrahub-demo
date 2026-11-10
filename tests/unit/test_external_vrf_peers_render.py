@@ -82,7 +82,7 @@ class TestEdgeRender:
 
     def test_sdwan_peer_accepts_what_the_offices_behind_its_gateway_registered(self) -> None:
         """C005's hosted segment, C002's and C003's LANs and C001's tunnel range: not the provider's LAN, another
-        gateway's, the provider-owned and the NON-PROD tunnel's."""
+        gateway's, the provider-owned and the NONPROD tunnel's."""
         output = _run_edge(_fixture())
         assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-IN") == [
             "10.176.5.0/24",
@@ -131,7 +131,7 @@ class TestEdgeRender:
         assert "le " not in output and "ge " not in output
 
     def test_unregistered_and_ownerless_space_is_never_announced(self) -> None:
-        """C009 is behind no session; an ownerless and a NON-PROD segment of other owners stay home."""
+        """C009 is behind no session; an ownerless and a NONPROD segment of other owners stay home."""
         output = _run_edge(_fixture())
         out_lines = "\n".join(line for line in output.splitlines() if "-OUT seq" in line)
         for never in ("10.9.9.0/24", "10.5.77.0/24", "10.6.20.0/24", "10.6.30.0/24", "10.250.0.0/24"):

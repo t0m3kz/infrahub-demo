@@ -1,0 +1,22 @@
+# The handoff circuit, in PROD. Unowned shared on-ramp (a handoff has no owner): the cage and the region are its
+# locations, the underlay is the cable on Ethernet1/13.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySessionCircuit
+  data:
+    - name: "HANDOFF-FR2-AWS-EUC1-PROD"
+      circuit_type: handoff
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P004"
+      description: "PROD handoff eg-fr201 <-> AWS Direct Connect private VIF (Nordix VPC behind the hub)"
+      vrf: [FR, "PROD"]
+      link_prefix: ["10.255.143.254/31", "default"]
+      password: "eqx-fr2-aws-euc1-key"
+      locations:
+        - "FR2"
+        - "eu-central-1"
+      capabilities:
+        - ["eg-fr201", "Ethernet1/13.1000"]
+        - ["dx-30all-euc1-fr2", "dxcon-fr2.1000"]

@@ -1,0 +1,32 @@
+---
+# The building of the customer office C900 in the Barcelona metro (00_common/03_geography/C900/00_metro.yml): one
+# suite with one network
+# rack, where the SD-WAN edge (20_C900/Office/03_edge.yml) and the campus switches (05_switches_and_aps.yml) stand.
+# The
+# rack has no deployment: an office hosts no rack
+# (TopologyRackHosting is a pod or a colocation zone), as the border rack of a DC.
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "Barcelona Office"
+      shortname: "bcn-office"
+      parent: "bcn"
+      children:
+        kind: LocationSuite
+        data:
+          - name: BCN-OFFICE-SUITE-1
+            index: 1
+            shortname: "bcn-office-suite-1"
+            rows: 1
+            racks_per_row: 1
+            children:
+              kind: LocationRack
+              data:
+                - name: BCN-OFFICE-RACK-01
+                  shortname: bcn-office-rack-01
+                  index: 1
+                  row_index: 1
+                  rack_type: network

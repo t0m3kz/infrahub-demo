@@ -1,0 +1,60 @@
+---
+# Address space of the sample. Link ranges (/31, /30) sit in the Handoff-PROD-IPv4 resource of the bootstrap data
+# (10.255.128.0/20): an object file cannot allocate from a pool, so each /31 is typed here at the place the pool would
+# hand it out (the first free /31 at the time). The generator will take them with allocate_next_ip_prefix.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - {prefix: "10.200.0.0/16", ip_namespace: "default", status: active,
+       description: "AWS VPC block"}
+    # The spoke accounts behind the transit gateway (AWS) and the Virtual WAN hub (Azure): each block is named by the
+    # attachment that announces it towards us, so it is flat here.
+    - {prefix: "10.201.0.0/16", ip_namespace: "default", status: active,
+       description: "Azure VNet block"}
+    - {prefix: "10.203.0.0/16", ip_namespace: "default", status: active,
+       description: "Azure spoke VNet block"}
+    - {prefix: "10.205.0.0/16", ip_namespace: "default", status: active,
+       description: "AWS payments VPC block"}
+    - {prefix: "10.206.0.0/16", ip_namespace: "default", status: active,
+       description: "AWS analytics VPC block"}
+    - {prefix: "10.207.0.0/16", ip_namespace: "default", status: active,
+       description: "AWS shared services VPC block"}
+    - {prefix: "10.208.0.0/16", ip_namespace: "default", status: active,
+       description: "Azure payments VNet block"}
+    - {prefix: "10.209.0.0/16", ip_namespace: "default", status: active,
+       description: "Azure analytics VNet block"}
+    - {prefix: "10.210.0.0/16", ip_namespace: "default", status: active,
+       description: "Azure identity VNet block"}
+    - {prefix: "10.90.255.0/24", ip_namespace: "default", status: active, description: "DC-KTW1 loopbacks"}
+    - {prefix: "10.255.128.0/31", ip_namespace: "default", status: active, description: "Link: AWS transit VIF"}
+    - {prefix: "10.255.128.2/31", ip_namespace: "default", status: active, description: "Link: AWS private VIF"}
+    - {prefix: "10.255.128.6/31", ip_namespace: "default", status: active, description: "Link: Webex private peering"}
+    # Azure assigns a /30 per peering (the link range is the circuit's, not the pool's), GCP a /29, AWS VPN a /30.
+    # yamllint disable-line rule:line-length
+    - {prefix: "10.255.128.8/30", ip_namespace: "default", status: active, description: "Link: ExpressRoute primary peering"}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {prefix: "10.255.128.12/30", ip_namespace: "default", status: active, description: "Link: ExpressRoute secondary peering"}  # yamllint disable-line rule:line-length
+    - {prefix: "169.254.20.0/29", ip_namespace: "default", status: active, description: "Link: GCP VLAN attachment"}
+    - {prefix: "169.254.10.0/30", ip_namespace: "default", status: active,
+       description: "Link: AWS VPN tunnel 1 (by AWS)"}
+    - {prefix: "169.254.10.4/30", ip_namespace: "default", status: active,
+       description: "Link: AWS VPN tunnel 2 (by AWS)"}
+    - {prefix: "169.254.30.0/29", ip_namespace: "default", status: active,
+       description: "Link: GCP dedicated routed port"}
+    # yamllint disable-line rule:line-length
+    - {prefix: "169.254.10.8/30", ip_namespace: "default", status: active, description: "Link: Zscaler tunnel (office edge)"}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {prefix: "169.254.10.12/30", ip_namespace: "default", status: active, description: "Link: office tunnel to the DC edge (SD-WAN hub)"}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {prefix: "169.254.10.16/30", ip_namespace: "default", status: active, description: "Link: Lisbon office edge 1 tunnel to the DC edge"}  # yamllint disable-line rule:line-length
+    # yamllint disable-line rule:line-length
+    - {prefix: "169.254.10.20/30", ip_namespace: "default", status: active, description: "Link: Lisbon office edge 2 tunnel to the DC edge"}  # yamllint disable-line rule:line-length
+    - {prefix: "10.91.255.0/24", ip_namespace: "default", status: active, description: "PAR-COLO1 loopbacks"}
+    - {prefix: "10.92.255.0/24", ip_namespace: "default", status: active, description: "DC-WAW1 loopbacks"}
+    - {prefix: "10.93.255.0/24", ip_namespace: "default", status: active, description: "DC-GDN1 loopbacks"}
+    - {prefix: "10.94.255.0/24", ip_namespace: "default", status: active, description: "FRA-COLO1 loopbacks"}
+    - {prefix: "10.95.255.0/24", ip_namespace: "default", status: active, description: "AMS-COLO1 loopbacks"}
+    - {prefix: "10.96.255.0/24", ip_namespace: "default", status: active, description: "C900 office loopbacks"}
+    - {prefix: "10.97.255.0/24", ip_namespace: "default", status: active, description: "C901 office loopbacks"}

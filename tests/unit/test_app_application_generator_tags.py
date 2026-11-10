@@ -14,6 +14,8 @@ import pytest
 
 from generators.protocols import AppComponent
 from tests.unit.app_application_generator_helpers import _app, _backend, _dep, _frontend, _make_gen, _segment
+from tests.unit.query_shape_helpers import compact, fragment_text
+from utils.graphql_queries import load_query
 
 # ===========================================================================
 # TestComponentTags
@@ -150,11 +152,11 @@ class TestComponentTags:
 
     def test_application_query_reads_the_tag_of_components_edge_targets_and_segments(self, root_dir: Path) -> None:
         """The fast path needs the tag of every child, every dependency target and every segment."""
-        query = (root_dir / "queries/topology/add/application.gql").read_text()
+        query = compact(load_query(root_dir / "queries/topology/add/application.gql"))
         assert query.count("security_tag { node { id } }") == 3
-        fragment = query.split("fragment AppComponentSecurityFields")[0]
+        fragment = fragment_text(root_dir / "queries/topology/add/application.gql", "SegmentSecurityFields")
         assert fragment.count("security_tag { node { id } }") == 1
-        assert "namespace_type { value }" in fragment
+        assert "vrf_type { value }" in fragment
 
 
 # ===========================================================================
@@ -167,8 +169,13 @@ def _tenant(segment: dict[str, Any], tag_id: str | None = None) -> dict[str, Any
     tag) or not."""
     return {
         **segment,
+        "security_zone": {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
         "gateway": {
-            "ip_prefix": {"prefix": "10.60.0.0/24", "ip_namespace": {"name": "PROD", "namespace_type": "prod"}}
+            "ip_prefix": {
+                "security_zone": {"name": "PROD", "vrf_type": "prod"},
+                "prefix": "10.60.0.0/24",
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
         },
         "security_tag": {"id": tag_id} if tag_id else None,
         "routing_tag": 7 if tag_id else None,
@@ -194,12 +201,11 @@ class TestSegmentTags:
         frontend["network_segment"] = _tenant(frontend["network_segment"], tag_id)
         return _app(frontend)
 
-    def test_component_and_edge_target_segments_are_tagged_after_zones_before_rules(self) -> None:
+    def test_component_and_edge_target_segments_are_tagged_before_rules(self) -> None:
         """The application run gives each segment it touches its group tag and its routing tag, the edge
         target's segment included."""
         gen = self._gen()
         order: list[str] = []
-        gen._ensure_segment_zones = AsyncMock(side_effect=lambda segments: order.append("zones"))
         gen._reconcile_segment_rule = AsyncMock(side_effect=lambda **kw: order.append("rule") or (True, False))
         ensure = AsyncMock(side_effect=lambda client, lock, *, segment: order.append(f"tag {segment['id']}"))
         routing = AsyncMock(side_effect=lambda client, *, segment: order.append(f"routing {segment['id']}"))
@@ -210,7 +216,7 @@ class TestSegmentTags:
         ):
             asyncio.run(gen._reconcile_application_rules(self._app_on_tenant_segments()))
 
-        assert order == ["zones", "tag seg-src", "routing seg-src", "tag seg-dst", "routing seg-dst", "rule"]
+        assert order == ["tag seg-src", "routing seg-src", "tag seg-dst", "routing seg-dst", "rule"]
         assert all(call.args == (gen.client, gen.resource_lock) for call in ensure.await_args_list)
         assert all(call.args == (gen.client,) for call in routing.await_args_list)
 
@@ -336,7 +342,7 @@ class TestCrossSegmentComponentTags:
 
     def test_application_query_reads_the_calling_application_of_a_component(self, root_dir: Path) -> None:
         """The fan-out reads dependents' source application (AppApplicationGenerator._calling_application_ids)."""
-        query = (root_dir / "queries/topology/add/application.gql").read_text()
+        query = compact(load_query(root_dir / "queries/topology/add/application.gql"))
         dependents = query.split("dependents {", 1)[1].split("depends_on {", 1)[0]
         # `__typename` is required: the live server cannot resolve a hierarchical parent without it
         # ("Unable to identify the type of the instance"), which failed every add_app_application run.

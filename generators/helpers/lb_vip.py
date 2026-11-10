@@ -17,6 +17,7 @@ from typing import Any
 
 from utils.limits import CLOUD_LB_NAME_MAX
 from utils.ports import PortProfileHelper, PortSpec
+from utils.service_contexts import context_legs, leg_interfaces
 
 VIP_PREFIXLEN = 32
 """A VIP is one host address of its context's routed VIP range."""
@@ -152,15 +153,30 @@ def serving_contexts(
 def leg_prefix_id(context: dict[str, Any]) -> str | None:
     """The context's leg /29: the prefix of the addresses on its member sub-interfaces.
 
-    None unless exactly one: the leg is not wired yet, or two prefixes would
+    The legs are derived from the members (``shared_devices``, utils/service_contexts.py ``leg_interfaces``): a
+    context has no interface edge. None unless exactly one: the leg is not wired yet, or two prefixes would
     make the R_server source ambiguous.
     """
     prefix_ids = {
         prefix_id
-        for interface in context.get("capabilities") or []
+        for member in context.get("shared_devices") or []
+        for interface in leg_interfaces(member).get(str(context.get("id")), [])
         if (prefix_id := (((interface.get("ip_address") or {}).get("ip_prefix")) or {}).get("id"))
     }
     return next(iter(prefix_ids)) if len(prefix_ids) == 1 else None
+
+
+def leg_zone(context: dict[str, Any]) -> str | None:
+    """The SecurityZone name of the context's leg (the zone of its VLAN slot, utils/service_contexts.py
+    ``context_legs``): what qualifies the leg /29 as the source of R_server. None unless exactly one, like
+    ``leg_prefix_id``."""
+    zones = {
+        leg.zone
+        for member in context.get("shared_devices") or []
+        for leg in context_legs(member)
+        if leg.context_id == str(context.get("id"))
+    }
+    return next(iter(zones)) if len(zones) == 1 else None
 
 
 def vip_range(context: dict[str, Any]) -> dict[str, Any] | None:

@@ -2,7 +2,7 @@
 
 {
   "BGP_GLOBALS": {
-    "NON-PROD": {
+    "NONPROD": {
       "local_asn": 65000,
       "router_id": "10.0.0.1"
     },
@@ -18,13 +18,13 @@
     }
   },
   "BGP_GLOBALS_AF": {
-    "NON-PROD|ipv4_unicast": {
+    "NONPROD|ipv4_unicast": {
       "admin_status": "true",
       "redistribute_connected": "true",
       "redistribute_static": "true",
-      "route_map_redistribute_static": "RM-VRF-STATIC-2-EVPN-NON-PROD"
+      "route_map_redistribute_static": "RM-VRF-STATIC-2-EVPN-NONPROD"
     },
-    "NON-PROD|l2vpn_evpn": {
+    "NONPROD|l2vpn_evpn": {
       "admin_status": "true",
       "advertise-ipv4-unicast": "true",
       "route-distinguisher": "10.0.0.1:60001"
@@ -56,7 +56,7 @@
     }
   },
   "BGP_GLOBALS_EVPN_RT": {
-    "NON-PROD|l2vpn_evpn|65000:60001": {
+    "NONPROD|l2vpn_evpn|65000:60001": {
       "route-target-type": "both"
     },
     "PROD|l2vpn_evpn|65000:60000": {
@@ -160,7 +160,7 @@
   "NTP_SERVER": {},
   "OSPF_ROUTER": {},
   "PREFIX": {
-    "PL-VRF-STATIC-NON-PROD|10|100.66.112.0/26|exact": {
+    "PL-VRF-STATIC-NONPROD|10|100.66.112.0/26|exact": {
       "action": "permit"
     },
     "PL-VRF-STATIC-PROD|10|100.66.96.0/26|exact": {
@@ -168,7 +168,7 @@
     }
   },
   "PREFIX_SET": {
-    "PL-VRF-STATIC-NON-PROD": {
+    "PL-VRF-STATIC-NONPROD": {
       "mode": "IPv4"
     },
     "PL-VRF-STATIC-PROD": {
@@ -176,8 +176,8 @@
     }
   },
   "ROUTE_MAP": {
-    "RM-VRF-STATIC-2-EVPN-NON-PROD|10": {
-      "match_prefix_set": "PL-VRF-STATIC-NON-PROD",
+    "RM-VRF-STATIC-2-EVPN-NONPROD|10": {
+      "match_prefix_set": "PL-VRF-STATIC-NONPROD",
       "route_operation": "permit"
     },
     "RM-VRF-STATIC-2-EVPN-PROD|10": {
@@ -191,7 +191,7 @@
     }
   },
   "STATIC_ROUTE": {
-    "NON-PROD|100.66.112.0/26": {
+    "NONPROD|100.66.112.0/26": {
       "nexthop": "100.66.80.4"
     },
     "PROD|100.66.96.0/26": {
@@ -221,14 +221,14 @@
     "Vlan3100|100.66.64.1/29": {},
     "Vlan3301": {
       "static_anycast_gateway": "true",
-      "vrf_name": "NON-PROD"
+      "vrf_name": "NONPROD"
     },
     "Vlan3301|100.66.80.1/29": {},
     "Vlan3900": {
       "vrf_name": "PROD"
     },
     "Vlan3901": {
-      "vrf_name": "NON-PROD"
+      "vrf_name": "NONPROD"
     }
   },
   "VLAN_MEMBER": {
@@ -240,7 +240,7 @@
     }
   },
   "VRF": {
-    "NON-PROD": {
+    "NONPROD": {
       "vni": "60001"
     },
     "PROD": {

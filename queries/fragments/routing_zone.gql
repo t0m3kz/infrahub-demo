@@ -1,0 +1,79 @@
+fragment RoutingZoneFields on SecurityZone {
+  id
+  name { value }
+  vrf_type { value }
+  l3_vni { value }
+}
+
+fragment RoutingVrfFields on ManagedVRF {
+  id
+  deployment { node { id name { value } } }
+  security_zone { node { ...RoutingZoneFields } }
+}
+
+fragment SegmentRoutingPrefixFields on ManagedNetworkSegment {
+  security_zone { node { ...RoutingZoneFields } }
+  gateway { node { ip_prefix { node { id prefix { value } } } } }
+}
+
+# The routing of an interface: its VRF instance (the ManagedVRF among its capabilities) and its session circuits, under
+# the alias `zone_capabilities`: a query that also selects the interface's own `capabilities` would otherwise select
+# that field twice on one object, and the server answers only the first selection of a field (the later one's
+# sub-fields come back null). The ONE selection of an interface's VRF: spread this fragment, never select the VRF
+# another way, so two selections on one interface are always the same. utils/routing_domain.py `interface_vrf` reads it.
+fragment InterfaceRoutingZoneFields on DcimInterface {
+  zone_capabilities: capabilities {
+    edges {
+      node {
+        __typename
+        # The fields of RoutingVrfFields, written out: a named fragment spread directly inside an inline fragment
+        # resolves to nulls.
+        ... on ManagedVRF {
+          id
+          deployment { node { id name { value } } }
+          security_zone { node { ...RoutingZoneFields } }
+        }
+        ... on TopologySessionCircuit {
+          circuit_type { value }
+          vrf { node { ...RoutingVrfFields } }
+        }
+      }
+    }
+  }
+}
+
+fragment EnvironmentRoutingZoneFields on SecurityZone {
+  ...RoutingZoneFields
+  network_segments { edges { node { ...SegmentRoutingPrefixFields } } }
+  vrfs {
+    edges {
+      node {
+        ...RoutingVrfFields
+        session_circuits {
+          edges {
+            node {
+              name { value }
+              vrf { node { ...RoutingVrfFields } }
+              link_prefix { node { id prefix { value } } }
+              registered_prefixes { edges { node { id prefix { value } } } }
+              originated_prefixes { edges { node { id prefix { value } } } }
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              ...InterfaceRoutingZoneFields
+              ... on DcimHasIPAddress {
+                ip_address { node { ip_prefix { node { id prefix { value } } } } }
+              }
+              ... on CloudPeeringInterface {
+                advertised_prefixes { edges { node { id prefix { value } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

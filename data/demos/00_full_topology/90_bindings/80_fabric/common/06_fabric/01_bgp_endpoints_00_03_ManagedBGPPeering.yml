@@ -1,0 +1,223 @@
+# ManagedBGPPeering declarations in recursive dependency order.
+# Bind every authored EVPN session to its two actual loopbacks after all facilities have been loaded.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: BGP-KTW1-BL01-WAW1-BL01-DCI-EVPN
+      bgp_processes: ["ktw1-bl-01-bgp", "waw1-bl-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["ktw1-bl-01", "Loopback0"], ["waw1-bl-01", "Loopback0"]]
+    - name: BGP-KTW1-BL02-WAW1-BL02-DCI-EVPN
+      bgp_processes: ["ktw1-bl-02-bgp", "waw1-bl-02-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["ktw1-bl-02", "Loopback0"], ["waw1-bl-02", "Loopback0"]]
+    - name: BGP-KTW1-BL01-GDN1-BL01-DCI-EVPN
+      bgp_processes: ["ktw1-bl-01-bgp", "gdn1-bl-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["ktw1-bl-01", "Loopback0"], ["gdn1-bl-01", "Loopback0"]]
+    - name: BGP-KTW1-BL02-GDN1-BL02-DCI-EVPN
+      bgp_processes: ["ktw1-bl-02-bgp", "gdn1-bl-02-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["ktw1-bl-02", "Loopback0"], ["gdn1-bl-02", "Loopback0"]]
+    - name: BGP-WAW1-BL01-GDN1-BL01-DCI-EVPN
+      bgp_processes: ["waw1-bl-01-bgp", "gdn1-bl-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["waw1-bl-01", "Loopback0"], ["gdn1-bl-01", "Loopback0"]]
+    - name: BGP-WAW1-BL02-GDN1-BL02-DCI-EVPN
+      bgp_processes: ["waw1-bl-02-bgp", "gdn1-bl-02-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["waw1-bl-02", "Loopback0"], ["gdn1-bl-02", "Loopback0"]]
+    - name: BGP-PAR1-EDGE01-BL01-DCI-EVPN
+      bgp_processes: ["par-colo1-edge-01-bgp", "ktw1-bl-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["par-colo1-edge-01", "Loopback0"], ["ktw1-bl-01", "Loopback0"]]
+    - name: BGP-PAR1-EDGE01-BL02-DCI-EVPN
+      bgp_processes: ["par-colo1-edge-01-bgp", "ktw1-bl-02-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["par-colo1-edge-01", "Loopback0"], ["ktw1-bl-02", "Loopback0"]]
+    - name: BGP-FRA1-EDGE01-KTW1-BL01-DCI-EVPN
+      bgp_processes: ["ktw1-bl-01-bgp", "fra-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["ktw1-bl-01", "Loopback0"], ["fra-colo1-edge-01", "Loopback0"]]
+    - name: BGP-FRA1-EDGE01-KTW1-BL02-DCI-EVPN
+      bgp_processes: ["ktw1-bl-02-bgp", "fra-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["ktw1-bl-02", "Loopback0"], ["fra-colo1-edge-01", "Loopback0"]]
+    - name: BGP-AMS1-EDGE01-KTW1-BL01-DCI-EVPN
+      bgp_processes: ["ktw1-bl-01-bgp", "ams-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["ktw1-bl-01", "Loopback0"], ["ams-colo1-edge-01", "Loopback0"]]
+    - name: BGP-AMS1-EDGE01-KTW1-BL02-DCI-EVPN
+      bgp_processes: ["ktw1-bl-02-bgp", "ams-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["ktw1-bl-02", "Loopback0"], ["ams-colo1-edge-01", "Loopback0"]]
+    - name: BGP-PAR1-EDGE01-WAW1-BL01-DCI-EVPN
+      bgp_processes: ["waw1-bl-01-bgp", "par-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["waw1-bl-01", "Loopback0"], ["par-colo1-edge-01", "Loopback0"]]
+    - name: BGP-PAR1-EDGE01-WAW1-BL02-DCI-EVPN
+      bgp_processes: ["waw1-bl-02-bgp", "par-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["waw1-bl-02", "Loopback0"], ["par-colo1-edge-01", "Loopback0"]]
+    - name: BGP-FRA1-EDGE01-WAW1-BL01-DCI-EVPN
+      bgp_processes: ["waw1-bl-01-bgp", "fra-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["waw1-bl-01", "Loopback0"], ["fra-colo1-edge-01", "Loopback0"]]
+    - name: BGP-FRA1-EDGE01-WAW1-BL02-DCI-EVPN
+      bgp_processes: ["waw1-bl-02-bgp", "fra-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["waw1-bl-02", "Loopback0"], ["fra-colo1-edge-01", "Loopback0"]]
+    - name: BGP-AMS1-EDGE01-WAW1-BL01-DCI-EVPN
+      bgp_processes: ["waw1-bl-01-bgp", "ams-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["waw1-bl-01", "Loopback0"], ["ams-colo1-edge-01", "Loopback0"]]
+    - name: BGP-AMS1-EDGE01-WAW1-BL02-DCI-EVPN
+      bgp_processes: ["waw1-bl-02-bgp", "ams-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["waw1-bl-02", "Loopback0"], ["ams-colo1-edge-01", "Loopback0"]]
+    - name: BGP-PAR1-EDGE01-GDN1-BL01-DCI-EVPN
+      bgp_processes: ["gdn1-bl-01-bgp", "par-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-bl-01", "Loopback0"], ["par-colo1-edge-01", "Loopback0"]]
+    - name: BGP-PAR1-EDGE01-GDN1-BL02-DCI-EVPN
+      bgp_processes: ["gdn1-bl-02-bgp", "par-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-bl-02", "Loopback0"], ["par-colo1-edge-01", "Loopback0"]]
+    - name: BGP-FRA1-EDGE01-GDN1-BL01-DCI-EVPN
+      bgp_processes: ["gdn1-bl-01-bgp", "fra-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-bl-01", "Loopback0"], ["fra-colo1-edge-01", "Loopback0"]]
+    - name: BGP-FRA1-EDGE01-GDN1-BL02-DCI-EVPN
+      bgp_processes: ["gdn1-bl-02-bgp", "fra-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-bl-02", "Loopback0"], ["fra-colo1-edge-01", "Loopback0"]]
+    - name: BGP-AMS1-EDGE01-GDN1-BL01-DCI-EVPN
+      bgp_processes: ["gdn1-bl-01-bgp", "ams-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-bl-01", "Loopback0"], ["ams-colo1-edge-01", "Loopback0"]]
+    - name: BGP-AMS1-EDGE01-GDN1-BL02-DCI-EVPN
+      bgp_processes: ["gdn1-bl-02-bgp", "ams-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["gdn1-bl-02", "Loopback0"], ["ams-colo1-edge-01", "Loopback0"]]
+    - name: BGP-PAR1-EDGE01-FRA1-EDGE01-DCI-EVPN
+      bgp_processes: ["par-colo1-edge-01-bgp", "fra-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["par-colo1-edge-01", "Loopback0"], ["fra-colo1-edge-01", "Loopback0"]]
+    - name: BGP-PAR1-EDGE01-AMS1-EDGE01-DCI-EVPN
+      bgp_processes: ["par-colo1-edge-01-bgp", "ams-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["par-colo1-edge-01", "Loopback0"], ["ams-colo1-edge-01", "Loopback0"]]
+    - name: BGP-FRA1-EDGE01-AMS1-EDGE01-DCI-EVPN
+      bgp_processes: ["fra-colo1-edge-01-bgp", "ams-colo1-edge-01-bgp"]
+      peering_role: dci
+      address_families: [["l2vpn", "evpn"]]
+      session_type: EBGP_MULTIHOP
+      ttl: 2
+      send_extended_community: true
+      capabilities: [["fra-colo1-edge-01", "Loopback0"], ["ams-colo1-edge-01", "Loopback0"]]

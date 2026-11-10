@@ -3,7 +3,7 @@ fragment SegmentSecurityZoneFields on ManagedNetworkSegment {
     node {
       name { value }
       trust_level { value }
-    }
+     id l3_vni { value } vrf_type { value } }
   }
 }
 
@@ -42,6 +42,8 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
   ...SegmentSecurityZoneFields
   ...SegmentSecurityPolicyFields
   ... on ManagedVxlanSegment {
+ security_zone { node { ...RoutingZoneFields } }
+
     id
     name { value }
     description { value }
@@ -80,12 +82,13 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
         address { value }
         ip_prefix {
           node {
+
             prefix { value }
             ip_namespace {
               node {
                 name { value }
-                l3_vni { value }
-                namespace_type { value }
+
+
               }
             }
           }
@@ -136,6 +139,8 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
             routing_tag { value }
             owner { node { routing_tag { value } } }
             ... on ManagedVxlanSegment {
+ security_zone { node { ...RoutingZoneFields } }
+
               name { value }
               customer_name { value }
               environment { value }
@@ -161,8 +166,9 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                   address { value }
                   ip_prefix {
                     node {
+
                       prefix { value }
-                      ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } }
+                      ip_namespace { node { name { value }   } }
                     }
                   }
                 }
@@ -180,6 +186,8 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                           node {
                             id
                             ... on ManagedVxlanSegment {
+ security_zone { node { ...RoutingZoneFields } }
+
                               gateway { node { ip_prefix { node { prefix { value } } } } }
                             }
                           }
@@ -187,6 +195,37 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                       }
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# The segments a switch carries: its own VLAN rows (`vlans`), each with the VNI of its realization and the segment.
+# Read nested from the device, so the answer is what THIS switch realizes and nothing else; transforms/common.py
+# _collect_row_activations turns a row into an activation (a stretched segment is realized on every VTEP with or
+# without a port of it, so ports alone miss it). The one selection of `vlans` on the device object of a switch config
+# query (DeviceServicesFields reads the rows on its own root, DeviceServices).
+fragment DeviceSegmentRowsFields on DcimDevice {
+  ... on DcimPhysicalDevice {
+    vlans {
+      edges {
+        node {
+          vlan_id {
+            value
+          }
+          segment_deployment {
+            node {
+              vni {
+                value
+              }
+              segment {
+                node {
+                  ...NetworkSegmentFields
                 }
               }
             }

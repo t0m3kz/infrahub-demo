@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from tests.unit.base_device_transform_helpers import _device_data, _make_transform, _render_leaf
+from tests.unit.routing_helpers import in_vrf
 from transforms.common import _loopback_name
 from transforms.config.border_spine import BorderSpine
 from utils.fabric_roles import BORDER_ROLES
@@ -160,11 +161,16 @@ class TestLeafPbrRules:
             "vlan_id": vlan_id,
             "vni": 10000 + vlan_id,
             "segment": {
+                "security_zone": {"name": "PROD", "l3_vni": 50000},
                 "id": f"seg-{vlan_id}",
                 "customer_name": f"seg-{vlan_id}",
                 "gateway": {
                     "address": f"10.{vlan_id}.0.1/24",
-                    "ip_prefix": {"prefix": f"10.{vlan_id}.0.0/24", "ip_namespace": {"name": "PROD", "l3_vni": 50000}},
+                    "ip_prefix": {
+                        "security_zone": {"name": "PROD", "l3_vni": 50000},
+                        "prefix": f"10.{vlan_id}.0.0/24",
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
+                    },
                 },
             },
             **({"border_gateway": True} if border_gateway else {}),
@@ -193,10 +199,10 @@ class TestLeafPbrRules:
     def test_border_gateway_activations_render_without_tenant_policy(self, platform: str, role: str) -> None:
         """A BGW's hostless stitched segments keep their VLAN, VNI and SVI but are no ACL/PBR input."""
         data = _device_data(
-            interfaces=[{"name": "Vlan100", "role": "svi", "vrf": {"namespace": {"name": "PROD"}}}],
+            interfaces=[{"name": "Vlan100", "role": "svi", **in_vrf({"security_zone": {"name": "PROD"}})}],
         )
         data["shared_capabilities"] = [
-            {"typename": "ManagedVRF", "namespace": {"name": "PROD", "l3_vni": 50000, "namespace_type": "prod"}}
+            {"typename": "ManagedVRF", "security_zone": {"name": "PROD", "l3_vni": 50000, "vrf_type": "prod"}}
         ]
         data["segment_deployments"] = [self._gateway_activation(100, border_gateway=True)]
         pbr, acl = self._policy_for_every_activation()

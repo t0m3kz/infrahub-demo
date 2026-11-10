@@ -1,0 +1,16 @@
+# ManagedVRF declarations in recursive dependency order.
+# The INTERNET VRF includes the upstream edge and both border leaves facing the external firewall pair.
+# Loads before the legs (03_legs.yml) that name it. This upsert retains the edge membership;
+# the PROD instance is in 02_routing/01_vrf.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc-ktw1-vrf-internet"
+      security_zone: "INTERNET"
+      deployment: "DC-KTW1"
+      shared_devices:
+        - "ktw1-edge-01"
+        - "ktw1-bl-01"
+        - "ktw1-bl-02"

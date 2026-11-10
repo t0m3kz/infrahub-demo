@@ -4,6 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from utils.limits import TENANT_POOL_TEMPLATE
+from utils.routing_domain import resolve_security_zone
+
+
+def tenant_pool_name(zone_name: str) -> str:
+    """The semantic bootstrap pool name; its IPAM namespace remains default."""
+    return TENANT_POOL_TEMPLATE.format(namespace=zone_name)
+
+
 HOSTING_KINDS = frozenset({"TopologyDataCenter", "TopologyColocationMetro", "TopologyCustomerOffice"})
 """The kinds that inherit TopologySegmentHosting: a segment's realization and a VRF instance sit on one of them."""
 
@@ -38,8 +47,8 @@ def _in_family(prefix: str, family: str) -> bool:
 
 
 def segment_namespace(seg: dict[str, Any]) -> dict[str, Any]:
-    """The ip_namespace of the segment's gateway prefix, or {} when it has none."""
-    return ((seg.get("gateway") or {}).get("ip_prefix") or {}).get("ip_namespace") or {}
+    """The segment's routing zone, independent of its gateway's IPAM identity."""
+    return resolve_security_zone([seg], required=True, label=str(seg.get("name") or "segment"))
 
 
 def is_terminated(seg: dict[str, Any]) -> bool:
@@ -55,14 +64,43 @@ def is_terminated(seg: dict[str, Any]) -> bool:
     return bool((seg.get("terminated_on") or {}).get("id"))
 
 
+BORDER_LEAF_ROLE = "border-leaf"
+L2_ONLY_KEY = "l2_only"
+"""Marks a device's view of a segment it carries as pure L2 (``l2_only_view``); never a field of the model."""
+
+
+def l2_only_on(role: str | None, seg: dict[str, Any]) -> bool:
+    """Whether a device of ``role`` carries the segment as L2 only (VLAN and L2 VNI, no SVI, VRF or L3 VNI).
+
+    A border leaf carries a STRETCHED segment (``stretch_scope`` not ``local``) that way: it relays the DCI routes and
+    has no host in it, so it has no anycast SVI of it (the leaves have). The one rule for the generator's SVIs and VRF
+    demand (utils/vrf_demand.py) and the switch transforms (transforms/common.py). ``seg`` is cleaned query data that
+    selects ``stretch_scope`` (a query that does not reads every segment as local).
+    """
+    return role == BORDER_LEAF_ROLE and (seg.get("stretch_scope") or "local") != "local"
+
+
+def l2_only_view(seg: dict[str, Any]) -> dict[str, Any]:
+    """A copy of the segment as one device carries it L2 only: ``is_fabric_l2`` is true for it."""
+    return {**seg, L2_ONLY_KEY: True}
+
+
+def is_fabric_l2(seg: dict[str, Any]) -> bool:
+    """True when the fabric switch carrying the segment does not route it: terminated on a firewall context
+    (``is_terminated``) or the device's L2-only view of it (``l2_only_view``). The gate every fabric reader of the
+    gateway goes through (``routed_segment_namespace``, transforms/helpers/segments.py)."""
+    return is_terminated(seg) or bool(seg.get(L2_ONLY_KEY))
+
+
 def routed_segment_namespace(seg: dict[str, Any]) -> dict[str, Any]:
     """The ip_namespace (VRF) the fabric routes the segment in, or {} when the fabric does not route it.
 
-    Empty for a segment without a gateway and for a terminated one: the fabric does not route it, so it needs no
-    VRF instance (utils/vrf_demand.py), no SVI and no L3 VNI. ``segment_namespace`` stays the namespace of the
-    gateway prefix for the readers that are not the fabric (the firewall, its policies and PBR next hops).
+    Empty for a segment without a gateway, a terminated one and a device's L2-only view of it (``is_fabric_l2``): the
+    fabric does not route it, so it needs no VRF instance (utils/vrf_demand.py), no SVI and no L3 VNI.
+    ``segment_namespace`` stays the namespace of the gateway prefix for the readers that are not the fabric (the
+    firewall, its policies and PBR next hops).
     """
-    if is_terminated(seg):
+    if is_fabric_l2(seg) or not seg.get("gateway"):
         return {}
     return segment_namespace(seg)
 

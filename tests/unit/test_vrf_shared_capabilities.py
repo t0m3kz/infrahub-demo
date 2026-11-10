@@ -1,7 +1,8 @@
-"""ManagedVRF membership rides the shared device edge (``DcimCapabilities.shared_capabilities``).
+"""ManagedVRF membership rides the shared device edge (``DcimDeviceManaged.shared_capabilities``).
 
-``device_memberships`` is the one typename filter; the queries select the edge only inside ``... on DcimCapabilities``
-(the field is not on ``DcimDevice``) and no query selects a device-level ``vrfs`` any more.
+``device_memberships`` is the one typename filter; the queries select the edge only inside ``... on DcimDeviceManaged``
+or a concrete kind that inherits it (``... on DcimPhysicalDevice``, the firewalls of a switch's hosting deployment):
+the field is not on ``DcimDevice``. No query selects a device-level ``vrfs`` any more.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from graphql import (
     FragmentDefinitionNode,
     FragmentSpreadNode,
     InlineFragmentNode,
+    OperationDefinitionNode,
     SelectionSetNode,
     parse,
 )
@@ -26,12 +28,15 @@ from utils.vrf_demand import device_memberships, device_vrf_facts
 
 QUERIES = Path(__file__).resolve().parents[2] / "queries"
 EDGE = "shared_capabilities"
-CAPABILITIES = "DcimCapabilities"
+CAPABILITIES = "DcimDeviceManaged"
+#: kinds that inherit ``DcimDeviceManaged``: a query that names one of them reaches the edge without the generic
+#: (a firewall's contexts are its shared capabilities, read through ``... on DcimPhysicalDevice``)
+CAPABILITY_KINDS = {CAPABILITIES, "DcimPhysicalDevice"}
 #: parents that may still select a field named ``vrfs`` (a deployment's or a namespace's own instances)
-VRFS_ALLOWED_PARENTS = {"TopologySegmentHosting", "IpamNamespace"}
+VRFS_ALLOWED_PARENTS = {"TopologySegmentHosting", "SecurityZone", "TopologyCustomerOffice"}
 
-PROD = {"name": "PROD", "l3_vni": 50000, "namespace_type": "prod"}
-VRF = {"typename": "ManagedVRF", "namespace": PROD}
+PROD = {"name": "PROD", "l3_vni": 60000, "vrf_type": "prod"}
+VRF = {"typename": "ManagedVRF", "security_zone": PROD}
 FOREIGN = {"typename": "ManagedSNMP"}
 
 
@@ -78,6 +83,41 @@ def _fields(path: Path) -> list[tuple[str, tuple[str, ...]]]:
         else:
             types = ()
         found.extend(_walk(getattr(definition, "selection_set", None), fragments, types, ()))
+    return found
+
+
+def _vrfs_owners(path: Path) -> list[tuple[str, ...]]:
+    """For each ``vrfs`` field: the type conditions and root kinds that enclose it (field chain, spreads expanded).
+
+    An offline parse cannot type a nested field, so the owner is the root field (``TopologyCustomerOffice``,
+    ``SecurityZone``) or the fragment's own type condition."""
+    document = _parse(path)
+    fragments = _fragments(document)
+    found: list[tuple[str, ...]] = []
+
+    def visit(
+        selection_set: SelectionSetNode | None, owners: tuple[str, ...], depth: int, seen: tuple[str, ...]
+    ) -> None:
+        for selection in selection_set.selections if selection_set else ():
+            if isinstance(selection, FieldNode):
+                if selection.name.value == "vrfs":
+                    found.append(owners)
+                root = (selection.name.value,) if depth == 0 else ()
+                visit(selection.selection_set, (*owners, *root), depth + 1, seen)
+            elif isinstance(selection, InlineFragmentNode):
+                condition = [selection.type_condition.name.value] if selection.type_condition else []
+                visit(selection.selection_set, (*owners, *condition), depth, seen)
+            elif isinstance(selection, FragmentSpreadNode) and selection.name.value in fragments:
+                name = selection.name.value
+                if name not in seen:
+                    fragment = fragments[name]
+                    visit(fragment.selection_set, (*owners, fragment.type_condition.name.value), depth, (*seen, name))
+
+    for definition in document.definitions:
+        if isinstance(definition, FragmentDefinitionNode):
+            visit(definition.selection_set, (definition.type_condition.name.value,), 1, (definition.name.value,))
+        elif isinstance(definition, OperationDefinitionNode):
+            visit(definition.selection_set, (), 0, ())
     return found
 
 
@@ -142,7 +182,7 @@ def test_device_vrfs_ignores_a_foreign_shared_kind() -> None:
 
 def test_device_vrfs_skips_a_vrf_without_a_namespace() -> None:
     """A membership with no namespace has nothing to render."""
-    assert device_vrfs({EDGE: [{"typename": "ManagedVRF", "namespace": None}]}) == []
+    assert device_vrfs({EDGE: [{"typename": "ManagedVRF", "security_zone": None}]}) == []
 
 
 def test_device_vrf_facts_ignores_a_foreign_shared_kind() -> None:
@@ -163,15 +203,16 @@ def test_raw_device_with_a_foreign_shared_kind_has_the_same_facts() -> None:
 # --- query shape ---------------------------------------------------------------------------------------------------
 
 
-def test_every_shared_capabilities_selection_is_inside_dcim_capabilities() -> None:
-    """The edge is on ``DcimCapabilities``, not on ``DcimDevice``: it is selected under ``... on DcimCapabilities``."""
+def test_every_shared_capabilities_selection_is_inside_a_capabilities_kind() -> None:
+    """The edge is on ``DcimDeviceManaged``, not on ``DcimDevice``: it is selected under ``... on DcimDeviceManaged`` or
+    under a concrete kind that inherits it (``CAPABILITY_KINDS``)."""
     offenders = []
     selecting = []
     for path in _all_queries():
         for name, types in _fields(path):
             if name == EDGE:
                 selecting.append(_rel(path))
-                if CAPABILITIES not in types:
+                if not CAPABILITY_KINDS & set(types):
                     offenders.append((_rel(path), types))
     assert offenders == []
     assert {"fragments/device_capabilities.gql", "validation/evpn_fabric.gql", "validation/vrf_instances.gql"} <= set(
@@ -190,12 +231,12 @@ def test_the_three_membership_queries_select_the_edge_with_a_typename(relative: 
 
 
 def test_no_query_selects_a_device_level_vrfs_field() -> None:
-    """``DcimDevice.vrfs`` is gone; the remaining ``vrfs`` live on a deployment or a namespace."""
+    """``DcimDevice.vrfs`` is gone; the remaining ``vrfs`` live on a deployment or a security zone."""
     offenders = []
     for path in _all_queries():
-        for name, types in _fields(path):
-            if name == "vrfs" and not (set(types) & VRFS_ALLOWED_PARENTS):
-                offenders.append((_rel(path), types))
+        for owners in _vrfs_owners(path):
+            if not set(owners) & VRFS_ALLOWED_PARENTS:
+                offenders.append((_rel(path), owners))
     assert offenders == []
 
 
@@ -231,4 +272,4 @@ def test_a_query_spreading_the_device_fragment_selects_the_edge_only_inside_dcim
             if name == EDGE:
                 found.append(types)
     assert found, "the spread must reach the shared_capabilities selection"
-    assert all(CAPABILITIES in types for types in found)
+    assert all(CAPABILITY_KINDS & set(types) for types in found)

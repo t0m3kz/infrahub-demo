@@ -477,7 +477,7 @@ class PoolMixin:
                 prefix_length=pool_size,
                 role=pool_name if pool_name in ["management", "technical", "loopback"] else pool_name.split("-")[-1],
                 kind="prefix" if is_prefix_pool else "address",
-                namespace="MANAGEMENT" if pool_name == "management" else DEFAULT_NAMESPACE,
+                namespace=DEFAULT_NAMESPACE,
             )
             created_pools[pool_name] = new_pool
 

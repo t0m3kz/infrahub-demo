@@ -150,6 +150,9 @@ class MLAGWiringMixin:
         )
 
         peer_link_ifaces: list[Any] = []
+        # The domain lists every interface it configures: the peer-link (LAG or virtual), the physical mlag-peer ports
+        # (the LAG's members, or the unused ports of a virtual peer-link) and the control SVIs.
+        domain_ifaces: list[Any] = [port for ports in peer_ports.values() for port in ports]
         for device_obj in member_devices:
             await self._disconnect_stale_peer_link(
                 device_obj, stale_peer_links[device_obj.id], mlag_name, virtual_peer_link
@@ -167,15 +170,19 @@ class MLAGWiringMixin:
                     device_obj, mlag_obj, platform_name, peer_ports[device_obj.id], existing_peer_link, track=track
                 )
                 if control_ip_id:
-                    await self._ensure_control_svi(
+                    control_svi = await self._ensure_control_svi(
                         device_obj,
                         mlag_name,
                         control_ip_id,
                         next(iter(existing_svis[device_obj.id]), None),
                         track=track,
                     )
+                    domain_ifaces.append(control_svi)
             if iface is not None:
                 peer_link_ifaces.append(iface)
+                domain_ifaces.append(iface)
+
+        await self._list_domain_interfaces(mlag_obj, mlag_name, domain_ifaces)
 
         dev_a, dev_b = member_devices[0], member_devices[1]
         if virtual_peer_link:
@@ -184,6 +191,18 @@ class MLAGWiringMixin:
             await self._ensure_peer_link_cables(
                 mlag_name, dev_a, dev_b, peer_ports[dev_a.id], peer_ports[dev_b.id], track=track
             )
+
+    async def _list_domain_interfaces(self, mlag_obj: Any, mlag_name: str, interfaces: list[Any]) -> None:
+        """List the interfaces the domain configures (both peer-links, the control SVIs) on its ``interfaces`` edge.
+
+        One additive RelationshipAdd of exactly these peers, untracked (never a save of the list: the edge belongs to
+        the domain, and an add of a peer already listed is a no-op, so a re-run converges). A stale interface needs no
+        removal: the stale peer-link and control SVI nodes are deleted above and their edge goes with them.
+        """
+        if not interfaces:
+            return
+        await mlag_obj.add_relationships(relation_to_update="interfaces", related_nodes=[i.id for i in interfaces])
+        self.logger.info(f"  [{mlag_name}] Listed {len(interfaces)} interface(s) on the domain")
 
     async def _interfaces_by_device(
         self, kind: type[Any], device_ids: list[str], role: str, **kwargs: Any
@@ -378,10 +397,10 @@ class MLAGWiringMixin:
 
     async def _ensure_control_svi(
         self, device_obj: Any, mlag_name: str, control_ip_id: str, existing_svi: Any | None, *, track: bool = True
-    ) -> None:
+    ) -> Any:
         """Create or upsert the Vlan4094 SVI that carries the MLAG control
         session over a back-to-back peer-link (``existing_svi``'s id passed
-        when found)."""
+        when found); returns the saved SVI."""
         svi_obj = await self.client.create(
             kind=DcimVirtualInterface,
             data={
@@ -399,6 +418,7 @@ class MLAGWiringMixin:
             f"  [{device_obj.name.value}] {'Updated' if existing_svi else 'Created'} MLAG control SVI "
             f"{_CONTROL_SVI_NAME} ({svi_obj.id})"
         )
+        return svi_obj
 
     async def _disconnect_stale_control_svis(self, member_devices: list[Any], mlag_name: str) -> None:
         """Delete control SVIs left from a back-to-back run — a virtual

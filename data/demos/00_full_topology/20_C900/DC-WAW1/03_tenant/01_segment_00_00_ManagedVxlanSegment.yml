@@ -1,0 +1,26 @@
+# ManagedVxlanSegment declarations in recursive dependency order.
+# The VXLAN segment of C900 in DC-WAW1: segment -> deployment (VNI 10200) -> VLAN row of leaf-01 (VLAN
+# 200, its SVI in 01_segment_02_00). The gateway 10.92.1.1/24 and its prefix are nested.
+# The vPC port-channels carry it (02_lag_interfaces.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - security_zone: "PROD"
+      owner: C900
+      customer_name: app
+      environment: p
+      customer_deployments: ["C900-P-DC-WAW1"]
+      gateway:
+        data:
+          address: "10.92.1.1/24"
+          description: Gateway of c900-app-p
+          ip_namespace: "default"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.92.1.0/24"
+              ip_namespace: "default"
+              status: active
+              description: DC segment c900-app-p

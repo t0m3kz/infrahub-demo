@@ -1,9 +1,9 @@
 """Unit tests for the INTERNET upstream handoff (ISP -> BGW edge -> EVPN type-5).
 
 Covers:
-  - _build_session_from_peering()  — ``transit`` flag on a namespace_type internet VRF session
+  - _build_session_from_peering()  — ``transit`` flag on a vrf_type internet VRF session
   - get_vxlan_config()             — INTERNET L3 VNI on a BGW edge, one global route-target
-  - get_exchange_transits()        — border-leaf INTERNET mapping carries namespace_type
+  - get_exchange_transits()        — border-leaf INTERNET mapping carries vrf_type
   - edges/cisco_nxos.j2            — transit filters and the shared VXLAN VRF stanza
 """
 
@@ -19,7 +19,7 @@ from transforms.helpers.bgp import _build_session_from_peering, add_template_fie
 from transforms.helpers.vxlan import get_vxlan_config
 
 _TEMPLATES_CONFIGS_DIR = Path(__file__).parents[2] / "templates" / "configs"
-_INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "namespace_type": "internet"}
+_INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "vrf_type": "internet"}
 
 
 def _transit_peering(namespace: dict[str, Any]) -> dict[str, Any]:
@@ -31,14 +31,20 @@ def _transit_peering(namespace: dict[str, Any]) -> dict[str, Any]:
         "ttl": 1,
         "capabilities": [
             {
+                "zone_capabilities": [
+                    {"typename": "ManagedVRF", "id": f"vrf-{namespace.get('name')}", "security_zone": namespace}
+                ],
                 "name": "Ethernet1/14",
                 "device": {"name": "eg-fr201"},
-                "ip_address": {"address": "203.0.113.0/31", "ip_namespace": namespace},
+                "ip_address": {"address": "203.0.113.0/31", "ip_namespace": {"node": {"name": {"value": "default"}}}},
             },
             {
+                "zone_capabilities": [
+                    {"typename": "ManagedVRF", "id": f"vrf-{namespace.get('name')}", "security_zone": namespace}
+                ],
                 "name": "eth1",
                 "device": {"name": "EXT-LUMEN-FRA1"},
-                "ip_address": {"address": "203.0.113.1/31", "ip_namespace": namespace},
+                "ip_address": {"address": "203.0.113.1/31", "ip_namespace": {"node": {"name": {"value": "default"}}}},
             },
         ],
         "bgp_processes": [
@@ -60,7 +66,7 @@ def _edge(*, bgw: bool = True, namespace: dict[str, Any] | None = _INTERNET_NS) 
     if namespace:
         capabilities.append({"typename": "ManagedBGP", "peerings": [_transit_peering(namespace)]})
         # the VRF generator's membership of the session's namespace: the device's only VRF set
-        vrfs.append({"typename": "ManagedVRF", "namespace": namespace})
+        vrfs.append({"typename": "ManagedVRF", "security_zone": namespace})
     return {"name": "eg-fr201", "interfaces": interfaces, "capabilities": capabilities, "shared_capabilities": vrfs}
 
 
@@ -71,9 +77,9 @@ class TestTransitFlag:
         assert session["vrf"] == "INTERNET"
         assert session["transit"] is True
 
-    @pytest.mark.parametrize("namespace_type", ["prod", None])
-    def test_other_namespaces_are_not_transit(self, namespace_type: str | None) -> None:
-        namespace = {"name": "PROD", "namespace_type": namespace_type}
+    @pytest.mark.parametrize("vrf_type", ["prod", None])
+    def test_other_namespaces_are_not_transit(self, vrf_type: str | None) -> None:
+        namespace = {"name": "PROD", "vrf_type": vrf_type}
         session = _build_session_from_peering(_transit_peering(namespace), "eg-fr201", {"asn": 4200000100}, [])
         assert session is not None
         assert session["vrf"] == "PROD"
@@ -104,7 +110,7 @@ class TestInternetVniMapping:
         assert get_vxlan_config(_edge(namespace=None), "cisco_nxos", device_role="edge", fabric_rt_asn=65000) is None
 
     def test_non_internet_session_namespace_is_ignored(self) -> None:
-        namespace = {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}
+        namespace = {"name": "PROD", "l3_vni": 50001, "vrf_type": "prod"}
         assert (
             get_vxlan_config(_edge(namespace=namespace), "cisco_nxos", device_role="edge", fabric_rt_asn=65000) is None
         )
@@ -119,13 +125,21 @@ class TestInternetVniMapping:
                 "vlan_id": vlan,
                 "vni": vni,
                 "segment": {
+                    "security_zone": ns,
                     "id": name,
                     "name": name,
-                    "gateway": {"address": "10.0.0.1/24", "ip_prefix": {"prefix": "10.0.0.0/24", "ip_namespace": ns}},
+                    "gateway": {
+                        "address": "10.0.0.1/24",
+                        "ip_prefix": {
+                            "security_zone": ns,
+                            "prefix": "10.0.0.0/24",
+                            "ip_namespace": {"node": {"name": {"value": "default"}}},
+                        },
+                    },
                 },
             }
             for vlan, vni, name, ns in (
-                (100, 10100, "seg", {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}),
+                (100, 10100, "seg", {"name": "PROD", "l3_vni": 50001, "vrf_type": "prod"}),
                 (3000, 13000, "XCHG-INTERNET", _INTERNET_NS),
             )
         ]
@@ -133,8 +147,8 @@ class TestInternetVniMapping:
             "name": "dc1-border-01",
             "interfaces": [{"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}],
             "shared_capabilities": [
-                {"typename": "ManagedVRF", "namespace": {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"}},
-                {"typename": "ManagedVRF", "namespace": _INTERNET_NS},
+                {"typename": "ManagedVRF", "security_zone": {"name": "PROD", "l3_vni": 50001, "vrf_type": "prod"}},
+                {"typename": "ManagedVRF", "security_zone": _INTERNET_NS},
             ],
         }
         config = get_vxlan_config(
@@ -210,7 +224,7 @@ class TestEdgeTemplate:
 
     def test_vrf_session_without_transit_renders_no_transit_filters(self, env: jinja2.Environment) -> None:
         """A regular peer in PROD is an external tenant-VRF peer (tests/unit/test_external_vrf_peers.py), not transit."""
-        rendered = self._render(env, {"name": "PROD", "namespace_type": "prod"}, None)
+        rendered = self._render(env, {"name": "PROD", "vrf_type": "prod"}, None)
         assert "RM-TRANSIT-IN" not in rendered
         assert "RM-TRANSIT-OUT" not in rendered
         assert "PL-TRANSIT" not in rendered

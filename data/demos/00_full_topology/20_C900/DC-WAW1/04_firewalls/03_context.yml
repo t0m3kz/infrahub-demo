@@ -1,0 +1,20 @@
+# Dedicated internal context; the addressed legs follow in this directory. Its legs (the sub-interfaces of each member's
+# first uplink tagged with a transit VLAN) and its border service ports (the ports cabled to a member's uplink) are
+# derived, never listed on the context (utils/service_contexts.py).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallContext
+  data:
+    - name: c900-waw1-fw-01-waw1-fw-02-prod
+      deployment: DC-WAW1
+      shared_devices: [c900-waw1-fw-01-prod, c900-waw1-fw-02-prod]
+      tenant:
+        kind: TopologyCustomerDC
+        data:
+          owner: C900
+          environment: p
+          parent: DC-WAW1
+          infrastructure_orchestrator: ansible_automation_platform
+      vlan_id: 3001
+      snat_address: ["192.0.2.0/32", "default"]

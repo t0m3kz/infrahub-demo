@@ -196,6 +196,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: segment_deployment_ports
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/segment_deployment_ports.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: lb_segment_gateways
     tests:
       - name: syntax_check

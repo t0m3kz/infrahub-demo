@@ -1,0 +1,13 @@
+# Acme's extranet range, registered by C001 behind the tunnel (registered_prefixes below) in the PROD
+# routing zone, like an office LAN: the SD-WAN gateway's PROD handoff accepts it from the gateway and announces it
+# only to C001's other sessions (transforms/helpers/bgp_external.py). The policy rule that aims at it
+# (05_security_policy.yml) names the same CIDR.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "198.18.0.0/24"
+      ip_namespace: "default"
+      status: active
+      description: "Acme Logistics B2B extranet range, reachable over the IPsec tunnel C001-PARTNER-ACME-FR2"

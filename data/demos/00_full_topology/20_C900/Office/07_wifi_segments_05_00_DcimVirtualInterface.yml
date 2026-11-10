@@ -1,0 +1,12 @@
+# DcimVirtualInterface declarations in recursive dependency order.
+# The SVIs of the two Wi-Fi segments on both access switches, each carrying its segment's anycast gateway as its
+# address (the address objects of 07_wifi_segments_02_00, referenced), so they load after the segments.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - {name: Vlan110, device: bcn-office-as-01, role: svi, status: active, ip_address: ["10.96.2.1/24", "default"]}
+    - {name: Vlan110, device: bcn-office-as-02, role: svi, status: active, ip_address: ["10.96.2.1/24", "default"]}
+    - {name: Vlan120, device: bcn-office-as-01, role: svi, status: active, ip_address: ["10.96.1.1/24", "default"]}
+    - {name: Vlan120, device: bcn-office-as-02, role: svi, status: active, ip_address: ["10.96.1.1/24", "default"]}

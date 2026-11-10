@@ -23,13 +23,13 @@ from utils.bgp_expectation import Device, DeviceAddrs, ExternalPolicy, Fabric, e
 from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE
 from utils.fabric_roles import BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE
-from utils.segment_addressing import segment_hosting_candidates
+from utils.routed_prefix import registrations
+from utils.segment_addressing import segment_hosting_candidates, segment_namespace
 from utils.vrf_demand import VRF_KIND, device_memberships
 
 LOOPBACK_ROLES = frozenset({"loopback", "loopback-vtep"})
 VIP_ROLE = "multisite-vip"
 VIP_ROOT = "DcimVirtualInterface"
-ENVIRONMENT_PREFIX_ROOT = "environment_prefixes_"
 SEGMENT_ROOT = "ManagedVxlanSegment"
 
 
@@ -114,17 +114,52 @@ def environment_prefixes(extra_roots: Mapping[str, Any]) -> tuple[dict[str, froz
     """
     found: dict[str, set[str]] = {}
     ranges: set[str] = set()
-    for key, prefixes in extra_roots.items():
-        if not key.startswith(ENVIRONMENT_PREFIX_ROOT):
-            continue
-        for prefix in prefixes or []:
-            namespace = prefix.get("ip_namespace") or {}
-            name = namespace.get("name")
-            if not name or name == DEFAULT_NAMESPACE or not prefix.get("prefix"):
-                continue
-            found.setdefault(name, set()).add(prefix["prefix"])
-            if namespace.get("namespace_type") == INTERNET_TYPE:
-                ranges.add(name)
+
+    def keep(prefixes: Iterable[Mapping[str, Any]], *owners: Mapping[str, Any] | None) -> None:
+        for registration in registrations(prefixes, *owners):
+            namespace = registration.zone
+            name = namespace["name"]
+            if registration.prefix.get("prefix"):
+                found.setdefault(name, set()).add(registration.prefix["prefix"])
+                if namespace.get("vrf_type") == INTERNET_TYPE:
+                    ranges.add(name)
+
+    for zone in extra_roots.get("environment_zones") or []:
+        for segment in zone.get("network_segments") or []:
+            prefix = ((segment.get("gateway") or {}).get("ip_prefix") or {}).get("prefix")
+            if prefix:
+                found.setdefault(zone["name"], set()).add(prefix)
+                if zone.get("vrf_type") == INTERNET_TYPE:
+                    ranges.add(zone["name"])
+        for vrf in zone.get("vrfs") or []:
+            for circuit in vrf.get("session_circuits") or []:
+                keep(
+                    [
+                        *(circuit.get("registered_prefixes") or []),
+                        *(circuit.get("originated_prefixes") or []),
+                        *([circuit["link_prefix"]] if circuit.get("link_prefix") else []),
+                    ],
+                    circuit,
+                )
+            for interface in vrf.get("capabilities") or []:
+                keep(
+                    [
+                        *(interface.get("advertised_prefixes") or []),
+                        *(
+                            [(interface.get("ip_address") or {})["ip_prefix"]]
+                            if (interface.get("ip_address") or {}).get("ip_prefix")
+                            else []
+                        ),
+                    ],
+                    interface,
+                )
+    for segment in extra_roots.get("environment_segments") or []:
+        prefix = ((segment.get("gateway") or {}).get("ip_prefix") or {}).get("prefix")
+        if prefix:
+            zone = segment_namespace(segment)
+            found.setdefault(zone["name"], set()).add(prefix)
+            if zone.get("vrf_type") == INTERNET_TYPE:
+                ranges.add(zone["name"])
     return {name: frozenset(prefixes) for name, prefixes in found.items()}, frozenset(ranges)
 
 
@@ -143,14 +178,14 @@ def default_exits(extra_roots: Mapping[str, Any], gateways: Iterable[str]) -> di
     border_gateways = set(gateways)
     exits: dict[str, set[str]] = {}
     for instance in extra_roots.get(VRF_KIND) or []:
-        namespace = instance.get("namespace") or {}
+        namespace = instance.get("security_zone") or {}
         name = namespace.get("name")
         if not name or name == DEFAULT_NAMESPACE:
             continue
         members = {device.get("name"): device.get("role") for device in instance.get("shared_devices") or []}
-        if namespace.get("namespace_type") == INTERNET_TYPE:
+        if namespace.get("vrf_type") == INTERNET_TYPE:
             found = set(members) & border_gateways
-        elif namespace.get("namespace_type") in EXCHANGE_PEERS:
+        elif namespace.get("vrf_type") in EXCHANGE_PEERS:
             found = {device for device, role in members.items() if role in BORDER_ROLES}
         else:
             continue
@@ -192,7 +227,7 @@ def build_device(device_data: Mapping[str, Any], local_only: Iterable[str] = ())
     ``local_only``: prefixes it holds for itself and must not originate into EVPN (a leaf's transit /29s).
     """
     namespaces = {
-        (membership.get("namespace") or {}).get("name") for membership in device_memberships(dict(device_data))
+        (membership.get("security_zone") or {}).get("name") for membership in device_memberships(dict(device_data))
     }
     return Device(
         str(device_data.get("name") or ""),

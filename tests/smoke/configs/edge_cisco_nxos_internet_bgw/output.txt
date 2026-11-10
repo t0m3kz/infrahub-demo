@@ -125,7 +125,6 @@ router bgp 65001
   vrf INTERNET
     address-family ipv4 unicast
       advertise l2vpn evpn
-      aggregate-address 192.0.2.0/24 summary-only
     neighbor 203.0.113.1
       remote-as 3356
       description EXT-LUMEN-FRA1

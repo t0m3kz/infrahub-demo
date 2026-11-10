@@ -33,6 +33,7 @@ from utils.limits import (
     MAX_ENCODABLE_VNI,
     TRANSIT_VLAN_BAND,
 )
+from utils.routing_domain import RoutingDomainError
 
 
 def test_slots_are_unique() -> None:
@@ -79,14 +80,14 @@ def test_transit_vni_band_disjoint_from_bootstrap_vni_ranges(root_dir: Path) -> 
     for name, start, end in pools:
         assert end < TRANSIT_VNI_MIN or start > TRANSIT_VNI_MAX, f"pool {name} overlaps transit VNI band"
 
-    namespaces = yaml.safe_load((root_dir / "data" / "bootstrap" / "22_namespaces.yml").read_text())
+    namespaces = yaml.safe_load((root_dir / "data" / "bootstrap" / "24_security_zones.yml").read_text())
     for ns in namespaces["spec"]["data"]:
         assert not TRANSIT_VNI_MIN <= ns["l3_vni"] <= TRANSIT_VNI_MAX
 
 
 def test_transit_vni_band_documented_in_namespace_table(root_dir: Path) -> None:
     """The VNI band comment table in 22_namespaces.yml lists the transit band."""
-    text = (root_dir / "data" / "bootstrap" / "22_namespaces.yml").read_text()
+    text = (root_dir / "data" / "bootstrap" / "24_security_zones.yml").read_text()
     assert f"{TRANSIT_VNI_MIN}-{TRANSIT_VNI_MAX}" in text
 
 
@@ -101,7 +102,7 @@ def test_transit_addresses_offsets() -> None:
 
 
 def test_exchange_peers_never_pair_prod_with_non_prod() -> None:
-    """PROD and NON-PROD must only ever exchange with INTERNET and MANAGEMENT."""
+    """PROD and NONPROD must only ever exchange with INTERNET and MANAGEMENT."""
     for ns_type, peers in EXCHANGE_PEERS.items():
         assert ns_type not in peers
         assert ns_type in {"prod", "non_prod"}
@@ -136,18 +137,18 @@ def test_exchange_peers_never_join_prod_and_non_prod() -> None:
     ],
 )
 def test_joins_prod_and_nonprod(env_a: str | None, env_b: str | None, joins: bool) -> None:
-    """Prod vs non-prod joins; a missing environment fails closed."""
+    """Prod vs nonprod joins; a missing environment fails closed."""
     assert joins_prod_and_nonprod(env_a, env_b) is joins
 
 
 @pytest.mark.parametrize(
     ("environment", "ns_type", "zone"),
     [
-        ("p", "prod", "PROD-ZONE"),
-        ("n", "non_prod", "NONPROD-ZONE"),
-        ("s", "non_prod", "NONPROD-ZONE"),
-        ("d", "non_prod", "NONPROD-ZONE"),
-        ("t", "non_prod", "NONPROD-ZONE"),
+        ("p", "prod", "PROD"),
+        ("n", "non_prod", "NONPROD"),
+        ("s", "non_prod", "NONPROD"),
+        ("d", "non_prod", "NONPROD"),
+        ("t", "non_prod", "NONPROD"),
     ],
 )
 def test_environment_to_namespace_type_and_zone(environment: str, ns_type: str, zone: str) -> None:
@@ -157,14 +158,14 @@ def test_environment_to_namespace_type_and_zone(environment: str, ns_type: str, 
 
 
 def test_internet_zone_name() -> None:
-    """The INTERNET namespace maps to INTERNET-ZONE."""
-    assert zone_name_for_namespace_type("internet") == "INTERNET-ZONE"
+    """The INTERNET namespace maps to INTERNET."""
+    assert zone_name_for_namespace_type("internet") == "INTERNET"
 
 
 def test_management_zone_and_type() -> None:
-    """The MANAGEMENT namespace maps to MANAGEMENT-ZONE; the type constant is the namespace_type value."""
+    """The MANAGEMENT namespace maps to MANAGEMENT; the type constant is the vrf_type value."""
     assert MANAGEMENT_TYPE == "management"
-    assert zone_name_for_namespace_type(MANAGEMENT_TYPE) == "MANAGEMENT-ZONE"
+    assert zone_name_for_namespace_type(MANAGEMENT_TYPE) == "MANAGEMENT"
     assert TRANSIT_SLOT[MANAGEMENT_TYPE] == 3
 
 
@@ -174,16 +175,23 @@ def _bootstrap_objects(root_dir: Path, name: str) -> dict[str, dict]:
     return {item["name"]: item for doc in docs for item in doc["spec"]["data"] if "name" in item}
 
 
+def test_bootstrap_zone_names_are_suffix_free(root_dir: Path) -> None:
+    """The canonical zone names omit the suffix and match the runtime lookup."""
+    zones = _bootstrap_objects(root_dir, "24_security_zones.yml")
+    assert set(zones) == {"PROD", "NONPROD", "INTERNET", "MANAGEMENT"}
+    assert set(ZONE_BY_NS_TYPE.values()) == set(zones)
+
+
 def test_every_exchange_peer_has_a_namespace_zone_and_transit_pool(root_dir: Path) -> None:
     """Each peer type of EXCHANGE_PEERS has a namespace, a SecurityZone and a FW-Transit-<NS>-IPv4 pool in it."""
-    namespaces = _bootstrap_objects(root_dir, "22_namespaces.yml")
+    namespaces = _bootstrap_objects(root_dir, "24_security_zones.yml")
     zones = _bootstrap_objects(root_dir, "24_security_zones.yml")
     pools = _bootstrap_objects(root_dir, "23_transit_pools.yml")
-    by_type = {ns["namespace_type"]: name for name, ns in namespaces.items()}
+    by_type = {ns["vrf_type"]: name for name, ns in namespaces.items()}
     for ns_type in {peer for peers in EXCHANGE_PEERS.values() for peer in peers}:
         ns_name = by_type[ns_type]
         assert ZONE_BY_NS_TYPE[ns_type] in zones
-        assert pools[f"FW-Transit-{ns_name}-IPv4"]["ip_namespace"] == ns_name
+        assert pools[f"FW-Transit-{ns_name}-IPv4"]["ip_namespace"] == "default"
 
 
 def test_management_transit_pool_and_zone(root_dir: Path) -> None:
@@ -193,9 +201,9 @@ def test_management_transit_pool_and_zone(root_dir: Path) -> None:
     assert (pool["default_prefix_length"], resource["prefix"], resource["ip_namespace"]) == (
         29,
         "100.66.48.0/20",
-        "MANAGEMENT",
+        "default",
     )
-    assert _bootstrap_objects(root_dir, "24_security_zones.yml")["MANAGEMENT-ZONE"]["trust_level"] == 90
+    assert _bootstrap_objects(root_dir, "24_security_zones.yml")["MANAGEMENT"]["trust_level"] == 90
 
 
 def test_services_segment_and_its_policy_rules(root_dir: Path) -> None:
@@ -205,9 +213,9 @@ def test_services_segment_and_its_policy_rules(root_dir: Path) -> None:
     segment = customer["network_segments"][0]["data"]
     gateway = segment["gateway"]["data"]
     assert customer["org_id"] == "INFRA"
-    assert (segment["environment"], segment["security_zone"]) == ("p", "MANAGEMENT-ZONE")
+    assert (segment["environment"], segment["security_zone"]) == ("p", "MANAGEMENT")
     assert segment["customer_deployments"] == ["C006-P-DC11"]
-    assert (gateway["ip_namespace"], gateway["ip_prefix"]["data"]["ip_namespace"]) == ("MANAGEMENT", "MANAGEMENT")
+    assert (gateway["ip_namespace"], gateway["ip_prefix"]["data"]["ip_namespace"]) == ("default", "default")
     assert ipaddress.ip_interface(gateway["address"]).network == ipaddress.ip_network(
         gateway["ip_prefix"]["data"]["prefix"]
     )
@@ -261,7 +269,9 @@ def test_is_public_address(address: str, public: bool) -> None:
 
 def test_snat_pool_and_context_relationship_are_declared(root_dir: Path) -> None:
     """Bootstrap pool: public TEST-NET-1 prefix in INTERNET; schema: optional cardinality-one IpamIPAddress peer."""
-    docs = list(yaml.safe_load_all((root_dir / "data" / "bootstrap" / "23_transit_pools.yml").read_text()))
+    docs = list(
+        yaml.safe_load_all((root_dir / "data" / "bootstrap" / "23_transit_pools_01_CoreIPAddressPool.yml").read_text())
+    )
     pool = next(
         item
         for doc in docs
@@ -273,8 +283,8 @@ def test_snat_pool_and_context_relationship_are_declared(root_dir: Path) -> None
     assert (prefix["prefix"], prefix["role"], prefix["ip_namespace"], pool["ip_namespace"]) == (
         "192.0.2.0/24",
         "public",
-        "INTERNET",
-        "INTERNET",
+        "default",
+        "default",
     )
 
     schema = yaml.safe_load((root_dir / "schemas" / "extensions" / "capabilities" / "ha.yml").read_text())
@@ -290,28 +300,49 @@ def test_snat_pool_and_context_relationship_are_declared(root_dir: Path) -> None
     assert rel["order_weight"] >= 1000
 
 
-def _segment(kind: str, namespace_type: str | None, zone: str | None) -> dict:
-    """A cleaned segment with its gateway namespace type and zone."""
-    gateway = {"ip_prefix": {"ip_namespace": {"namespace_type": namespace_type}}} if namespace_type else None
-    return {"typename": kind, "gateway": gateway, "security_zone": {"name": zone} if zone else None}
+def _segment(kind: str, vrf_type: str | None, zone: str | None) -> dict:
+    """A cleaned segment with default IPAM identity and explicit zone type."""
+    gateway = {"ip_prefix": {"ip_namespace": {"name": "default"}}} if vrf_type else None
+    return {
+        "typename": kind,
+        "gateway": gateway,
+        "security_zone": {"name": zone, "vrf_type": vrf_type} if zone else None,
+    }
 
 
 @pytest.mark.parametrize(
     ("segment", "tenant"),
     [
-        (_segment("ManagedVxlanSegment", "prod", "PROD-ZONE"), True),
-        (_segment("ManagedVxlanSegment", "non_prod", None), True),
-        (_segment("ManagedVxlanSegment", "management", "MANAGEMENT-ZONE"), False),
-        (_segment("ManagedVxlanSegment", "internet", "INTERNET-ZONE"), False),
-        (_segment("ManagedVxlanSegment", "prod", "MANAGEMENT-ZONE"), False),
-        (_segment("ManagedVxlanSegment", None, "PROD-ZONE"), False),
-        (_segment("CloudNetworkSegment", "prod", "PROD-ZONE"), False),
+        (_segment("ManagedVxlanSegment", "prod", "PROD"), True),
+        (_segment("ManagedVxlanSegment", "non_prod", "NONPROD"), True),
+        (_segment("ManagedVxlanSegment", "management", "MANAGEMENT"), False),
+        (_segment("ManagedVxlanSegment", "internet", "INTERNET"), False),
+        (_segment("ManagedVxlanSegment", "prod", "MANAGEMENT"), False),
+        (_segment("ManagedVxlanSegment", None, "PROD"), False),
+        (_segment("CloudNetworkSegment", "prod", "PROD"), False),
     ],
-    ids=["vxlan-prod", "vxlan-nonprod", "management", "internet", "exchange-zone", "no-gateway", "cloud"],
+    ids=[
+        "vxlan-prod",
+        "vxlan-nonprod",
+        "management",
+        "internet",
+        "exchange-zone",
+        "no-gateway",
+        "cloud",
+    ],
 )
 def test_routed_tenant_segment(segment: dict, tenant: bool) -> None:
-    """The one tenant-SVI test of L0 and the group tags: VXLAN, PROD/NON-PROD gateway, no exchange zone."""
+    """The one tenant-SVI test of L0 and the group tags: VXLAN, PROD/NONPROD gateway, no exchange zone."""
     assert is_routed_tenant_segment(segment) is tenant
+
+
+def test_routed_segment_without_zone_cannot_infer_it_from_ipam() -> None:
+    """Legacy IPAM routing labels cannot supply a missing explicit segment owner."""
+    segment = _segment("ManagedVxlanSegment", "prod", None)
+    segment["gateway"]["ip_prefix"]["ip_namespace"] = {"name": "PROD", "vrf_type": "prod"}
+
+    with pytest.raises(RoutingDomainError, match="missing security zone"):
+        is_routed_tenant_segment(segment)
 
 
 def test_tenant_namespace_types_are_the_exchange_peers_tenants() -> None:
@@ -322,7 +353,7 @@ def test_tenant_namespace_types_are_the_exchange_peers_tenants() -> None:
 def test_transit_pool_name_is_the_bootstrap_pool_of_the_vrf() -> None:
     """data/bootstrap/23_transit_pools.yml names one pool per fixed VRF namespace."""
     assert transit_pool_name("PROD") == "FW-Transit-PROD-IPv4"
-    assert transit_pool_name("NON-PROD") == "FW-Transit-NON-PROD-IPv4"
+    assert transit_pool_name("NONPROD") == "FW-Transit-NONPROD-IPv4"
 
 
 def test_wan_exit_vlans_follow_the_slots_just_after_the_transit_band() -> None:

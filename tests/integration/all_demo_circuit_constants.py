@@ -266,8 +266,9 @@ class VirtualCircuitExpectation(TypedDict):
     #: is a sub-interface), in end order, each once; never declared. Empty when the carrier is a cable or there is none.
     #: The derived list is compared sorted in test_02 (declared ones only: the generated INET-<office> is in no row).
     carrier: tuple[str, ...]
-    #: The Handoff's environment namespace; None for the other kinds.
-    ip_namespace: str | None
+    #: The routing zone of the circuit's `vrf`: a Handoff's, and the partner tunnel's (the data names its VRF, the
+    #: zone its registered range is routed in); None for the others.
+    security_zone: str | None
 
 
 _DEVICE_DEPLOYMENTS: dict[str, str] = {
@@ -304,7 +305,7 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
             )
         ),
         "carrier": (f"INET-{office_name}", ALL_DEMO_SDWAN_GATEWAY_ACCESS),
-        "ip_namespace": None,
+        "security_zone": None,
     }
 
 
@@ -323,7 +324,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "locations": ("C001-OFFICE", "FR2"),
         "ends": (("EQX-FR2-SDWAN-GW1", "eth1"), ("EXT-ACME-EDGE1", "et-0/0/0")),
         "carrier": ("INET-LUMEN-EQXFR2-GW", "INET-ACME-COGENT"),
-        "ip_namespace": None,
+        "security_zone": "PROD",
     },
     # The DCI: ends = the fibre's two ports, locations = the fibre's two facilities.
     **{
@@ -332,7 +333,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
             "locations": tuple(sorted(locations)),
             "ends": ends,
             "carrier": (fibre,),
-            "ip_namespace": None,
+            "security_zone": None,
         }
         for circuit_name, locations, ends, fibre in (
             (
@@ -379,7 +380,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "locations": ("FR2",),
         "ends": (("EQX-FR2-SDWAN-GW1", "eth0.1900"), ("eg-fr201", "Ethernet1/12.1900")),
         "carrier": (),
-        "ip_namespace": "PROD",
+        "security_zone": "PROD",
     },
     # C001's AWS handoff (08_interconnects/03_virtual_circuits/02_aws_prod_handoff.yml): the cage router's sub-interface
     # to the private virtual interface of the Direct Connect transport, authored by hand (a cloud end: no generated
@@ -389,7 +390,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "locations": ("FR2", "eu-central-1"),
         "ends": (("dx-30all-euc1-fr2", "dxcon-fr2.1000"), ("eg-fr201", "Ethernet1/13.1000")),
         "carrier": (),
-        "ip_namespace": "PROD",
+        "security_zone": "PROD",
     },
 }
 

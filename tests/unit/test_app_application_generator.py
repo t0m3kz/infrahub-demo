@@ -443,7 +443,7 @@ class TestReconcileApplicationRulesCloudEndpoints:
         assert gen._segment_policy.await_args.args[1] == "seg-seg-src-name-egress"
 
     def test_cloud_to_other_environment_is_refused_not_ruled(self) -> None:
-        """The prod/non-prod guard still applies to a cloud endpoint: no rule is written."""
+        """The prod/nonprod guard still applies to a cloud endpoint: no rule is written."""
         gen = self._make_gen_ready()
         app = self._single_port_app(dst_typename="CloudNetworkSegment")
         app["children"][0]["depends_on"][0]["target"]["network_segment"]["environment"] = "n"
@@ -642,7 +642,7 @@ class TestReconcileApplicationRulesPerPort:
 
 
 class TestReconcileApplicationRulesSegmentEnvironmentGuard:
-    """The prod/non-prod guard reads each segment's environment, so a flow onto a non-prod segment makes no rule."""
+    """The prod/nonprod guard reads each segment's environment, so a flow onto a nonprod segment makes no rule."""
 
     @staticmethod
     def _run(dst_env: str | None) -> Any:
@@ -659,7 +659,7 @@ class TestReconcileApplicationRulesSegmentEnvironmentGuard:
         return gen
 
     def test_prod_to_non_prod_segment_creates_no_rule(self) -> None:
-        """A prod source segment and a non-prod destination segment are never joined."""
+        """A prod source segment and a nonprod destination segment are never joined."""
         self._run("s")._reconcile_segment_rule.assert_not_awaited()
 
     def test_destination_segment_without_environment_creates_no_rule(self) -> None:
@@ -672,41 +672,18 @@ class TestReconcileApplicationRulesSegmentEnvironmentGuard:
 
 
 # ===========================================================================
-# TestReconcileApplicationRulesZonesAndFailures
+# TestReconcileApplicationRulesFailures
 # ===========================================================================
 
 
-class TestReconcileApplicationRulesZonesAndFailures:
-    """Zones are set before any rule is planned, and a failed rule fails the run."""
+class TestReconcileApplicationRulesFailures:
+    """A failed rule fails the run."""
 
     def _make_gen_ready(self) -> Any:
         gen = _make_gen()
         gen._ensure_segment_isolation_mode = AsyncMock()
         gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
         return gen
-
-    def test_zones_are_set_for_component_and_edge_target_segments_before_rules(self) -> None:
-        gen = self._make_gen_ready()
-        order: list[str] = []
-        gen._ensure_segment_zones = AsyncMock(side_effect=lambda segments: order.append("zones"))
-        gen._reconcile_segment_rule = AsyncMock(side_effect=lambda **kw: order.append("rule") or (True, False))
-        app = _app(_frontend(_dep(target=_backend(ports=["tcp/8443"]))))
-
-        asyncio.run(gen._reconcile_application_rules(app))
-
-        assert order == ["zones", "rule"]
-        zoned_ids = [seg["id"] for seg in gen._ensure_segment_zones.call_args.args[0]]
-        assert zoned_ids == ["seg-src", "seg-dst"]
-
-    def test_zone_failure_stops_the_application(self) -> None:
-        gen = self._make_gen_ready()
-        gen._ensure_segment_zones = AsyncMock(side_effect=LookupError("zone missing"))
-        gen._reconcile_segment_rule = AsyncMock()
-
-        with pytest.raises(LookupError):
-            asyncio.run(gen._reconcile_application_rules(_app(_frontend(_dep(target=_backend())))))
-
-        gen._reconcile_segment_rule.assert_not_awaited()
 
     def test_failed_rules_are_counted_all_ports_tried_then_the_run_fails(self) -> None:
         gen = self._make_gen_ready()

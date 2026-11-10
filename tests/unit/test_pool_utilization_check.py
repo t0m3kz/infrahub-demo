@@ -56,20 +56,18 @@ def _dc_child(prefix: str, pool_id: str | None = None, *, kind: str = "", name: 
     }
 
 
-def _address_pool(
-    pool_id: str, name: str, slice_: str, addresses: int, *, namespace: str = "default", slice_namespace: str = ""
-) -> dict[str, Any]:
+def _address_pool(pool_id: str, name: str, slice_: str, addresses: int) -> dict[str, Any]:
     return {
         "node": {
             "id": pool_id,
             "name": _value(name),
-            "ip_namespace": _named(namespace),
+            "ip_namespace": _named("default"),
             "resources": {
                 "edges": [
                     {
                         "node": {
                             "prefix": _value(slice_),
-                            "ip_namespace": _named(slice_namespace or namespace),
+                            "ip_namespace": _named("default"),
                             "ip_addresses": {"count": addresses},
                         }
                     }
@@ -142,14 +140,12 @@ def _payload(
                 ),
             ],
         ),
-        # The slice is a `default` prefix, the addresses are in MANAGEMENT: the hierarchy count is 0.
+        # Pool and slice share builtin default; the prefix's hierarchy supplies the count.
         "management_pool": _address_pool(
             "dc-management",
             "dc10-management-pool",
             "172.16.1.0/24",
-            0,
-            namespace="MANAGEMENT",
-            slice_namespace="default",
+            management_addresses,
         ),
     }
     management = [f"172.16.1.{host}/32" for host in range(1, management_addresses + 1)] + ["172.16.2.1/32"]
@@ -157,7 +153,10 @@ def _payload(
         "TopologyDataCenter": {"edges": [{"node": dc}]},
         "TopologyPod": {"edges": pods},
         "IpamIPAddress": {
-            "edges": [{"node": {"address": _value(a), "ip_namespace": _named("MANAGEMENT")}} for a in management]
+            "edges": [
+                {"node": {"address": _value(a), "ip_namespace": {"node": {"name": {"value": "default"}}}}}
+                for a in management
+            ]
         },
     }
 
@@ -187,7 +186,7 @@ class TestPoolUsages:
             ("dc10-technical-pool", 128, 16384),  # two nested /122 pod pools by their own size
             ("dc10-loopback-pool", 48, 1024),  # three /124 slices
             ("dc10-dc-fabric-loopback-pool", 4, 15),
-            ("dc10-management-pool", 24, 254),  # MANAGEMENT addresses inside the slice, IPv4 minus 2
+            ("dc10-management-pool", 24, 254),  # management slice's addresses, IPv4 minus 2
         ],
     )
     def test_used_and_capacity_per_pool(self, pool: str, used: int, capacity: int) -> None:
@@ -211,7 +210,7 @@ class TestPoolUsages:
         assert _usage(payload, "dc10-1-pod-1-loopback-pool").capacity == 14
 
     def test_management_addresses_outside_the_slice_are_ignored(self) -> None:
-        """Only MANAGEMENT addresses inside the pool's slice are counted (172.16.2.1 belongs to another DC)."""
+        """The slice's hierarchy excludes 172.16.2.1, even though the root address list also contains it."""
         assert _usage(_payload(management_addresses=3), "dc10-management-pool").used == 3
 
     def test_hierarchy_count_when_slice_shares_the_namespace(self) -> None:
@@ -220,6 +219,13 @@ class TestPoolUsages:
         dc = payload["TopologyDataCenter"]["edges"][0]["node"]
         dc["management_pool"] = _address_pool("dc-management", "dc10-management-pool", "172.16.1.0/24", 7)
         assert _usage(payload, "dc10-management-pool").used == 7
+
+    def test_empty_hierarchy_is_not_recounted_from_root_addresses(self) -> None:
+        """A same-namespace slice uses its hierarchy even when root addresses would give a larger count."""
+        payload = _payload()
+        dc = payload["TopologyDataCenter"]["edges"][0]["node"]
+        dc["management_pool"] = _address_pool("dc-management", "dc10-management-pool", "172.16.1.0/24", 0)
+        assert _usage(payload, "dc10-management-pool").used == 0
 
 
 class TestCheckPoolUtilization:

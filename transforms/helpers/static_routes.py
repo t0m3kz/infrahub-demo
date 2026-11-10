@@ -22,7 +22,7 @@ def get_static_routes(device_capabilities: list[dict[str, Any]] | None) -> list[
     for cap in device_capabilities or []:
         if cap.get("typename") != STATIC_ROUTE_KIND:
             continue
-        namespace = ((cap.get("vrf") or {}).get("namespace")) or {}
+        namespace = ((cap.get("vrf") or {}).get("security_zone")) or {}
         vrf = namespace.get("name")
         label = f"static route '{cap.get('name')}' ({cap['prefix']} via {cap['next_hop']})"
         # The templates render a static in a VRF with the default distance; refuse the rest rather than drop it.

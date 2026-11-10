@@ -133,8 +133,15 @@ def _payload(footprints: list[dict[str, Any]], vxlan: list[dict[str, Any]]) -> d
     ports: dict[str, dict[str, Any]] = {}
     for segment in vxlan:
         for port in segment["node"]["_ports"]:
-            row = ports.setdefault(port["node"]["id"], {"node": {**port["node"], "segments": {"edges": []}}})
-            row["node"]["segments"]["edges"].append({"node": {"id": segment["node"]["id"]}})
+            row = ports.setdefault(port["node"]["id"], {"node": {**port["node"], "capabilities": {"edges": []}}})
+            row["node"]["capabilities"]["edges"].append(
+                {
+                    "node": {
+                        "__typename": "ManagedSegmentVlan",
+                        "segment_deployment": {"node": {"segment": {"node": {"id": segment["node"]["id"]}}}},
+                    }
+                }
+            )
     return {
         "TopologyCustomerDC": {"edges": footprints},
         "ManagedVxlanSegment": {"edges": [_vxlan(s) for s in vxlan]},
@@ -195,12 +202,12 @@ class TestSegmentQuota:
 
     def test_exchange_zone_segment_is_not_counted(self) -> None:
         """The operator's shared DC-local service segment is no part of the customer's quota."""
-        segments = [_segment("s1", ["C005-P-DC10"]), _segment("infra", ["C005-P-DC10"], zone="MANAGEMENT-ZONE")]
+        segments = [_segment("s1", ["C005-P-DC10"]), _segment("infra", ["C005-P-DC10"], zone="MANAGEMENT")]
         assert _run([_footprint(max_segments=1)], segments) == []
 
     def test_tenant_zone_segment_is_counted(self) -> None:
-        """Only an exchange zone exempts: a PROD-ZONE segment counts."""
-        segments = [_segment("s1", ["C005-P-DC10"]), _segment("s2", ["C005-P-DC10"], zone="PROD-ZONE")]
+        """Only an exchange zone exempts: a PROD segment counts."""
+        segments = [_segment("s1", ["C005-P-DC10"]), _segment("s2", ["C005-P-DC10"], zone="PROD")]
         assert len(_run([_footprint(max_segments=1)], segments)) == 1
 
 
@@ -303,7 +310,7 @@ class TestPortQuota:
 
     def test_exchange_zone_segment_ports_are_not_counted(self) -> None:
         """The operator's infra servers' ports are not the customer's."""
-        segments = [_segment("infra", ["C005-P-DC10"], _port("a"), _port("b"), zone="MANAGEMENT-ZONE")]
+        segments = [_segment("infra", ["C005-P-DC10"], _port("a"), _port("b"), zone="MANAGEMENT")]
         assert _run([_footprint(ports_25g=0)], segments) == []
 
     def test_segment_and_port_errors_are_both_reported(self) -> None:
@@ -349,10 +356,13 @@ def test_check_and_query_are_registered() -> None:
 
 
 def test_query_reads_the_ports_from_the_port_side() -> None:
-    """The ports come from the physical and LAG roots (an edge present), joined to the segments by id."""
+    """The ports come from the physical and LAG roots (a capability present), their segments through their segment
+    deployments, joined to the segments by id."""
     compact = " ".join((_ROOT / "queries" / "validation" / "customer_quota.gql").read_text().split())
-    assert "DcimPhysicalInterface(segments__isnull: false)" in compact
-    assert "DcimLAGInterface(segments__isnull: false)" in compact
+    assert "DcimPhysicalInterface(capabilities__isnull: false)" in compact
+    assert "DcimLAGInterface(capabilities__isnull: false)" in compact
+    assert "... on ManagedSegmentVlan { segment_deployment { node { segment { node { id } } } } }" in compact
+    assert " segments { edges" not in compact
 
 
 @pytest.mark.parametrize("field", ["max_segments", "ports_25g", "ports_100g"])

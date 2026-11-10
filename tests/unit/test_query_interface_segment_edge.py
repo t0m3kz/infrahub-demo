@@ -1,8 +1,9 @@
-"""No config query selects a segment on an interface's ``capabilities`` edge.
+"""No config query selects a segment directly on an interface's ``capabilities`` edge.
 
-A segment on an interface is read from ``DcimSwitchedInterface.segments`` (switch port, LAG), never from
-``capabilities`` (transforms/helpers/segments.py interface_segments). The segment fragments below must not be spread at the node level
-of any ``capabilities`` selection of a query or fragment.
+A switch port (physical, LAG) is a member of its switch's VLAN ROW: the ManagedSegmentVlan among its ``capabilities``,
+whose deployment's ``segment`` the transforms read (transforms/helpers/segments.py interface_segments). A segment is
+never itself on the edge, so the segment fragments below must not be spread at the node level of any ``capabilities``
+selection of a query or fragment (only under the row deployment's ``segment``).
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ SEGMENT_FRAGMENTS = {
     "SegmentRulesFields",
     "SegmentSecurityPolicyFields",
 }
-INTERFACE_SEGMENT_FRAGMENTS = {"InterfaceSegmentsFields", "InterfaceCapabilitiesWithSegmentFields"}
+INTERFACE_SEGMENT_FRAGMENTS = {"InterfaceCapabilitiesWithSegmentFields"}
 
 
 def _definitions() -> dict[str, FragmentDefinitionNode]:
@@ -85,10 +86,24 @@ def test_no_query_selects_a_segment_under_a_capabilities_edge() -> None:
     assert offenders == []
 
 
-def test_the_interface_segments_fragment_reads_the_segments_edge() -> None:
-    """``InterfaceSegmentsFields`` selects ``segments`` on a switched interface."""
+def test_the_interface_fragment_reads_the_segment_of_the_port_row() -> None:
+    """``InterfaceCapabilitiesWithSegmentFields`` reads the row inside the interface's one plain ``capabilities``
+    selection, its VLAN and device, and the VNI and segment under its deployment."""
     text = (QUERIES / "fragments" / "interface_capability_fields.gql").read_text()
-    fragment = text[
-        text.index("fragment InterfaceSegmentsFields") : text.index("fragment InterfaceCapabilitiesWithSegmentFields")
+    start = text.index("fragment InterfaceCapabilitiesWithSegmentFields")
+    fragment = text[start : text.index("\nfragment ", start + 1)]
+    assert fragment.count("capabilities {") == 1
+    row = fragment[fragment.index("... on ManagedSegmentVlan") :]
+    assert "ManagedSegmentDeployment" not in fragment
+    assert all(field in row for field in ("vlan_id {", "device {", "segment_deployment {", "vni {", "segment {"))
+    assert "...NetworkSegmentFields" in row
+
+
+def test_no_query_selects_a_port_segments_edge() -> None:
+    """The port-to-segment edge is gone: no query or fragment selects ``segments`` under a switched interface."""
+    offenders = [
+        str(path.relative_to(QUERIES))
+        for path in sorted(QUERIES.rglob("*.gql"))
+        if "DcimSwitchedInterface" in path.read_text() or "segments__ids" in path.read_text()
     ]
-    assert "... on DcimSwitchedInterface" in fragment and "segments {" in fragment
+    assert offenders == []

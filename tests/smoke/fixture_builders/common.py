@@ -10,7 +10,15 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from tests.smoke.fixture_builders.vrf import with_vrf_objects
+from tests.smoke.fixture_builders.context_members import with_context_members
+from tests.smoke.fixture_builders.vrf import (
+    interface_vrf_capability,
+    routing_vrf,
+    routing_zone,
+    with_interface_vrfs,
+    with_vrf_objects,
+)
+from tests.smoke.fixture_builders.zone_migration import migrate_zone_owners
 from transforms.common import BaseDeviceTransform
 
 # ============================================================================
@@ -133,6 +141,7 @@ def _make_interface(
     remote_ip: str | None = None,
     remote_device: str | None = None,
     segments: list[dict] | None = None,
+    vlan_id: int | None = None,
 ) -> dict:
     iface: dict[str, Any] = {
         "__typename": typename,
@@ -141,6 +150,8 @@ def _make_interface(
         "status": _v("active"),
         "role": _v(role),
     }
+    if ns_name != "default":
+        iface.update(interface_vrf_capability(routing_vrf(ns_name)))
 
     if typename == "DcimPhysicalInterface":
         iface["interface_type"] = _v("10gbase-x-sfpp")
@@ -150,7 +161,7 @@ def _make_interface(
             iface["ip_address"] = _node(
                 {
                     "address": _v(ip_address),
-                    "ip_namespace": _node({"name": _v(ns_name)}),
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
                 }
             )
         else:
@@ -181,11 +192,13 @@ def _make_interface(
         else:
             iface["cable"] = _node(None)
     elif typename == "DcimVirtualInterface":
+        if vlan_id is not None:
+            iface["vlan_id"] = _v(vlan_id)
         if ip_address:
             iface["ip_address"] = _node(
                 {
                     "address": _v(ip_address),
-                    "ip_namespace": _node({"name": _v(ns_name)}),
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
                 }
             )
         else:
@@ -224,11 +237,24 @@ def _make_interface(
                 ),
             }
         )
-    # A switch port or LAG carries its segments on `segments` (transforms/helpers/segments.py interface_segments).
-    if typename != "DcimVirtualInterface" or segments:
-        iface["segments"] = _edges(segments or [])
-    iface["capabilities"] = _edges(services)
+    # A switch port or LAG carries a segment as a member of its switch's VLAN row, one of the port's `capabilities`
+    # (transforms/helpers/segments.py interface_segments).
+    iface["capabilities"] = _edges([*services, *_segment_memberships(segments or [])])
     return iface
+
+
+def _segment_memberships(segments: list[dict]) -> list[dict]:
+    """A port's capability entries for the segments it carries: its switch's VLAN row (ManagedSegmentVlan) of each,
+    with the segment under the row's deployment (queries/fragments/interface_capability_fields.gql
+    InterfaceCapabilitiesWithSegmentFields)."""
+    return [
+        {
+            "__typename": "ManagedSegmentVlan",
+            "id": f"sv-{segment.get('id')}",
+            "segment_deployment": _node({"id": f"sd-{segment.get('id')}", "segment": _node(segment)}),
+        }
+        for segment in segments
+    ]
 
 
 def _make_policy_rule(
@@ -288,7 +314,8 @@ def _make_segment_node(
     ``routing_identity`` is the (segment routing_tag, owner routing_tag) the fragment selects
     (queries/fragments/network_segment.gql); without it the node carries neither field, as before.
 
-    This is the shape that hangs off ``interfaces[].capabilities`` —
+    This is the shape that hangs off a port's segment deployment (``interfaces[].capabilities``, the ``segment`` of
+    a ManagedSegmentDeployment) —
     the ONLY place BaseDeviceTransform._collect_activations_from_interfaces
     looks for segments, and therefore the only path that produces VXLAN/EVPN
     output for leaf/tor/access-leaf roles.
@@ -299,22 +326,21 @@ def _make_segment_node(
     A segment with no row for the device is skipped entirely
     by the transform, so ``row_device_id`` must match or no VXLAN is rendered.
 
-    The VRF and its L3 VNI are reached ONLY via
-    ``gateway.ip_prefix.ip_namespace`` (see utils.segment_addressing.segment_namespace and
-    _get_segment_gateways in transforms/helpers/segments.py). A flat
-    ``segment.prefix`` key — which this generator used to emit — is read by
-    nothing, which is why no fixture ever rendered a VRF or an L3 VNI.
-    See queries/fragments/network_segment.gql's NetworkSegmentFields.
+    The routing authority is the segment's explicit ``security_zone``.
+    ``gateway.ip_prefix`` supplies its subnet, whose IPAM identity is always
+    ``default`` and does not select the VRF.
     """
+    if ns_name == "default":
+        ns_name = "PROD"
+        l3_vni = 60000
     seg: dict[str, Any] = {"id": f"seg-{seg_name}"}
 
     if isolation_mode is not None:
         seg["isolation_mode"] = _v(isolation_mode)
 
-    security_zone_node = _node(None)
+    security_zone_node = _node(routing_zone(ns_name, l3_vni=l3_vni, vrf_type="prod"))
 
-    # gateway.ip_prefix carries the segment's subnet and its IpamNamespace (the
-    # VRF). Derive the prefix from the gateway address so the two stay coherent.
+    # Derive the subnet from its gateway; IPAM identity is not routing authority.
     gateway_node: dict[str, Any] | None = None
     if gateway_ip:
         iface = ipaddress.ip_interface(gateway_ip)
@@ -323,7 +349,7 @@ def _make_segment_node(
             "ip_prefix": _node(
                 {
                     "prefix": _v(str(iface.network)),
-                    "ip_namespace": _node({"name": _v(ns_name), "l3_vni": _v(l3_vni)}),
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
                 }
             ),
         }
@@ -413,6 +439,7 @@ def run_transform(transform_cls: type, data: dict) -> str:
 
     The unit tests that build their own device data go through here too (the hook is idempotent).
     """
+    data = with_context_members(with_interface_vrfs(migrate_zone_owners(data)))
     instance = make_transform(transform_cls)
     if isinstance(instance, BaseDeviceTransform):
         data = with_vrf_objects(instance, data)
@@ -422,12 +449,14 @@ def run_transform(transform_cls: type, data: dict) -> str:
 def _write_data_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple[int, int]:
     """Write `data` as input.json and its rendered config as output.txt.
 
-    The one hook every writer goes through: a device that carries VRFs gets the ManagedVRF memberships (`shared_capabilities`) and SVI
-    objects its config demands appended to the input first (tests/smoke/fixture_builders/vrf.py), the way the
-    VRF generator leaves them in the model.
+    The one hook every writer goes through: the nested service data (`DeviceServices`) is derived from what the builder
+    declares (tests/smoke/fixture_builders/derived_services.py), then a device that carries VRFs gets the ManagedVRF
+    memberships (`shared_capabilities`) and SVI objects its config demands appended to the input
+    (tests/smoke/fixture_builders/vrf.py), the way the VRF generator leaves them in the model.
     """
     test_dir = SMOKE_DIR / dir_name
     test_dir.mkdir(parents=True, exist_ok=True)
+    data = with_context_members(with_interface_vrfs(migrate_zone_owners(data)))
 
     try:
         instance = make_transform(transform_cls)

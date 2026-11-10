@@ -1,0 +1,10 @@
+# One active-passive internal pair, with an unused HA group ID.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallHA
+  data:
+    - name: gdn1-fw-ha
+      group_id: 5
+      mode: active-passive
+      capabilities: [gdn1-fw-01, gdn1-fw-02]

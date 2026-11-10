@@ -1,23 +1,23 @@
-"""The public IPv4 space of the INTERNET namespace: what the edge announces to an upstream transit session."""
+"""Explicit native upstream origination, distinct from public-service reachability."""
 
 from collections.abc import Iterable
 from ipaddress import ip_address
 from typing import Any
 
+from utils.routing_domain import RoutingDomainError, resolve_security_zone
 
-def get_internet_prefixes(prefixes: list[dict[str, Any]] | None) -> list[str]:
-    """IPv4 public prefixes of the namespace_type internet namespace, sorted.
 
-    ``prefixes`` is the cleaned IpamPrefix(role public) query root; the edge
-    announces exactly these upstream (aggregate + RM-TRANSIT-OUT).
-    """
-    found = {
-        p["prefix"]
-        for p in prefixes or []
-        if p.get("prefix")
-        and ":" not in p["prefix"]
-        and (p.get("ip_namespace") or {}).get("namespace_type") == "internet"
-    }
+def get_internet_prefixes(circuits: list[dict[str, Any]] | None) -> list[str]:
+    """IPv4 origins explicitly registered on INTERNET session circuits, sorted."""
+    found: set[str] = set()
+    for circuit in circuits or []:
+        prefixes = circuit.get("originated_prefixes") or []
+        if not prefixes:
+            continue
+        zone = resolve_security_zone([circuit], required=True, label=str(circuit.get("name") or "public origin"))
+        if zone.get("vrf_type") != "internet":
+            raise RoutingDomainError("public origin: originated prefixes require an INTERNET circuit")
+        found.update(p["prefix"] for p in prefixes if p.get("prefix") and ":" not in p["prefix"])
     return sorted_prefixes(found)
 
 

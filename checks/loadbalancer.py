@@ -6,12 +6,13 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
+from utils.service_contexts import leg_interfaces
 
 from .common import validate_appliance
 
 
 def validate_loadbalancer_contexts(device: dict[str, Any]) -> list[str]:
-    """Errors in the contexts the device's HA cluster hosts: leg, VIP range, VIPs and their pool members.
+    """Errors in the contexts the device is a member of: leg, VIP range, VIPs and their pool members.
 
     A context is complete when it has its VLAN and VIP range, this device has a leg of it (a sub-interface with an
     address), and every VIP sits inside the range and balances across at least one member. A context with no VIP
@@ -19,8 +20,8 @@ def validate_loadbalancer_contexts(device: dict[str, Any]) -> list[str]:
     """
     errors: list[str] = []
     device_name = device.get("name", "Unknown")
-    clusters = [c for c in (device.get("capabilities") or []) if c.get("typename") == "ManagedLoadbalancerHA"]
-    for context in clusters[0].get("contexts") or [] if clusters else []:
+    members_of = device.get("shared_capabilities") or []
+    for context in (c for c in members_of if c.get("typename") == "ManagedLoadbalancerContext"):
         label = f"Context '{context.get('name')}' on '{device_name}'"
         if not context.get("vlan_id"):
             errors.append(f"{label} has no leg VLAN")
@@ -28,11 +29,9 @@ def validate_loadbalancer_contexts(device: dict[str, Any]) -> list[str]:
         if not vip_prefix:
             errors.append(f"{label} has no VIP range")
         legs = [
-            cap
-            for cap in (context.get("capabilities") or [])
-            if cap.get("typename") == "DcimVirtualInterface"
-            and (cap.get("device") or {}).get("name") == device_name
-            and (cap.get("ip_address") or {}).get("address")
+            leg
+            for leg in leg_interfaces(device).get(context.get("id"), [])
+            if leg.get("typename") == "DcimVirtualInterface" and (leg.get("ip_address") or {}).get("address")
         ]
         if not legs:
             errors.append(f"{label} has no leg sub-interface with an address on this device")

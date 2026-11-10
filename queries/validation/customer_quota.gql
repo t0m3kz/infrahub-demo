@@ -3,8 +3,9 @@
 #   - TopologyCustomerDC: the design's quota (max_segments, ports_<speed>g) and
 #     the DC the footprint hangs off (a port counts for a footprint only in its DC).
 #   - ManagedVxlanSegment: the footprints each names.
-#   - DcimPhysicalInterface / DcimLAGInterface with a `segments` edge: the switch ports tagged with a segment (the edge
-#     is one-sided, read from the port; the check joins them to the segments by id). A port's speed is its
+#   - DcimPhysicalInterface / DcimLAGInterface with capabilities: the switch ports tagged with a segment (a VLAN row,
+#     ManagedSegmentVlan, of it among the port's `capabilities`, read from the port, the segment through the row's
+#     deployment; the check joins them to the segments by id). A port's speed is its
 #     interface_type; a port-channel carries its member ports' speeds. role tells the host-facing ports from the
 #     border-leaf firewall/load-balancer ports (where a segment terminated on a firewall context is tagged).
 #     The device's deployment (a pod, a colocation zone) is how the port is placed
@@ -36,32 +37,32 @@ query customer_quota {
       node {
         id
         name { value }
-        security_zone { node { name { value } } }
+        security_zone { node { ...RoutingZoneFields } }
         customer_deployments { edges { node { id name { value } } } }
       }
     }
   }
 
-  DcimPhysicalInterface(segments__isnull: false) {
+  DcimPhysicalInterface(capabilities__isnull: false) {
     edges {
       node {
         id
         __typename
         ...QuotaPortFields
         interface_type { value }
-        segments { edges { node { id } } }
+        capabilities { edges { node { __typename ... on ManagedSegmentVlan { segment_deployment { node { segment { node { id } } } } } } } }
       }
     }
   }
 
-  DcimLAGInterface(segments__isnull: false) {
+  DcimLAGInterface(capabilities__isnull: false) {
     edges {
       node {
         id
         __typename
         ...QuotaPortFields
         member_interfaces { edges { node { id interface_type { value } } } }
-        segments { edges { node { id } } }
+        capabilities { edges { node { __typename ... on ManagedSegmentVlan { segment_deployment { node { segment { node { id } } } } } } } }
       }
     }
   }

@@ -6,10 +6,124 @@ import copy
 from pathlib import Path
 from typing import Any
 
+from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
+from tests.unit.segment_port_helpers import raw_deployment_edges, raw_port_segments
 from transforms.config.firewall import Firewall
 
 # Project root — needed to point root_directory at the real templates/
 ROOT = str(Path(__file__).parent.parent.parent)
+
+_LEG_NAMESPACES = {
+    "prod": ("PROD", "100.66.0.5/29", 3000),
+    "non_prod": ("NONPROD", "100.66.16.5/29", 3200),
+    "internet": ("INTERNET", "100.66.32.5/29", 3400),
+}
+
+
+def _leg_interface(ns_type: str) -> dict[str, Any]:
+    """A raw addressed transit leg: ``eth1.<transit VLAN>`` of the HA-owned context."""
+    ns_name, address, vlan = _LEG_NAMESPACES[ns_type]
+    return {
+        **interface_vrf_capability(routing_vrf(ns_name)),
+        "__typename": {"value": "DcimVirtualInterface"},
+        "name": {"value": f"eth1.{vlan}"},
+        "vlan_id": {"value": vlan},
+        "description": {"value": None},
+        "status": {"value": "active"},
+        "role": {"value": None},
+        "device": {"node": {"id": "dev-fw"}},
+        "parent_interface": {"node": {"name": {"value": "eth1"}, "device": {"node": {"id": "dev-fw"}}}},
+        "ip_address": {
+            "node": {
+                "address": {"value": address},
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
+        },
+        "ha_domain": {"node": None},
+        "capabilities": {"edges": []},
+    }
+
+
+def _uplink_interface() -> dict[str, Any]:
+    """The physical trunk the context legs are sub-interfaces of (utils/service_contexts.py)."""
+    return {
+        "__typename": "DcimPhysicalInterface",
+        "name": {"value": "eth1"},
+        "role": {"value": "uplink"},
+        "description": {"value": None},
+        "status": {"value": "active"},
+        "ip_address": {"node": None},
+        "capabilities": {"edges": []},
+    }
+
+
+def _make_exchange_data(platform: str, *, ns_types: tuple[str, ...]) -> dict[str, Any]:
+    """Shared HA context with nested served segments and namespace transit legs."""
+    data = _make_smoke_data(platform)
+    device = data["DcimPhysicalDevice"]["edges"][0]["node"]
+    device["name"] = {"value": "dc11-fw-01"}
+    device["interfaces"]["edges"] = [{"node": _uplink_interface()}, *({"node": _leg_interface(ns)} for ns in ns_types)]
+
+    def segment(name: str, segment_id: str, prefix: str) -> dict[str, Any]:
+        return {
+            "id": segment_id,
+            "gateway": {"node": {"ip_prefix": {"node": {"prefix": {"value": prefix}}}}},
+            "security_zone": {
+                "node": {
+                    "name": {"value": name},
+                    "trust_level": {"value": 50},
+                    "description": {"value": ""},
+                }
+            },
+        }
+
+    context = {
+        "__typename": "ManagedFirewallContext",
+        "id": "ctx-shared",
+        "name": {"value": "dc11-fw-shared"},
+        "vlan_id": {"value": 3000},
+        "context_id": {"value": None},
+        "tenant": {"node": None},
+        "served_deployments": {
+            "edges": [
+                {
+                    "node": {
+                        "id": "dep-1",
+                        "network_segments": {
+                            "edges": [
+                                {"node": segment("PROD", "seg-prod", "10.1.0.0/24")},
+                                {"node": segment("NONPROD", "seg-nonprod", "10.2.0.0/24")},
+                            ]
+                        },
+                    }
+                }
+            ]
+        },
+    }
+    device["capabilities"] = {
+        "edges": [
+            {
+                "node": {
+                    "__typename": "ManagedFirewallHA",
+                    "name": {"value": "dc11-fw-ha"},
+                    "group_id": {"value": 1},
+                    "mode": {"value": "active-passive"},
+                    "priority": {"value": 100},
+                    "preempt": {"value": False},
+                    "ha_timer": {"value": "standard"},
+                    "capabilities": {
+                        "edges": [
+                            {"node": {"name": {"value": "dc11-fw-01"}}},
+                            {"node": {"name": {"value": "dc11-fw-02"}}},
+                        ]
+                    },
+                }
+            }
+        ]
+    }
+    device["shared_capabilities"] = {"edges": [{"node": context}]}
+    data.pop("SecurityZone", None)
+    return data
 
 
 def _make_fw() -> Firewall:
@@ -50,7 +164,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
                 {
                     "node": {
                         "prefix": {"value": "10.10.10.0/24"},
-                        "ip_namespace": {"node": {"name": {"value": "VRF-SMOKE"}, "l3_vni": {"value": None}}},
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
                     }
                 }
             ]
@@ -58,6 +172,8 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
         "security_zone": {
             "node": {
                 "name": {"value": "internal"},
+                "vrf_type": {"value": "prod"},
+                "l3_vni": {"value": 60000},
                 "trust_level": {"value": 100},
             }
         },
@@ -97,21 +213,23 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
 
     # FW interface with IP — zone and policies come from the interface's segments
     fw_iface_node: dict[str, Any] = {
+        **interface_vrf_capability(routing_vrf(seg_node["security_zone"]["node"]["name"]["value"])),
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth0.100"},
+        "vlan_id": {"value": 100},
         "description": {"value": "Smoke test interface"},
         "status": {"value": "active"},
         "role": {"value": None},
-        "parent_interface": {"node": {"name": {"value": "eth0"}}},
+        "device": {"node": {"id": "dev-fw"}},
+        "parent_interface": {"node": {"name": {"value": "eth0"}, "device": {"node": {"id": "dev-fw"}}}},
         "ip_address": {
             "node": {
                 "address": {"value": "10.99.99.1/30"},
-                "ip_namespace": {"node": {"name": {"value": "VRF-SMOKE"}}},
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         },
         "ha_domain": {"node": None},
-        "segments": {"edges": [{"node": seg_node}]},
-        "capabilities": {"edges": []},
+        "capabilities": {"edges": raw_deployment_edges(seg_node)},
     }
 
     # Zone also exposed as a top-level SecurityZone root
@@ -164,7 +282,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
 def _smoke_segment(data: dict[str, Any]) -> dict[str, Any]:
     """The segment the smoke firewall carries on eth0.100."""
     iface = data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"][0]["node"]
-    return iface["segments"]["edges"][0]["node"]
+    return raw_port_segments(iface)[0]
 
 
 def _add_segment_rule(data: dict[str, Any], rule_node: dict[str, Any]) -> None:
@@ -206,38 +324,38 @@ def _make_context_smoke_data(platform: str, *, serves_segment: bool) -> dict[str
     context_iface: dict[str, Any] = {
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth1.3005"},
+        "vlan_id": {"value": 3005},
         "description": {"value": None},
         "status": {"value": "active"},
         "role": {"value": None},
-        "parent_interface": {"node": {"name": {"value": "eth1"}}},
-        "ip_address": {"node": {"address": {"value": "100.65.0.4/31"}, "ip_namespace": {"node": None}}},
+        "device": {"node": {"id": "dev-fw"}},
+        "parent_interface": {"node": {"name": {"value": "eth1"}, "device": {"node": {"id": "dev-fw"}}}},
+        "ip_address": {
+            "node": {"address": {"value": "100.65.0.4/31"}, "ip_namespace": {"node": {"name": {"value": "default"}}}}
+        },
         "ha_domain": {"node": None},
-        "capabilities": {
+        "capabilities": {"edges": []},
+    }
+    context = {
+        "__typename": "ManagedFirewallContext",
+        "id": "ctx-c005",
+        "name": {"value": "c005-dedicated"},
+        "vlan_id": {"value": 3005},
+        "context_id": {"value": None},
+        "tenant": {"node": {"id": "dep-c005", "name": {"value": "C005-P-DC12"}}},
+        "served_deployments": {
             "edges": [
                 {
                     "node": {
-                        "__typename": "ManagedFirewallContext",
-                        "id": "ctx-c005",
-                        "name": {"value": "c005-dedicated"},
-                        "vlan_id": {"value": 3005},
-                        "context_id": {"value": None},
-                        "tenant": {"node": {"id": "dep-c005", "name": {"value": "C005-P-DC12"}}},
-                        "served_deployments": {
-                            "edges": [
-                                {
-                                    "node": {
-                                        "id": "dep-c005",
-                                        "network_segments": {
-                                            "edges": [{"node": served_segment}] if serves_segment else []
-                                        },
-                                    }
-                                }
-                            ]
-                        },
+                        "id": "dep-c005",
+                        "network_segments": {"edges": [{"node": served_segment}] if serves_segment else []},
                     }
                 }
             ]
         },
     }
+    # The firewall is a member of the context and its leg is `<uplink>.<VLAN>` of the uplink trunk.
+    device.setdefault("shared_capabilities", {"edges": []})["edges"].append({"node": context})
+    device["interfaces"]["edges"].append({"node": _uplink_interface()})
     device["interfaces"]["edges"].append({"node": context_iface})
     return data

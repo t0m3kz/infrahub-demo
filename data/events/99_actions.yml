@@ -210,6 +210,23 @@ spec:
           - relationship_name: terminated_on
             modification_type: updated
 
+    # Re-run the segment reconcile when a port is assigned to, or withdrawn from, a segment deployment (its
+    # `capabilities`, the request): the reconcile gives the port its switch's VLAN row. An edit of the edge from either
+    # side (the port or the deployment) fires `updated` on both nodes (measured on 1.11.9). The target is the
+    # deployment, a member of segment_deployments (add_vxlan_segment adds every deployment it builds; a data file that
+    # authors one declares it). The reconcile writes the port -> ROW edge, never this one, so its run raises no event
+    # of this rule.
+    - name: trigger-segment-deployment-ports-updated
+      branch_scope: "other_branches"
+      node_kind: ManagedSegmentDeployment
+      mutation_action: "updated"
+      action: run-segment-deployment-ports-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: capabilities
+            modification_type: updated
+
     # Re-run generator when stretch_scope changes (e.g. local -> dc_pair) —
     # it picks the VNI identifier strategy (per-deployment vs shared, see
     # generators/topology/segment.py's _activate_segment_in_deployment), so a
@@ -614,7 +631,7 @@ spec:
     # One set of rules for the one kind, none on a generic: a rule on a generic node_kind is unprobed here, a
     # per-kind rule is the shape every rule in this file uses.
     # Each `updated` rule watches what the generator reads and nothing it writes: `capabilities` (the ends, hence
-    # the carrier), `status`, and for a handoff its `ip_namespace` (the pool) and `password`
+    # the carrier), `status`, and for a handoff its `vrf` (the routing instance) and `password`
     # (those two fire for a dci or a tunnel too, which never sets them: harmless).
     # A carrier's change reaches the circuits through add_circuit, which fans out here (generators/topology/circuit.py).
 
@@ -640,7 +657,7 @@ spec:
           - attribute_name: status
             value_match: any
 
-    - name: trigger-session-circuit-on-namespace-updated
+    - name: trigger-session-circuit-on-vrf-updated
       branch_scope: "other_branches"
       node_kind: TopologySessionCircuit
       mutation_action: "updated"
@@ -648,7 +665,7 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: ip_namespace
+          - relationship_name: vrf
             modification_type: updated
 
     - name: trigger-session-circuit-on-password-updated
@@ -679,10 +696,11 @@ spec:
           - attribute_name: panel_type
             value_match: any
 
-    # A context is built in steps (VLAN, SNAT or VIP prefix, legs, then its border ports are tagged last): a route needs
-    # the whole of it, so every change of its capabilities re-runs the route generator (an incomplete context writes
-    # nothing). Both kinds are members of service_contexts.
-    - name: trigger-firewall-context-routes-on-capabilities
+    # A context is built in steps (VLAN, SNAT or VIP prefix, then its legs): a route needs the whole of it, so the
+    # context joins service_contexts (the group trigger of add_context_routes) only once its legs are written
+    # (generators/firewall_context.py). Its legs and border ports are derived from its members (a context has no
+    # interface edge), so a change of its members re-runs the route generator (an incomplete context writes nothing).
+    - name: trigger-firewall-context-routes-on-members
       branch_scope: "other_branches"
       node_kind: ManagedFirewallContext
       mutation_action: "updated"
@@ -690,10 +708,10 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: capabilities
+          - relationship_name: shared_devices
             modification_type: updated
 
-    - name: trigger-loadbalancer-context-routes-on-capabilities
+    - name: trigger-loadbalancer-context-routes-on-members
       branch_scope: "other_branches"
       node_kind: ManagedLoadbalancerContext
       mutation_action: "updated"
@@ -701,5 +719,5 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: capabilities
+          - relationship_name: shared_devices
             modification_type: updated

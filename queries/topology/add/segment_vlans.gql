@@ -8,16 +8,17 @@
 #     sits in, so a device is mapped to a deployment through its own
 #     `deployment` (the hosting parent or one of its children, see
 #     _device_deployment_ids).
-#   - DcimPhysicalInterface / DcimLAGInterface (segments__ids): the switch ports carrying the segment, read from the
-#     port (the edge is one-sided); their devices need a row. `properties { source { id } }` is who wrote the
-#     port's edge to this segment (none: a person did): the reconcile removes only its own. The reader takes the
-#     ports from the raw response, because clean_data drops `properties`.
+#   - capabilities: the ports assigned to each deployment, a person's request to carry the segment there (they need a
+#     row, like the ports the components derive).
+#   - the member switch ports are NOT read here: a port is a member of its switch's VLAN ROW (its interface
+#     `capabilities`), so they are read once the rows are known (generators/segment_vlan.py SEGMENT_PORTS_QUERY).
 #   - each row's device (the devices whose VRF instances and SVIs follow the rows).
 #   - stretch_scope + customer_deployments' hosting parents: a stretched
 #     segment's border gateways need it too (same shape as vxlan_segment.gql)
-#   - terminated_on: the firewall context terminating the segment and its `capabilities`, among which the border
-#     service ports (role firewall, a physical port or a LAG of the border leaf) facing its HA pair: those carry the
-#     segment as a VLAN like a customer port does (SegmentPortTagMixin).
+#   - terminated_on: the firewall context terminating the segment and its members' uplinks with their cables: the
+#     border service ports (role firewall) those are cabled to face its HA pair (utils/service_contexts.py
+#     member_border_ports: a context has no interface edge) and carry the segment as a VLAN like a customer port does
+#     (SegmentPortTagMixin).
 query segment_vlans($segment_id: ID!) {
   ManagedVxlanSegment(ids: [$segment_id]) {
     edges {
@@ -28,12 +29,29 @@ query segment_vlans($segment_id: ID!) {
         terminated_on {
           node {
             id
-            capabilities {
+            shared_devices {
               edges {
                 node {
                   __typename
                   id
+                  name { value }
                   role { value }
+                  ... on DcimDevice {
+                    interfaces(role__values: ["uplink"]) {
+                      edges {
+                        node {
+                          __typename
+                          id
+                          name { value }
+                          role { value }
+                          ...ServiceMemberCableFields
+                          ... on DcimVirtualInterface {
+                            parent_interface { node { id ...ServiceMemberCableFields } }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -88,6 +106,7 @@ query segment_vlans($segment_id: ID!) {
         id
         vni { value }
         deployment { node { id } }
+        capabilities { edges { node { id __typename } } }
         vlans {
           edges {
             node {
@@ -95,34 +114,6 @@ query segment_vlans($segment_id: ID!) {
               vlan_id { value }
               device { node { id } }
             }
-          }
-        }
-      }
-    }
-  }
-  DcimPhysicalInterface(segments__ids: [$segment_id]) {
-    edges {
-      node {
-        id
-        device { node { id } }
-        segments(ids: [$segment_id]) {
-          edges {
-            properties { source { id } }
-            node { id }
-          }
-        }
-      }
-    }
-  }
-  DcimLAGInterface(segments__ids: [$segment_id]) {
-    edges {
-      node {
-        id
-        device { node { id } }
-        segments(ids: [$segment_id]) {
-          edges {
-            properties { source { id } }
-            node { id }
           }
         }
       }

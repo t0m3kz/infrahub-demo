@@ -25,6 +25,7 @@ spec:
           data:
             customer_name: "web-frontend-local-dc10"
             environment: "p"
+            security_zone: "PROD"
             customer_deployments:
               - "C005-P-DC10"
             member_of_groups:
@@ -34,6 +35,7 @@ spec:
           data:
             customer_name: "app-backend-stretch"
             environment: "p"
+            security_zone: "PROD"
             stretch_scope: dc_pair
             # No explicit isolation_mode: AppApplicationGenerator derives
             # microsegmented for it (see _ensure_segment_isolation_mode) since
@@ -53,6 +55,7 @@ spec:
           data:
             customer_name: "database-local-dc12"
             environment: "p"
+            security_zone: "PROD"
             customer_deployments:
               - "C005-P-DC12"
             member_of_groups:
@@ -62,6 +65,7 @@ spec:
           data:
             customer_name: "message-queue-stretch"
             environment: "p"
+            security_zone: "PROD"
             stretch_scope: dc_pair
             customer_deployments:
               - "C005-P-DC10"
@@ -82,6 +86,7 @@ spec:
           data:
             customer_name: "colo-services-stretch"
             environment: "p"
+            security_zone: "PROD"
             stretch_scope: global
             customer_deployments:
               - "C005-P-DC10"
@@ -100,6 +105,7 @@ spec:
           data:
             customer_name: "firewalled-dc10"
             environment: "p"
+            security_zone: "PROD"
             terminated_on: "shared-fw-dc10101-fw-dc10102-prod"
             customer_deployments:
               - "C005-P-DC10"
@@ -114,6 +120,7 @@ spec:
           data:
             customer_name: "office-lan"
             environment: "p"
+            security_zone: "PROD"
             customer_deployments:
               - "C005-OFFICE"
             member_of_groups:

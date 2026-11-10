@@ -71,7 +71,7 @@ class TransitPolicyGenerator(CommonGenerator):
         if not peerings:
             self.fail(f"No {self.graphql_root_key} data in GraphQL response")
         peering = peerings[0]
-        spec = transit_spec(get_internet_prefixes(cleaned.get("IpamPrefix")))
+        spec = transit_spec(get_internet_prefixes(cleaned.get("public_origins")))
         prefix_lists = {item["name"]: await self._write_prefix_list(item) for item in spec["prefix_lists"]}
         community_lists = {
             item["name"]: (await self._save("RoutingCommunityList", item)).id for item in spec["community_lists"]

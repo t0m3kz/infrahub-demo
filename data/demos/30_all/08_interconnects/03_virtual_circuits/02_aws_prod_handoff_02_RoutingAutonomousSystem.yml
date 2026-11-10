@@ -1,0 +1,8 @@
+# The Amazon side of the Direct Connect gateway: a 2-byte private ASN, clear of the 4-byte fabric ASNs.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 64512
+      description: "AWS Direct Connect gateway AS (Amazon side)"

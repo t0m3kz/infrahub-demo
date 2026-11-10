@@ -1,0 +1,46 @@
+---
+# The interfaces of each VRF instance of PAR: an interface is in a VRF as one of the instance's
+# `capabilities` (the interface edge, schemas/extensions/capabilities/vrf.yml). An upsert of that list replaces
+# it, so each instance's whole list is here, once, after every interface it names is loaded (90_bindings loads
+# last). The instances themselves and their members are declared with the topology.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "par-vrf-internet"
+      deployment: "PAR"
+      security_zone: "INTERNET"
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data: {device: par-colo1-edge-01, name: "Ethernet1/14"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-01, name: "ethernet1/1.3401"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-02, name: "ethernet1/1.3401"}
+    - name: "par-vrf-prod"
+      deployment: "PAR"
+      security_zone: "PROD"
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-edge-01, name: "Ethernet1/1.200"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-edge-01, name: "Ethernet1/1.201"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-edge-01, name: "Ethernet1/1.400"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-edge-01, name: "Ethernet1/3.1000"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-edge-01, name: "Ethernet1/3.1100"}
+        - kind: DcimPhysicalInterface
+          data: {device: par-colo1-edge-01, name: "Ethernet1/5"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-edge-01, name: "Ethernet1/6.300"}
+        - kind: DcimPhysicalInterface
+          data: {device: par-colo1-srv-01, name: "eno1"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-01, name: "ethernet1/1.3001"}
+        - kind: DcimPhysicalInterface
+          data: {device: par-colo1-xfw-01, name: "ethernet1/2"}
+        - kind: DcimVirtualInterface
+          data: {device: par-colo1-xfw-02, name: "ethernet1/1.3001"}

@@ -153,8 +153,8 @@ class TestL2FromActivations:
 # ===========================================================================
 
 
-def _vrf(name: str, l3_vni: int | None, namespace_type: str = "prod") -> dict:
-    return {"name": name, "l3_vni": l3_vni, "namespace_type": namespace_type}
+def _vrf(name: str, l3_vni: int | None, vrf_type: str = "prod") -> dict:
+    return {"name": name, "l3_vni": l3_vni, "vrf_type": vrf_type}
 
 
 class TestL3Instances:

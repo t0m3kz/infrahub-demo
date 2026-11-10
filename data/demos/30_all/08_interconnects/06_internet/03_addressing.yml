@@ -1,8 +1,7 @@
----
-# Transit link addressing, in the INTERNET namespace: an address there is what
+# Transit link addressing in default IPAM; the ports' explicit INTERNET zone
 # makes transforms/helpers/bgp.py render the session under `vrf INTERNET` on the
 # cage edge, so the internet table never mixes with the default VRF's DCI
-# underlay or with PROD/NON-PROD.
+# underlay or with PROD/NONPROD.
 #
 # 203.0.113.0/24 (TEST-NET-3) stands in for the ISP-assigned /31s. The ISP
 # takes the even address of each /31, as carriers usually do on a handoff.
@@ -14,95 +13,20 @@ spec:
     - prefix: "203.0.113.0/24"
       description: "Transit handoffs to the internet ISPs (ISP-assigned /31s)"
       status: active
-      ip_namespace: "INTERNET"
+      ip_namespace: "default"
     - prefix: "203.0.113.0/31"
       description: "EXT-LUMEN-FRA1 <-> eg-fr201 transit"
       status: active
-      ip_namespace: "INTERNET"
+      ip_namespace: "default"
     - prefix: "203.0.113.2/31"
       description: "EXT-COGENT-FRA1 <-> eg-fr202 transit"
       status: active
-      ip_namespace: "INTERNET"
+      ip_namespace: "default"
     - prefix: "203.0.113.4/31"
       description: "EXT-LUMEN-PAR1 <-> eg-pa401 transit"
       status: active
-      ip_namespace: "INTERNET"
+      ip_namespace: "default"
     - prefix: "203.0.113.6/31"
       description: "EXT-COGENT-PAR1 <-> eg-pa402 transit"
       status: active
-      ip_namespace: "INTERNET"
----
-# Ethernet1/14 is the second `uplink` port on each cage edge; Ethernet1/13 is
-# already the cloud cross-connect on eg-fr201 (AWS) and eg-pa401 (Azure), so 1/14
-# is the one that is free on all four. The ISP side is the first customer port
-# on its provider edge.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: DcimPhysicalInterface
-  data:
-    - name: "Ethernet1/14"
-      device: "eg-fr201"
-      status: active
-      description: "Internet transit to Lumen (EXT-LUMEN-FRA1)"
-      ip_address:
-        data:
-          address: "203.0.113.1/31"
-          ip_namespace: "INTERNET"
-    - name: "Ethernet1/14"
-      device: "eg-fr202"
-      status: active
-      description: "Internet transit to Cogent (EXT-COGENT-FRA1)"
-      ip_address:
-        data:
-          address: "203.0.113.3/31"
-          ip_namespace: "INTERNET"
-    - name: "Ethernet1/14"
-      device: "eg-pa401"
-      status: active
-      description: "Internet transit to Lumen (EXT-LUMEN-PAR1)"
-      ip_address:
-        data:
-          address: "203.0.113.5/31"
-          ip_namespace: "INTERNET"
-    - name: "Ethernet1/14"
-      device: "eg-pa402"
-      status: active
-      description: "Internet transit to Cogent (EXT-COGENT-PAR1)"
-      ip_address:
-        data:
-          address: "203.0.113.7/31"
-          ip_namespace: "INTERNET"
-
-    - name: "et-0/0/0"
-      device: "EXT-LUMEN-FRA1"
-      status: active
-      description: "Transit customer: Equinix FR cage (eg-fr201)"
-      ip_address:
-        data:
-          address: "203.0.113.0/31"
-          ip_namespace: "INTERNET"
-    - name: "et-0/0/0"
-      device: "EXT-COGENT-FRA1"
-      status: active
-      description: "Transit customer: Equinix FR cage (eg-fr202)"
-      ip_address:
-        data:
-          address: "203.0.113.2/31"
-          ip_namespace: "INTERNET"
-    - name: "et-0/0/0"
-      device: "EXT-LUMEN-PAR1"
-      status: active
-      description: "Transit customer: Equinix PA cage (eg-pa401)"
-      ip_address:
-        data:
-          address: "203.0.113.4/31"
-          ip_namespace: "INTERNET"
-    - name: "et-0/0/0"
-      device: "EXT-COGENT-PAR1"
-      status: active
-      description: "Transit customer: Equinix PA cage (eg-pa402)"
-      ip_address:
-        data:
-          address: "203.0.113.6/31"
-          ip_namespace: "INTERNET"
+      ip_namespace: "default"

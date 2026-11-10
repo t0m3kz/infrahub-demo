@@ -60,35 +60,35 @@ def raw_state(
     vlan_scope: str = "local",
     vni: int | None = None,
     customer_deployments: list[dict[str, Any]] | None = None,
-    sources: dict[str, str] | None = None,
+    requested: dict[str, list[tuple[str, str]]] | None = None,
 ) -> dict[str, Any]:
-    """A raw segment_vlans.gql response: interfaces are (id, typename, device id) and ``sources`` maps a port id
-    to the account that wrote its edge to the segment (none: a person's edge); deployments are
-    (segment deployment id, hosting deployment id), by default one in ``dc-1``; rows are (row id, device id,
-    vlan id, segment deployment id)."""
+    """A raw segment_vlans.gql response, merged with the raw SEGMENT_PORTS_QUERY one (the generator reads both and
+    each takes its own keys): interfaces are (id, typename, device id), each a member of its device's row of the
+    segment (a port whose device has no row has no edge: a port joins an existing row only), and ``requested`` maps
+    a segment deployment id to the (id, typename) of the interfaces assigned to it (its ``capabilities``); deployments are (segment deployment id,
+    hosting deployment id), by default one in ``dc-1``; rows are (row id, device id, vlan id, segment deployment id)."""
+    realizations = deployments or [(segment_deployment_id(segment_id), "dc-1")]
+    row_of_device = {device_id: row_id for row_id, device_id, _vlan, _sd in rows}
 
     def ports(typename: str) -> dict[str, Any]:
-        """The ``segments__ids`` root of one port kind, each port with its edge to the segment."""
+        """The ``capabilities__ids`` root of one port kind, each port with its edge to its device's row."""
         return {
             "edges": [
                 {
                     "node": {
                         "id": i,
                         "device": {"node": {"id": d}},
-                        "segments": {
+                        "capabilities": {
                             "edges": [
                                 {
-                                    "properties": {
-                                        "source": {"id": (sources or {})[i]} if i in (sources or {}) else None
-                                    },
-                                    "node": {"id": segment_id},
+                                    "node": {"id": row_of_device[d], "__typename": "ManagedSegmentVlan"},
                                 }
                             ]
                         },
                     }
                 }
                 for i, t, d in interfaces
-                if t == typename
+                if t == typename and d in row_of_device
             ]
         }
 
@@ -114,6 +114,10 @@ def raw_state(
                         "id": sd_id,
                         "deployment": {"node": {"id": hosting_id}},
                         "vni": {"value": vni},
+                        # The interfaces assigned to the deployment (its `capabilities`): a person's request.
+                        "capabilities": {
+                            "edges": [{"node": {"id": i, "__typename": t}} for i, t in (requested or {}).get(sd_id, [])]
+                        },
                         "vlans": {
                             "edges": [
                                 {
@@ -129,7 +133,7 @@ def raw_state(
                         },
                     }
                 }
-                for sd_id, hosting_id in (deployments or [(segment_deployment_id(segment_id), "dc-1")])
+                for sd_id, hosting_id in realizations
             ]
         },
     }
@@ -259,12 +263,15 @@ class VlanWorld:
 
         gen.client.execute_graphql = AsyncMock(side_effect=_execute_graphql)
         gen.client.filters = AsyncMock(side_effect=_filters)
+        # The devices of the ports the reconcile derives (the rows come first, from them).
+        gen.port_device_ids = {device_id for _, _, device_id in interfaces}
         gen.client.create = AsyncMock(side_effect=self._create)
         gen.client.delete = AsyncMock(side_effect=self._delete)
         return gen
 
 
 async def reconcile(gen: Any, segment_id: str, segment_name: str) -> None:
-    """The VLAN row reconcile of a segment under its segment lock, as the segment generators run it."""
+    """The VLAN row reconcile of a segment under its segment lock, as the segment generators run it: the devices of
+    the world's interfaces are the devices of the derived ports."""
     async with gen.resource_lock(segment_lock_key(segment_id)):
-        await gen._reconcile_segment_vlans_locked(segment_id, segment_name)
+        await gen._reconcile_segment_vlans_locked(segment_id, segment_name, None, gen.port_device_ids)

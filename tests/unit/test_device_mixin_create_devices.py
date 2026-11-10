@@ -272,7 +272,7 @@ class TestCreateDevicesPairingDispatch:
             return []  # no existing devices, no existing HA domain
 
         gen.client.filters = AsyncMock(side_effect=_filters)
-        gen.client.get = AsyncMock(side_effect=[_mock_group(), _mock_group()])
+        gen.client.get = AsyncMock(side_effect=[_mock_group(), _mock_group(), MagicMock(id="ha-pool")])
 
         await gen.create_devices(
             device_role="internal-firewall",
@@ -284,6 +284,7 @@ class TestCreateDevicesPairingDispatch:
 
         last_create_kwargs = gen.client.create.call_args_list[-1].kwargs
         assert last_create_kwargs["kind"] == "ManagedFirewallHA"
+        assert last_create_kwargs["data"]["group_id"] == {"from_pool": {"id": "ha-pool"}}
 
     @pytest.mark.asyncio
     async def test_load_balancer_without_ha_kind_does_not_pair(self) -> None:

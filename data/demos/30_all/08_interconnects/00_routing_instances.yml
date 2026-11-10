@@ -1,0 +1,21 @@
+---
+# The routing instances the interconnect data below points at, authored empty. They load before the interfaces and
+# circuits that name them (an interface and a handoff circuit hold their `vrf`, which must exist). The generators join
+# the devices as the demand appears (generators/helpers/vrf.py), so no member is listed here.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "fr-vrf-prod"
+      security_zone: "PROD"
+      deployment: "FR"
+    - name: "fr-vrf-internet"
+      security_zone: "INTERNET"
+      deployment: "FR"
+    - name: "pa-vrf-internet"
+      security_zone: "INTERNET"
+      deployment: "PA"
+    - name: "c001-office-vrf-prod"
+      security_zone: "PROD"
+      deployment: "C001-OFFICE"

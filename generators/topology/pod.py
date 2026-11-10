@@ -6,10 +6,11 @@ from typing import Any, Literal, cast
 from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
 from utils.limits import BORDER_LEAF_WAIT, WAIT_FOR_PEER_GENERATOR
 
 from ..common import CommonGenerator
-from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
+from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..fabric_sizing import host_bits_to_prefix_length, max_sibling_spines, pod_loopback_bits, pod_technical_bits
 from ..helpers.naming import DeviceNamingConfig
@@ -34,8 +35,8 @@ from .pod_mesh import PodMeshMixin, mesh_slot_width, pod_routing_options
 # "load-balancer" interfaces are the dedicated counterpart ports — same
 # convention as dc.py's DC-wide border-leaf, just scoped to one pod's own
 # border-spine instead. See DCS-7050CX3-32C-R_BORDER_SPINE's template for
-# the canonical port layout. BORDER_ROLE_FOR_SERVICES (generators/
-# connections.py) supplies the border_role_for mapping below.
+# the canonical port layout. BORDER_ROLE_FOR_SERVICES (utils/
+# exchange_transit.py) supplies the border_role_for mapping below.
 
 
 class TopologyPodParentData(TypedDict, total=False):

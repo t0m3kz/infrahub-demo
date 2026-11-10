@@ -1,13 +1,15 @@
 """The customer service tier (TopologyCustomerTemplateDC) is one contract between schema, data and check.
 
 A DC footprint states `design: "M_DC"`; the numbers behind the name live once, in the template rows of
-data/bootstrap/21_customer_templates.yml. checks/customer_quota.py holds the footprint to them. These tests
+data/bootstrap/21_customer_templates.yml, or an earlier file in the same demo for a custom service mix.
+checks/customer_quota.py holds the footprint to them. These tests
 keep the three in line: the schema requires the numbers, every row sets them, the tiers are ordered, every
 design a demo footprint names exists, and the demo data itself stays within its tier's segment quota.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -75,7 +77,7 @@ def test_removed_customer_kinds_are_gone_from_the_schema(kind: str) -> None:
 
 
 def test_the_four_tiers_are_declared() -> None:
-    """S, M, L, XL, nothing else: every demo design names one of them."""
+    """Bootstrap keeps exactly the four standard tiers; custom mixes belong to their own demo."""
     assert sorted(_ROWS) == sorted(_TIER_ORDER)
 
 
@@ -133,10 +135,57 @@ def test_the_scan_finds_designed_footprints_in_every_demo_set() -> None:
     assert {"07_customers", "30_all", "32_arista_mssg"} <= sets
 
 
+def _design_row(footprint: Declared) -> Declared:
+    """Resolve a standard tier or a valid, earlier custom definition in this footprint's own demo."""
+    design = footprint.item["design"]
+    if design in _ROWS:
+        return _ROWS[design]
+    demo = _DEMOS / footprint.path.relative_to(_DEMOS).parts[0]
+    matches = [row for row in declared(_KIND, demo) if row.item.get("name") == design]
+    assert matches, f"{design}: no template in {demo.name}"
+    assert all(row.path < footprint.path for row in matches), f"{design}: defined after its consumer"
+    for row in matches:
+        for column in _NUMBERS:
+            value = row.item.get(column)
+            assert isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        assert row.item["max_segments"] >= 1
+        for flag in ("dedicated_firewall", "dedicated_loadbalancer"):
+            assert isinstance(row.item.get(flag), bool)
+    return matches[0]
+
+
 @pytest.mark.parametrize("footprint", _metered_footprints(), ids=name)
 def test_every_footprint_design_is_a_declared_template(footprint: Declared) -> None:
-    """`design` is a relationship by name: a typo would fail the load, or meter nothing."""
-    assert footprint.item["design"] in _ROWS
+    """A custom design must be valid and defined earlier in this demo, never borrowed from another demo."""
+    assert _design_row(footprint).item["name"] == footprint.item["design"]
+
+
+def test_custom_template_from_another_demo_does_not_resolve() -> None:
+    """Moving only the footprint to another demo must not expose 00_full_topology's custom template."""
+    footprint = next(row for row in _metered_footprints() if name(row) == "C900-P-DC-WAW1")
+    foreign = replace(footprint, path=_DEMOS / "07_customers" / "99_custom_waw.yml")
+    with pytest.raises(AssertionError, match="no template in 07_customers"):
+        test_every_footprint_design_is_a_declared_template(foreign)
+
+
+@pytest.mark.parametrize("fault", ["later", "negative_quota", "boolean_quota", "invalid_flag"])
+def test_custom_template_must_be_earlier_and_valid(fault: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Local scope alone does not permit a late definition or a malformed custom entitlement."""
+    footprint = next(row for row in _metered_footprints() if name(row) == "C900-P-DC-WAW1")
+    template = next(row for row in declared(_KIND, _DEMOS / "00_full_topology") if name(row) == "M_INTERNAL_DC")
+    item = dict(template.item)
+    path = template.path
+    if fault == "later":
+        path = _DEMOS / "00_full_topology" / "99_late.yml"
+    elif fault == "negative_quota":
+        item["ports_25g"] = -1
+    elif fault == "boolean_quota":
+        item["max_segments"] = True
+    else:
+        item["dedicated_firewall"] = "true"
+    monkeypatch.setitem(globals(), "declared", lambda *_: [replace(template, path=path, item=item)])
+    with pytest.raises(AssertionError):
+        test_every_footprint_design_is_a_declared_template(footprint)
 
 
 def _segments_per_footprint() -> dict[str, set[str]]:
@@ -159,7 +208,7 @@ def test_the_demo_segments_fit_the_segment_quota_of_their_footprint_design() -> 
         if "30_all" not in footprint.path.parts:
             continue
         used = len(counted.get(name(footprint), ()))
-        allowed = _number(footprint.item["design"], "max_segments")
+        allowed = _design_row(footprint).item["max_segments"]
         if used > allowed:
             over.append(f"{name(footprint)} ({footprint.item['design']}): {used} segments, max {allowed}")
     assert not over, "\n".join(over)

@@ -20,7 +20,7 @@ from tests.smoke.fixture_builders.common import (
 from tests.smoke.fixture_builders.fabric import build_device_data
 from tests.smoke.fixture_builders.route_protection_roots import TENANT_NAMESPACE, add_environment_roots
 from tests.smoke.fixture_builders.transit import build_exchange_transit_bl_data
-from tests.smoke.fixture_builders.vrf import _vrf_node
+from tests.smoke.fixture_builders.vrf import ZONE_CATALOG, ZoneMetadata, _vrf_node, routing_vrf, routing_zone
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 
@@ -64,7 +64,7 @@ def build_border_leaf_bgw_stretched_data(*, device_name: str, platform: str) -> 
     fw_port = next(e["node"] for e in device_node["interfaces"]["edges"] if e["node"]["role"] == _v("firewall"))
     firewall = {
         "node": {
-            "capabilities": _edges([{"__typename": "ManagedFirewallHA", "contexts": fw_port["capabilities"]}]),
+            "shared_capabilities": fw_port["capabilities"],
         }
     }
     device_node["deployment"]["node"]["devices"] = {"edges": [firewall]}
@@ -75,7 +75,7 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
     """A colocation edge that is its site's EVPN Multi-Site BGW and peers an ISP in INTERNET.
 
     ebgp_ebgp edge plus a multisite-vip loopback (what makes it a BGW) and one
-    upstream transit peering: Ethernet1/14 in namespace INTERNET (namespace_type
+    upstream transit peering: Ethernet1/14 in namespace INTERNET (vrf_type
     internet, l3_vni 60002) towards the ISP PE. No stretched segments, so the
     INTERNET L3 VNI comes from the transit session alone.
     """
@@ -96,7 +96,6 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
             )
         }
     )
-    internet_ns = _node({"name": _v("INTERNET"), "l3_vni": _v(60002), "namespace_type": _v("internet")})
     interfaces.append(
         {
             "node": {
@@ -107,7 +106,10 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
                     role="customer",
                     ip_address="203.0.113.0/31",
                 ),
-                "ip_address": _node({"address": _v("203.0.113.0/31"), "ip_namespace": internet_ns}),
+                "vrf": _node(routing_vrf("INTERNET")),
+                "ip_address": _node(
+                    {"address": _v("203.0.113.0/31"), "ip_namespace": {"node": {"name": {"value": "default"}}}}
+                ),
             }
         }
     )
@@ -126,10 +128,15 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
     )
     for iface_edge in peering["capabilities"]["edges"]:
         node = iface_edge["node"]
-        node["ip_address"]["node"]["ip_namespace"] = internet_ns
+        node["vrf"] = _node(routing_vrf("INTERNET"))
     # The INTERNET namespace's public space: aggregate + outbound filter.
     data["IpamPrefix"] = _edges(
-        [{"prefix": _v("192.0.2.0/24"), "ip_namespace": _node({"namespace_type": _v("internet")})}]
+        [
+            {
+                "prefix": _v("192.0.2.0/24"),
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
+        ]
     )
     device_node["capabilities"]["edges"].append(
         {
@@ -153,9 +160,17 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
-def _cidr_blocks(*blocks: tuple[str, str]) -> dict:
-    """IpamPrefix edges from (prefix, namespace name) pairs: VPC cidr_blocks, office lan_prefixes."""
-    return _edges([{"prefix": _v(prefix), "ip_namespace": _node({"name": _v(ns)})} for prefix, ns in blocks])
+def _cidr_blocks(*blocks: str) -> dict:
+    """Neutral IpamPrefix edges for VPC blocks, office LANs and tunnel registrations."""
+    return _edges(
+        [
+            {
+                "prefix": _v(prefix),
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
+            }
+            for prefix in blocks
+        ]
+    )
 
 
 def _owner_node(typename: str, org_id: str, label: str) -> dict:
@@ -201,8 +216,10 @@ def _regular_handoff(
                 role="uplink",
                 ip_address=local_ip,
                 typename="DcimVirtualInterface",
+                vlan_id=int(iface.rsplit(".", 1)[-1]),
             ),
-            "ip_address": _node({"address": _v(local_ip), "ip_namespace": namespace}),
+            "vrf": _node(routing_vrf(namespace["node"]["name"]["value"])),
+            "ip_address": _node({"address": _v(local_ip), "ip_namespace": {"node": {"name": {"value": "default"}}}}),
         }
     }
     peering = _make_bgp_peering(
@@ -229,7 +246,7 @@ def _regular_handoff(
     if far_kind:
         peering["capabilities"]["edges"][1]["node"]["device"]["node"]["__typename"] = far_kind
     for iface_edge in peering["capabilities"]["edges"]:
-        iface_edge["node"]["ip_address"]["node"]["ip_namespace"] = namespace
+        iface_edge["node"]["vrf"] = _node(routing_vrf(namespace["node"]["name"]["value"]))
     return interface, peering
 
 
@@ -253,9 +270,16 @@ def build_edge_unfiltered_appliance_data(*, device_name: str) -> dict:
         port = edge["node"]
         if port["__typename"] == "DcimPhysicalInterface":
             port["__typename"] = "DcimVirtualInterface"
-            for physical_only in ("cable", "interface_type", "mtu", "segments"):
+            for physical_only in ("cable", "interface_type", "mtu"):
                 port.pop(physical_only, None)
-    prod = _node({"name": _v("PROD"), "l3_vni": _v(60000), "namespace_type": _v("prod")})
+            port["capabilities"] = _edges(
+                [
+                    cap["node"]
+                    for cap in port["capabilities"]["edges"]
+                    if cap["node"].get("__typename") != "ManagedSegmentVlan"
+                ]
+            )
+    prod = _node({"name": _v("PROD"), "l3_vni": _v(60000), "vrf_type": _v("prod")})
     peerings = []
     for iface, local_ip, remote_ip, remote, remote_iface, remote_asn, name, far_role in (
         ("Ethernet1/1.1100", "10.255.9.0/31", "10.255.9.1/31", "EXT-AWS-DX-FR2", "et-0/0/0.1100", 64512,
@@ -303,12 +327,12 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
 
     ebgp_ebgp edge (no VTEP) plus five peering_role regular sessions, as add_virtual_circuit writes a
     handoff (send_community and send_extended_community both False), on sub-interfaces:
-      - Ethernet1/13.1000 PROD and Ethernet1/13.1001 NON-PROD: the AWS VIFs. The far end registers no
+      - Ethernet1/13.1000 PROD and Ethernet1/13.1001 NONPROD: the AWS VIFs. The far end registers no
         prefix (a cloud gateway registers nothing on the edge), so the session has no owner: deny-all
         both ways, with a comment.
       - Ethernet1/13.1900 PROD: the SD-WAN gateway handoff. It accepts what the offices behind
         EQX-FR2-SDWAN-GW1 register: C002's PROD lan_prefixes (10.210.2.0/24), C003's (10.210.3.0/24)
-        and C005's hosted office-lan segment (10.176.5.0/24). A NON-PROD LAN, an office owned by a provider, an office registering nothing, an office behind another
+        and C005's hosted office-lan segment (10.176.5.0/24). A NONPROD LAN, an office owned by a provider, an office registering nothing, an office behind another
         gateway and an office without a gateway are not accepted.
       - Ethernet1/13.1300 PROD: EXT-MEGAPORT-MCR1, no far end registers a prefix, so the session has
         no owner: deny-all both ways, with a comment.
@@ -319,7 +343,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     on-prem segments in the namespace plus what it registered behind another session of the namespace,
     minus the session's own IN (C005's office-hosted segment is registered behind GW1, so it is never
     announced back to it). Never another owner's prefix. Segments of C003, C015,
-    C002 and C005 in PROD and NON-PROD; C001's segment is behind no session and never announced, a
+    C002 and C005 in PROD and NONPROD; C001's segment is behind no session and never announced, a
     segment without a customer owner, a PROD container, a MANAGEMENT segment and
     a segment without a gateway are never announced. A VIF on another device with the same VLAN is
     ignored.
@@ -330,15 +354,15 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     device_node = data["DcimDevice"]["edges"][0]["node"]
     interfaces = device_node["interfaces"]["edges"]
     namespaces = {
-        "PROD": _node({"name": _v("PROD"), "l3_vni": _v(60000), "namespace_type": _v("prod")}),
-        "NON-PROD": _node({"name": _v("NON-PROD"), "l3_vni": _v(60001), "namespace_type": _v("non_prod")}),
+        "PROD": _node({"name": _v("PROD"), "l3_vni": _v(60000), "vrf_type": _v("prod")}),
+        "NONPROD": _node({"name": _v("NONPROD"), "l3_vni": _v(60001), "vrf_type": _v("non_prod")}),
     }
     handoffs = [
         # (sub-interface, namespace, local ip, remote ip, remote device, remote iface, remote asn, peering, bfd,
         #  process_role of the far end's BGP process, kind of the far end's device)
         ("Ethernet1/13.1000", "PROD", "10.255.5.5/30", "10.255.5.6/30", "EXT-AWS-DX-FR2", "et-0/0/0.1000", 64512,
          "VRF-PROD-EQXFR2-AWS-EUC1", True, "regular", None),
-        ("Ethernet1/13.1001", "NON-PROD", "10.255.6.5/30", "10.255.6.6/30", "EXT-AWS-DX-FR2", "et-0/0/0.1001", 64512,
+        ("Ethernet1/13.1001", "NONPROD", "10.255.6.5/30", "10.255.6.6/30", "EXT-AWS-DX-FR2", "et-0/0/0.1001", 64512,
          "VRF-NONPROD-EQXFR2-AWS-EUC1", True, "underlay", None),
         ("Ethernet1/13.1900", "PROD", "10.255.5.0/31", "10.255.5.1/31", "EQX-FR2-SDWAN-GW1", "eth0.1900", 65028,
          "VRF-PROD-EQXFR2-SDWAN", False, None, None),
@@ -390,6 +414,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         member_type: str = "address",
     ) -> dict:
         return {
+            "security_zone": _node({"name": _v(ns_name), "vrf_type": _v(ns_type)}),
             "owner": owner if owner is not None else _node(None),
             "gateway": _node(
                 {
@@ -397,7 +422,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
                         {
                             "prefix": _v(prefix),
                             "member_type": _v(member_type),
-                            "ip_namespace": _node({"name": _v(ns_name), "namespace_type": _v(ns_type)}),
+                            "ip_namespace": {"node": {"name": {"value": "default"}}},
                         }
                     )
                 }
@@ -416,9 +441,9 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             segment_prefix("10.176.5.0/24", "PROD", "prod", owner=_customer("C005")),
             segment_prefix("10.9.1.0/24", "PROD", "prod", owner=_customer("C001")),
             segment_prefix("10.9.9.0/24", "PROD", "prod", owner=_customer("C009")),
-            segment_prefix("10.6.10.0/24", "NON-PROD", "non_prod", owner=_customer("C003")),
-            segment_prefix("10.6.20.0/24", "NON-PROD", "non_prod", owner=_customer("C015")),
-            segment_prefix("10.6.30.0/24", "NON-PROD", "non_prod", owner=_customer("C002")),
+            segment_prefix("10.6.10.0/24", "NONPROD", "non_prod", owner=_customer("C003")),
+            segment_prefix("10.6.20.0/24", "NONPROD", "non_prod", owner=_customer("C015")),
+            segment_prefix("10.6.30.0/24", "NONPROD", "non_prod", owner=_customer("C002")),
             segment_prefix("10.250.0.0/24", "MANAGEMENT", "management", owner=_customer("C003")),
             {"owner": _customer("C003"), "gateway": _node(None)},
         ]
@@ -427,7 +452,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     def office(
         gateway: str | None,
         owner: dict,
-        *lans: tuple[str, str],
+        *lans: str,
         hosted: tuple[tuple[str, str, dict], ...] = (),
     ) -> dict:
         """A footprint's gateway and owner, its lan_prefixes and (``hosted``) the segments it hosts itself.
@@ -436,18 +461,46 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         """
         return {
             "owner": owner,
-            "sdwan_gateway": _node({"name": _v(gateway)} if gateway else None),
+            "sdwan_gateway": _node(
+                {
+                    "name": _v(gateway),
+                    "interfaces": _edges(
+                        [
+                            {
+                                "name": _v("fixture-handoff"),
+                                "vrf": _node(routing_vrf("PROD")),
+                                "capabilities": _edges(
+                                    [
+                                        {
+                                            "__typename": "TopologySessionCircuit",
+                                            "circuit_type": _v("handoff"),
+                                            "vrf": _node(routing_vrf("PROD")),
+                                        }
+                                    ]
+                                ),
+                            }
+                        ]
+                    ),
+                }
+                if gateway
+                else None
+            ),
             "lan_prefixes": _cidr_blocks(*lans),
+            "vrfs": _edges([routing_vrf(namespace) for namespace in sorted({namespace for _, namespace, _ in hosted})]),
             "segment_deployments": _edges(
                 [
                     {
                         "segment": _node(
                             {
+                                "security_zone": _node(routing_zone(namespace)),
                                 "owner": segment_owner,
                                 "gateway": _node(
                                     {
                                         "ip_prefix": _node(
-                                            {"prefix": _v(prefix), "ip_namespace": _node({"name": _v(namespace)})}
+                                            {
+                                                "prefix": _v(prefix),
+                                                "ip_namespace": {"node": {"name": {"value": "default"}}},
+                                            }
                                         )
                                     }
                                 ),
@@ -467,33 +520,34 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
                 _customer("C005"),
                 hosted=(("10.176.5.0/24", "PROD", _customer("C005")),),
             ),
-            office(gw1, _customer("C002"), ("10.210.2.0/24", "PROD"), ("10.211.2.0/24", "NON-PROD")),
-            office(gw1, _customer("C003"), ("10.210.3.0/24", "PROD")),
+            office(gw1, _customer("C002"), "10.210.2.0/24"),
+            office(gw1, _customer("C003"), "10.210.3.0/24"),
             office(gw1, _customer("C007")),
-            office(gw1, _PROVIDER, ("10.210.7.0/24", "PROD")),
-            office("EQX-AM5-SDWAN-GW1", _customer("C002"), ("10.210.9.0/24", "PROD")),
-            office(None, _customer("C002"), ("10.210.15.0/24", "PROD")),
+            office(gw1, _PROVIDER, "10.210.7.0/24"),
+            office("EQX-AM5-SDWAN-GW1", _customer("C002"), "10.210.9.0/24"),
+            office(None, _customer("C002"), "10.210.15.0/24"),
         ]
     )
 
-    def tunnel(owner: dict, prefixes: tuple[tuple[str, str], ...], *ends: str) -> dict:
-        """A tunnel circuit: the office (of ``owner``) in its locations, the (prefix, namespace) pairs it registers
+    def tunnel(owner: dict, zone_name: str, prefixes: tuple[str, ...], *ends: str) -> dict:
+        """A tunnel circuit: the office (of ``owner``) in its locations, the neutral prefixes it registers
         and the device of each end port. The tunnel stores no owner: it is the office's."""
         return {
+            "vrf": _node(routing_vrf(zone_name)),
             "locations": _edges([{"owner": owner}]),
             "registered_prefixes": _cidr_blocks(*prefixes),
             "capabilities": _edges([{"device": _node({"name": _v(end)})} for end in ends]),
         }
 
     # The tunnels registering space behind a gateway: C001's partner range behind GW1 (accepted from GW1's
-    # session, announced to C001's other sessions), a provider-owned one (never accepted), a NON-PROD one
+    # session, announced to C001's other sessions), a provider-owned one (never accepted), a NONPROD one
     # (not the PROD session's) and the office's own inventory tunnel, which registers nothing.
     data["TopologySessionCircuit"] = _edges(
         [
-            tunnel(_customer("C001"), (("198.18.0.0/24", "PROD"),), gw1, "EXT-ACME-EDGE1"),
-            tunnel(_PROVIDER, (("198.19.0.0/24", "PROD"),), gw1, "EXT-PARTNER-EDGE1"),
-            tunnel(_customer("C001"), (("198.20.0.0/24", "NON-PROD"),), gw1, "EXT-PARTNER-EDGE2"),
-            tunnel(_customer("C002"), (), gw1, "C002-OFFICE-EDGE1"),
+            tunnel(_customer("C001"), "PROD", ("198.18.0.0/24",), gw1, "EXT-ACME-EDGE1"),
+            tunnel(_PROVIDER, "PROD", ("198.19.0.0/24",), gw1, "EXT-PARTNER-EDGE1"),
+            tunnel(_customer("C001"), "NONPROD", ("198.20.0.0/24",), gw1, "EXT-PARTNER-EDGE2"),
+            tunnel(_customer("C002"), "PROD", (), gw1, "C002-OFFICE-EDGE1"),
         ]
     )
     return data
@@ -695,16 +749,16 @@ def _add_route_protection(data: dict, *, device_name: str, sibling: str, enforce
     # The edge is a border gateway in the INTERNET instance (its default exit) and a member of the tenant one.
     add_environment_roots(data, tenant_members=[device_name], internet_members=[device_name])
     node = data["DcimDevice"]["edges"][0]["node"]
-    memberships = [
-        {"namespace": {"name": TENANT_NAMESPACE, "l3_vni": 50001, "namespace_type": "prod"}},
-        {"namespace": {"name": "INTERNET", "l3_vni": 60002, "namespace_type": "internet"}},
+    memberships: list[ZoneMetadata] = [
+        {"name": name, "vrf_type": ZONE_CATALOG[name][0], "l3_vni": ZONE_CATALOG[name][1]}
+        for name in (TENANT_NAMESPACE, "INTERNET")
     ]
     existing = {
-        edge["node"]["namespace"]["node"]["name"]["value"]
+        edge["node"]["security_zone"]["node"]["name"]["value"]
         for edge in (node.get("shared_capabilities") or {}).get("edges") or []
     }
     node.setdefault("shared_capabilities", {"edges": []})["edges"].extend(
-        {"node": _vrf_node(m["namespace"])} for m in memberships if m["namespace"]["name"] not in existing
+        {"node": _vrf_node(zone)} for zone in memberships if zone["name"] not in existing
     )
     data["DcimVirtualInterface"] = _edges(
         [

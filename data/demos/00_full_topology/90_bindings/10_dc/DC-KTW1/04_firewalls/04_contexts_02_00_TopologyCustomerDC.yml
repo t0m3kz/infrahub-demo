@@ -1,0 +1,16 @@
+# TopologyCustomerDC declarations in recursive dependency order.
+# C900's footprint lists every firewall context that serves it: the internal one (its east-west rules) and the DC's
+# Internet edge one (its internet rules, both directions; utils/firewall_split.py). The same object as in
+# 03_tenant/00_customer_dc.yml (an upsert by its keys) with the one link added: the contexts load after the footprint,
+# and a generic peer (served_deployments of the context) cannot be named by a string, so the link is written from this
+# side.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner: "C900"
+      environment: "p"
+      infrastructure_orchestrator: ansible_automation_platform
+      parent: "DC-KTW1"
+      serving_firewall_contexts: [shared-ktw1-fw-ha-prod, shared-ktw1-xfw-ha-prod]

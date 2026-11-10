@@ -1,0 +1,70 @@
+---
+# The connections of the Azure Virtual WAN hub, the same shape as the AWS transit gateway's
+# (05_gateway_attachments.yml): a VNet connection per VNet (a cross-subscription one lives in the spoke subscription),
+# each joining the default route table and propagating its block into it, and the association of the ExpressRoute
+# gateway, whose `allowed_prefixes` are what it announces on-prem (checks/cloud_connection.py R1: one target each).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGatewayAttachment
+  data:
+    - name: "vhuba-c900-weu"
+      description: "VNet connection of the Virtual WAN hub (hub VNet)"
+      status: active
+      gateway: "vwan-hub-c900-weu"
+      virtual_network: "vnet-c900-weu"
+      owner_account: "c900-azure-prod"
+      associated_route_table: "rt-c900-weu"
+      propagates_to_route_tables:
+        - "rt-c900-weu"
+    - name: "vhuba-c900-spoke"
+      description: "VNet connection of the Virtual WAN hub (spoke VNet)"
+      status: active
+      gateway: "vwan-hub-c900-weu"
+      virtual_network: "vnet-c900-weu-spoke"
+      owner_account: "c900-azure-prod"
+      associated_route_table: "rt-c900-weu"
+      propagates_to_route_tables:
+        - "rt-c900-weu"
+    - name: "vhuba-c900-payments"
+      description: "Cross-subscription VNet connection of the Virtual WAN hub (c900-azure-payments)"
+      status: active
+      gateway: "vwan-hub-c900-weu"
+      virtual_network: "vnet-c900-payments-weu"
+      owner_account: "c900-azure-payments"
+      associated_route_table: "rt-c900-weu"
+      propagates_to_route_tables:
+        - "rt-c900-weu"
+    - name: "vhuba-c900-analytics"
+      description: "Cross-subscription VNet connection of the Virtual WAN hub (c900-azure-analytics)"
+      status: active
+      gateway: "vwan-hub-c900-weu"
+      virtual_network: "vnet-c900-analytics-weu"
+      owner_account: "c900-azure-analytics"
+      associated_route_table: "rt-c900-weu"
+      propagates_to_route_tables:
+        - "rt-c900-weu"
+    - name: "vhuba-c900-identity"
+      description: "Cross-subscription VNet connection of the Virtual WAN hub (c900-azure-identity)"
+      status: active
+      gateway: "vwan-hub-c900-weu"
+      virtual_network: "vnet-c900-identity-weu"
+      owner_account: "c900-azure-identity"
+      associated_route_table: "rt-c900-weu"
+      propagates_to_route_tables:
+        - "rt-c900-weu"
+    - name: "vhuba-c900-ergw"
+      description: "Association of the ExpressRoute gateway with the Virtual WAN hub"
+      status: active
+      gateway: "vwan-hub-c900-weu"
+      peer_gateway: "ergw-c900-weu"
+      owner_account: "c900-azure-prod"
+      associated_route_table: "rt-c900-weu"
+      # The ExpressRoute gateway announces on-prem only what the association allows: the hub VNet and the VNets of
+      # the spoke subscriptions (the sandbox VNet has no hub connection and is not among them).
+      allowed_prefixes:
+        - ["10.201.0.0/16", "default"]
+        - ["10.203.0.0/16", "default"]
+        - ["10.208.0.0/16", "default"]
+        - ["10.209.0.0/16", "default"]
+        - ["10.210.0.0/16", "default"]

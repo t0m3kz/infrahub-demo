@@ -32,7 +32,9 @@ from typing import Any
 
 from transforms.helpers.addressing import host_ip, sub_interface_parent
 from transforms.helpers.firewall import transit_legs
-from utils.exchange_transit import TENANT_NAMESPACE_TYPES, TRANSIT_SLOT
+from utils.exchange_transit import LOADBALANCER_CONTEXT_KIND, TENANT_NAMESPACE_TYPES, TRANSIT_SLOT
+from utils.routing_domain import interface_security_zone
+from utils.service_contexts import leg_interfaces
 
 HC_INTERVAL_S = 5
 """Probe interval of every health check (the model has none); stretched when a probe's own timeout needs more."""
@@ -251,29 +253,31 @@ def _partition_name(context: dict[str, Any], namespace_name: str) -> str:
     return f"{org_id}-{environment}".upper()
 
 
-def _leg(context: dict[str, Any], device_name: str, ha: dict[str, Any] | None) -> dict[str, Any] | None:
-    """This device's leg of ``context``, None while the generator has not built it.
+def _leg(
+    context: dict[str, Any], own_legs: list[dict[str, Any]], device_name: str, ha: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """This device's leg of ``context`` (``own_legs``: its leg interfaces), None while the generator has not built it.
 
-    The leg is the device's sub-interface carrying the context with an IPv4 address; its VLAN, VNI and
+    The leg is the device's sub-interface of the context (utils/service_contexts.py ``context_legs``) with an IPv4 address; its VLAN, VNI and
     fixed addresses are the context's transit leg in that namespace (transforms/helpers/firewall.py
     transit_legs, the one derivation the border leaves render their side from). The member address
     follows the name order of the pair (.5 first, .6 second); an address that disagrees would have both
     members claim one self IP, so it raises.
     """
-    for iface in context.get("capabilities") or []:
-        if iface.get("typename") != "DcimVirtualInterface" or (iface.get("device") or {}).get("name") != device_name:
+    for iface in own_legs:
+        if iface.get("typename") != "DcimVirtualInterface":
             continue
         ip_obj = iface.get("ip_address") or {}
         address = ip_obj.get("address")
         if not address or ipaddress.ip_interface(address).version != 4:
             return None
-        namespace = ip_obj.get("ip_namespace") or {}
-        if namespace.get("namespace_type") not in TENANT_NAMESPACE_TYPES or not namespace.get("l3_vni"):
+        namespace = interface_security_zone(iface)
+        if namespace.get("vrf_type") not in TENANT_NAMESPACE_TYPES or not namespace.get("l3_vni"):
             raise ValueError(
                 f"LB context {context.get('name')}: leg {iface.get('name')} on {device_name} is not in a tenant VRF "
                 f"with an l3_vni (namespace {namespace.get('name')})"
             )
-        leg = transit_legs(context).get(namespace.get("name"))
+        leg = transit_legs({**context, "legs": own_legs}).get(namespace.get("name"))
         if leg is None:
             return None
         own_ip = host_ip(address)
@@ -299,13 +303,8 @@ def _leg(context: dict[str, Any], device_name: str, ha: dict[str, Any] | None) -
     return None
 
 
-def get_loadbalancer_contexts(
-    device_capabilities: list[dict[str, Any]] | None,
-    device_name: str,
-    ha: dict[str, Any] | None,
-    platform: str,
-) -> list[dict[str, Any]]:
-    """The contexts of the device's ManagedLoadbalancerHA cluster that have a leg on this device.
+def get_loadbalancer_contexts(device: dict[str, Any], ha: dict[str, Any] | None, platform: str) -> list[dict[str, Any]]:
+    """The load balancer contexts the device is a member of that have a leg on this device.
 
     Each is {name, partition, dedicated, vrf (namespace name), route_domain (its l3_vni), vrf_device
     (``vrf-<NAMESPACE>``), vip_prefix, leg (see _leg), vips (see _vip)}, PROD first. A context whose leg
@@ -313,17 +312,16 @@ def get_loadbalancer_contexts(
     ValueError for a platform with no load-balancer template, or two contexts in one VRF on one device
     (they would share a route domain).
     """
+    device_name = device.get("name") or ""
     if platform not in _VENDORS:
         raise ValueError(f"{platform}: no load-balancer template; refusing to render {device_name}")
     contexts = [
-        context
-        for cap in device_capabilities or []
-        if cap.get("typename") == "ManagedLoadbalancerHA"
-        for context in cap.get("contexts") or []
+        cap for cap in device.get("shared_capabilities") or [] if cap.get("typename") == LOADBALANCER_CONTEXT_KIND
     ]
+    legs = leg_interfaces(device)
     rendered: list[tuple[int, dict[str, Any]]] = []
     for context in contexts:
-        leg = _leg(context, device_name, ha)
+        leg = _leg(context, legs.get(context["id"], []), device_name, ha)
         if leg is None:
             continue
         namespace = leg.pop("namespace")
@@ -334,7 +332,7 @@ def get_loadbalancer_contexts(
         )
         rendered.append(
             (
-                TRANSIT_SLOT[namespace["namespace_type"]],
+                TRANSIT_SLOT[namespace["vrf_type"]],
                 {
                     "name": context.get("name"),
                     "partition": partition,

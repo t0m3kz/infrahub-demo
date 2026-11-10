@@ -8,6 +8,16 @@ from utils.group_policy import MICROSEGMENTED, is_microsegmented
 from utils.ports import PortProfileHelper, PortSpec
 
 
+def zone_ref(zone_name: str | None) -> dict[str, Any]:
+    """``{side}_zone`` of a rule side that has a selector and no segment, as a SecurityZone HFID reference.
+
+    A zone qualifies a prefix or address selector (transforms/helpers/policy.py ``rule_zone``): a side with a
+    selector and no segment must name it. Empty when the zone is not known: checks/segment_security.py reports
+    the rule then.
+    """
+    return {"hfid": [zone_name]} if zone_name else {}
+
+
 class RulesPlanner:
     """Planner for dependency-driven rule preparation without DB side effects."""
 
@@ -78,7 +88,7 @@ class RulesPlanner:
 
     @staticmethod
     def _is_exchange_segment(segment: dict[str, Any]) -> bool:
-        """Whether the segment sits in an exchange zone (INTERNET-ZONE, MANAGEMENT-ZONE)."""
+        """Whether the segment sits in an exchange zone (INTERNET, MANAGEMENT)."""
         return is_exchange_zone((segment.get("security_zone") or {}).get("name"))
 
     @classmethod
@@ -209,6 +219,10 @@ class RulesPlanner:
         }
         if vip_id:
             payload["destination_ip_addresses"] = [{"id": vip_id}]
+            # The VIP is a /32 of the context serving the target, in the target's tenant zone (the context's VIP
+            # range and legs are in the backend's own VRF): the zone that qualifies the address selector.
+            if zone := zone_ref((dst_seg.get("security_zone") or {}).get("name")):
+                payload["destination_zone"] = zone
         else:
             payload["destination_segment"] = {"id": dst_seg.get("id")}
         if port_start is not None:
@@ -241,14 +255,16 @@ class RulesPlanner:
         component: dict[str, Any],
         segment: dict[str, Any],
         leg_prefix_id: str,
+        leg_zone: str | None,
         port: PortSpec,
     ) -> dict[str, Any]:
         """R_server: the context's leg /29 (the SNAT automap source of every
         balanced connection) to the backend segment on the VIP port.
 
         The leg is an UNCLASSIFIED service leg, so only the destination side
-        carries a component tag, where its segment is microsegmented. Never
-        expires: it lives exactly as long as its VIP.
+        carries a component tag, where its segment is microsegmented. Its
+        ``leg_zone`` (the zone of the leg's VLAN slot) qualifies the source
+        selector. Never expires: it lives exactly as long as its VIP.
         """
         protocol, port_start, _port_end = port
         return {
@@ -261,6 +277,7 @@ class RulesPlanner:
             "disabled": False,
             "expires_at": None,
             "source_prefixes": [{"id": leg_prefix_id}],
+            **({"source_zone": zone} if (zone := zone_ref(leg_zone)) else {}),
             "destination_segment": {"id": segment.get("id")},
             "apply_on_switch": is_microsegmented(segment),
             "description": (

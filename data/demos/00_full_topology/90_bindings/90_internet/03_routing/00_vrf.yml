@@ -1,0 +1,16 @@
+---
+# The INTERNET VRF retains both firewall border members when adding the upstream edge. The edge's and ISP's
+# eBGP transit session between them on Ethernet1/2 / et-0/0/0 (a physical port at both ends: no tunnel, no VIF)
+# follow. The ISP sends a default route, which is how everything behind it (the two public ranges) is reached.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVRF
+  data:
+    - name: "dc-ktw1-vrf-internet"
+      security_zone: "INTERNET"
+      deployment: "DC-KTW1"
+      shared_devices:
+        - "ktw1-edge-01"
+        - "ktw1-bl-01"
+        - "ktw1-bl-02"

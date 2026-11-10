@@ -1,0 +1,17 @@
+---
+# The Azure transit hub: a Virtual WAN hub in the C900 subscription, the counterpart of the AWS transit gateway
+# tgw-c900-euc1 (03_gateways.yml). VNet peering is not transitive in Azure, so the hub carries what the hub VNet's
+# peerings used to: the hub VNet and the spoke VNets connect to it (06_azure_hub_02_00_CloudGatewayAttachment.yml)
+# and the ExpressRoute gateway is associated with it. 65515 is the AS Azure gives every Virtual WAN hub router.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGateway
+  data:
+    - name: "vwan-hub-c900-weu"
+      description: "Azure Virtual WAN hub of the C900 subscription"
+      status: active
+      gateway_type: hub
+      asn: 65515
+      account: "c900-azure-prod"
+      region: "westeurope"

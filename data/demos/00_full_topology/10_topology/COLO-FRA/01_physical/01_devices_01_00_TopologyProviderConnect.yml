@@ -1,0 +1,24 @@
+# TopologyProviderConnect declarations in recursive dependency order.
+# The provider's port of the metro: a TopologyProviderConnect, a slim device of the provider placed by its
+# `location` (the cage), with no role, platform or template, that holds the physical Fabric port.
+# The port is cabled to fra-colo1-edge-01 Ethernet1/1
+# (02_cables.yml); the Internet Access service that starts on it has an interface of its own
+# (03_fabric_interfaces.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnect
+  data:
+    - name: EXT-FABRIC-FRA
+      description: Equinix Fabric port of the cage FRA, in the FRA-COLO1 cage (cabled to fra-colo1-edge-01 Ethernet1/1)
+      status: active
+      provider: P016
+      location: FRA-COLO1
+      bandwidth: 10000
+      external_id: 9f3c7a52-1d4e-4b8a-a6c0-3e5b7d9f1a21
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: et-0/0/0
+            description: Fabric port 10G, cross-connected to the cage edge
+            status: active

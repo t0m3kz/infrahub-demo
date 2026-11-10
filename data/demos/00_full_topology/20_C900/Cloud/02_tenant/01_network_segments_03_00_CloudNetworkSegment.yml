@@ -1,0 +1,16 @@
+---
+# The subnet of the sandbox VNet: only the spoke VNet it peers with reaches it (no transit, no gateway).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNetworkSegment
+  data:
+    - owner: "C900"
+      customer_name: "sandbox-azure"
+      environment: "p"
+      security_zone: "PROD"
+      segment_type: "cloud_subnet"
+      virtual_network: "vnet-c900-sandbox-weu"
+      availability_zone: ["westeurope", "westeurope-1"]
+      cidr_block: "10.211.1.0/24"
+      customer_deployment: "C900-P-SANDBOX-AZURE-WESTEUROPE"

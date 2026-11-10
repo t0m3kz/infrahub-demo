@@ -5,19 +5,19 @@ set hostname dc1-fw-01
 set interface ethernet1/1.10 vlan 10
 set interface ethernet1/1.10 state on
 set interface ethernet1/1.10 ipv4-address 10.0.1.1 mask-length 30
-set interface ethernet1/1.10 security-zone internal
+set interface ethernet1/1.10 security-zone PROD
 set interface ethernet1/1.10 comments "Internal LAN link"
 !
 set interface ethernet1/1.20 vlan 20
 set interface ethernet1/1.20 state on
 set interface ethernet1/1.20 ipv4-address 10.0.2.1 mask-length 30
-set interface ethernet1/1.20 security-zone dmz
+set interface ethernet1/1.20 security-zone NONPROD
 set interface ethernet1/1.20 comments "DMZ link"
 !
 set interface ethernet1/1.30 vlan 30
 set interface ethernet1/1.30 state on
 set interface ethernet1/1.30 ipv4-address 10.0.3.1 mask-length 30
-set interface ethernet1/1.30 security-zone external
+set interface ethernet1/1.30 security-zone INTERNET
 set interface ethernet1/1.30 comments "External link"
 !
 ! --- Static Routes (return path to leaf per zone) ---
@@ -25,18 +25,25 @@ set static-route 10.0.2.0/24 nexthop gateway address 10.0.2.2 on
 set static-route 10.0.1.0/24 nexthop gateway address 10.0.1.2 on
 set static-route 10.0.10.0/24 nexthop gateway address 10.0.1.2 on
 !
+!
+! --- Firewall Contexts (VSX Virtual Systems) — one per tenant, per ManagedFirewallContext ---
+!
+add virtual-system name shared-dc1-fw-01-policy
+!
+! --- Security Policies in virtual system shared-dc1-fw-01-policy ---
+set virtual-system shared-dc1-fw-01-policy
 ! --- Security Policy Rules ---
 add service-tcp name svc-tcp-443 port 443
 add access-rule layer "Network" position 10 name "allow-https" action accept source 10.0.2.0/24 destination 10.0.1.0/24 service svc-tcp-443 track Log
-set access-rule layer "Network" name "allow-https" source dmz
-set access-rule layer "Network" name "allow-https" destination internal
+set access-rule layer "Network" name "allow-https" source NONPROD
+set access-rule layer "Network" name "allow-https" destination PROD
 add service-tcp name svc-tcp-22 port 22
 add access-rule layer "Network" position 20 name "allow-ssh" action accept source 10.0.2.0/24 destination 10.0.1.0/24 service svc-tcp-22 track Log
-set access-rule layer "Network" name "allow-ssh" source dmz
-set access-rule layer "Network" name "allow-ssh" destination internal
+set access-rule layer "Network" name "allow-ssh" source NONPROD
+set access-rule layer "Network" name "allow-ssh" destination PROD
 add access-rule layer "Network" position 30 name "allow-any" action accept source 10.0.1.0/24 destination 10.0.2.0/24 service Any track None
-set access-rule layer "Network" name "allow-any" source internal
-set access-rule layer "Network" name "allow-any" destination dmz
+set access-rule layer "Network" name "allow-any" source PROD
+set access-rule layer "Network" name "allow-any" destination NONPROD
 add access-rule layer "Network" position 9990 name "implicit-deny-all" action drop source Any destination Any service Any track Log
 !
 !

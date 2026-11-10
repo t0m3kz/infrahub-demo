@@ -1,0 +1,45 @@
+# SecurityPolicy declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: seg-c900-wifi-corp-p-egress
+      description: "Egress contract of c900-wifi-corp-p: the web tier of the DC and the internet"
+      segment: "c900-wifi-corp-p"
+      default_action: deny
+      enabled: true
+      rules:
+        data:
+          - index: 10
+            name: wifi-corp-to-web
+            action: permit
+            protocol: tcp
+            port_start: 443
+            source_segment: "c900-wifi-corp-p"
+            destination_segment: "c900-web-p"
+            log: false
+            description: "Staff to the web tier of the DC over the SD-WAN tunnel"
+          - index: 20
+            name: wifi-corp-to-internet
+            action: permit
+            protocol: any
+            source_segment: "c900-wifi-corp-p"
+            destination_zone: "INTERNET"
+            log: false
+            description: "Staff to the internet"
+    - name: seg-c900-wifi-guest-p-egress
+      description: "Egress contract of c900-wifi-guest-p: the internet only, so it reaches no internal prefix"
+      segment: "c900-wifi-guest-p"
+      default_action: deny
+      enabled: true
+      rules:
+        data:
+          - index: 10
+            name: wifi-guest-to-internet
+            action: permit
+            protocol: any
+            source_segment: "c900-wifi-guest-p"
+            destination_zone: "INTERNET"
+            log: false
+            description: "Guests to the internet"

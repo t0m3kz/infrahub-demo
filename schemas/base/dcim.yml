@@ -2,19 +2,6 @@
 version: "1.0"
 
 generics:
-  - name: Capabilities
-    namespace: Dcim
-    description: "Unified compute endpoint — any node that can host managed capabilities"
-    include_in_menu: false
-    human_friendly_id:
-      - name__value
-    display_label: "{{name__value}}"
-    attributes:
-      - name: name
-        kind: Text
-        optional: true
-        order_weight: 1000
-
   # The slim device: a name and the interfaces it holds. It is all an interface needs of its device (the interface
   # `device` Parent, the HFID `[device name, name]`), so a holder of interfaces that is not a managed device (a cloud
   # transport: Direct Connect, VPN connection) inherits ONLY this. The unique name holds across every kind that
@@ -255,6 +242,25 @@ generics:
     label: Sub-Interface
     description: "Interface that rides on another one (sub-interface, VM NIC, cloud peering)"
     include_in_menu: false
+    attributes:
+      - name: vlan_id
+        kind: Number
+        label: "VLAN ID"
+        optional: true
+        order_weight: 1410
+        description: "VLAN tag on the parent (outer S-tag of a QinQ one), unset is untagged; the name <parent>.<vlan> is only a convention"  # yamllint disable-line rule:line-length
+        parameters:
+          min_value: 1
+          max_value: 4094
+      - name: inner_vlan_id
+        kind: Number
+        label: "Inner VLAN ID (C-tag)"
+        optional: true
+        order_weight: 1420
+        description: "The inner VLAN of a QinQ interface"
+        parameters:
+          min_value: 1
+          max_value: 4094
     relationships:
       - name: parent_interface
         peer: DcimInterface
@@ -283,9 +289,9 @@ generics:
         on_delete: no-action
         order_weight: 1900
 
-  # Ports that can be switchport members of VXLAN segments: a physical port and a LAG. Its one relationship,
-  # `segments` (the typed L2 membership, one-sided: the segment has no list of its ports), is declared in
-  # schemas/extensions/service/segment.yml next to the segment.
+  # Ports that can be switchport members of VXLAN segments: a physical port and a LAG (a marker: a port's membership is
+  # its switch's VLAN row, a ManagedSegmentVlan among its interface `capabilities`, checks/interface_layers.py holds the
+  # kinds; a virtual switch's `uplinks` peer it).
   - name: SwitchedInterface
     namespace: Dcim
     label: Switched Interface
@@ -426,7 +432,7 @@ generics:
             color: "#FCD34D"
           - name: svi
             label: SVI
-            description: "Routed VLAN interface of a segment on a fabric switch, generated from its VLAN-domain row"
+            description: "Routed VLAN interface of a segment on a switch (Vlan<id> of its row), with its gateway"
             color: "#FBBF24"
           - name: l3vni
             label: L3 VNI SVI
@@ -609,7 +615,6 @@ nodes:
       - CoreArtifactTarget
       - DcimDevice
       - DcimDeviceManaged
-      - DcimCapabilities
       - AppInstance
       - DcimSoftwareRunner
     attributes:
@@ -651,7 +656,6 @@ nodes:
       - CoreArtifactTarget
       - DcimDevice
       - DcimDeviceManaged
-      - DcimCapabilities
       - AppInstance
       - DcimSoftwareRunner
     attributes:

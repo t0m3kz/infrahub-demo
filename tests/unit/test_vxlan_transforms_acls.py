@@ -184,16 +184,28 @@ class TestAclRuleEndpointResolver:
     first prefix/IP selector, else any."""
 
     def test_destination_prefix_selector_without_segment(self) -> None:
-        rule = {**_rule(src=_seg_ref("10.1.0.0/24")), "destination_prefixes": [{"prefix": "10.40.0.0/16"}]}
+        rule = {
+            **_rule(src=_seg_ref("10.1.0.0/24")),
+            "destination_zone": {"name": "PROD"},
+            "destination_prefixes": [{"prefix": "10.40.0.0/16"}],
+        }
         acl_rule = _build_acl_rule(rule)
         assert (acl_rule["src"], acl_rule["dst"]) == ("10.1.0.0/24", "10.40.0.0/16")
 
     def test_destination_ip_selector_without_segment(self) -> None:
-        rule = {**_rule(src=_seg_ref("10.1.0.0/24")), "destination_ip_addresses": [{"address": "198.51.100.7/32"}]}
+        rule = {
+            **_rule(src=_seg_ref("10.1.0.0/24")),
+            "destination_zone": {"name": "PROD"},
+            "destination_ip_addresses": [{"address": "198.51.100.7/32"}],
+        }
         assert _build_acl_rule(rule)["dst"] == "198.51.100.7/32"
 
     def test_segment_prefix_wins_over_selectors(self) -> None:
-        rule = {**_rule(dst=_seg_ref("10.2.0.0/24")), "destination_prefixes": [{"prefix": "10.40.0.0/16"}]}
+        rule = {
+            **_rule(dst=_seg_ref("10.2.0.0/24")),
+            "destination_zone": {"name": "PROD"},
+            "destination_prefixes": [{"prefix": "10.40.0.0/16"}],
+        }
         assert _build_acl_rule(rule)["dst"] == "10.2.0.0/24"
 
     def test_no_segment_and_no_selector_is_any(self) -> None:
@@ -204,6 +216,7 @@ class TestAclRuleEndpointResolver:
         inbound = {
             **_rule(port_start=5432),
             "source_segment": {"id": "seg-a", "name": "a"},
+            "source_zone": {"name": "PROD"},
             "source_prefixes": [{"prefix": "10.9.0.0/24"}],
             "destination_segment": {"id": "seg-b"},
             "policy": {"enabled": True},
@@ -215,7 +228,7 @@ class TestAclRuleEndpointResolver:
 
 def _internet_rule(**kwargs) -> dict:
     """A rule whose destination is the internet zone: no destination segment."""
-    return _rule(destination_zone="INTERNET-ZONE", **kwargs)
+    return _rule(destination_zone="INTERNET", **kwargs)
 
 
 class TestGetAclsInternetBand:
@@ -245,7 +258,7 @@ class TestGetAclsInternetBand:
             "any",
             "eq 443",
         )
-        assert permit["dst_zone"] == "INTERNET-ZONE"
+        assert permit["dst_zone"] == "INTERNET"
         assert rules[-1]["name"] == "implicit-deny-all"
 
     def test_no_unconditional_permit_any_at_the_rules_own_index(self) -> None:
@@ -318,9 +331,43 @@ class TestGetAclsInternetBand:
         assert [r["name"] for r in rules] == ["default-permit-all"]
 
     def test_a_rule_to_the_internet_zone_has_no_return_leg(self) -> None:
-        """It is in no segment's inbound_rules (no destination segment): inbound from outside is DNAT, out of scope."""
+        """It is in no segment's inbound_rules (no destination segment), so it has no reply leg."""
         rules = self._rules([_internet_rule(src=self.SRC)])
         assert not [r for r in rules if r["name"].startswith("return-to-")]
+
+
+class TestGetAclsFromTheInternet:
+    """A rule from the internet into the segment, held in its own policy: only its reply leg is on the SVI."""
+
+    @staticmethod
+    def _inbound() -> dict:
+        return {
+            **_rule(index=20, port_start=443),
+            "source_zone": {"name": "INTERNET"},
+            "destination_segment": {"id": "seg-a"},
+            "policy": {"enabled": True},
+        }
+
+    def _rules(self) -> list[dict]:
+        inbound = self._inbound()
+        act = _make_acl_activation(
+            seg_id="seg-a",
+            prefix="10.1.0.0/24",
+            security_policies=[_policy(rules=[inbound])],
+            inbound_rules=[inbound],
+        )
+        return get_acls(activations=[act])[0]["rules"]
+
+    def test_it_is_not_rendered_as_traffic_the_segment_sends(self) -> None:
+        """No `permit any -> own prefix` at the rule's own index: the SVI ingress ACL sees the segment's own hosts."""
+        assert not [r for r in self._rules() if r["seq"] == 20 or r["dst"] == "10.1.0.0/24"]
+
+    def test_its_reply_leg_returns_to_any_established(self) -> None:
+        """The hosts answer from the published port to the outside client: own prefix -> any, tcp established."""
+        returns = [r for r in self._rules() if r["name"].startswith("return-to-")]
+        assert [(r["src"], r["src_port"], r["dst"], r["established"]) for r in returns] == [
+            ("10.1.0.0/24", "eq 443", "any", True)
+        ]
 
 
 class TestGetAclsDefaultAction:

@@ -1,0 +1,9 @@
+# IpamIPAddress declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.255.143.255/31"
+      description: "AWS side of the PROD Direct Connect VIF dxcon-fr2.1000"
+      ip_namespace: "default"

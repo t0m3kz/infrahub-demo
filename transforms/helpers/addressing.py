@@ -9,13 +9,15 @@ def host_ip(address: str | None) -> str | None:
 
 
 def sub_interface_parent(iface: dict[str, Any]) -> dict[str, Any] | None:
-    """The parent port of a VLAN sub-interface (``<parent>.<vlan>``), None for any other interface.
+    """The parent port of a sub-interface (an interface riding on a port of its own device), None for any other.
 
     ``parent_interface`` is also a VM NIC's host port (a port of another device), which no config renders as a
-    parent: only a name that starts with ``<parent name>.`` is the sub-interface of that parent.
+    parent: only a parent on the interface's own device (both ``device`` ids selected by the query) counts. The
+    name is a convention and plays no part; the VLAN tag is the interface's ``vlan_id`` (None: untagged).
     """
     parent = iface.get("parent_interface")
-    if parent and str(iface.get("name") or "").startswith(f"{parent.get('name')}."):
+    own_device = (iface.get("device") or {}).get("id")
+    if parent and own_device and (parent.get("device") or {}).get("id") == own_device:
         return parent
     return None
 

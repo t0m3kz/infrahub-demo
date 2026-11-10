@@ -41,10 +41,21 @@ def _rule(
         "security_profile": {"node": None},
         "source_segment": {"node": None},
         "destination_segment": {"node": None},
-        "destination_zone": {"node": {"name": _v(zone)} if zone else None},
+        # A prefix selector carries no routing authority of its own: the rule names its zone (the office is PROD).
+        "destination_zone": {"node": {"name": _v(zone or "PROD" if prefix else zone)} if zone or prefix else None},
         "source_prefixes": _edges(),
         "destination_prefixes": _edges(
-            *([{"id": "p", "prefix": _v(prefix), "ip_namespace": {"node": None}}] if prefix else [])
+            *(
+                [
+                    {
+                        "id": "p",
+                        "prefix": _v(prefix),
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
+                    }
+                ]
+                if prefix
+                else []
+            )
         ),
         "source_ip_addresses": _edges(),
         "destination_ip_addresses": _edges(),
@@ -58,7 +69,7 @@ def _segment(name: str, prefix: str, *rules: dict[str, Any]) -> dict[str, Any]:
         "customer_name": _v(name),
         "environment": _v("p"),
         "gateway": {"node": {"ip_prefix": {"node": {"prefix": _v(prefix)}}}},
-        "security_zone": {"node": {"name": _v("PROD-ZONE"), "trust_level": _v(70)}},
+        "security_zone": {"node": {"name": _v("PROD"), "trust_level": _v(70)}},
         "security_policy": {
             "node": {
                 "id": f"pol-{name}",
@@ -94,12 +105,12 @@ def _run(data: dict[str, Any]) -> Any:
     return json.loads(result) if result else result
 
 
-GUEST = _segment("c900-wifi-guest-p", "10.96.1.0/24", _rule(10, "internet", zone="INTERNET-ZONE"))
+GUEST = _segment("c900-wifi-guest-p", "10.96.1.0/24", _rule(10, "internet", zone="INTERNET"))
 CORP = _segment(
     "c900-wifi-corp-p",
     "10.96.2.0/24",
     _rule(10, "intranet", prefix="10.90.1.0/24", port=443),
-    _rule(20, "internet", zone="INTERNET-ZONE"),
+    _rule(20, "internet", zone="INTERNET"),
 )
 
 
@@ -107,10 +118,10 @@ def test_the_payload_names_the_office_its_zones_and_its_segments_with_their_clos
     payload = _run(_office(GUEST, CORP))
 
     assert payload["office"] == "C900-OFFICE" and payload["owner"] == "C900"
-    assert payload["zones"] == ["INTERNET-ZONE", "PROD-ZONE"]
+    assert payload["zones"] == ["INTERNET", "PROD"]
     assert payload["segments"] == [
-        {"name": "c900-wifi-corp-p", "zone": "PROD-ZONE", "prefix": "10.96.2.0/24", "default_action": "deny"},
-        {"name": "c900-wifi-guest-p", "zone": "PROD-ZONE", "prefix": "10.96.1.0/24", "default_action": "deny"},
+        {"name": "c900-wifi-corp-p", "zone": "PROD", "prefix": "10.96.2.0/24", "default_action": "deny"},
+        {"name": "c900-wifi-guest-p", "zone": "PROD", "prefix": "10.96.1.0/24", "default_action": "deny"},
     ]
 
 
@@ -120,11 +131,11 @@ def test_a_guest_segment_reaches_only_the_internet_and_the_corporate_one_also_it
 
     # the one implicit deny-all of the table closes its last policy (get_zone_policies), here the guest's
     guest = by_policy["policy-c900-wifi-guest-p"]
-    assert [(rule["action"], rule["dst_zone"]) for rule in guest] == [("permit", "INTERNET-ZONE"), ("deny", None)]
+    assert [(rule["action"], rule["dst_zone"]) for rule in guest] == [("permit", "INTERNET"), ("deny", None)]
     corp = by_policy["policy-c900-wifi-corp-p"]
     assert [rule["action"] for rule in corp] == ["permit", "permit"]
     assert corp[0]["dst"] == "10.90.1.0/24" and corp[0]["dst_port"] == "eq 443"
-    assert corp[1]["dst_zone"] == "INTERNET-ZONE"
+    assert corp[1]["dst_zone"] == "INTERNET"
     assert all(rule["dst"] != "10.90.1.0/24" for rule in guest)
 
 

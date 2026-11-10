@@ -1,0 +1,10 @@
+# RoutingCommunityList declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingCommunityList
+  data:
+    - name: "CL-LEARNED-FROM-TRANSIT"
+      community_type: standard
+      match: any
+      members: ["64498:1"]

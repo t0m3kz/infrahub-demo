@@ -1,0 +1,25 @@
+# ManagedVxlanSegment declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - security_zone: "PROD"
+      owner: C900
+      customer_name: sync
+      environment: p
+      stretch_scope: dc_pair
+      vlan_scope: shared
+      customer_deployments: ["C900-P-DC-KTW1", "C900-P-DC-WAW1"]
+      gateway:
+        data:
+          address: "10.94.1.1/24"
+          description: Gateway of c900-sync-p (anycast, the same in both DCs)
+          ip_namespace: "default"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.94.1.0/24"
+              ip_namespace: "default"
+              status: active
+              description: Stretched DC segment c900-sync-p

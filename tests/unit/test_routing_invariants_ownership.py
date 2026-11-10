@@ -86,9 +86,9 @@ class TestOwnershipConflicts:
         assert _rule_eight(_run(TopologyCustomerOffice=offices)) == []
 
     def test_the_same_prefix_in_two_namespaces_does_not_conflict(self) -> None:
-        """PROD and NON-PROD are separate routing domains: the rule runs per namespace."""
+        """PROD and NONPROD are separate routing domains: the rule runs per namespace."""
         check = _run(
-            ManagedNetworkSegment=[_segment("dev", "10.32.0.0/16", _CUSTOMER, ns_name="NON-PROD", ns_type="non_prod")],
+            ManagedNetworkSegment=[_segment("dev", "10.32.0.0/16", _CUSTOMER, ns_name="NONPROD", ns_type="non_prod")],
             TopologyCustomerOffice=[_gateway_office("C015-OFFICE", "GW1", _C015, _block("10.32.0.0/16"))],
         )
         assert _rule_eight(check) == []

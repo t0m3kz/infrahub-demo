@@ -4,7 +4,7 @@
   "ACL_RULE": {},
   "ACL_TABLE": {},
   "BGP_GLOBALS": {
-    "VRF_A": {
+    "PROD": {
       "local_asn": 65001,
       "router_id": "10.0.0.1"
     },
@@ -16,14 +16,14 @@
     }
   },
   "BGP_GLOBALS_AF": {
-    "VRF_A|ipv4_unicast": {
+    "PROD|ipv4_unicast": {
       "admin_status": "true",
       "redistribute_connected": "true"
     },
-    "VRF_A|l2vpn_evpn": {
+    "PROD|l2vpn_evpn": {
       "admin_status": "true",
       "advertise-ipv4-unicast": "true",
-      "route-distinguisher": "10.0.0.1:50001"
+      "route-distinguisher": "10.0.0.1:60000"
     },
     "default|ipv4_unicast": {
       "admin_status": "true",
@@ -41,7 +41,7 @@
     }
   },
   "BGP_GLOBALS_EVPN_RT": {
-    "VRF_A|l2vpn_evpn|65000:50001": {
+    "PROD|l2vpn_evpn|65000:60000": {
       "route-target-type": "both"
     }
   },
@@ -292,15 +292,16 @@
   "VLAN_INTERFACE": {
     "Vlan100": {
       "static_anycast_gateway": "true",
-      "vrf_name": "VRF_A"
+      "vrf_name": "PROD"
     },
     "Vlan100|10.100.0.1/24": {},
     "Vlan200": {
-      "static_anycast_gateway": "true"
+      "static_anycast_gateway": "true",
+      "vrf_name": "PROD"
     },
     "Vlan200|10.200.0.1/24": {},
     "Vlan3900": {
-      "vrf_name": "VRF_A"
+      "vrf_name": "PROD"
     }
   },
   "VLAN_MEMBER": {
@@ -312,8 +313,8 @@
     }
   },
   "VRF": {
-    "VRF_A": {
-      "vni": "50001"
+    "PROD": {
+      "vni": "60000"
     }
   },
   "VXLAN_TUNNEL": {
@@ -330,9 +331,9 @@
       "vlan": "Vlan200",
       "vni": "10200"
     },
-    "vtep|map_50001_Vlan3900": {
+    "vtep|map_60000_Vlan3900": {
       "vlan": "Vlan3900",
-      "vni": "50001"
+      "vni": "60000"
     }
   }
 }

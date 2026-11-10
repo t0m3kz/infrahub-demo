@@ -100,7 +100,7 @@ def _no_findings(*devices: dict[str, Any]) -> None:
 def test_s3_a_default_gateway_row_whose_svi_has_no_vrf_passes() -> None:
     """S3: ``vrf`` may be unset for a ``default`` row, and the row needs no instance."""
     row = raw_row("r1", 100, "default", segment="infra")
-    _no_findings(raw_device("d1", "leaf-1", rows=[row], interfaces=[raw_svi("s1", 100, "r1")]))
+    _no_findings(raw_device("d1", "leaf-1", rows=[row], interfaces=[raw_svi("s1", 100, "infra")]))
 
 
 def test_s5_each_member_of_a_pair_holds_an_svi_on_its_own_row() -> None:
@@ -112,7 +112,7 @@ def test_s5_each_member_of_a_pair_holds_an_svi_on_its_own_row() -> None:
             rows=[raw_row(f"r{i}", 100, "PROD", segment="web")],
             capabilities=[raw_mlag("mlag-1")],
             vrfs=[raw_instance("v1", f"leaf-{i}", "PROD")],
-            interfaces=[raw_svi(f"s{i}", 100, f"r{i}", "v1", "PROD")],
+            interfaces=[raw_svi(f"s{i}", 100, "web", "v1", "PROD")],
         )
         for i in (1, 2)
     ]

@@ -30,20 +30,47 @@ def segment_schema(root_dir: Path) -> dict[str, Any]:
     return _load(root_dir, "schemas/extensions/service/segment.yml")
 
 
-class TestRowIsAChildOfTheSegmentDeployment:
-    def test_the_row_has_a_mandatory_parent_deployment_and_no_segment(self, segment_schema: dict[str, Any]) -> None:
+class TestRowIsAChildOfItsSwitchUnderTheSegmentDeployment:
+    def test_the_row_has_a_mandatory_deployment_and_no_segment(self, segment_schema: dict[str, Any]) -> None:
+        """The deployment is a plain mandatory edge: the Parent is the switch."""
         row = _node(segment_schema, "SegmentVlan")
 
-        parent = _relationship(row, "segment_deployment")
-        assert (parent["kind"], parent["cardinality"], parent["optional"]) == ("Parent", "one", False)
-        assert parent["peer"] == "ManagedSegmentDeployment"
+        deployment = _relationship(row, "segment_deployment")
+        assert (deployment["kind"], deployment["cardinality"], deployment["optional"]) == ("Attribute", "one", False)
+        assert deployment["peer"] == "ManagedSegmentDeployment"
         assert "segment" not in {r["name"] for r in row["relationships"]}
 
-    def test_the_row_has_no_port(self, segment_schema: dict[str, Any]) -> None:
-        """A VLAN is not assigned to a port: the port is given a segment and the VLAN is an output."""
+    def test_the_row_is_a_child_of_its_switch_and_dies_with_it(self, segment_schema: dict[str, Any]) -> None:
+        row = _node(segment_schema, "SegmentVlan")
+        device = _relationship(row, "device")
+        assert (device["kind"], device["cardinality"], device["optional"]) == ("Parent", "one", False)
+        extension = next(n for n in segment_schema["extensions"]["nodes"] if n["kind"] == "DcimPhysicalDevice")
+        vlans = _relationship(extension, "vlans")
+        assert (vlans["kind"], vlans["on_delete"], vlans["identifier"]) == (
+            "Component",
+            "cascade",
+            device["identifier"],
+        )
+
+    def test_the_row_lists_its_ports_of_its_own_switch_only(
+        self, segment_schema: dict[str, Any], root_dir: Path
+    ) -> None:
+        """A port is a member of its switch's row: the row inherits the interface edge and re-declares it with
+        ``common_parent: device``, so the server refuses another switch's port; nothing else names a port."""
         row = _node(segment_schema, "SegmentVlan")
 
+        assert "ManagedGenericInterfaces" in row["inherit_from"]
+        ports = _relationship(row, "capabilities")
+        generic = _load(root_dir, "schemas/extensions/capabilities/capabilities.yml")
+        edge = _relationship(next(g for g in generic["generics"] if g["name"] == "GenericInterfaces"), "capabilities")
+        assert (ports["peer"], ports["identifier"], ports["common_parent"]) == (
+            "DcimInterface",
+            edge["identifier"],
+            "device",
+        )
         assert not {r["name"] for r in row["relationships"]} & {"interfaces", "interface", "ports"}
+        # The deployment keeps the interface edge too: the ports a person asks for (the request, not the realization).
+        assert "ManagedGenericInterfaces" in _node(segment_schema, "SegmentDeployment")["inherit_from"]
 
     def test_the_deployment_owns_its_rows_and_they_go_with_it(self, segment_schema: dict[str, Any]) -> None:
         deployment = _node(segment_schema, "SegmentDeployment")
@@ -79,13 +106,16 @@ class TestRowIsAChildOfTheSegmentDeployment:
 
 
 class TestTheRowPointsAtItsDevice:
-    def test_the_row_has_a_mandatory_device_and_one_svi(self, segment_schema: dict[str, Any]) -> None:
+    def test_the_row_has_a_mandatory_device_and_no_svi_link(self, segment_schema: dict[str, Any]) -> None:
+        """The SVI of a row is found by (device, ``Vlan<vlan_id>``): no edge links them in either direction (a Component
+        under a row whose device is its Parent breaks the server's object-template walk)."""
         row = _node(segment_schema, "SegmentVlan")
 
         device = _relationship(row, "device")
         assert (device["peer"], device["optional"]) == ("DcimPhysicalDevice", False)
-        assert _relationship(row, "svi")["cardinality"] == "one"
-        assert "vlan_domain" not in {r["name"] for r in row["relationships"]}
+        assert {"svi", "vlan_domain"}.isdisjoint(r["name"] for r in row["relationships"])
+        extended = {n["kind"] for n in segment_schema["extensions"]["nodes"]}
+        assert "DcimVirtualInterface" not in extended
 
     def test_the_vlan_domain_generic_is_gone(self, root_dir: Path) -> None:
         """No domain object and no marker generic: a device inherits nothing for it, an MLAG neither."""

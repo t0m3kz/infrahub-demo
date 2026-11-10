@@ -1,0 +1,62 @@
+# CloudNetworkSegment declarations in recursive dependency order.
+# A subnet in each spoke account. AWS: reached through the transit gateway; Azure: through the Virtual WAN hub and its
+# ExpressRoute association.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNetworkSegment
+  data:
+    - owner: "C900"
+      customer_name: "payments-aws"
+      environment: "p"
+      security_zone: "PROD"
+      segment_type: "cloud_subnet"
+      virtual_network: "vpc-c900-payments"
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      cidr_block: "10.205.1.0/24"
+      customer_deployment: "C900-P-PAYMENTS-AWS-EU-CENTRAL-1"
+    - owner: "C900"
+      customer_name: "analytics-aws"
+      environment: "p"
+      security_zone: "PROD"
+      segment_type: "cloud_subnet"
+      virtual_network: "vpc-c900-analytics"
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      cidr_block: "10.206.1.0/24"
+      customer_deployment: "C900-P-ANALYTICS-AWS-EU-CENTRAL-1"
+    - owner: "C900"
+      customer_name: "shared-aws"
+      environment: "p"
+      security_zone: "PROD"
+      segment_type: "cloud_subnet"
+      virtual_network: "vpc-c900-shared"
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      cidr_block: "10.207.1.0/24"
+      customer_deployment: "C900-P-SHARED-AWS-EU-CENTRAL-1"
+    - owner: "C900"
+      customer_name: "payments-azure"
+      environment: "p"
+      security_zone: "PROD"
+      segment_type: "cloud_subnet"
+      virtual_network: "vnet-c900-payments-weu"
+      availability_zone: ["westeurope", "westeurope-1"]
+      cidr_block: "10.208.1.0/24"
+      customer_deployment: "C900-P-PAYMENTS-AZURE-WESTEUROPE"
+    - owner: "C900"
+      customer_name: "analytics-azure"
+      environment: "p"
+      security_zone: "PROD"
+      segment_type: "cloud_subnet"
+      virtual_network: "vnet-c900-analytics-weu"
+      availability_zone: ["westeurope", "westeurope-1"]
+      cidr_block: "10.209.1.0/24"
+      customer_deployment: "C900-P-ANALYTICS-AZURE-WESTEUROPE"
+    - owner: "C900"
+      customer_name: "identity-azure"
+      environment: "p"
+      security_zone: "PROD"
+      segment_type: "cloud_subnet"
+      virtual_network: "vnet-c900-identity-weu"
+      availability_zone: ["westeurope", "westeurope-1"]
+      cidr_block: "10.210.1.0/24"
+      customer_deployment: "C900-P-IDENTITY-AZURE-WESTEUROPE"

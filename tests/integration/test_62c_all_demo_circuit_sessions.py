@@ -67,14 +67,9 @@ from .interconnect_rules import (
     _sessions_by_name,
 )
 from .routed_link_rules import LABEL_HANDOFF, routed_session_errors
+from .service_inventory_helpers import fetch_transit_inventory
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-
-def _cluster_members(context: dict) -> frozenset[str]:
-    """The ids of the devices of the cluster a serving context sits on."""
-    cluster = (context.get("cluster") or {}).get("node") or {}
-    return frozenset(edge["node"]["id"] for edge in (cluster.get("capabilities") or {}).get("edges", []))
 
 
 class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
@@ -106,6 +101,15 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         deployments = {
             edge["node"]["name"]["value"]: edge["node"] for edge in result["TopologyCustomerColocation"]["edges"]
         }
+        # A context's members (`shared_devices`) and legs (derived from them), by context id.
+        inventory = {
+            str(c["id"]): c
+            for c in (await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))["contexts"]
+        }
+
+        def members(context: dict) -> frozenset[str]:
+            """The ids of the firewalls that are members of a serving context."""
+            return frozenset(inventory.get(str(context["id"]), {}).get("member_ids") or [])
 
         errors: list[str] = []
         if sorted(deployments) != sorted(ALL_DEMO_COLOCATION_SERVED):
@@ -139,7 +143,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     )
                 continue
 
-            clusters = {_cluster_members(c) for c in contexts}
+            clusters = {members(c) for c in contexts}
             if len(contexts) != len(serving_zones) or clusters != {frozenset(ids) for ids in firewall_zones.values()}:
                 errors.append(
                     f"{name}: served by {[c['name']['value'] for c in contexts]}, expected one shared context on "
@@ -147,7 +151,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 )
                 continue
             for zone_name, zone_firewalls in sorted(firewall_zones.items()):
-                context = next(c for c in contexts if _cluster_members(c) == zone_firewalls)
+                context = next(c for c in contexts if members(c) == zone_firewalls)
                 context_name = context["name"]["value"]
                 if (context.get("tenant") or {}).get("node"):
                     errors.append(
@@ -168,11 +172,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 if not vlan or not FW_CONTEXT_VLAN_START <= int(vlan) <= FW_CONTEXT_VLAN_END:
                     errors.append(f"{name}: '{context_name}' VLAN {vlan}, expected one in the zone pool")
                     continue
-                # Sub-interfaces are `<uplink>.<vlan>`; the tagged edge ports (Ethernet1/15-16) have no dot.
+                # The legs are the members' `<uplink>.<vlan>` sub-interfaces tagged with the transit VLANs.
                 sub_vlans = sorted(
-                    str(edge["node"]["name"]["value"]).rsplit(".", 1)[-1]
-                    for edge in (context.get("capabilities") or {}).get("edges", [])
-                    if "." in str(edge["node"]["name"]["value"])
+                    str(leg["interface"]).rsplit(".", 1)[-1]
+                    for leg in inventory.get(str(context["id"]), {}).get("legs") or []
                 )
                 expected_vlans = sorted(
                     str(transit_vlan(int(vlan), transit_namespace_type(namespace)))
@@ -386,7 +389,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             )
         )
         pools: dict[str, list[ipaddress.IPv4Network]] = {}
-        for namespace in sorted({c["ip_namespace"] for c in handoffs.values() if c["ip_namespace"]}):
+        for namespace in sorted({c["security_zone"] for c in handoffs.values() if c["security_zone"]}):
             pool = await client.execute_graphql(
                 query=EDGE_PAIR_POOL_QUERY, variables={"name": f"Handoff-{namespace}-IPv4"}, branch_name=scenario_branch
             )
@@ -405,7 +408,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     name,
                     circuit,
                     sessions.get(f"{name}-bgp"),
-                    pools=pools.get(circuit["ip_namespace"] or "", []),
+                    pools=pools.get(circuit["security_zone"] or "", []),
                     prefixes=prefixes.get(f"{LABEL_HANDOFF} {name}"),
                     party=ALL_DEMO_HANDOFF_PARTY_ASNS.get(name),
                 )
@@ -477,8 +480,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     ) -> None:
         """Verify the ISP transit sessions and that each DC's DCI lands on both upstream BGWs.
 
-        The four TRANSIT-* eBGP sessions run in the INTERNET namespace (an
-        `internet`-type namespace is what makes the edge filter them and
+        The four TRANSIT-* eBGP sessions run in the INTERNET VRF (an
+        `internet`-type zone is what makes the edge filter them and
         export 0/0 as EVPN type-5). The upstream BGW of a DC is the edge its
         dark fibres end on: both edges of its metro, each a Multi-Site BGW with its own DCI.
         """
@@ -508,13 +511,16 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if len(local) != 1:
                 errors.append(f"{name}: {len(local)} interface(s) on {edge_device}, expected 1")
                 continue
-            namespace = (((local[0].get("ip_address") or {}).get("node") or {}).get("ip_namespace") or {}).get(
-                "node"
-            ) or {}
-            if namespace.get("name", {}).get("value") != "INTERNET":
-                errors.append(f"{name}: local address of {edge_device} is not in namespace INTERNET")
-            elif namespace["namespace_type"]["value"] != "internet":
-                errors.append(f"{name}: namespace INTERNET has type {namespace['namespace_type']['value']}")
+            # The routing zone of the local interface is its VRF instance's (a ManagedVRF among its capabilities).
+            zones = [
+                (edge["node"].get("security_zone") or {}).get("node") or {}
+                for edge in local[0]["capabilities"]["edges"]
+                if edge["node"]["__typename"] == "ManagedVRF"
+            ]
+            if len(zones) != 1 or zones[0].get("name", {}).get("value") != "INTERNET":
+                errors.append(f"{name}: local interface of {edge_device} is not in the INTERNET VRF")
+            elif zones[0]["vrf_type"]["value"] != "internet":
+                errors.append(f"{name}: zone INTERNET has type {zones[0]['vrf_type']['value']}")
 
         transit_edges = set(ALL_DEMO_INTERNET_TRANSIT_PEERINGS.values())
         if transit_edges != ALL_DEMO_INTERNET_BGWS:
@@ -770,8 +776,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     if not parent or end["name"]["value"] != f"{parent}.{tag}":
                         errors.append(f"{name}: {device} interface {end['name']['value']}, expected <port>.{tag}")
                     ip = ((end.get("ip_address") or {}).get("node")) or {}
-                    if ((ip.get("ip_namespace") or {}).get("node") or {}).get("name", {}).get("value") != namespace:
-                        errors.append(f"{name}: {device} address is not in {namespace}")
+                    zones = [
+                        ((e["node"].get("security_zone") or {}).get("node") or {}).get("name", {}).get("value")
+                        for e in end["capabilities"]["edges"]
+                        if e["node"]["__typename"] == "ManagedVRF"
+                    ]
+                    if zones != [namespace]:
+                        errors.append(f"{name}: {device} interface is in VRF(s) {zones}, expected {namespace}")
                     if ip.get("address"):
                         networks.add(ipaddress.IPv4Interface(ip["address"]["value"]).network)
                 if len(networks) != 1 or next(iter(networks)).prefixlen != 31:

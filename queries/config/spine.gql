@@ -4,18 +4,46 @@ query spine_config($device: String!) {
       node {
         __typename
         id
-        name { value }
-        ... on DcimDeviceManaged {
-          role { value }
-          platform { node { id name { value } } }
-          primary_address { node { address { value } ip_namespace { node { name { value } } } } }
-          tags { edges { node { name { value } } } }
+        name {
+          value
         }
-
-        # Device Services (BGP, OSPF) with nested peerings
+        ... on DcimDeviceManaged {
+          role {
+            value
+          }
+          platform {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+          primary_address {
+            node {
+              address {
+                value
+              }
+              ip_namespace {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+          tags {
+            edges {
+              node {
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
         ...DeviceCapabilitiesOnDeviceFields
-
-        # The hosting deployment: the loopback supernet and the staging switch of the BGP route protection.
         ... on DcimPhysicalDevice {
           deployment {
             node {
@@ -23,23 +51,42 @@ query spine_config($device: String!) {
             }
           }
         }
-
-        # Interface Information
         interfaces {
           edges {
             node {
               __typename
-              name { value }
-              description { value }
-              status { value }
-              role { value }
+              name {
+                value
+              }
+              description {
+                value
+              }
+              status {
+                value
+              }
+              role {
+                value
+              }
+              ...InterfaceRoutingZoneFields
               ... on DcimPhysicalInterface {
-                interface_type { value }
-                mtu { value }
+                interface_type {
+                  value
+                }
+                mtu {
+                  value
+                }
                 ip_address {
                   node {
-                    address { value }
-                    ip_namespace { node { name { value } } }
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
                 cable {
@@ -49,16 +96,23 @@ query spine_config($device: String!) {
                       edges {
                         node {
                           __typename
+                          ...InterfaceRoutingZoneFields
                           ... on DcimPhysicalInterface {
-                            name { value }
+                            name {
+                              value
+                            }
                             ip_address {
                               node {
-                                address { value }
+                                address {
+                                  value
+                                }
                               }
                             }
                             device {
                               node {
-                                name { value }
+                                name {
+                                  value
+                                }
                               }
                             }
                           }
@@ -68,31 +122,58 @@ query spine_config($device: String!) {
                   }
                 }
               }
-
               ... on DcimVirtualInterface {
+                vlan_id {
+                  value
+                }
                 ip_address {
                   node {
-                    address { value }
-                    ip_namespace { node { name { value } } }
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
               }
-
               ... on DcimLAGInterface {
-                lag_id { value }
-                lacp_mode { value }
-                mtu { value }
-                minimum_links { value }
+                lag_id {
+                  value
+                }
+                lacp_mode {
+                  value
+                }
+                mtu {
+                  value
+                }
+                minimum_links {
+                  value
+                }
                 ip_address {
                   node {
-                    address { value }
-                    ip_namespace { node { name { value } } }
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
                 member_interfaces {
                   edges {
                     node {
-                      name { value }
+                      name {
+                        value
+                      }
                     }
                   }
                 }
@@ -104,24 +185,52 @@ query spine_config($device: String!) {
       }
     }
   }
-
-  # The EVPN Multi-Site VIPs of the model and the loopbacks of the border gateways that carry them: the far end
-  # of a fabric or DCI session and the VIPs every underlay session may carry
-  # (transforms/helpers/bgp_facts.py). A handful of interfaces, however large the fleet.
   DcimVirtualInterface(role__value: "multisite-vip") {
     edges {
       node {
-        ip_address { node { address { value } } }
+        ...InterfaceRoutingZoneFields
+        ip_address {
+          node {
+            address {
+              value
+            }
+          }
+        }
         device {
           node {
-            name { value }
-            ... on DcimDeviceManaged { role { value } }
+            name {
+              value
+            }
+            ... on DcimDeviceManaged {
+              role {
+                value
+              }
+            }
             interfaces(role__values: ["loopback", "loopback-vtep"]) {
               edges {
                 node {
-                  role { value }
-                  ... on DcimVirtualInterface { ip_address { node { address { value } } } }
-                  ... on DcimPhysicalInterface { ip_address { node { address { value } } } }
+                  role {
+                    value
+                  }
+                  ...InterfaceRoutingZoneFields
+                  ... on DcimVirtualInterface {
+                    ip_address {
+                      node {
+                        address {
+                          value
+                        }
+                      }
+                    }
+                  }
+                  ... on DcimPhysicalInterface {
+                    ip_address {
+                      node {
+                        address {
+                          value
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -130,34 +239,66 @@ query spine_config($device: String!) {
       }
     }
   }
-
-  # Route protection (utils/bgp_expectation.py, transforms/helpers/bgp_facts.py): the EVPN type-5 routes of a VRF are
-  # prefixes of its namespace, so a device's EVPN filter is the prefixes of the namespaces it is a member of (a
-  # spine: all of them), the default route only from a default exit, and the L2 VNIs bound the route count.
-  # One aliased root per environment namespace type (the namespaces are data/bootstrap/22_namespaces.yml).
-  environment_prefixes_prod: IpamPrefix(ip_namespace__namespace_type__value: "prod") {
-    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  environment_segments: ManagedNetworkSegment {
+    edges {
+      node {
+        ...SegmentRoutingPrefixFields
+      }
+    }
   }
-  environment_prefixes_non_prod: IpamPrefix(ip_namespace__namespace_type__value: "non_prod") {
-    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+  environment_zones: SecurityZone {
+    edges {
+      node {
+        ...EnvironmentRoutingZoneFields
+      }
+    }
   }
-  environment_prefixes_internet: IpamPrefix(ip_namespace__namespace_type__value: "internet") {
-    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
-  }
-  environment_prefixes_management: IpamPrefix(ip_namespace__namespace_type__value: "management") {
-    edges { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } }
-  }
-  # The devices in each namespace's VRF instance: a border gateway in an internet one is the default exit, and a border
-  # in a tenant one originates the shared firewall context's default route (get_exchange_routes).
   ManagedVRF {
     edges {
       node {
-        namespace { node { name { value } namespace_type { value } } }
-        shared_devices { edges { node { name { value } ... on DcimDeviceManaged { role { value } } } } }
+        security_zone {
+          node {
+            ...RoutingZoneFields
+          }
+        }
+        shared_devices {
+          edges {
+            node {
+              name {
+                value
+              }
+              ... on DcimDeviceManaged {
+                role {
+                  value
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
   ManagedVxlanSegment {
-    edges { node { id } }
+    edges {
+      node {
+        id
+        security_zone {
+          node {
+            ...RoutingZoneFields
+          }
+        }
+        gateway {
+          node {
+            ip_prefix {
+              node {
+                prefix {
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }

@@ -1,0 +1,12 @@
+# TopologyCustomerCloud declarations in recursive dependency order.
+# The footprint of C900 in the AWS account.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner: "C900"
+      environment: "p"
+      account: "c900-aws-prod"
+      customer_name: "demo-aws"
+      parent: "eu-central-1"

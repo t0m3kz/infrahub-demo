@@ -1,0 +1,42 @@
+# ManagedVxlanSegment declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: C900
+      customer_name: wifi-corp
+      environment: p
+      description: "Staff Wi-Fi: the intranet and the internet"
+      customer_deployments: ["C900-OFFICE"]
+      security_zone: PROD
+      gateway:
+        data:
+          address: "10.96.2.1/24"
+          description: Gateway of c900-wifi-corp-p
+          ip_namespace: "default"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.96.2.0/24"
+              ip_namespace: "default"
+              status: active
+              description: Office segment c900-wifi-corp-p
+    - owner: C900
+      customer_name: wifi-guest
+      environment: p
+      description: "Guest Wi-Fi: the internet and nothing else"
+      customer_deployments: ["C900-OFFICE"]
+      security_zone: PROD
+      gateway:
+        data:
+          address: "10.96.1.1/24"
+          description: Gateway of c900-wifi-guest-p
+          ip_namespace: "default"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.96.1.0/24"
+              ip_namespace: "default"
+              status: active
+              description: Office segment c900-wifi-guest-p

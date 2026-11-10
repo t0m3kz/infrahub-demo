@@ -1,0 +1,17 @@
+# Internal service exchanges of the context: their legs are the context's authored leg interfaces in their two VRFs
+# (derived, utils/service_contexts.py exchange_legs).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyRoutedExchange
+  data:
+    - name: c900-waw1-fw-01-waw1-fw-02-prod-PROD-INTERNET
+      status: active
+      gateway: c900-waw1-fw-01-waw1-fw-02-prod
+      vrf_a: [DC-WAW1, PROD]
+      vrf_z: [DC-WAW1, INTERNET]
+    - name: c900-waw1-fw-01-waw1-fw-02-prod-PROD-MANAGEMENT
+      status: active
+      gateway: c900-waw1-fw-01-waw1-fw-02-prod
+      vrf_a: [DC-WAW1, PROD]
+      vrf_z: [DC-WAW1, MANAGEMENT]

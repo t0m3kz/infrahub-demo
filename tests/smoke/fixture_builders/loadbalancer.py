@@ -19,8 +19,8 @@ def _lb_members(device_name: str, peer_name: str) -> list[dict]:
 
 
 _LB_CONTEXT_NAMESPACES: dict[str, dict[str, Any]] = {
-    "PROD": {"namespace_type": "prod", "l3_vni": 60000},
-    "NON-PROD": {"namespace_type": "non_prod", "l3_vni": 60001},
+    "PROD": {"vrf_type": "prod", "l3_vni": 60000},
+    "NONPROD": {"vrf_type": "non_prod", "l3_vni": 60001},
 }
 
 
@@ -28,16 +28,16 @@ def _lb_leg_iface(*, device: str, name: str, address: str, namespace: str) -> di
     """A member's leg sub-interface as LoadbalancerContextConfigFields selects it."""
     ns = _LB_CONTEXT_NAMESPACES[namespace]
     return {
+        "security_zone": _node({"name": _v(namespace), "vrf_type": _v(ns["vrf_type"]), "l3_vni": _v(ns["l3_vni"])}),
         "__typename": "DcimVirtualInterface",
         "name": _v(name),
-        "device": _node({"name": _v(device), "role": _v("load-balancer")}),
-        "parent_interface": _node({"name": _v(name.split(".")[0])}),
+        "vlan_id": _v(int(name.rsplit(".", 1)[1])),
+        "device": _node({"id": f"dev-{device}", "name": _v(device), "role": _v("load-balancer")}),
+        "parent_interface": _node({"name": _v(name.split(".")[0]), "device": _node({"id": f"dev-{device}"})}),
         "ip_address": _node(
             {
                 "address": _v(address),
-                "ip_namespace": _node(
-                    {"name": _v(namespace), "namespace_type": _v(ns["namespace_type"]), "l3_vni": _v(ns["l3_vni"])}
-                ),
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         ),
     }
@@ -80,7 +80,7 @@ def _lb_vip(
 
 def build_lb_context_data(*, device_name: str, platform: str) -> dict:
     """Shared load-balancer pair (device = primary member) hosting a shared PROD and a shared
-    NON-PROD context, one VIP each, next to a management port and the uplink trunk."""
+    NONPROD context, one VIP each, next to a management port and the uplink trunk."""
     peer_name = device_name.replace("01", "02")
     cluster = f"{device_name}-{peer_name}-ha"
     # (namespace, context VLAN, leg /29 base, VIP /26, VIP)
@@ -101,7 +101,7 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
             },
         ),
         (
-            "NON-PROD",
+            "NONPROD",
             3101,
             "100.66.80",
             "100.66.112.0/26",
@@ -119,9 +119,10 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
     contexts = []
     leg_ifaces = []
     for namespace, vlan_id, leg_base, vip_prefix, vip in specs:
-        leg_name = f"eth1.{vlan_id + (200 if namespace == 'NON-PROD' else 0)}"
+        leg_name = f"eth1.{vlan_id + (200 if namespace == 'NONPROD' else 0)}"
         contexts.append(
             {
+                "__typename": "ManagedLoadbalancerContext",
                 "id": f"ctx-{namespace}",
                 "name": _v(f"{cluster}-{namespace}"),
                 "vlan_id": _v(vlan_id),
@@ -151,7 +152,8 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
                 "status": _v("active"),
                 "role": _v("uplink"),
                 "ip_address": _node({"address": _v(f"{leg_base}.5/29")}),
-                "parent_interface": _node({"name": _v("eth1")}),
+                "device": _node({"id": "dev-lb"}),
+                "parent_interface": _node({"name": _v("eth1"), "device": _node({"id": "dev-lb"})}),
                 "capabilities": _edges([{"__typename": "ManagedLoadbalancerContext"}]),
             }
         )
@@ -165,7 +167,6 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
         "lb_type": _v("l4_software" if platform.startswith("haproxy") else "l4_hardware"),
         "scheme": _v("internal"),
         "capabilities": _edges(_lb_members(device_name, peer_name)),
-        "contexts": _edges(contexts),
     }
     interfaces = [
         {
@@ -198,6 +199,7 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
             }
         ),
         "capabilities": _edges([ha_cap]),
+        "shared_capabilities": _edges(contexts),
         "interfaces": _edges(interfaces),
     }
     return {"DcimPhysicalDevice": _edges([device_node]), "DcimVirtualDevice": _edges([])}
@@ -207,7 +209,7 @@ def write_fixtures() -> tuple[int, int]:
     """Write the load-balancer fixtures."""
     generated = errors = 0
 
-    # Load-balancer pair hosting a shared PROD and a shared NON-PROD context (one-arm leg, VIPs)
+    # Load-balancer pair hosting a shared PROD and a shared NONPROD context (one-arm leg, VIPs)
     print("\nGenerating load-balancer context fixtures:")
     g, e = write_data_fixtures(
         (

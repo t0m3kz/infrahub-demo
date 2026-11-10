@@ -203,15 +203,6 @@ nodes:
           - name: static
             label: Static
             color: "#95A5A6"
-      - name: vlan_id
-        kind: Number
-        label: "VLAN ID"
-        optional: true
-        order_weight: 2030
-        description: "The VLAN of the peering on its transport (a VLAN-based peering)"
-        parameters:
-          min_value: 1
-          max_value: 4094
       - name: tunnel_index
         kind: Number
         label: "Tunnel"
@@ -551,7 +542,6 @@ nodes:
       - CoreArtifactTarget
       - DcimDevice
       - DcimDeviceManaged
-      - DcimCapabilities
       - DcimSoftwareRunner
     uniqueness_constraints:
       - ["name__value"]

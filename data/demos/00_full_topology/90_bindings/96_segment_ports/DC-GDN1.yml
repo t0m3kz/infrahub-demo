@@ -1,0 +1,53 @@
+---
+# The switch ports of each VLAN row of DC-GDN1: a port carries a segment as a member of its switch's VLAN row
+# (ManagedSegmentVlan: the segment's deployment on that one switch, with its vlan_id), one of the row's `capabilities`
+# (the interface edge, schemas/extensions/service/segment.yml). An upsert of that list replaces it, so each row's whole
+# list is here, once, after every port and row it names is loaded (90_bindings loads last). This is the REALIZATION:
+# where a generator runs, the segment reconcile writes it from the deployment's assigned interfaces (the request,
+# 95b_segment_requests) and the component-derived ports; 00_full runs no generator, so both are data and a unit test
+# keeps them equal. A server port carries no membership (checks/virtual_switch.py reads the port groups); a border
+# leaf's Ethernet1/25 is the service port facing the firewall pair that terminates the segment.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSegmentVlan
+  data:
+    - device: gdn1-bl-01
+      vlan_id: 350
+      segment_deployment: ["c900-internal-fw-gdn1-p", "DC-GDN1"]
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-bl-01, name: "Ethernet1/25"}
+    - device: gdn1-bl-02
+      vlan_id: 350
+      segment_deployment: ["c900-internal-fw-gdn1-p", "DC-GDN1"]
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-bl-02, name: "Ethernet1/25"}
+    - device: gdn1-leaf-01
+      vlan_id: 300
+      segment_deployment: ["c900-db-p", "DC-GDN1"]
+      capabilities:
+        - kind: DcimLAGInterface
+          data: {device: gdn1-leaf-01, name: "Port-Channel10", lag_id: 10}
+    - device: gdn1-leaf-01
+      vlan_id: 350
+      segment_deployment: ["c900-internal-fw-gdn1-p", "DC-GDN1"]
+      capabilities:
+        - kind: DcimLAGInterface
+          data: {device: gdn1-leaf-01, name: "Port-Channel10", lag_id: 10}
+        - kind: DcimPhysicalInterface
+          data: {device: gdn1-leaf-01, name: "Ethernet1/5"}
+    - device: gdn1-leaf-02
+      vlan_id: 300
+      segment_deployment: ["c900-db-p", "DC-GDN1"]
+      capabilities:
+        - kind: DcimLAGInterface
+          data: {device: gdn1-leaf-02, name: "Port-Channel10", lag_id: 10}
+    - device: gdn1-leaf-02
+      vlan_id: 350
+      segment_deployment: ["c900-internal-fw-gdn1-p", "DC-GDN1"]
+      capabilities:
+        - kind: DcimLAGInterface
+          data: {device: gdn1-leaf-02, name: "Port-Channel10", lag_id: 10}

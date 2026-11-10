@@ -1,0 +1,392 @@
+# The nested data a device's services are derived from (utils/service_contexts.py, utils/device_services.py): which
+# SVIs a switch steers to a firewall (PBR), and the legs and border ports of the service contexts its members hold.
+# None of it is stored on an interface: it is read from the device, its cables and the members behind them.
+#
+# Every field is selected once per object (the server answers only the first selection of a field), and a named
+# fragment is never spread directly inside an inline fragment (it resolves to nulls); the spreads below sit at node
+# level or under a field.
+
+# A service context as seen from a member device (shared_capabilities). The served footprints are aliased per kind:
+# the two kinds both have `served_deployments`, with a different peer.
+fragment ServiceContextFields on ManagedSecurityContext {
+  id
+  ... on ManagedGeneric {
+    name {
+      value
+    }
+  }
+  vlan_id {
+    value
+  }
+  tenant {
+    node {
+      id
+      ... on TopologyEnvironmentScoped {
+        environment {
+          value
+        }
+      }
+    }
+  }
+}
+
+fragment FirewallServedFields on ManagedFirewallContext {
+  fw_served: served_deployments {
+    edges {
+      node {
+        id
+        ... on TopologyEnvironmentScoped {
+          environment {
+            value
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment LoadbalancerServedFields on ManagedLoadbalancerContext {
+  lb_served: served_deployments {
+    edges {
+      node {
+        id
+        ... on TopologyEnvironmentScoped {
+          environment {
+            value
+          }
+        }
+      }
+    }
+  }
+}
+
+# An interface of a member device: a leg of its contexts is a sub-interface of its uplink, tagged with the transit
+# VLAN (`vlan_id`), with an address in a VRF.
+fragment ServiceMemberInterfaceFields on DcimInterface {
+  __typename
+  id
+  name {
+    value
+  }
+  role {
+    value
+  }
+  ...InterfaceRoutingZoneFields
+  ... on DcimVirtualInterface {
+    vlan_id {
+      value
+    }
+    parent_interface {
+      node {
+        name {
+          value
+        }
+      }
+    }
+    ip_address {
+      node {
+        address {
+          value
+        }
+        ip_namespace {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# A device that is a member of service contexts (a firewall or a load balancer): its contexts and its interfaces, whose
+# legs are the sub-interfaces of the first uplink tagged with a transit VLAN.
+fragment ServiceMemberFields on DcimDevice {
+  __typename
+  id
+  name {
+    value
+  }
+  ... on DcimDeviceManaged {
+    role {
+      value
+    }
+    shared_capabilities {
+      edges {
+        node {
+          __typename
+          ...ServiceContextFields
+          ...FirewallServedFields
+          ...LoadbalancerServedFields
+        }
+      }
+    }
+  }
+  interfaces {
+    edges {
+      node {
+        ...ServiceMemberInterfaceFields
+      }
+    }
+  }
+}
+
+# The far end of a border service port's cable: the member's physical port (its uplink), the device with its contexts.
+fragment ServiceFarEndFields on DcimInterface {
+  __typename
+  id
+  name {
+    value
+  }
+  role {
+    value
+  }
+  device {
+    node {
+      ...ServiceMemberFields
+    }
+  }
+}
+
+# A hosted member (a virtual device) has no cable: its NIC is pinned to a port of its host.
+fragment ServiceHostedNicFields on DcimPhysicalInterface {
+  sub_interfaces {
+    edges {
+      node {
+        __typename
+        id
+        ... on DcimInterface {
+          name {
+            value
+          }
+          role {
+            value
+          }
+        }
+        ... on DcimVirtualInterface {
+          device {
+            node {
+              ...ServiceMemberFields
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# A border service port: the cable to the member behind it.
+fragment ServiceBorderPortFields on DcimPhysicalInterface {
+  cable {
+    node {
+      id
+      endpoints {
+        edges {
+          node {
+            ...ServiceFarEndFields
+            ...ServiceHostedNicFields
+          }
+        }
+      }
+    }
+  }
+}
+
+# The service ports of a switch (a border leaf, a border spine, an edge) under their own key: the other interfaces are
+# not walked to the members behind a cable.
+fragment ServiceBorderPortsFields on DcimDevice {
+  service_ports: interfaces(role__values: ["firewall", "load-balancer"]) {
+    edges {
+      node {
+        __typename
+        id
+        name {
+          value
+        }
+        role {
+          value
+        }
+        ...ServiceBorderPortFields
+      }
+    }
+  }
+}
+
+fragment ServiceHostingFields on TopologyDeployment {
+  __typename
+  id
+  name {
+    value
+  }
+  ... on TopologyPod {
+    parent {
+      node {
+        __typename
+        id
+        name {
+          value
+        }
+      }
+    }
+  }
+  ... on TopologyColocationZone {
+    parent {
+      node {
+        __typename
+        id
+        name {
+          value
+        }
+      }
+    }
+  }
+  ... on TopologyVirtualColocation {
+    parent {
+      node {
+        __typename
+        id
+        name {
+          value
+        }
+      }
+    }
+  }
+}
+
+# A segment row of the device (its `vlans`), with the footprints of its segment and the contexts that serve
+# them. `stretch_scope`: a border leaf carries a stretched segment as L2 only (utils/segment_addressing.py).
+fragment ServiceRowFields on ManagedSegmentVlan {
+  id
+  vlan_id {
+    value
+  }
+  segment_deployment {
+    node {
+      segment {
+        node {
+          __typename
+          id
+          security_zone {
+            node {
+              ...RoutingZoneFields
+            }
+          }
+          gateway {
+            node {
+              id
+              address {
+                value
+              }
+              ip_prefix {
+                node {
+                  ip_namespace {
+                    node {
+                      name {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          ... on ManagedVxlanSegment {
+            name {
+              value
+            }
+            terminated_on {
+              node {
+                id
+              }
+            }
+            stretch_scope {
+              value
+            }
+            customer_deployments {
+              edges {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                  parent {
+                    node {
+                      __typename
+                      id
+                    }
+                  }
+                  ... on TopologyCustomerDC {
+                    serving_firewall_contexts {
+                      edges {
+                        node {
+                          id
+                        }
+                      }
+                    }
+                  }
+                  ... on TopologyCustomerColocation {
+                    serving_firewall_contexts {
+                      edges {
+                        node {
+                          id
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# The root `DeviceServices` of a switch config query (transforms/common.py): the device again, with only what its
+# services derive from: its routed rows and hosting (the steered SVIs), and its service ports with the members behind them.
+fragment DeviceServicesFields on DcimDeviceManaged {
+  __typename
+  id
+  name {
+    value
+  }
+  role {
+    value
+  }
+  status {
+    value
+  }
+  member_of_groups {
+    edges {
+      node {
+        name {
+          value
+        }
+      }
+    }
+  }
+  ... on DcimPhysicalDevice {
+    deployment {
+      node {
+        ...ServiceHostingFields
+      }
+    }
+    vlans {
+      edges {
+        node {
+          ...ServiceRowFields
+        }
+      }
+    }
+  }
+  ... on CloudNetworkAppliance {
+    deployment {
+      node {
+        ...ServiceHostingFields
+      }
+    }
+  }
+  ...ServiceBorderPortsFields
+}

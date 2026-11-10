@@ -3,7 +3,7 @@ no generator instance needed.
 
 Covers rule naming (one rule per dependency and port), rule descriptions
 (including target_fqdn external targets), dependency authorization (owner
-approval, prod/non-prod separation),
+approval, prod/nonprod separation),
 rule-payload building, zone context, and the security_profile-driven mappings.
 """
 
@@ -156,7 +156,7 @@ class TestOwnerAuthorization:
             (_comp("checkout", "C001"), _comp("authentication", "C001")),
             (_comp("checkout", "C001", "s"), _comp("checkout", "C001", "d")),
         ],
-        ids=["same-app", "cross-app", "cross-non-prod-environment"],
+        ids=["same-app", "cross-app", "cross-nonprod-environment"],
     )
     def test_same_owner_is_auto_authorized(self, src: dict, dst: dict) -> None:
         """A flow inside one owner needs no approval."""
@@ -203,7 +203,7 @@ class TestOwnerAuthorization:
 
 
 class TestCrossEnvironmentAuthorization:
-    """Prod and non-prod are never joined; the decision is made from each
+    """Prod and nonprod are never joined; the decision is made from each
     component's own segment, the application environment is governance only."""
 
     @pytest.mark.parametrize(
@@ -219,7 +219,7 @@ class TestCrossEnvironmentAuthorization:
     def test_prod_and_non_prod_segments_are_never_joined_even_when_approved(
         self, src_owner: str, dst_owner: str, src_app: str, dst_app: str, src_env: str, dst_env: str
     ) -> None:
-        """An approval opens a cross-owner flow, never prod <-> non-prod segments."""
+        """An approval opens a cross-owner flow, never prod <-> nonprod segments."""
         src_comp = _comp(src_app, src_owner, src_env, segment=_seg(src_env))
         dst_comp = _comp(dst_app, dst_owner, dst_env, segment=_seg(dst_env))
         dep = {"access_status": "approved"}
@@ -231,7 +231,7 @@ class TestCrossEnvironmentAuthorization:
         assert "joins prod and non-prod" in reason
 
     def test_prod_app_on_non_prod_segment_is_blocked(self) -> None:
-        """Both applications say prod, but a segment is non-prod: the segment decides."""
+        """Both applications say prod, but a segment is nonprod: the segment decides."""
         src_comp = _comp("checkout", "C001", "p", segment=_seg("p"))
         dst_comp = _comp("checkout", "C001", "p", segment=_seg("s"))
 
@@ -243,7 +243,7 @@ class TestCrossEnvironmentAuthorization:
         assert reason is not None
 
     def test_differing_app_environments_on_same_namespace_type_segments_are_allowed(self) -> None:
-        """The application environment is governance input only: two non-prod segments connect."""
+        """The application environment is governance input only: two nonprod segments connect."""
         src_comp = _comp("checkout", "C001", "p", segment=_seg("s"))
         dst_comp = _comp("checkout", "C001", "d", segment=_seg("d"))
 
@@ -280,7 +280,7 @@ class TestCrossEnvironmentAuthorization:
         assert reason is not None
         assert "unknown" in reason
 
-    @pytest.mark.parametrize("zone", ["INTERNET-ZONE", "MANAGEMENT-ZONE"])
+    @pytest.mark.parametrize("zone", ["INTERNET", "MANAGEMENT"])
     def test_exchange_zone_segment_is_exempt(self, zone: str) -> None:
         """An INTERNET/MANAGEMENT segment is governed by EXCHANGE_PEERS, not by its environment."""
         src_comp = _comp("checkout", "C001", "p", segment=_seg("p"))

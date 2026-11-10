@@ -9,8 +9,9 @@ query tenant_svi_protection {
         __typename
         id
         name { value }
-        security_zone { node { name { value } } }
-        gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } } }
+        security_zone { node { ...RoutingZoneFields } }
+        gateway { node { ip_prefix { node {
+ prefix { value } ip_namespace { node { name { value }  } } } } } }
         security_policy {
           node {
             id

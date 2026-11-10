@@ -123,7 +123,7 @@ router bgp 65000
     address-family l2vpn evpn
       inherit peer-policy EVPN-PEERS-POLICY 1
     !
-  vrf VRF_A
+  vrf PROD
     address-family ipv4 unicast
       advertise l2vpn evpn
       redistribute direct route-map RM-VRF-DIRECT-2-EVPN
@@ -137,12 +137,12 @@ router bgp 65000
 !
 ! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
 !
-vrf context VRF_A
-  vni 50001
-  rd 10.0.0.1:50001
+vrf context PROD
+  vni 60000
+  rd 10.0.0.1:60000
   address-family ipv4 unicast
-    route-target both 65000:50001
-    route-target both 65000:50001 evpn
+    route-target both 65000:60000
+    route-target both 65000:60000 evpn
 !
 interface nve1
   source-interface Loopback0
@@ -153,7 +153,7 @@ interface nve1
   member vni 10200
     suppress-arp
     ingress-replication protocol bgp
-  member vni 50001 associate-vrf
+  member vni 60000 associate-vrf
   no shutdown
 !
 !
@@ -180,12 +180,12 @@ vlan 200
 ! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
 !
 vlan 3900
-  name L3VNI_VRF_A
-  vn-segment 50001
+  name L3VNI_PROD
+  vn-segment 60000
 !
 interface Vlan3900
-  description L3VNI transit SVI for VRF VRF_A
-  vrf member VRF_A
+  description L3VNI transit SVI for VRF PROD
+  vrf member PROD
   ip forward
   mtu 9214
   no shutdown
@@ -197,13 +197,14 @@ fabric forwarding anycast-gateway-mac 001c7300dc01
 !
 interface Vlan100
   description Customer-A
-  vrf member VRF_A
+  vrf member PROD
   ip address 10.100.0.1/24
   fabric forwarding mode anycast-gateway
   no shutdown
 !
 interface Vlan200
   description Customer-A
+  vrf member PROD
   ip address 10.200.0.1/24
   fabric forwarding mode anycast-gateway
   no shutdown

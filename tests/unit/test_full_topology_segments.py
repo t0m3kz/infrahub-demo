@@ -47,7 +47,7 @@ def test_no_segment_nests_its_deployment() -> None:
     assert nesting == []
 
 
-def _deployment_rows() -> list[dict]:
+def _deployment_declarations() -> list[dict]:
     return [
         row
         for _, doc in _documents()
@@ -56,13 +56,130 @@ def _deployment_rows() -> list[dict]:
     ]
 
 
+def _deployment_rows() -> list[dict]:
+    """The realizations with their VLAN rows."""
+    return [row for row in _deployment_declarations() if "vlans" in row]
+
+
+def _svis() -> dict[tuple[str, str], Any]:
+    """(device, name) -> the ``ip_address`` of every segment SVI (role svi) the sample declares."""
+    return {
+        (item["device"], item["name"]): item.get("ip_address")
+        for _, doc in _documents()
+        if (doc.get("spec") or {}).get("kind") == "DcimVirtualInterface"
+        for item in doc["spec"]["data"]
+        if item.get("role") == "svi"
+    }
+
+
+def _gateways() -> dict[str, list[str]]:
+    """Segment name -> the HFID [address, namespace] of its anycast gateway (nested under the segment)."""
+    return {
+        f"{item['owner'].lower()}-{item['customer_name']}-{item['environment']}": [
+            item["gateway"]["data"]["address"],
+            item["gateway"]["data"]["ip_namespace"],
+        ]
+        for _, doc in _documents()
+        if (doc.get("spec") or {}).get("kind") == "ManagedVxlanSegment"
+        for item in doc["spec"]["data"]
+        if item.get("gateway")
+    }
+
+
+def _row_bindings() -> list[dict]:
+    """The port lists of the VLAN rows (90_bindings/96_segment_ports upserts each row by [device, vlan_id] with its
+    ``capabilities``)."""
+    return [
+        row
+        for _, doc in _documents()
+        if (doc.get("spec") or {}).get("kind") == "ManagedSegmentVlan"
+        for row in doc["spec"]["data"]
+        if "capabilities" in row
+    ]
+
+
+def test_every_svi_is_a_row_of_its_device_and_carries_its_segment_s_gateway() -> None:
+    """A row names no SVI: the SVI of a row is its device's ``Vlan<vlan_id>``, and it carries the segment's anycast
+    gateway (the existing address object, referenced by [address, namespace])."""
+    segment_of = {
+        (vlan["device"], f"Vlan{vlan['vlan_id']}"): row["segment"]
+        for row in _deployment_rows()
+        for vlan in row["vlans"]["data"]
+    }
+    assert all("svi" not in vlan for row in _deployment_rows() for vlan in row["vlans"]["data"])
+    gateways = _gateways()
+    svis = _svis()
+    assert svis
+    for key, ip_address in svis.items():
+        assert key in segment_of, key
+        assert ip_address == gateways[segment_of[key]], key
+
+
+def test_every_port_of_a_row_is_a_switch_port_of_the_row_s_switch() -> None:
+    """A port is a member of its own switch's VLAN row, a physical port or a LAG, each row's list declared once (an
+    upsert of the list replaces it), and the row is one its deployment declares (a person only picks an existing
+    row)."""
+    declared = {
+        (vlan["device"], vlan["vlan_id"]): (row["segment"], row["deployment"])
+        for row in _deployment_rows()
+        for vlan in row["vlans"]["data"]
+    }
+    bindings = _row_bindings()
+    keys = [(row["device"], row["vlan_id"]) for row in bindings]
+    assert bindings and len(keys) == len(set(keys))
+    for row in bindings:
+        assert declared.get((row["device"], row["vlan_id"])) == tuple(row["segment_deployment"]), row
+        for port in row["capabilities"]:
+            assert port["kind"] in {"DcimPhysicalInterface", "DcimLAGInterface"}, port
+            assert port["data"]["device"] == row["device"], (row["device"], port)
+
+
+def test_one_row_of_a_segment_per_port() -> None:
+    """A port names at most one row of a segment (checks/interface_layers.py R4)."""
+    seen: dict[tuple[str, str, str], list[int]] = {}
+    for row in _row_bindings():
+        segment = row["segment_deployment"][0]
+        for port in row["capabilities"]:
+            seen.setdefault((port["data"]["device"], port["data"]["name"], segment), []).append(row["vlan_id"])
+    assert {key: vlans for key, vlans in seen.items() if len(vlans) > 1} == {}
+
+
+def test_no_port_names_a_segment() -> None:
+    """The port-to-segment edge is gone: a port reaches a segment through its switch's VLAN row only."""
+    ports = [
+        item
+        for _, doc in _documents()
+        if (doc.get("spec") or {}).get("kind") in {"DcimPhysicalInterface", "DcimLAGInterface"}
+        for item in doc["spec"]["data"]
+        if "segments" in item
+    ]
+    assert ports == []
+
+
 def test_each_dc_declares_its_deployment_with_the_same_vlan_on_both_leaves() -> None:
-    """One deployment row per DC for its own (local) segment, a VLAN row for each leaf of the MLAG pair under one id."""
+    """Each DC's routed local segment has two leaf rows; its firewall-terminated segment also reaches both borders."""
     rows = [row for row in _deployment_rows() if row["segment"] != _STRETCHED and row["deployment"].startswith("DC-")]
-    assert sorted(row["deployment"] for row in rows) == ["DC-GDN1", "DC-KTW1", "DC-WAW1"]
+    assert sorted(row["deployment"] for row in rows) == [
+        "DC-GDN1",
+        "DC-GDN1",
+        "DC-KTW1",
+        "DC-KTW1",
+        "DC-WAW1",
+        "DC-WAW1",
+    ]
     for row in rows:
         vlans = row["vlans"]["data"]
-        assert len(vlans) == 2 and len({vlan["vlan_id"] for vlan in vlans}) == 1
+        site = row["deployment"].split("-")[1].lower()
+        expected_devices = {f"{site}-leaf-01", f"{site}-leaf-02"}
+        terminated = row["segment"] == f"c900-internal-fw-{site}-p"
+        if terminated:
+            expected_devices |= {f"{site}-bl-01", f"{site}-bl-02"}
+        assert {vlan["device"] for vlan in vlans} == expected_devices
+        assert len(vlans) == len(expected_devices) and len({vlan["vlan_id"] for vlan in vlans}) == 1
+        svis, gateway = _svis(), _gateways()[row["segment"]]
+        for vlan in vlans:
+            key = (vlan["device"], f"Vlan{vlan['vlan_id']}")
+            assert (key not in svis) if terminated else (svis.get(key) == gateway), key
         assert {vlan["device"].split("-")[0] for vlan in vlans} == {row["deployment"].split("-")[1].lower()}
 
 
@@ -74,6 +191,11 @@ def test_the_stretched_segment_is_shared_one_vni_and_the_vlan_it_gives_on_every_
     assert len(vnis) == 1 and shared_vlan_id(vnis.pop()) is not None
     assert {vlan["vlan_id"] for row in rows for vlan in row["vlans"]["data"]} == {shared_vlan_id(rows[0]["vni"])}
     assert len([vlan for row in rows for vlan in row["vlans"]["data"]]) == 8
+    # A border leaf carries the stretched segment as VLAN and VNI only: it has no SVI, a leaf has one with the gateway.
+    svis, gateway = _svis(), _gateways()[_STRETCHED]
+    for vlan in (vlan for row in rows for vlan in row["vlans"]["data"]):
+        key = (vlan["device"], f"Vlan{vlan['vlan_id']}")
+        assert (svis.get(key) == gateway) if "-leaf-" in vlan["device"] else (key not in svis), key
     segment = next(
         item
         for _, doc in _documents()
@@ -104,9 +226,33 @@ def test_the_office_wifi_segments_are_a_guest_and_a_staff_one_on_the_access_swit
     }
     guest = policies["c900-wifi-guest-p"]["rules"]["data"]
     assert [(rule["action"], rule.get("destination_zone"), rule.get("destination_segment")) for rule in guest] == [
-        ("permit", "INTERNET-ZONE", None)
+        ("permit", "INTERNET", None)
     ]
     assert policies["c900-wifi-guest-p"]["default_action"] == "deny"
     assert any(
         rule.get("destination_segment") == "c900-web-p" for rule in policies["c900-wifi-corp-p"]["rules"]["data"]
     )
+
+
+def _port_key(port: dict[str, Any]) -> tuple[str, str, str]:
+    return (port["kind"], port["data"]["device"], port["data"]["name"])
+
+
+def test_the_memberships_are_exactly_the_requests_per_deployment() -> None:
+    """00_full runs no generator, so it authors the intent (the ports assigned to a deployment, its ``capabilities``,
+    95b_segment_requests) and its realization (the rows' ports, 96_segment_ports) by hand: per deployment, the same
+    set of ports."""
+    requests: dict[tuple[str, str], set[tuple[str, str, str]]] = {}
+    for row in _deployment_declarations():
+        if "capabilities" in row:
+            key = (row["segment"], row["deployment"])
+            assert key not in requests, key
+            requests[key] = {_port_key(port) for port in row["capabilities"]}
+    memberships: dict[tuple[str, str], set[tuple[str, str, str]]] = {}
+    for row in _row_bindings():
+        memberships.setdefault(tuple(row["segment_deployment"]), set()).update(
+            _port_key(port) for port in row["capabilities"]
+        )
+    assert requests and requests == memberships
+    for ports in requests.values():
+        assert {kind for kind, _, _ in ports} <= {"DcimPhysicalInterface", "DcimLAGInterface"}

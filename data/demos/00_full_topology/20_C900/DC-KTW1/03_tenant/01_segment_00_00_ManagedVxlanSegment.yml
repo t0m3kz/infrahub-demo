@@ -1,0 +1,32 @@
+# ManagedVxlanSegment declarations in recursive dependency order.
+# The VXLAN segment of C900, realized on the leaf: segment -> deployment (VNI) -> VLAN row of the leaf (VLAN 100, its
+# SVI, 01_segment_02_00). The gateway 10.90.1.1/24 and its prefix 10.90.1.0/24 exist
+# only for the segment, so they are nested under it. The port Ethernet1/1 of the leaf is a member of the segment's
+# deployment (90_bindings/96_segment_ports/DC-KTW1.yml). The segment is nested under no customer: its owner is the
+# relationship.
+#
+# Its realization in the DC (the second document) is a row of its own, named by its two parents (segment,
+# deployment), so a second load updates it instead of creating it again; it carries the VNI and the VLAN row of each
+# leaf (the MLAG pair carries the segment under one id).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - security_zone: "PROD"
+      owner: C900
+      customer_name: web
+      environment: p
+      customer_deployments: ["C900-P-DC-KTW1"]
+      gateway:
+        data:
+          address: "10.90.1.1/24"
+          description: Gateway of c900-web-p
+          ip_namespace: "default"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.90.1.0/24"
+              ip_namespace: "default"
+              status: active
+              description: DC segment c900-web-p

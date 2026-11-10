@@ -14,6 +14,7 @@ from tests.smoke.fixture_builders.common import (
     _make_segment_deployment,
     _make_segment_node,
     _node,
+    _segment_memberships,
     _v,
     _write_data_fixture,
     write_data_fixtures,
@@ -475,7 +476,7 @@ def build_device_data(
         "primary_address": _node(
             {
                 "address": _v(router_id),
-                "ip_namespace": _node({"name": _v("default")}),
+                "ip_namespace": {"node": {"name": {"value": "default"}}},
             }
         ),
         "tags": _edges([]),
@@ -547,8 +548,7 @@ def build_terminated_segment_data(*, device_name: str, role: str, platform: str)
         )
     else:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["capabilities"] = _edges([])
-        customer_port["segments"] = _edges([seg])
+        customer_port["capabilities"] = _edges(_segment_memberships([seg]))
     # DC-wide view (border-leaf PBR / BGW): the same segment, still no PBR.
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [_deployment_record(seg, _TERMINATED_SEGMENT_KWARGS["vni"])]

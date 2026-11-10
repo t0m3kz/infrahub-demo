@@ -12,6 +12,7 @@ from tests.unit.cloud_leg_helpers import (
     attachment,
     aws_chain,
     cleaned,
+    interface_vrf,
     peering,
     prefix,
 )
@@ -28,6 +29,7 @@ from transforms.helpers.bgp_external import (
     get_external_session_policies,
     registered_by_attachment,
 )
+from utils.routing_domain import RoutingDomainError
 
 _LOCAL = ("eg-fr201", "Ethernet1/13.1000")
 
@@ -112,6 +114,31 @@ class TestLegDerivation:
         assert set(legs_by_interface(legs, "eg-fr201")) == {_LOCAL[1]}
         assert legs_by_interface(legs, "other") == {}
 
+    def test_a_missing_session_and_local_interface_vrf_is_refused(self) -> None:
+        """Neutral prefixes cannot supply a routing context when both explicit owners are absent."""
+        raw = peering("vif", "dx")
+        circuit = raw["capabilities"]["edges"][1]["node"]
+        circuit["vrf"] = {"node": None}
+        circuit["capabilities"]["edges"][0]["node"]["zone_capabilities"] = {"edges": []}
+        with pytest.raises(RoutingDomainError, match="missing VRF instance"):
+            _legs(raw)
+
+    def test_same_zone_different_instance_on_the_local_end_is_refused(self) -> None:
+        """An end's export VRF must agree by scoped ID, not merely by its zone name."""
+        raw = peering("vif", "dx")
+        circuit = raw["capabilities"]["edges"][1]["node"]
+        circuit["capabilities"]["edges"][0]["node"]["zone_capabilities"] = interface_vrf("PROD", "AM")
+        with pytest.raises(RoutingDomainError, match="conflicting VRF instances"):
+            _legs(raw)
+
+    def test_native_cloud_endpoint_has_no_managed_vrf(self) -> None:
+        """Only our interface and the authored session circuit own the export context."""
+        raw = peering("vif", "dx")
+        circuit = raw["capabilities"]["edges"][1]["node"]
+        assert "vrf" not in raw
+        assert "vrf" not in circuit["capabilities"]["edges"][-1]["node"]
+        assert "zone_capabilities" not in circuit["capabilities"]["edges"][-1]["node"]
+
 
 class TestRegisteredPrefixes:
     """Cloud to us: the prefixes behind the peering's gateway."""
@@ -120,7 +147,9 @@ class TestRegisteredPrefixes:
         """dxgw -> tgw (hub hop) -> the VPC attachment: its CIDR block, owned by the transport's owner."""
         peerings, attachments = aws_chain()
         (leg,) = cloud_legs(peerings, attachments)
-        assert [(owner, p["prefix"]) for owner, p in leg.registered] == [("C001", "10.10.0.0/16")]
+        assert [(registration.customer, registration.prefix["prefix"]) for registration in leg.registered] == [
+            ("C001", "10.10.0.0/16")
+        ]
 
     def test_allowed_prefixes_replace_the_network_blocks(self) -> None:
         """An attachment with allowed prefixes lets exactly those through."""
@@ -171,18 +200,31 @@ class TestRegisteredPrefixes:
         )
         assert _blocks(reachable_prefixes(gateway_ref("dxgw"), attachments)) == ["10.30.0.0/16"]
 
-    def test_the_namespace_travels_with_the_prefix(self) -> None:
-        """PROD and NON-PROD blocks stay apart: the edge keeps the ones in the session's own namespace."""
-        attachments = cleaned(
-            attachment(
-                "a", "vgw", network="v", blocks=(prefix("10.10.0.0/16"), prefix("10.50.0.0/16", "NON-PROD", "non_prod"))
-            )
+    def test_each_session_binds_neutral_prefixes_to_its_export_vrf(self) -> None:
+        """The same native cloud space may be registered into distinct scoped session contexts."""
+        attachments = (attachment("a", "vgw", network="v", blocks=(prefix("10.10.0.0/16"),)),)
+        legs = _legs(
+            peering("prod", "dx-p", on="vgw"),
+            peering("nonprod", "dx-n", on="vgw", zone="NONPROD"),
+            attachments=attachments,
         )
-        found = reachable_prefixes(gateway_ref("vgw"), attachments)
-        assert {p["prefix"]: p["ip_namespace"]["name"] for p in found} == {
-            "10.10.0.0/16": "PROD",
-            "10.50.0.0/16": "NON-PROD",
+        assert {leg.peering: leg.registered[0].zone["name"] for leg in legs} == {
+            "prod": "PROD",
+            "nonprod": "NONPROD",
         }
+        assert len({leg.registered[0].vrf["id"] for leg in legs}) == 2
+        assert all("security_zone" not in leg.registered[0].prefix for leg in legs)
+        assert {leg.registered[0].prefix["ip_namespace"]["name"] for leg in legs} == {"default"}
+
+    def test_same_zone_in_two_deployments_retains_distinct_vrf_ids(self) -> None:
+        """A shared policy zone must not collapse deployment-scoped export owners."""
+        legs = _legs(
+            peering("fr", "dx-fr", on="vgw", deployment="FR"),
+            peering("am", "dx-am", on="vgw", deployment="AM"),
+            attachments=(attachment("a", "vgw", network="v", blocks=(prefix("10.10.0.0/16"),)),),
+        )
+        assert {leg.registered[0].zone["name"] for leg in legs} == {"PROD"}
+        assert len({leg.registered[0].vrf["id"] for leg in legs}) == 2
 
     def test_a_public_peering_registers_nothing(self) -> None:
         """A public virtual interface learns the provider's public ranges, which nobody registers."""
@@ -214,11 +256,12 @@ class TestFarEnd:
             "ttl": 1,
             "capabilities": [
                 {
+                    "zone_capabilities": cleaned(*(e["node"] for e in interface_vrf()["edges"])),
                     "name": _LOCAL[1],
                     "device": {"name": _LOCAL[0]},
                     "ip_address": {
                         "address": "10.255.5.5/30",
-                        "ip_namespace": {"name": "PROD", "namespace_type": "prod"},
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
                     },
                 }
             ],
@@ -281,7 +324,11 @@ class TestFarEnd:
 
 
 def _subif(name: str = _LOCAL[1], namespace: str = "PROD") -> dict[str, Any]:
-    return {"name": name, "ip_address": {"address": "10.255.5.5/30", "ip_namespace": {"name": namespace}}}
+    return {
+        "zone_capabilities": cleaned(*(e["node"] for e in interface_vrf(namespace)["edges"])),
+        "name": name,
+        "ip_address": {"address": "10.255.5.5/30", "ip_namespace": {"node": {"name": {"value": "default"}}}},
+    }
 
 
 def _peer_prefixes(legs: list[CloudLeg], interfaces: list[dict[str, Any]]) -> dict[str, dict[str, list[str]]]:
@@ -313,10 +360,10 @@ class TestSessionPolicy:
         assert policy == {"owners": ["C001"], "in": ["10.10.0.0/16"], "out": ["10.5.10.0/24"]}
 
     def test_a_non_prod_session_does_not_accept_a_prod_block(self) -> None:
-        """PROD and NON-PROD never mix: a NON-PROD sub-interface accepts only NON-PROD registrations."""
+        """PROD and NONPROD never mix: a NONPROD sub-interface accepts only NONPROD registrations."""
         peerings, attachments = aws_chain()
         legs = cloud_legs(peerings, attachments)
-        peers = _peer_prefixes(legs, [_subif(namespace="NON-PROD")])
+        peers = _peer_prefixes(legs, [_subif(namespace="NONPROD")])
         assert peers == {_LOCAL[1]: {}}
 
     def test_a_saas_leg_has_the_transports_owner_and_accepts_what_its_gateway_reaches(self) -> None:
@@ -409,4 +456,6 @@ class TestSessionPolicy:
         )
         points = registered_by_attachment(None, None, legs)
         assert list(points) == ["cloud gateway 'ergw'"]
-        assert {(owner, p["prefix"]) for owner, p in points["cloud gateway 'ergw'"]} == {("C001", "10.10.0.0/16")}
+        assert {
+            (registration.customer, registration.prefix["prefix"]) for registration in points["cloud gateway 'ergw'"]
+        } == {("C001", "10.10.0.0/16")}

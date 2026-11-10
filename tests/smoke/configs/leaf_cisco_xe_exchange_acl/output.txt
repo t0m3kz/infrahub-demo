@@ -115,30 +115,30 @@ route-map RM-CONN-2-BGP permit 10
 ! Tenant VRFs (symmetric IRB — one L3 VNI per tenant)
 ! unverified-no-lab: `route-target ... stitching` is how the guide imports and exports a VRF into L2VPN EVPN
 vrf definition INTERNET
- rd 10.0.0.1:50003
+ rd 10.0.0.1:60002
  address-family ipv4
-  route-target export 50003:50003
-  route-target import 50003:50003
-  route-target export 50003:50003 stitching
-  route-target import 50003:50003 stitching
+  route-target export 60002:60002
+  route-target import 60002:60002
+  route-target export 60002:60002 stitching
+  route-target import 60002:60002 stitching
  exit-address-family
 !
 vrf definition MANAGEMENT
- rd 10.0.0.1:50004
+ rd 10.0.0.1:60003
  address-family ipv4
-  route-target export 65000:50004
-  route-target import 65000:50004
-  route-target export 65000:50004 stitching
-  route-target import 65000:50004 stitching
+  route-target export 65000:60003
+  route-target import 65000:60003
+  route-target export 65000:60003 stitching
+  route-target import 65000:60003 stitching
  exit-address-family
 !
 vrf definition PROD
- rd 10.0.0.1:50001
+ rd 10.0.0.1:60000
  address-family ipv4
-  route-target export 65000:50001
-  route-target import 65000:50001
-  route-target export 65000:50001 stitching
-  route-target import 65000:50001 stitching
+  route-target export 65000:60000
+  route-target import 65000:60000
+  route-target export 65000:60000 stitching
+  route-target import 65000:60000 stitching
  exit-address-family
 !
 !
@@ -223,7 +223,7 @@ vlan 3902
  name L3VNI_INTERNET
 !
 vlan configuration 3902
- member vni 50003
+ member vni 60002
 !
 interface Vlan3902
  description L3VNI transit SVI for VRF INTERNET
@@ -236,7 +236,7 @@ vlan 3903
  name L3VNI_MANAGEMENT
 !
 vlan configuration 3903
- member vni 50004
+ member vni 60003
 !
 interface Vlan3903
  description L3VNI transit SVI for VRF MANAGEMENT
@@ -249,7 +249,7 @@ vlan 3900
  name L3VNI_PROD
 !
 vlan configuration 3900
- member vni 50001
+ member vni 60000
 !
 interface Vlan3900
  description L3VNI transit SVI for VRF PROD
@@ -273,9 +273,9 @@ interface nve1
  member vni 64401 ingress-replication
  member vni 64600 ingress-replication
  member vni 64601 ingress-replication
- member vni 50003 vrf INTERNET
- member vni 50004 vrf MANAGEMENT
- member vni 50001 vrf PROD
+ member vni 60002 vrf INTERNET
+ member vni 60003 vrf MANAGEMENT
+ member vni 60000 vrf PROD
  no shutdown
 !
 !

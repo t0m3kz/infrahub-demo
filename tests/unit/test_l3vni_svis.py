@@ -8,9 +8,9 @@ from generators.helpers.svi import L3vniPlan, L3vniWrite, plan_l3vni_svis
 from tests.unit.vrf_instances_helpers import facts_of, raw_device, raw_interface, raw_row, raw_svi
 
 _NAMESPACES: dict[str, dict[str, Any]] = {
-    "PROD": {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"},
-    "INTERNET": {"name": "INTERNET", "l3_vni": 50003, "namespace_type": "internet"},
-    "NOVNI": {"name": "NOVNI", "l3_vni": None, "namespace_type": "prod"},
+    "PROD": {"name": "PROD", "l3_vni": 50001, "vrf_type": "prod"},
+    "INTERNET": {"name": "INTERNET", "l3_vni": 50003, "vrf_type": "internet"},
+    "NOVNI": {"name": "NOVNI", "l3_vni": None, "vrf_type": "prod"},
 }
 
 

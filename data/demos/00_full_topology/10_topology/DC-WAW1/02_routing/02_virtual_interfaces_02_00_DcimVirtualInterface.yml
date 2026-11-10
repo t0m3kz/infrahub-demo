@@ -1,0 +1,26 @@
+# Dedicated service legs realize the existing environment VRFs on both border leaves.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - device: waw1-bl-01
+      name: Vlan3902
+      role: l3vni
+      status: active
+      mtu: 9000
+    - device: waw1-bl-02
+      name: Vlan3902
+      role: l3vni
+      status: active
+      mtu: 9000
+    - device: waw1-bl-01
+      name: Vlan3903
+      role: l3vni
+      status: active
+      mtu: 9000
+    - device: waw1-bl-02
+      name: Vlan3903
+      role: l3vni
+      status: active
+      mtu: 9000

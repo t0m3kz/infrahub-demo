@@ -11,6 +11,7 @@ from tests.smoke.fixture_builders.common import (
     _make_interface,
     _make_segment_node,
     _node,
+    _segment_memberships,
     _v,
     _write_data_fixture,
     write_data_fixtures,
@@ -18,6 +19,7 @@ from tests.smoke.fixture_builders.common import (
 from tests.smoke.fixture_builders.fabric import FIREWALL_PLATFORMS, build_device_data
 from tests.smoke.fixture_builders.firewall import build_firewall_ha_data
 from tests.smoke.fixture_builders.loadbalancer import _LB_CONTEXT_NAMESPACES
+from tests.smoke.fixture_builders.vrf import ZONE_CATALOG, routing_zone
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
@@ -30,10 +32,7 @@ from utils.exchange_transit import exchange_route_specs, transit_addresses
 # .5/.6 members (utils/exchange_transit.py). The shared context (no tenant)
 # serves deployment dep-shared; the dedicated one (tenant) serves dep-ded.
 _XCHG_NAMESPACES: dict[str, tuple[str, int]] = {
-    "prod": ("PROD", 50001),
-    "non_prod": ("NON-PROD", 50002),
-    "internet": ("INTERNET", 50003),
-    "management": ("MANAGEMENT", 50004),
+    vrf_type: (name, l3_vni) for name, (vrf_type, l3_vni) in ZONE_CATALOG.items()
 }
 _XCHG_VLAN_OFFSET = {"prod": 0, "non_prod": 200, "internet": 400, "management": 600}
 # context -> (context id, name, context vlan, tenant name or None, served deployment id, {ns_type: /29})
@@ -66,7 +65,7 @@ _XCHG_CONTEXTS: dict[str, dict[str, Any]] = {
 
 def _xchg_ns_node(ns_type: str, *, with_vni: bool = True) -> dict:
     name, l3_vni = _XCHG_NAMESPACES[ns_type]
-    inner: dict[str, Any] = {"name": _v(name), "namespace_type": _v(ns_type)}
+    inner: dict[str, Any] = routing_zone(name)
     if with_vni:
         inner["l3_vni"] = _v(l3_vni)
     return _node(inner)
@@ -90,8 +89,8 @@ def _xchg_segment(*, seg_name: str, vlan: int, vni: int, gateway_ip: str, deploy
         l3_vni=_XCHG_NAMESPACES["prod"][1],
         row_device_id=domain,
     )
-    ns = seg["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"]["node"]
-    ns["namespace_type"] = _v("prod")
+    ns = seg["security_zone"]["node"]
+    ns["vrf_type"] = _v("prod")
     seg["customer_deployments"] = _edges([{"id": deployment}])
     return seg
 
@@ -105,7 +104,7 @@ def _static_route_node(spec: dict[str, Any], l3_vni: int) -> dict:
         "next_hop": _v(spec["nexthop"]),
         "distance": _v(1),
         "exported": _v(not spec["local_only"]),
-        "vrf": _node({"namespace": _node({"name": _v(spec["namespace"]), "l3_vni": _v(l3_vni)})}),
+        "vrf": _node({"security_zone": _node(routing_zone(spec["namespace"], l3_vni=l3_vni))}),
     }
 
 
@@ -182,12 +181,13 @@ def build_exchange_transit_bl_data(
             for member, host in (("dc1-fw-01", 5), ("dc1-fw-02", 6)):
                 legs.append(
                     {
+                        "vrf": _node({"security_zone": _xchg_ns_node(ns_type)}),
                         "name": _v(f"ethernet1/1.{ctx['vlan'] + _XCHG_VLAN_OFFSET[ns_type]}"),
                         "device": _node({"name": _v(member), "role": _v("internal-firewall")}),
                         "ip_address": _node(
                             {
                                 "address": _v(f"{net[host]}/{net.prefixlen}"),
-                                "ip_namespace": _xchg_ns_node(ns_type),
+                                "ip_namespace": {"node": {"name": {"value": "default"}}},
                             }
                         ),
                         "capabilities": _edges(exchanges),
@@ -226,8 +226,7 @@ def build_exchange_transit_bl_data(
     )
     if with_customer_port:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["capabilities"] = _edges([])
-        customer_port["segments"] = _edges([shared])
+        customer_port["capabilities"] = _edges(_segment_memberships([shared]))
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [_deployment_record(shared, 10100), _deployment_record(acme, 10110)]
     )
@@ -244,15 +243,7 @@ def build_overlay_pbr_bl_data(*, device_name: str, platform: str) -> dict:
     data = build_exchange_transit_bl_data(device_name=device_name, platform=platform, with_customer_port=False)
     node = data["DcimDevice"]["edges"][0]["node"]
     fw_port = next(e["node"] for e in node["interfaces"]["edges"] if e["node"]["role"] == _v("firewall"))
-    node["deployment"]["node"]["devices"] = {
-        "edges": [
-            {
-                "node": {
-                    "capabilities": _edges([{"__typename": "ManagedFirewallHA", "contexts": fw_port["capabilities"]}])
-                }
-            }
-        ]
-    }
+    node["deployment"]["node"]["devices"] = {"edges": [{"node": {"shared_capabilities": fw_port["capabilities"]}}]}
     policies = [
         {
             "node": {
@@ -273,7 +264,7 @@ def build_overlay_pbr_bl_data(*, device_name: str, platform: str) -> dict:
                 "status": _v("active"),
                 "role": _v("l3vni"),
                 "ip_address": _node(None),
-                "vrf": _node({"namespace": _node({"name": _v("PROD")})}),
+                "vrf": _node({"security_zone": _node(routing_zone("PROD", l3_vni=60000))}),
                 "capabilities": {"edges": policies},
             }
         }
@@ -319,27 +310,33 @@ def build_edge_exchange_transit_data(*, device_name: str, platform: str) -> dict
 # (context id, name, context VLAN, tenant namespace, leg /29, VIP /26)
 _LB_CONTEXTS: list[tuple[str, str, int, str, str, str]] = [
     ("lbctx-prod", "dc1-lb-01-dc1-lb-02-ha-PROD", 3100, "PROD", "100.66.64.0/29", "100.66.96.0/26"),
-    ("lbctx-nonprod", "dc1-lb-01-dc1-lb-02-ha-NON-PROD", 3101, "NON-PROD", "100.66.80.0/29", "100.66.112.0/26"),
+    ("lbctx-nonprod", "dc1-lb-01-dc1-lb-02-ha-NONPROD", 3101, "NONPROD", "100.66.80.0/29", "100.66.112.0/26"),
 ]
 
 
 def _lb_context_cap(
     ctx_id: str, name: str, vlan: int, namespace: str, leg: str, vip: str, *, border_port: dict
 ) -> dict:
-    """A ManagedLoadbalancerContext as LoadbalancerContextInterfaceCapabilityFields returns it on a border port.
+    """A ManagedLoadbalancerContext declared on a border port (the fixture hook derives the member behind it).
 
     Its capabilities are the members' leg sub-interfaces (role load-balancer devices, addressed .5/.6 in the
     tenant VRF) and ``border_port``, the border leaf's own load-balancer port tagged with the context.
     """
     net = ipaddress.ip_network(leg)
     ns = _LB_CONTEXT_NAMESPACES[namespace]
-    leg_vlan = vlan + _XCHG_VLAN_OFFSET[ns["namespace_type"]]
-    ns_node = _node({"name": _v(namespace), "namespace_type": _v(ns["namespace_type"]), "l3_vni": _v(ns["l3_vni"])})
+    leg_vlan = vlan + _XCHG_VLAN_OFFSET[ns["vrf_type"]]
+    ns_node = _node({"name": _v(namespace), "vrf_type": _v(ns["vrf_type"]), "l3_vni": _v(ns["l3_vni"])})
     members = [
         {
+            "vrf": _node({"security_zone": ns_node}),
             "name": _v(f"1.1.{leg_vlan}"),
             "device": _node({"name": _v(member), "role": _v("load-balancer")}),
-            "ip_address": _node({"address": _v(f"{net[host]}/{net.prefixlen}"), "ip_namespace": ns_node}),
+            "ip_address": _node(
+                {
+                    "address": _v(f"{net[host]}/{net.prefixlen}"),
+                    "ip_namespace": {"node": {"name": {"value": "default"}}},
+                }
+            ),
         }
         for member, host in (("dc1-lb-01", 5), ("dc1-lb-02", 6))
     ]
@@ -354,11 +351,11 @@ def _lb_context_cap(
 
 
 def build_lb_context_bl_data(*, device_name: str, platform: str) -> dict:
-    """A border leaf whose load-balancer port is tagged with the shared PROD and NON-PROD contexts of the
+    """A border leaf whose load-balancer port is tagged with the shared PROD and NONPROD contexts of the
     pair dc1-lb-01/dc1-lb-02.
 
     Each context's one leg becomes a VLAN + L2VNI + anycast .1 in its tenant VRF (LB-<context>: PROD
-    3100 / VNI 64100, NON-PROD 3101 + 200 = 3301 / VNI 64301; the NON-PROD name is past 32 characters,
+    3100 / VNI 64100, NONPROD 3101 + 200 = 3301 / VNI 64301; the NONPROD name is past 32 characters,
     so its VLAN name is cut with a digest and the SVI description keeps it whole), the port a trunk of
     both, and the VIP /26 a static to the leg's floating .4 in that VRF, redistributed to EVPN. No
     exchange, no SNAT route, no 0/0: the LB never leaves its VRF.
@@ -393,33 +390,35 @@ def build_lb_context_bl_data(*, device_name: str, platform: str) -> dict:
 def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
     """An HA pair member (the first) carrying two contexts' transit legs.
 
-    dc1-fw-shared holds PROD, NON-PROD and INTERNET (so it renders the explicit
-    PROD<->NON-PROD deny); dc1-fw-acme holds PROD and INTERNET. Served segments:
+    dc1-fw-shared holds PROD, NONPROD and INTERNET (so it renders the explicit
+    PROD<->NONPROD deny); dc1-fw-acme holds PROD and INTERNET. Served segments:
     seg-prod 10.1.0.0/24 and seg-nonprod 10.2.0.0/24 (shared), seg-acme
-    10.3.0.0/24 (dedicated). The MANAGEMENT-ZONE holds seg-infra 10.250.0.0/24,
+    10.3.0.0/24 (dedicated). The MANAGEMENT holds seg-infra 10.250.0.0/24,
     the services segment: every context routes it to its MANAGEMENT leg.
     """
     data = build_firewall_ha_data(device_name=device_name, platform=platform)
     device = data["DcimPhysicalDevice"]["edges"][0]["node"]
 
-    def zone_segment(seg_id: str, prefix: str) -> dict:
+    def zone_segment(seg_id: str, prefix: str, zone_name: str) -> dict:
         return {
             "id": seg_id,
             "__typename": "ManagedVxlanSegment",
             "name": _v(seg_id),
             "gateway": _node({"ip_prefix": _node({"prefix": _v(prefix)})}),
+            "security_zone": _node({"name": _v(zone_name), "trust_level": _v(50), "description": _v("")}),
         }
 
-    seg_prod = zone_segment("seg-prod", "10.1.0.0/24")
-    seg_nonprod = zone_segment("seg-nonprod", "10.2.0.0/24")
-    seg_acme = zone_segment("seg-acme", "10.3.0.0/24")
-    seg_infra = zone_segment("seg-infra", "10.250.0.0/24")
+    seg_prod = zone_segment("seg-prod", "10.1.0.0/24", "PROD")
+    seg_nonprod = zone_segment("seg-nonprod", "10.2.0.0/24", "NONPROD")
+    seg_acme = zone_segment("seg-acme", "10.3.0.0/24", "PROD")
+    seg_infra = zone_segment("seg-infra", "10.250.0.0/24", "MANAGEMENT")
     served = {
         "shared": [seg_prod, seg_nonprod, seg_infra],
         "dedicated": [seg_acme],
     }
 
     interfaces = []
+    contexts = []
     for key, ctx in _XCHG_CONTEXTS.items():
         cap = {
             "__typename": "ManagedFirewallContext",
@@ -431,31 +430,45 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
             "served_deployments": _edges([{"id": ctx["deployment"], "network_segments": _edges(served[key])}]),
             "snat_address": _node({"address": _v(ctx["snat"])}),
         }
+        contexts.append(cap)
         for ns_type, prefix in ctx["prefixes"].items():
             ns_name = _XCHG_NAMESPACES[ns_type][0]
             vlan = ctx["vlan"] + _XCHG_VLAN_OFFSET[ns_type]
             net = ipaddress.ip_network(prefix)
             interfaces.append(
                 {
+                    "vrf": _node({"security_zone": _node({"name": _v(ns_name), "vrf_type": _v(ns_type)})}),
                     "__typename": "DcimVirtualInterface",
                     "name": _v(f"ethernet1/1.{vlan}"),
                     "description": _v(None),
                     "status": _v("active"),
                     "role": _v(None),
-                    "parent_interface": _node({"name": _v("ethernet1/1")}),
+                    "device": _node({"id": "dev-fw"}),
+                    "vlan_id": _v(vlan),
+                    "parent_interface": _node({"name": _v("ethernet1/1"), "device": _node({"id": "dev-fw"})}),
                     "ip_address": _node(
                         {
                             "address": _v(f"{net[5]}/{net.prefixlen}"),
-                            "ip_namespace": _node({"name": _v(ns_name), "namespace_type": _v(ns_type)}),
+                            "ip_namespace": {"node": {"name": {"value": "default"}}},
                         }
                     ),
                     "ha_domain": _node(None),
-                    "capabilities": _edges([cap]),
+                    "capabilities": _edges([]),
                 }
             )
-    # keep the HA sync port of the HA fixture, replace the zone legs by the context legs
+    # keep the HA sync port of the HA fixture, replace the zone legs by the context legs, on the trunk they ride on
     ha_port = [e for e in device["interfaces"]["edges"] if e["node"]["name"]["value"] == "ethernet1/7"]
-    device["interfaces"]["edges"] = [{"node": i} for i in interfaces] + ha_port
+    trunk = {
+        "__typename": "DcimPhysicalInterface",
+        "name": _v("ethernet1/1"),
+        "description": _v("Uplink trunk"),
+        "status": _v("active"),
+        "role": _v("uplink"),
+        "ip_address": _node(None),
+        "capabilities": _edges([]),
+    }
+    device["interfaces"]["edges"] = [{"node": trunk}] + [{"node": i} for i in interfaces] + ha_port
+    device["shared_capabilities"] = _edges(contexts)
 
     def zone(name: str, segments: list[dict]) -> dict:
         return {
@@ -467,21 +480,29 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
 
     data["SecurityZone"] = _edges(
         [
-            zone("PROD-ZONE", [seg_prod, seg_acme]),
-            zone("NONPROD-ZONE", [seg_nonprod]),
-            zone("MANAGEMENT-ZONE", [seg_infra]),
+            zone("MANAGEMENT", [seg_infra]),
         ]
     )
     return data
 
 
+def _footprint_context(context_id: str, role: str, *, tenant: str | None, snat: str | None) -> dict:
+    """A context of a footprint's ``serving_firewall_contexts``: its members' role, tenant and public address."""
+    return {
+        "id": context_id,
+        "tenant": _node({"id": tenant} if tenant else None),
+        "snat_address": _node({"address": _v(snat)} if snat else None),
+        "shared_devices": _edges([{"role": _v(role)}, {"role": _v(role)}]),
+    }
+
+
 def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dict:
     """An external-firewall member carrying the Internet edge context of a DC (PROD).
 
-    The context has a PROD and an INTERNET leg and names the DC (``internet_edge_hostings``) whose footprints it serves:
-    C005 on a shared context (seg-a, 10.1.0.0/24, a rule to the internet and one to seg-b) and C006 on a dedicated one
-    with its own public address 198.51.100.9 (seg-b, 10.2.0.0/24, a rule to the internet). The edge holds the two
-    internet rules only; the east-west rule stays on the internal pair. A pod of the DC carries no segments.
+    The context has a PROD and an INTERNET leg and serves the DC's footprints (``served_deployments``), each of which
+    lists it next to its internal context (``serving_firewall_contexts``): C005 on a shared context (seg-a, 10.1.0.0/24, a rule to the internet and one to seg-b) and C006 on a dedicated one
+    with its own public address 198.51.100.9 (seg-b, 10.2.0.0/24, a rule to the internet and one from it). The edge
+    holds the three internet rules only, both directions; the east-west rule stays on the internal pair.
     """
     from tests.smoke.fixture_builders.firewall import (  # noqa: PLC0415 - firewall.py imports this module's package
         _make_policy_header,
@@ -492,13 +513,15 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
 
     data = build_firewall_ha_data(device_name=device_name, platform=platform)
     device = data["DcimPhysicalDevice"]["edges"][0]["node"]
-    seg_a = _make_rule_segment(cidr="10.1.0.0/24", zone_name="PROD-ZONE")
-    seg_b = _make_rule_segment(cidr="10.2.0.0/24", zone_name="PROD-ZONE")
+    seg_a = _make_rule_segment(cidr="10.1.0.0/24", zone_name="PROD")
+    seg_b = _make_rule_segment(cidr="10.2.0.0/24", zone_name="PROD")
+    for segment in (seg_a, seg_b):
+        segment["security_zone"]["node"].update({"trust_level": _v(50), "description": _v("")})
     header_a = _make_policy_header(name="c005-a", segment=seg_a)
     header_b = _make_policy_header(name="c006-b", segment=seg_b)
     rules_a = [
         _make_segment_rule(
-            policy="c005-a", index=10, name="a-to-internet", port_start=443, src_segment=seg_a, dst_zone="INTERNET-ZONE"
+            policy="c005-a", index=10, name="a-to-internet", port_start=443, src_segment=seg_a, dst_zone="INTERNET"
         ),
         _make_segment_rule(
             policy="c005-a", index=20, name="a-to-b", port_start=8443, src_segment=seg_a, dst_segment=seg_b
@@ -506,8 +529,18 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
     ]
     rules_b = [
         _make_segment_rule(
-            policy="c006-b", index=10, name="b-to-internet", port_start=80, src_segment=seg_b, dst_zone="INTERNET-ZONE"
-        )
+            policy="c006-b", index=10, name="b-to-internet", port_start=80, src_segment=seg_b, dst_zone="INTERNET"
+        ),
+        # Inbound from the internet, held in the destination segment's own policy: the edge renders it too.
+        _make_segment_rule(
+            policy="c006-b",
+            index=20,
+            name="internet-to-b",
+            port_start=443,
+            src_segment=None,
+            src_zone="INTERNET",
+            dst_segment=seg_b,
+        ),
     ]
     by_id = _make_rule_bearing_segments([seg_a, seg_b], [(header_a, rules_a), (header_b, rules_b)])
 
@@ -521,7 +554,12 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
             "name": _v("C005-P-DC10"),
             "environment": _v("p"),
             "network_segments": _edges([served(seg_a)]),
-            "serving_firewall_context": _node({"id": "ctx-shared", "tenant": _node(None), "snat_address": _node(None)}),
+            "serving_firewall_contexts": _edges(
+                [
+                    _footprint_context("ctx-shared", "internal-firewall", tenant=None, snat=None),
+                    _footprint_context("ctx-edge", "external-firewall", tenant=None, snat="198.51.100.5/32"),
+                ]
+            ),
         },
         {
             "id": "fp-c006",
@@ -529,15 +567,13 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
             "name": _v("C006-P-DC10"),
             "environment": _v("p"),
             "network_segments": _edges([served(seg_b)]),
-            "serving_firewall_context": _node(
-                {
-                    "id": "ctx-c006",
-                    "tenant": _node({"id": "fp-c006"}),
-                    "snat_address": _node({"address": _v("198.51.100.9/32")}),
-                }
+            "serving_firewall_contexts": _edges(
+                [
+                    _footprint_context("ctx-c006", "internal-firewall", tenant="fp-c006", snat="198.51.100.9/32"),
+                    _footprint_context("ctx-edge", "external-firewall", tenant=None, snat="198.51.100.5/32"),
+                ]
             ),
         },
-        {"id": "pod-1", "__typename": "TopologyPod"},
     ]
     cap = {
         "__typename": "ManagedFirewallContext",
@@ -546,9 +582,11 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
         "vlan_id": _v(3002),
         "context_id": _v(None),
         "tenant": _node(None),
-        "served_deployments": _edges([]),
+        "served_deployments": _edges(footprints),
         "snat_address": _node({"address": _v("198.51.100.5/32")}),
-        "internet_edge_hostings": _edges([{"id": "dc-10", "children": _edges(footprints)}]),
+        "shared_devices": _edges(
+            [{"name": _v(name), "role": _v("external-firewall")} for name in (device_name, f"{device_name}-peer")]
+        ),
     }
     interfaces = []
     for ns_type, prefix in (("prod", "100.66.0.16/29"), ("internet", "100.66.32.16/29")):
@@ -556,35 +594,32 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
         net = ipaddress.ip_network(prefix)
         interfaces.append(
             {
+                "vrf": _node({"security_zone": _node({"name": _v(ns_name), "vrf_type": _v(ns_type)})}),
                 "__typename": "DcimVirtualInterface",
                 "name": _v(f"ethernet1/1.{3002 + _XCHG_VLAN_OFFSET[ns_type]}"),
                 "description": _v(None),
                 "status": _v("active"),
                 "role": _v(None),
-                "parent_interface": _node({"name": _v("ethernet1/1")}),
+                "device": _node({"id": "dev-fw"}),
+                "vlan_id": _v(3002 + _XCHG_VLAN_OFFSET[ns_type]),
+                "parent_interface": _node({"name": _v("ethernet1/1"), "device": _node({"id": "dev-fw"})}),
                 "ip_address": _node(
                     {
                         "address": _v(f"{net[5]}/{net.prefixlen}"),
-                        "ip_namespace": _node({"name": _v(ns_name), "namespace_type": _v(ns_type)}),
+                        "ip_namespace": {"node": {"name": {"value": "default"}}},
                     }
                 ),
                 "ha_domain": _node(None),
-                "capabilities": _edges([cap]),
+                "capabilities": _edges(
+                    [{"__typename": "ManagedFirewallContext", "id": cap["id"], "name": cap["name"]}]
+                ),
             }
         )
     ha_port = [e for e in device["interfaces"]["edges"] if e["node"]["name"]["value"] == "ethernet1/7"]
     device["interfaces"]["edges"] = [{"node": i} for i in interfaces] + ha_port
     device["role"] = _v("external-firewall")
-    data["SecurityZone"] = _edges(
-        [
-            {
-                "name": _v("PROD-ZONE"),
-                "trust_level": _v(50),
-                "description": _v(""),
-                "network_segments": _edges([seg_a, seg_b]),
-            }
-        ]
-    )
+    device["shared_capabilities"] = _edges([cap])
+    data["SecurityZone"] = _edges([])
     return data
 
 
@@ -597,7 +632,7 @@ _FACING_LEAF = "dev-dc1-border-leaf-01"
 def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
     """The exchange-transit firewall (an HA member with the shared context's legs) with a segment terminated on it.
 
-    seg-term (10.9.0.0/24, PROD-ZONE, gateway 10.9.0.1 = the pair's floating VIP) is in the live query shape: the
+    seg-term (10.9.0.0/24, PROD, gateway 10.9.0.1 = the pair's floating VIP) is in the live query shape: the
     context's ``terminated_segments`` carry its gateway, zone and the VLAN rows of its deployments; the uplink trunk
     ethernet1/1 carries the cable whose far end is the border leaf with the row to take. It is also a segment the
     shared deployment serves (so it is a zone member and one of the context's policies' segments), which must not
@@ -611,11 +646,12 @@ def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
         "__typename": "ManagedVxlanSegment",
         "name": _v("seg-term"),
         "gateway": _node({"ip_prefix": _node({"prefix": _v("10.9.0.0/24")})}),
+        "security_zone": _node({"name": _v("PROD"), "trust_level": _v(50), "description": _v("")}),
     }
     term = {
         "id": "seg-term",
         "name": _v("seg-term"),
-        "security_zone": _node({"name": _v("PROD-ZONE")}),
+        "security_zone": _node({"name": _v("PROD")}),
         "gateway": _node({"address": _v("10.9.0.1/24")}),
         "segment_deployments": _edges(
             [
@@ -630,41 +666,25 @@ def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
             ]
         ),
     }
-    # The legs of a context all hold the same context node: edit it once.
-    shared = next(
-        cap_edge["node"]
-        for edge in device["interfaces"]["edges"]
-        for cap_edge in edge["node"]["capabilities"]["edges"]
-        if cap_edge["node"].get("id") == shared_id
-    )
+    # The full context is fetched once through the member's shared capabilities.
+    shared = next(edge["node"] for edge in device["shared_capabilities"]["edges"] if edge["node"]["id"] == shared_id)
     shared["terminated_segments"] = _edges([term])
     shared["served_deployments"]["edges"][0]["node"]["network_segments"]["edges"].append({"node": term_served})
-    device["interfaces"]["edges"].append(
+    # The uplink trunk the context legs ride on carries the cable whose far end is the facing border leaf.
+    trunk = next(
+        edge["node"] for edge in device["interfaces"]["edges"] if edge["node"]["name"]["value"] == "ethernet1/1"
+    )
+    trunk["description"] = _v("uplink trunk to the border leaf")
+    trunk["cable"] = _node(
         {
-            "node": {
-                "__typename": "DcimPhysicalInterface",
-                "name": _v("ethernet1/1"),
-                "description": _v("uplink trunk to the border leaf"),
-                "status": _v("active"),
-                "role": _v("uplink"),
-                "ip_address": _node(None),
-                "cable": _node(
-                    {
-                        "endpoints": _edges(
-                            [
-                                {"__typename": "DcimPhysicalInterface", "device": _node({"id": device["id"]})},
-                                {"__typename": "DcimPhysicalInterface", "device": _node({"id": _FACING_LEAF})},
-                            ]
-                        )
-                    }
-                ),
-                "capabilities": _edges([]),
-            }
+            "endpoints": _edges(
+                [
+                    {"__typename": "DcimPhysicalInterface", "device": _node({"id": device["id"]})},
+                    {"__typename": "DcimPhysicalInterface", "device": _node({"id": _FACING_LEAF})},
+                ]
+            )
         }
     )
-    for zone in data["SecurityZone"]["edges"]:
-        if zone["node"]["name"]["value"] == "PROD-ZONE":
-            zone["node"]["network_segments"]["edges"].append({"node": term_served})
     return data
 
 
@@ -691,22 +711,25 @@ def build_virtual_firewall_data() -> dict:
         return name.replace("ethernet1/1", "eth1").replace("ethernet1/7", "eth7")
 
     interfaces = []
+    # The legs `<trunk>.<transit VLAN>` of the other (shared) context stay on the physical pair.
+    shared_legs = {
+        f"ethernet1/1.{_XCHG_CONTEXTS['shared']['vlan'] + _XCHG_VLAN_OFFSET[ns_type]}"
+        for ns_type in _XCHG_CONTEXTS["shared"]["prefixes"]
+    }
     for edge in device["interfaces"]["edges"]:
         node = edge["node"]
-        caps = node["capabilities"]["edges"]
-        if caps and caps[0]["node"]["id"] != dedicated["id"]:
+        if node["name"]["value"] in shared_legs:
             continue
         node["name"] = _v(rename(node["name"]["value"]))
         if node["__typename"] == "DcimPhysicalInterface":  # a NIC of the virtual machine, not a port
             node["__typename"] = "DcimVirtualInterface"
             for physical_only in ("interface_type", "mtu", "cable", "lag"):
                 node.pop(physical_only, None)
-        if caps:
-            context = caps[0]["node"]
-            context["name"] = _v("fw-C007-p-dedicated-context")
-            context["tenant"] = _node({"name": _v("C007-p")})
         if node.get("parent_interface", {}).get("node"):
-            node["parent_interface"] = _node({"name": _v(rename(node["parent_interface"]["node"]["name"]["value"]))})
+            parent = node["parent_interface"]["node"]
+            node["parent_interface"] = _node(
+                {"name": _v(rename(parent["name"]["value"])), "device": parent.get("device")}
+            )
         interfaces.append(edge)
     management = _make_interface(
         name="eth0",
@@ -720,6 +743,12 @@ def build_virtual_firewall_data() -> dict:
     device["interfaces"] = _edges([management, *(edge["node"] for edge in interfaces)])
 
     ha_cap = device["capabilities"]["edges"][0]["node"]
+    dedicated_context = next(
+        edge["node"] for edge in device["shared_capabilities"]["edges"] if edge["node"]["id"] == dedicated["id"]
+    )
+    dedicated_context["name"] = _v("fw-C007-p-dedicated-context")
+    dedicated_context["tenant"] = _node({"name": _v("C007-p")})
+    device["shared_capabilities"] = _edges([dedicated_context])
     ha_cap["name"] = _v("fw-C007-p-dedicated-ha")
     ha_cap["capabilities"] = _edges([{"name": _v(member)} for member in _VIRTUAL_FW_MEMBERS])
     device["name"] = _v(device_name)

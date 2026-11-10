@@ -260,62 +260,73 @@ async def fetch_segment_vlans(
 # Switch ports carrying a segment
 # ======================================================================
 
-# The edge between a port and a segment is the PORT's `segments` (one-sided: the segment has no list of its ports).
-# `properties { source { id } }` is who wrote it: the segment reconcile writes its own edges with its account as the
-# source, a person sets an edge from the port with none.
-SEGMENT_PORTS_QUERY = """
-query SegmentPorts($segment_id: ID!) {
-  DcimPhysicalInterface(segments__ids: [$segment_id]) {
-    edges {
-      node {
-        __typename
-        id
-        name { value }
-        role { value }
-        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
-        segments(ids: [$segment_id]) { edges { properties { source { id } } node { id } } }
-      }
-    }
-  }
-  DcimLAGInterface(segments__ids: [$segment_id]) {
-    edges {
-      node {
-        __typename
-        id
-        name { value }
-        role { value }
-        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
-        segments(ids: [$segment_id]) { edges { properties { source { id } } node { id } } }
-      }
-    }
-  }
+# A port carries a segment as a member of its switch's VLAN ROW: the ManagedSegmentVlan among the port's interface
+# `capabilities`, an edge only the segment reconcile writes (a person assigns the port to the segment's deployment, the
+# request). Read from the port side (like the reconcile, generators/segment_vlan.py), after the segment's rows.
+SEGMENT_ROW_IDS_QUERY = """
+query SegmentRowIds($segment_id: ID!) {
+  ManagedSegmentDeployment(segment__ids: [$segment_id]) { edges { node { id vlans { edges { node { id } } } } } }
 }
 """
 
+_SEGMENT_PORT_FIELDS = """
+        __typename
+        id
+        name { value }
+        role { value }
+        device { node { name { value } ... on DcimDeviceManaged { role { value } } } }
+        capabilities(ids: $row_ids) { edges { node { id } } }
+"""
+
+SEGMENT_PORTS_QUERY = f"""
+query SegmentPorts($row_ids: [ID]) {{
+  DcimPhysicalInterface(capabilities__ids: $row_ids) {{ edges {{ node {{ {_SEGMENT_PORT_FIELDS} }} }} }}
+  DcimLAGInterface(capabilities__ids: $row_ids) {{ edges {{ node {{ {_SEGMENT_PORT_FIELDS} }} }} }}
+}}
+"""
+
+
+async def fetch_segment_row_ids(client: InfrahubClient, branch: str, segment_id: str) -> dict[str, str]:
+    """{row id: id of its deployment} of the segment's VLAN rows (one per switch it is realized on)."""
+    result = await client.execute_graphql(
+        query=SEGMENT_ROW_IDS_QUERY, variables={"segment_id": segment_id}, branch_name=branch
+    )
+    return {
+        row["node"]["id"]: edge["node"]["id"]
+        for edge in (result.get("ManagedSegmentDeployment") or {}).get("edges") or []
+        for row in ((edge["node"].get("vlans") or {}).get("edges") or [])
+    }
+
 
 async def fetch_segment_ports(client: InfrahubClient, branch: str, segment_id: str) -> list[dict[str, Any]]:
-    """The switch ports (physical ports and port-channels) carrying the segment, with who wrote each edge.
+    """The switch ports (physical ports and port-channels) carrying the segment: the members of its VLAN rows.
 
-    Returns ``[{"id", "name", "role", "device", "device_role", "source_id"}]`` sorted by device and port;
-    ``source_id`` is the account that wrote the port's edge to the segment, None for an edge a person set.
+    Returns ``[{"id", "name", "role", "device", "device_role", "row_id", "deployment_id"}]`` sorted by device and
+    port (one entry per row edge); ``deployment_id`` is the segment deployment the row is under.
     """
+    rows = await fetch_segment_row_ids(client, branch, segment_id)
+    if not rows:
+        return []
     result = await client.execute_graphql(
-        query=SEGMENT_PORTS_QUERY, variables={"segment_id": segment_id}, branch_name=branch
+        query=SEGMENT_PORTS_QUERY, variables={"row_ids": sorted(rows)}, branch_name=branch
     )
     ports: list[dict[str, Any]] = []
     for kind in ("DcimPhysicalInterface", "DcimLAGInterface"):
         for port_edge in (result.get(kind) or {}).get("edges") or []:
             node = port_edge["node"]
-            edge = next(e for e in node["segments"]["edges"] if e["node"]["id"] == segment_id)
             device = (node.get("device") or {}).get("node") or {}
-            ports.append(
-                {
-                    "id": node["id"],
-                    "name": node["name"]["value"],
-                    "role": (node.get("role") or {}).get("value"),
-                    "device": (device.get("name") or {}).get("value"),
-                    "device_role": (device.get("role") or {}).get("value"),
-                    "source_id": ((edge.get("properties") or {}).get("source") or {}).get("id"),
-                }
-            )
+            for edge in node["capabilities"]["edges"]:
+                if edge["node"]["id"] not in rows:
+                    continue
+                ports.append(
+                    {
+                        "id": node["id"],
+                        "name": node["name"]["value"],
+                        "role": (node.get("role") or {}).get("value"),
+                        "device": (device.get("name") or {}).get("value"),
+                        "device_role": (device.get("role") or {}).get("value"),
+                        "row_id": edge["node"]["id"],
+                        "deployment_id": rows[edge["node"]["id"]],
+                    }
+                )
     return sorted(ports, key=lambda port: (str(port["device"]), port["name"]))

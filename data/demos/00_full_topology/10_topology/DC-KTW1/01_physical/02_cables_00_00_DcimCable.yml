@@ -1,0 +1,34 @@
+# DcimCable declarations in recursive dependency order.
+# L1 of the DC segment: leaf Ethernet1/1 (carries the segment) -- front 1 | rear 1 of PP-KTW1-01 -- edge Ethernet1/13.
+# Cables in data are never generated. A panel port end repeats the connector of its template.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-KTW1-LEAF01-PP01-F1"
+      type: smf
+      deployment: "DC-KTW1"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ktw1-leaf-01"
+            name: "Ethernet1/1"
+        - kind: DcimFrontPatchPanelPort
+          data:
+            panel: ["ktw1-rack-01", "PP-KTW1-01"]
+            name: "1"
+            connector: "lc-upc"
+    - name: "CBL-KTW1-PP01-R1-EDGE01"
+      type: smf
+      deployment: "DC-KTW1"
+      endpoints:
+        - kind: DcimRearPatchPanelPort
+          data:
+            panel: ["ktw1-rack-01", "PP-KTW1-01"]
+            name: "1"
+            connector: "lc-upc"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "ktw1-edge-01"
+            name: "Ethernet1/13"

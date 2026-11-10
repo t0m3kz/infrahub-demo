@@ -1,123 +1,183 @@
 fragment ManagedBGPServiceFields on ManagedBGP {
-  multipath { value }
-  graceful_restart { value }
-  confederation_identifier { value }
-  process_role { value }
-  local_as { node { asn { value } } }
-  router_id { node { address { value } } }
+  multipath {
+    value
+  }
+  graceful_restart {
+    value
+  }
+  confederation_identifier {
+    value
+  }
+  process_role {
+    value
+  }
+  local_as {
+    node {
+      asn {
+        value
+      }
+    }
+  }
+  router_id {
+    node {
+      address {
+        value
+      }
+    }
+  }
   peerings {
     edges {
       node {
         id
-        name { value }
-        peering_role { value }
-        session_type { value }
-        bfd_enabled { value }
-        send_community { value }
-        send_extended_community { value }
-        local_pref { value }
-        med { value }
-        remove_private_as { value }
-        password { node { password { value } } }
-        ttl { value }
-        route_reflector_client { value }
-        import_policies { edges { node { ...RoutingPolicyFields } } }
-        export_policies { edges { node { ...RoutingPolicyFields } } }
+        name {
+          value
+        }
+        peering_role {
+          value
+        }
+        session_type {
+          value
+        }
+        bfd_enabled {
+          value
+        }
+        send_community {
+          value
+        }
+        send_extended_community {
+          value
+        }
+        local_pref {
+          value
+        }
+        med {
+          value
+        }
+        remove_private_as {
+          value
+        }
+        password {
+          node {
+            password {
+              value
+            }
+          }
+        }
+        ttl {
+          value
+        }
+        route_reflector_client {
+          value
+        }
+        import_policies {
+          edges {
+            node {
+              ...RoutingPolicyFields
+            }
+          }
+        }
+        export_policies {
+          edges {
+            node {
+              ...RoutingPolicyFields
+            }
+          }
+        }
         address_families {
           edges {
             node {
-              afi { value }
-              safi { value }
+              afi {
+                value
+              }
+              safi {
+                value
+              }
             }
           }
         }
         capabilities {
           edges {
             node {
-              name { value }
-              # ip_namespace: a peering whose local address sits in a tenant
-              # namespace is a VRF session (transforms/helpers/bgp.py); l3_vni and
-              # namespace_type mark the internet one (transit filters, INTERNET L3 VNI).
+              name {
+                value
+              }
+              ...InterfaceRoutingZoneFields
               ... on DcimPhysicalInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } } } }
+                ip_address {
+                  node {
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
               }
               ... on DcimVirtualInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } } } }
+                vlan_id {
+                  value
+                }
+                ip_address {
+                  node {
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
               }
-              # __typename: a far end that is a CloudNetworkAppliance (provider-hosted) is never ours
-              # (transforms/helpers/bgp.py _far_end_is_ours). role: a relaying far end (a spine) may pass on a
-              # default route its client could not (utils/bgp_expectation.py).
-              device { node { __typename name { value } ... on DcimDeviceManaged { role { value } } } }
+              device {
+                node {
+                  __typename
+                  name {
+                    value
+                  }
+                  ... on DcimDeviceManaged {
+                    role {
+                      value
+                    }
+                  }
+                }
+              }
             }
           }
         }
-        # process_role: a far end that runs one of our overlay processes is an internal
-        # session, so no external prefix policy applies, unless its device is an appliance
-        # (transforms/helpers/bgp.py).
         bgp_processes {
           edges {
             node {
-              process_role { value }
-              router_id { node { address { value } } }
-              local_as { node { asn { value } } }
-              capabilities { edges { node { name { value } } } }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-fragment DeviceCapabilitiesFields on DcimCapabilities {
-  capabilities {
-    edges {
-      node {
-        __typename
-
-        ... on ManagedGeneric {
-          name { value }
-          status { value }
-        }
-
-        ...ManagedBGPServiceFields
-
-        ... on ManagedOSPF {
-          process_id { value }
-          version { value }
-          router_type { value }
-          reference_bandwidth { value }
-          router_id { node { address { value } } }
-        }
-
-        ... on ManagedStaticRoute {
-          prefix { value }
-          next_hop { value }
-          distance { value }
-          exported { value }
-          vrf { node { namespace { node { name { value } l3_vni { value } } } } }
-        }
-
-        ... on ManagedMLAG {
-          id
-          domain_id { value }
-          reload_delay { value }
-          reload_delay_non_mlag { value }
-          capabilities {
-            edges {
-              node {
-                name { value }
-                ... on DcimDevice {
-                  ... on DcimDeviceManaged { role { value } primary_address { node { address { value } } } }
-                  interfaces(role__values: ["mlag-control", "mlag-peer"]) {
-                    edges {
-                      node {
-                        name { value }
-                        role { value }
-                        ... on DcimVirtualInterface {
-                          ip_address { node { address { value } } }
-                        }
-                      }
+              process_role {
+                value
+              }
+              router_id {
+                node {
+                  address {
+                    value
+                  }
+                }
+              }
+              local_as {
+                node {
+                  asn {
+                    value
+                  }
+                }
+              }
+              capabilities {
+                edges {
+                  node {
+                    name {
+                      value
                     }
                   }
                 }
@@ -130,20 +190,138 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
   }
 }
 
-fragment DeviceCapabilitiesOnDeviceFields on DcimDevice {
-  ... on DcimCapabilities {
-    # The device's memberships of shared objects (the shared device edge, ManagedGenericSharedDevice): today the
-    # VRF instances of its topology, i.e. the L3 instances it may realize (utils/vrf_demand.py device_memberships).
-    # A new shared kind adds one typed `... on` block here. Declared on DcimCapabilities, not on DcimDevice: it must
-    # stay inside this inline fragment.
+fragment DeviceCapabilitiesFields on DcimDeviceManaged {
+  capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedGeneric {
+          name {
+            value
+          }
+          status {
+            value
+          }
+        }
+        ...ManagedBGPServiceFields
+        ... on ManagedOSPF {
+          process_id {
+            value
+          }
+          version {
+            value
+          }
+          router_type {
+            value
+          }
+          reference_bandwidth {
+            value
+          }
+          router_id {
+            node {
+              address {
+                value
+              }
+            }
+          }
+        }
+        ... on ManagedStaticRoute {
+          prefix {
+            value
+          }
+          next_hop {
+            value
+          }
+          distance {
+            value
+          }
+          exported {
+            value
+          }
+          vrf {
+            node {
+              security_zone {
+                node {
+                  ...RoutingZoneFields
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedMLAG {
+          id
+          domain_id {
+            value
+          }
+          reload_delay {
+            value
+          }
+          reload_delay_non_mlag {
+            value
+          }
+          capabilities {
+            edges {
+              node {
+                name {
+                  value
+                }
+                ... on DcimDevice {
+                  ... on DcimDeviceManaged { role { value } primary_address { node { address { value } } } }
+                }
+              }
+            }
+          }
+          # The domain's own interfaces (ManagedMLAG.interfaces): each member's peer-link and control SVI, read by
+          # transforms/helpers/mlag.py get_mlag. Each field once per object, the kind-specific ones in their own
+          # inline fragment.
+          interfaces {
+            edges {
+              node {
+                __typename
+                name { value }
+                role { value }
+                device { node { name { value } } }
+                ...InterfaceRoutingZoneFields
+                ... on DcimLAGInterface {
+                  lag_id { value }
+                  lacp_mode { value }
+                  member_interfaces { edges { node { name { value } } } }
+                }
+                ... on DcimVirtualInterface {
+                  ip_address { node { address { value } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment DeviceSharedCapabilitiesOnDeviceFields on DcimDevice {
+  ... on DcimDeviceManaged {
     shared_capabilities {
       edges {
         node {
           __typename
-          ... on ManagedVRF { namespace { node { name { value } l3_vni { value } namespace_type { value } } } }
+          ...FirewallContextConfigFields
+          ... on ManagedVRF {
+            security_zone {
+              node {
+                ...RoutingZoneFields
+              }
+            }
+          }
         }
       }
     }
+  }
+}
+
+fragment DeviceCapabilitiesOnDeviceFields on DcimDevice {
+  ...DeviceSharedCapabilitiesOnDeviceFields
+  ... on DcimDeviceManaged {
     ...DeviceCapabilitiesFields
   }
 }

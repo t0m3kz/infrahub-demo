@@ -1,0 +1,104 @@
+# TopologyCarrierCircuit declarations in recursive dependency order.
+# The internet access of the colocation cage and of the office, next to the DC's (ktw1-ispa-48211-isp-a,
+# 90_bindings/50_connections/Cloud/00_carriers/00_carrier_circuits.yml, and ktw1-ispb-77301-isp-b above): an
+# `internet` carrier from the site's
+# port to a free `customer` port of an ISP router of the sample, the pattern of 30_all's INET-LUMEN-EQXFR2 and of
+# add_sdwan_edge's INET-<office>. Both ISP routers are attached to INTERNET (isp-a-upl-48001-internet,
+# isp-b-upl-77001-internet: rule I3), so every site reaches every other site and the public sides of the services
+# at L1 through the internet:
+#
+#   par-colo1-edge-01 Ethernet1/14 -- par1-ispb-77302-isp-b -- EXT-ISP-B-PE1 et-0/0/1   (cage, second ISP)
+#   bcn-office-edge-01 GE1  -- bcn-office-ispa-48212-isp-a     -- EXT-ISP-A-PE1   et-0/0/1   (office, first ISP)
+#   lis-office-edge-01 GE1  -- lis-office-ispa-48213-isp-a     -- EXT-ISP-A-PE1   et-0/0/2   (second office, first ISP)
+#   lis-office-edge-02 GE1  -- lis-office-ispb-77303-isp-b     -- EXT-ISP-B-PE1   et-0/0/2   (second office, second ISP)
+#
+# The FRA and AMS cages buy an Equinix Internet Access service instead of an ISP access: the cage edge is cabled to the
+# provider's Fabric port of the cage (10_topology/COLO-FRA, 10_topology/COLO-AMS), the service is an `internet`
+# carrier from the
+# connection interface of that port straight to THE INTERNET (no ISP router on the way):
+#
+#   fra-colo1-edge-01 Ethernet1/1 -cable- EXT-FABRIC-FRA et-0/0/0.1301 -- fra1-eqx-5a1f2c30-internet -- INTERNET:bus
+#   ams-colo1-edge-01 Ethernet1/1 -cable- EXT-FABRIC-AMS et-0/0/0.1401 -- ams1-eqx-8d3b6e41-internet -- INTERNET:bus
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - name: par1-ispb-77302-isp-b
+      circuit_id: ISPB-77302
+      description: Internet access of the PAR-COLO1 cage edge
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - PAR-COLO1
+        - ISP-B
+      capabilities:
+        - ["par-colo1-edge-01", "Ethernet1/14"]
+        - ["EXT-ISP-B-PE1", "et-0/0/1"]
+    - name: fra1-eqx-5a1f2c30-internet
+      circuit_id: EQX-5A1F2C30
+      description: Equinix Internet Access of the FRA-COLO1 cage, on the Fabric port of the cage FRA (10G)
+      provider: P016
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - FRA-COLO1
+        - INTERNET
+      capabilities:
+        - ["EXT-FABRIC-FRA", "et-0/0/0.1301"]
+        - ["INTERNET", "bus"]
+    - name: ams1-eqx-8d3b6e41-internet
+      circuit_id: EQX-8D3B6E41
+      description: Equinix Internet Access of the AMS-COLO1 cage, on the Fabric port of the cage AMS (10G)
+      provider: P016
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      locations:
+        - AMS-COLO1
+        - INTERNET
+      capabilities:
+        - ["EXT-FABRIC-AMS", "et-0/0/0.1401"]
+        - ["INTERNET", "bus"]
+    - name: bcn-office-ispa-48212-isp-a
+      circuit_id: ISPA-48212
+      description: Internet access of the C900 office SD-WAN edge (underlay of its tunnels)
+      provider: P014
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - C900-OFFICE
+        - ISP-A
+      capabilities:
+        - ["bcn-office-edge-01", "GE1"]
+        - ["EXT-ISP-A-PE1", "et-0/0/1"]
+    - name: lis-office-ispa-48213-isp-a
+      circuit_id: ISPA-48213
+      description: Internet access of the first C901 office SD-WAN edge (underlay of its tunnel)
+      provider: P014
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - C901-OFFICE
+        - ISP-A
+      capabilities:
+        - ["lis-office-edge-01", "GE1"]
+        - ["EXT-ISP-A-PE1", "et-0/0/2"]
+    - name: lis-office-ispb-77303-isp-b
+      circuit_id: ISPB-77303
+      description: Internet access of the second C901 office SD-WAN edge (underlay of its tunnel)
+      provider: P023
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      locations:
+        - C901-OFFICE
+        - ISP-B
+      capabilities:
+        - ["lis-office-edge-02", "GE1"]
+        - ["EXT-ISP-B-PE1", "et-0/0/2"]

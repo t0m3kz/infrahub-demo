@@ -9,29 +9,41 @@ kinds of context, a ContextSpec (generators/firewall_context_spec.py) holds what
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, IpamNamespace
+from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
 
 from utils.exchange_transit import (
+    BORDER_ROLE_FOR_SERVICES,
     INTERNET_TYPE,
     TRANSIT_OFFSETS,
     transit_vlan,
 )
 from utils.limits import FW_SNAT_POOL, OFFSET_MEMBER_A, OFFSET_MEMBER_B, TRANSIT_PREFIXLEN
+from utils.service_contexts import UPLINK_KINDS, UPLINK_ROLE
 
-from .connections import BORDER_ROLE_FOR_SERVICES, tracked_save_kwargs
+from .connections import tracked_save_kwargs
 from .far_end import far_end_interfaces
 from .firewall_context_spec import ContextSpec, _TransitMember, _TransitState
-from .protocols import DcimPhysicalInterface, DcimVirtualInterface, IpamIPAddress, IpamPrefix, TopologyRoutedExchange
+from .protocols import (
+    DcimPhysicalInterface,
+    DcimVirtualInterface,
+    IpamIPAddress,
+    IpamPrefix,
+    ManagedVRF,
+    SecurityZone,
+    TopologyRoutedExchange,
+)
 
 if TYPE_CHECKING:
     from .connections import CablingMixin
 
 _MEMBER_OFFSETS = (OFFSET_MEMBER_A, OFFSET_MEMBER_B)
-_UPLINK_ROLE = "uplink"  # the member interface its context sub-interfaces sit on, cabled to a border service port
+_UPLINK_INTERFACES = {kind.__name__: kind for kind in (DcimPhysicalInterface, DcimVirtualInterface)}
+"""The SDK class of each uplink kind of utils/service_contexts.py ``UPLINK_KINDS``, which the readers derive the legs from."""
 
 
 def _dev_id(device: Any) -> str:
@@ -89,12 +101,12 @@ class TransitLegsMixin:
         """
         cached = self._namespaces_by_type or {}
         if not set(leg_types) <= cached.keys():
-            nodes = await self.client.filters(kind=IpamNamespace, namespace_type__values=list(leg_types))
-            cached = {**cached, **{getattr(node, "namespace_type").value: node for node in nodes}}
+            nodes = await self.client.filters(kind=SecurityZone, vrf_type__values=list(leg_types))
+            cached = {**cached, **{node.vrf_type.value: node for node in nodes}}
             self._namespaces_by_type = cached
         missing = [leg_type for leg_type in leg_types if leg_type not in cached]
         if missing:
-            self.logger.error(f"No IpamNamespace with namespace_type {missing} — cannot provision transit legs")
+            self.logger.error(f"No SecurityZone with vrf_type {missing} — cannot provision transit legs")
             return None
         return {leg_type: cached[leg_type] for leg_type in leg_types}
 
@@ -137,7 +149,7 @@ class TransitLegsMixin:
         cabled_uplinks = [
             port for up in uplinks.values() if (port := _host_port(up, host_ports)) is not None and _cable_id(port)
         ]
-        far_ends = await far_end_interfaces(self.client, cabled_uplinks, include=["capabilities"])
+        far_ends = await far_end_interfaces(self.client, cabled_uplinks, include=[])
 
         members: list[_TransitMember] = []
         for device, offset in pairs:
@@ -162,28 +174,29 @@ class TransitLegsMixin:
             )
         return members
 
-    async def _context_ports(
-        self, spec: ContextSpec, context_name: str, members: list[_TransitMember], *, fresh_ports: bool
-    ) -> _TransitState:
-        """The context named context_name (None when absent) and the border ports still to tag with it.
+    async def _context_named(self, spec: ContextSpec, context_name: str) -> _TransitState:
+        """The context named context_name (None when absent), never complete: the part of _transit_state that a
+        dedicated (tracked) context also needs, as it re-saves every leg anyway.
 
-        Never complete: the part of _transit_state that a dedicated (tracked) context also needs, as
-        it re-saves every leg anyway. fresh_ports reads the members' border ports again; without it
-        the capabilities they were fetched with by _resolve_transit_members are used (a pre-lock
-        check, where a stale answer only sends the run into the lock, which re-reads).
-        """
-        every_port = [member.bl_port.id for member in members]
+        Its border ports are not tagged: they are the ports cabled to its members' uplinks (utils/service_contexts.py
+        ``context_border_ports``), derived by every reader."""
         contexts = await self.client.filters(kind=spec.context_kind, name__value=context_name)
-        if not contexts:
-            return _TransitState(context=None, complete=False, untagged_port_ids=every_port)
-        context = contexts[0]
-        if fresh_ports:
-            ports = await self.client.filters(kind=DcimPhysicalInterface, ids=every_port, include=["capabilities"])
-        else:
-            ports = [member.bl_port for member in members]
-        tagged = {port.id for port in ports if any(cap.id == context.id for cap in port.capabilities.peers)}
-        untagged = [port_id for port_id in every_port if port_id not in tagged]
-        return _TransitState(context=context, complete=False, untagged_port_ids=untagged)
+        return _TransitState(context=contexts[0] if contexts else None, complete=False)
+
+    async def _interface_zones(self, interface_ids: list[str]) -> dict[str, str]:
+        """interface id -> the SecurityZone id of the VRF instance it is in (the ManagedVRF listing it in its
+        ``capabilities``), one query; an interface in no instance is absent."""
+        if not interface_ids:
+            return {}
+        wanted = set(interface_ids)
+        zones: dict[str, str] = {}
+        for vrf in await self.client.filters(
+            kind=ManagedVRF, capabilities__ids=sorted(wanted), include=["capabilities", "security_zone"]
+        ):
+            for peer in vrf.capabilities.peers:
+                if peer.id in wanted:
+                    zones[peer.id] = vrf.security_zone.id
+        return zones
 
     async def _transit_state(
         self,
@@ -194,25 +207,24 @@ class TransitLegsMixin:
         leg_types: tuple[str, ...],
         exchange_specs: list[tuple[str, str, str]],
         *,
-        fresh_ports: bool,
         needs_snat: bool | None = None,
     ) -> _TransitState:
         """Read-only completeness check of a context's legs.
 
         Complete means: the context has its VLAN (and its SNAT address / VIP
-        prefix where it takes one); every member's border port carries the
-        context; every exchange exists; every member has a sub-interface per
-        leg with an address in that leg's namespace, linked to the leg's
-        exchanges. Sub-interfaces are written last, so one with its address
-        implies the leg's other addresses exist. Also returns the context and
-        the border ports still to tag with it (_context_ports, see fresh_ports).
+        prefix where it takes one); every exchange exists; every member has a
+        sub-interface per leg with an address in that leg's namespace, in the
+        VRF instance of the leg's namespace (an exchange's legs are derived from
+        that, utils/service_contexts.py exchange_legs).
+        Sub-interfaces are written last, so one with its address implies the
+        leg's other addresses exist. Also returns the context (_context_named).
         """
-        incomplete = await self._context_ports(spec, context_name, members, fresh_ports=fresh_ports)
+        incomplete = await self._context_named(spec, context_name)
         context = incomplete.context
         if context is None:
             return incomplete
         vlan_id = getattr(context.vlan_id, "value", None)
-        if incomplete.untagged_port_ids or not vlan_id:
+        if not vlan_id:
             return incomplete
         if (INTERNET_TYPE in leg_types if needs_snat is None else needs_snat) and not getattr(
             context.snat_address, "id", None
@@ -222,44 +234,37 @@ class TransitLegsMixin:
             return incomplete
 
         exchange_names = [name for name, _, _ in exchange_specs]
-        exchange_ids = (
-            {
-                exchange.name.value: exchange.id
-                for exchange in await self.client.filters(kind=TopologyRoutedExchange, name__values=exchange_names)
-            }
-            if exchange_names
-            else {}
-        )
-        if len(exchange_ids) != len(exchange_names):
+        if exchange_names and len(
+            await self.client.filters(kind=TopologyRoutedExchange, name__values=exchange_names)
+        ) != len(exchange_names):
             return incomplete
 
         sub_interfaces = {
-            (sub.device.id, sub.name.value): sub
+            (sub.device.id, sub.parent_interface.id, sub.vlan_id.value): sub
             for sub in await self.client.filters(
-                kind=DcimVirtualInterface, capabilities__ids=[context.id], include=["capabilities"]
+                kind=DcimVirtualInterface,
+                device__ids=[member.device_id for member in members],
+                parent_interface__ids=[member.trunk.id for member in members],
+                include=["parent_interface"],
             )
         }
+        zones = await self._interface_zones(sorted(sub.id for sub in sub_interfaces.values()))
         address_namespace: dict[str, str] = {}  # IpamIPAddress id -> namespace id it must be in
         for leg_type in leg_types:
-            wanted = {exchange_ids[name] for name, a_type, z_type in exchange_specs if leg_type in (a_type, z_type)}
             for member in members:
-                sub = sub_interfaces.get(
-                    (member.device_id, f"{member.trunk.name.value}.{transit_vlan(vlan_id, leg_type)}")
-                )
+                sub = sub_interfaces.get((member.device_id, member.trunk.id, transit_vlan(vlan_id, leg_type)))
                 if sub is None or not sub.ip_address.id:
                     return incomplete
-                if not wanted <= {cap.id for cap in sub.capabilities.peers}:
+                if zones.get(sub.id) != namespaces[leg_type].id:
                     return incomplete
-                address_namespace[sub.ip_address.id] = namespaces[leg_type].id
+                address_namespace[sub.ip_address.id] = sub.ip_address.id
         addresses = await self.client.filters(
             kind=IpamIPAddress, ids=sorted(address_namespace), include=["ip_namespace"]
         )
-        in_namespace = {
-            address.id for address in addresses if address.ip_namespace.id == address_namespace.get(address.id)
-        }
+        in_namespace = {address.id for address in addresses if address.ip_namespace.peer.name.value == "default"}
         if in_namespace != set(address_namespace):
             return incomplete
-        return _TransitState(context=context, complete=True, untagged_port_ids=[])
+        return _TransitState(context=context, complete=True)
 
     async def _snat_pool(self) -> Any | None:
         """The FW-SNAT-INTERNET-IPv4 address pool (data/bootstrap); None (logged) when missing."""
@@ -309,7 +314,16 @@ class TransitLegsMixin:
         return True
 
     async def _allocate_transit_addresses(
-        self, spec: ContextSpec, *, context_obj: Any, namespace: Any, pool: Any, track: bool
+        self,
+        spec: ContextSpec,
+        *,
+        context_obj: Any,
+        namespace: Any,
+        pool: Any,
+        members: list[_TransitMember],
+        vlan_id: int,
+        leg_type: str,
+        track: bool,
     ) -> dict[int, Any] | None:
         """The leg's /29 from the VRF's leg pool, with its fixed-offset addresses upserted.
 
@@ -319,15 +333,24 @@ class TransitLegsMixin:
         (logged) when the pool hands out nothing.
         """
         label = f"{context_obj.name.value}/{namespace.name.value}"
+        prefix = await self._existing_transit_prefix(
+            context_id=context_obj.id,
+            namespace=namespace,
+            pool=pool,
+            members=members,
+            vlan_id=vlan_id,
+            leg_type=leg_type,
+        )
         try:
-            prefix = await self.client.allocate_next_ip_prefix(
-                resource_pool=pool,
-                kind=IpamPrefix,
-                identifier=f"{context_obj.id}-{namespace.name.value}-{spec.leg_identifier}",
-                prefix_length=TRANSIT_PREFIXLEN,
-                member_type="address",
-                data={"role": "technical"},
-            )
+            if prefix is None:
+                prefix = await self.client.allocate_next_ip_prefix(
+                    resource_pool=pool,
+                    kind=IpamPrefix,
+                    identifier=f"{context_obj.id}-{namespace.name.value}-{spec.leg_identifier}",
+                    prefix_length=TRANSIT_PREFIXLEN,
+                    member_type="address",
+                    data={"role": "technical"},
+                )
         except Exception as exc:
             self.logger.error(f"Failed to allocate the leg /29 for {label}: {exc}")
             return None
@@ -335,6 +358,73 @@ class TransitLegsMixin:
             self.logger.error(f"Leg pool '{pool.name.value}' returned no prefix for {label}")
             return None
         return await self.upsert_prefix_addresses(prefix, offsets=TRANSIT_OFFSETS, track=track)
+
+    async def _existing_transit_prefix(
+        self,
+        *,
+        context_id: str,
+        namespace: Any,
+        pool: Any,
+        members: list[_TransitMember],
+        vlan_id: int,
+        leg_type: str,
+    ) -> Any | None:
+        """Reuse an addressed leg's actual prefix, whether authored or allocated.
+
+        An authored prefix reserves space but has no UUID-keyed allocation identifier.
+        Allocating again would move the leg. Existing addresses must instead agree on
+        their prefix, namespace, member offsets and the configured pool's resources.
+        Inconsistent existing legs fail rather than silently consuming another range.
+        """
+        interfaces = await self.client.filters(
+            kind=DcimVirtualInterface,
+            device__ids=[member.device_id for member in members],
+            parent_interface__ids=[member.trunk.id for member in members],
+            vlan_id__value=transit_vlan(vlan_id, leg_type),
+        )
+        addressed = {
+            interface.device.id: interface.ip_address.id for interface in interfaces if interface.ip_address.id
+        }
+        if not addressed:
+            return None
+        # The legs' VRF instances with their zone, in one query (the instance lists its interfaces).
+        zone_of = await self._interface_zones(
+            sorted(interface.id for interface in interfaces if interface.ip_address.id)
+        )
+        for interface in interfaces:
+            if not interface.ip_address.id:
+                continue
+            zone_id = zone_of.get(interface.id)
+            # A leg in no instance yet is healed by the run (its VRF edge is written after its save); one in the VRF
+            # of another zone is a defect.
+            if zone_id is not None and zone_id != namespace.id:
+                raise ValueError(
+                    f"Existing transit member {interface.name.value} (device {interface.device.id}) is in security "
+                    f"zone {zone_id}, expected {namespace.name.value} ({namespace.id})"
+                )
+        addresses = await self.client.filters(kind=IpamIPAddress, ids=sorted(addressed.values()), include=["ip_prefix"])
+        by_id = {address.id: address for address in addresses}
+        prefix_ids = {address.ip_prefix.id for address in addresses}
+        if len(by_id) != len(addressed) or len(prefix_ids) != 1 or None in prefix_ids:
+            raise ValueError("Existing transit members do not have one explicit prefix")
+        prefix = await self.client.get(kind=IpamPrefix, id=next(iter(prefix_ids)), include=["ip_namespace"])
+        network = ipaddress.IPv4Network(prefix.prefix.value)
+        resources = await self.client.filters(
+            kind=IpamPrefix, ids=sorted(resource.id for resource in pool.resources.peers)
+        )
+        if (
+            network.prefixlen != TRANSIT_PREFIXLEN
+            or prefix.ip_namespace.peer.name.value != "default"
+            or prefix.member_type.value != "address"
+            or not any(network.subnet_of(ipaddress.IPv4Network(resource.prefix.value)) for resource in resources)
+        ):
+            raise ValueError("Existing transit prefix is not an address /29 in this namespace's pool")
+        for member in members:
+            if member.device_id in addressed:
+                address = ipaddress.ip_interface(by_id[addressed[member.device_id]].address.value)
+                if address.network != network or address.ip != network[member.offset]:
+                    raise ValueError("Existing transit member address differs from its fixed HA offset")
+        return prefix
 
     async def _uplinks_by_device(self, members: list[Any]) -> dict[str, Any] | None:
         """member device id -> its role=uplink interface, one query for the physical members, one more for the rest.
@@ -348,15 +438,15 @@ class TransitLegsMixin:
         by_device: dict[str, Any] = {}
         device_ids = [_dev_id(member) for member in members]
         try:
-            for kind in (DcimPhysicalInterface, DcimVirtualInterface):
+            for kind in (_UPLINK_INTERFACES[name] for name in UPLINK_KINDS):
                 wanted = [device_id for device_id in device_ids if device_id not in by_device]
                 if not wanted:
                     break
-                for interface in await self.client.filters(kind=kind, device__ids=wanted, role__value=_UPLINK_ROLE):
+                for interface in await self.client.filters(kind=kind, device__ids=wanted, role__value=UPLINK_ROLE):
                     by_device.setdefault(interface.device.id, interface)
         except Exception as exc:
             for member in members:
-                self.logger.error(f"Error resolving {_UPLINK_ROLE} interface on {_dev_name(member)}: {exc}")
+                self.logger.error(f"Error resolving {UPLINK_ROLE} interface on {_dev_name(member)}: {exc}")
             return None
         return by_device
 
@@ -387,7 +477,7 @@ class TransitLegsMixin:
         uplink = uplinks.get(device_id)
         if uplink is None:
             self.logger.error(
-                f"{device_name}: no role={_UPLINK_ROLE} interface found — cannot create a context sub-interface"
+                f"{device_name}: no role={UPLINK_ROLE} interface found — cannot create a context sub-interface"
             )
         return uplink
 
@@ -401,8 +491,7 @@ class TransitLegsMixin:
         uplink given. The far end must be a border service port of
         the spec's role (BORDER_ROLE_FOR_SERVICES) on a border leaf or edge —
         the one port the context's legs face for this member, whatever the
-        number of border devices. Fetched with its capabilities, the context
-        tags read from it.
+        number of border devices.
         """
         service_role = BORDER_ROLE_FOR_SERVICES[spec.role]
         if not _cable_id(uplink):

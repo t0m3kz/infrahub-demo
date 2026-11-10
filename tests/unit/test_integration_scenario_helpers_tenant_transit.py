@@ -21,12 +21,29 @@ from tests.unit.integration_scenario_helpers_helpers import _deployment
 
 
 def _firewall_context(name: str, dc: str, kind: str = "TopologyDataCenter", tenant: str | None = None) -> dict:
-    """A raw ManagedFirewallContext edge whose cluster's two firewalls sit in ``dc``."""
-    member = {"node": {"deployment": _deployment(dc, kind)}}
+    """A raw ManagedFirewallContext edge whose two member firewalls (``shared_devices``) sit in ``dc``, both in
+    the HA pair ``<name>-ha`` (a context holds no HA edge: the pair is among the members' own capabilities)."""
+    ha = {
+        "__typename": "ManagedFirewallHA",
+        "id": f"{name}-ha",
+        "name": {"value": f"{name}-ha"},
+        "capabilities": {"edges": [{"node": {"id": f"{name}-fw{n}"}} for n in (1, 2)]},
+    }
+    members = [
+        {
+            "node": {
+                "id": f"{name}-fw{n}",
+                "capabilities": {"edges": [{"node": ha}]},
+                "deployment": _deployment(dc, kind),
+            }
+        }
+        for n in (1, 2)
+    ]
     return {
         "node": {
+            "id": name,
             "name": {"value": name},
-            "cluster": {"node": {"name": {"value": f"{name}-ha"}, "capabilities": {"edges": [member, member]}}},
+            "shared_devices": {"edges": members},
             "tenant": {"node": {"__typename": "TopologyCustomerDC", "name": {"value": tenant}}}
             if tenant
             else {"node": None},
@@ -82,6 +99,7 @@ async def test_fetch_tenant_services_resolves_cluster_dcs(tenant_services_client
         "fw-fr-shared": [],
         "fw-dc6-shared": ["DC6"],
     }
+    assert {c["name"]: c["cluster"] for c in services["firewall_contexts"]}["fw-dc10-c007"] == "fw-dc10-c007-ha"
     assert [(leg["deployment"], leg["deployment_is_dc"]) for leg in services["segment_deployments"]] == [
         ("DC10", True),
         ("FR", False),
@@ -221,24 +239,24 @@ def test_match_transit_contexts_keys_a_served_colocation_context_by_its_metro() 
 
 
 def test_match_transit_contexts_keys_a_shared_context_per_tenant_namespace() -> None:
-    """A DC's PROD and NON-PROD shared contexts are two keys, a dedicated one a third."""
+    """A DC's PROD and NONPROD shared contexts are two keys, a dedicated one a third."""
     prod = _context("shared-fw-dc12-prod", dcs=("DC12",))
-    non_prod = _context("shared-fw-dc12-non-prod", dcs=("DC12",), namespaces=("NON-PROD", "INTERNET", "MANAGEMENT"))
+    non_prod = _context("shared-fw-dc12-nonprod", dcs=("DC12",), namespaces=("NONPROD", "INTERNET", "MANAGEMENT"))
     dedicated = _context("c005-fw-dc12-prod", tenant="C005-P-DC12")
 
     by_key, unmatched = match_transit_contexts([prod, non_prod, dedicated], ("DC12",), ("C005-P-DC12",))
 
     assert by_key == {
         ("DC12", "PROD", None): prod,
-        ("DC12", "NON-PROD", None): non_prod,
+        ("DC12", "NONPROD", None): non_prod,
         ("DC12", "PROD", "C005-P-DC12"): dedicated,
     }
     assert unmatched == []
 
 
 def test_match_transit_contexts_leaves_a_context_in_no_single_tenant_namespace_unmatched() -> None:
-    """A context with a leg in both PROD and NON-PROD, or a second one for a key, is not keyed."""
-    mixed = _context("fw-dc12-mixed", dcs=("DC12",), namespaces=("PROD", "NON-PROD", "INTERNET"))
+    """A context with a leg in both PROD and NONPROD, or a second one for a key, is not keyed."""
+    mixed = _context("fw-dc12-mixed", dcs=("DC12",), namespaces=("PROD", "NONPROD", "INTERNET"))
     first = _context("shared-fw-dc12-prod", dcs=("DC12",))
     second = _context("shared-fw-dc12-prod-again", dcs=("DC12",))
 
@@ -261,25 +279,45 @@ def test_match_transit_contexts_leaves_an_unmatched_colocation_context_in_the_li
 
 
 async def test_fetch_transit_inventory_tags_edge_service_ports_like_border_leaf_ones() -> None:
-    """A context's physical ports on an edge (colocation metro) are border_ports, like a border leaf's."""
+    """The firewall ports on an edge (colocation metro) a member's uplink is cabled to are border_ports, like a border
+    leaf's; a port on a device of another role is not."""
 
-    def port(port_id: str, device: str, role: str) -> dict:
+    def member(member_id: str, port_id: str, device: str, role: str) -> dict:
+        far = {
+            "__typename": "DcimPhysicalInterface",
+            "id": port_id,
+            "name": {"value": "Ethernet1/15"},
+            "role": {"value": "firewall"},
+            "device": {"node": {"id": f"id-{device}", "name": {"value": device}, "role": {"value": role}}},
+        }
+        uplink = {
+            "__typename": "DcimPhysicalInterface",
+            "id": f"up-{member_id}",
+            "name": {"value": "ethernet1/1"},
+            "role": {"value": "uplink"},
+            "cable": {"node": {"id": f"c-{member_id}", "endpoints": {"edges": [{"node": far}]}}},
+        }
         return {
             "node": {
-                "__typename": "DcimPhysicalInterface",
-                "id": port_id,
-                "name": {"value": "Ethernet1/15"},
-                "device": {"node": {"id": f"id-{device}", "name": {"value": device}, "role": {"value": role}}},
+                "__typename": "DcimPhysicalDevice",
+                "id": member_id,
+                "name": {"value": member_id},
+                "role": {"value": "internal-firewall"},
+                "shared_capabilities": {"edges": [{"node": {"__typename": "ManagedFirewallContext", "id": "ctx"}}]},
+                "interfaces": {"edges": [{"node": uplink}]},
             }
         }
 
     context = {
         "id": "ctx",
         "name": {"value": "fw-fr-shared"},
-        "capabilities": {
-            "edges": [port("p1", "eg-fr201", "edge"), port("p2", "eg-fr202", "edge"), port("p3", "server-1", "server")]
+        "shared_devices": {
+            "edges": [
+                member("fw-1", "p1", "eg-fr201", "edge"),
+                member("fw-2", "p2", "eg-fr202", "edge"),
+                member("fw-3", "p3", "server-1", "server"),
+            ]
         },
-        "cluster": {"node": {"capabilities": {"edges": []}}},
         "served_deployments": {"edges": []},
     }
     client = MagicMock()
@@ -305,16 +343,16 @@ def test_shared_contexts_of_a_site_are_listed_in_namespace_order_whatever_the_de
     contexts: dict[tuple[str, str, str | None], dict[str, Any]] = {
         ("DC12", "PROD", None): {"name": "shared-prod"},
         ("DC12", "PROD", "C005-P-DC12"): {"name": "dedicated"},
-        ("DC12", "NON-PROD", None): {"name": "shared-non-prod"},
+        ("DC12", "NONPROD", None): {"name": "shared-nonprod"},
         ("DC10", "PROD", None): {"name": "other-site"},
     }
 
-    assert [c["name"] for c in _shared_contexts(contexts, "DC12")] == ["shared-non-prod", "shared-prod"]
+    assert [c["name"] for c in _shared_contexts(contexts, "DC12")] == ["shared-nonprod", "shared-prod"]
 
 
 _CHECKPOINT_TWO_CONTEXTS = """!
 add virtual-system name ctx-np
-set interface eth1.1 security-zone NONPROD-ZONE
+set interface eth1.1 security-zone NONPROD
 set virtual-system ctx-np interface eth1.1
 set virtual-system ctx-np
 mgmt_cli add host name "SNAT-ctx-np" ip-address "192.0.2.3"
@@ -324,10 +362,10 @@ set virtual-system ctx-p
 !
 ! --- Zone isolation ---
 set virtual-system ctx-np
-add access-rule layer "Network" position top name "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE"
+add access-rule layer "Network" position top name "deny-MANAGEMENT-to-NONPROD"
 !
 set virtual-system ctx-p
-add access-rule layer "Network" position top name "deny-MANAGEMENT-ZONE-to-PROD-ZONE"
+add access-rule layer "Network" position top name "deny-MANAGEMENT-to-PROD"
 !
 set cluster mode HighAvailability
 """
@@ -340,10 +378,10 @@ def test_context_lines_of_a_check_point_member_hold_only_that_virtual_systems_ru
     non_prod = _context_lines(_CHECKPOINT_TWO_CONTEXTS, "checkpoint_gaia", "ctx-np")
     prod = _context_lines(_CHECKPOINT_TWO_CONTEXTS, "checkpoint_gaia", "ctx-p")
 
-    assert "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE" in non_prod
-    assert "deny-MANAGEMENT-ZONE-to-PROD-ZONE" not in non_prod
-    assert "deny-MANAGEMENT-ZONE-to-PROD-ZONE" in prod
-    assert "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE" not in prod
+    assert "deny-MANAGEMENT-to-NONPROD" in non_prod
+    assert "deny-MANAGEMENT-to-PROD" not in non_prod
+    assert "deny-MANAGEMENT-to-PROD" in prod
+    assert "deny-MANAGEMENT-to-NONPROD" not in prod
     assert "set cluster mode HighAvailability" not in prod
 
 

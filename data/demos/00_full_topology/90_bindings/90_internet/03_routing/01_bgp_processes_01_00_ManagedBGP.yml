@@ -1,0 +1,18 @@
+# ManagedBGP declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "par-colo1-edge-01-inet-bgp"
+      status: active
+      process_role: regular
+      local_as: "AS4200091001"
+      router_id: ["198.51.100.14/31", "default"]
+      capabilities: ["par-colo1-edge-01"]
+    - name: "EXT-ISP-B-PE1-bgp"
+      status: active
+      process_role: regular
+      local_as: "AS64497"
+      router_id: ["198.51.100.15/31", "default"]
+      capabilities: ["EXT-ISP-B-PE1"]

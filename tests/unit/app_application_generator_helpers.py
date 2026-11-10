@@ -13,9 +13,6 @@ def _make_gen() -> Any:
     gen.client = AsyncMock()
     gen._init_client = AsyncMock()
     gen.logger = MagicMock()
-    # Zone assignment has its own tests (test_segment_firewall_mixin.py,
-    # test_security_zone_helper.py) - stubbed at the boundary here.
-    gen._ensure_segment_zones = AsyncMock()
     return gen
 
 
@@ -27,7 +24,7 @@ def _segment(seg_id: str, typename: str = "ManagedVxlanSegment") -> dict[str, An
         "typename": typename,
         "isolation_mode": "normal",
         "environment": "p",
-        "security_zone": {"name": "PROD-ZONE", "trust_level": 70},
+        "security_zone": {"name": "PROD", "trust_level": 70},
     }
     if typename != "CloudNetworkSegment":
         seg["gateway"] = {"ip_prefix": {"prefix": "10.60.0.0/24"}}

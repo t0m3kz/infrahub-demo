@@ -64,9 +64,10 @@ from typing import Any, ClassVar, Literal, cast
 from infrahub_sdk.exceptions import NodeNotFoundError
 
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
 
 from ..common import CommonGenerator
-from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
+from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..firewall_context import FIREWALL_CONTEXT
 from ..helpers.routing import loopback_prefix_length
@@ -648,7 +649,7 @@ class ColocationFabricGenerator(
             return
 
         # Role names on the EDGE side of each leg — BORDER_ROLE_FOR_SERVICES
-        # (generators/connections.py), the same mapping dc.py and pod.py use
+        # (utils/exchange_transit.py), the same mapping dc.py and pod.py use
         # for their own border-leaf/border-spine: a `firewall`-role port
         # faces a firewall. N9K-C9316D-GX_EDGE provides Ethernet1/[15-16] for
         # that (see data/bootstrap/10_physical_devices_templates_cisco_nxos.

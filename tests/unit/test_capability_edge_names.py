@@ -8,8 +8,8 @@ name ``interface_capabilities`` (an identifier is a pairing key, not a field nam
   so the node would get two relationships with the same name);
 * the old name appears nowhere in the tracked files except on its ``identifier:`` lines.
 
-The device edge has two branches: the individual one (``ManagedGenericDevice``, ``DcimCapabilities.capabilities``,
-cascades with the device) and the shared one (``ManagedGenericSharedDevice``, ``DcimCapabilities.shared_capabilities``,
+The device edge has two branches: the individual one (``ManagedGenericDevice``, ``DcimDeviceManaged.capabilities``,
+cascades with the device) and the shared one (``ManagedGenericSharedDevice``, ``DcimDeviceManaged.shared_capabilities``,
 never cascades; members are ``shared_devices``). A kind inherits exactly one of them, only the individual edge
 cascades, and ``ManagedVRF`` is a shared kind (no ``devices`` of its own, no ``DcimDevice.vrfs``).
 """
@@ -123,15 +123,15 @@ def test_no_kind_inherits_both_device_edges(schema: SchemaModel) -> None:
 
 
 def test_both_ends_of_the_shared_edge_pair_under_one_identifier(schema: SchemaModel) -> None:
-    """DcimCapabilities.shared_capabilities -> the shared generic, and its shared_devices -> DcimCapabilities."""
+    """DcimDeviceManaged.shared_capabilities -> the shared generic, and its shared_devices -> DcimDeviceManaged."""
     ends = {
         (kind, rel["name"]): rel["peer"]
         for kind, rel in schema.all_relationships()
         if rel.get("identifier") == SHARED_IDENTIFIER
     }
     assert ends == {
-        ("DcimCapabilities", "shared_capabilities"): SHARED_EDGE_GENERIC,
-        (SHARED_EDGE_GENERIC, "shared_devices"): "DcimCapabilities",
+        ("DcimDeviceManaged", "shared_capabilities"): SHARED_EDGE_GENERIC,
+        (SHARED_EDGE_GENERIC, "shared_devices"): "DcimDeviceManaged",
     }, ends
 
 
@@ -140,7 +140,7 @@ def test_only_the_individual_edge_cascades(schema: SchemaModel) -> None:
     by_identifier = {
         rel["identifier"]: rel.get("on_delete")
         for kind, rel in schema.all_relationships()
-        if kind == "DcimCapabilities" and rel.get("identifier") in {INDIVIDUAL_IDENTIFIER, SHARED_IDENTIFIER}
+        if kind == "DcimDeviceManaged" and rel.get("identifier") in {INDIVIDUAL_IDENTIFIER, SHARED_IDENTIFIER}
     }
     assert by_identifier == {INDIVIDUAL_IDENTIFIER: "cascade", SHARED_IDENTIFIER: "no-action"}, by_identifier
     shared_kinds = [kind for kind in schema.parents if SHARED_EDGE_GENERIC in schema.ancestors(kind)]
@@ -149,7 +149,7 @@ def test_only_the_individual_edge_cascades(schema: SchemaModel) -> None:
         (kind, rel["name"])
         for kind in [SHARED_EDGE_GENERIC, *shared_kinds]
         for rel in schema.relationships.get(kind, [])
-        if rel.get("on_delete") == "cascade" and rel.get("peer") in {"DcimCapabilities", "DcimDevice"}
+        if rel.get("on_delete") == "cascade" and rel.get("peer") in {"DcimDeviceManaged", "DcimDevice"}
     ]
     assert not cascading, f"a shared kind must never cascade to a device: {cascading}"
 
@@ -206,11 +206,10 @@ def test_old_name_only_remains_on_identifier_lines(root_dir: Path) -> None:
     assert not leftovers, "\n".join(leftovers[:20])
 
 
-def test_a_segment_is_not_on_the_interface_edge(schema: SchemaModel) -> None:
-    """One edge between a port and a segment: `segments` on the port, one-sided (the segment lists no ports).
-
-    The "Assigned Interfaces" tab (`capabilities` of ManagedGenericInterfaces) is gone, which also makes a segment in the
-    `capabilities` of a switch port impossible by schema (it was rule R5 of checks/interface_layers.py).
+def test_a_port_is_in_a_vlan_row_not_in_a_segment(schema: SchemaModel) -> None:
+    """The port's segment is its switch's VLAN ROW (ManagedSegmentVlan inherits the interface edge, the port's
+    `capabilities`, the realization); the deployment inherits it too (the ports a person asks for); the segment itself
+    is not on the interface edge, and the port-side `segments` edge is gone.
     """
     segment = "ManagedVxlanSegment"
     lineage = schema.ancestors(segment) | {segment}
@@ -226,16 +225,17 @@ def test_a_segment_is_not_on_the_interface_edge(schema: SchemaModel) -> None:
         for kind in lineage
         for rel in schema.relationships.get(kind, [])
         if "Interface" in rel["peer"]
-    ], "the segment lists no interface: a reader asks the ports (segments__ids)"
-    port_edges = [rel for rel in schema.relationships.get("DcimSwitchedInterface", []) if rel["peer"] == segment]
-    assert [(rel["name"], rel["cardinality"]) for rel in port_edges] == [("segments", "many")]
+    ], "the segment lists no interface: its rows do"
+    assert INTERFACE_EDGE_GENERIC in schema.ancestors("ManagedSegmentVlan")
+    assert INTERFACE_EDGE_GENERIC in schema.ancestors("ManagedSegmentDeployment")
+    assert not [rel for rel in schema.relationships.get("DcimSwitchedInterface", []) if rel["peer"] == segment]
 
 
 PANEL_KINDS = ("DcimPatchPanel", "DcimRearPatchPanelPort", "DcimFrontPatchPanelPort")
 DEVICE_ONLY_GENERICS = {
     "DcimDevice",
     "DcimPhysicalDevice",
-    "DcimCapabilities",
+    "DcimDeviceManaged",
     DEVICE_EDGE_GENERIC,
     SHARED_EDGE_GENERIC,
     INTERFACE_EDGE_GENERIC,
@@ -248,7 +248,7 @@ DEVICE_ONLY_GENERICS = {
 def test_a_patch_panel_kind_has_no_capability_edge(schema: SchemaModel, kind: str) -> None:
     """A passive panel and its ports carry neither ``capabilities`` nor ``shared_capabilities``, by construction.
 
-    Both edges reach a kind only through DcimCapabilities (device edges) or DcimInterface (interface edge); the
+    Both edges reach a kind only through DcimDeviceManaged (device edges) or DcimInterface (interface edge); the
     panel kinds inherit neither, so no extension on either can reach them.
     """
     assert schema.is_generic.get(kind) is False
@@ -257,11 +257,11 @@ def test_a_patch_panel_kind_has_no_capability_edge(schema: SchemaModel, kind: st
 
 
 def test_no_kind_inherits_a_panel_kind_and_the_capabilities_generic(schema: SchemaModel) -> None:
-    """Nothing inherits from a panel kind, and no panel kind sits under DcimCapabilities."""
+    """Nothing inherits from a panel kind, and no panel kind sits under DcimDeviceManaged."""
     offenders = sorted(
         kind
         for kind in schema.parents
-        if set(PANEL_KINDS) & (schema.ancestors(kind) | {kind}) and "DcimCapabilities" in schema.ancestors(kind)
+        if set(PANEL_KINDS) & (schema.ancestors(kind) | {kind}) and "DcimDeviceManaged" in schema.ancestors(kind)
     )
     assert not offenders, offenders
     assert not [kind for kind in schema.parents if set(PANEL_KINDS) & set(schema.parents[kind])]
