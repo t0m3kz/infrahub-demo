@@ -313,10 +313,11 @@ def test_the_segment_counter_sees_the_demo_segments() -> None:
 
 def test_tier_names_are_unique_per_kind_not_across_the_generic() -> None:
     """The three template kinds all name their tiers S, M, L and XL, so the name is constrained on each node and NOT on
-    the generic: a constraint on the generic makes the server resolve an upsert by name across kinds (a colocation "S"
-    found the DC "S" and the bootstrap load failed with NODE_NOT_FOUND)."""
+    the generic: a constraint or an HFID on the generic makes the server resolve an upsert by name across kinds (a
+    colocation "S" found the DC "S" and the bootstrap load failed with NODE_NOT_FOUND)."""
     generic = schema()["TopologyCustomerTemplate"]
     assert not generic.attributes["name"].get("unique"), "name must not be unique on the generic"
     assert not generic.uniqueness_constraints, "the generic must not constrain its kinds' names together"
+    assert not generic.human_friendly_id, "the generic must not have an HFID: it is enforced across its kinds"
     for kind in ("TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo", "TopologyCustomerTemplateCloud"):
         assert schema()[kind].uniqueness_constraints == (("name__value",),), kind

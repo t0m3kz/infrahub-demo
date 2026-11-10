@@ -145,14 +145,12 @@ generics:
     label: "Customer Deployment Template"
     icon: "mdi:account-network"
     include_in_menu: false
-    human_friendly_id:
-      - name__value
     order_by:
       - name__value
     display_label: "{{ name__value }}"
-    # No uniqueness here: the tiers of the three kinds are all named S, M, L and XL, and a constraint on the generic
-    # makes the server resolve an upsert by name across kinds (a colocation "S" found the DC "S"). Each node below
-    # constrains its own name.
+    # No uniqueness and no human_friendly_id here: the tiers of the three kinds are all named S, M, L and XL, and
+    # either on the generic makes the server resolve an upsert by name across kinds (a colocation "S" found the DC
+    # "S": NODE_NOT_FOUND on the bootstrap load). Each node below has its own. Nothing is a peer of the generic.
     attributes:
       - name: name
         kind: Text
