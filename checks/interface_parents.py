@@ -1,7 +1,8 @@
-"""Validate what an interface rides on (``parent_interface`` of a ``DcimSubInterface``).
+"""Validate what an interface rides on (the ``parent`` of its ``ManagedInterfaceEncapsulation``).
 
-``parent_interface`` is one link of the marker generic ``DcimSubInterface`` (a virtual interface and a cloud peering
-interface inherit it) and the schema holds no same-device rule (no ``common_parent``):
+An interface that rides on another one has one ``ManagedInterfaceEncapsulation`` among its ``capabilities``
+(schemas/extensions/capabilities/encapsulation.yml): a virtual interface, a cloud peering interface or the end of a
+provider connection. The schema holds no same-device rule (no ``common_parent``):
 
 * a sub-interface (a context leg, an SVI's port) rides on a NIC, port or LAG of ITS OWN device; so does the cloud
   peering interface of a transport, unless the cloud's port is the provider's own in a cage: a Direct Connect or
@@ -17,20 +18,23 @@ Rules:
 2. the parent of a NIC of a virtual device is a port of that ``hosting_device`` (a NIC on a device without one is
    rule 1 when its parent is elsewhere);
 3. the host port of an uplink NIC is cabled (otherwise nothing reaches the border leaf through it);
-4. a NIC without a parent is not reported: a machine can have more uplinks than its host;
-5. the parent of a NIC is a DcimPhysicalInterface (a host port, not a LAG, a NIC or a sub-interface).
+4. a NIC without a parent is not reported: a machine can have more uplinks than its host (it has no encapsulation);
+5. the parent of a NIC is a DcimPhysicalInterface (a host port, not a LAG, a NIC or a sub-interface);
+6. an interface has at most one encapsulation, and an encapsulation is on one interface (ERROR);
+7. an interface is not its own parent (ERROR);
+8. (WARNING) an encapsulation on no interface: the interface it belonged to was deleted and left it behind.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
-from infrahub_sdk.checks import InfrahubCheck
-
+from checks.base import WarningCheck
 from generators.virtual_nics import is_host_nic
 from utils.data_cleaning import clean_data
+from utils.interface_encapsulation import ENCAPSULATION_KIND
 
-_SUB_INTERFACE = "DcimSubInterface"
 _PHYSICAL_INTERFACE = "DcimPhysicalInterface"
 _UPLINK_ROLE = "uplink"
 _PEERING = "CloudPeeringInterface"
@@ -41,9 +45,8 @@ def _label(node: dict[str, Any]) -> str:
     return str(node.get("name") or node.get("id") or "<unnamed>")
 
 
-def interface_parent_errors(iface: dict[str, Any]) -> list[str]:
-    """The messages (rules 1, 2, 3, 5) of one cleaned DcimSubInterface node of interface_parents.gql."""
-    parent = iface.get("parent_interface")
+def interface_parent_errors(iface: dict[str, Any], parent: dict[str, Any] | None) -> list[str]:
+    """The messages (rules 1, 2, 3, 5) of one cleaned interface of interface_parents.gql and the parent it rides on."""
     if not isinstance(parent, dict):
         return []
     device = iface.get("device") or {}
@@ -58,7 +61,7 @@ def interface_parent_errors(iface: dict[str, Any]) -> list[str]:
             iface.get("typename") == _PEERING and parent_device.get("typename") == _PROVIDER_CONNECT
         ):
             return [
-                f"{where} rides on {_label(parent)} of '{_label(parent_device)}', another device: a parent_interface "
+                f"{where} rides on {_label(parent)} of '{_label(parent_device)}', another device: a parent "
                 "is an interface of the same device."
             ]
         return []
@@ -80,14 +83,49 @@ def interface_parent_errors(iface: dict[str, Any]) -> list[str]:
     return errors
 
 
-class CheckInterfaceParents(InfrahubCheck):
-    """A sub-interface or a peering rides on an interface of its own device; a NIC of a virtual device on a cabled host port."""
+class CheckInterfaceParents(WarningCheck):
+    """An interface rides on one interface, of its own device (a NIC of a virtual device: a cabled host port)."""
 
     query = "interface_parents"
 
     def validate(self, data: Any) -> None:
-        for iface in clean_data(data).get("DcimSubInterface") or []:
-            for message in interface_parent_errors(iface):
+        encapsulations = clean_data(data).get(ENCAPSULATION_KIND) or []
+        per_interface = Counter(
+            iface.get("id") for encapsulation in encapsulations for iface in encapsulation.get("capabilities") or []
+        )
+        reported: set[str] = set()
+        for encapsulation in encapsulations:
+            parent = encapsulation.get("parent")
+            ifaces = encapsulation.get("capabilities") or []
+            if not ifaces:
+                self.log_warning(f"encapsulation '{_label(encapsulation)}' is on no interface: it was left behind.")
+            if len(ifaces) > 1:
                 self.log_error(
-                    message=message, object_id=iface.get("id"), object_type=iface.get("typename") or _SUB_INTERFACE
+                    message=f"encapsulation '{_label(encapsulation)}' is on {len(ifaces)} interfaces: it is one "
+                    "interface's.",
+                    object_id=encapsulation.get("id"),
+                    object_type=ENCAPSULATION_KIND,
                 )
+            for iface in ifaces:
+                where = f"{_label(iface.get('device') or {})} {_label(iface)}"
+                if per_interface[iface.get("id")] > 1 and iface.get("id") not in reported:
+                    reported.add(iface.get("id"))
+                    self.log_error(
+                        message=f"{where} has {per_interface[iface.get('id')]} encapsulations: an interface rides "
+                        "on one.",
+                        object_id=iface.get("id"),
+                        object_type=iface.get("typename") or ENCAPSULATION_KIND,
+                    )
+                if isinstance(parent, dict) and parent.get("id") == iface.get("id"):
+                    self.log_error(
+                        message=f"{where} is its own parent.",
+                        object_id=iface.get("id"),
+                        object_type=iface.get("typename") or ENCAPSULATION_KIND,
+                    )
+                    continue
+                for message in interface_parent_errors(iface, parent):
+                    self.log_error(
+                        message=message,
+                        object_id=iface.get("id"),
+                        object_type=iface.get("typename") or ENCAPSULATION_KIND,
+                    )

@@ -227,11 +227,30 @@ def test_the_c900_footprints_that_tag_100g_ports_name_a_tier_that_allows_them() 
 # ---------------------------------------------------------------------------
 
 
+def _encapsulation(item: dict) -> dict | None:
+    """The data of the ManagedInterfaceEncapsulation authored among an interface's ``capabilities``, None without one."""
+    return next(
+        (
+            capability["data"]
+            for capability in item.get("capabilities") or []
+            if isinstance(capability, dict) and capability.get("kind") == "ManagedInterfaceEncapsulation"
+        ),
+        None,
+    )
+
+
 def test_a_provider_interface_rides_on_a_port_of_its_own_provider_connect() -> None:
     """validate_interface_parents rule 1: the connection of a Fabric port rides on that port, same device."""
     interfaces = declared("TopologyProviderInterface", _FULL)
     assert interfaces
-    assert [i.item["name"] for i in interfaces if i.item["parent_interface"][0] != i.item["device"]] == []
+    encapsulations = {i.item["name"]: _encapsulation(i.item) for i in interfaces}
+    assert all(encapsulations.values()), "a provider interface has an encapsulation: it rides on a port"
+    assert [
+        name
+        for name, data in encapsulations.items()
+        if data is not None
+        and data["parent"][0] != next(i.item["device"] for i in interfaces if i.item["name"] == name)
+    ] == []
 
 
 # ---------------------------------------------------------------------------

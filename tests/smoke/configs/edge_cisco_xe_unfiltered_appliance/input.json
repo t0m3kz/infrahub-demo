@@ -1348,8 +1348,20 @@
                   "role": {
                     "value": "uplink"
                   },
-                  "vlan_id": {
-                    "value": 1100
+                  "encapsulation_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedInterfaceEncapsulation",
+                          "vlan_id": {
+                            "value": 1100
+                          },
+                          "parent": {
+                            "node": null
+                          }
+                        }
+                      }
+                    ]
                   },
                   "ip_address": {
                     "node": {
@@ -1417,8 +1429,20 @@
                   "role": {
                     "value": "uplink"
                   },
-                  "vlan_id": {
-                    "value": 1200
+                  "encapsulation_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedInterfaceEncapsulation",
+                          "vlan_id": {
+                            "value": 1200
+                          },
+                          "parent": {
+                            "node": null
+                          }
+                        }
+                      }
+                    ]
                   },
                   "ip_address": {
                     "node": {

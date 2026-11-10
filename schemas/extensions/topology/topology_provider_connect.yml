@@ -64,9 +64,9 @@ nodes:
         order_weight: 750
 
   # The end of ONE provider connection on a port of a provider connect, the counterpart of CloudPeeringInterface: it
-  # rides on a port of the same device (`parent_interface`), carries the S-tag and the connection's
-  # bandwidth, and the virtual_connection or internet carrier circuit ends on it. L2 only: no address, no routing (the
-  # cloud peering holds those).
+  # rides on a port of the same device (its ManagedInterfaceEncapsulation `parent`), carries the S-tag and the
+  # connection's bandwidth, and the virtual_connection or internet carrier circuit ends on it. L2 only: no address,
+  # no routing (the cloud peering holds those).
   - name: ProviderInterface
     namespace: Topology
     label: Provider Interface
@@ -75,7 +75,6 @@ nodes:
     include_in_menu: false
     inherit_from:
       - DcimInterface
-      - DcimSubInterface
     attributes:
       - name: bandwidth
         kind: Number

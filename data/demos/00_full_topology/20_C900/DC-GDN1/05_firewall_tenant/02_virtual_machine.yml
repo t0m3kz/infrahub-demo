@@ -15,7 +15,11 @@ spec:
             name: eth0
             role: uplink
             status: active
-            parent_interface: ["gdn1-srv-02", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "gdn1-vm-fw-01:eth0"
+                  parent: ["gdn1-srv-02", "eno1"]
             ip_address:
               data:
                 address: "10.93.2.11/24"

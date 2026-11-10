@@ -62,11 +62,9 @@ fragment InternetEgressContext on ManagedFirewallContext {
                   value
                 }
                 ...InterfaceRoutingZoneFields
+                ...InterfaceEncapsulationEgressFields
                 ...EgressPortCableFields
                 ... on DcimVirtualInterface {
-                  vlan_id {
-                    value
-                  }
                   ip_address {
                     node {
                       id
@@ -80,15 +78,6 @@ fragment InternetEgressContext on ManagedFirewallContext {
                           }
                         }
                       }
-                    }
-                  }
-                  parent_interface {
-                    node {
-                      id
-                      name {
-                        value
-                      }
-                      ...EgressPortCableFields
                     }
                   }
                 }

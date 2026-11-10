@@ -5,6 +5,7 @@ from pathlib import Path
 import jinja2
 import pytest
 
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from transforms.helpers.vxlan import get_interfaces
 
 # ===========================================================================
@@ -285,7 +286,7 @@ class TestGetInterfacesFirewallContextDot1q:
         iface = {
             "name": "Ethernet1/49.150",
             "device": {"id": "dev-1"},
-            "parent_interface": {"name": "Ethernet1/49", "device": {"id": "dev-1"}},
+            **cleaned_encapsulation(150, {"name": "Ethernet1/49", "device": {"id": "dev-1"}}),
         }
         context = {"typename": "ManagedFirewallContext", "name": "dc10-shared", "vlan_id": 150}
         result = get_interfaces([iface], interface_contexts={"Ethernet1/49.150": [context]})
@@ -298,9 +299,8 @@ class TestGetInterfacesFirewallContextDot1q:
         iface = {
             "typename": "DcimVirtualInterface",
             "name": "eth1.3301",
-            "vlan_id": 3301,
             "device": {"id": "dev-1"},
-            "parent_interface": {"name": "eth1", "device": {"id": "dev-1"}},
+            **cleaned_encapsulation(3301, {"name": "eth1", "device": {"id": "dev-1"}}),
         }
         context = {"typename": "ManagedLoadbalancerContext", "name": "dc1-lb-ha-NONPROD", "vlan_id": 3101}
         result = get_interfaces([iface], interface_contexts={"eth1.3301": [context]})

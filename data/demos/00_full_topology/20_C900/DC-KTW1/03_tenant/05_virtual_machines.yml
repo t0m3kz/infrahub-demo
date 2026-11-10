@@ -3,7 +3,7 @@
 # host's), run
 # for the tenant footprint
 # C900-P-DC-KTW1. They come from the bootstrap template LINUX-SVC, which gives each one NIC, eth0 (role uplink). A VM
-# has no cable: eth0 rides on the host port of its role through parent_interface (the n-th uplink NIC on the n-th
+# has no cable: eth0 rides on the host port of its role through its encapsulation (the n-th uplink NIC on the n-th
 # uplink port, the rule of generators/virtual_nics.py). ktw1-vm-01 is on eno1 of ktw1-srv-01, a member of the bond to
 # the
 # vPC pair, so L1 is VM -> eth0 -> eno1 -> bond0 -> both leaves; ktw1-vm-02 is on eno1 of ktw1-srv-02, which is cabled
@@ -29,7 +29,11 @@ spec:
             role: uplink
             status: active
             description: Rides on the host port eno1 of ktw1-srv-01
-            parent_interface: ["ktw1-srv-01", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-vm-01:eth0"
+                  parent: ["ktw1-srv-01", "eno1"]
             ip_address:
               data:
                 address: "10.90.1.11/24"
@@ -47,7 +51,11 @@ spec:
             role: uplink
             status: active
             description: Rides on the host port eno1 of ktw1-srv-02
-            parent_interface: ["ktw1-srv-02", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-vm-02:eth0"
+                  parent: ["ktw1-srv-02", "eno1"]
             ip_address:
               data:
                 address: "10.90.1.12/24"

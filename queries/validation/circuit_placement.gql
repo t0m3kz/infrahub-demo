@@ -248,30 +248,34 @@ fragment VirtualPort on DcimInterface {
       }
     }
   }
-  ... on CloudPeeringInterface {
-    vlan_id {
-      value
-    }
-  }
-  ... on DcimVirtualInterface {
-    vlan_id {
-      value
-    }
-    parent_interface {
+  # What the end rides on and its tag (a sub-interface or a cloud peering; utils/interface_encapsulation.py): the parent
+  # with its cable and the carrier circuits that end on it.
+  encapsulation_capabilities: capabilities {
+    edges {
       node {
-        ... on DcimPhysicalInterface {
-          cable {
-            node {
-              id
-            }
+        __typename
+        ... on ManagedInterfaceEncapsulation {
+          vlan_id {
+            value
           }
-        }
-        capabilities {
-          edges {
+          parent {
             node {
-              __typename
-              ... on TopologyCarrierCircuit {
-                ...Carrier
+              ... on DcimPhysicalInterface {
+                cable {
+                  node {
+                    id
+                  }
+                }
+              }
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    ... on TopologyCarrierCircuit {
+                      ...Carrier
+                    }
+                  }
+                }
               }
             }
           }

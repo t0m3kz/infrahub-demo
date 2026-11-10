@@ -24,19 +24,25 @@ query interface_layers {
             id
           }
         }
-        # A sub-interface is routed (an L3 signal) unless it is a VM NIC pinned to this host port (generators/virtual_nics.py
+        # A sub-interface (the interfaces of its encapsulations) is routed (an L3 signal) unless it is a VM NIC pinned to this host port (generators/virtual_nics.py
         # is_host_nic): its role and the kind of its device say which.
-        sub_interfaces {
+        encapsulations {
           edges {
             node {
-              __typename
-              ... on DcimVirtualInterface {
-                role {
-                  value
-                }
-                device {
+              capabilities {
+                edges {
                   node {
                     __typename
+                    ... on DcimVirtualInterface {
+                      role {
+                        value
+                      }
+                      device {
+                        node {
+                          __typename
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -92,19 +98,25 @@ query interface_layers {
             id
           }
         }
-        # A sub-interface is routed (an L3 signal) unless it is a VM NIC pinned to this host port (generators/virtual_nics.py
+        # A sub-interface (the interfaces of its encapsulations) is routed (an L3 signal) unless it is a VM NIC pinned to this host port (generators/virtual_nics.py
         # is_host_nic): its role and the kind of its device say which.
-        sub_interfaces {
+        encapsulations {
           edges {
             node {
-              __typename
-              ... on DcimVirtualInterface {
-                role {
-                  value
-                }
-                device {
+              capabilities {
+                edges {
                   node {
                     __typename
+                    ... on DcimVirtualInterface {
+                      role {
+                        value
+                      }
+                      device {
+                        node {
+                          __typename
+                        }
+                      }
+                    }
                   }
                 }
               }

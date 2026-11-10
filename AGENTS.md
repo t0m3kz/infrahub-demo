@@ -247,7 +247,7 @@ class MyCheck(InfrahubCheck):
 
 | Namespace | Holds |
 | --------- | ----- |
-| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
+| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, `ManagedInterfaceEncapsulation` (what an interface rides on, see **Interface encapsulation**), and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
 | Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimDeviceManaged`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped, and the two transports `CloudDirectConnect` and `CloudVPNConnection`, which inherit `CloudResource`, `CloudTransport` and only the slim `DcimDevice` (see **Device generics**); a cloud region hosts nothing but the provider's connect devices (`TopologyProviderConnect`). The cloud and SaaS side of a connection is one provider-neutral model (see **Cloud and SaaS connections**): the transport devices (`CloudDirectConnect`, `CloudVPNConnection`, generic `CloudTransport` with `account`, `region` or `saas_region`, `owner`), the peering interface `CloudPeeringInterface` (a `DcimInterface` of its transport), the gateway `CloudGateway` (`hub`, `edge` or `customer`) with `CloudGatewayAttachment` and `CloudGatewayRouteTable`, `CloudVirtualNetwork` and `CloudServiceEndpoint` |
 | Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**), the one meeting point of every internet connection `TopologyInternet` (bootstrap data, see **Circuit placement**) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
@@ -329,8 +329,8 @@ class MyCheck(InfrahubCheck):
     `checks/carrier_circuit_ports.py`: a port is an end of at most one carrier and both ends
     are physical ports, EXCEPT a `virtual_connection` (a provider port hosts one connection per S-tag, and an end may be
     the `DcimVirtualInterface` NIC of a provider-hosted appliance, or a `TopologyProviderInterface`: the end of ONE
-    Fabric connection on the provider's port, unshared, with its S-tag `vlan_id` and
-    `bandwidth` (no C-tag is modelled: nothing reads it), riding on that port through `parent_interface`; the port is a `TopologyProviderConnect`, placed by
+    Fabric connection on the provider's port, unshared, with its S-tag (the encapsulation's `vlan_id`) and
+    `bandwidth` (no C-tag is modelled: nothing reads it), riding on that port through its `ManagedInterfaceEncapsulation` (`parent`, with the tag); the port is a `TopologyProviderConnect`, placed by
     its `location`, the zone, so that zone is the circuit's location); the other types on
     the same port still hold both. A carrier whose far end is such a NIC is a provider-delivered
     `virtual_connection`; a physical `cross_connect` joins physical ports only (our cage edge and a Fabric port or a
@@ -376,10 +376,10 @@ class MyCheck(InfrahubCheck):
   - **Handoff** (`handoff`): no office owner, with an `ip_namespace` (required here, optional in the schema); `password`
     belongs to the handoff and the `vpn` only; one or two locations (both ends may
     sit in one cage); at least one end on a physical device is
-    carried (a live carrier circuit or a `DcimCable` on the port or its `parent_interface`, a cable to a patch panel port
+    carried (a live carrier circuit or a `DcimCable` on the port or its encapsulation `parent`, a cable to a patch panel port
     counts: the cross-connect through a panel is cables, see **Patch panels**); the ends are sub-interfaces
     `<port>.<vlan>` with the same VLAN, or a routed physical port (an IP and no VLAN); a `CloudPeeringInterface` end
-    (the far end of a cloud leg) fits either shape and needs no carrier of its own, and its `vlan_id` (when set) is the
+    (the far end of a cloud leg) fits either shape and needs no carrier of its own, and its encapsulation `vlan_id` (when set) is the
     VLAN. The session of a cloud leg is authored, `add_virtual_circuit` builds none.
   - **VPN** (`vpn`): an IPsec or GRE tunnel over the internet, one session on a tunnel interface pair; no office owner, no
     `registered_prefixes`, an `ip_namespace`, one or two locations, two end ports. Model only: no IPsec or tunnel
@@ -404,9 +404,9 @@ class MyCheck(InfrahubCheck):
   `account` it has no `owner`, without one (Webex, Zscaler) it has `saas_region` and an `owner` customer.
   `CloudPeeringInterface` is the L3/BGP termination on the cloud side, a `DcimInterface` of its transport (an AWS VIF, an
   ExpressRoute peering, a GCP VLAN attachment, a VPN tunnel, a SaaS peering) riding on a port or LAG of the provider connect that
-  holds it (`parent_interface`, the edge of the marker `DcimSubInterface` it shares with a sub-interface, and with a VM NIC the
-  only parent that sits on another device, `checks/interface_parents.py`: the port's and the LAG's
-  `sub_interfaces` list it, and it holds its `ip_address` like any interface): `scope` (`private`, `public`, `saas`), `routing`, `vlan_id` or
+  holds it (its `ManagedInterfaceEncapsulation`: `parent` the port or LAG and `vlan_id` the tag, the same object as a
+  sub-interface, see **Interface encapsulation**; the port's and the LAG's `encapsulations` list it, and it holds its
+  `ip_address` like any interface): `scope` (`private`, `public`, `saas`), `routing`, the tag (`vlan_id` of the encapsulation) or
   `tunnel_index`, the provider's `peer_ip` and `peer_asn`, `auth`, and for a tunnel `endpoint_ip`, `tunnel_mode`,
   `crypto_profile` (`SecurityIPsecProfile`) and `tunnel_key`. A circuit ends on a provider connect's port or LAG, or on a peering, through
   `capabilities` like on any interface; our side is always an interface of one of our devices (a sub-interface, or a
@@ -435,7 +435,7 @@ class MyCheck(InfrahubCheck):
   (`VirtualCircuitSessionGenerator`, planners keyed by `circuit_type`), builds the sessions of `dci`, `handoff` and
   `vpn` circuits; `add_circuit` only derives carrier locations and fans out to it (one `filters` on `circuit_type__values`). The
   carrier of a session circuit is derived, never listed: the
-  carrier circuits (or a `DcimCable` inside one facility) on its port or its `parent_interface`
+  carrier circuits (or a `DcimCable` inside one facility) on its port or its encapsulation `parent`
   (`utils/circuit_underlay.py`). The only role that is an output is `ManagedBGPPeering.peering_role` (`regular`,
   `dci`, `dci-underlay`, `fabric`, `overlay`, `underlay`). The tunnel readers (`edge.gql`, `routing_invariants.gql`,
   `segment_security.gql`) root at `TopologySessionCircuit(circuit_type__value: "tunnel")` and read its `capabilities`.
@@ -619,11 +619,11 @@ class MyCheck(InfrahubCheck):
     and remove the edge once the port is no longer derived. The ports are not host-facing: `checks/customer_quota.py` does not count them. A change of `terminated_on` re-runs
     `add_vxlan_segment` (`data/events/99_actions.yml`).
   - **Firewall side**: the sub-interface is derived, never stored. `transforms/helpers/firewall_terminated.py` names it
-    `<uplink trunk>.<vlan>` (the trunk is the `parent_interface` of the context's legs; the VLAN is the segment's row on
+    `<uplink trunk>.<vlan>` (the trunk is the encapsulation `parent` of the context's legs; the VLAN is the segment's row on
     the device at the far end of the trunk's cable, the tag both ends use), gives it the gateway as `virtual_ip` and the
     segment's zone, and `Firewall.transform` renders it through the same interface path as any other. A segment with no
     row on the facing leaf yet, no gateway, or a trunk with no facing device (an unpinned hosted firewall NIC, a colocation
-    context with no legs) is left out with a warning. A hosted NIC follows its `parent_interface` to the physical
+    context with no legs) is left out with a warning. A hosted NIC follows its encapsulation `parent` to the physical
     chassis port's cable, never an invented direct cable. The derived gateway interface is attached to its serving
     context's policy and routing table, not the appliance's root table. The context never routes a terminated prefix to
     the border leaves
@@ -668,7 +668,7 @@ class MyCheck(InfrahubCheck):
   `uplinks`, the host ports or bonds (a generic peer without a HFID, so a data file names them as nested objects with an
   explicit kind). `ManagedPortGroup` is a component of the switch: a `vlan_id` and the fabric `segment` it is, and it lists the
   VM NICs in it (`nics`, one-sided: `DcimVirtualInterface` is not extended; a NIC still rides on its host port through
-  `parent_interface`). A server port carries NO segment membership: an uplink trunks the VLANs of the switch's port
+  its encapsulation). A server port carries NO segment membership: an uplink trunks the VLANs of the switch's port
   groups (`vlan_id`, `segment`), its allowed VLAN list. `checks/virtual_switch.py`: VS1 the uplinks
   are ports of the cluster's hosts and every host has one; VS2 a VLAN id is used once per switch; VS3 the segment of every
   port group has a deployment in the hosting deployment of every uplink's host (read from the port groups and the
@@ -827,26 +827,45 @@ class MyCheck(InfrahubCheck):
   deployment enforces, a WARNING where it stages: turn the switch on only where it reports no error.
 - **Virtual NICs**: the base NICs of a hosted virtual device (a dedicated firewall or load balancer, built from a
   `*_CUSTOMER_*` template) are `DcimVirtualInterface`, never `DcimPhysicalInterface`. Only the physical host is cabled:
-  `generators/virtual_nics.py` pins each NIC through its `parent_interface` to the host port of its role (`management`,
+  `generators/virtual_nics.py` pins each NIC to the host port of its role (`management`,
   `uplink`, `ha`; n-th by interface order; only cabled host ports qualify for an uplink, and a NIC with no host port
-  left stays unpinned). A stale generated pin is removed with RelationshipRemove (SDK save omits a None single
-  relationship), and a context sub-interface
-  rides on the NIC through `parent_interface` too, so border leaf -> host port -> NIC -> sub-interface is a path in the
-  graph. `_resolve_transit_members` follows `parent_interface`, not a name. A controller keeps physical ports;
+  left stays unpinned) by upserting its `ManagedInterfaceEncapsulation` (`parent` the host port, no tag, see
+  **Interface encapsulation**). A stale generated pin is deleted with its encapsulation (the parent is mandatory), and a
+  context sub-interface rides on the NIC through its encapsulation too, so border leaf -> host port -> NIC ->
+  sub-interface is a path in the graph. `_resolve_transit_members` follows the encapsulation `parent`, not a name. A
+  controller keeps physical ports;
   a provider-hosted `CloudNetworkAppliance` has no hardware, so its ports are virtual NICs with no host (and no cable).
-- **Interface parents**: `parent_interface` is the one "rides on" link, declared once on the marker generic
-  `DcimSubInterface` that `DcimVirtualInterface` and `CloudPeeringInterface` inherit (a generic cannot inherit a generic,
-  so each kind lists it): a sub-interface's parent is a port, LAG or NIC of its own device, a VM NIC's is the port of its
-  `hosting_device` it is pinned to, a cloud peering's is a port or LAG of its transport. It and its inverse
-  `sub_interfaces` (declared once on the marker generic `DcimHasSubInterface`, many, peer `DcimSubInterface`: a NIC
-  parents several sub-interfaces, a host port several NICs, a transport LAG several peerings; `checks/interface_layers.py`
-  reads it as an L3 signal, a port with sub-interfaces is routed, except for a VM base NIC pinned to a host port (`is_host_nic`), which may sit on a bond member; the generators filter on `parent_interface__ids`) carry
-  no `common_parent`, so the cross-device rule is `checks/interface_parents.py` (rooted on `DcimSubInterface`): a parent
-  on another device is an ERROR unless the interface is a NIC of a `DcimVirtualDevice` pinned to a port of its
-  `hosting_device`, a NIC's parent is a physical port, and an uplink's host port is cabled. The transforms render a
-  `parent_interface` only for a parent on the interface's own device (`transforms/helpers/addressing.py` `sub_interface_parent`; the
-  queries select both `device` ids). The VLAN tag of a sub-interface is its `vlan_id`, declared once on
-  `DcimSubInterface` (unset: untagged); `<parent>.<vlan>` is only the default name the generators give, nothing parses it.
+- **Interface encapsulation**: what an interface "rides on", with which tag, is ONE capability kind,
+  `ManagedInterfaceEncapsulation` (`schemas/extensions/capabilities/encapsulation.yml`, `ManagedGeneric` +
+  `ManagedGenericInterfaces`): a dot1q sub-interface, a firewall context leg on a trunk, the NIC of a VM pinned to a host
+  port, a `CloudPeeringInterface` on a port or LAG of the provider connect, a `TopologyProviderInterface` on a provider
+  port. There is NO `parent_interface`, NO sub-interface `vlan_id` and NO marker generic (`DcimSubInterface` and
+  `DcimHasSubInterface` are gone): the interface that rides has the object among its own `capabilities` (the standard
+  interface edge, no re-declaration), with the optional `vlan_id` (1..4094; unset: untagged, a VM NIC or a LAG peering) and
+  the mandatory `parent` (a plain Attribute relationship to a `DcimInterface`, `common_parent` nowhere: a NIC's parent is
+  on another device). The port lists its sub-interfaces in `encapsulations`, the reverse edge declared ONCE on
+  `DcimInterface` by the same schema file (a NIC parents several sub-interfaces, a host port several NICs, a transport
+  LAG several peerings); the interfaces that ride on a port are the `capabilities` of those encapsulations. An interface
+  WITHOUT a parent (an SVI, a loopback, a tunnel that rides on nothing) needs none. The name is `<device>:<interface>`
+  (`utils/interface_encapsulation.py` `encapsulation_name`), so a data file or a generator upserts it; the interface name
+  `<parent>.<vlan>` is only a convention, nothing parses it. A data file authors it as a nested object under the
+  interface's `capabilities` (`- kind: ManagedInterfaceEncapsulation`, `data: {name, vlan_id, parent: [device, port]}`).
+  ONE reader, `utils/interface_encapsulation.py` (`parent_of`, `vlan_of`, `sub_interfaces_of`, `encapsulation_of`): queries
+  select it under the alias `encapsulation_capabilities` (`queries/fragments/interface_encapsulation.gql`, one of the three
+  fragments per interface object; the plain `capabilities` is selected by other fragments and the server answers only the
+  first selection of a field) and the reverse edge as `encapsulations { capabilities }`; generators read and write it with
+  `generators/helpers/encapsulation.py` (`parent_ids_of`, `sub_interfaces_on`, `riding_interface_ids`). A generator that
+  creates a sub-interface saves its encapsulation with it, tracked like the interface (`ensure_vlan_subinterface`), and
+  one that deletes interfaces deletes their encapsulations (the pod decommission): the interface does not take the object
+  with it. `checks/interface_layers.py` reads the reverse edge as an L3 signal (a port with sub-interfaces is routed),
+  except for a VM base NIC pinned to a host port (`is_host_nic`), which may sit on a bond member. The server holds no
+  same-device rule, so `checks/interface_parents.py` (rooted on `ManagedInterfaceEncapsulation`): a parent on another
+  device is an ERROR unless the interface is a NIC of a `DcimVirtualDevice` pinned to a port of its `hosting_device` (a
+  physical port, cabled for an uplink) or a cloud peering on a `TopologyProviderConnect`; an interface has at most one
+  encapsulation and an encapsulation is on one interface; an interface is not its own parent (ERRORs); an encapsulation
+  on no interface is a WARNING. The transforms render a parent only for one on the interface's own device
+  (`transforms/helpers/addressing.py` `sub_interface_parent`; the queries select both `device` ids); the payload keys
+  `parent_interface` and `vlan_id` that the config templates read are the rendering contract, not the schema.
   `common_parent: device` stays on the LAG pair `lag` / `member_interfaces` and `common_parent: panel` on the patch panel
   ports (see **Patch panels**), the only two uses; it works only on a node with a `kind: Parent` relationship and a peer
   with one (the interfaces' `device`, a patch panel port's `panel`). Every other "same parent" rule is a check: the
@@ -1100,8 +1119,8 @@ class MyCheck(InfrahubCheck):
     a service context is not either (its legs and border ports are derived from its members,
     `utils/service_contexts.py`), nor is a routed exchange (its legs are the context's legs in its two VRFs,
     `exchange_legs`) or an OSPF peering (its interfaces are those of its `ospf_interface` settings); the kinds on
-    `ManagedGenericInterfaces` are the VRF, the segment deployment and the VLAN row, the BGP peering and the OSPF
-    interface settings.
+    `ManagedGenericInterfaces` are the VRF, the segment deployment and the VLAN row, the BGP peering, the OSPF
+    interface settings and the interface encapsulation (what an interface rides on).
     The circuits are on it too: their two ends are their `capabilities` (see **Circuit placement**).
 
 #### Schema Best Practices

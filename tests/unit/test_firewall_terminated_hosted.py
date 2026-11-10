@@ -7,6 +7,7 @@ import pytest
 from graphql import FragmentDefinitionNode, parse
 
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.firewall_transform_helpers import _make_fw
 from transforms.helpers.firewall_contexts import get_firewall_contexts
 from transforms.helpers.firewall_terminated import terminated_interfaces
@@ -82,15 +83,16 @@ def _payload(
                                         "__typename": "DcimVirtualInterface",
                                         "name": {"value": "eth1"},
                                         "role": {"value": "uplink"},
-                                        "parent_interface": {
-                                            "node": {
+                                        **raw_encapsulation(
+                                            None,
+                                            {
                                                 "name": {"value": "eth3"},
                                                 "device": {"node": {"id": own_device}}
                                                 if own_device
                                                 else {"node": None},
                                                 "cable": cable if cabled else {"node": None},
-                                            }
-                                        },
+                                            },
+                                        ),
                                         "capabilities": {"edges": []},
                                     }
                                 },
@@ -99,11 +101,10 @@ def _payload(
                                         **interface_vrf_capability(routing_vrf("PROD")),
                                         "__typename": "DcimVirtualInterface",
                                         "name": {"value": "eth1.3000"},
-                                        "vlan_id": {"value": 3000},
+                                        **raw_encapsulation(
+                                            3000, {"name": {"value": "eth1"}, "device": {"node": {"id": "vm"}}}
+                                        ),
                                         "device": {"node": {"id": "vm"}},
-                                        "parent_interface": {
-                                            "node": {"name": {"value": "eth1"}, "device": {"node": {"id": "vm"}}}
-                                        },
                                         "ip_address": {
                                             "node": {
                                                 "address": {"value": "10.250.0.5/29"},

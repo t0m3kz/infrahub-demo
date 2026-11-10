@@ -8,6 +8,7 @@ from typing import Any
 from tests.smoke.fixture_builders.common import (
     _deployment_record,
     _edges,
+    _encapsulation,
     _make_interface,
     _make_segment_node,
     _node,
@@ -444,8 +445,7 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
                     "status": _v("active"),
                     "role": _v(None),
                     "device": _node({"id": "dev-fw"}),
-                    "vlan_id": _v(vlan),
-                    "parent_interface": _node({"name": _v("ethernet1/1"), "device": _node({"id": "dev-fw"})}),
+                    **_encapsulation(vlan, {"name": _v("ethernet1/1"), "device": _node({"id": "dev-fw"})}),
                     "ip_address": _node(
                         {
                             "address": _v(f"{net[5]}/{net.prefixlen}"),
@@ -601,8 +601,9 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
                 "status": _v("active"),
                 "role": _v(None),
                 "device": _node({"id": "dev-fw"}),
-                "vlan_id": _v(3002 + _XCHG_VLAN_OFFSET[ns_type]),
-                "parent_interface": _node({"name": _v("ethernet1/1"), "device": _node({"id": "dev-fw"})}),
+                **_encapsulation(
+                    3002 + _XCHG_VLAN_OFFSET[ns_type], {"name": _v("ethernet1/1"), "device": _node({"id": "dev-fw"})}
+                ),
                 "ip_address": _node(
                     {
                         "address": _v(f"{net[5]}/{net.prefixlen}"),
@@ -725,11 +726,12 @@ def build_virtual_firewall_data() -> dict:
             node["__typename"] = "DcimVirtualInterface"
             for physical_only in ("interface_type", "mtu", "cable", "lag"):
                 node.pop(physical_only, None)
-        if node.get("parent_interface", {}).get("node"):
-            parent = node["parent_interface"]["node"]
-            node["parent_interface"] = _node(
-                {"name": _v(rename(parent["name"]["value"])), "device": parent.get("device")}
-            )
+        for encapsulation in node.get("encapsulation_capabilities", {}).get("edges", []):
+            encapsulation = encapsulation["node"]
+            if parent := (encapsulation.get("parent") or {}).get("node"):
+                encapsulation["parent"] = _node(
+                    {"name": _v(rename(parent["name"]["value"])), "device": parent.get("device")}
+                )
         interfaces.append(edge)
     management = _make_interface(
         name="eth0",

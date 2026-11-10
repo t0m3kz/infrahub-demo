@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import yaml
 
-from generators.protocols import DcimPhysicalInterface, DcimVirtualInterface
+from generators.protocols import DcimPhysicalInterface, DcimVirtualInterface, ManagedInterfaceEncapsulation
 from generators.virtual_nics import PINNED_ROLES, VirtualNicMixin, pair_nics_with_host_ports
 
 
@@ -20,7 +20,6 @@ def _port(
     role: str,
     *,
     device_id: str = "vm-1",
-    parent_id: str | None = None,
     cabled: bool = False,
 ) -> Any:
     port = SimpleNamespace(
@@ -28,7 +27,6 @@ def _port(
         name=SimpleNamespace(value=name),
         role=SimpleNamespace(value=role),
         device=SimpleNamespace(id=device_id),
-        parent_interface=SimpleNamespace(id=parent_id),
     )
     if device_id == "host":
         port.cable = SimpleNamespace(id=f"cable-{port_id}" if cabled else None)
@@ -46,16 +44,18 @@ def _host_ports() -> list[Any]:
     ]
 
 
-def _nics(device_id: str = "vm-1", **pinned: str) -> list[Any]:
+def _nics(device_id: str = "vm-1") -> list[Any]:
     """The base NICs of a CloudGuard instance: eth0 management, eth1-eth3 uplink, eth7 ha."""
-    nics = [
+    return [
         _port(f"{device_id}-eth0", "eth0", "management", device_id=device_id),
         *(_port(f"{device_id}-eth{index}", f"eth{index}", "uplink", device_id=device_id) for index in (3, 1, 2)),
         _port(f"{device_id}-eth7", "eth7", "ha", device_id=device_id),
     ]
-    for nic in nics:
-        nic.parent_interface = SimpleNamespace(id=pinned.get(nic.name.value))
-    return nics
+
+
+def _pins(device_name: str = "vm", **pinned: str) -> dict[str, str]:
+    """The stored encapsulations of a device's NICs: name ``<device>:<nic>`` -> the id of the host port it rides on."""
+    return {f"{device_name}:{nic}": parent_id for nic, parent_id in pinned.items()}
 
 
 def test_nics_ride_the_host_port_of_their_role_in_interface_order() -> None:
@@ -89,8 +89,17 @@ class _Gen(VirtualNicMixin):
         self._retry_delay = MagicMock(return_value=0.0)
 
 
-def _client(nics_by_call: list[list[Any]], host_ports: list[Any]) -> Any:
-    """filters(): the NIC lookups answer nics_by_call in turn (last repeats), the host lookup host_ports."""
+def _client(nics_by_call: list[list[Any]], host_ports: list[Any], pins: dict[str, str] | None = None) -> Any:
+    """filters(): the NIC lookups answer nics_by_call in turn (last repeats), the host lookup host_ports, the
+    encapsulation lookup the stored ``pins`` (name -> parent port id) among the names asked for."""
+    stored = {
+        name: SimpleNamespace(
+            name=SimpleNamespace(value=name),
+            parent=SimpleNamespace(id=parent_id),
+            delete=AsyncMock(),
+        )
+        for name, parent_id in (pins or {}).items()
+    }
     calls = iter(nics_by_call)
     last: list[Any] = []
 
@@ -99,6 +108,8 @@ def _client(nics_by_call: list[list[Any]], host_ports: list[Any]) -> Any:
         if kind is DcimPhysicalInterface:
             assert kwargs["device__ids"] == ["host"]
             return host_ports
+        if kind is ManagedInterfaceEncapsulation:
+            return [stored[name] for name in kwargs["name__values"] if name in stored]
         assert kind is DcimVirtualInterface
         last = next(calls, last)
         return last
@@ -111,51 +122,78 @@ def _client(nics_by_call: list[list[Any]], host_ports: list[Any]) -> Any:
         node.save = AsyncMock(side_effect=lambda **kwargs: saved.append((data, kwargs)))
         return node
 
-    return SimpleNamespace(filters=filters, create=create, saved=saved, execute_graphql=AsyncMock())
+    return SimpleNamespace(filters=filters, create=create, saved=saved, pins=stored, execute_graphql=AsyncMock())
 
 
 @pytest.mark.asyncio
-async def test_pin_sets_parent_interface_of_every_paired_nic_untracked() -> None:
+async def test_pin_writes_the_encapsulation_of_every_paired_nic_untracked() -> None:
+    """Each NIC gets one ManagedInterfaceEncapsulation named after it: the host port as parent, the NIC in its
+    capabilities, no tag."""
     client = _client([_nics()], _host_ports())
     gen: Any = _Gen(client)
 
     await gen._pin_virtual_nics([SimpleNamespace(id="vm-1", name=SimpleNamespace(value="vm"))], "host")
 
-    assert {data["name"]: data["parent_interface"] for data, _ in client.saved} == {
-        "eth0": {"id": "h-mgmt"},
-        "eth1": {"id": "h-eth1"},
-        "eth2": {"id": "h-eth2"},
-        "eth7": {"id": "h-sync"},
+    assert {data["name"]: data for data, _ in client.saved} == {
+        f"vm:{nic}": {"name": f"vm:{nic}", "parent": {"id": port}, "capabilities": [{"id": f"vm-1-{nic}"}]}
+        for nic, port in (("eth0", "h-mgmt"), ("eth1", "h-eth1"), ("eth2", "h-eth2"), ("eth7", "h-sync"))
     }
+    assert all("vlan_id" not in data for data, _ in client.saved)
     assert all(kwargs == {"allow_upsert": True, "update_group_context": False} for _, kwargs in client.saved)
     gen.logger.error.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_pin_is_idempotent_when_the_nics_are_already_pinned() -> None:
-    pinned = _nics(eth0="h-mgmt", eth1="h-eth1", eth2="h-eth2", eth7="h-sync")
-    client = _client([pinned], _host_ports())
+    pins = _pins(eth0="h-mgmt", eth1="h-eth1", eth2="h-eth2", eth7="h-sync")
+    client = _client([_nics()], _host_ports(), pins)
 
     await _Gen(client)._pin_virtual_nics([SimpleNamespace(id="vm-1", name=SimpleNamespace(value="vm"))], "host")
 
     assert client.saved == []
+    assert all(pin.delete.await_count == 0 for pin in client.pins.values())
+
+
+@pytest.mark.asyncio
+async def test_a_pin_to_another_port_is_rewritten_in_place() -> None:
+    """A NIC whose pin names the wrong port is upserted by the same encapsulation name, never deleted."""
+    pins = _pins(eth0="h-old", eth1="h-eth1", eth2="h-eth2", eth7="h-sync")
+    client = _client([_nics()], _host_ports(), pins)
+
+    await _Gen(client)._pin_virtual_nics([SimpleNamespace(id="vm-1", name=SimpleNamespace(value="vm"))], "host")
+
+    assert [data for data, _ in client.saved] == [
+        {"name": "vm:eth0", "parent": {"id": "h-mgmt"}, "capabilities": [{"id": "vm-1-eth0"}]}
+    ]
+    assert client.pins["vm:eth0"].delete.await_count == 0
 
 
 @pytest.mark.asyncio
 async def test_uncabled_uplink_is_not_pinned_and_its_previous_generated_pin_is_removed() -> None:
-    """An unused chassis uplink must not become a false path from a dedicated appliance."""
+    """An unused chassis uplink must not become a false path from a dedicated appliance: the stale pin is deleted
+    (the parent is mandatory, so the encapsulation goes, not just its parent)."""
     ports = _host_ports()
     next(port for port in ports if port.id == "h-eth2").cable.id = None
-    nics = _nics(eth0="h-mgmt", eth1="h-eth1", eth2="h-eth2", eth7="h-sync")
-    client = _client([nics], ports)
+    pins = _pins(eth0="h-mgmt", eth1="h-eth1", eth2="h-eth2", eth7="h-sync")
+    client = _client([_nics()], ports, pins)
 
     await _Gen(client)._pin_virtual_nics([SimpleNamespace(id="vm-1", name=SimpleNamespace(value="vm"))], "host")
 
     assert client.saved == []
-    client.execute_graphql.assert_awaited_once()
-    assert client.execute_graphql.await_args.kwargs["variables"] == {
-        "data": {"id": "vm-1-eth2", "name": "parent_interface", "nodes": [{"id": "h-eth2"}]}
-    }
+    client.pins["vm:eth2"].delete.assert_awaited_once_with()
+    assert sum(pin.delete.await_count for pin in client.pins.values()) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_nic_with_no_host_port_and_no_pin_does_nothing() -> None:
+    """eth3 has no third uplink on the host and no stale pin: nothing is written or deleted."""
+    pins = _pins(eth0="h-mgmt", eth1="h-eth1", eth2="h-eth2", eth7="h-sync")
+    client = _client([_nics()], _host_ports(), pins)
+
+    await _Gen(client)._pin_virtual_nics([SimpleNamespace(id="vm-1", name=SimpleNamespace(value="vm"))], "host")
+
+    assert client.saved == []
+    assert all(pin.delete.await_count == 0 for pin in client.pins.values())
 
 
 @pytest.mark.asyncio

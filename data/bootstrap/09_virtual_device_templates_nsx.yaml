@@ -1,7 +1,7 @@
 ---
 # VMware NSX Edge node (large form factor): the VM that runs the Tier-0 and Tier-1 gateways of an NSX domain. NSX
 # software is not a platform of the model, so the node is a Linux appliance with a management NIC and two datapath
-# (fast path) NICs: a datapath NIC rides on a host port of its role like any VM NIC (parent_interface) and is in a
+# (fast path) NICs: a datapath NIC rides on a host port of its role like any VM NIC (its encapsulation) and is in a
 # port group of the cluster's virtual switch (schemas/extensions/service/virtual_switch.yml). The gateways themselves
 # (Tier-0, Tier-1, their routing) are not modelled yet.
 apiVersion: infrahub.app/v1

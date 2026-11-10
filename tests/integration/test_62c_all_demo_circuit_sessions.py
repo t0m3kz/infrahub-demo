@@ -44,6 +44,7 @@ from .all_demo_firewall_constants import (
 )
 from .circuit_helpers import fetch_interconnect_inventory
 from .conftest import TestInfrahubDockerWithClient
+from .encapsulation_reads import raw_parent_name
 from .interconnect_queries import (
     CIRCUIT_PREFIXES_QUERY,
     COLOCATION_CONTEXTS_QUERY,
@@ -772,7 +773,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     continue
                 networks = set()
                 for device, end in sorted(ends.items()):
-                    parent = ((end.get("parent_interface") or {}).get("node") or {}).get("name", {}).get("value")
+                    parent = raw_parent_name(end)
                     if not parent or end["name"]["value"] != f"{parent}.{tag}":
                         errors.append(f"{name}: {device} interface {end['name']['value']}, expected <port>.{tag}")
                     ip = ((end.get("ip_address") or {}).get("node")) or {}

@@ -22,7 +22,11 @@ spec:
             role: uplink
             status: active
             description: Datapath NIC, rides on the host port eno1 of ktw1-srv-01
-            parent_interface: ["ktw1-srv-01", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-nsx-edge-01:fp-eth0"
+                  parent: ["ktw1-srv-01", "eno1"]
     - name: ktw1-nsx-edge-02
       object_template: NSX-EDGE-LARGE
       description: "NSX Edge node 2 of 2 (Tier-0 gateway) on ktw1-srv-02"
@@ -35,4 +39,8 @@ spec:
             role: uplink
             status: active
             description: Datapath NIC, rides on the host port eno1 of ktw1-srv-02
-            parent_interface: ["ktw1-srv-02", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-nsx-edge-02:fp-eth0"
+                  parent: ["ktw1-srv-02", "eno1"]

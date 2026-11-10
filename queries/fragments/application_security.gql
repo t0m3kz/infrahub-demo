@@ -554,17 +554,8 @@ fragment ServingLoadbalancerContextFields on ManagedLoadbalancerContext {
                 role {
                   value
                 }
+                ...InterfaceEncapsulationFields
                 ... on DcimVirtualInterface {
-                  vlan_id {
-                    value
-                  }
-                  parent_interface {
-                    node {
-                      name {
-                        value
-                      }
-                    }
-                  }
                   ip_address {
                     node {
                       ip_prefix {

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
+
 FW = "ManagedFirewallContext"
 LB = "ManagedLoadbalancerContext"
 
@@ -45,7 +47,7 @@ def make_member(
 ) -> dict[str, Any]:
     """A cleaned member device with its uplinks and the given sub-interfaces.
 
-    A sub-interface is ``"<parent>.<vlan>"`` (its ``parent_interface`` and ``vlan_id`` are read from the string, as the
+    A sub-interface is ``"<parent>.<vlan>"`` (its encapsulation ``parent`` and ``vlan_id`` are read from the string, as the
     conventional name states them; a non-numeric suffix leaves ``vlan_id`` unset) or an explicit
     ``(name, vlan_id, parent name)`` when the name must not say what the fields say.
     """
@@ -64,8 +66,7 @@ def make_member(
                 sub_name,
                 "service",
                 "DcimVirtualInterface",
-                vlan_id=vlan,
-                parent_interface={"name": parent_name, "device": {"id": device_id}},
+                **cleaned_encapsulation(vlan, {"name": parent_name, "device": {"id": device_id}}),
                 device={"id": device_id},
             )
         )
@@ -84,7 +85,7 @@ def make_far(
 ) -> dict[str, Any]:
     """The far end of a cable as the query returns it: a physical port, its device and its pinned NICs."""
     device = {k: device_[k] for k in ("id", "name", "role", "shared_capabilities", "interfaces")}
-    return {**port, "device": device, "sub_interfaces": nics or []}
+    return {**port, "device": device, "encapsulations": [{"capabilities": nics or []}]}
 
 
 def make_switch(ports: dict[str, tuple[str, list[dict[str, Any]]]]) -> dict[str, Any]:

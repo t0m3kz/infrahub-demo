@@ -9,6 +9,7 @@ import pytest
 from generators.logger import GeneratorError
 from generators.topology.virtual_circuit import handoff_pool_name
 from tests.integration.demo_data import BOOTSTRAP, declared
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.simulators.circuit_fakes import (
     HANDOFF_POOL_NETWORK,
     VC_ID,
@@ -189,15 +190,15 @@ class TestHandoffSession:
         [
             pytest.param(
                 session_port("if-aws", "Ethernet1", "EXT-AWS-DX-FR2", where=deployment("TopologyCloudRegion", "x")),
-                r"EXT-AWS-DX-FR2/Ethernet1 must be a DcimVirtualInterface riding on a parent_interface",
+                r"EXT-AWS-DX-FR2/Ethernet1 must be a DcimVirtualInterface riding on a parent \(its encapsulation\)",
                 id="physical-port",
             ),
             pytest.param(
                 {
                     **session_port("if-aws", "Ethernet1.1900", "EXT-AWS-DX-FR2", kind="DcimVirtualInterface"),
-                    "parent_interface": {"node": None},
+                    **raw_encapsulation(None, None),
                 },
-                r"EXT-AWS-DX-FR2/Ethernet1.1900 must be a DcimVirtualInterface riding on a parent_interface",
+                r"EXT-AWS-DX-FR2/Ethernet1.1900 must be a DcimVirtualInterface riding on a parent \(its encapsulation\)",
                 id="no-parent-whatever-the-name-says",
             ),
             pytest.param(

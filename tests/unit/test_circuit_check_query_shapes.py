@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from tests.unit.circuit_placement_check_helpers import DCI, DF10, HANDOFF, INET_OFFICE, TUNNEL, VPN_CIRCUIT, _edges
-from tests.unit.test_circuit_query_shapes import _QUERIES, _payload_paths, _selected_paths
+from tests.unit.test_circuit_query_shapes import _QUERIES, ENCAPSULATION, _payload_paths, _selected_paths
 
 PLACEMENT = _QUERIES / "validation" / "circuit_placement.gql"
 
@@ -77,14 +77,15 @@ _PORT_READS = [
     "capabilities.device.capabilities.process_role",
     # the shape of a handoff end: a cloud peering interface (its vlan_id) or a routed physical port (its address)
     "capabilities.__typename",
-    "capabilities.vlan_id",
+    f"{ENCAPSULATION}.__typename",
+    f"{ENCAPSULATION}.vlan_id",
     "capabilities.ip_address.id",
     # a hop inside one facility is a cable: on the physical port, or on the parent of a sub-interface
     "capabilities.cable.id",
-    "capabilities.parent_interface.cable.id",
+    f"{ENCAPSULATION}.parent.cable.id",
     *(
         f"capabilities.{where}capabilities.{field}"
-        for where in ("", "parent_interface.")
+        for where in ("", "encapsulation_capabilities.parent.")
         for field in (
             "__typename",
             "id",
@@ -126,7 +127,7 @@ _ROOTS = ["TopologyCarrierCircuit", "TopologySessionCircuit"]
 @pytest.fixture(scope="module")
 def placement_paths() -> dict[str, set[str]]:
     """Selected paths per root of circuit_placement.gql."""
-    return {root: _selected_paths(PLACEMENT, root) for root in _ROOTS}
+    return {root: _selected_paths(PLACEMENT, root, by_alias=True) for root in _ROOTS}
 
 
 def _reads(root: str) -> list[str]:

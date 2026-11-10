@@ -109,6 +109,7 @@ from utils.circuit_underlay import (
     session_circuits_on,
 )
 from utils.data_cleaning import clean_data
+from utils.interface_encapsulation import parent_of, vlan_of
 from utils.limits import DCI_TECHNICAL_IPV4_POOL, DCI_TECHNICAL_IPV6_POOL, HANDOFF_POOL_TEMPLATE, UNDERLAY_MTU
 
 from ..common import CommonGenerator
@@ -243,8 +244,8 @@ class SessionEnd:
             ),
             overlay_ids=tuple(process["id"] for process in overlay_processes(device) if process.get("id")),
             loopbacks=tuple(loopbacks),
-            parent_id=(port.get("parent_interface") or {}).get("id"),
-            vlan_id=port.get("vlan_id"),
+            parent_id=(parent_of(port) or {}).get("id"),
+            vlan_id=vlan_of(port),
         )
 
 
@@ -503,7 +504,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         """One eBGP session over the circuit's link prefix; our end (overlay process) takes the lower address."""
         for end in ends:
             if end.port_kind != DcimVirtualInterface.__name__ or end.parent_id is None:
-                self.fail(f"{name}: {end.label} must be a DcimVirtualInterface riding on a parent_interface")
+                self.fail(f"{name}: {end.label} must be a DcimVirtualInterface riding on a parent (its encapsulation)")
         return self._plan_routed_link(circuit, name, ends, label="Handoff")
 
     def _plan_vpn(self, circuit: dict[str, Any], name: str, ends: list[SessionEnd]) -> SessionPlan:

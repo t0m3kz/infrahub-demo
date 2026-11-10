@@ -20,7 +20,11 @@ spec:
             role: uplink
             status: active
             description: Rides on the host port eno1 of waw1-srv-01
-            parent_interface: ["waw1-srv-01", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "waw1-vm-01:eth0"
+                  parent: ["waw1-srv-01", "eno1"]
             ip_address:
               data:
                 address: "10.92.1.11/24"

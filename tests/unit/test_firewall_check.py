@@ -7,6 +7,7 @@ from typing import Any, cast
 
 from checks.firewall import CheckFirewall
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability
+from tests.unit.encapsulation_helpers import raw_encapsulation
 
 
 def _v(value: Any) -> dict[str, Any]:
@@ -243,8 +244,7 @@ def _leg_interface(name: str, address: str, namespace: str, ns_type: str) -> dic
     return {
         **interface_vrf_capability(_vrf(namespace, ns_type)),
         "name": _v(name),
-        "vlan_id": _v(int(name.rsplit(".", 1)[-1])),
-        "parent_interface": _node({"name": _v("eth1"), "device": _node({"id": "dev-fw-1"})}),
+        **raw_encapsulation(int(name.rsplit(".", 1)[-1]), {"name": _v("eth1"), "device": _node({"id": "dev-fw-1"})}),
         "device": _node({"id": "dev-fw-1"}),
         "ip_address": _node({"address": _v(address), "ip_namespace": {"node": {"name": {"value": "default"}}}}),
     }

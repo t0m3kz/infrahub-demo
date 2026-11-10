@@ -427,7 +427,7 @@ pairs of the first sample keep their chains, which is the whole point of not bre
 
 Each DC server hosts C900 VMs (`DcimVirtualDevice`, template `LINUX-SVC`, `hosting_device` the server): `ktw1-vm-01` and
 `ktw1-vm-02` in DC-KTW1, `waw1-vm-01`, `gdn1-vm-01`. A VM has no cable (it is a VM, that is rather the point): its NIC `eth0` rides on the host port of its
-role (`parent_interface`, the first uplink `eno1`, the rule of `generators/virtual_nics.py`), and its address is in the
+role (its encapsulation `parent`, the first uplink `eno1`, the rule of `generators/virtual_nics.py`), and its address is in the
 segment of its DC. The application `c900-web-shop-p` (`90_bindings/40_applications/C900/`) names the VMs as the instances of its
 components: frontend (`c900-web-p`, the KTW1 VMs), backend (`c900-app-p`, WAW1), database (`c900-db-p`, GDN1).
 
@@ -445,7 +445,7 @@ VLAN attachment, tunnel) appears only in object names, descriptions and in the t
 | Shared element | Kind | What it is |
 | -------------- | ---- | ---------- |
 | transport | `CloudDirectConnect` (`physical` / `logical`, `rides_on`), `CloudVPNConnection` (generic `CloudTransport` + `DcimDevice`) | a device that HOLDS INTERFACES: ports (`DcimPhysicalInterface`), a bundle (`DcimLAGInterface`) and peerings; `physical`: ports and bundle in the provider's region, `logical`: a circuit on a partner's or our own port, `CloudVPNConnection`: holds tunnels; the account, `region` or `saas_region`, `owner` (SaaS) are on the transport |
-| peering ("cloud interface") | `CloudPeeringInterface` (`DcimInterface` of the transport) | the L3/BGP termination on the cloud side: an interface of the transport riding on its port or bundle (`parent_interface`); a session circuit ends on it (`capabilities`); the provider's address and AS are `peer_ip`, `peer_asn` |
+| peering ("cloud interface") | `CloudPeeringInterface` (`DcimInterface` of the transport) | the L3/BGP termination on the cloud side: an interface of the transport riding on its port or bundle (its `ManagedInterfaceEncapsulation`: `parent` and `vlan_id`); a session circuit ends on it (`capabilities`); the provider's address and AS are `peer_ip`, `peer_asn` |
 | gateway | `CloudGateway`, `gateway_type`: `hub` / `edge` / `customer` | `hub`: a routing node with attachments and tables; `edge`: where a peering or VPN lands before the network; `customer`: our side of the VPN (public address and AS), required on a VPN connection |
 | gateway attachment | `CloudGatewayAttachment` | one connection of a gateway (`gateway`) with EXACTLY one target: `virtual_network` or `peer_gateway` (check R1); `allowed_prefixes`: what it announces towards on-prem |
 | routing table | `CloudGatewayRouteTable` | the routing domain of a hub; an attachment has `associated_route_table` and `propagates_to_route_tables` |
@@ -456,11 +456,11 @@ Our side is always a sub-interface of a device and our BGP process; it is not in
 
 `CloudPeeringInterface` (HFID: `[transport, interface]`, for example `[dx-c900-fra-lag, lag1.1000]`): it is a
 `DcimInterface`, so it has `device` (the transport), `name`, `mtu` (9000 by default) and `capabilities` like any port (no special treatment, whatever the marketing says).
-Its own fields: `scope` (private, public, saas), `routing` (bgp, static), `vlan_id` or `tunnel_index`, `bfd`,
+Its own fields: `scope` (private, public, saas), `routing` (bgp, static), the tag (`vlan_id` of its encapsulation) or `tunnel_index`, `bfd`,
 `service_id`; a tunnel: `endpoint_ip`, `tunnel_mode` (ipsec, gre), `crypto_profile` (`SecurityIPsecProfile`),
-`tunnel_key` (`RoutingPassword`, the IPsec key; BGP uses `auth`); relationships `parent_interface` (a port or bundle of
-the SAME transport; the `DcimSubInterface` marker, the same `sub__interface` edge as a device sub-interface: the port
-and the bundle see the peering in `sub_interfaces`, and the peering has an `ip_address`), `gateway` (empty for a VPN
+`tunnel_key` (`RoutingPassword`, the IPsec key; BGP uses `auth`); relationships: its `ManagedInterfaceEncapsulation` (`parent` a port or bundle of
+the SAME transport, the same object as a device sub-interface: the port and the bundle see the peering in
+`encapsulations`, and the peering has an `ip_address`), `gateway` (empty for a VPN
 tunnel: it lands through `transport.gateway`), `auth` (`RoutingPassword`), `advertised_prefixes`, and `peer_ip`,
 `peer_asn` from `TopologyConnectorRouting`. The account, region and `owner` belong to the transport, not to the peering.
 
@@ -482,7 +482,7 @@ it physically is (the cage for a cross-connect, the region for a Fabric connecti
 | AWS LAG / ExpressRoute Direct pair / OCI cross-connect group / Interconnect bundle | the ports (`DcimPhysicalInterface`) and the bundle (`DcimLAGInterface`, `member_interfaces`) are the provider's, on its `TopologyProviderConnect` in the cage, cabled to ours; ONE `CloudDirectConnect` `physical` holds the peerings, which ride on the bundle |
 | AWS hosted connection / ExpressRoute circuit (provider) / Partner Interconnect attachment / OCI VC (partner) / IBM Connect / Alibaba hosted | `CloudDirectConnect` `logical` + `partner_account`, `service_key` |
 | ExpressRoute circuit on Direct, OCI VC on its own CCG, Dedicated Interconnect attachment | `CloudDirectConnect` `logical` + `rides_on` the transport that holds the port or bundle; the ports (`msee-pri`, `msee-sec`) are the provider's own, on a `TopologyProviderConnect` of the region, the far ends of the Fabric connections |
-| Dedicated Interconnect / OCI FastConnect: a routed port without a VLAN | `CloudDirectConnect` `physical` with a port; the peering WITHOUT `vlan_id`, `parent_interface` = the port; our end is a PHYSICAL port with an address |
+| Dedicated Interconnect / OCI FastConnect: a routed port without a VLAN | `CloudDirectConnect` `physical` with a port; the peering WITHOUT a tag, its encapsulation `parent` = the port; our end is a PHYSICAL port with an address |
 | Equinix Fabric / Megaport VXC | a `virtual_connection` carrier; the end in the cloud = a `logical` transport + `partner_account`; MCR / Network Edge = `CloudNetworkAppliance` |
 | AWS VIF private / transit / public, ExpressRoute private / Microsoft peering, GCP VLAN attachment, OCI virtual circuit, IBM, Alibaba VBR | `CloudPeeringInterface` `scope` private or public (+ `vlan_id`, `peer_ip`, `peer_asn`, `auth`) |
 | Public VIF / Microsoft peering / OCI public VC: our public prefixes | `peering.advertised_prefixes` (US -> cloud) |
@@ -545,7 +545,7 @@ the port of another device): R1 an attachment has exactly one target, R2 a routi
 attachment's gateway, R3 `rides_on` without a loop, physical only on physical, logical on our transport without
 `partner_account`, R4 the segments of a service endpoint are from its network and a tunnel key requires IPsec, R5 a
 crypto profile only with IPsec, R6 a VPN tunnel has `endpoint_ip` and is an interface of a `CloudVPNConnection`, R7
-withdrawn (the server holds the bundle's members, `checks/interface_parents.py` holds the peering's `parent_interface`),
+withdrawn (the server holds the bundle's members, `checks/interface_parents.py` holds the peering's encapsulation `parent`),
 R8 a peering with `vlan_id` rides on a port or bundle, the parent of a peering is a port or bundle, the VLANs of one
 parent are different (the same VLAN on two ports is allowed: ExpressRoute), R9 the place of a transport: exactly one of
 `region` and `saas_region`, with an account without `owner`, without an account with `saas_region` and `owner`; a
@@ -776,7 +776,7 @@ office - Zscaler tunnel.
 - The provider side of a peering has no BGP process: a BGP peering has one process (ours), the other side is the
   `peer_ip` and `peer_asn` of the cloud peering, found through the session circuit that has the same interface
   (sub-interface or routed port) in `capabilities`.
-- A tunnel is tied to the internet carrier through `parent_interface`, not through a circuit: the internet circuit does
+- A tunnel is tied to the internet carrier through its encapsulation `parent`, not through a circuit: the internet circuit does
   not know which tunnels ride on it.
 - There is no service request (`TopologyProviderConnection`): nothing says "I want to connect A to B for customer X"; the
   legs are made of circuits and their ends. Pools, `near_port` and primary/secondary redundancy have no fields.
@@ -788,7 +788,7 @@ office - Zscaler tunnel.
   edge), so check R3 sees loops of at least two objects. The input guards it: the unit test
   `tests/unit/test_cloud_demo_data.py` rejects a `rides_on` onto itself in the YAML files (it does not protect changes
   from the API or the UI).
-- The `parent_interface` of a peering (the `DcimSubInterface` marker, the same edge as a device sub-interface) has no
+- The encapsulation `parent` of a peering (the same object as a device sub-interface) has no
   `common_parent`, so the server does not hold that the parent is on the same transport (the bundle and its members:
   the server holds them): that is `checks/interface_parents.py` (rule 1). The first peering on a partner transport's port
   passes the schema (the schema was not asked to look).

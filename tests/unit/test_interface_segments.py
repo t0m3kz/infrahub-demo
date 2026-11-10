@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from tests.smoke.fixture_builders.common import make_transform
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from tests.unit.segment_port_helpers import deployment_caps
 from transforms.config.leaf import Leaf
 from transforms.helpers.addressing import sub_interface_parent
@@ -58,13 +59,20 @@ def test_sub_interface_parent_only_for_a_parent_on_the_own_device() -> None:
     parent = {"name": "Ethernet5", "device": {"id": "dev-1"}}
     own = {"id": "dev-1"}
 
-    assert sub_interface_parent({"name": "Ethernet5.100", "device": own, "parent_interface": parent}) == parent
+    assert (
+        sub_interface_parent({"name": "Ethernet5.100", "device": own, **cleaned_encapsulation(None, parent)}) == parent
+    )
     # the name says nothing: a Junos unit, an IOS sub-interface tagged otherwise, an untagged one
-    assert sub_interface_parent({"name": "unit-7", "device": own, "parent_interface": parent}) == parent
-    assert sub_interface_parent({"name": "Ethernet5.100", "device": {"id": "vm-1"}, "parent_interface": parent}) is None
-    assert sub_interface_parent({"name": "eth0", "device": {"id": "vm-1"}, "parent_interface": parent}) is None
-    assert sub_interface_parent({"name": "Ethernet5.100", "device": own, "parent_interface": None}) is None
-    assert sub_interface_parent({"name": "Ethernet5.100", "parent_interface": parent}) is None
+    assert sub_interface_parent({"name": "unit-7", "device": own, **cleaned_encapsulation(None, parent)}) == parent
+    assert (
+        sub_interface_parent({"name": "Ethernet5.100", "device": {"id": "vm-1"}, **cleaned_encapsulation(None, parent)})
+        is None
+    )
+    assert (
+        sub_interface_parent({"name": "eth0", "device": {"id": "vm-1"}, **cleaned_encapsulation(None, parent)}) is None
+    )
+    assert sub_interface_parent({"name": "Ethernet5.100", "device": own, **cleaned_encapsulation(None, None)}) is None
+    assert sub_interface_parent({"name": "Ethernet5.100", **cleaned_encapsulation(None, parent)}) is None
 
 
 def test_a_segment_in_the_capabilities_does_not_become_an_activation() -> None:

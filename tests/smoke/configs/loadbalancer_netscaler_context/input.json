@@ -392,17 +392,29 @@
                       "id": "dev-lb"
                     }
                   },
-                  "parent_interface": {
-                    "node": {
-                      "name": {
-                        "value": "eth1"
-                      },
-                      "device": {
+                  "encapsulation_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "dev-lb"
+                          "__typename": "ManagedInterfaceEncapsulation",
+                          "vlan_id": {
+                            "value": 3100
+                          },
+                          "parent": {
+                            "node": {
+                              "name": {
+                                "value": "eth1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "dev-lb"
+                                }
+                              }
+                            }
+                          }
                         }
                       }
-                    }
+                    ]
                   },
                   "capabilities": {
                     "edges": []
@@ -438,9 +450,6 @@
                         }
                       }
                     ]
-                  },
-                  "vlan_id": {
-                    "value": 3100
                   }
                 }
               },
@@ -471,17 +480,29 @@
                       "id": "dev-lb"
                     }
                   },
-                  "parent_interface": {
-                    "node": {
-                      "name": {
-                        "value": "eth1"
-                      },
-                      "device": {
+                  "encapsulation_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "dev-lb"
+                          "__typename": "ManagedInterfaceEncapsulation",
+                          "vlan_id": {
+                            "value": 3301
+                          },
+                          "parent": {
+                            "node": {
+                              "name": {
+                                "value": "eth1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "dev-lb"
+                                }
+                              }
+                            }
+                          }
                         }
                       }
-                    }
+                    ]
                   },
                   "capabilities": {
                     "edges": []
@@ -517,9 +538,6 @@
                         }
                       }
                     ]
-                  },
-                  "vlan_id": {
-                    "value": 3301
                   }
                 }
               }

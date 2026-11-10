@@ -603,11 +603,11 @@ class TestHandoffCircuit:
         assert "has no live carrier circuit and no cable" in messages[0]
 
     def test_end_that_is_not_a_vlan_sub_interface_fails(self) -> None:
-        """A handoff end must be a sub-interface on a parent_interface (or a routed port); a bare port of no kind is reported."""
+        """A handoff end must be a sub-interface with an encapsulation (or a routed port); a bare port of no kind is reported."""
         ends = [EG_FR_VLAN, _vport("EXT-AWS-DX-FR2", "et-0/0/0", (XC,))]
         messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert messages == [
-            "Handoff circuit 'HO' end 'EXT-AWS-DX-FR2:et-0/0/0' is neither a sub-interface (a virtual interface on a parent_interface) "
+            "Handoff circuit 'HO' end 'EXT-AWS-DX-FR2:et-0/0/0' is neither a sub-interface (a virtual interface with an encapsulation) "
             "nor a routed physical port (an IP address, no VLAN) nor a cloud peering interface: a physical port with "
             "no IP address and no VLAN cannot carry a handoff."
         ]

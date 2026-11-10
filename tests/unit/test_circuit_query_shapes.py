@@ -35,12 +35,16 @@ from utils.graphql_queries import load_query
 
 _QUERIES = Path(__file__).parents[2] / "queries"
 _WRAPPERS = frozenset({"edges", "node"})
+# The encapsulation of a circuit end (queries/fragments/interface_encapsulation.gql): selected under this alias.
+ENCAPSULATION = "capabilities.encapsulation_capabilities"
 
 
-def _selected_paths(path: Path, root: str) -> set[str]:
+def _selected_paths(path: Path, root: str, by_alias: bool = False) -> set[str]:
     """Dotted paths of every field selected under the top-level ``root`` field of the query in ``path``.
 
     A field selecting only ``value`` is a leaf (``status { value }`` is ``status``); ``edges``/``node`` are dropped.
+    ``by_alias`` keys an aliased selection by its alias like the response does (the circuit queries select the
+    encapsulation as ``encapsulation_capabilities: capabilities``); the default keys it by the field name.
     """
     document = parse(load_query(path))
     fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
@@ -54,7 +58,8 @@ def _selected_paths(path: Path, root: str) -> set[str]:
             elif isinstance(selection, FragmentSpreadNode):
                 walk(fragments[selection.name.value].selection_set.selections, prefix)
             elif isinstance(selection, FieldNode):
-                name = selection.name.value
+                # An aliased selection is keyed by its alias, like the response (`encapsulation_capabilities: capabilities`).
+                name = (selection.alias if by_alias and selection.alias else selection.name).value
                 children = selection.selection_set.selections if selection.selection_set else []
                 if name in _WRAPPERS:
                     walk(children, prefix)
@@ -99,7 +104,9 @@ def _payload_paths(value: Any, prefix: tuple[str, ...] = ()) -> set[str]:
 @pytest.fixture(scope="module")
 def generator_paths() -> set[str]:
     """Paths selected by queries/topology/add/virtual_circuit.gql."""
-    return _selected_paths(_QUERIES / "topology" / "add" / "virtual_circuit.gql", "TopologySessionCircuit")
+    return _selected_paths(
+        _QUERIES / "topology" / "add" / "virtual_circuit.gql", "TopologySessionCircuit", by_alias=True
+    )
 
 
 # What generators/topology/virtual_circuit.py reads from the cleaned virtual circuit, for every kind
@@ -136,18 +143,19 @@ _GENERATOR_READS = [
     "capabilities.capabilities.name",
     "capabilities.capabilities.circuit_id",
     "capabilities.capabilities.status",
-    # a handoff end is a sub-interface: it rides on a parent_interface, its tag is its vlan_id
-    "capabilities.parent_interface.id",
-    "capabilities.vlan_id",
-    # ... and, for a sub-interface, on its parent interface
-    "capabilities.parent_interface.capabilities.__typename",
-    "capabilities.parent_interface.capabilities.id",
-    "capabilities.parent_interface.capabilities.name",
-    "capabilities.parent_interface.capabilities.circuit_id",
-    "capabilities.parent_interface.capabilities.status",
+    # a handoff end is a sub-interface: its encapsulation names the parent it rides on and the tag (vlan_id)
+    f"{ENCAPSULATION}.__typename",
+    f"{ENCAPSULATION}.parent.id",
+    f"{ENCAPSULATION}.vlan_id",
+    # ... and, for a sub-interface, on the carrier circuits of its parent interface
+    f"{ENCAPSULATION}.parent.capabilities.__typename",
+    f"{ENCAPSULATION}.parent.capabilities.id",
+    f"{ENCAPSULATION}.parent.capabilities.name",
+    f"{ENCAPSULATION}.parent.capabilities.circuit_id",
+    f"{ENCAPSULATION}.parent.capabilities.status",
     # a hop inside one facility is a cable, not a circuit: on a physical port, or on a sub-interface's parent
     "capabilities.cable.id",
-    "capabilities.parent_interface.cable.id",
+    f"{ENCAPSULATION}.parent.cable.id",
     # a handoff
     "vrf.id",
     "vrf.deployment.id",

@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from tests.unit.firewall_transform_helpers import _make_context_smoke_data, _make_fw, _render_template
 from tests.unit.routing_helpers import in_vrf
 from transforms.config.firewall import _build_fw_interfaces
@@ -19,16 +20,14 @@ from utils.routing_domain import RoutingDomainError
 class TestAddressFamilyAwareRendering:
     _FW_IFACE_V6 = {
         "name": "eth0",
-        "vlan_id": None,
-        "parent_interface": None,
+        **cleaned_encapsulation(None, None),
         "ip_address": {"address": "fd00:2300::1/127"},
         "description": None,
         "security_zone": None,
     }
     _FW_IFACE_V4 = {
         "name": "eth1",
-        "vlan_id": None,
-        "parent_interface": None,
+        **cleaned_encapsulation(None, None),
         "ip_address": {"address": "10.0.0.1/30"},
         "description": None,
         "security_zone": None,
@@ -214,7 +213,7 @@ class TestFirewallTransformContextPlacement:
 
 
 class TestParentInterfaceOnlyForSubInterfaces:
-    """``parent_interface`` is also a VM NIC's host port: only a parent on the interface's own device is a
+    """The encapsulation parent is also a VM NIC's host port: only a parent on the interface's own device is a
     sub-interface, whatever the names say."""
 
     @staticmethod
@@ -222,10 +221,12 @@ class TestParentInterfaceOnlyForSubInterfaces:
         return [
             {
                 "name": name,
-                "vlan_id": int(name.rsplit(".", 1)[1]) if "." in name else None,
+                **cleaned_encapsulation(
+                    int(name.rsplit(".", 1)[1]) if "." in name else None,
+                    {"name": parent, "device": {"id": parent_device}},
+                ),
                 "device": {"id": "dev-1"},
                 "ip_address": {"address": "10.0.0.2/30"},
-                "parent_interface": {"name": parent, "device": {"id": parent_device}},
                 "capabilities": [],
             }
         ]
@@ -247,7 +248,7 @@ class TestParentInterfaceOnlyForSubInterfaces:
         """A sub-interface named otherwise keeps its parent and states its own tag; a NIC named like a sub-interface
         of its host port is none."""
         interfaces = self._interfaces("unit-7", "ethernet1/1")
-        interfaces[0]["vlan_id"] = 210
+        interfaces[0].update(cleaned_encapsulation(210, {"name": "ethernet1/1", "device": {"id": "dev-1"}}))
         (renamed,) = _build_fw_interfaces(interfaces, [], {})
         (nic,) = _build_fw_interfaces(self._interfaces("Ethernet5.100", "Ethernet5", "host-1"), [], {})
 

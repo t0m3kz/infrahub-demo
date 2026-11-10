@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from utils.circuit_underlay import (
     DCI_TYPE,
     HANDOFF_TYPE,
@@ -30,9 +31,9 @@ OTHER = {"typename": "ManagedVxlanSegment"}
         pytest.param({"cable": "cable-1"}, True, id="cable-on-the-port"),
         pytest.param({"cable": None}, False, id="no-cable-on-the-port"),
         pytest.param({}, False, id="no-cable-selection"),
-        pytest.param({"parent_interface": {"cable": "cable-1"}}, True, id="cable-on-the-parent"),
-        pytest.param({"parent_interface": {"cable": None}}, False, id="no-cable-on-the-parent"),
-        pytest.param({"parent_interface": None}, False, id="no-parent"),
+        pytest.param(cleaned_encapsulation(None, {"cable": "cable-1"}), True, id="cable-on-the-parent"),
+        pytest.param(cleaned_encapsulation(None, {"cable": None}), False, id="no-cable-on-the-parent"),
+        pytest.param(cleaned_encapsulation(None, None), False, id="no-parent"),
     ],
 )
 def test_port_cabled_reads_the_port_and_its_parent(port: dict[str, Any], cabled: bool) -> None:
@@ -44,9 +45,11 @@ def test_port_cabled_reads_the_port_and_its_parent(port: dict[str, Any], cabled:
     ("port", "carried"),
     [
         pytest.param({"capabilities": [CIRCUIT]}, True, id="circuit-any-status"),
-        pytest.param({"parent_interface": {"capabilities": [CIRCUIT]}}, True, id="circuit-on-the-parent"),
+        pytest.param(cleaned_encapsulation(None, {"capabilities": [CIRCUIT]}), True, id="circuit-on-the-parent"),
         pytest.param({"cable": "cable-1", "capabilities": []}, True, id="cable-only"),
-        pytest.param({"parent_interface": {"cable": "cable-1", "capabilities": []}}, True, id="cable-on-the-parent"),
+        pytest.param(
+            cleaned_encapsulation(None, {"cable": "cable-1", "capabilities": []}), True, id="cable-on-the-parent"
+        ),
         pytest.param({"cable": None, "capabilities": [OTHER]}, False, id="a-segment-is-no-carrier"),
         pytest.param({"capabilities": []}, False, id="nothing"),
     ],

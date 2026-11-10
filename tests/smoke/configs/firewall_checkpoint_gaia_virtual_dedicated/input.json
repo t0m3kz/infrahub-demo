@@ -181,20 +181,29 @@
                       "id": "dev-fw"
                     }
                   },
-                  "vlan_id": {
-                    "value": 3001
-                  },
-                  "parent_interface": {
-                    "node": {
-                      "name": {
-                        "value": "eth1"
-                      },
-                      "device": {
+                  "encapsulation_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "dev-fw"
+                          "__typename": "ManagedInterfaceEncapsulation",
+                          "vlan_id": {
+                            "value": 3001
+                          },
+                          "parent": {
+                            "node": {
+                              "name": {
+                                "value": "eth1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "dev-fw"
+                                }
+                              }
+                            }
+                          }
                         }
                       }
-                    }
+                    ]
                   },
                   "ip_address": {
                     "node": {
@@ -270,20 +279,29 @@
                       "id": "dev-fw"
                     }
                   },
-                  "vlan_id": {
-                    "value": 3401
-                  },
-                  "parent_interface": {
-                    "node": {
-                      "name": {
-                        "value": "eth1"
-                      },
-                      "device": {
+                  "encapsulation_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "dev-fw"
+                          "__typename": "ManagedInterfaceEncapsulation",
+                          "vlan_id": {
+                            "value": 3401
+                          },
+                          "parent": {
+                            "node": {
+                              "name": {
+                                "value": "eth1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "dev-fw"
+                                }
+                              }
+                            }
+                          }
                         }
                       }
-                    }
+                    ]
                   },
                   "ip_address": {
                     "node": {
@@ -359,20 +377,29 @@
                       "id": "dev-fw"
                     }
                   },
-                  "vlan_id": {
-                    "value": 3601
-                  },
-                  "parent_interface": {
-                    "node": {
-                      "name": {
-                        "value": "eth1"
-                      },
-                      "device": {
+                  "encapsulation_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "dev-fw"
+                          "__typename": "ManagedInterfaceEncapsulation",
+                          "vlan_id": {
+                            "value": 3601
+                          },
+                          "parent": {
+                            "node": {
+                              "name": {
+                                "value": "eth1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "dev-fw"
+                                }
+                              }
+                            }
+                          }
                         }
                       }
-                    }
+                    ]
                   },
                   "ip_address": {
                     "node": {

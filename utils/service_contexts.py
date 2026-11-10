@@ -5,7 +5,7 @@ devices. Two facts about its interfaces carry no setting of their own, only memb
 edge on the interface: they are derived here.
 
 - ``context_legs``: the sub-interfaces of a member that are legs of one of its contexts,
-  the sub-interfaces of the first uplink whose ``vlan_id`` is ``transit_vlan(context vlan, namespace slot)``.
+  the sub-interfaces of the first uplink whose encapsulation ``vlan_id`` is ``transit_vlan(context vlan, namespace slot)``.
 - ``exchange_legs``: the legs of a routed exchange, the context's legs on a member in the exchange's two VRFs.
 - ``port_contexts`` / ``context_border_ports``: the border-leaf / edge service ports whose cable ends on a member, and
   the contexts the member belongs to.
@@ -17,7 +17,7 @@ checks read: the context's own fields plus ``legs`` (the member's cleaned interf
 The input is cleaned query data (``utils.data_cleaning.clean_data``): a member device with ``name``, ``role``,
 ``shared_capabilities`` (the contexts: ``typename``, ``id``, ``vlan_id``, ...) and ``interfaces`` (``typename``,
 ``name``, ``role``; the legs also their address and VRF); a border device additionally with the physical ports'
-``cable`` ``endpoints``, each far end carrying its ``device`` and the virtual NICs pinned to it in ``sub_interfaces``
+``cable`` ``endpoints``, each far end carrying its ``device`` and the virtual NICs pinned to it in ``encapsulations``
 (fragments ``DeviceServicesFields`` and ``ServiceBorderPortsFields``, queries/fragments/device_services.gql: the ports
 under their own key ``service_ports``).
 
@@ -41,6 +41,7 @@ from utils.exchange_transit import (
     namespace_type_for_environment,
     transit_vlan,
 )
+from utils.interface_encapsulation import parent_of, sub_interfaces_of, vlan_of
 from utils.routing_domain import interface_vrfs
 
 SERVICE_PORTS_KEY = "service_ports"
@@ -114,7 +115,7 @@ def first_uplink(interfaces: list[dict[str, Any]] | None) -> dict[str, Any] | No
 
 def context_legs(device: dict[str, Any]) -> list[ContextLeg]:
     """The legs of the contexts a member device belongs to: a sub-interface of the device's first uplink whose
-    ``vlan_id`` is ``transit_vlan(context.vlan_id, zone type)``. The tag is the field, never parsed from the name.
+    the encapsulation ``vlan_id`` is ``transit_vlan(context.vlan_id, zone type)``. The tag is the field, never parsed from the name.
 
     One candidate per context and namespace slot (``TRANSIT_SLOT``). The context does not store the tenant type of an
     Internet-edge context (it serves no footprint), so every slot is a candidate: the bands of the context VLAN ranges
@@ -126,11 +127,9 @@ def context_legs(device: dict[str, Any]) -> list[ContextLeg]:
     if trunk is None:
         return []
     on_trunk = {
-        i["vlan_id"]: i["name"]
+        vlan_of(i): i["name"]
         for i in interfaces
-        if i.get("name")
-        and isinstance(i.get("vlan_id"), int)
-        and (i.get("parent_interface") or {}).get("name") == trunk["name"]
+        if i.get("name") and isinstance(vlan_of(i), int) and (parent_of(i) or {}).get("name") == trunk["name"]
     }
     legs: list[ContextLeg] = []
     for ctx in _member_contexts(device):
@@ -209,26 +208,26 @@ def contexts_with_legs(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def member_border_ports(member: dict[str, Any]) -> list[dict[str, Any]]:
     """The far ends of the cable of a member's first uplink: the port a physical member is cabled to, or (a hosted
-    member, whose NIC has no cable) the far end of the host port its NIC is pinned to (``parent_interface``).
+    member, whose NIC has no cable) the far end of the host port its NIC is pinned to (its encapsulation ``parent``).
 
     The inverse of ``port_members``: the same border service ports seen from the member. Cleaned interface dicts of the
     far end (``id``, ``typename``, ``role``, its ``device``); the caller keeps the ones it counts."""
     uplink = first_uplink(member.get("interfaces"))
     if uplink is None:
         return []
-    port = uplink if uplink.get("typename") == PHYSICAL_INTERFACE else uplink.get("parent_interface") or {}
+    port = uplink if uplink.get("typename") == PHYSICAL_INTERFACE else parent_of(uplink) or {}
     return [far for far in (port.get("cable") or {}).get("endpoints") or [] if far.get("id") != port.get("id")]
 
 
 def _members_behind(far: dict[str, Any]) -> list[dict[str, Any]]:
     """The devices that send their traffic out of the physical port ``far``: its own device (when ``far`` is the first
-    uplink of it) and the hosted devices whose first uplink is a NIC pinned to it (``sub_interfaces``)."""
+    uplink of it) and the hosted devices whose first uplink is a NIC pinned to it (``encapsulations``)."""
     members: list[dict[str, Any]] = []
     device = far.get("device") or {}
     first = first_uplink(device.get("interfaces"))
     if far.get("role") == UPLINK_ROLE and first is not None and first.get("id") == far.get("id"):
         members.append(device)
-    for nic in far.get("sub_interfaces") or []:
+    for nic in sub_interfaces_of(far):
         hosted = nic.get("device") or {}
         first_nic = first_uplink(hosted.get("interfaces"))
         if (

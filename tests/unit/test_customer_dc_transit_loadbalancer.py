@@ -126,6 +126,7 @@ class TestLoadbalancerSharedContext:
             "ManagedLoadbalancerContext",
             "IpamIPAddress",
             "DcimVirtualInterface",
+            "ManagedInterfaceEncapsulation",
         }
         for kind, label, kwargs in world.saves:
             assert kwargs == _UNTRACKED, (kind, label)

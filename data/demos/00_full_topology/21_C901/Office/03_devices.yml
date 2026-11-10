@@ -27,7 +27,11 @@ spec:
             role: cloud
             status: active
             description: SD-WAN tunnel to the DC edge (rides on the internet port GE1)
-            parent_interface: ["lis-office-edge-01", "GE1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "lis-office-edge-01:Tunnel1"
+                  parent: ["lis-office-edge-01", "GE1"]
             ip_address:
               data:
                 address: "169.254.10.17/30"
@@ -47,7 +51,11 @@ spec:
             role: cloud
             status: active
             description: SD-WAN tunnel to the DC edge (rides on the internet port GE1)
-            parent_interface: ["lis-office-edge-02", "GE1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "lis-office-edge-02:Tunnel1"
+                  parent: ["lis-office-edge-02", "GE1"]
             ip_address:
               data:
                 address: "169.254.10.21/30"

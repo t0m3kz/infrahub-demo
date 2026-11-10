@@ -21,7 +21,11 @@ spec:
             role: uplink
             status: active
             description: Rides on the host port eno1 of ktw1-srv-01
-            parent_interface: ["ktw1-srv-01", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-k8s-cp-01:eth0"
+                  parent: ["ktw1-srv-01", "eno1"]
     - name: ktw1-k8s-cp-02
       object_template: LINUX-SVC
       description: "Control plane node of ktw1-rke2-cl01 on ktw1-srv-02"
@@ -34,7 +38,11 @@ spec:
             role: uplink
             status: active
             description: Rides on the host port eno1 of ktw1-srv-02
-            parent_interface: ["ktw1-srv-02", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-k8s-cp-02:eth0"
+                  parent: ["ktw1-srv-02", "eno1"]
     - name: ktw1-k8s-cp-03
       object_template: LINUX-SVC
       description: "Control plane node of ktw1-rke2-cl01 on ktw1-srv-03"
@@ -47,7 +55,11 @@ spec:
             role: uplink
             status: active
             description: Rides on the host port eno1 of ktw1-srv-03
-            parent_interface: ["ktw1-srv-03", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-k8s-cp-03:eth0"
+                  parent: ["ktw1-srv-03", "eno1"]
     - name: ktw1-k8s-wk-01
       object_template: LINUX-SVC
       description: "Worker node of ktw1-rke2-cl01 on ktw1-srv-01"
@@ -60,7 +72,11 @@ spec:
             role: uplink
             status: active
             description: Rides on the host port eno1 of ktw1-srv-01
-            parent_interface: ["ktw1-srv-01", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-k8s-wk-01:eth0"
+                  parent: ["ktw1-srv-01", "eno1"]
     - name: ktw1-k8s-wk-02
       object_template: LINUX-SVC
       description: "Worker node of ktw1-rke2-cl01 on ktw1-srv-02"
@@ -73,4 +89,8 @@ spec:
             role: uplink
             status: active
             description: Rides on the host port eno1 of ktw1-srv-02
-            parent_interface: ["ktw1-srv-02", "eno1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-k8s-wk-02:eth0"
+                  parent: ["ktw1-srv-02", "eno1"]

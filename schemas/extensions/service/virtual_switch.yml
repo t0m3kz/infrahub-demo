@@ -1,7 +1,8 @@
 ---
 version: "1.0"
 # The virtual switch of a hypervisor cluster: the L2 element between a VM NIC and the host port. A VM NIC is a
-# DcimVirtualInterface that rides on a host port (parent_interface); this adds what that shortcut leaves out, which
+# DcimVirtualInterface that rides on a host port (its
+# ManagedInterfaceEncapsulation); this adds what that shortcut leaves out, which
 # VLAN the
 # NIC is in and which fabric segment that VLAN is.
 #   ManagedVirtualSwitch   one per cluster and kind of switch (vSphere standard or distributed switch, Proxmox/Linux

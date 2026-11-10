@@ -54,9 +54,15 @@ def _port(
         "device": {"node": {"name": {"value": "leaf-1"}}},
         "lag": {"node": {"id": "lag-1"} if lag else None},
         "ip_address": {"node": {"id": "ip-1"} if ip else None},
-        "sub_interfaces": {
-            "edges": [{"node": _sub("service", "DcimPhysicalDevice")} for _ in range(subs)]
-            + [{"node": _sub("uplink", "DcimVirtualDevice")} for _ in range(nics)]
+        # the sub-interfaces: the interfaces of the encapsulations that ride on this port (one encapsulation each)
+        "encapsulations": {
+            "edges": [
+                {"node": {"capabilities": {"edges": [{"node": sub}]}}}
+                for sub in (
+                    [_sub("service", "DcimPhysicalDevice") for _ in range(subs)]
+                    + [_sub("uplink", "DcimVirtualDevice") for _ in range(nics)]
+                )
+            ]
         },
         "capabilities": _caps(*caps, rows=members),
     }
@@ -170,13 +176,13 @@ def test_r2_lag_member_with_a_segment_and_an_address_is_one_error() -> None:
 
 
 def test_the_fixtures_emit_only_fields_the_query_selects_and_the_layer_fields_are_selected() -> None:
-    """The builders match interface_layers.gql, which must select lag, sub_interfaces and the capability kinds with
+    """The builders match interface_layers.gql, which must select lag, encapsulations and the capability kinds with
     the rows, their VLAN and their deployment's segment, and per row its requests, ports and their cable ends."""
     tree = query_tree(QUERY)
     assert "DcimVirtualInterface" not in tree
     for root, node in (("DcimPhysicalInterface", _port()), ("DcimLAGInterface", _port("Port-Channel1"))):
         selected = tree[root]["edges"]["node"]
-        assert {"ip_address", "sub_interfaces", "capabilities"} <= set(selected)
+        assert {"ip_address", "encapsulations", "capabilities"} <= set(selected)
         assert "segments" not in selected
         assert {"vlan_id", "segment_deployment"} <= set(selected["capabilities"]["edges"]["node"])
         node = _port(node["name"]["value"], segments=1)

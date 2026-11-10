@@ -9,9 +9,13 @@ spec:
   kind: DcimVirtualInterface
   data:
     - name: "ethernet1/1.3000"
-      vlan_id: 3000
       device: ktw1-fw-01
-      parent_interface: ["ktw1-fw-01", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "ktw1-fw-01:ethernet1/1.3000"
+            vlan_id: 3000
+            parent: ["ktw1-fw-01", "ethernet1/1"]
       role: service
       status: active
       ip_address:
@@ -19,9 +23,13 @@ spec:
           address: "100.66.0.5/29"
           ip_namespace: "default"
     - name: "ethernet1/1.3000"
-      vlan_id: 3000
       device: ktw1-fw-02
-      parent_interface: ["ktw1-fw-02", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "ktw1-fw-02:ethernet1/1.3000"
+            vlan_id: 3000
+            parent: ["ktw1-fw-02", "ethernet1/1"]
       role: service
       status: active
       ip_address:
@@ -29,9 +37,13 @@ spec:
           address: "100.66.0.6/29"
           ip_namespace: "default"
     - name: "ethernet1/1.3001"
-      vlan_id: 3001
       device: ktw1-xfw-01
-      parent_interface: ["ktw1-xfw-01", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "ktw1-xfw-01:ethernet1/1.3001"
+            vlan_id: 3001
+            parent: ["ktw1-xfw-01", "ethernet1/1"]
       role: service
       status: active
       ip_address:
@@ -39,9 +51,13 @@ spec:
           address: "100.66.0.13/29"
           ip_namespace: "default"
     - name: "ethernet1/1.3001"
-      vlan_id: 3001
       device: ktw1-xfw-02
-      parent_interface: ["ktw1-xfw-02", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "ktw1-xfw-02:ethernet1/1.3001"
+            vlan_id: 3001
+            parent: ["ktw1-xfw-02", "ethernet1/1"]
       role: service
       status: active
       ip_address:
@@ -49,9 +65,13 @@ spec:
           address: "100.66.0.14/29"
           ip_namespace: "default"
     - name: "ethernet1/1.3401"
-      vlan_id: 3401
       device: ktw1-xfw-01
-      parent_interface: ["ktw1-xfw-01", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "ktw1-xfw-01:ethernet1/1.3401"
+            vlan_id: 3401
+            parent: ["ktw1-xfw-01", "ethernet1/1"]
       role: service
       status: active
       ip_address:
@@ -59,9 +79,13 @@ spec:
           address: "100.66.32.5/29"
           ip_namespace: "default"
     - name: "ethernet1/1.3401"
-      vlan_id: 3401
       device: ktw1-xfw-02
-      parent_interface: ["ktw1-xfw-02", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "ktw1-xfw-02:ethernet1/1.3401"
+            vlan_id: 3401
+            parent: ["ktw1-xfw-02", "ethernet1/1"]
       role: service
       status: active
       ip_address:

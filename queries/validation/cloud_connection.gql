@@ -59,14 +59,13 @@ query cloud_connection {
         id
         name { value }
         scope { value }
-        vlan_id { value }
         tunnel_index { value }
         endpoint_ip { value }
         tunnel_mode { value }
         crypto_profile { node { id } }
         tunnel_key { node { id } }
         device { node { __typename id name { value } } }
-        parent_interface { node { __typename id name { value } device { node { id } } } }
+        ...InterfaceEncapsulationFields
       }
     }
   }

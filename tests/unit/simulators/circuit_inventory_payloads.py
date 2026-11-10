@@ -109,13 +109,17 @@ def inventory_payload(
                 port["device"]["node"].update(model.placement(device))
                 if port.get("__typename") != "CloudPeeringInterface":
                     port["__typename"] = (
-                        "DcimVirtualInterface" if "parent_interface" in port else "DcimPhysicalInterface"
+                        "DcimVirtualInterface" if "encapsulation_capabilities" in port else "DcimPhysicalInterface"
                     )
                 address = (addresses or {}).get((device, port["name"]["value"]))
                 port["ip_address"] = {"node": {"address": {"value": address}} if address else None}
                 _with_circuit_id([e["node"] for e in port["capabilities"]["edges"]])
-                parent = port.get("parent_interface")
-                if parent:
+                parent = (
+                    ((port.get("encapsulation_capabilities") or {}).get("edges") or [{}])[0]
+                    .get("node", {})
+                    .get("parent")
+                )
+                if parent and parent["node"]:
                     parent_name = port["name"]["value"].rpartition(".")[0]
                     parent["node"]["id"] = f"{device}:{parent_name}"
                     parent["node"]["name"] = {"value": parent_name}

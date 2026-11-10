@@ -17,6 +17,7 @@ from utils.exchange_transit import (
     transit_addresses,
     transit_vlan,
 )
+from utils.interface_encapsulation import vlan_of
 from utils.limits import OFFSET_MEMBER_A, OFFSET_MEMBER_B, TRANSIT_PREFIXLEN
 from utils.routing_domain import interface_security_zone
 from utils.service_contexts import (
@@ -240,9 +241,7 @@ def _validate_exchange(
             continue
         by_namespace.setdefault(namespace_name, []).append(iface_name)
         types[namespace_name] = namespace.get("vrf_type")
-        errors.extend(
-            _validate_leg(label, iface_name, interface.get("vlan_id"), address, namespace.get("vrf_type"), context)
-        )
+        errors.extend(_validate_leg(label, iface_name, vlan_of(interface), address, namespace.get("vrf_type"), context))
 
     for namespace_name, iface_names in by_namespace.items():
         if len(iface_names) != 1:

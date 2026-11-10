@@ -120,11 +120,14 @@ def test_a_peering_is_an_interface_of_its_transport_and_keeps_no_transport_edges
     """DcimInterface gives device, name and mtu; account, region, saas_region, owner and transport are the transport's."""
     peering = _nodes()["CloudPeeringInterface"]
 
-    assert {"DcimInterface", "DcimSubInterface", "DcimHasIPAddress"} <= set(peering["inherit_from"])
-    assert "parent_interface" not in _names(peering, "relationships")  # the marker DcimSubInterface holds it
+    assert {"DcimInterface", "DcimHasIPAddress"} <= set(peering["inherit_from"])
+    assert (
+        "DcimSubInterface" not in peering["inherit_from"]
+    )  # the marker is gone: the encapsulation capability holds it
+    assert not {"parent_interface", "sub_interfaces"} & _names(peering, "relationships")
     assert not {"transport", "account", "region", "saas_region", "owner"} & _names(peering, "relationships")
     assert "mtu" not in _names(peering, "attributes")
-    assert not {"vlan_id"} & _names(peering, "attributes")  # the marker DcimSubInterface holds them
+    assert not {"vlan_id"} & _names(peering, "attributes")  # the tag is the ManagedInterfaceEncapsulation's
 
 
 def test_virtual_network_peers_are_symmetric_on_one_identifier() -> None:
