@@ -150,12 +150,12 @@ generics:
     order_by:
       - name__value
     display_label: "{{ name__value }}"
-    uniqueness_constraints:
-      - [name__value]
+    # No uniqueness here: the tiers of the three kinds are all named S, M, L and XL, and a constraint on the generic
+    # makes the server resolve an upsert by name across kinds (a colocation "S" found the DC "S"). Each node below
+    # constrains its own name.
     attributes:
       - name: name
         kind: Text
-        unique: true
         optional: false
         order_weight: 100
 
