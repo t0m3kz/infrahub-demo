@@ -4,8 +4,8 @@ DcimSubInterface.parent_interface (outbound, one) is the child side of "rides on
 that DcimVirtualInterface and CloudPeeringInterface inherit; DcimHasSubInterface.sub_interfaces (inbound, many) is the
 other end, declared once on a marker generic that every kind able to carry
 sub-interfaces inherits (a NIC is the parent of several sub-interfaces, which the server accepts only with the many
-side declared: ``has 2 peers for sub__interface, maximum of 1 allowed`` otherwise). Only the LAG pair carries
-``common_parent: device`` (a port and its LAG are on one device). The NIC of a virtual machine rides a port of ANOTHER
+side declared: ``has 2 peers for sub__interface, maximum of 1 allowed`` otherwise). In the whole schema only the LAG
+pair (``common_parent: device``) and the patch panel ports (``common_parent: panel``) carry ``common_parent``. The NIC of a virtual machine rides a port of ANOTHER
 device (its host) through the same parent_interface, so the sub-interface pair has no common_parent and
 checks/interface_parents.py holds the cross-device rule. ``ip_address`` is declared once on DcimHasIPAddress.
 """
@@ -103,3 +103,12 @@ def test_ip_address_is_declared_once_on_the_marker_generic() -> None:
     assert inheritors == {"DcimPhysicalInterface", "DcimLAGInterface", "DcimVirtualInterface"}
     for node in schema["nodes"]:
         assert "ip_address" not in [rel["name"] for rel in node.get("relationships") or []], node["name"]
+
+
+def test_common_parent_is_used_only_by_the_lag_pair_and_the_patch_panel_ports() -> None:
+    """The interface edges (VLAN row ports, OSPF settings) hold no same-device rule in the schema: checks do."""
+    root = Path(__file__).parents[2] / "schemas"
+    users = sorted(
+        str(path.relative_to(root)) for path in root.rglob("*.yml") if "\n        common_parent:" in path.read_text()
+    )
+    assert users == ["base/dcim.yml", "extensions/dcim/patch_panel.yml"]

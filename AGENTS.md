@@ -845,14 +845,11 @@ class MyCheck(InfrahubCheck):
   `parent_interface` only for a parent on the interface's own device (`transforms/helpers/addressing.py` `sub_interface_parent`; the
   queries select both `device` ids). The VLAN tag of a sub-interface is its `vlan_id` and `inner_vlan_id` (QinQ C-tag), declared once on
   `DcimSubInterface` (unset: untagged); `<parent>.<vlan>` is only the default name the generators give, nothing parses it.
-  `common_parent: device`
-  stays on the LAG pair `lag` / `member_interfaces`, on a VLAN row's ports (`ManagedSegmentVlan.capabilities`: the
-  row's `device` is its Parent, so the server refuses another switch's port, measured on 1.11.9) and on the OSPF
-  settings of interfaces of ONE device (`RoutingOSPFInterface`: a child of its device, `device` `kind: Parent`, peer
-  `DcimPhysicalDevice`, reverse `ospf_interfaces`, cascade, its interface edge re-declared with `common_parent:
-  device`); `common_parent` works only on a node with a `kind: Parent` relationship and a peer with one (the
-  interfaces' `device`, the row's and the OSPF settings' `device`, `CloudNetworkSegment`'s `virtual_network`), every
-  other "same parent" rule is a check.
+  `common_parent: device` stays on the LAG pair `lag` / `member_interfaces` and `common_parent: panel` on the patch panel
+  ports (see **Patch panels**), the only two uses; it works only on a node with a `kind: Parent` relationship and a peer
+  with one (the interfaces' `device`, a patch panel port's `panel`). Every other "same parent" rule is a check: the
+  ports of a VLAN row are of the row's switch (R6) and the interfaces of an OSPF interface setting are of one device (R7),
+  both in `checks/interface_layers.py`.
 - **Interface addresses and layers**: `ip_address` is declared once, on the marker generic `DcimHasIPAddress`
   (inherited by a physical port, a LAG, a virtual interface and a cloud peering interface, not a console port): an
   Attribute with no cascade (a multisite VIP is one address on two loopbacks, a segment's anycast gateway one address
@@ -870,7 +867,12 @@ class MyCheck(InfrahubCheck):
   `checks/interface_layers.py` holds what the schema cannot: a deployment or a row lists only physical ports and LAGs
   (`DcimSwitchedInterface`, a marker; R3), one row of a segment per port (R4), both ERRORs, and a WARNING for a row
   member nobody asked for (R5: not assigned to the deployment, derived from no component and no firewall service port
-  of a terminated segment; the next reconcile removes it). Every writer of an interface's `capabilities` adds and
+  of a terminated segment; the next reconcile removes it), a row lists only ports of its own switch (R6, ERROR: no
+  `common_parent` on the edge). The same check holds the OSPF interface settings (`RoutingOSPFInterface`: on the
+  standard interface edge, no device field, so they do not go with a device): all their interfaces are on one device (R7,
+  ERROR), a setting with no interface left is reported (R8, WARNING: a deleted device or interface leaves it behind, the
+  routing generator's tracking reclaims it on its next run) and its device is one that runs a process of its peering
+  (R9, ERROR; a setting with no peering is not judged). Every writer of an interface's `capabilities` adds and
   removes single edges (`generators/helpers/edges.py`), never saves the list. A segment itself is on no interface's
   `capabilities`. The layer of a port is its content, not its kind: a row or a deployment means switchport, an
   address, sub-interfaces or a routed capability (BGP peering, OSPF interface settings, interconnect, tunnel or handoff
@@ -889,7 +891,7 @@ class MyCheck(InfrahubCheck):
   vlan_id], HFID [device name, vlan_id] (a data file upserts a row). **Request and realization**: a person asks for a
   port by assigning it to the segment's deployment (the deployment's `capabilities`, "this port carries this segment
   in this DC"); the reconcile realizes the request and the ports its components derive as the port's membership of its
-  switch's row (the row's `capabilities`, `common_parent: device`). Only the reconcile creates a row and writes a
+  switch's row (the row's `capabilities`, the inherited interface edge: `checks/interface_layers.py` R6 holds that a port is of the row's switch). Only the reconcile creates a row and writes a
   port -> row edge; a person never tags a row, and nothing creates a row because of a hand edit of the row's ports (the
   check reports it, R5). In `data/demos/00_full_topology`, where no generator runs, both are data and agree: the
   requests in `90_bindings/95b_segment_requests` and the rows' ports in `90_bindings/96_segment_ports`
@@ -1064,7 +1066,7 @@ class MyCheck(InfrahubCheck):
   cascades with the device: a BGP or OSPF process, an MLAG domain, an HA pair, `ManagedPBR`); one object several devices
   are members of is a shared capability (`ManagedGenericSharedDevice`, never cascades: a VRF instance, a service context,
   an NTP, SNMP or AAA profile). An interface-side object (on `ManagedGenericInterfaces`) exists only when the interface
-  has a setting of its own (`RoutingOSPFInterface`: metric, mode, authentication); a binding that carries no setting is
+  has a setting of its own (`RoutingOSPFInterface`: metric, mode, authentication; one device's interfaces, held by a check); a binding that carries no setting is
   derived when the device is rendered, never stored (the steered SVIs of PBR, the legs and border ports of a context:
   `utils/device_services.py`). So a transform reads what a device does in ONE place, its `capabilities` and
   `shared_capabilities` (a typename filter), nested under the device, and derives the rest from that and the device's own

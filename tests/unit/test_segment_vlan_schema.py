@@ -55,19 +55,13 @@ class TestRowIsAChildOfItsSwitchUnderTheSegmentDeployment:
     def test_the_row_lists_its_ports_of_its_own_switch_only(
         self, segment_schema: dict[str, Any], root_dir: Path
     ) -> None:
-        """A port is a member of its switch's row: the row inherits the interface edge and re-declares it with
-        ``common_parent: device``, so the server refuses another switch's port; nothing else names a port."""
+        """A port is a member of its switch's row: the row inherits the interface edge as it is (no re-declaration, no
+        ``common_parent``: checks/interface_layers.py R6 holds that a port is of the row's switch); nothing else
+        names a port."""
         row = _node(segment_schema, "SegmentVlan")
 
         assert "ManagedGenericInterfaces" in row["inherit_from"]
-        ports = _relationship(row, "capabilities")
-        generic = _load(root_dir, "schemas/extensions/capabilities/capabilities.yml")
-        edge = _relationship(next(g for g in generic["generics"] if g["name"] == "GenericInterfaces"), "capabilities")
-        assert (ports["peer"], ports["identifier"], ports["common_parent"]) == (
-            "DcimInterface",
-            edge["identifier"],
-            "device",
-        )
+        assert "capabilities" not in {r["name"] for r in row["relationships"]}
         assert not {r["name"] for r in row["relationships"]} & {"interfaces", "interface", "ports"}
         # The deployment keeps the interface edge too: the ports a person asks for (the request, not the realization).
         assert "ManagedGenericInterfaces" in _node(segment_schema, "SegmentDeployment")["inherit_from"]
