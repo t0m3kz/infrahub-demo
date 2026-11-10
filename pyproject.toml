@@ -82,6 +82,8 @@ log_cli = 1
 log_cli_level = "INFO"
 filterwarnings = [
     "ignore::RuntimeWarning:_pytest.runner",  # Ignore AsyncMock cleanup warnings
+    # netutils imports the stdlib crypt (removed in 3.13) and falls back to HAS_CRYPT = False; we use no password helper
+    "ignore:'crypt' is deprecated:DeprecationWarning:netutils.password",
 ]
 
 [tool.pip-licenses]
