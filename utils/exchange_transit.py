@@ -117,7 +117,11 @@ TRANSIT_OFFSETS: tuple[int, ...] = (OFFSET_ANYCAST, OFFSET_VIP, OFFSET_MEMBER_A,
 
 
 def is_public_address(address: str) -> bool:
-    """Whether an IPv4 address (with or without a mask) lies outside NON_INTERNET_PREFIXES."""
+    """Whether an IPv4 address (with or without a mask) lies outside NON_INTERNET_PREFIXES.
+
+    IPv4 by design: the only caller judges a context's ``snat_address``, which is IPv4 (an IPv6 source is not translated).
+    The ACL internet band is family-aware on its own (utils/internet_space.py ``non_internet_prefixes``).
+    """
     ip = ipaddress.ip_interface(address).ip
     return ip.version == 4 and not any(ip in ipaddress.ip_network(prefix) for prefix in NON_INTERNET_PREFIXES)
 

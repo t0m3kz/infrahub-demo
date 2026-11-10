@@ -226,12 +226,83 @@ class TestAddressBlockHoldsTheTier:
         assert "ipv6_segment_prefix_length /56 is larger than its /58 IPv6 address block" in messages[1]
         assert all("'S'" in message for message in messages)
 
-    def test_the_cloud_template_is_not_judged(self) -> None:
-        """A cloud template's length is the footprint's routed range, not a block for its segments."""
-        payload = {"TopologyCustomerTemplateCloud": _edges(_template("XL", 24, 25))}
-        assert _run(payload)._errors == []
-        bare = {"node": {"id": "tpl-XL", "name": _v("XL"), "max_segments": _v(24), "address_prefix_length": _v(25)}}
-        assert _run({"TopologyCustomerTemplateCloud": _edges(bare)})._errors == []
+    def test_a_cloud_template_is_judged_on_its_routed_range_only(self) -> None:
+        """A cloud tier has no segment sizes: only its block against max_virtual_networks (not the DC numbers)."""
+        assert _run({"TopologyCustomerTemplateCloud": _edges(_cloud_template("XL", 25, 12))})._errors == []
+
+
+def _cloud_template(name: str, length: int, max_virtual_networks: int) -> dict[str, Any]:
+    """A cloud template row."""
+    return {
+        "node": {
+            "id": f"tpl-{name}",
+            "name": _v(name),
+            "address_prefix_length": _v(length),
+            "max_virtual_networks": _v(max_virtual_networks),
+        }
+    }
+
+
+class TestCloudTierRoutedRanges:
+    """A cloud tier's block holds a /29 routed range per virtual network it allows."""
+
+    @pytest.mark.parametrize(
+        ("length", "networks", "fits"),
+        [(28, 1, True), (28, 2, True), (28, 3, False), (27, 3, True), (26, 6, True), (25, 12, True), (25, 17, False)],
+    )
+    def test_the_block_holds_max_virtual_networks_slices(self, length: int, networks: int, fits: bool) -> None:
+        """2^(29 - block) slices against max_virtual_networks; an ERROR naming the tier when they do not fit."""
+        errors = _run({"TopologyCustomerTemplateCloud": _edges(_cloud_template("M", length, networks))})._errors
+        assert (errors == []) is fits
+        if not fits:
+            message = errors[0]["message"]
+            assert "'M'" in message and f"/{length} block" in message and f"{networks} virtual networks" in message
+
+    def test_a_block_smaller_than_a_slice_holds_none(self) -> None:
+        """A /30 block cannot hold a /29: zero slices."""
+        (finding,) = _run({"TopologyCustomerTemplateCloud": _edges(_cloud_template("S", 30, 1))})._errors
+        assert "holds 0 /29" in finding["message"]
+
+
+def _attachment(name: str, network_id: str | None, prefixes: int = 0) -> dict[str, Any]:
+    """A CloudGatewayAttachment row with ``prefixes`` allowed_prefixes."""
+    return {
+        "node": {
+            "id": f"att-{name}",
+            "name": _v(name),
+            "virtual_network": {"node": {"id": network_id} if network_id else None},
+            "allowed_prefixes": {"edges": [{"node": {"id": f"p{i}"}} for i in range(prefixes)]},
+        }
+    }
+
+
+class TestAttachmentsWithoutRange:
+    """WARNING: an attachment to a footprint's network with no allowed_prefixes (neither authored nor allocated)."""
+
+    @staticmethod
+    def _payload(*attachments: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "TopologyCustomerCloud": _edges(_cloud()),
+            "CloudVirtualNetwork": _edges(_network("n1"), _network("n2", account="acct-other")),
+            "CloudGatewayAttachment": _edges(*attachments),
+        }
+
+    def test_a_bare_attachment_of_a_footprints_network_warns(self) -> None:
+        """Names the attachment and the footprint; it is a WARNING, not an ERROR."""
+        check = _run(self._payload(_attachment("tgwa-a", "n1")))
+
+        (message,) = check._warnings
+        assert "'tgwa-a'" in message and "'C003-P-AWS'" in message and "allowed_prefixes" in message
+        assert check._errors == []
+
+    def test_an_attachment_with_prefixes_does_not_warn(self) -> None:
+        """Authored, or the routed range the generator wrote: either is a range."""
+        assert _run(self._payload(_attachment("tgwa-a", "n1", prefixes=1)))._warnings == []
+
+    @pytest.mark.parametrize("network_id", ["n2", None, "n-unknown"])
+    def test_an_attachment_of_no_footprint_network_does_not_warn(self, network_id: str | None) -> None:
+        """A network of another account, an attachment to a gateway, an unknown network: not this check's business."""
+        assert _run(self._payload(_attachment("tgwa-a", network_id)))._warnings == []
 
 
 class TestCloudSegmentBlock:

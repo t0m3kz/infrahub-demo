@@ -324,6 +324,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: cloud_attachment_range
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/cloud_attachment_range.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: customer_dc
     tests:
       - name: syntax_check

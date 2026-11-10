@@ -85,6 +85,9 @@ spec:
     - name: run-customer-deployment-colocation-generator
       description: Provision FirewallContext/dedicated LB for a colocation customer deployment
       generator: add_customer_deployment_colocation
+    - name: run-cloud-attachment-range-generator
+      description: Give the virtual network of a gateway attachment its routed range from the cloud footprint's pool
+      generator: add_cloud_attachment_range
     - name: run-customer-deployment-cloud-generator
       description: Create the customer's cloud pool for a cloud customer deployment
       generator: add_customer_deployment_cloud

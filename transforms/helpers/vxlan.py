@@ -565,6 +565,11 @@ def evpn_vxlan_context(node: OverlayNode, evpn_inputs: EvpnInputs, platform: str
 
     l2_vni_mappings = [_l2_mapping(l2) for l2 in node.l2]
     l3_vni_mappings = [_l3_mapping(l3) for l3 in node.l3]
+    # A VRF carries the IPv6 address family (and its route-targets) once one of its segments has an IPv6 gateway; the
+    # IPv4 family is always there (the exchange statics and the handoff sessions of a VRF are IPv4).
+    ipv6_vrfs = {l2.vrf for l2 in node.l2 if l2.gateway_ipv6}
+    for mapping in l3_vni_mappings:
+        mapping["ipv6"] = mapping["vrf_name"] in ipv6_vrfs
 
     # RT admin field: fabric-wide constant, NOT this device's local ASN.
     # Under ebgp-ebgp every VTEP runs its own ASN, so `{local_as}:{vni}` makes

@@ -37,6 +37,7 @@ vlan {{ vlan.vlan_id }}
 ! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
 !
 {%- set acl_indent = '   ' %}
+{%- set acl_icmpv6 = 'icmpv6' %}
 {%- include 'common/ip_access_lists.j2' %}
 {%- endif %}
 

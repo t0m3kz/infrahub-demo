@@ -351,6 +351,11 @@ def footprint_gaps(kind: str, footprint: dict[str, Any], cleaned: dict[str, Any]
     return [gap for context in sorted(holders, key=_name) for gap in context_gaps(context, exchanges)]
 
 
+def _ip_version(segment: dict[str, Any] | str) -> str:
+    """The segment's ``ip_version`` (``ipv4`` when the query row is only an id)."""
+    return (segment.get("ip_version") if isinstance(segment, dict) else None) or "ipv4"
+
+
 def internet_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The enabled rules that name the internet and a source segment, by name."""
     return sorted(
@@ -360,6 +365,9 @@ def internet_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if rule_enabled(rule)
             and (rule.get("destination_zone") or {}).get("name") == INTERNET_ZONE
             and _id(rule.get("source_segment"))
+            # An IPv6 source is not translated (accepted gap, like cloud and office egress): the check demands no
+            # snat_address for it, which is an IPv4 address.
+            and _ip_version(rule["source_segment"]) != "ipv6"
         ),
         key=_name,
     )

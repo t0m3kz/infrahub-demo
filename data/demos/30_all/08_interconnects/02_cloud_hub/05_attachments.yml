@@ -42,6 +42,7 @@ spec:
       status: active
       gateway: "tgw-30all-euc1"
       owner_account: "net-hub-aws-prod"
+      member_of_groups: [cloud_attachment_ranges]
       # Target: the Direct Connect gateway the on-prem link lands on (an attachment has exactly one target).
       peer_gateway: "dxgw-30all"
       associated_route_table: "rt-hub-shared"
@@ -56,6 +57,7 @@ spec:
       status: active
       gateway: "tgw-30all-euc1"
       owner_account: "vaultex-aws-prod"
+      member_of_groups: [cloud_attachment_ranges]
       virtual_network: "vaultex-vpc-prod"
       associated_route_table: "rt-hub-shared"
       propagates_to_route_tables:
@@ -67,6 +69,7 @@ spec:
       status: active
       gateway: "tgw-30all-euc1"
       owner_account: "nordix-aws-prod"
+      member_of_groups: [cloud_attachment_ranges]
       virtual_network: "nordix-vpc-prod"
       associated_route_table: "rt-hub-shared"
       propagates_to_route_tables:
@@ -78,6 +81,7 @@ spec:
       status: active
       gateway: "tgw-30all-euc1"
       owner_account: "novantis-aws-prod"
+      member_of_groups: [cloud_attachment_ranges]
       virtual_network: "novantis-vpc-prod"
       associated_route_table: "rt-hub-isolated"
       # rt-hub-shared: the hybrid attachment's table, see the header.

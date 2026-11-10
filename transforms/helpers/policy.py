@@ -23,7 +23,7 @@ from typing import Any
 
 from utils.exchange_transit import INTERNET_ZONE
 from utils.routing_domain import resolve_security_zone
-from utils.segment_addressing import refuse_ipv6_segment, segment_prefix
+from utils.segment_addressing import own_prefix
 
 
 def merge_policies(*policy_lists: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -99,12 +99,11 @@ def rule_endpoint(rule: dict[str, Any], side: str) -> str | None:
     """What a rule matches on `side` ("source"/"destination"): its segment's
     prefix, else its first prefix/IP selector, else None (any). The one
     resolver behind the leaf ACL and the firewall rule table, so a rule to an
-    external prefix (no destination segment) renders the same on both. A segment with an IPv6 gateway is refused:
-    it resolves to no IPv4 prefix, which every caller would render as `any`."""
+    external prefix (no destination segment) renders the same on both. A segment resolves to its prefix of its one
+    family (``own_prefix``): the switch ACLs render either family."""
     segment = rule.get(f"{side}_segment") or {}
-    refuse_ipv6_segment(segment, "the rule tables (switch ACLs, firewall rules, office policy)")
     selector = rule_selector(rule, side)
-    return (segment_prefix(segment) if segment else None) or (selector[0] if selector else None)
+    return (own_prefix(segment) if segment else None) or (selector[0] if selector else None)
 
 
 def is_internet_destination(rule: dict[str, Any]) -> bool:

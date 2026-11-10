@@ -11,15 +11,16 @@ from typing import Any
 
 from transforms.helpers.segments import _get_segment_gateways, routed_activations
 from utils.routing_identity import list_name_part, routing_communities, routing_tag
+from utils.segment_addressing import segment_family
 
 
 def get_origination(activations: list[dict[str, Any]] | None, vrfs: Iterable[str]) -> list[dict[str, Any]]:
-    """The routed IPv4 segment prefixes of ``activations`` that originate with routing-identity communities.
+    """The routed segment prefixes (IPv4 or IPv6) of ``activations`` that originate with routing-identity communities.
 
     One entry per tagged segment, sorted by name: ``name`` (the segment name, safe in a prefix-list name),
-    ``vrf``, ``prefix`` (the gateway's subnet, the route redistributed into EVPN) and ``communities`` (customer
+    ``vrf``, ``family`` (``ipv4``/``ipv6``), ``prefix`` (the gateway's subnet, the route redistributed into EVPN) and ``communities`` (customer
     first, then segment; only the tags that exist). A segment is skipped when it has neither tag, when the
-    fabric does not route it (terminated on a firewall context, no gateway, IPv6) or when its VRF is not one of
+    fabric does not route it (terminated on a firewall context, no gateway) or when its VRF is not one of
     ``vrfs`` (the VRFs that redistribute into EVPN), so an untagged device renders exactly as before.
 
     ``activations`` are the cleaned segment activations of the device (``segment_deployments``); a segment's
@@ -30,13 +31,14 @@ def get_origination(activations: list[dict[str, Any]] | None, vrfs: Iterable[str
     for activation in routed_activations(activations):
         segment = activation.get("segment") or {}
         name = segment.get("name")
-        gateway_ip, _, vrf, _ = _get_segment_gateways(segment)
+        gateway_ip, gateway_ipv6, vrf, _ = _get_segment_gateways(segment)
         prefix = (((segment.get("gateway") or {}).get("ip_prefix")) or {}).get("prefix")
         communities = routing_communities(routing_tag(segment.get("owner")), routing_tag(segment))
-        if name and gateway_ip and prefix and vrf in evpn_vrfs and communities:
+        if name and (gateway_ip or gateway_ipv6) and prefix and vrf in evpn_vrfs and communities:
             entries[name] = {
                 "name": list_name_part(name),
                 "vrf": vrf,
+                "family": segment_family(segment),
                 "prefix": prefix,
                 "communities": communities,
             }

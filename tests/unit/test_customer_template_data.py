@@ -26,6 +26,7 @@ from tests.integration.demo_data import (
     schema,
 )
 from utils.exchange_transit import is_exchange_zone
+from utils.limits import CLOUD_RANGE_PREFIX_LENGTH
 
 _BOOTSTRAP = ROOT / "data" / "bootstrap"
 _DEMOS = ROOT / "data" / "demos"
@@ -162,6 +163,14 @@ def test_the_cloud_tiers_have_the_agreed_values(tier: str) -> None:
     """Cloud: max_segments, max_virtual_networks and the routed range of the footprint (/28 to /25)."""
     row = next(r for r in declared("TopologyCustomerTemplateCloud", _BOOTSTRAP) if r.item["name"] == tier).item
     assert (row["max_segments"], row["max_virtual_networks"], row["address_prefix_length"]) == _CLOUD_TIERS[tier]
+
+
+@pytest.mark.parametrize("tier", _TIER_ORDER)
+def test_a_cloud_tiers_block_holds_a_routed_range_per_virtual_network(tier: str) -> None:
+    """The footprint's pool is split into one CLOUD_RANGE_PREFIX_LENGTH slice per virtual network it allows
+    (generators/topology/cloud_range.py): 2^(29 - block) >= max_virtual_networks, as checks/customer_quota.py holds."""
+    row = next(r for r in declared("TopologyCustomerTemplateCloud", _BOOTSTRAP) if r.item["name"] == tier).item
+    assert 2 ** (CLOUD_RANGE_PREFIX_LENGTH - row["address_prefix_length"]) >= row["max_virtual_networks"]
 
 
 @pytest.mark.parametrize("tier", _TIER_ORDER)

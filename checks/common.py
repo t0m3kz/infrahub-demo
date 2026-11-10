@@ -341,6 +341,7 @@ def _validate_leg(
     """Address and VLAN rules of one leg of ``context`` (see validate_exchange_gateways)."""
     errors: list[str] = []
     network = ip_interface(address).network
+    # IPv4 by design: a context leg is a /29 of the IPv4 transit pools (utils/exchange_transit.py).
     if network.version != 4 or network.prefixlen != TRANSIT_PREFIXLEN:
         errors.append(f"{label}: leg '{iface_name}' address {address} is not inside a /{TRANSIT_PREFIXLEN}.")
     elif address.split("/")[0] not in transit_addresses(str(network))["members"]:

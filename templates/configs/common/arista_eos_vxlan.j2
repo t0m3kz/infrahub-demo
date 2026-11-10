@@ -33,6 +33,10 @@ vrf instance {{ mapping.vrf_name }}
     like an EVPN problem and is not one. #}
 !
 ip routing vrf {{ mapping.vrf_name }}
+{%- if mapping.ipv6 %}
+! U: IPv6 routing of a VRF is its own switch on EOS, like `ip routing vrf`
+ipv6 unicast-routing vrf {{ mapping.vrf_name }}
+{%- endif %}
 !
 {%- endfor %}
 {%- endif %}
@@ -75,6 +79,11 @@ router bgp {{ bgp_config.local_as.asn }}
       route-target import evpn {{ rt }}
       {%- endfor %}
       redistribute connected{% if (eos_leaf and leaf_transit_prefixes) or origination %} route-map RM-VRF-CONN-2-EVPN{% endif %}
+{%- if mapping.ipv6 %}
+      ! U: the IPv6 type-5 routes of the VRF (`address-family ipv6` inside a BGP VRF, `redistribute connected`)
+      address-family ipv6
+         redistribute connected{% if origination %} route-map RM-VRF-CONN-2-EVPN{% endif %}
+{%- endif %}
 {%- if not eos_leaf and vrf_routes | default([]) | selectattr('vrf', 'equalto', mapping.vrf_name) | list %}
       redistribute static route-map RM-VRF-STATIC-2-EVPN-{{ mapping.vrf_name }}
 {%- endif %}
@@ -105,7 +114,11 @@ interface Vlan{{ vlan.vlan_id }}
    ipv6 address virtual {{ vlan.gateway_ipv6 }}
 {%- endif %}
 {%- if vlan.acl_name %}
+{%- if vlan.acl_family == 'ipv6' %}
+   ipv6 access-group {{ vlan.acl_name }} in
+{%- else %}
    ip access-group {{ vlan.acl_name }} in
+{%- endif %}
 {%- endif %}
 {%- endif %}
 {%- endfor %}

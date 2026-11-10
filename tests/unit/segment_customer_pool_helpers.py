@@ -112,9 +112,9 @@ def customer_pool(name: str, blocks: int = 1) -> MagicMock:
     return pool
 
 
-def make_gen(client: Client) -> Any:
-    """A VxlanSegmentGenerator with the recording client, a raising logger and a lock that records its keys."""
-    gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
+def make_gen(client: Client, cls: Any = VxlanSegmentGenerator) -> Any:
+    """A generator (default: the segment one) with the recording client, a raising logger and a recording lock."""
+    gen: Any = cls.__new__(cls)
     gen.client = client
     gen.logger = MagicMock()
 

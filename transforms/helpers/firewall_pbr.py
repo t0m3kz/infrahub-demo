@@ -13,7 +13,7 @@ from utils.exchange_transit import MANAGEMENT_TYPE, exchange_peer_zones
 from utils.fabric_roles import FIREWALL_ROLES
 from utils.firewall_split import is_external
 from utils.routing_domain import interface_vrf
-from utils.segment_addressing import is_terminated, segment_namespace, segment_prefix
+from utils.segment_addressing import IPV4, is_terminated, refuse_ipv6_segment, segment_namespace, segment_prefix
 from utils.vrf_demand import L3VNI_ROLE, svi_name, svi_vlan_id
 
 
@@ -241,7 +241,8 @@ def get_customer_pbr_rules(
 
         def _classify(rule: dict[str, Any], side: str) -> None:
             peer = rule.get(f"{side}_segment")
-            prefix = segment_prefix(peer) if peer else None
+            # The PBR ACLs and next hops are IPv4 by design (an IPv6 segment that is steered is refused).
+            prefix = segment_prefix(peer, IPV4) if peer else None
             if not prefix:
                 # A pure selector (cloud/partner CIDR): bypassed only when it lives in
                 # this segment's own VRF, where the leaf can route it. Without a
@@ -319,6 +320,10 @@ def get_overlay_pbr_rules(
         serving = _serving_context_nexthops(firewall_contexts, vrf)
         steers = []
         for footprint in footprints:
+            # The steered prefixes and the context's next hop are IPv4: an IPv6 segment would drop out of the steer.
+            for seg in segments:
+                if footprint in _segment_deployment_ids(seg) and segment_namespace(seg).get("name") == vrf:
+                    refuse_ipv6_segment(seg, "the PBR of the overlay ingress")
             prefixes = sorted(
                 {
                     prefix
@@ -326,7 +331,7 @@ def get_overlay_pbr_rules(
                     if footprint in _segment_deployment_ids(seg)
                     and not is_terminated(seg)
                     and segment_namespace(seg).get("name") == vrf
-                    and (prefix := segment_prefix(seg))
+                    and (prefix := segment_prefix(seg, IPV4))
                 }
             )
             if footprint in serving and prefixes:

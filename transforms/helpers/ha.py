@@ -91,6 +91,7 @@ def leg_virtual_ip(ha: dict[str, Any] | None, leg_address: str) -> dict[str, str
     if not ha:
         return {"virtual_ip": None}
     network = ip_interface(leg_address).network
+    # IPv4 by design: the VIP is a fixed offset of a leg /29 (the transit pools are IPv4).
     if network.version != 4:
         return {"virtual_ip": None}
     return {"virtual_ip": f"{network[OFFSET_VIP]}/{network.prefixlen}"}

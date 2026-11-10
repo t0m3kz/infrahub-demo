@@ -30,6 +30,7 @@ def get_static_routes(device_capabilities: list[dict[str, Any]] | None) -> list[
             raise ValueError(
                 f"{label} is in the default table: only VRF statics are rendered; refusing incomplete config"
             )
+        # IPv4 by design: these are the exchange statics through a firewall context, whose legs and next hops are IPv4.
         if ipaddress.ip_network(cap["prefix"], strict=False).version != 4:
             raise ValueError(f"{label} is not IPv4: only IPv4 statics are rendered")
         if (cap.get("distance") or 1) != 1:

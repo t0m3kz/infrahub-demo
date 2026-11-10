@@ -305,5 +305,5 @@ def build_overlay_node(
         locator=select_locator(interfaces),
         l2=l2,
         l3=l3,
-        gateway=AnycastGateway(enabled=any(i.gateway_ip for i in l2), mac=anycast_mac),
+        gateway=AnycastGateway(enabled=any(i.gateway_ip or i.gateway_ipv6 for i in l2), mac=anycast_mac),
     )

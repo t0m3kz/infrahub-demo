@@ -6,8 +6,8 @@
 # --- {{ title }} ---
 {%- for policy in policies %}
 {%- for rule in policy.rules %}
-set {{ scope }}security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match source-address {{ rule.src or 'any' }}
-set {{ scope }}security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match destination-address {{ rule.dst or 'any' }}
+set {{ scope }}security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match source-address {{ rule.src_ref or rule.src or 'any' }}
+set {{ scope }}security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match destination-address {{ rule.dst_ref or rule.dst or 'any' }}
 {%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
 {%- set app_name = 'app-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
 set applications application {{ app_name }} protocol {{ rule.raw_protocol }} destination-port {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
@@ -65,9 +65,13 @@ set {{ scope }}routing-instances ri-{{ iface.context_name }} interface {{ iface.
 # --- Address Books (one per zone) ---
 {%- for zone in zones %}
 {%- for cidr in zone.member_cidrs %}
-{%- set addr_name = 'addr-' + cidr | replace('/', '-') | replace('.', '-') %}
+{%- set addr_name = 'addr-' + cidr | replace('/', '-') | replace('.', '-') | replace(':', '-') %}
 set security zones security-zone {{ zone.name }} address-book address {{ addr_name }} {{ cidr }}
 {%- endfor %}
+{%- endfor %}
+{#- I: a global address-book entry takes an IPv6 prefix like an IPv4 one (`set security address-book global address <name> <prefix>`). #}
+{%- for entry in address_table | default([]) if not entry.zones and entry.family == 6 %}
+set security address-book global address {{ entry.name }} {{ entry.cidr }}
 {%- endfor %}
 #
 {%- endif %}
@@ -75,7 +79,12 @@ set security zones security-zone {{ zone.name }} address-book address {{ addr_na
 #
 # --- Static Routes (return path to leaf per zone) ---
 {%- for route in static_routes %}
+{#- I: an IPv6 static route of an instance sits in its inet6 table (`routing-options rib <instance>.inet6.0 static route`). #}
+{%- if ':' in route.destination %}
+set routing-instances {{ route.vrf | replace(' ', '-') }} routing-options rib {{ route.vrf | replace(' ', '-') }}.inet6.0 static route {{ route.destination }} next-hop {{ route.nexthop }}
+{%- else %}
 set routing-instances {{ route.vrf | replace(' ', '-') }} routing-options static route {{ route.destination }} next-hop {{ route.nexthop }}
+{%- endif %}
 {%- endfor %}
 #
 {%- endif %}

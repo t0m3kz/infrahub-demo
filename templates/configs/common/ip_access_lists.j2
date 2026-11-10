@@ -1,7 +1,10 @@
 {#- Zero-trust per-segment ACL bodies in NX-OS/EOS `ip access-list` syntax; acl_indent is the body indent. -#}
 {%- set _i = acl_indent | default('  ') %}
+{#- U: an IPv6 ACL (`ipv6 access-list`, protocol `ipv6`, bound on the SVI by `ipv6 traffic-filter` on NX-OS and
+    `ipv6 access-group` on EOS) for a segment with an IPv6 gateway; `icmp` is ICMPv6 there (EOS spells it `icmpv6`:
+    the EOS leaf sets `acl_icmpv6`). The IPv4 form is unchanged. #}
 {%- for acl in acls %}
-ip access-list {{ acl.name }}
+{{ 'ipv6' if acl.family == 'ipv6' else 'ip' }} access-list {{ acl.name }}
 {%- for rule in acl.rules %}
 {%- if rule.src_zone or rule.dst_zone %}
 {{ _i }}remark Zone: {{ rule.src_zone or 'any' }} -> {{ rule.dst_zone or 'any' }}
@@ -9,7 +12,7 @@ ip access-list {{ acl.name }}
 {%- if rule.src_customer or rule.dst_customer %}
 {{ _i }}remark Customer: {{ rule.src_customer or 'any' }}/{{ rule.src_environment or 'any' }} -> {{ rule.dst_customer or 'any' }}/{{ rule.dst_environment or 'any' }}
 {%- endif %}
-{{ _i }}{{ rule.seq }} {{ rule.action }} {{ rule.protocol }} {{ rule.src -}}
+{{ _i }}{{ rule.seq }} {{ rule.action }} {{ (acl_icmpv6 | default('icmp')) if (acl.family == 'ipv6' and rule.protocol == 'icmp') else rule.protocol }} {{ rule.src -}}
 {%- if rule.src_port %} {{ rule.src_port }}{% endif %} {{ rule.dst -}}
 {%- if rule.dst_port %} {{ rule.dst_port }}{% endif -%}
 {%- if rule.established %} established{% endif -%}

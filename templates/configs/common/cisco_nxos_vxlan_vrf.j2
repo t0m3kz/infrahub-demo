@@ -72,6 +72,19 @@ vrf context {{ mapping.vrf_name }}
     route-target import {{ rt }}
     route-target import {{ rt }} evpn
 {%- endfor %}
+{%- if mapping.ipv6 %}
+{#- U: the IPv6 family of the tenant VRF takes the same explicit route-targets as IPv4 (Cisco Nexus 9000 VXLAN BGP EVPN
+    configuration guide, `address-family ipv6 unicast` under `vrf context`); no lab has run it. #}
+  address-family ipv6 unicast
+{%- if mapping.route_target %}
+    route-target both {{ mapping.route_target }}
+    route-target both {{ mapping.route_target }} evpn
+{%- endif %}
+{%- for rt in mapping.import_route_targets | default([]) %}
+    route-target import {{ rt }}
+    route-target import {{ rt }} evpn
+{%- endfor %}
+{%- endif %}
 !
 {%- endfor %}
 {%- endif -%}

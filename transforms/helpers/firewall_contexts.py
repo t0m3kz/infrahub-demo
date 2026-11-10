@@ -21,7 +21,7 @@ from utils.exchange_transit import (
 )
 from utils.firewall_split import RuleShare, footprint_contexts, is_external, rule_share, steering_contexts
 from utils.routing_domain import interface_security_zone
-from utils.segment_addressing import segment_hosting_candidates, segment_prefix
+from utils.segment_addressing import IPV4, segment_hosting_candidates, segment_prefix
 from utils.service_contexts import contexts_with_legs, leg_interfaces
 
 
@@ -103,6 +103,7 @@ def get_firewall_contexts(device: dict[str, Any], ha: dict[str, Any] | None = No
             if ns_type not in ZONE_BY_NS_TYPE or not address or not context.get("vlan_id"):
                 continue
             network = ip_interface(address).network
+            # IPv4 by design: a context leg is a /29 of the IPv4 transit pools; an IPv6 interface is no leg.
             if network.version != 4:
                 continue
             zone = ZONE_BY_NS_TYPE[ns_type]
@@ -188,8 +189,9 @@ def _edge_customers(footprints: list[dict[str, Any]]) -> list[dict[str, Any]]:
         customers.append(
             {
                 "name": footprint.get("name"),
+                # The translated sources: NAT is IPv4 only by design (an IPv6 source is not translated, AGENTS.md).
                 "prefixes": sorted(
-                    {prefix for segment in footprint["segments"] if (prefix := segment_prefix(segment))}
+                    {prefix for segment in footprint["segments"] if (prefix := segment_prefix(segment, IPV4))}
                 ),
                 "address": _snat_host(dedicated) if dedicated else None,
             }

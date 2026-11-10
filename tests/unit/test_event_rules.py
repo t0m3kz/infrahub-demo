@@ -333,6 +333,44 @@ def test_cloud_footprints_of_the_triggered_data_declare_the_boarding_group() -> 
 
 
 # ---------------------------------------------------------------------------
+# Cloud attachments: the routed range of the virtual network an attachment targets
+# ---------------------------------------------------------------------------
+
+
+def test_a_cloud_attachment_runs_the_range_generator_on_its_group_and_on_a_retarget() -> None:
+    """The attachment is the node that fires the event, so it is the generator's target: it runs when it joins the
+    group (created with member_of_groups) and when its virtual_network changes, and on nothing else (the generator writes
+    allowed_prefixes only, so it raises no event of its own rule)."""
+    group_rule = _group_rules_for("cloud_attachment_ranges")["trigger-cloud-attachment-range-on-added"]
+    assert group_rule["action"] == "run-cloud-attachment-range-generator"
+    assert GROUP_MEMBER_KINDS["cloud_attachment_ranges"] == ("CloudGatewayAttachment",)
+    (rule,) = _rules_for("CloudGatewayAttachment").values()
+    assert rule["action"] == "run-cloud-attachment-range-generator" and rule["mutation_action"] == "updated"
+    assert rule["matches"]["kind"] == "CoreNodeTriggerRelationshipMatch"
+    assert [match["relationship_name"] for match in rule["matches"]["data"]] == ["virtual_network"]
+    assert action_generators()[rule["action"]] == "add_cloud_attachment_range"
+    assert definition_targets()["add_cloud_attachment_range"] == "cloud_attachment_ranges"
+
+
+def test_the_cloud_attachment_range_generator_is_registered_in_infrahub_yml() -> None:
+    """The definition names its class, file and query, the files exist, and the query is registered."""
+    config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
+    definition = {d["name"]: d for d in config["generator_definitions"]}["add_cloud_attachment_range"]
+    queries = {query["name"]: query["file_path"] for query in config["queries"]}
+    assert definition["class_name"] == "CloudAttachmentRangeGenerator"
+    assert definition["file_path"] == "generators/topology/cloud_attachment_range.py"
+    assert definition["query"] == "cloud_attachment_range" and definition["parameters"] == {"name": "name__value"}
+    assert (ROOT / definition["file_path"]).is_file() and (ROOT / queries["cloud_attachment_range"]).is_file()
+
+
+def test_every_cloud_attachment_of_the_triggered_data_declares_the_group() -> None:
+    """The updated rule fires for every attachment and fails for a non-member, so each one joins the group."""
+    attachments = list(declared("CloudGatewayAttachment", *_TRIGGERED_DATA_DIRS))
+    assert attachments
+    assert all("cloud_attachment_ranges" in obj.groups() for obj in attachments)
+
+
+# ---------------------------------------------------------------------------
 # Circuits: a carrier circuit is a pure carrier, the session kinds of a virtual circuit run add_virtual_circuit
 # ---------------------------------------------------------------------------
 
