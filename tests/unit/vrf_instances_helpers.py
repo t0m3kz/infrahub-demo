@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, transit_vlan
 from utils.segment_addressing import HOSTING_KINDS
@@ -239,8 +240,7 @@ def raw_service_port(
             "__typename": "DcimVirtualInterface",
             "id": f"{ctx_id}:{namespace}",
             "name": {"value": f"ethernet1/1.{transit_vlan(vlan_id, ns_type)}"},
-            "vlan_id": {"value": transit_vlan(vlan_id, ns_type)},
-            "parent_interface": parent_ref,
+            **raw_encapsulation(transit_vlan(vlan_id, ns_type), parent_ref["node"]),
             "role": {"value": "service"},
             "ip_address": ip_address,
         }
@@ -253,8 +253,7 @@ def raw_service_port(
                 "__typename": "DcimVirtualInterface",
                 "id": f"{ctx_id}:{len(subs)}",
                 "name": {"value": f"ethernet1/1.{transit_vlan(vlan_id, raw['_ns_type'])}"},
-                "vlan_id": {"value": transit_vlan(vlan_id, raw["_ns_type"])},
-                "parent_interface": parent_ref,
+                **raw_encapsulation(transit_vlan(vlan_id, raw["_ns_type"]), parent_ref["node"]),
                 "role": {"value": "service"},
                 **{key: value for key, value in raw.items() if key != "_ns_type"},
             }
@@ -271,7 +270,7 @@ def raw_service_port(
                 "interfaces": edges(uplink, *subs),
             }
         },
-        "sub_interfaces": edges(),
+        "encapsulations": edges(),
     }
     own = {
         "__typename": "DcimPhysicalInterface",

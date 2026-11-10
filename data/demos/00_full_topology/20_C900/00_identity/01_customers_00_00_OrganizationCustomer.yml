@@ -8,5 +8,6 @@ spec:
   data:
     - name: "Cloud Demo GmbH"
       org_id: "C900"
+      routing_tag: 900
       member_of_groups:
         - customers

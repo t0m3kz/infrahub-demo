@@ -102,6 +102,7 @@ fragment ManagedBGPServiceFields on ManagedBGP {
                 value
               }
               ...InterfaceRoutingZoneFields
+              ...InterfaceEncapsulationFields
               ... on DcimPhysicalInterface {
                 ip_address {
                   node {
@@ -119,9 +120,6 @@ fragment ManagedBGPServiceFields on ManagedBGP {
                 }
               }
               ... on DcimVirtualInterface {
-                vlan_id {
-                  value
-                }
                 ip_address {
                   node {
                     address {

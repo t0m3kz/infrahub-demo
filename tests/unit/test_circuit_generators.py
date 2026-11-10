@@ -295,13 +295,16 @@ class TestFanOutToSessionCircuits:
 
     @pytest.mark.asyncio
     async def test_sub_interfaces_of_the_ports_count_as_ends(self) -> None:
-        """A handoff ends on the VLAN sub-interface of the carrier's port: found through its parent_interface."""
+        """A handoff ends on the VLAN sub-interface of the carrier's port: found through the encapsulations that ride on it."""
         client = FakeClient()
         client.sub_interfaces = ["sub-1900", "sub-1901"]
 
         await physical_generator(client).generate(carrier_payload())
 
-        assert ("DcimVirtualInterface", {"parent_interface__ids": ["if-bl", "if-eg"]}) in client.filter_calls
+        assert (
+            "ManagedInterfaceEncapsulation",
+            {"parent__ids": ["if-bl", "if-eg"], "include": ["capabilities"]},
+        ) in client.filter_calls
         session_queries = [kwargs for _, kwargs in client.filter_calls if "capabilities__ids" in kwargs]
         assert session_queries == [
             {

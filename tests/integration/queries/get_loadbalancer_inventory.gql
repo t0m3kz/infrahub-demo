@@ -165,40 +165,49 @@ query GetLoadbalancerInventory {
                         }
                       }
                       ... on DcimVirtualInterface {
-                        vlan_id {
-                          value
-                        }
-                        parent_interface {
-                          node {
-                            id
-                            name {
-                              value
-                            }
-                            ... on DcimPhysicalInterface {
-                              cable {
-                                node {
-                                  id
-                                  endpoints {
-                                    edges {
-                                      node {
-                                        __typename
-                                        ... on DcimPhysicalInterface {
+                        encapsulation_capabilities: capabilities {
+                          edges {
+                            node {
+                              __typename
+                              ... on ManagedInterfaceEncapsulation {
+                                vlan_id {
+                                  value
+                                }
+                                parent {
+                                  node {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                    ... on DcimPhysicalInterface {
+                                      cable {
+                                        node {
                                           id
-                                          name {
-                                            value
-                                          }
-                                          role {
-                                            value
-                                          }
-                                          device {
-                                            node {
-                                              id
-                                              name {
-                                                value
-                                              }
-                                              ... on DcimDeviceManaged {
-                                                role {
-                                                  value
+                                          endpoints {
+                                            edges {
+                                              node {
+                                                __typename
+                                                ... on DcimPhysicalInterface {
+                                                  id
+                                                  name {
+                                                    value
+                                                  }
+                                                  role {
+                                                    value
+                                                  }
+                                                  device {
+                                                    node {
+                                                      id
+                                                      name {
+                                                        value
+                                                      }
+                                                      ... on DcimDeviceManaged {
+                                                        role {
+                                                          value
+                                                        }
+                                                      }
+                                                    }
+                                                  }
                                                 }
                                               }
                                             }

@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 from generators.helpers.lb_vip import cloud_lb_name
 from generators.protocols import LoadbalancerVIP
 from generators.topology.application_security import AppApplicationGenerator
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 
 # ---------------------------------------------------------------------------
 # Fixtures (cleaned application.gql shape)
@@ -46,8 +47,7 @@ def lb_member(ctx_id: str, name: str, leg: str | None) -> dict[str, Any]:
             "id": f"{name}-leg",
             "name": f"1.1.{LB_CONTEXT_VLAN}",
             "role": "service",
-            "vlan_id": LB_CONTEXT_VLAN,
-            "parent_interface": {"name": "1.1"},
+            **cleaned_encapsulation(LB_CONTEXT_VLAN, {"name": "1.1"}),
             "ip_address": {"ip_prefix": {"id": leg}},
         }
     ]

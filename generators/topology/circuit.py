@@ -51,9 +51,10 @@ from utils.data_cleaning import clean_data
 from utils.limits import CIRCUIT_ENDS
 
 from ..common import CommonGenerator
+from ..helpers.encapsulation import riding_interface_ids
 from ..helpers.vrf import VrfMixin
 from ..pools import PoolMixin
-from ..protocols import DcimVirtualInterface, TopologyCarrierCircuit
+from ..protocols import TopologyCarrierCircuit
 
 CARRIER_CIRCUIT_GENERATOR = "add_circuit"
 VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
@@ -232,7 +233,7 @@ class CarrierCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
         """Re-run add_virtual_circuit for every session circuit riding this carrier, without waiting.
 
         A virtual circuit rides this one when it ends on one of its ports or on a sub-interface whose
-        ``parent_interface`` is one of them (the derived underlay, utils/circuit_underlay.py). Each of those runs
+        encapsulation ``parent`` is one of them (the derived underlay, utils/circuit_underlay.py). Each of those runs
         waits for this run itself (wait_for_parent_generator_and_refetch), so it sees what this run wrote.
 
         This run happens when the circuit is created, its ends change or its status changes; a port removed from
@@ -241,8 +242,7 @@ class CarrierCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
         port_ids = [endpoint.interface_id for endpoint in endpoints]
         if not port_ids:
             return
-        sub_interfaces = await self.client.filters(kind=DcimVirtualInterface, parent_interface__ids=port_ids)
-        end_ids = [*port_ids, *(sub.id for sub in sub_interfaces)]
+        end_ids = [*port_ids, *await riding_interface_ids(self.client, port_ids)]
         session_ids = {vc.id for vc in await session_circuits_on(self.client, end_ids)}
         if session_ids:
             self.logger.info(f"  {circuit_name} carries {len(session_ids)} session circuit(s)")

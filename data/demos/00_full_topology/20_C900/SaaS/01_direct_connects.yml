@@ -24,10 +24,14 @@ spec:
             status: active
             scope: saas
             routing: bgp
-            vlan_id: 300
             bfd: false
             service_id: webex-org-c900
-            parent_interface: ["EXT-WEBEX-PAR", "wbx-port-1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "webex-c900-fra-xc:webex-c900-fra"
+                  vlan_id: 300
+                  parent: ["EXT-WEBEX-PAR", "wbx-port-1"]
             auth: c900-webex-bgp-key
             peer_ip:
               data:

@@ -185,8 +185,17 @@ query {
                       name { value }
                       role { value }
                       ... on DcimVirtualInterface {
-                        vlan_id { value }
-                        parent_interface { node { name { value } } }
+                        encapsulation_capabilities: capabilities {
+                          edges {
+                            node {
+                              __typename
+                              ... on ManagedInterfaceEncapsulation {
+                                vlan_id { value }
+                                parent { node { id __typename name { value } device { node { id } } } }
+                              }
+                            }
+                          }
+                        }
                         ip_address { node { id address { value } } }
                       }
                     }

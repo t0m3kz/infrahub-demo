@@ -38,22 +38,29 @@ query virtual_circuit_data($name: String!) {
                   }
                 }
               }
-              ... on DcimVirtualInterface {
-                vlan_id { value }
-                parent_interface {
+              encapsulation_capabilities: capabilities {
+                edges {
                   node {
-                    id
-                    ... on DcimPhysicalInterface {
-                      cable {
+                    __typename
+                    ... on ManagedInterfaceEncapsulation {
+                      vlan_id { value }
+                      parent {
                         node {
                           id
-                        }
-                      }
-                    }
-                    capabilities {
-                      edges {
-                        node {
-                          ...VirtualCircuitCarrier
+                          ... on DcimPhysicalInterface {
+                            cable {
+                              node {
+                                id
+                              }
+                            }
+                          }
+                          capabilities {
+                            edges {
+                              node {
+                                ...VirtualCircuitCarrier
+                              }
+                            }
+                          }
                         }
                       }
                     }

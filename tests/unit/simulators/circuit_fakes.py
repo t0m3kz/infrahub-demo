@@ -18,6 +18,7 @@ from infrahub_sdk.exceptions import GraphQLError
 from generators.logger import GeneratorError
 from generators.topology.circuit import CarrierCircuitGenerator
 from generators.topology.virtual_circuit import VirtualCircuitSessionGenerator
+from tests.unit.encapsulation_helpers import raw_encapsulation
 
 CIRCUIT_ID = "circ-df10"
 
@@ -217,14 +218,16 @@ def session_port(
     """
     port: dict[str, Any] = {"id": port_id, "__typename": kind, "name": {"value": name}}
     if kind == "DcimVirtualInterface":
-        port["vlan_id"] = {"value": vlan_id}
-        port["parent_interface"] = {
-            "node": {
-                "id": f"parent-{port_id}",
-                "cable": {"node": {"id": f"cable-{port_id}"} if parent_cabled else None},
-                "capabilities": _capabilities(parent_circuits or []),
-            }
-        }
+        port.update(
+            raw_encapsulation(
+                vlan_id,
+                {
+                    "id": f"parent-{port_id}",
+                    "cable": {"node": {"id": f"cable-{port_id}"} if parent_cabled else None},
+                    "capabilities": _capabilities(parent_circuits or []),
+                },
+            )
+        )
     else:
         port["cable"] = {"node": {"id": f"cable-{port_id}"} if cabled else None}
     port["capabilities"] = _capabilities(circuits or [])
@@ -458,7 +461,7 @@ class FakeClient:
         # filters(capabilities__ids=...); the status defaults to active.
         # circuit_type (dci, handoff, tunnel) -> (id, name[, status]) of the session circuits of that type
         self.session_circuits: dict[str, list[tuple[str, ...]]] = {}
-        # DcimVirtualInterface ids whose parent is a port, returned by filters(parent_interface__ids=...).
+        # DcimVirtualInterface ids whose parent is a port, returned through filters(parent__ids=...) of the encapsulations.
         self.sub_interfaces: list[str] = []
         self.filter_calls: list[tuple[str, dict[str, Any]]] = []
         self.get_calls: list[tuple[str, dict[str, Any]]] = []
@@ -525,9 +528,10 @@ class FakeClient:
         if name == "ManagedVRF":
             # VRF provisioning is stubbed by make_generator; no native provider instance is invented here.
             return []
+        if name == "ManagedInterfaceEncapsulation":  # riding_interface_ids: the encapsulations on the carrier's ports
+            peers = [SimpleNamespace(id=iface_id) for iface_id in self.sub_interfaces]
+            return [SimpleNamespace(capabilities=SimpleNamespace(peers=peers))] if peers else []
         if name in ("DcimPhysicalInterface", "DcimVirtualInterface"):
-            if "parent_interface__ids" in kwargs:
-                return [self.interface_node(iface_id) for iface_id in self.sub_interfaces]
             return [self.interface_node(iface_id) for iface_id in kwargs["ids"]]
         if name == "IpamIPAddress":  # CablingMixin._find_addresses: one read for the addresses of a prefix
             return [self.addresses[address] for address in kwargs["address__values"] if address in self.addresses]

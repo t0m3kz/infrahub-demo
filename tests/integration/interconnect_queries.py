@@ -102,7 +102,7 @@ query ($names: [String]) {
                 description { value }
                 status { value }
                 role { value }
-                parent_interface { node { name { value } } }
+                encapsulation_capabilities: capabilities { edges { node { __typename ... on ManagedInterfaceEncapsulation { parent { node { name { value } } } } } } }
                 ip_address { node { address { value } ip_namespace { node { name { value } } } } }
               }
             }
@@ -201,7 +201,7 @@ query ($names: [String]) {
                 edges { node { __typename ... on ManagedVRF { security_zone { node { name { value } } } } } }
               }
               ... on DcimVirtualInterface {
-                parent_interface { node { name { value } } }
+                encapsulation_capabilities: capabilities { edges { node { __typename ... on ManagedInterfaceEncapsulation { parent { node { name { value } } } } } } }
                 ip_address { node { address { value } } }
               }
             }

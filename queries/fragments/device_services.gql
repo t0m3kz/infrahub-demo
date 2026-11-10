@@ -72,17 +72,8 @@ fragment ServiceMemberInterfaceFields on DcimInterface {
     value
   }
   ...InterfaceRoutingZoneFields
+  ...InterfaceEncapsulationFields
   ... on DcimVirtualInterface {
-    vlan_id {
-      value
-    }
-    parent_interface {
-      node {
-        name {
-          value
-        }
-      }
-    }
     ip_address {
       node {
         address {
@@ -151,23 +142,27 @@ fragment ServiceFarEndFields on DcimInterface {
 
 # A hosted member (a virtual device) has no cable: its NIC is pinned to a port of its host.
 fragment ServiceHostedNicFields on DcimPhysicalInterface {
-  sub_interfaces {
+  encapsulations {
     edges {
       node {
-        __typename
-        id
-        ... on DcimInterface {
-          name {
-            value
-          }
-          role {
-            value
-          }
-        }
-        ... on DcimVirtualInterface {
-          device {
+        capabilities {
+          edges {
             node {
-              ...ServiceMemberFields
+              __typename
+              id
+              name {
+                value
+              }
+              role {
+                value
+              }
+              ... on DcimVirtualInterface {
+                device {
+                  node {
+                    ...ServiceMemberFields
+                  }
+                }
+              }
             }
           }
         }

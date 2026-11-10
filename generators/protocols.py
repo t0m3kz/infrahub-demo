@@ -204,16 +204,6 @@ class AppInstance(CoreNode):
     name: String
 
 
-class DcimHasSubInterface(CoreNode):
-    sub_interfaces: RelationshipManager[DcimSubInterface]
-
-
-class DcimSubInterface(CoreNode):
-    inner_vlan_id: IntegerOptional
-    vlan_id: IntegerOptional
-    parent_interface: RelationshipAttribute[DcimInterface]
-
-
 class DcimProviderPort(CoreNode):
     bandwidth: IntegerOptional
     provider: RelationshipAttribute[OrganizationProvider]
@@ -235,6 +225,7 @@ class DcimInterface(CoreNode):
     role: DropdownOptional
     status: Dropdown
     device: RelationshipAttribute[DcimDevice]
+    encapsulations: RelationshipManager[ManagedInterfaceEncapsulation]
     tags: RelationshipManager[BuiltinTag]
 
 
@@ -698,7 +689,7 @@ class CloudInstance(CloudResource, AppInstance):
     deployment: RelationshipAttribute[TopologyCloudHosting]
 
 
-class DcimLAGInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress, DcimSwitchedInterface):
+class DcimLAGInterface(DcimInterface, DcimHasIPAddress, DcimSwitchedInterface):
     lacp_mode: Dropdown
     lag_id: Integer
     minimum_links: Integer
@@ -835,7 +826,7 @@ class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppI
     serial: StringOptional
 
 
-class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimHasSubInterface, DcimHasIPAddress, DcimSwitchedInterface):
+class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimHasIPAddress, DcimSwitchedInterface):
     interface_type: Dropdown
     lag: RelationshipAttribute[DcimLAGInterface]
 
@@ -1027,6 +1018,11 @@ class ManagedSegmentVlan(ManagedGenericInterfaces):
     device: RelationshipAttribute[DcimPhysicalDevice]
 
 
+class ManagedInterfaceEncapsulation(ManagedGeneric, ManagedGenericInterfaces):
+    vlan_id: IntegerOptional
+    parent: RelationshipAttribute[DcimInterface]
+
+
 class DcimSoftwareImage(CoreNode):
     description: StringOptional
     name: String
@@ -1108,7 +1104,7 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppIn
     hosting_device: RelationshipAttribute[DcimPhysicalDevice]
 
 
-class DcimVirtualInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress, DcimSubInterface):
+class DcimVirtualInterface(DcimInterface, DcimHasIPAddress):
     pass
 
 
@@ -1152,7 +1148,7 @@ class SecurityIPsecProfile(ManagedGeneric):
     pfs_group: IntegerOptional
 
 
-class CloudPeeringInterface(DcimInterface, DcimHasIPAddress, DcimSubInterface, TopologyConnectorRouting):
+class CloudPeeringInterface(DcimInterface, DcimHasIPAddress, TopologyConnectorRouting):
     bfd: Boolean
     cloud_id: StringOptional
     endpoint_ip: IPHostOptional

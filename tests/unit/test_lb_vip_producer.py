@@ -17,6 +17,7 @@ from generators.helpers.lb_vip import leg_zone
 from generators.helpers.rules import RulesPlanner
 from generators.protocols import SecurityPolicy
 from generators.segment_firewall import SegmentFirewallMixin
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.lb_vip_helpers import (
     _client_comp,
     _cloud_frontend,
@@ -455,8 +456,7 @@ def _context_read(dep_id: str, *, linked: bool = True) -> dict[str, Any]:
             "id": "lb-1-leg",
             "name": {"value": "1.1.3100"},
             "role": {"value": "service"},
-            "vlan_id": {"value": 3100},
-            "parent_interface": {"node": {"name": {"value": "1.1"}}},
+            **raw_encapsulation(3100, {"name": {"value": "1.1"}}),
             "ip_address": {"node": {"ip_prefix": {"node": {"id": "leg-1"}}}},
         }
         uplink = {

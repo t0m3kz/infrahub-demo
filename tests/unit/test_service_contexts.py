@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from tests.unit.service_contexts_helpers import LB, make_context, make_far, make_iface, make_member, make_switch
 from utils.service_contexts import (
     DEVICE_SERVICES_ROOT,
@@ -163,20 +164,20 @@ def test_virtual_member_is_tagged_through_its_host_port() -> None:
         "name": "p1",
         "role": "uplink",
         "device": {"id": "host", "name": "host", "role": "server", "shared_capabilities": [], "interfaces": []},
-        "sub_interfaces": [nic],
+        "encapsulations": [{"capabilities": [nic]}],
     }
     assert context_border_ports(make_switch({"Ethernet1/25": ("firewall", [host_port])})) == {"Ethernet1/25": ["ctx"]}
 
 
 def test_unpinned_nic_is_not_a_member_port() -> None:
-    """A NIC that is not pinned to the host port is not in its ``sub_interfaces``: the border port is untagged."""
+    """A NIC that is not pinned to the host port is not in its ``encapsulations``: the border port is untagged."""
     host_port = {
         "typename": "DcimPhysicalInterface",
         "id": "host:p1",
         "name": "p1",
         "role": "uplink",
         "device": {"id": "host", "name": "host", "role": "server", "shared_capabilities": [], "interfaces": []},
-        "sub_interfaces": [],
+        "encapsulations": [],
     }
     assert context_border_ports(make_switch({"Ethernet1/25": ("firewall", [host_port])})) == {}
 
@@ -279,7 +280,7 @@ def test_a_hosted_member_reaches_its_border_port_through_the_host_port() -> None
     member = make_member("vfw", [make_context("ctx", 3001)], virtual=True, uplinks=("eth1/1",))
     border = {"id": "border:p1", "typename": "DcimPhysicalInterface", "name": "p1", "role": "firewall"}
     host_port = {"id": "host:p1", "cable": {"id": "c", "endpoints": [{"id": "host:p1"}, border]}}
-    member["interfaces"][0]["parent_interface"] = host_port
+    member["interfaces"][0].update(cleaned_encapsulation(None, host_port))
     assert member_border_ports(member) == [border]
 
 

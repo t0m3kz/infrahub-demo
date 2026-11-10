@@ -69,6 +69,7 @@ query border_spine_config($device: String!) {
               }
               ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
               ...InterfaceRoutingZoneFields
+              ...InterfaceEncapsulationFields
               ... on DcimPhysicalInterface {
                 interface_type {
                   value
@@ -124,9 +125,6 @@ query border_spine_config($device: String!) {
                 }
               }
               ... on DcimVirtualInterface {
-                vlan_id {
-                  value
-                }
                 ip_address {
                   node {
                     address {

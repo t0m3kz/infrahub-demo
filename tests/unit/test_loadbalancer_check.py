@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from checks.loadbalancer import CheckLoadBalancer, validate_loadbalancer_contexts
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 
 
 def _check() -> Any:
@@ -54,8 +55,7 @@ def _device(contexts: list[dict[str, Any]] | None = None, **overrides: Any) -> d
             {
                 "typename": "DcimVirtualInterface",
                 "name": "eth1.3100",
-                "vlan_id": 3100,
-                "parent_interface": {"name": "eth1", "device": {"node": {"id": "dev-lb-1"}}},
+                **cleaned_encapsulation(3100, {"name": "eth1", "device": {"id": "dev-lb-1"}}),
                 "device": {"node": {"id": "dev-lb-1"}},
                 "role": "service",
                 "ip_address": {"address": "100.66.64.5/29"},
@@ -147,7 +147,7 @@ class TestContextValidation:
     def test_sub_interface_that_is_not_the_transit_vlan_of_the_context_does_not_count(self) -> None:
         device = _device()
         device["interfaces"][1]["name"] = "eth1.3101"
-        device["interfaces"][1]["vlan_id"] = 3101
+        device["interfaces"][1].update(cleaned_encapsulation(3101, {"name": "eth1", "device": {"id": "dev-lb-1"}}))
         errors = validate_loadbalancer_contexts(device)
         assert any("no leg sub-interface" in error for error in errors)
 

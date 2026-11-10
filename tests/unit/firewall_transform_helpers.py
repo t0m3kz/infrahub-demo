@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.segment_port_helpers import raw_deployment_edges, raw_port_segments
 from transforms.config.firewall import Firewall
 
@@ -27,12 +28,11 @@ def _leg_interface(ns_type: str) -> dict[str, Any]:
         **interface_vrf_capability(routing_vrf(ns_name)),
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": f"eth1.{vlan}"},
-        "vlan_id": {"value": vlan},
         "description": {"value": None},
         "status": {"value": "active"},
         "role": {"value": None},
         "device": {"node": {"id": "dev-fw"}},
-        "parent_interface": {"node": {"name": {"value": "eth1"}, "device": {"node": {"id": "dev-fw"}}}},
+        **raw_encapsulation(vlan, {"name": {"value": "eth1"}, "device": {"node": {"id": "dev-fw"}}}),
         "ip_address": {
             "node": {
                 "address": {"value": address},
@@ -217,12 +217,11 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
         **interface_vrf_capability(routing_vrf(seg_node["security_zone"]["node"]["name"]["value"])),
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth0.100"},
-        "vlan_id": {"value": 100},
         "description": {"value": "Smoke test interface"},
         "status": {"value": "active"},
         "role": {"value": None},
         "device": {"node": {"id": "dev-fw"}},
-        "parent_interface": {"node": {"name": {"value": "eth0"}, "device": {"node": {"id": "dev-fw"}}}},
+        **raw_encapsulation(100, {"name": {"value": "eth0"}, "device": {"node": {"id": "dev-fw"}}}),
         "ip_address": {
             "node": {
                 "address": {"value": "10.99.99.1/30"},
@@ -325,12 +324,11 @@ def _make_context_smoke_data(platform: str, *, serves_segment: bool) -> dict[str
     context_iface: dict[str, Any] = {
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth1.3005"},
-        "vlan_id": {"value": 3005},
         "description": {"value": None},
         "status": {"value": "active"},
         "role": {"value": None},
         "device": {"node": {"id": "dev-fw"}},
-        "parent_interface": {"node": {"name": {"value": "eth1"}, "device": {"node": {"id": "dev-fw"}}}},
+        **raw_encapsulation(3005, {"name": {"value": "eth1"}, "device": {"node": {"id": "dev-fw"}}}),
         "ip_address": {
             "node": {"address": {"value": "100.65.0.4/31"}, "ip_namespace": {"node": {"name": {"value": "default"}}}}
         },

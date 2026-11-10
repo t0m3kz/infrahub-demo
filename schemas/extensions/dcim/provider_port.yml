@@ -3,7 +3,7 @@ version: "1.0"
 
 # A provider's port: what a cloud transport (CloudDirectConnect) and the provider's port in a colocation metro
 # (TopologyProviderConnect, an Equinix Fabric port) share. A marker generic that carries fields only, the way
-# DcimSubInterface and DcimHasIPAddress do: a generic cannot inherit a generic, so each kind lists DcimDevice (the slim
+# DcimHasIPAddress does: a generic cannot inherit a generic, so each kind lists DcimDevice (the slim
 # one) AND this one. The provider's own identifier of the port is CloudResource.cloud_id, not a field here.
 generics:
   - name: ProviderPort

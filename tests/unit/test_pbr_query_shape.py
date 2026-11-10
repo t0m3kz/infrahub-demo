@@ -68,4 +68,4 @@ def test_the_firewall_query_reads_the_role_its_legs_are_derived_from() -> None:
     node = _tree(_CONFIG / "firewall.gql")["DcimDevice"]["edges"]["node"]
     assert {"role", "shared_capabilities", "interfaces"} <= set(node)
     interface = node["interfaces"]["edges"]["node"]
-    assert {"role", "ip_address", "zone_capabilities", "parent_interface"} <= set(interface)
+    assert {"role", "ip_address", "zone_capabilities", "encapsulation_capabilities"} <= set(interface)

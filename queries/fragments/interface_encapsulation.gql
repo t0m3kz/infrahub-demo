@@ -1,0 +1,95 @@
+# What an interface rides on (utils/interface_encapsulation.py reads it): its ManagedInterfaceEncapsulation, under the
+# alias `encapsulation_capabilities` because the interface's plain `capabilities` is selected by other fragments and the
+# server answers only the first selection of a field. ONE of the two fragments per interface object, never both.
+# The tag (`vlan_id`) and the `parent` with its device; the parent's `device` is what tells a sub-interface of the
+# interface's own device from a VM NIC pinned to a port of its host.
+fragment InterfaceEncapsulationFields on DcimInterface {
+  encapsulation_capabilities: capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedInterfaceEncapsulation {
+          vlan_id {
+            value
+          }
+          parent {
+            node {
+              id
+              __typename
+              name {
+                value
+              }
+              device {
+                node {
+                  id
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# The same, with the cable of the parent port (ServiceMemberCableFields: the border service port its far end is).
+fragment InterfaceEncapsulationCableFields on DcimInterface {
+  encapsulation_capabilities: capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedInterfaceEncapsulation {
+          vlan_id {
+            value
+          }
+          parent {
+            node {
+              id
+              __typename
+              name {
+                value
+              }
+              device {
+                node {
+                  id
+                }
+              }
+              ...ServiceMemberCableFields
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# The same, with the cable of the parent port as the internet egress check reads it (EgressPortCableFields).
+fragment InterfaceEncapsulationEgressFields on DcimInterface {
+  encapsulation_capabilities: capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedInterfaceEncapsulation {
+          vlan_id {
+            value
+          }
+          parent {
+            node {
+              id
+              __typename
+              name {
+                value
+              }
+              device {
+                node {
+                  id
+                }
+              }
+              ...EgressPortCableFields
+            }
+          }
+        }
+      }
+    }
+  }
+}

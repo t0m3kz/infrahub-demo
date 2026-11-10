@@ -1,0 +1,298 @@
+---
+# The rear ports of every panel of DC-GDN1, as add_patch_panel builds them from the panel_type (lc-24: 24 rear ports,
+# lc-upc). 00_full runs no generator, so the ports are data and
+# checks/patch_panel_pairing.py finds the panels complete. The jacks the cables use are also declared in
+# 00_patch_panels.yml; both land on one port (upsert by panel and name).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimRearPatchPanelPort
+  data:
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "1"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "2"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "3"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "4"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "5"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "6"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "7"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "8"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "9"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "10"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "11"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "12"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "13"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "14"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "15"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "16"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "17"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "18"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "19"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "20"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "21"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "22"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "23"
+      connector: lc-upc
+    - panel: ["gdn1-rack-01", "PP-GDN1-01"]
+      name: "24"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "1"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "2"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "3"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "4"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "5"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "6"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "7"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "8"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "9"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "10"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "11"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "12"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "13"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "14"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "15"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "16"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "17"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "18"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "19"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "20"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "21"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "22"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "23"
+      connector: lc-upc
+    - panel: ["gdn1-rack-02", "PP-GDN1-02"]
+      name: "24"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "1"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "2"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "3"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "4"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "5"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "6"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "7"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "8"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "9"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "10"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "11"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "12"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "13"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "14"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "15"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "16"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "17"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "18"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "19"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "20"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "21"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "22"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "23"
+      connector: lc-upc
+    - panel: ["gdn1-rack-03", "PP-GDN1-03"]
+      name: "24"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "1"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "2"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "3"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "4"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "5"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "6"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "7"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "8"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "9"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "10"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "11"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "12"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "13"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "14"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "15"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "16"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "17"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "18"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "19"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "20"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "21"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "22"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "23"
+      connector: lc-upc
+    - panel: ["gdn1-rack-04", "PP-GDN1-04"]
+      name: "24"
+      connector: lc-upc

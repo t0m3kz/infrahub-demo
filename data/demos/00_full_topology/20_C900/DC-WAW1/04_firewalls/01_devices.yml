@@ -17,14 +17,26 @@ spec:
         data:
           - name: eth1/1
             role: uplink
-            parent_interface: ["waw1-fw-01", "ethernet1/1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "c900-waw1-fw-01-prod:eth1/1"
+                  parent: ["waw1-fw-01", "ethernet1/1"]
           - name: ha1
             role: ha
             status: active
-            parent_interface: ["waw1-fw-01", "HA1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "c900-waw1-fw-01-prod:ha1"
+                  parent: ["waw1-fw-01", "HA1"]
           - name: mgmt
             role: management
-            parent_interface: ["waw1-fw-01", "MGT"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "c900-waw1-fw-01-prod:mgmt"
+                  parent: ["waw1-fw-01", "MGT"]
     - name: c900-waw1-fw-02-prod
       object_template: PA-VM_EDGE_CUSTOMER_S
       hosting_device: waw1-fw-02
@@ -38,11 +50,23 @@ spec:
         data:
           - name: eth1/1
             role: uplink
-            parent_interface: ["waw1-fw-02", "ethernet1/1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "c900-waw1-fw-02-prod:eth1/1"
+                  parent: ["waw1-fw-02", "ethernet1/1"]
           - name: ha1
             role: ha
             status: active
-            parent_interface: ["waw1-fw-02", "HA1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "c900-waw1-fw-02-prod:ha1"
+                  parent: ["waw1-fw-02", "HA1"]
           - name: mgmt
             role: management
-            parent_interface: ["waw1-fw-02", "MGT"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "c900-waw1-fw-02-prod:mgmt"
+                  parent: ["waw1-fw-02", "MGT"]

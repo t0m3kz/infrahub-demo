@@ -6,6 +6,7 @@ from typing import Any
 
 from utils.routing_domain import RoutingDomainError
 
+from .encapsulation_reads import raw_parent_name
 from .interconnect_rules import (
     _address,
     _interface_zone,
@@ -85,7 +86,7 @@ def routed_session_errors(
                 f"{session_label}: {end[0]}:{end[1]} description '{node.get('description', {}).get('value')}'"
             )
         if circuit["circuit_type"] == "handoff":
-            parent = ((node.get("parent_interface") or {}).get("node") or {}).get("name", {}).get("value")
+            parent = raw_parent_name(node)
             if parent != by_end[end]["parent_name"] or end[1] != f"{parent}.{_vlan(end[1])}":
                 errors.append(f"{session_label}: {end[0]}:{end[1]} is not <parent>.<vlan> of its parent ({parent})")
     addresses = {end: _address(node) for end, node in ports.items()}

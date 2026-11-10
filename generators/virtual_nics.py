@@ -2,8 +2,8 @@
 
 A virtual machine has no cable of its own: its traffic leaves through the physical device that hosts
 it. Each base NIC the machine's template provides (a DcimVirtualInterface) therefore points, through
-``parent_interface``, to the host port it rides on, and the host port carries the cable. A context
-sub-interface sits on the NIC, so border leaf -> host port -> NIC -> sub-interface is a path in the graph.
+``ManagedInterfaceEncapsulation`` (no tag), to the host port it rides on, and the host port carries the cable. A
+context sub-interface sits on the NIC, so border leaf -> host port -> NIC -> sub-interface is a path in the graph.
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING, Any
 
 from netutils.interface import sort_interface_list
 
+from utils.interface_encapsulation import encapsulation_name
 from utils.limits import WAIT_FOR_PEER_GENERATOR
 
-from .helpers.edges import remove_edge
-from .protocols import DcimPhysicalInterface, DcimVirtualInterface
+from .protocols import DcimPhysicalInterface, DcimVirtualInterface, ManagedInterfaceEncapsulation
 
 if TYPE_CHECKING:
     import logging
@@ -25,6 +25,14 @@ if TYPE_CHECKING:
 
 # The roles of the base NICs a virtual template provides; a context sub-interface (role service) is not one.
 PINNED_ROLES = ("management", "uplink", "ha")
+VIRTUAL_DEVICE_KIND = "DcimVirtualDevice"
+
+
+def is_host_nic(interface: dict[str, Any]) -> bool:
+    """True for a cleaned interface that is a base NIC of a virtual device (the kind this module pins to a host port)."""
+    return (interface.get("device") or {}).get("typename") == VIRTUAL_DEVICE_KIND and interface.get(
+        "role"
+    ) in PINNED_ROLES
 
 
 def pair_nics_with_host_ports(nics: list[Any], host_ports: list[Any]) -> list[tuple[Any, Any]]:
@@ -58,11 +66,11 @@ class VirtualNicMixin:
         _retry_delay = staticmethod(CommonGenerator._retry_delay)
 
     async def _pin_virtual_nics(self, devices: list[Any], host_id: str) -> None:
-        """Set parent_interface of every base NIC of devices to a port of the device host_id.
+        """Pin every base NIC of devices to a port of the device host_id: its encapsulation, with that port as parent.
 
         The server instantiates the template's NICs after the device is saved, so the read is retried
         until every device has some. Uplinks only ride cabled host ports. A NIC with no
-        available port is unpinned, including a stale generated pin from an earlier run.
+        available port is unpinned (its encapsulation deleted), including a stale generated pin from an earlier run.
         The NICs belong to the template, not to this run, so they are saved untracked.
         """
         device_ids = [device.id for device in devices]
@@ -87,32 +95,34 @@ class VirtualNicMixin:
             for port in host_ports
             if port.role.value != "uplink" or getattr(getattr(port, "cable", None), "id", None)
         ]
+        names = {
+            nic.id: encapsulation_name(device.name.value, nic.name.value)
+            for device in devices
+            for nic in nics
+            if nic.device.id == device.id
+        }
+        pins = {
+            pin.name.value: pin
+            for pin in await self.client.filters(kind=ManagedInterfaceEncapsulation, name__values=list(names.values()))
+        }
         for device in devices:
             device_nics = [nic for nic in nics if nic.device.id == device.id]
             parents = {nic.id: host_port for nic, host_port in pair_nics_with_host_ports(device_nics, host_ports)}
             for nic in device_nics:
                 host_port = parents.get(nic.id)
                 parent_id = host_port.id if host_port is not None else None
-                if getattr(nic.parent_interface, "id", None) == parent_id:
+                pin = pins.get(names[nic.id])
+                if getattr(getattr(pin, "parent", None), "id", None) == parent_id:
                     continue
                 if host_port is None:
-                    # SDK save() omits a None single relationship; remove the stale edge explicitly.
-                    await remove_edge(
-                        self.client,
-                        node_id=nic.id,
-                        relation="parent_interface",
-                        peer_id=nic.parent_interface.id,
-                    )
+                    # The parent is mandatory: a stale pin (equal to None only when there is none) goes with its object.
+                    if pin is not None:
+                        await pin.delete()
                     self.logger.info(f"  - Unpinned {device.name.value} {nic.name.value}: no available host port")
                     continue
-                pinned = await self.client.create(
-                    kind=DcimVirtualInterface,
-                    data={
-                        "id": nic.id,
-                        "name": nic.name.value,
-                        "device": {"id": device.id},
-                        "parent_interface": {"id": parent_id},
-                    },
+                encapsulation = await self.client.create(
+                    kind=ManagedInterfaceEncapsulation,
+                    data={"name": names[nic.id], "parent": {"id": parent_id}, "capabilities": [{"id": nic.id}]},
                 )
-                await pinned.save(allow_upsert=True, update_group_context=False)
+                await encapsulation.save(allow_upsert=True, update_group_context=False)
                 self.logger.info(f"  - Pinned {device.name.value} {nic.name.value} to host port {host_port.name.value}")

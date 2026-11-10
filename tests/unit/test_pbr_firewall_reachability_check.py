@@ -8,6 +8,7 @@ import pytest
 
 from checks.pbr_firewall_reachability import CheckPbrFirewallReachability
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.vrf_instances_helpers import raw_service_port
 from utils.exchange_transit import transit_vlan
 
@@ -51,8 +52,7 @@ def _member(context: dict[str, Any]) -> dict[str, Any]:
             "__typename": "DcimVirtualInterface",
             "id": f"sub-{leg['namespace']}",
             "name": _v(f"eth1.{transit_vlan(3000, leg['ns_type'] or 'prod')}"),
-            "vlan_id": _v(transit_vlan(3000, leg["ns_type"] or "prod")),
-            "parent_interface": {"node": {"name": _v("eth1")}},
+            **raw_encapsulation(transit_vlan(3000, leg["ns_type"] or "prod"), {"name": _v("eth1")}),
             "role": _v("service"),
             "ip_address": {"node": {"ip_namespace": {"node": {"name": _v("default")}}}}
             if leg["ns_type"]

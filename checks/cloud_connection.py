@@ -2,8 +2,7 @@
 
 A transport (``CloudDirectConnect``, ``CloudVPNConnection``) is a device that holds interfaces: the
 ``CloudPeeringInterface`` that ride on the ports and LAG of the provider's ``TopologyProviderConnect`` (or tunnels). The schema accepts what these rules refuse (measured on 1.11.9): an
-attachment with no target or with two, a transport riding on itself, a peering whose ``parent_interface`` (a one-sided
-edge) is a port of a device that is no provider connect. Each rule is one method and reports ERRORs.
+attachment with no target or with two, a transport riding on itself, a peering whose encapsulation ``parent`` is a port of a device that is no provider connect. Each rule is one method and reports ERRORs.
 
 R1  an attachment has exactly one target, ``virtual_network`` or ``peer_gateway``, and its peer gateway is not its own
 R2  a route table belongs to a ``hub`` gateway, and an attachment's route tables belong to the attachment's gateway
@@ -13,10 +12,10 @@ R4  a service endpoint's segments belong to the endpoint's virtual network; a tu
 R5  a crypto profile belongs to an IPsec tunnel, and an IPsec tunnel has one (GRE has none, a key only with IPsec)
 R6  a VPN tunnel has the provider's ``endpoint_ip`` and is an interface of a VPN connection
 R7  retired: that every interface of a transport is on that transport is held twice already, by the server for the
-    members of a LAG (``common_parent: device``) and by ``checks/interface_parents.py`` for the ``parent_interface`` of
-    a peering (a ``DcimSubInterface``: the port of its own transport or of a provider connect)
-R8  a peering that has a ``vlan_id`` rides on a port or LAG (a tunnel needs no parent), the parent of a peering is a
-    port or LAG, and the VLANs of the peerings of one parent are distinct
+    members of a LAG (``common_parent: device``) and by ``checks/interface_parents.py`` for the encapsulation ``parent``
+    of a peering (the port of its own transport or of a provider connect)
+R8  the parent of a peering (a tunnel needs none) is a port or LAG, and the VLANs of the peerings of one parent are
+    distinct
 R9  placement: a transport has exactly one of ``region`` and ``saas_region``; with an ``account`` it has no ``owner``,
     without one it needs ``saas_region`` and ``owner``; a peering is an interface of a transport and one of scope
     ``saas`` is on a transport with a ``saas_region``
@@ -34,6 +33,7 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.circuit_underlay import INTERNET_KIND
 from utils.data_cleaning import clean_data
+from utils.interface_encapsulation import parent_of, vlan_of
 
 ATTACHMENT = "CloudGatewayAttachment"
 ROUTE_TABLE = "CloudGatewayRouteTable"
@@ -244,21 +244,19 @@ class CheckCloudConnection(InfrahubCheck):
             )
 
     def _r8_parent(self, peering: dict[str, Any]) -> None:
-        parent = peering.get("parent_interface")
-        label = f"R8: peering '{_name(peering)}'"
-        if isinstance(parent, dict):
-            if parent.get("typename") not in (PORT, LAG):
-                self._error(
-                    peering, PEERING, f"{label} rides on a {parent.get('typename')}: a port or a LAG of its transport."
-                )
-        elif peering.get("vlan_id") is not None:
-            self._error(peering, PEERING, f"{label} has vlan_id {peering['vlan_id']} but no parent_interface.")
+        parent = parent_of(peering)
+        if parent and parent.get("typename") not in (PORT, LAG):
+            self._error(
+                peering,
+                PEERING,
+                f"R8: peering '{_name(peering)}' rides on a {parent.get('typename')}: a port or a LAG of its transport.",
+            )
 
     def _r8_vlans(self, peerings: list[dict[str, Any]]) -> None:
         seen: dict[tuple[str, Any], dict[str, Any]] = {}
         for peering in peerings:
-            parent = _ref(peering.get("parent_interface"))
-            vlan = peering.get("vlan_id")
+            parent = _ref(parent_of(peering))
+            vlan = vlan_of(peering)
             if parent is None or vlan is None:
                 continue
             first = seen.setdefault((parent, vlan), peering)
@@ -267,7 +265,7 @@ class CheckCloudConnection(InfrahubCheck):
                     peering,
                     PEERING,
                     f"R8: peering '{_name(peering)}' has vlan_id {vlan} like '{_name(first)}' on the same parent "
-                    f"'{_name(peering.get('parent_interface'))}'.",
+                    f"'{_name(parent_of(peering))}'.",
                 )
 
     def _r9_transport(self, transport: dict[str, Any]) -> None:

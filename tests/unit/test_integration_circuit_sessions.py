@@ -41,6 +41,7 @@ from tests.integration.all_demo_circuit_constants import (
     ALL_DEMO_VIRTUAL_CIRCUITS,
 )
 from tests.integration.demo_data import BOOTSTRAP, attribute, declared, name
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.external_vrf_peers_helpers import _raw_vrf
 from tests.unit.simulators.circuit_fakes import FakeClient, session_generator
 from tests.unit.simulators.circuit_inventory_payloads import inventory_payload
@@ -92,7 +93,7 @@ def _interface(
         node["mtu"] = _value(mtu)
     if role is not None or parent is not None:
         node["role"] = _value(role)
-        node["parent_interface"] = {"node": {"name": _value(parent)} if parent else None}
+        node.update(raw_encapsulation(None, {"name": _value(parent)} if parent else None))
     return node
 
 
@@ -223,7 +224,15 @@ class _Devices:
             deployment["underlay_protocol"] = _value(_underlay_protocol())
         selected: dict[str, Any] = {
             key: port[key]
-            for key in ("id", "__typename", "name", "capabilities", "cable", "parent_interface", "zone_capabilities")
+            for key in (
+                "id",
+                "__typename",
+                "name",
+                "capabilities",
+                "cable",
+                "encapsulation_capabilities",
+                "zone_capabilities",
+            )
             if key in port
         }
         selected["device"] = {

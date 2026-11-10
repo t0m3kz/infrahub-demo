@@ -114,7 +114,7 @@ class TestRoutingInvariantsCloudLegs:
             attachment("tgwa-vpc2", "dxgw2", network="v2", blocks=(prefix("10.10.0.0/16"),))
         )
         errors = _rule_eight(_run_invariants(**roots))
-        assert any("registered behind more than one session" in e and "cloud gateway 'dxgw'" in e for e in errors)
+        assert any("registered behind more than one session" in e and "cloud gateway 'dxgw+tgw'" in e for e in errors)
 
     def test_the_primary_and_secondary_peering_of_one_gateway_are_one_point(self) -> None:
         """A dual connection landing on one gateway registers its block once."""

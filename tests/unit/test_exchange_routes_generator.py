@@ -10,6 +10,7 @@ import pytest
 
 from generators.exchange_routes import route_name
 from generators.topology.context_routes import ContextRoutesGenerator
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
 
 
@@ -30,8 +31,7 @@ def _leg(address: str, namespace: dict[str, Any], vlan: int) -> dict[str, Any]:
             "id": f"leg-{address}",
             "name": _value(f"ethernet1/1.{vlan}"),
             "role": _value("service"),
-            "vlan_id": _value(vlan),
-            "parent_interface": {"node": {"id": "up", "name": _value("ethernet1/1")}},
+            **raw_encapsulation(vlan, {"id": "up", "name": _value("ethernet1/1")}),
             "zone_capabilities": {"edges": [{"node": vrf}]},
             "ip_address": {"node": {"address": _value(address)}},
         }

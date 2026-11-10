@@ -25,6 +25,7 @@ from typing import Any
 from generators.helpers.naming import sdwan_edge_name
 from generators.topology.circuit import CircuitEndpoint, CircuitLocation, plan_locations
 from tests.integration.demo_data import ROOT, Declared, declared, distinct, name
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.external_vrf_peers_helpers import _raw_vrf
 
 ALL_DEMO = ROOT / "data" / "demos" / "30_all"
@@ -69,6 +70,18 @@ def _edges(nodes: Iterable[dict[str, Any]]) -> dict[str, Any]:
     return {"edges": [{"node": node} for node in nodes]}
 
 
+def _encapsulation_data(item: dict[str, Any]) -> dict[str, Any] | None:
+    """The ``data`` of the ManagedInterfaceEncapsulation an interface object file item authors under ``capabilities``."""
+    return next(
+        (
+            capability["data"]
+            for capability in item.get("capabilities") or []
+            if isinstance(capability, dict) and capability.get("kind") == "ManagedInterfaceEncapsulation"
+        ),
+        None,
+    )
+
+
 def _all(kind: str) -> list[Declared]:
     return distinct(declared(kind, ALL_DEMO))
 
@@ -92,10 +105,12 @@ class _Model:
         self._add_generated_devices()
         self.peerings = {(str(i.item["device"]), name(i)): i for i in _all(PEERING)}
         sub_interfaces = {
-            (str(i.item["device"]), name(i)): i for i in _all("DcimVirtualInterface") if i.item.get("parent_interface")
+            (str(i.item["device"]), name(i)): encapsulation
+            for i in _all("DcimVirtualInterface")
+            if (encapsulation := _encapsulation_data(i.item))
         }
-        self.parents = {key: str(i.item["parent_interface"][1]) for key, i in sub_interfaces.items()}
-        self.tags = {key: i.item.get("vlan_id") for key, i in sub_interfaces.items()}
+        self.parents = {key: str(data["parent"][1]) for key, data in sub_interfaces.items()}
+        self.tags = {key: data.get("vlan_id") for key, data in sub_interfaces.items()}
         self.cabled: set[tuple[str, str]] = set()
         if not without_cables:
             for cable in _all("DcimCable"):
@@ -304,20 +319,24 @@ class _Model:
         peering = self.peerings.get((device, port))
         if peering is not None:
             node["__typename"] = PEERING
-            node["vlan_id"] = {"value": peering.item.get("vlan_id")}
+            node.update(raw_encapsulation((_encapsulation_data(peering.item) or {}).get("vlan_id"), None))
         parent = self.parents.get((device, port))
         if parent is None:
             node["cable"] = {"node": {"id": f"cable-{device}:{port}"} if (device, port) in self.cabled else None}
         else:
             node["__typename"] = "DcimVirtualInterface"
-            node["vlan_id"] = {"value": self.tags[(device, port)]}
-            node["parent_interface"] = {
-                "node": {
-                    "id": f"id-{device}:{parent}",
-                    "cable": {"node": {"id": f"cable-{device}:{parent}"} if (device, parent) in self.cabled else None},
-                    "capabilities": _edges(self.carriers_on(device, parent)),
-                }
-            }
+            node.update(
+                raw_encapsulation(
+                    self.tags[(device, port)],
+                    {
+                        "id": f"id-{device}:{parent}",
+                        "cable": {
+                            "node": {"id": f"cable-{device}:{parent}"} if (device, parent) in self.cabled else None
+                        },
+                        "capabilities": _edges(self.carriers_on(device, parent)),
+                    },
+                )
+            )
         return node
 
     def carrier_payload(self, row: dict[str, Any]) -> dict[str, Any]:

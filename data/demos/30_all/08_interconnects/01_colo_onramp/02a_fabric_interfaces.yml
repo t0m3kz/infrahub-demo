@@ -1,7 +1,7 @@
 ---
 # The end of the Equinix Fabric virtual connection that starts on the Fabric port et-0/0/0 of the metro FR (the
 # TopologyProviderConnect EXT-EQX-FABRIC-FR2, 02_cloud_provider_edges.yml): one TopologyProviderInterface per
-# connection, riding on the physical port (`parent_interface`) and named <port>.<S-tag>. It carries the S-tag
+# connection, riding on the physical port (its encapsulation) and named <port>.<S-tag>. It carries the S-tag
 # (`vlan_id`) and the bandwidth, and the carrier FABRIC-FR2-AMNE01 (03_carrier_circuits.yml) ends on it, so the port
 # is no longer shared between connections. Created before that file, whose carrier ends on it.
 apiVersion: infrahub.app/v1
@@ -13,6 +13,10 @@ spec:
       name: "et-0/0/0.1301"
       description: "Fabric connection FABRIC-FR2-AMNE01 to the Network Edge router eg-am-ne01"
       status: active
-      parent_interface: ["EXT-EQX-FABRIC-FR2", "et-0/0/0"]
-      vlan_id: 1301
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "EXT-EQX-FABRIC-FR2:et-0/0/0.1301"
+            vlan_id: 1301
+            parent: ["EXT-EQX-FABRIC-FR2", "et-0/0/0"]
       bandwidth: 1000

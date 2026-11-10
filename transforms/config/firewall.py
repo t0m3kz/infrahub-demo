@@ -18,6 +18,7 @@ from utils.exchange_transit import (
     MANAGEMENT_TYPE,
     ZONE_BY_NS_TYPE,
 )
+from utils.interface_encapsulation import vlan_of
 from utils.routing_domain import interface_security_zone, interface_vrfs
 from utils.segment_addressing import Ipv6SegmentNotRenderedError, own_prefix, prefix_family, refuse_ipv6_segment
 from utils.service_contexts import leg_contexts
@@ -65,7 +66,7 @@ def _build_fw_interfaces(
             if seg.get("name") in seg_vlan and vlan_id is None:
                 vlan_id = seg_vlan[seg["name"]]
         if vlan_id is None and parent:
-            vlan_id = iface.get("vlan_id")
+            vlan_id = vlan_of(iface)
         context = leg_contexts.get(str(iface.get("name")))
         if context and not context.get("name"):
             raise ValueError(f"firewall interface {iface.get('name')!r} has an incomplete context owner")

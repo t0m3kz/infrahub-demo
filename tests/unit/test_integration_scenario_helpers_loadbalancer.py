@@ -12,6 +12,7 @@ from tests.integration.service_inventory_helpers import (
     fetch_loadbalancer_inventory,
     match_loadbalancer_contexts,
 )
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.integration_scenario_helpers_helpers import _no_propagation_delay  # noqa: F401 (autouse fixture)
 from tests.unit.test_circuit_query_shapes import _selected_paths
 
@@ -27,12 +28,12 @@ from tests.unit.test_circuit_query_shapes import _selected_paths
         (
             "get_loadbalancer_inventory.gql",
             "ManagedLoadbalancerContext",
-            {"shared_devices.interfaces.capabilities", "shared_devices.interfaces.capabilities.vrf"},
+            {"shared_devices.interfaces.zone_capabilities", "shared_devices.interfaces.zone_capabilities.vrf"},
         ),
         (
             "get_transit_inventory.gql",
             "ManagedFirewallContext",
-            {"shared_devices.interfaces.capabilities", "shared_devices.interfaces.capabilities.vrf"},
+            {"shared_devices.interfaces.zone_capabilities", "shared_devices.interfaces.zone_capabilities.vrf"},
         ),
         ("get_transit_inventory.gql", "TopologyRoutedExchange", {"vrf_a", "vrf_z"}),
     ],
@@ -45,7 +46,7 @@ def test_inventory_queries_select_routing_from_vrf_and_only_ipam_identity(
     owners: set[str],
 ) -> None:
     """Inventory legs and exchange sides select exact VRF owners, never direct IPAM or zone routing."""
-    paths = _selected_paths(root_dir / "tests/integration/queries" / filename, root)
+    paths = _selected_paths(root_dir / "tests/integration/queries" / filename, root, by_alias=True)
     for owner in owners:
         assert {path.removeprefix(f"{owner}.") for path in paths if path.startswith(f"{owner}.")} >= {
             "id",
@@ -190,8 +191,7 @@ def _raw_members(
         "id": "sub1",
         "name": {"value": f"eth1.{vlan}"},
         "role": {"value": "service"},
-        "vlan_id": {"value": vlan},
-        "parent_interface": {"node": {"id": "up1", "name": {"value": "eth1"}}},
+        **raw_encapsulation(vlan, {"id": "up1", "name": {"value": "eth1"}}),
         "zone_capabilities": {"edges": [{"node": vrf}] if vrf else []},
         "ip_address": {
             "node": {"address": {"value": "100.66.64.5/29"}, "ip_namespace": {"node": {"name": {"value": "default"}}}}

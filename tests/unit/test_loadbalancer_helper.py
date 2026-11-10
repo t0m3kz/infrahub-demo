@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.helpers.loadbalancer import get_loadbalancer_contexts, member_address, pool_member_ips
 
@@ -22,9 +23,10 @@ def _leg(device: str, name: str, address: str, namespace: str) -> dict[str, Any]
         **in_vrf(make_vrf(_NAMESPACES[namespace])),
         "typename": "DcimVirtualInterface",
         "name": name,
-        "vlan_id": int(name.rsplit(".", 1)[-1]),
+        **cleaned_encapsulation(
+            int(name.rsplit(".", 1)[-1]), {"name": name.split(".")[0], "device": {"id": f"dev-{device}"}}
+        ),
         "device": {"id": f"dev-{device}", "name": device, "role": "load-balancer"},
-        "parent_interface": {"name": name.split(".")[0], "device": {"id": f"dev-{device}"}},
         "ip_address": {"address": address, "ip_namespace": {"node": {"name": {"value": "default"}}}},
     }
 

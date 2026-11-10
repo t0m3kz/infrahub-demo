@@ -18,6 +18,7 @@ import jinja2
 import pytest
 
 from checks.common import validate_transit_vlans
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from tests.unit.routing_helpers import in_vrf, make_vrf
 from tests.unit.vrf_instances_helpers import raw_device, raw_footprint, raw_row
 from transforms.common import BaseDeviceTransform
@@ -112,8 +113,7 @@ def _member(index: int, contexts: list[dict]) -> dict[str, Any]:
                     **leg,
                     "typename": "DcimVirtualInterface",
                     "name": name,
-                    "vlan_id": vlan,
-                    "parent_interface": {"name": "eth1", "device": {"id": device_id}},
+                    **cleaned_encapsulation(vlan, {"name": "eth1", "device": {"id": device_id}}),
                     "device": {"id": device_id},
                     "role": "service",
                 }

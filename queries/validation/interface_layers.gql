@@ -24,8 +24,30 @@ query interface_layers {
             id
           }
         }
-        sub_interfaces {
-          count
+        # A sub-interface (the interfaces of its encapsulations) is routed (an L3 signal) unless it is a VM NIC pinned to this host port (generators/virtual_nics.py
+        # is_host_nic): its role and the kind of its device say which.
+        encapsulations {
+          edges {
+            node {
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    ... on DcimVirtualInterface {
+                      role {
+                        value
+                      }
+                      device {
+                        node {
+                          __typename
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
         capabilities {
           edges {
@@ -76,8 +98,30 @@ query interface_layers {
             id
           }
         }
-        sub_interfaces {
-          count
+        # A sub-interface (the interfaces of its encapsulations) is routed (an L3 signal) unless it is a VM NIC pinned to this host port (generators/virtual_nics.py
+        # is_host_nic): its role and the kind of its device say which.
+        encapsulations {
+          edges {
+            node {
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    ... on DcimVirtualInterface {
+                      role {
+                        value
+                      }
+                      device {
+                        node {
+                          __typename
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
         capabilities {
           edges {

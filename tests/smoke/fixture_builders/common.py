@@ -41,6 +41,22 @@ def _edges(nodes: list[dict]) -> dict:
     return {"edges": [{"node": n} for n in nodes]}
 
 
+def _encapsulation(vlan_id: int | None, parent: dict | None = None) -> dict:
+    """The ``encapsulation_capabilities`` of an interface that rides on ``parent`` (a raw interface node: name, device)
+    with the tag ``vlan_id``, as queries/fragments/interface_encapsulation.gql returns it."""
+    return {
+        "encapsulation_capabilities": _edges(
+            [
+                {
+                    "__typename": "ManagedInterfaceEncapsulation",
+                    "vlan_id": _v(vlan_id),
+                    "parent": _node(parent),
+                }
+            ]
+        )
+    }
+
+
 def _af_edges(*pairs: tuple[str, str]) -> dict:
     """RoutingBGPAddressFamily edges as the peering query returns them."""
     return _edges([{"afi": _v(afi), "safi": _v(safi)} for afi, safi in pairs])
@@ -193,7 +209,7 @@ def _make_interface(
             iface["cable"] = _node(None)
     elif typename == "DcimVirtualInterface":
         if vlan_id is not None:
-            iface["vlan_id"] = _v(vlan_id)
+            iface.update(_encapsulation(vlan_id))
         if ip_address:
             iface["ip_address"] = _node(
                 {

@@ -27,6 +27,7 @@ from generators.protocols import (
     DcimVirtualInterface,
     IpamIPAddress,
     IpamPrefix,
+    ManagedInterfaceEncapsulation,
 )
 
 _DC = {"name": "DC7", "index": 7, "naming_convention": "hierarchical"}
@@ -138,6 +139,20 @@ def _payload(
     }
 
 
+def _virtual_interface(node_id: str) -> MagicMock:
+    """A stored virtual interface: its hfid is ``[device, name]``, the key of its encapsulation."""
+    node = _node(node_id)
+    node.hfid = [f"dev-{node_id}", node_id]
+    return node
+
+
+def _encapsulation(name: str) -> MagicMock:
+    """A stored ManagedInterfaceEncapsulation named ``name``."""
+    node = _node(name)
+    node.name = MagicMock(value=name)
+    return node
+
+
 def _gen(*, slices: dict[str, MagicMock] | None = None) -> Any:
     gen: Any = PodDecommissionGenerator.__new__(PodDecommissionGenerator)
     gen.logger = MagicMock()
@@ -148,12 +163,19 @@ def _gen(*, slices: dict[str, MagicMock] | None = None) -> Any:
     gen.reconcile_vrfs = gen.vrf_calls.reconcile_vrfs = AsyncMock()
     gen.prune_empty_vrfs = gen.vrf_calls.prune_empty_vrfs = AsyncMock()
     gen.filter_calls = []
+    gen.encapsulation_reads = []
     known_slices: dict[str, MagicMock] = slices or {}
 
-    async def _filters(*, kind: Any, ids: list[str], **kwargs: Any) -> list[Any]:
+    async def _filters(*, kind: Any, ids: list[str] | None = None, **kwargs: Any) -> list[Any]:
+        if kind is ManagedInterfaceEncapsulation:  # one per virtual interface, found by its name
+            gen.encapsulation_reads.append(kwargs["name__values"])
+            return [_encapsulation(name) for name in kwargs["name__values"]]
+        assert ids is not None
         gen.filter_calls.append((kind, ids, kwargs))
         if kind is IpamPrefix and "include" in kwargs:
             return [known_slices[node_id] for node_id in ids if node_id in known_slices]
+        if kind is DcimVirtualInterface:
+            return [_virtual_interface(node_id) for node_id in ids]
         return [_node(node_id) for node_id in ids]
 
     gen.client.filters = AsyncMock(side_effect=_filters)
@@ -360,6 +382,46 @@ class TestVrfSweep:
         await gen.generate(_payload(devices=[_device("leaf-1", "lf1", "leaf", [svi, loopback])], pools=False))
 
         assert _ids(gen, DcimVirtualInterface) == ["vif-lo"]
+
+    @pytest.mark.asyncio
+    async def test_the_encapsulations_of_the_deleted_virtual_interfaces_are_deleted_first(self) -> None:
+        """An interface does not take the encapsulation it rides on with it: the pod reads them by name
+        (``<device>:<interface>``) and deletes each before the interfaces."""
+        loopback = {
+            "__typename": "DcimVirtualInterface",
+            "id": "vif-lo",
+            "status": {"value": "active"},
+            "role": {"value": "loopback"},
+        }
+        gen = _gen()
+        order: list[str] = []
+        original = gen.client.filters.side_effect
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            found = await original(kind=kind, **kwargs)
+            for node in found:
+                if kind is ManagedInterfaceEncapsulation:
+                    node.delete = AsyncMock(side_effect=lambda name=node.name.value: order.append(f"enc:{name}"))
+                elif kind is DcimVirtualInterface:
+                    node.delete = AsyncMock(side_effect=lambda node_id=node.id: order.append(f"vif:{node_id}"))
+            return found
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+
+        await gen.generate(_payload(devices=[_device("leaf-1", "lf1", "leaf", [loopback])], pools=False))
+
+        assert gen.encapsulation_reads == [["dev-vif-lo:vif-lo"]]
+        assert order == ["enc:dev-vif-lo:vif-lo", "vif:vif-lo"]
+
+    @pytest.mark.asyncio
+    async def test_no_virtual_interface_reads_no_encapsulation(self) -> None:
+        """``name__values=[]`` does not narrow the query (as ``ids=[]``): with no virtual interface to delete, no
+        encapsulation is read, or the pod would delete every encapsulation of the stack."""
+        gen = _gen()
+
+        await gen.generate(_payload(devices=[_device("spine-1", "sp1", "spine", [])], pools=False))
+
+        assert gen.encapsulation_reads == []
 
     @pytest.mark.asyncio
     async def test_the_segment_gateway_an_svi_carries_is_not_deleted(self) -> None:

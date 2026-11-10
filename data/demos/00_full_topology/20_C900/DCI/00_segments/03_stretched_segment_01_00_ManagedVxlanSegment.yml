@@ -7,6 +7,7 @@ spec:
     - security_zone: "PROD"
       owner: C900
       customer_name: sync
+      routing_tag: 104
       environment: p
       stretch_scope: dc_pair
       vlan_scope: shared

@@ -8,6 +8,7 @@ import yaml
 
 from checks.cloud_connection import CheckCloudConnection
 from tests.integration.demo_data import ROOT
+from tests.unit.encapsulation_helpers import raw_encapsulation
 
 
 def _v(value: Any) -> dict[str, Any]:
@@ -95,26 +96,33 @@ def _saas_transport(name: str = "saas", **overrides: Any) -> dict[str, Any]:
 
 
 def _port(name: str, kind: str = "DcimPhysicalInterface", device: str | None = "dx") -> dict[str, Any]:
-    """The parent_interface of a peering: an interface of ``device``."""
+    """The parent of a peering encapsulation: an interface of ``device``."""
     return _node(name, __typename=kind, device=_node(device))
 
 
 def _peering(
-    name: str = "p1", device: str = "dx", kind: str = "CloudDirectConnect", **overrides: Any
+    name: str = "p1",
+    device: str = "dx",
+    kind: str = "CloudDirectConnect",
+    parent_interface: dict[str, Any] | None = None,
+    vlan_id: dict[str, Any] | None = None,
+    **overrides: Any,
 ) -> dict[str, Any]:
+    """A peering; ``parent_interface`` (a ``_port``) and ``vlan_id`` (a ``_v``) make its encapsulation, none makes it a
+    peering that rides on nothing."""
     peering = {
         "id": name,
         "name": _v(name),
         "scope": _v("private"),
-        "vlan_id": _v(None),
         "tunnel_index": _v(None),
         "endpoint_ip": _v(None),
         "tunnel_mode": _v(None),
         "crypto_profile": _node(None),
         "tunnel_key": _node(None),
         "device": _node(device, __typename=kind),
-        "parent_interface": _node(None),
     }
+    if parent_interface is not None or vlan_id is not None:
+        peering.update(raw_encapsulation((vlan_id or {}).get("value"), (parent_interface or {}).get("node")))
     peering.update(overrides)
     return peering
 
@@ -350,10 +358,10 @@ class TestR8VlanPeerings:
         peering = _peering(parent_interface=_port("ic-dedicated-port"))
         assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering]) == []
 
-    def test_a_vlan_without_a_parent_fails(self) -> None:
-        """A VLAN has to ride on something."""
-        errors = _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[_peering(vlan_id=_v(300))])
-        assert len(errors) == 1 and "R8" in errors[0] and "no parent_interface" in errors[0]
+    def test_a_peering_with_no_encapsulation_passes(self) -> None:
+        """A tunnel or a peering on a bare transport rides on nothing: R8 has no parent to judge (a VLAN always has one,
+        it lives in the encapsulation)."""
+        assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[_peering()]) == []
 
     def test_a_parent_that_is_no_port_or_lag_fails(self) -> None:
         """A peering on a peering."""

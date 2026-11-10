@@ -13,7 +13,7 @@ contexts) needs:
 
 1. exactly two member devices (``shared_devices``), both with role ``internal-firewall`` (``external-firewall`` for
    the Internet edge context);
-2. for every member, an INTERNET leg: a sub-interface of the context tagged with ``vlan_id`` (the transit VLAN of the
+2. for every member, an INTERNET leg: a sub-interface of the context tagged with the encapsulation ``vlan_id`` (the transit VLAN of the
    INTERNET slot, utils/exchange_transit.py) with an address in the INTERNET namespace;
 3. a ``TopologyRoutedExchange`` of the context between the tenant VRF and INTERNET, with every INTERNET leg in its
    INTERNET VRF (generators/firewall_context.py names it ``{context}-{A}-{Z}``; its legs are derived,
@@ -50,6 +50,7 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, namespace_type_for_environment, transit_vlan
 from utils.fabric_roles import CARRIER_ROLES, EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
 from utils.firewall_split import footprint_contexts, internet_contexts, is_external
+from utils.interface_encapsulation import vlan_of
 from utils.routing_domain import interface_security_zone
 from utils.service_contexts import exchange_legs, leg_interfaces, member_border_ports
 
@@ -134,7 +135,7 @@ def _leg_gaps(
         (
             leg
             for leg in legs
-            if (wanted_vlan is not None and leg.get("vlan_id") == wanted_vlan)
+            if (wanted_vlan is not None and vlan_of(leg) == wanted_vlan)
             or interface_security_zone(leg).get("vrf_type") == INTERNET_TYPE
         ),
         key=_name,

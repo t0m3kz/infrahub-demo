@@ -28,6 +28,7 @@ from utils.service_contexts import UPLINK_KINDS, UPLINK_ROLE
 from .connections import tracked_save_kwargs
 from .far_end import far_end_interfaces
 from .firewall_context_spec import ContextSpec, _TransitMember, _TransitState
+from .helpers.encapsulation import parent_ids_of, sub_interfaces_on
 from .protocols import (
     DcimPhysicalInterface,
     DcimVirtualInterface,
@@ -56,17 +57,13 @@ def _dev_name(device: Any) -> str:
     return device["name"] if isinstance(device, dict) else device.name.value
 
 
-def _parent_interface_id(interface: Any) -> str | None:
-    """id of the interface a virtual NIC rides on (its host port when pinned), None for an unpinned NIC."""
-    return getattr(getattr(interface, "parent_interface", None), "id", None)
-
-
 def _host_port(uplink: Any, host_ports: dict[str, Any]) -> Any | None:
     """The port a member's traffic leaves through: its own uplink, or for a virtual instance the host port
-    that uplink is pinned to (None when it is not pinned to a physical port of its host)."""
+    that uplink is pinned to (``host_ports``: uplink id -> host port; None when it is not pinned to a physical port
+    of its host)."""
     if getattr(uplink, "typename", None) != DcimVirtualInterface.__name__:
         return uplink
-    return host_ports.get(_parent_interface_id(uplink) or "")
+    return host_ports.get(uplink.id)
 
 
 def _cable_id(interface: Any) -> str | None:
@@ -161,7 +158,7 @@ class TransitLegsMixin:
             if uplink is None:
                 self.logger.error(
                     f"{device_name}: uplink {trunk.name.value} is not pinned to a physical port of its hosting device "
-                    f"(parent_interface) — cannot find its border service port"
+                    f"(its encapsulation) — cannot find its border service port"
                 )
                 continue
             bl_port = self._border_service_port(
@@ -240,12 +237,11 @@ class TransitLegsMixin:
             return incomplete
 
         sub_interfaces = {
-            (sub.device.id, sub.parent_interface.id, sub.vlan_id.value): sub
-            for sub in await self.client.filters(
-                kind=DcimVirtualInterface,
-                device__ids=[member.device_id for member in members],
-                parent_interface__ids=[member.trunk.id for member in members],
-                include=["parent_interface"],
+            (sub.device.id, encapsulation.parent.id, encapsulation.vlan_id.value): sub
+            for sub, encapsulation in await sub_interfaces_on(
+                self.client,
+                device_ids=[member.device_id for member in members],
+                parent_ids=[member.trunk.id for member in members],
             )
         }
         zones = await self._interface_zones(sorted(sub.id for sub in sub_interfaces.values()))
@@ -376,12 +372,15 @@ class TransitLegsMixin:
         their prefix, namespace, member offsets and the configured pool's resources.
         Inconsistent existing legs fail rather than silently consuming another range.
         """
-        interfaces = await self.client.filters(
-            kind=DcimVirtualInterface,
-            device__ids=[member.device_id for member in members],
-            parent_interface__ids=[member.trunk.id for member in members],
-            vlan_id__value=transit_vlan(vlan_id, leg_type),
-        )
+        interfaces = [
+            interface
+            for interface, _ in await sub_interfaces_on(
+                self.client,
+                device_ids=[member.device_id for member in members],
+                parent_ids=[member.trunk.id for member in members],
+                vlan_id=transit_vlan(vlan_id, leg_type),
+            )
+        ]
         addressed = {
             interface.device.id: interface.ip_address.id for interface in interfaces if interface.ip_address.id
         }
@@ -451,26 +450,27 @@ class TransitLegsMixin:
         return by_device
 
     async def _pinned_host_ports(self, uplinks: Any) -> dict[str, Any] | None:
-        """port id -> the host port each virtual uplink is pinned to (parent_interface), one query.
+        """uplink id -> the host port each virtual uplink is pinned to (its encapsulation's parent), two queries.
 
         Empty when no uplink is pinned (physical members). None when the lookup fails.
         """
-        port_ids = sorted(
-            {
-                port_id
-                for uplink in uplinks
-                if getattr(uplink, "typename", None) == DcimVirtualInterface.__name__
-                and (port_id := _parent_interface_id(uplink))
-            }
+        virtual_ids = sorted(
+            uplink.id for uplink in uplinks if getattr(uplink, "typename", None) == DcimVirtualInterface.__name__
         )
-        if not port_ids:
-            return {}
         try:
-            ports = await self.client.filters(kind=DcimPhysicalInterface, ids=port_ids)
+            parents = await parent_ids_of(self.client, virtual_ids)
+            ports = (
+                {
+                    port.id: port
+                    for port in await self.client.filters(kind=DcimPhysicalInterface, ids=sorted(set(parents.values())))
+                }
+                if parents
+                else {}
+            )
         except Exception as exc:
             self.logger.error(f"Error resolving the host ports the virtual uplinks are pinned to: {exc}")
             return None
-        return {port.id: port for port in ports}
+        return {uplink_id: ports[parent_id] for uplink_id, parent_id in parents.items() if parent_id in ports}
 
     def _uplink_of(self, uplinks: dict[str, Any], device_id: str, *, device_name: str) -> Any | None:
         """device_id's uplink from _uplinks_by_device, logging an error (for member device_name) when it has none."""

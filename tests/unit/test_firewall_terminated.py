@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from tests.unit.firewall_helpers_shared import fw_contexts
 from tests.unit.routing_helpers import in_vrf
 from transforms.config.firewall import apply_context_routes
@@ -179,7 +180,7 @@ class TestContextShape:
             ),
             "name": "eth1.3000",
             "device": {"id": "dev-fw"},
-            "parent_interface": {"name": "eth1", "device": {"id": "dev-fw"}},
+            **cleaned_encapsulation(None, {"name": "eth1", "device": {"id": "dev-fw"}}),
             "ip_address": {"address": "10.0.0.5/29", "ip_namespace": {"node": {"name": {"value": "default"}}}},
             "capabilities": [capability],
         }

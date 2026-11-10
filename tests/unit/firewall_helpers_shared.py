@@ -2,8 +2,10 @@
 
 from typing import Any
 
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from transforms.helpers.firewall_contexts import get_firewall_contexts
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, TRANSIT_SLOT, transit_vlan
+from utils.interface_encapsulation import parent_of
 from utils.routing_domain import interface_vrf
 
 
@@ -29,16 +31,19 @@ def fw_contexts(
         leg = {key: value for key, value in iface.items() if key != "capabilities"}
         if context is not None:
             contexts.setdefault(context["id"], context)
-            trunk = (iface.get("parent_interface") or {}).get("name") or "eth1"
+            trunk = (parent_of(iface) or {}).get("name") or "eth1"
             trunks.add(trunk)
             ns_type = (interface_vrf(iface).get("security_zone") or {}).get("vrf_type")
             if isinstance(context.get("vlan_id"), int):
                 leg["name"] = (
                     f"{trunk}.{transit_vlan(context['vlan_id'], ns_type if ns_type in TRANSIT_SLOT else 'prod')}"
                 )
-            if isinstance(context.get("vlan_id"), int):
-                leg["vlan_id"] = transit_vlan(context["vlan_id"], ns_type if ns_type in TRANSIT_SLOT else "prod")
-            leg.setdefault("parent_interface", {"name": trunk, "device": {"id": "dev-fw-1"}})
+            tag = (
+                transit_vlan(context["vlan_id"], ns_type if ns_type in TRANSIT_SLOT else "prod")
+                if isinstance(context.get("vlan_id"), int)
+                else None
+            )
+            leg.update(cleaned_encapsulation(tag, parent_of(iface) or {"name": trunk, "device": {"id": "dev-fw-1"}}))
             leg.setdefault("device", {"id": "dev-fw-1"})
             leg.setdefault("typename", "DcimVirtualInterface")
             leg.setdefault("role", "service")

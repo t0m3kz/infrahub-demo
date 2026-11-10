@@ -130,6 +130,8 @@ class _World:
         self.exchanges: dict[str, Any] = {}
         self.group_adds: list[tuple[str, list[str]]] = []
         self.sub_interfaces: dict[tuple[str, str], Any] = {}
+        # encapsulation name -> its ManagedInterfaceEncapsulation (parent, tag, the interface riding on it).
+        self.encapsulations: dict[str, Any] = {}
         self.addresses: dict[tuple[str, str], Any] = {}
         self.saves: list[tuple[str, str, dict[str, Any]]] = []
         self.allocated: dict[str, Any] = {}
@@ -270,6 +272,17 @@ class _World:
             cable=SimpleNamespace(id=f"cable-{cabled_to or device_id}"),
         )
 
+    def pin(self, nic_id: str, parent_id: str, *, device: str = "", vlan_id: int | None = None) -> None:
+        """Pin an interface (a hosted member's NIC) to the port it rides on: its encapsulation."""
+        name = f"{device}:{nic_id}"
+        self.encapsulations[name] = SimpleNamespace(
+            id=f"enc-{len(self.encapsulations)}",
+            name=SimpleNamespace(value=name),
+            parent=SimpleNamespace(id=parent_id),
+            vlan_id=SimpleNamespace(value=vlan_id),
+            capabilities=_Many([nic_id]),
+        )
+
     # --- reads -----------------------------------------------------------
     async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
         name = kind.__name__
@@ -338,14 +351,27 @@ class _World:
             return [port for port in ports if port.id in kwargs["ids"]]
         if name == "TopologyRoutedExchange":
             return [ex for ex_name, ex in self.exchanges.items() if ex_name in kwargs["name__values"]]
-        if name == "DcimVirtualInterface":  # a context's legs: the members' sub-interfaces of their uplinks
+        if name == "ManagedInterfaceEncapsulation":  # what rides on a parent, or the parent of given interfaces
+            found = list(self.encapsulations.values())
+            if "parent__ids" in kwargs:
+                found = [enc for enc in found if enc.parent.id in kwargs["parent__ids"]]
+            if "capabilities__ids" in kwargs:
+                found = [
+                    enc
+                    for enc in found
+                    if {peer.id for peer in enc.capabilities.peers} & set(kwargs["capabilities__ids"])
+                ]
+            if "name__values" in kwargs:
+                found = [enc for enc in found if enc.name.value in kwargs["name__values"]]
+            if "vlan_id__value" in kwargs:
+                found = [enc for enc in found if enc.vlan_id.value == kwargs["vlan_id__value"]]
+            return found
+        if name == "DcimVirtualInterface":  # a context's legs: the sub-interfaces found through their encapsulations
             assert "capabilities__ids" not in kwargs
             return [
                 sub
                 for sub in self.sub_interfaces.values()
-                if sub.parent_interface.id in kwargs["parent_interface__ids"]
-                and sub.device.id in kwargs["device__ids"]
-                and ("vlan_id__value" not in kwargs or sub.vlan_id.value == kwargs["vlan_id__value"])
+                if sub.id in kwargs["ids"] and sub.device.id in kwargs["device__ids"]
             ]
         if name == "IpamIPAddress":
             if "address__values" in kwargs:  # CablingMixin._find_addresses: one read for a prefix's addresses
@@ -497,16 +523,30 @@ class _World:
                     id=f"sub-{len(self.sub_interfaces)}",
                     name=SimpleNamespace(value=data["name"]),
                     device=SimpleNamespace(id=data["device"]["id"]),
-                    parent_interface=SimpleNamespace(id=(data.get("parent_interface") or {}).get("id")),
-                    vlan_id=SimpleNamespace(value=data.get("vlan_id")),
+                    vlan_id=SimpleNamespace(value=None),  # the tag of its encapsulation, set when that is created
                     ip_address=SimpleNamespace(id=None),
                     capabilities=_Many(on_add=lambda peer_id, key=key: self._joined(key, peer_id)),
                 ),
             )
             sub.ip_address = SimpleNamespace(id=(data.get("ip_address") or {}).get("id") or sub.ip_address.id)
             # The VRF is the instance's interface edge, written after the save (generators/helpers/interface_vrf.py).
-            assert "vrf" not in data and "capabilities" not in data
+            assert not {"vrf", "capabilities", "parent_interface", "vlan_id"} & set(data)
             return self._node(name, data["name"], backing=sub)
+        if name == "ManagedInterfaceEncapsulation":
+            (peer,) = data["capabilities"]
+            sub = next(sub for sub in self.sub_interfaces.values() if sub.id == peer["id"])
+            sub.vlan_id = SimpleNamespace(value=data.get("vlan_id"))
+            enc = self.encapsulations.setdefault(
+                data["name"],
+                SimpleNamespace(
+                    id=f"enc-{len(self.encapsulations)}",
+                    name=SimpleNamespace(value=data["name"]),
+                    parent=SimpleNamespace(id=data["parent"]["id"]),
+                    vlan_id=SimpleNamespace(value=data.get("vlan_id")),
+                    capabilities=_Many([sub.id]),
+                ),
+            )
+            return self._node(name, data["name"], backing=enc)
         raise AssertionError(f"unexpected create({name})")
 
     def _context(self, kind: str, name: str) -> Any:

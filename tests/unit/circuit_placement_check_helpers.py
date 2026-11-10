@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from checks.circuit_placement import CheckCircuitPlacement
+from tests.unit.encapsulation_helpers import raw_encapsulation
 
 KINDS = {"TopologyCarrierCircuit", "TopologySessionCircuit"}
 
@@ -204,7 +205,7 @@ def _vport(
     if ip_address:
         port["ip_address"] = {"node": {"id": f"ip-{device}:{name}"}}
     if kind == "CloudPeeringInterface":
-        port["vlan_id"] = {"value": None if vlan_id is _FROM_NAME else vlan_id}
+        port.update(raw_encapsulation(None if vlan_id is _FROM_NAME else vlan_id, None))
     if region is not None:
         node = port["device"]["node"]
         node.pop("deployment")
@@ -218,13 +219,15 @@ def _vport(
         suffix = name.rsplit(".", 1)[-1]
         tag = int(suffix) if "." in name and suffix.isdigit() else None
         port["__typename"] = kind or "DcimVirtualInterface"
-        port["vlan_id"] = {"value": tag if vlan_id is _FROM_NAME else vlan_id}
-        port["parent_interface"] = {
-            "node": {
-                "cable": {"node": {"id": f"cable-{device}:{parent_name}"} if parent_cabled else None},
-                "capabilities": _edges([_carrier(circuit) for circuit in parent_carriers]),
-            }
-        }
+        port.update(
+            raw_encapsulation(
+                tag if vlan_id is _FROM_NAME else vlan_id,
+                {
+                    "cable": {"node": {"id": f"cable-{device}:{parent_name}"} if parent_cabled else None},
+                    "capabilities": _edges([_carrier(circuit) for circuit in parent_carriers]),
+                },
+            )
+        )
     return port
 
 

@@ -23,6 +23,7 @@ from typing import Any
 import jinja2
 import pytest
 
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from transforms.helpers.bgp import _build_peer_groups, _build_session_from_peering, add_template_fields
 from transforms.helpers.vxlan import _multisite_vrf_site_asns, _platform_vxlan_config, get_interfaces, get_vxlan_config
 
@@ -215,7 +216,7 @@ class TestSubinterfaceDot1q:
             [
                 {
                     "name": "Ethernet1/13.1900",
-                    "vlan_id": 200,
+                    **cleaned_encapsulation(200, {"name": "Ethernet1/13", "device": {"id": "dev-1"}}),
                     "typename": "DcimVirtualInterface",
                     "ip_address": _ip("10.255.5.0/31"),
                     **_vrf("PROD"),
