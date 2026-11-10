@@ -19,6 +19,7 @@ Prerequisites: DC6 deployed and merged to main (Scenario 1), spine added (Scenar
 """
 
 import logging
+from ipaddress import IPv4Network, ip_interface
 from typing import Any
 
 import pytest
@@ -49,6 +50,34 @@ EXPECTED_SEGMENTS = frozenset({"c001-web-app-p", "c001-db-backend-p"})
 # reserved for stretched segments, so a local VNI there is a pool mix-up.
 LOCAL_VNI_RANGE = (10001, 39999)
 
+# The addressing the generator gives a segment with no authored gateway (generators/topology/segment_addressing.py):
+# the prefix length is sized from host_count (hosts + network, broadcast and gateway, a power of two, a /29 at the
+# smallest, a /24 with no host_count) and the prefix is drawn from the customer's pool, named
+# {org_id}-{environment}-{dc|colocation}-ipv4, whose block is as long as the footprint's service tier says (the
+# tier M of tests/integration/data/20_segments/01_deployment.yml: address_prefix_length 21).
+EXPECTED_SEGMENT_PREFIX_LENGTH = {"c001-web-app-p": 29, "c001-db-backend-p": 24}
+CUSTOMER_POOL_NAME = "c001-p-dc-ipv4"
+CUSTOMER_POOL_BLOCK_LENGTH = 21
+
+QUERY_SEGMENT_ADDRESSING = (
+    """
+query SegmentAddressing($names: [String]) {
+    ManagedVxlanSegment(name__values: $names) {
+        edges {
+            node {
+                name { value }
+                gateway { node { address { value } ip_prefix { node { prefix { value } } } } }
+            }
+        }
+    }
+    CoreIPPrefixPool(name__value: "%s") {
+        edges { node { resources { edges { node { ... on IpamPrefix { prefix { value } } } } } } }
+    }
+}
+"""
+    % CUSTOMER_POOL_NAME
+)
+
 QUERY_FOOTPRINT = """
 query GetCustomerFootprint($name: String!) {
     TopologyCustomerDC(name__value: $name) {
@@ -62,6 +91,31 @@ query GetCustomerFootprint($name: String!) {
     }
 }
 """
+
+
+def _assert_segment_addressing(branch: str, result: dict[str, Any]) -> None:
+    """Assert each segment got a prefix of the sized length, from the customer's pool block, gateway on its .1."""
+    pools = [edge["node"] for edge in result["CoreIPPrefixPool"]["edges"]]
+    assert len(pools) == 1, f"Expected exactly 1 customer pool '{CUSTOMER_POOL_NAME}' on '{branch}', found {len(pools)}"
+    blocks = [IPv4Network(edge["node"]["prefix"]["value"]) for edge in pools[0]["resources"]["edges"] if edge["node"]]
+    assert [block.prefixlen for block in blocks] == [CUSTOMER_POOL_BLOCK_LENGTH], (
+        f"Pool '{CUSTOMER_POOL_NAME}' resources {[str(block) for block in blocks]}, "
+        f"expected one /{CUSTOMER_POOL_BLOCK_LENGTH} block (tier M) and no growth for two segments"
+    )
+    segments = {edge["node"]["name"]["value"]: edge["node"] for edge in result["ManagedVxlanSegment"]["edges"]}
+    assert set(segments) == set(EXPECTED_SEGMENT_PREFIX_LENGTH), f"Segments found: {sorted(segments)}"
+    prefixes = []
+    for name, length in sorted(EXPECTED_SEGMENT_PREFIX_LENGTH.items()):
+        gateway = (segments[name]["gateway"] or {}).get("node")
+        assert gateway, f"{name}: no gateway, the generator must address a segment that authors none"
+        prefix = IPv4Network(gateway["ip_prefix"]["node"]["prefix"]["value"])
+        assert prefix.prefixlen == length, f"{name}: prefix {prefix}, expected a /{length}"
+        assert prefix.subnet_of(blocks[0]), f"{name}: prefix {prefix} is not inside the customer block {blocks[0]}"
+        assert ip_interface(gateway["address"]["value"]).ip == prefix.network_address + 1, (
+            f"{name}: gateway {gateway['address']['value']} is not the first address of {prefix}"
+        )
+        prefixes.append(prefix)
+    assert not prefixes[0].overlaps(prefixes[1]), f"Segment prefixes overlap: {prefixes}"
 
 
 def _assert_dc6_segment_deployments(branch: str, result: dict[str, Any]) -> None:
@@ -250,8 +304,8 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify ManagedSegmentDeployment (VNI-and-status, DC-wide) and
-        ManagedSegmentVlan (local VLAN ID, per switch) records."""
+        """Verify ManagedSegmentDeployment (VNI-and-status, DC-wide), the segments' addressing (sized prefix from
+        the customer pool, gateway on the first address) and ManagedSegmentVlan (local VLAN ID, per switch) records."""
         logging.info("=== %s - Step 5: Verify Segment Deployments ===", SCENARIO_NAME)
 
         result = await fetch_segment_deployments(
@@ -280,6 +334,14 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
         assert not not_provisioning, f"Expected status 'provisioning', got {not_provisioning}"
 
         logging.info("Segment deployments verified: %d records, VNIs=%s", len(deployments), vnis)
+
+        addressing = await async_client_main.execute_graphql(
+            query=QUERY_SEGMENT_ADDRESSING,
+            variables={"names": sorted(EXPECTED_SEGMENT_PREFIX_LENGTH)},
+            branch_name=scenario_branch,
+        )
+        _assert_segment_addressing(scenario_branch, addressing)
+        logging.info("Segment addressing verified: %s", sorted(EXPECTED_SEGMENT_PREFIX_LENGTH.items()))
 
         # A local VLAN ID (ManagedSegmentVlan) is realized only where an
         # AppComponent instance is cabled to a switch (add_app_component_segment)
