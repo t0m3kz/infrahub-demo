@@ -184,6 +184,15 @@ def test_an_svi_of_another_segment_in_the_namespace_is_foreign_demand() -> None:
     assert state["leaf-b"]["foreign"] == []
 
 
+def test_the_instances_own_l3vni_svi_is_not_foreign_demand() -> None:
+    """The role-l3vni SVI (Vlan3903 for MANAGEMENT) is there because the device is a member of the instance."""
+    result = _healthy()
+    result["DcimVirtualInterface"]["edges"].append({"node": _svi("leaf-a", "Vlan3903", None, DC_VRF, role="l3vni")})
+    state = _state(result)
+    assert state["leaf-a"]["foreign"] == []
+    assert precondition_errors(state) == []
+
+
 def test_an_svi_without_an_address_is_foreign_not_a_crash() -> None:
     """An SVI that carries no address (no gateway) cannot belong to the segment."""
     result = _healthy()

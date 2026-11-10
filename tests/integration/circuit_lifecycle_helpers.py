@@ -12,6 +12,7 @@ from typing import Any
 SEGMENT_NAME = "infra-core-dns-ntp-p"
 SEGMENT_NAMESPACE = "MANAGEMENT"
 SVI_ROLE = "svi"
+L3VNI_ROLE = "l3vni"
 
 _HOST_CABLES_QUERY = """
 query ($hosts: [String]) {
@@ -114,7 +115,7 @@ def switches_of_host(result: dict[str, Any], host: str) -> set[str]:
 def parse_switch_vrf_state(result: dict[str, Any], devices: list[str]) -> dict[str, dict[str, Any]]:
     """device -> {vrf: id of the instance of the segment's namespace it is a member of or None, svis: {name: {id, vrf}}
     of the segment's SVIs, foreign: what else on the device demands the namespace (an SVI of another segment, an
-    address on another interface)}."""
+    address on another interface; not the instance's own role-l3vni SVI)}."""
     state: dict[str, dict[str, Any]] = {device: {"vrf": None, "svis": {}, "foreign": []} for device in devices}
     gateways = {
         gateway["id"]
@@ -136,6 +137,10 @@ def parse_switch_vrf_state(result: dict[str, Any], devices: list[str]) -> dict[s
             and ((node.get("ip_address") or {}).get("node") or {}).get("id") in gateways
         ):
             state[device]["svis"][name] = {"id": node["id"], "vrf": vrf.get("id")}
+            continue
+        if _value(node, "role") == L3VNI_ROLE:
+            # The instance's own L3 VNI SVI (VRF pass, VlanNNNN): it exists because the device is a member, it is
+            # not demand of another segment, and it goes with the membership.
             continue
         if SEGMENT_NAMESPACE in (_address_namespace(node), _namespace_name(vrf, "security_zone")):
             state[device]["foreign"].append(f"{name} (virtual)")
