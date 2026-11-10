@@ -68,16 +68,19 @@ async def fetch_tenant_services(client: InfrahubClient, branch: str) -> dict[str
     raw = await client.execute_graphql(query=QUERY_GET_TENANT_SERVICES)
     result = clean_data(raw)
 
-    firewall_contexts = [
-        {
-            "name": str(context.get("name") or ""),
-            "cluster": (context.get("cluster") or {}).get("name"),
-            "cluster_dcs": _deployed_dc_names((context.get("cluster") or {}).get("capabilities")),
-            "tenant": (context.get("tenant") or {}).get("name"),
-            "tenant_design": ((context.get("tenant") or {}).get("design") or {}).get("name"),
-        }
-        for context in result.get("ManagedFirewallContext", []) or []
-    ]
+    firewall_contexts = []
+    for node in _edge_nodes(raw.get("ManagedFirewallContext")):
+        cluster = _context_cluster(node)
+        tenant = _rel_node(node.get("tenant"))
+        firewall_contexts.append(
+            {
+                "name": str(_value(node.get("name")) or ""),
+                "cluster": cluster["name"],
+                "cluster_dcs": cluster["dcs"],
+                "tenant": _value(tenant.get("name")),
+                "tenant_design": _value(_rel_node(tenant.get("design")).get("name")),
+            }
+        )
 
     segment_deployments = [
         {
@@ -182,19 +185,46 @@ def _context_legs_and_ports(
     return legs, list(border_ports.values())
 
 
-def _cluster_dcs(cluster: dict[str, Any]) -> list[str]:
-    """The TopologyDataCenter names a raw HA cluster's physical members are deployed in (see _deployed_dc_names)."""
-    return _deployed_dc_names(
-        [
-            {
-                "deployment": {
-                    "typename": _rel_node(member.get("deployment")).get("__typename"),
-                    "name": _value(_rel_node(member.get("deployment")).get("name")),
+#: The HA pair kinds a service context's members are in (individual capabilities of each member).
+_HA_KINDS = frozenset({"ManagedFirewallHA", "ManagedLoadbalancerHA"})
+
+
+def _context_cluster(node: dict[str, Any]) -> dict[str, Any]:
+    """The HA pair of a raw service context, {"name", "member_ids", "dcs"}, read off its members (``shared_devices``).
+
+    A context is a shared capability and holds no HA edge: its pair is the ``ManagedFirewallHA`` /
+    ``ManagedLoadbalancerHA`` among its members' own ``capabilities`` (``name`` None, ``member_ids`` empty when they
+    name none or more than one). ``member_ids`` are the pair's own members, ``dcs`` the sorted TopologyDataCenter
+    names the context's members are deployed in (empty for a colocation zone or for virtual members).
+    """
+    members = _edge_nodes(node.get("shared_devices"))
+    pairs = {
+        str(cap["id"]): cap
+        for member in members
+        for cap in _edge_nodes(member.get("capabilities"))
+        if cap.get("__typename") in _HA_KINDS and cap.get("id")
+    }
+    pair = next(iter(pairs.values())) if len(pairs) == 1 else {}
+    return {
+        "name": _value(pair.get("name")),
+        "member_ids": sorted(str(device["id"]) for device in _edge_nodes(pair.get("capabilities"))),
+        "dcs": _deployed_dc_names(
+            [
+                {
+                    "deployment": {
+                        "typename": _rel_node(member.get("deployment")).get("__typename"),
+                        "name": _value(_rel_node(member.get("deployment")).get("name")),
+                    }
                 }
-            }
-            for member in _edge_nodes(cluster.get("capabilities"))
-        ]
-    )
+                for member in members
+            ]
+        ),
+    }
+
+
+def _exchange_zone(exchange: dict[str, Any], side: str) -> dict[str, Any]:
+    """The raw SecurityZone of a routed exchange's ``vrf_a`` or ``vrf_z`` (a ManagedVRF), {} when unset."""
+    return _rel_node(_rel_node(exchange.get(side)).get("security_zone"))
 
 
 async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
@@ -202,15 +232,18 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
 
     Returns:
         {"contexts": [{"id", "name", "vlan", "snat", "snat_namespace", "tenant", "cluster_dcs",
+                       "members", "member_ids",
                        "served": [{"name", "environment"}],
                        "legs": [{"interface", "device", "device_id", "address",
                                  "namespace", "vrf_type", "exchanges"}],
                        "border_ports": [{"id", "interface", "device", "role"}]}],
-         "exchanges": [{"id", "name", "security_zone_a", "namespace_a_type",
-                        "security_zone_z", "namespace_z_type", "gateway_id",
+         "exchanges": [{"id", "name", "namespace_a", "namespace_a_type",
+                        "namespace_z", "namespace_z_type", "gateway_id",
                         "gateway_name"}]}
 
-        ``legs`` and ``border_ports`` as _context_legs_and_ports returns them.
+        ``legs`` and ``border_ports`` as _context_legs_and_ports returns them; ``members`` / ``member_ids`` the names
+        and ids of the context's member devices (``shared_devices``). An exchange's ``namespace_a`` / ``namespace_z``
+        are the SecurityZone names of its ``vrf_a`` / ``vrf_z`` (the legacy key, like a leg's ``namespace``).
     """
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
@@ -230,7 +263,11 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
                     _rel_node(_rel_node(node.get("snat_address")).get("ip_namespace")).get("name")
                 ),
                 "tenant": _value(_rel_node(node.get("tenant")).get("name")),
-                "cluster_dcs": _cluster_dcs(_rel_node(node.get("cluster"))),
+                "cluster_dcs": _context_cluster(node)["dcs"],
+                "members": sorted(
+                    str(_value(member.get("name"))) for member in _edge_nodes(node.get("shared_devices"))
+                ),
+                "member_ids": sorted(str(member["id"]) for member in _edge_nodes(node.get("shared_devices"))),
                 "served": [
                     {"name": _value(served.get("name")), "environment": _value(served.get("environment"))}
                     for served in _edge_nodes(node.get("served_deployments"))
@@ -244,10 +281,10 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
         {
             "id": node["id"],
             "name": _value(node.get("name")),
-            "security_zone_a": _value(_rel_node(node.get("security_zone_a")).get("name")),
-            "namespace_a_type": _value(_rel_node(node.get("security_zone_a")).get("vrf_type")),
-            "security_zone_z": _value(_rel_node(node.get("security_zone_z")).get("name")),
-            "namespace_z_type": _value(_rel_node(node.get("security_zone_z")).get("vrf_type")),
+            "namespace_a": _value(_exchange_zone(node, "vrf_a").get("name")),
+            "namespace_a_type": _value(_exchange_zone(node, "vrf_a").get("vrf_type")),
+            "namespace_z": _value(_exchange_zone(node, "vrf_z").get("name")),
+            "namespace_z_type": _value(_exchange_zone(node, "vrf_z").get("vrf_type")),
             "gateway_id": _rel_node(node.get("gateway")).get("id"),
             "gateway_name": _value(_rel_node(node.get("gateway")).get("name")),
         }
@@ -339,7 +376,7 @@ async def fetch_loadbalancer_inventory(client: InfrahubClient, branch: str) -> l
     contexts: list[dict[str, Any]] = []
     for node in _edge_nodes(raw["ManagedLoadbalancerContext"]):
         legs, border_ports = _context_legs_and_ports(node)
-        cluster = _rel_node(node.get("cluster"))
+        cluster = _context_cluster(node)
         vip_prefix = _rel_node(node.get("vip_prefix"))
         vips = []
         for vip in _edge_nodes(node.get("vips")):
@@ -364,9 +401,9 @@ async def fetch_loadbalancer_inventory(client: InfrahubClient, branch: str) -> l
                 "name": _value(node.get("name")),
                 "vlan": _value(node.get("vlan_id")),
                 "tenant": _value(_rel_node(node.get("tenant")).get("name")),
-                "cluster": _value(cluster.get("name")),
-                "cluster_member_ids": sorted(member["id"] for member in _edge_nodes(cluster.get("capabilities"))),
-                "cluster_dcs": _cluster_dcs(cluster),
+                "cluster": cluster["name"],
+                "cluster_member_ids": cluster["member_ids"],
+                "cluster_dcs": cluster["dcs"],
                 "served": sorted(str(_value(d.get("name"))) for d in _edge_nodes(node.get("served_deployments"))),
                 "vip_prefix": _value(vip_prefix.get("prefix")),
                 "vip_prefix_namespace": _value(_rel_node(vip_prefix.get("ip_namespace")).get("name")),

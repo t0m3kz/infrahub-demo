@@ -78,11 +78,12 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value }",
     "ManagedSegmentVlan": "vlan_id { value } device { node { id } }",
-    # The VRF instances (one per hosting deployment and namespace) and the segment SVIs are untracked and converged by
-    # generators/helpers/vrf.py: a rerun that rebuilt an instance (new id), moved it to another topology or namespace,
+    # The VRF instances (one per hosting deployment and security zone) and the segment SVIs are untracked and converged by
+    # generators/helpers/vrf.py: a rerun that rebuilt an instance (new id), moved it to another topology or zone,
     # changed its members, or re-pointed an SVI (its address, the segment gateway, is in DcimInterface) is a diff.
     "ManagedVRF": (
-        "name { value } deployment { node { id } } namespace { node { id } } shared_devices { edges { node { id } } }"
+        "name { value } deployment { node { id } } security_zone { node { id } } "
+        "shared_devices { edges { node { id } } }"
     ),
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",
@@ -95,7 +96,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "TopologySessionCircuit": (
         "name { value } circuit_type { value } locations { edges { node { id } } } "
         "capabilities { edges { node { id capabilities { edges { node { id } } } } } } "
-        "security_zone { node { id } } password { node { id } } "
+        "vrf { node { id } } password { node { id } } "
         "link_prefix { node { id } } registered_prefixes { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",

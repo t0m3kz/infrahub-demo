@@ -221,21 +221,6 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
         "name": value("lb-dc10-PROD"),
         "vlan_id": value(3100),
         "tenant": {"node": None},
-        "cluster": {
-            "node": {
-                "name": value("lb-dc10-ha"),
-                "capabilities": {
-                    "edges": [
-                        {
-                            "node": {
-                                "id": "lb1",
-                                "deployment": {"node": {"__typename": "TopologyDataCenter", "name": value("DC10")}},
-                            }
-                        }
-                    ]
-                },
-            }
-        },
         "served_deployments": {
             "edges": [
                 {"node": {"id": "d2", "name": value("C008-P-DC10")}},
@@ -310,11 +295,29 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
             ]
         },
     }
+    # A context holds no HA edge: its pair is the ManagedLoadbalancerHA among its member's own capabilities, and
+    # its DC the member's deployment.
+    (member,) = node["shared_devices"]["edges"]
+    member["node"]["capabilities"] = {
+        "edges": [
+            {
+                "node": {
+                    "__typename": "ManagedLoadbalancerHA",
+                    "id": "ha1",
+                    "name": value("lb-dc10-ha"),
+                    "capabilities": {"edges": [{"node": {"id": "lb1"}}]},
+                }
+            },
+            {"node": {"__typename": "ManagedBGP"}},
+        ]
+    }
+    member["node"]["deployment"] = {"node": {"__typename": "TopologyDataCenter", "name": value("DC10")}}
     client = MagicMock()
     client.execute_graphql = AsyncMock(return_value={"ManagedLoadbalancerContext": {"edges": [{"node": node}]}})
 
     (context,) = await fetch_loadbalancer_inventory(client=client, branch="main")
 
+    assert context["cluster"] == "lb-dc10-ha"
     assert context["cluster_dcs"] == ["DC10"]
     assert context["cluster_member_ids"] == ["lb1"]
     assert context["served"] == ["C005-P-DC10", "C008-P-DC10"]

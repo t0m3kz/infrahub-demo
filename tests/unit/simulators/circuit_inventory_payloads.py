@@ -3,7 +3,8 @@
 Built on the simulator of the placement check (``circuit_data_payloads``, shaped like ``circuit_placement.gql``) and
 completed with what the inventory query selects on top: the carrier circuits' ``circuit_id`` and status, the owners (a
 circuit has none: the office locations carry them, as customers),
-each end device's deployment, the interface kind, the parent of a sub-interface and a handoff's key. No
+each end device's deployment, the interface kind, the parent of a sub-interface, a handoff's key and a declared
+tunnel's VRF. No
 address is set (nothing generated it offline): ``addresses`` puts them on named ports.
 """
 
@@ -12,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from tests.integration.demo_data import declared, distinct, name
+from tests.unit.external_vrf_peers_helpers import _raw_vrf
 from tests.unit.simulators.circuit_data_payloads import (
     ALL_DEMO,
     CARRIER,
@@ -84,6 +86,7 @@ def inventory_payload(
         physical.append(circuit)
 
     passwords = {name(h): h.item["password"] for h in session_circuits(HANDOFF)}
+    tunnel_vrfs = {name(t): t.item.get("vrf") for t in session_circuits(TUNNEL)}
     virtual = []
     for circuit_type in (TUNNEL, INTERCONNECT, HANDOFF):
         for edge in payloads[SESSION]["edges"]:
@@ -92,6 +95,10 @@ def inventory_payload(
                 continue
             circuit["__typename"] = SESSION
             named_owners(circuit)
+            if circuit_type == TUNNEL and tunnel_vrfs.get(circuit["name"]["value"]):
+                # A declared tunnel that names its VRF (the partner tunnel: its registered range is routed there).
+                vrf = tunnel_vrfs[circuit["name"]["value"]]
+                circuit["vrf"] = {"node": _raw_vrf(str(vrf[1]), str(vrf[0]))}
             if circuit_type == HANDOFF:
                 # An authored handoff names its key.
                 key = passwords.get(circuit["name"]["value"])

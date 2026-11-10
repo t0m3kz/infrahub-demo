@@ -88,7 +88,9 @@ async def test_every_kind_is_in_the_inventory_with_its_own_fields(monkeypatch: p
     # a cable-carried handoff has no carrier circuit but a cable
     assert sdwan["carrier"] == [] and all(end["cabled"] for end in sdwan["end_nodes"])
     for tunnel in (c for c in data["virtual"] if c["circuit_type"] == TUNNEL_TYPE):
-        assert tunnel["security_zone"] is None and tunnel["password"] is None
+        # Only the partner tunnel names a VRF (the zone its registered range is routed in).
+        assert tunnel["security_zone"] == ALL_DEMO_VIRTUAL_CIRCUITS[tunnel["name"]]["security_zone"]
+        assert tunnel["password"] is None
         assert tunnel["owner_org"]
 
 
@@ -351,7 +353,7 @@ def test_the_snapshot_covers_the_addresses_sessions_and_keys_the_generator_write
         assert field in cable
     circuits = TOPOLOGY_SNAPSHOT_KINDS["TopologySessionCircuit"]
     assert "tunnel_id" not in circuits and "carrier_circuits" not in circuits
-    for field in ("circuit_type { value }", "locations {", "security_zone", "registered_prefixes"):
+    for field in ("circuit_type { value }", "locations {", "vrf { node { id } }", "registered_prefixes"):
         assert field in circuits
     assert "ip_namespace" not in circuits
 

@@ -53,7 +53,6 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from checks.firewall import CheckFirewall
-from generators.protocols import DcimPhysicalDevice
 from tasks import ALL_DEMO_BRANCH
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
@@ -139,23 +138,17 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         contexts = [edge["node"] for edge in (deployment.get("serving_firewall_contexts") or {}).get("edges", [])]
         assert len(contexts) == 1, f"expected one serving firewall context for '{SOURCE_SEGMENT}', got {contexts}"
         context = contexts[0]
-        cluster_id = ((context.get("cluster") or {}).get("node") or {}).get("id")
-        assert cluster_id, f"no serving firewall context with a cluster for '{SOURCE_SEGMENT}'"
+        # A context is a shared capability: the firewalls that enforce it are its members.
+        members = sorted(
+            edge["node"]["name"]["value"] for edge in (context.get("shared_devices") or {}).get("edges", [])
+        )
+        assert members, f"no firewall device is a member of the context serving '{SOURCE_SEGMENT}'"
         metro = (deployment.get("parent") or {}).get("node") or {}
         zone_firewalls = sorted(
             device["node"]["name"]["value"]
             for zone in (edge["node"] for edge in (metro.get("children") or {}).get("edges", []))
             for device in (zone.get("devices") or {}).get("edges", [])
         )
-
-        devices = await async_client_main.filters(
-            kind=DcimPhysicalDevice,
-            role__value="internal-firewall",
-            capabilities__ids=[cluster_id],
-            branch=scenario_branch,
-        )
-        assert devices, f"no firewall device in cluster {cluster_id} on branch '{scenario_branch}'"
-        members = sorted(device.name.value for device in devices)
 
         firewalls = await async_client_main.execute_graphql(query=FIREWALLS_QUERY, branch_name=scenario_branch)
         platform_by_name = {

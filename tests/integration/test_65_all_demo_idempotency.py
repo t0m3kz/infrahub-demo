@@ -32,6 +32,8 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from tasks import ALL_DEMO_BRANCH
+from utils.data_cleaning import clean_data
+from utils.service_contexts import leg_interfaces
 
 from .all_demo_circuit_constants import (
     ALL_DEMO_CLOUD_HANDOFF_PEERINGS,
@@ -159,17 +161,36 @@ query {
         id
         name { value }
         vlan_id { value }
-        cluster { node { id } }
         served_deployments { edges { node { id } } }
         snat_address { node { id address { value } } }
-        # The members' transit sub-interfaces and the physical service ports tagged with the
-        # context (a DC's border-leaf ports, the colocation metro's edge ports).
-        capabilities {
+        # The members (a context is a shared capability, with no HA or interface edge) and what their legs are
+        # derived from (utils/service_contexts.py leg_interfaces): the transit sub-interfaces of the first uplink.
+        shared_devices {
           edges {
             node {
+              __typename
               id
-              name { value }
-              ... on DcimVirtualInterface { ip_address { node { id address { value } } } }
+              role { value }
+              shared_capabilities {
+                edges { node { __typename id ... on ManagedSecurityContext { vlan_id { value } } } }
+              }
+              ... on DcimDevice {
+                interfaces {
+                  edges {
+                    node {
+                      __typename
+                      id
+                      name { value }
+                      role { value }
+                      ... on DcimVirtualInterface {
+                        vlan_id { value }
+                        parent_interface { node { name { value } } }
+                        ip_address { node { id address { value } } }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -181,8 +202,8 @@ query {
       node {
         id
         name { value }
-        namespace_a { node { id } }
-        namespace_z { node { id } }
+        vrf_a { node { id } }
+        vrf_z { node { id } }
         gateway { node { id } }
       }
     }
@@ -231,6 +252,23 @@ def _nodes(result: dict[str, Any], kind: str) -> list[dict[str, Any]]:
     return [edge["node"] for edge in result[kind]["edges"]]
 
 
+def _context_legs(context: dict[str, Any]) -> tuple[tuple[Any, ...], ...]:
+    """The legs of a raw firewall context, (interface id, name, address id, address) sorted: the transit
+    sub-interfaces of its members, derived (utils/service_contexts.py leg_interfaces), a context has no interface edge."""
+    return tuple(
+        sorted(
+            (
+                leg["id"],
+                leg.get("name"),
+                (leg.get("ip_address") or {}).get("id"),
+                (leg.get("ip_address") or {}).get("address"),
+            )
+            for member in clean_data([edge["node"] for edge in (context.get("shared_devices") or {}).get("edges", [])])
+            for leg in leg_interfaces(member).get(context["id"], [])
+        )
+    )
+
+
 def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Kind -> {id: comparable state}, so a diff names the object that moved."""
     return {
@@ -277,22 +315,12 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
             n["id"]: (
                 _value(n, "name"),
                 _value(n, "vlan_id"),
-                _peer_id(n, "cluster"),
+                _peer_ids(n, "shared_devices"),
                 _peer_ids(n, "served_deployments"),
                 # The SNAT /32: same address object and value after every rerun.
                 _peer_id(n, "snat_address"),
                 ((n.get("snat_address") or {}).get("node") or {}).get("address", {}).get("value"),
-                tuple(
-                    sorted(
-                        (
-                            edge["node"]["id"],
-                            _value(edge["node"], "name"),
-                            _peer_id(edge["node"], "ip_address"),
-                            ((edge["node"].get("ip_address") or {}).get("node") or {}).get("address", {}).get("value"),
-                        )
-                        for edge in (n.get("capabilities") or {}).get("edges", [])
-                    )
-                ),
+                _context_legs(n),
             )
             for n in _nodes(result, "ManagedFirewallContext")
         },
@@ -300,8 +328,8 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "TopologyRoutedExchange": {
             n["id"]: (
                 _value(n, "name"),
-                _peer_id(n, "security_zone_a"),
-                _peer_id(n, "security_zone_z"),
+                _peer_id(n, "vrf_a"),
+                _peer_id(n, "vrf_z"),
                 _peer_id(n, "gateway"),
             )
             for n in _nodes(result, "TopologyRoutedExchange")

@@ -166,11 +166,14 @@ fragment CircuitCarrier on ManagedGenericInterfaces {
   }
 }
 
+# The generic has no `name`: every location is a TopologyDeployment.
 fragment CircuitLocation on TopologyConnectableLocation {
   id
   __typename
-  name {
-    value
+  ... on TopologyDeployment {
+    name {
+      value
+    }
   }
   ... on TopologyColocationZone {
     parent {
@@ -319,8 +322,11 @@ fragment CircuitEndDevice on DcimDevice {
       node {
         id
         __typename
-        name {
-          value
+        # TopologyApplianceHosting has no `name`: every host is a TopologyDeployment.
+        ... on TopologyDeployment {
+          name {
+            value
+          }
         }
         ... on TopologyVirtualColocation {
           parent {

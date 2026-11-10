@@ -21,12 +21,29 @@ from tests.unit.integration_scenario_helpers_helpers import _deployment
 
 
 def _firewall_context(name: str, dc: str, kind: str = "TopologyDataCenter", tenant: str | None = None) -> dict:
-    """A raw ManagedFirewallContext edge whose cluster's two firewalls sit in ``dc``."""
-    member = {"node": {"deployment": _deployment(dc, kind)}}
+    """A raw ManagedFirewallContext edge whose two member firewalls (``shared_devices``) sit in ``dc``, both in
+    the HA pair ``<name>-ha`` (a context holds no HA edge: the pair is among the members' own capabilities)."""
+    ha = {
+        "__typename": "ManagedFirewallHA",
+        "id": f"{name}-ha",
+        "name": {"value": f"{name}-ha"},
+        "capabilities": {"edges": [{"node": {"id": f"{name}-fw{n}"}} for n in (1, 2)]},
+    }
+    members = [
+        {
+            "node": {
+                "id": f"{name}-fw{n}",
+                "capabilities": {"edges": [{"node": ha}]},
+                "deployment": _deployment(dc, kind),
+            }
+        }
+        for n in (1, 2)
+    ]
     return {
         "node": {
+            "id": name,
             "name": {"value": name},
-            "cluster": {"node": {"name": {"value": f"{name}-ha"}, "capabilities": {"edges": [member, member]}}},
+            "shared_devices": {"edges": members},
             "tenant": {"node": {"__typename": "TopologyCustomerDC", "name": {"value": tenant}}}
             if tenant
             else {"node": None},
@@ -82,6 +99,7 @@ async def test_fetch_tenant_services_resolves_cluster_dcs(tenant_services_client
         "fw-fr-shared": [],
         "fw-dc6-shared": ["DC6"],
     }
+    assert {c["name"]: c["cluster"] for c in services["firewall_contexts"]}["fw-dc10-c007"] == "fw-dc10-c007-ha"
     assert [(leg["deployment"], leg["deployment_is_dc"]) for leg in services["segment_deployments"]] == [
         ("DC10", True),
         ("FR", False),
@@ -300,7 +318,6 @@ async def test_fetch_transit_inventory_tags_edge_service_ports_like_border_leaf_
                 member("fw-3", "p3", "server-1", "server"),
             ]
         },
-        "cluster": {"node": {"capabilities": {"edges": []}}},
         "served_deployments": {"edges": []},
     }
     client = MagicMock()

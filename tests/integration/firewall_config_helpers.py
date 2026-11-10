@@ -52,8 +52,9 @@ EXPECTED_DESTINATION_CIDRS = ("10.10.0.0/16", "198.18.0.0/24")
 EXPECTED_RULE_NAMES = ("nordix-prod-to-aws", "nordix-prod-to-partner-acme", "nordix-prod-to-saas-zscaler")
 
 
-# The policy's source segment -> its colocation deployment -> the serving
-# contexts' HA clusters (one per zone of its metro with firewalls), plus the firewalls of the metro's zones.
+# The policy's source segment -> its colocation deployment -> the serving contexts (one per zone of its metro with
+# firewalls) and their members (a context is a shared capability: its devices are its `shared_devices`), plus the
+# firewalls of the metro's zones.
 SOURCE_SEGMENT = "c001-nordix-prod-p"
 
 SERVING_CLUSTER_QUERY = """
@@ -65,7 +66,9 @@ query ($segment: String!) {
           edges {
             node {
               ... on TopologyCustomerColocation {
-                serving_firewall_contexts { edges { node { name { value } cluster { node { id } } } } }
+                serving_firewall_contexts {
+                  edges { node { name { value } shared_devices { edges { node { name { value } } } } } }
+                }
                 parent {
                   node {
                     ... on TopologyColocationMetro {

@@ -266,7 +266,8 @@ class VirtualCircuitExpectation(TypedDict):
     #: is a sub-interface), in end order, each once; never declared. Empty when the carrier is a cable or there is none.
     #: The derived list is compared sorted in test_02 (declared ones only: the generated INET-<office> is in no row).
     carrier: tuple[str, ...]
-    #: The Handoff's explicit routing zone; None for the other kinds.
+    #: The routing zone of the circuit's `vrf`: a Handoff's, and the partner tunnel's (the data names its VRF, the
+    #: zone its registered range is routed in); None for the others.
     security_zone: str | None
 
 
@@ -323,7 +324,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "locations": ("C001-OFFICE", "FR2"),
         "ends": (("EQX-FR2-SDWAN-GW1", "eth1"), ("EXT-ACME-EDGE1", "et-0/0/0")),
         "carrier": ("INET-LUMEN-EQXFR2-GW", "INET-ACME-COGENT"),
-        "security_zone": None,
+        "security_zone": "PROD",
     },
     # The DCI: ends = the fibre's two ports, locations = the fibre's two facilities.
     **{

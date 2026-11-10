@@ -19,31 +19,6 @@ query GetLoadbalancerInventory {
             }
           }
         }
-        cluster {
-          node {
-            id
-            name {
-              value
-            }
-            capabilities {
-              edges {
-                node {
-                  id
-                  ... on DcimPhysicalDevice {
-                    deployment {
-                      node {
-                        __typename
-                        name {
-                          value
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
         served_deployments {
           edges {
             node {
@@ -82,6 +57,50 @@ query GetLoadbalancerInventory {
               }
               role {
                 value
+              }
+              # The HA pair of the member (a context holds no HA edge) and where it stands.
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    ... on ManagedFirewallHA {
+                      id
+                      name {
+                        value
+                      }
+                      capabilities {
+                        edges {
+                          node {
+                            id
+                          }
+                        }
+                      }
+                    }
+                    ... on ManagedLoadbalancerHA {
+                      id
+                      name {
+                        value
+                      }
+                      capabilities {
+                        edges {
+                          node {
+                            id
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on DcimPhysicalDevice {
+                deployment {
+                  node {
+                    __typename
+                    name {
+                      value
+                    }
+                  }
+                }
               }
               shared_capabilities {
                 edges {

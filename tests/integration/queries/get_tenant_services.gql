@@ -5,24 +5,39 @@ query GetTenantServices {
         name {
           value
         }
-        cluster {
-          node {
-            name {
-              value
-            }
-            # Member firewalls' deployment: the DC (or colocation metro) the
-            # cluster sits in, so a check can scope contexts to its own DCs.
-            capabilities {
-              edges {
-                node {
-                  ... on DcimPhysicalDevice {
-                    deployment {
-                      node {
-                        __typename
-                        name {
-                          value
+        id
+        # The member firewalls (a context is a shared capability with no HA edge): the HA pair each is in, and the
+        # DC (or colocation zone) it stands in, so a check can scope contexts to its own DCs.
+        shared_devices {
+          edges {
+            node {
+              id
+              capabilities {
+                edges {
+                  node {
+                    __typename
+                    ... on ManagedFirewallHA {
+                      id
+                      name {
+                        value
+                      }
+                      capabilities {
+                        edges {
+                          node {
+                            id
+                          }
                         }
                       }
+                    }
+                  }
+                }
+              }
+              ... on DcimPhysicalDevice {
+                deployment {
+                  node {
+                    __typename
+                    name {
+                      value
                     }
                   }
                 }

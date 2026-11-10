@@ -18,6 +18,7 @@ from tasks import ALL_DEMO_BRANCH
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_addresses, transit_vlan
 from utils.limits import (
+    DEFAULT_NAMESPACE,
     FW_CONTEXT_VLAN_END,
     FW_CONTEXT_VLAN_START,
     LB_CONTEXT_VLAN_END,
@@ -375,7 +376,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     ) -> None:
         """Each context with an INTERNET leg owns exactly one public SNAT /32.
 
-        The address lives in the INTERNET namespace, inside the FW-SNAT-INTERNET-IPv4
+        The address is allocated in the builtin IPAM namespace (the SecurityZone, not IPAM, is the routing
+        authority), inside the FW-SNAT-INTERNET-IPv4
         block (ALL_DEMO_SNAT_POOL_PREFIX), is a /32 and is distinct per context, the
         FR2 colocation zone's included (it must not reuse a DC's address).
         """
@@ -407,7 +409,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{label}: snat_address {snat} is not a /32")
             if interface.ip not in pool:
                 errors.append(f"{label}: snat_address {snat} is outside {ALL_DEMO_SNAT_POOL_PREFIX}")
-            if context["snat_namespace"] != "INTERNET":
+            if context["snat_namespace"] != DEFAULT_NAMESPACE:
                 errors.append(f"{label}: snat_address {snat} is in namespace '{context['snat_namespace']}'")
             if str(interface.ip) in seen:
                 errors.append(f"{label}: snat_address {snat} is also the one of {seen[str(interface.ip)]}")
@@ -440,7 +442,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         a /29 of LB-Leg-<NS> with the members at .5/.6 in name order on
         `<uplink>.<transit_vlan>` sub-interfaces of the cluster's members; both
         members' border-leaf `load-balancer` ports tagged with it; a /26 VIP
-        range of LB-VIP-<NS> in the same namespace. Scoped to the 30_all DCs.
+        range of LB-VIP-<NS> (allocated in the builtin IPAM namespace). Scoped to the 30_all DCs.
         """
         logging.info("=== %s - Step 3d: Load-balancer contexts ===", SCENARIO_NAME)
 
@@ -563,7 +565,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(
                     f"{label}: VIP prefix {vip_range} is not a /{LB_VIP_PREFIXLEN} of {ALL_DEMO_LB_VIP_RESOURCES[namespace]}"
                 )
-            if context["vip_prefix_namespace"] != namespace:
+            # IPAM allocates in the builtin namespace; the tenant VRF of the range is its pool's (checked above).
+            if context["vip_prefix_namespace"] != DEFAULT_NAMESPACE:
                 errors.append(f"{label}: VIP prefix {vip_range} is in namespace '{context['vip_prefix_namespace']}'")
             if vip_range in vip_ranges:
                 errors.append(f"{label}: VIP prefix {vip_range} is also the one of {vip_ranges[vip_range]}")
