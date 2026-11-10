@@ -11,3 +11,4 @@ spec:
       account: "c900-azure-prod"
       customer_name: "demo-azure"
       parent: "westeurope"
+      design: "M"

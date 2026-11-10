@@ -54,11 +54,13 @@ The pod `DC-KTW1-9-POD-1` still holds the spine, leaves and servers; border leav
 
 ### C900 Warsaw dedicated internal firewall: declarative service
 
-`C900-P-DC-WAW1` requests `M_INTERNAL_DC`: dedicated **internal** firewall appliances, not a dedicated load balancer.
+`C900-P-DC-WAW1` requests `M_INTERNAL`: dedicated **internal** firewall appliances, not a dedicated load balancer.
 The network entitlement allows six segments, twelve 25G and four 100G host ports (the existing WAW workload uses
 three 100G ports). The physical chassis and their existing shared HA/context remain authored and are never deleted.
 
-The four standard bootstrap tiers are unchanged. A demo may define a valid custom template earlier in its own
+The standard bootstrap tiers (S, M, L and XL, in each of the data center, colocation and cloud template kinds) are
+unchanged; every footprint states one as its required `design`, the smallest that holds its segments (and, for a cloud
+footprint, the virtual networks of its account in its region). A demo may define a valid custom template earlier in its own
 numbered files (`00_common/00_global/05_customer_designs.yml` here); it cannot borrow one from an unrelated demo.
 The sample supplies `dc-waw1-management-pool` and `dc-waw1-fw-context-vlan-pool`; it does not run `add_dc` over the
 authored fabric. Management reserves `172.16.0.0/22` in the bootstrap `default` namespace's `172.16.0.0/18` range.

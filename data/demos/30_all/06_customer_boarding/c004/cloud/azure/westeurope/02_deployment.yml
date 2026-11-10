@@ -10,4 +10,5 @@ spec:
       account: "peakora-azure-prod"
       customer_name: "peakora-azure"
       parent: "westeurope"
+      design: "S"
       member_of_groups: [customer_deployments_cloud]

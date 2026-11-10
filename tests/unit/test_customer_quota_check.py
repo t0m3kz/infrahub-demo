@@ -1,5 +1,8 @@
 """Unit tests for CheckCustomerQuota (segments and host-facing ports of a DC footprint against its design).
 
+The colocation and cloud footprints, the address block, the cloud segment block and the mixed-kind warning are in
+test_customer_quota_check_kinds.py.
+
 The payloads are raw GraphQL responses shaped like queries/validation/customer_quota.gql; ``validate`` runs them
 through ``clean_data``.
 """
@@ -29,18 +32,20 @@ def _check() -> Any:
     findings: list[dict[str, Any]] = []
     check._captured = findings
     check.log_error = lambda **kwargs: findings.append(kwargs)
+    check._warnings = []
+    check.log_warning = lambda message: check._warnings.append(message)
     return check
 
 
 def _footprint(
     name: str = "C005-P-DC10",
     dc: str = "DC10",
-    design: str | None = "M_DC",
+    design: str = "M",
     max_segments: int = 2,
     ports_25g: int = 4,
     ports_100g: int = 0,
 ) -> dict[str, Any]:
-    """One TopologyCustomerDC row, with its design's numbers (design=None: no design)."""
+    """One TopologyCustomerDC row, with its design's numbers."""
     return {
         "node": {
             "id": f"fp-{name}",
@@ -54,9 +59,7 @@ def _footprint(
                     "ports_25g": _v(ports_25g),
                     "ports_100g": _v(ports_100g),
                 }
-            }
-            if design
-            else {"node": None},
+            },
         }
     }
 
@@ -124,7 +127,10 @@ def _segment(
 def _vxlan(segment: dict[str, Any]) -> dict[str, Any]:
     """The segment as a ManagedVxlanSegment row naming its footprints."""
     node = {k: v for k, v in segment["node"].items() if k not in ("_footprints", "_ports")}
-    named = [{"node": {"id": f"fp-{name}", "name": _v(name)}} for name in segment["node"]["_footprints"]]
+    named = [
+        {"node": {"id": f"fp-{name}", "__typename": "TopologyCustomerDC", "name": _v(name)}}
+        for name in segment["node"]["_footprints"]
+    ]
     return {"node": {**node, "customer_deployments": {"edges": named}}}
 
 
@@ -179,7 +185,7 @@ class TestSegmentQuota:
         assert len(findings) == 1
         message = findings[0]["message"]
         assert "'C005-P-DC10'" in message and "3 segments" in message and "over the 2" in message
-        assert "'M_DC'" in message and "max_segments" in message
+        assert "'M'" in message and "max_segments" in message
         assert findings[0]["object_type"] == "TopologyCustomerDC"
         assert findings[0]["object_id"] == "fp-C005-P-DC10"
 
@@ -323,12 +329,6 @@ class TestPortQuota:
 class TestNotMetered:
     """What is out of scope produces nothing."""
 
-    def test_footprint_without_design_is_skipped(self) -> None:
-        """No design, no numbers: any usage passes."""
-        ports = [_port(f"p{i}") for i in range(20)]
-        segments = [_segment(f"s{i}", ["C005-P-DC10"], *ports) for i in range(20)]
-        assert _run([_footprint(design=None)], segments) == []
-
     def test_segment_naming_an_unmetered_footprint_is_ignored(self) -> None:
         """A colocation/cloud/office footprint is not in the DC list: its segments touch no DC's count."""
         segments = [_segment("s1", ["C011-P-NY"], _port("a"))]
@@ -365,7 +365,9 @@ def test_query_reads_the_ports_from_the_port_side() -> None:
     assert " segments { edges" not in compact
 
 
-@pytest.mark.parametrize("field", ["max_segments", "ports_25g", "ports_100g"])
+@pytest.mark.parametrize(
+    "field", ["max_segments", "ports_25g", "ports_100g", "max_virtual_networks", "address_prefix_length"]
+)
 def test_query_selects_each_number_the_design_carries(field: str) -> None:
     """The query reads every quota attribute of the design."""
     query = (_ROOT / "queries" / "validation" / "customer_quota.gql").read_text()
@@ -402,7 +404,7 @@ def _all_demo_payload() -> dict[str, Any]:
         _footprint(
             name(fp),
             str(fp.item["parent"]).upper(),
-            fp.item.get("design"),
+            str(fp.item["design"]),
             **{k: templates[fp.item["design"]][k] for k in ("max_segments", "ports_25g", "ports_100g")},
         )
         for fp in distinct(declared("TopologyCustomerDC", _ALL_DEMO))

@@ -8,6 +8,7 @@ hold a design relation (the VLAN, VNI and ASN bands that must not overlap) are c
 from __future__ import annotations
 
 import ast
+import ipaddress
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -439,3 +440,39 @@ class TestSharedVlanBand:
     def test_the_bands_are_ordered_and_do_not_overlap(self) -> None:
         assert limits.CUSTOMER_VLAN_ID_MIN < limits.LOCAL_VLAN_ID_MAX < limits.SHARED_VLAN_ID_MIN
         assert limits.SHARED_VLAN_ID_MAX == limits.CUSTOMER_VLAN_ID_MAX < limits.FW_CONTEXT_VLAN_START
+
+
+class TestSegmentSizing:
+    """The sizing of a tenant segment's prefix mirrors the schema and the tenant pools."""
+
+    def test_the_default_length_is_the_tenant_pools_default(self, prefix_pools: dict[str, dict[str, Any]]) -> None:
+        """Change ``SEGMENT_PREFIX_LENGTH_DEFAULT`` in utils/limits.py, or default_prefix_length in 23b_tenant_pools.yml."""
+        for namespace in ("PROD", "NONPROD"):
+            pool = prefix_pools[tenant_pool_name(namespace)]
+            assert pool["default_prefix_length"] == limits.SEGMENT_PREFIX_LENGTH_DEFAULT
+
+    def test_the_host_count_range_is_the_schema_parameters(self) -> None:
+        """Change ``SEGMENT_HOST_COUNT_MAX`` in utils/limits.py, or the ``parameters`` of host_count in the schema."""
+        definition = attribute("ManagedNetworkSegment", "host_count")
+        assert definition is not None
+        assert definition["parameters"] == {"min_value": 1, "max_value": limits.SEGMENT_HOST_COUNT_MAX}
+
+    def test_the_bounds_are_ordered_and_the_default_is_inside_them(self) -> None:
+        """A /22 is the largest segment, a /29 the smallest, and the default /24 is between."""
+        assert (
+            limits.SEGMENT_PREFIX_LENGTH_MIN < limits.SEGMENT_PREFIX_LENGTH_DEFAULT < limits.SEGMENT_PREFIX_LENGTH_MAX
+        )
+        assert (
+            limits.SEGMENT_HOST_COUNT_MAX
+            == 2 ** (32 - limits.SEGMENT_PREFIX_LENGTH_MIN) - limits.SEGMENT_RESERVED_ADDRESSES
+        )
+
+    def test_the_tenant_supernets_hold_the_largest_tier_block(self, prefix_pools: dict[str, dict[str, Any]]) -> None:
+        """Every tier block (/19 at most) fits the tenant supernets the customer pools are carved from."""
+        largest = max(
+            2 ** (24 - row["address_prefix_length"])
+            for row in _bootstrap_objects(Path(__file__).parents[2], "TopologyCustomerTemplateDC")
+        )
+        for namespace in ("PROD", "NONPROD"):
+            supernet = ipaddress.ip_network(prefix_pools[tenant_pool_name(namespace)]["resources"]["data"][0]["prefix"])
+            assert supernet.num_addresses // 256 >= largest

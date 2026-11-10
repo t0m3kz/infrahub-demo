@@ -10,5 +10,5 @@ spec:
     - owner: "MSSG1"
       environment: "p"
       parent: "DC14"
-      design: "M_DC"
+      design: "M"
       member_of_groups: [customer_deployments_dc]

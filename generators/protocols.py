@@ -74,9 +74,11 @@ class TopologyCustomer(CoreNode):
 
 
 class TopologyCustomerTemplate(CoreNode):
+    address_prefix_length: Integer
     dedicated_firewall: Boolean
     dedicated_loadbalancer: Boolean
     description: StringOptional
+    max_segments: Integer
     name: String
 
 
@@ -249,6 +251,7 @@ class ManagedNetworkSegment(CoreNode):
     customer_name: String
     description: StringOptional
     environment: Dropdown
+    host_count: IntegerOptional
     isolation_mode: Dropdown
     name: String
     routing_tag: IntegerOptional
@@ -508,6 +511,7 @@ class TopologyCustomerCloud(
     customer_name: String
     name: StringOptional
     account: RelationshipAttribute[CloudAccount]
+    design: RelationshipAttribute[TopologyCustomerTemplateCloud]
     network_segments: RelationshipManager[CloudNetworkSegment]
 
 
@@ -515,6 +519,7 @@ class TopologyCustomerColocation(
     TopologyCustomer, TopologyEnvironmentScoped, TopologyDeployment, TopologyConnectableLocation, ManagedTenantScoped
 ):
     name: StringOptional
+    design: RelationshipAttribute[TopologyCustomerTemplateColo]
     network_segments: RelationshipManager[ManagedVxlanSegment]
     serving_firewall_contexts: RelationshipManager[ManagedFirewallContext]
 
@@ -546,8 +551,15 @@ class TopologyCustomerOffice(
     owner: RelationshipAttribute[OrganizationEntity]
 
 
+class TopologyCustomerTemplateCloud(TopologyCustomerTemplate):
+    max_virtual_networks: Integer
+
+
+class TopologyCustomerTemplateColo(TopologyCustomerTemplate):
+    pass
+
+
 class TopologyCustomerTemplateDC(TopologyCustomerTemplate):
-    max_segments: Integer
     ports_100g: Integer
     ports_25g: Integer
 

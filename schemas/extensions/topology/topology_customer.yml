@@ -18,7 +18,8 @@ version: "1.0"
 #
 # TopologyCustomerTemplate is a second, unrelated generic: a reusable
 # service-tier blueprint, not part of the topology hierarchy (no parent/
-# children). A CustomerDC references one as its `design`.
+# children). Every footprint (CustomerDC, CustomerColocation, CustomerCloud)
+# references one template of its own kind as its required `design`.
 # ============================================================================
 
 generics:
@@ -133,10 +134,11 @@ generics:
             label: Testing
             color: "#D2B4DE"
 
-  # Naming convention for template rows: {SIZE}_{TYPE} (S_DC, M_DC, L_DC,
-  # XL_DC) — S and M use the shared firewall/load balancer capacity, L and XL
-  # are dedicated. The name is a label only; the generators and checks read the
-  # flags and numbers the template carries.
+  # Tier names are S, M, L and XL for every template kind (the kinds are
+  # distinct nodes, so the names do not clash). In the DC kind S and M use the
+  # shared firewall/load balancer capacity, L and XL are dedicated. The name is
+  # a label only; the generators and checks read the flags and numbers the
+  # template carries.
   - name: CustomerTemplate
     namespace: Topology
     description: "Reusable service-tier blueprint for a customer deployment: dedicated devices and entitlements"
@@ -178,6 +180,29 @@ generics:
         default_value: false
         order_weight: 310
 
+      # Network-segment quota of the footprint, enforced by checks/customer_quota.py (an ERROR above the limit; not
+      # used for sizing).
+      - name: max_segments
+        kind: Number
+        label: "Max Segments"
+        description: "Network-segment quota of the footprint, enforced by checks/customer_quota.py"
+        optional: false
+        parameters:
+          min_value: 1
+        order_weight: 320
+
+      # DC and colocation: the block the customer's prefix pool is carved from the environment's tenant pool in
+      # (generators/topology/segment_ports.py); a segment takes a prefix out of it, sized from its host_count.
+      - name: address_prefix_length
+        kind: Number
+        label: "Address Block Prefix Length"
+        description: "Customer block carved from the tenant pool (DC, colocation); cloud: routed range of the footprint, not its segments"  # yamllint disable-line rule:line-length
+        optional: false
+        parameters:
+          min_value: 16
+          max_value: 28
+        order_weight: 325
+
 nodes:
   - name: CustomerDC
     namespace: Topology
@@ -217,7 +242,7 @@ nodes:
         label: "DC Design"
         cardinality: one
         kind: Attribute
-        optional: true
+        optional: false
         order_weight: 220
 
   - name: CustomerColocation
@@ -252,6 +277,14 @@ nodes:
           jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
+    relationships:
+      - name: design
+        peer: TopologyCustomerTemplateColo
+        label: "Colocation Design"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 220
 
   # A customer's office: exactly one per customer, directly under TopologyLabel
   # ("Campus and Office") with no grouping node in between. Not a
@@ -448,16 +481,22 @@ nodes:
         identifier: customer_cloud__account
         order_weight: 1300
         description: "The one cloud account of this footprint (same owner, same region); one footprint per account"
+      - name: design
+        peer: TopologyCustomerTemplateCloud
+        label: "Cloud Design"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 220
 
-  # The DC customer's service tier, referenced by a CustomerDC's `design`.
-  # Naming convention {SIZE}_DC: S and M share the firewall/load balancer
-  # capacity, L and XL are dedicated. The numbers below live once, in the
-  # template rows (data/bootstrap/21_customer_templates.yml), and are
-  # enforced by checks/customer_quota.py; the dedicated flags are read by
+  # The service tier of a customer footprint, referenced by the footprint's `design`: one kind per facility
+  # (data center, colocation, cloud), tiers S, M, L and XL in each. The numbers live once, in the template rows
+  # (data/bootstrap/21_customer_templates.yml); max_segments and the ports are enforced by checks/customer_quota.py,
+  # the address block by generators/topology/segment_ports.py (the customer's prefix pool), the dedicated flags by
   # generators/firewall_context.py.
   - name: CustomerTemplateDC
     namespace: Topology
-    description: "Data center customer service tier: dedicated devices, segment quota, port entitlement (S/M shared, L/XL dedicated)"  # yamllint disable-line rule:line-length
+    description: "Data center customer service tier: dedicated devices, segment quota, ports, address block (S/M shared, L/XL dedicated)"  # yamllint disable-line rule:line-length
     label: "Customer Template (Data Center)"
     icon: "mdi:file-document-edit-outline"
     inherit_from:
@@ -471,23 +510,12 @@ nodes:
     uniqueness_constraints:
       - [name__value]
     attributes:
-      # Network-segment quota of the footprint, enforced by
-      # checks/customer_quota.py (an ERROR above the limit; not used for
-      # sizing). A footprint without `design` is not metered.
-      - name: max_segments
-        kind: Number
-        label: "Max Segments"
-        description: "Network-segment quota of the footprint, enforced by checks/customer_quota.py; no `design` means not metered"  # yamllint disable-line rule:line-length
-        optional: false
-        parameters:
-          min_value: 1
-        order_weight: 320
       # ports_<speed>g: number of host-facing leaf/access ports of that speed
       # the customer may have tagged with its segments; 0 = none of this speed
-      # allowed. Enforced by checks/customer_quota.py; a footprint without
-      # `design` is not metered. One attribute per server-NIC speed in the
-      # model: the server device types carry 25G and 100G NICs only
-      # (utils/interface_speed.py derives the speed from interface_type).
+      # allowed. Enforced by checks/customer_quota.py. One attribute per
+      # server-NIC speed in the model: the server device types carry 25G and
+      # 100G NICs only (utils/interface_speed.py derives the speed from
+      # interface_type).
       - name: ports_25g
         kind: Number
         label: "25G Ports"
@@ -504,6 +532,50 @@ nodes:
         parameters:
           min_value: 0
         order_weight: 340
+
+  - name: CustomerTemplateColo
+    namespace: Topology
+    description: "Colocation customer service tier: segment quota and address block"
+    label: "Customer Template (Colocation)"
+    icon: "mdi:file-document-edit-outline"
+    inherit_from:
+      - TopologyCustomerTemplate
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+
+  # In a cloud template `address_prefix_length` is the routed range of the footprint (one account in one cloud region),
+  # not the address space of its segments: their subnets are provider-assigned. No cloud pool is built from it yet.
+  - name: CustomerTemplateCloud
+    namespace: Topology
+    description: "Cloud customer service tier: segment and virtual network quota, routed range of the footprint (one account, one region)"  # yamllint disable-line rule:line-length
+    label: "Customer Template (Cloud)"
+    icon: "mdi:file-document-edit-outline"
+    inherit_from:
+      - TopologyCustomerTemplate
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      # The CloudVirtualNetworks of the footprint's account (in its region), enforced by checks/customer_quota.py.
+      - name: max_virtual_networks
+        kind: Number
+        label: "Max Virtual Networks"
+        description: "Virtual networks the footprint's account may have in the footprint's region, enforced by checks/customer_quota.py"  # yamllint disable-line rule:line-length
+        optional: false
+        parameters:
+          min_value: 1
+        order_weight: 330
 
 extensions:
   nodes:

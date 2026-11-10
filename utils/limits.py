@@ -95,6 +95,17 @@ TRANSIT_PREFIXLEN = 29
 LB_VIP_PREFIXLEN = 26
 SNAT_PREFIX_LENGTH = 32
 
+# The prefix of a tenant segment (utils/segment_addressing.py ``segment_prefix_length``): a segment with no host_count
+# is a /24, one with a host_count gets the smallest prefix that holds its hosts plus the network, broadcast and gateway
+# addresses, never smaller than a /29 and never larger than a /22. ``SEGMENT_HOST_COUNT_MAX`` mirrors the schema
+# ``max_value`` of ManagedNetworkSegment.host_count (a /22 minus those three addresses); the /24 is the
+# ``default_prefix_length`` of the tenant pools (23b_tenant_pools.yml).
+SEGMENT_PREFIX_LENGTH_DEFAULT = 24
+SEGMENT_PREFIX_LENGTH_MAX = 29
+SEGMENT_PREFIX_LENGTH_MIN = 22
+SEGMENT_RESERVED_ADDRESSES = 3
+SEGMENT_HOST_COUNT_MAX = 2 ** (32 - SEGMENT_PREFIX_LENGTH_MIN) - SEGMENT_RESERVED_ADDRESSES
+
 # The host offsets inside a transit /29 (utils/exchange_transit.py, generators/firewall_transit.py,
 # transforms/helpers/ha.py, checks/common.py) and the tenant segment's anycast gateway: .1 the border-leaf / edge
 # anycast gateway, .2/.3 reserved, .4 the firewall or load-balancer VIP, .5/.6 the HA members. The largest offset
@@ -169,6 +180,10 @@ FW_TRANSIT_POOL_TEMPLATE = "FW-Transit-{namespace}-IPv4"
 LB_LEG_POOL_TEMPLATE = "LB-Leg-{namespace}-IPv4"
 LB_VIP_POOL_TEMPLATE = "LB-VIP-{namespace}-IPv4"
 TENANT_POOL_TEMPLATE = "Tenant-{namespace}-IPv4"
+# A customer's own prefix pool, created by the first segment request (generators/topology/segment_addressing.py): the
+# owner's org_id, the segment environment (p, n, s, d, t) and the facility word (dc, colocation), all lowercase. It is
+# not bootstrap data, so no test looks for it there.
+CUSTOMER_POOL_NAME_FORMAT = "{owner}-{environment}-{facility}-ipv4"
 HANDOFF_POOL_TEMPLATE = "Handoff-{namespace}-IPv4"
 # The public SNAT address of a firewall context (23_transit_pools.yml, an address pool in the INTERNET namespace).
 FW_SNAT_POOL = "FW-SNAT-INTERNET-IPv4"

@@ -10,4 +10,5 @@ spec:
       account: "novantis-aws-prod"
       customer_name: "novantis-aws"
       parent: "eu-central-1"
+      design: "S"
       member_of_groups: [customer_deployments_cloud]

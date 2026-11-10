@@ -4,10 +4,11 @@ kind: Object
 spec:
   kind: TopologyCustomerTemplateDC
   data:
-    - name: M_INTERNAL_DC
+    - name: M_INTERNAL
       description: "Dedicated internal firewall pair; shared LB. Up to 6 segments, 12 x 25G and 4 x 100G host ports."
       dedicated_firewall: true
       dedicated_loadbalancer: false
       max_segments: 6
+      address_prefix_length: 21
       ports_25g: 12
       ports_100g: 4

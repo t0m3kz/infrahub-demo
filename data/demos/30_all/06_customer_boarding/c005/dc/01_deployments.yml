@@ -9,11 +9,11 @@ spec:
       environment: "p"
       infrastructure_orchestrator: ansible_automation_platform
       parent: "DC10"
-      design: "M_DC"
+      design: "M"
       member_of_groups: [customer_deployments_dc]
     - owner: "C005"
       environment: "p"
       infrastructure_orchestrator: ansible_automation_platform
       parent: "DC12"
-      design: "L_DC"
+      design: "L"
       member_of_groups: [customer_deployments_dc]

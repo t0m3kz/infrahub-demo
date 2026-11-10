@@ -1,10 +1,11 @@
-"""The customer service tier (TopologyCustomerTemplateDC) is one contract between schema, data and check.
+"""The customer service tier (TopologyCustomerTemplateDC, ...Colo, ...Cloud) is one contract between schema, data and check.
 
-A DC footprint states `design: "M_DC"`; the numbers behind the name live once, in the template rows of
-data/bootstrap/21_customer_templates.yml, or an earlier file in the same demo for a custom service mix.
-checks/customer_quota.py holds the footprint to them. These tests
-keep the three in line: the schema requires the numbers, every row sets them, the tiers are ordered, every
-design a demo footprint names exists, and the demo data itself stays within its tier's segment quota.
+A footprint states `design: "M"` (required, a template of its own kind); the numbers behind the name live once, in the
+template rows of data/bootstrap/21_customer_templates.yml, or an earlier file in the same demo for a custom service
+mix. checks/customer_quota.py holds the footprint to them. These tests
+keep the three in line: the schema requires the numbers, every row sets them, the tiers are ordered and have the
+agreed values, every design a demo footprint names exists, and the demo data itself stays within its tier's segment
+quota.
 """
 
 from __future__ import annotations
@@ -14,16 +15,35 @@ from typing import Any
 
 import pytest
 
-from tests.integration.demo_data import ROOT, Declared, attribute, declared, name, schema
+from tests.integration.demo_data import (
+    ROOT,
+    Declared,
+    attribute,
+    declared,
+    human_friendly_id,
+    name,
+    relationship,
+    schema,
+)
 from utils.exchange_transit import is_exchange_zone
 
 _BOOTSTRAP = ROOT / "data" / "bootstrap"
 _DEMOS = ROOT / "data" / "demos"
 _KIND = "TopologyCustomerTemplateDC"
-_NUMBERS = ("max_segments", "ports_25g", "ports_100g")
-_SHARED = ("S_DC", "M_DC")
-_DEDICATED = ("L_DC", "XL_DC")
+_NUMBERS = ("max_segments", "address_prefix_length", "ports_25g", "ports_100g")
+_SHARED = ("S", "M")
+_DEDICATED = ("L", "XL")
 _TIER_ORDER = (*_SHARED, *_DEDICATED)
+_TEMPLATE_KINDS = {
+    "TopologyCustomerDC": "TopologyCustomerTemplateDC",
+    "TopologyCustomerColocation": "TopologyCustomerTemplateColo",
+    "TopologyCustomerCloud": "TopologyCustomerTemplateCloud",
+}
+# tier -> (max_segments, address_prefix_length) shared by the data center and colocation kinds.
+_BLOCK_TIERS = {"S": (2, 23), "M": (6, 21), "L": (12, 20), "XL": (24, 19)}
+# tier -> (max_segments, max_virtual_networks, address_prefix_length) of the cloud kind: the length is the routed range of
+# the footprint, not a block for its segments.
+_CLOUD_TIERS = {"S": (2, 1, 28), "M": (6, 3, 27), "L": (12, 6, 26), "XL": (24, 12, 25)}
 
 
 def _rows() -> dict[str, Declared]:
@@ -52,6 +72,45 @@ def test_schema_requires_each_number_with_no_default(column: str) -> None:
     assert "default_value" not in definition
 
 
+@pytest.mark.parametrize("kind", [*_TEMPLATE_KINDS.values()])
+def test_the_generic_carries_the_quota_and_the_address_block_once(kind: str) -> None:
+    """max_segments and address_prefix_length are the generic's: required, no default, the block between /16 and /28,
+    and no template node redefines them (a node must not redefine a generic attribute)."""
+    quota = attribute(kind, "max_segments") or {}
+    block = attribute(kind, "address_prefix_length") or {}
+    assert quota["optional"] is False and "default_value" not in quota
+    assert quota["parameters"] == {"min_value": 1}
+    assert block["optional"] is False and "default_value" not in block
+    assert block["parameters"] == {"min_value": 16, "max_value": 28}
+    assert "max_segments" in schema()["TopologyCustomerTemplate"].attributes
+    assert "address_prefix_length" in schema()["TopologyCustomerTemplate"].attributes
+    assert {"max_segments", "address_prefix_length"}.isdisjoint(schema()[kind].attributes)
+
+
+def test_the_cloud_template_states_its_virtual_network_quota() -> None:
+    """max_virtual_networks is cloud only: required, at least one."""
+    definition = attribute("TopologyCustomerTemplateCloud", "max_virtual_networks") or {}
+    assert definition["optional"] is False and definition["parameters"] == {"min_value": 1}
+    assert attribute("TopologyCustomerTemplateDC", "max_virtual_networks") is None
+    assert attribute("TopologyCustomerTemplateColo", "max_virtual_networks") is None
+
+
+@pytest.mark.parametrize(("footprint", "template"), [*_TEMPLATE_KINDS.items()])
+def test_a_footprint_names_a_design_of_its_own_kind_and_must(footprint: str, template: str) -> None:
+    """`design` is required on the data center, colocation and cloud footprints and peers their own template kind."""
+    design = relationship(footprint, "design") or {}
+    assert design["peer"] == template
+    assert design["optional"] is False
+    assert design["cardinality"] == "one"
+
+
+@pytest.mark.parametrize("kind", [*_TEMPLATE_KINDS.values()])
+def test_every_template_kind_has_the_same_hfid_and_a_menu_entry(kind: str) -> None:
+    """Names clash between the kinds only in appearance: each kind is its own node with a name HFID."""
+    assert human_friendly_id(kind) == ("name__value",)
+    assert f"kind: {kind}" in (ROOT / "menu" / "menu.yml").read_text()
+
+
 def test_schema_template_has_no_size_label() -> None:
     """`size` was a label nothing read; the numbers replaced it."""
     assert attribute(_KIND, "size") is None
@@ -76,14 +135,39 @@ def test_removed_customer_kinds_are_gone_from_the_schema(kind: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_four_tiers_are_declared() -> None:
-    """Bootstrap keeps exactly the four standard tiers; custom mixes belong to their own demo."""
-    assert sorted(_ROWS) == sorted(_TIER_ORDER)
+@pytest.mark.parametrize("kind", [*_TEMPLATE_KINDS.values()])
+def test_the_four_tiers_are_declared_for_every_kind(kind: str) -> None:
+    """Bootstrap keeps exactly the four standard tiers S, M, L and XL in each kind; custom mixes belong to their own
+    demo."""
+    assert sorted(str(row.item["name"]) for row in declared(kind, _BOOTSTRAP)) == sorted(_TIER_ORDER)
+
+
+@pytest.mark.parametrize("tier", _TIER_ORDER)
+def test_the_data_center_and_colocation_tiers_have_the_agreed_values(tier: str) -> None:
+    """S 2/23, M 6/21, L 12/20, XL 24/19 (max_segments / address_prefix_length) in both kinds."""
+    wanted = _BLOCK_TIERS[tier]
+    for kind in ("TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo"):
+        row = next(r for r in declared(kind, _BOOTSTRAP) if r.item["name"] == tier).item
+        assert (row["max_segments"], row["address_prefix_length"]) == wanted, f"{kind} {tier}"
+
+
+@pytest.mark.parametrize("tier", _TIER_ORDER)
+def test_the_cloud_tiers_have_the_agreed_values(tier: str) -> None:
+    """Cloud: max_segments, max_virtual_networks and the routed range of the footprint (/28 to /25)."""
+    row = next(r for r in declared("TopologyCustomerTemplateCloud", _BOOTSTRAP) if r.item["name"] == tier).item
+    assert (row["max_segments"], row["max_virtual_networks"], row["address_prefix_length"]) == _CLOUD_TIERS[tier]
+
+
+@pytest.mark.parametrize("kind", ["TopologyCustomerTemplateDC", "TopologyCustomerTemplateColo"])
+def test_the_address_block_holds_the_tier(kind: str) -> None:
+    """Rule 9(a) of checks/customer_quota.py on the data: a /<address_prefix_length> holds max_segments /24s."""
+    for row in declared(kind, _BOOTSTRAP):
+        assert 2 ** (24 - row.item["address_prefix_length"]) >= row.item["max_segments"], f"{kind} {row.item['name']}"
 
 
 @pytest.mark.parametrize("tier", _TIER_ORDER)
 def test_every_row_sets_the_numbers_and_no_size(tier: str) -> None:
-    """Whole numbers, no negative quota, at least one segment, and no `size` label."""
+    """Whole numbers, no negative quota, at least one segment, a block of /16 to /28, and no `size` label."""
     row = _ROWS[tier].item
     assert "size" not in row
     for column in _NUMBERS:
@@ -91,19 +175,26 @@ def test_every_row_sets_the_numbers_and_no_size(tier: str) -> None:
         assert isinstance(value, int) and not isinstance(value, bool), f"{tier}.{column} = {value!r}"
         assert value >= 0, f"{tier}.{column}"
     assert row["max_segments"] >= 1
+    assert 16 <= row["address_prefix_length"] <= 28
 
 
-@pytest.mark.parametrize("column", _NUMBERS)
+@pytest.mark.parametrize("column", ("max_segments", "ports_25g", "ports_100g"))
 def test_shared_tiers_are_below_dedicated_tiers_in_every_column(column: str) -> None:
     """The biggest shared tier is entitled to less than the smallest dedicated one."""
     assert max(_number(tier, column) for tier in _SHARED) < min(_number(tier, column) for tier in _DEDICATED)
 
 
-@pytest.mark.parametrize("column", _NUMBERS)
+@pytest.mark.parametrize("column", ("max_segments", "ports_25g", "ports_100g"))
 def test_tiers_never_shrink_from_one_to_the_next(column: str) -> None:
     """S <= M <= L <= XL: a larger tier is never entitled to less."""
     values = [_number(tier, column) for tier in _TIER_ORDER]
     assert values == sorted(values), f"{column}: {values}"
+
+
+def test_a_larger_tier_never_gets_a_smaller_block() -> None:
+    """address_prefix_length falls (the block grows) from S to XL."""
+    values = [_number(tier, "address_prefix_length") for tier in _TIER_ORDER]
+    assert values == sorted(values, reverse=True), values
 
 
 def test_only_the_large_tiers_are_dedicated() -> None:
@@ -172,7 +263,7 @@ def test_custom_template_from_another_demo_does_not_resolve() -> None:
 def test_custom_template_must_be_earlier_and_valid(fault: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """Local scope alone does not permit a late definition or a malformed custom entitlement."""
     footprint = next(row for row in _metered_footprints() if name(row) == "C900-P-DC-WAW1")
-    template = next(row for row in declared(_KIND, _DEMOS / "00_full_topology") if name(row) == "M_INTERNAL_DC")
+    template = next(row for row in declared(_KIND, _DEMOS / "00_full_topology") if name(row) == "M_INTERNAL")
     item = dict(template.item)
     path = template.path
     if fault == "later":

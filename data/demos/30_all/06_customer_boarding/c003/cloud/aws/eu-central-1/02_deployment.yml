@@ -10,4 +10,5 @@ spec:
       account: "vaultex-aws-prod"
       customer_name: "vaultex-aws"
       parent: "eu-central-1"
+      design: "S"
       member_of_groups: [customer_deployments_cloud]

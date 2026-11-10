@@ -8,4 +8,5 @@ spec:
     - owner: "C012"
       environment: "p"
       parent: "VA"
+      design: "S"
       member_of_groups: [customer_deployments_colocation]

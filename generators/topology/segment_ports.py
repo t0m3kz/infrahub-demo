@@ -41,27 +41,20 @@ until then checks/vrf_instances.py reports the instance as a WARNING.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-from infrahub_sdk.protocols import CoreIPPrefixPool
+from typing import Any
 
 from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 from utils.graphql_queries import load_query
-from utils.limits import DEFAULT_NAMESPACE, OFFSET_ANYCAST
-from utils.segment_addressing import segment_namespace, tenant_pool_name
 from utils.service_contexts import member_border_ports
 
 from ..far_end import far_end_interfaces
 from ..helpers.edges import add_edges, remove_edge
 from ..helpers.vrf import VrfMixin
-from ..protocols import DcimPhysicalInterface, IpamPrefix
+from ..protocols import DcimPhysicalInterface
 from ..segment_vlan import SWITCHED_PORT_KINDS, SegmentVlanMixin, segment_lock_key
 from .endpoint import ENDPOINT_NIC_ROLES
-
-if TYPE_CHECKING:
-    from ..connections import CablingMixin
 
 # The device of each desired port, one read: the port joins that device's row of the segment.
 _PORT_DEVICES_QUERY = """
@@ -80,50 +73,6 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
 
     Expects the host class to provide what SegmentVlanMixin does.
     """
-
-    if TYPE_CHECKING:
-        upsert_prefix_addresses = CablingMixin.upsert_prefix_addresses
-
-    async def ensure_segment_addressing(self, segment: dict[str, Any]) -> None:
-        """Allocate a missing gateway once, using explicit zone authority and default IPAM."""
-        if segment.get("gateway"):
-            return
-        segment_id, segment_name = segment["id"], segment["name"]
-        pool_name = tenant_pool_name(segment_namespace(segment)["name"])
-        pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name)
-        if not pools:
-            self.logger.error(f"Segment {segment_name}: tenant pool {pool_name} not found")
-            return
-        async with self.resource_lock(f"segment-addressing-{segment_id}"):
-            prefix = await self.client.allocate_next_ip_prefix(
-                resource_pool=pools[0],
-                kind=IpamPrefix,
-                identifier=segment_name,
-                member_type="address",
-                data={"role": "customer", "status": "active", "description": segment_name},
-            )
-            if prefix is None:
-                self.logger.error(f"Segment {segment_name}: tenant pool {pool_name} returned no prefix")
-                return
-            gateway = (
-                await self.upsert_prefix_addresses(
-                    prefix,
-                    offsets=(OFFSET_ANYCAST,),
-                    description=f"{segment_name} anycast gateway",
-                    track=False,
-                )
-            )[OFFSET_ANYCAST]
-            segment_obj = await self.client.create(
-                kind=segment["typename"],
-                data={"id": segment_id, "gateway": {"id": gateway.id}},
-            )
-            await segment_obj.save(allow_upsert=True, update_group_context=False)
-        segment["gateway"] = {
-            "id": gateway.id,
-            "address": gateway.address.value,
-            "ip_prefix": {"id": prefix.id, "prefix": prefix.prefix.value, "ip_namespace": {"name": DEFAULT_NAMESPACE}},
-        }
-        self.logger.info(f"Segment {segment_name}: gateway {gateway.address.value} from {pool_name}")
 
     async def reconcile_vxlan_segment(self, segment_id: str, segment_name: str) -> tuple[int, int] | None:
         """Reconcile the segment's VLAN rows for its desired ports (derived and requested), then join the ports to

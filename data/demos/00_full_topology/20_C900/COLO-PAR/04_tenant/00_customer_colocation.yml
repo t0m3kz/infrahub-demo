@@ -10,4 +10,5 @@ spec:
       environment: p
       infrastructure_orchestrator: ansible_automation_platform
       parent: PAR
+      design: "S"
       serving_firewall_contexts: [shared-par-xfw-ha-prod]

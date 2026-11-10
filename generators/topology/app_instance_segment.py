@@ -61,10 +61,13 @@ from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..pools import PoolMixin
 from ..protocols import ManagedVxlanSegment
+from .segment_addressing import SegmentAddressingMixin
 from .segment_ports import SegmentPortTagMixin
 
 
-class AppInstanceSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, CommonGenerator):
+class AppInstanceSegmentGenerator(
+    PoolMixin, CablingMixin, SegmentAddressingMixin, SegmentPortTagMixin, CommonGenerator
+):
     """Reconciles a segment's customer-facing switch-port tags from the
     instances of every AppComponent on it, then, for a VXLAN segment, the
     segment's LOCAL VLAN ID rows on the switches those ports belong to

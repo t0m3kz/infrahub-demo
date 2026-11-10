@@ -1,10 +1,12 @@
 """Unit tests for the derived tenant segment addressing.
 
-VxlanSegmentGenerator.ensure_segment_addressing (generators/topology/segment.py)
-gives a gateway-less segment a prefix from the tenant pool of its
-environment's VRF namespace (data/bootstrap/23b_tenant_pools.yml), keyed by
-the segment name, and its anycast gateway on .1; an authored gateway is never
-touched. The app generator waits for an in-flight add_vxlan_segment run of a
+VxlanSegmentGenerator.ensure_segment_addressing (generators/topology/segment_addressing.py)
+gives a gateway-less segment of a footprint with no design (an office's)
+a prefix from the tenant pool of its environment's VRF namespace
+(data/bootstrap/23b_tenant_pools.yml), keyed by the segment name, and its
+anycast gateway on .1; an authored gateway is never touched. A segment of a data
+center or colocation footprint is addressed from its customer's pool
+(test_segment_customer_pool.py). The app generator waits for an in-flight add_vxlan_segment run of a
 gateway-less segment it uses (AppApplicationGenerator._await_segment_addressing).
 """
 
@@ -151,8 +153,8 @@ class TestEnsureSegmentAddressing:
         assert allocation["kind"] is IpamPrefix
         assert allocation["member_type"] == "address"
         assert allocation["data"] == {"role": "customer", "status": "active", "description": segment["name"]}
-        # The prefix length is the pool's default (data), not a Python constant.
-        assert "prefix_length" not in allocation
+        # No host_count: a /24, the default segment size (utils/limits.py SEGMENT_PREFIX_LENGTH_DEFAULT).
+        assert allocation["prefix_length"] == 24
         assert gen.upserts == [
             {"offsets": (OFFSET_ANYCAST,), "description": f"{segment['name']} anycast gateway", "track": False}
         ]

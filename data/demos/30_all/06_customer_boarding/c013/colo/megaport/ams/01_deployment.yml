@@ -8,4 +8,5 @@ spec:
     - owner: "C013"
       environment: "p"
       parent: "AMS"
+      design: "S"
       member_of_groups: [customer_deployments_colocation]

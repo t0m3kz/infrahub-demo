@@ -11,3 +11,4 @@ spec:
       account: "c900-azure-sandbox"
       customer_name: "sandbox-azure"
       parent: "westeurope"
+      design: "S"

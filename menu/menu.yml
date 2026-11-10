@@ -64,6 +64,18 @@ spec:
                   kind: TopologyCustomerTemplateDC
                   icon: "mdi:floor-plan"
 
+                - namespace: Topology
+                  name: DesignCustomerTemplateColocationItem
+                  label: Colocation
+                  kind: TopologyCustomerTemplateColo
+                  icon: "mdi:server-network"
+
+                - namespace: Topology
+                  name: DesignCustomerTemplateCloudItem
+                  label: Cloud
+                  kind: TopologyCustomerTemplateCloud
+                  icon: "mdi:cloud-outline"
+
           - namespace: Topology
             name: DesignFabricTemplateMenu
             label: Fabric Templates

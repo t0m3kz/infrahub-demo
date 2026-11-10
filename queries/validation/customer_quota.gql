@@ -1,8 +1,15 @@
-# validate_customer_quota (checks/customer_quota.py): what each DC customer
-# footprint with a design uses, against the numbers its design carries.
+# validate_customer_quota (checks/customer_quota.py): what each customer
+# footprint uses, against the numbers its design carries.
 #   - TopologyCustomerDC: the design's quota (max_segments, ports_<speed>g) and
 #     the DC the footprint hangs off (a port counts for a footprint only in its DC).
-#   - ManagedVxlanSegment: the footprints each names.
+#   - TopologyCustomerColocation: the design's max_segments.
+#   - TopologyCustomerCloud: the design's max_segments and max_virtual_networks, the footprint's cloud segments
+#     (network_segments) and its account and region (the virtual networks it counts are the account's in that region).
+#   - CloudVirtualNetwork: the account and region of each network.
+#   - TopologyCustomerTemplateDC / ...Colocation: the max_segments and address block of each tier (the block must hold
+#     the tier).
+#   - CloudNetworkSegment: the host_count and cidr_block of each cloud segment.
+#   - ManagedVxlanSegment: the footprints each names, with their kind.
 #   - DcimPhysicalInterface / DcimLAGInterface with capabilities: the switch ports tagged with a segment (a VLAN row,
 #     ManagedSegmentVlan, of it among the port's `capabilities`, read from the port, the segment through the row's
 #     deployment; the check joins them to the segments by id). A port's speed is its
@@ -32,13 +39,58 @@ query customer_quota {
     }
   }
 
+  TopologyCustomerColocation {
+    edges {
+      node {
+        id
+        name { value }
+        design { node { id name { value } max_segments { value } } }
+      }
+    }
+  }
+
+  TopologyCustomerCloud {
+    edges {
+      node {
+        id
+        name { value }
+        parent { node { id name { value } } }
+        account { node { id } }
+        design { node { id name { value } max_segments { value } max_virtual_networks { value } } }
+        network_segments { edges { node { id } } }
+      }
+    }
+  }
+
+  CloudVirtualNetwork {
+    edges {
+      node {
+        id
+        account { node { id } }
+        region { node { id } }
+      }
+    }
+  }
+
+  TopologyCustomerTemplateDC {
+    edges { node { id name { value } max_segments { value } address_prefix_length { value } } }
+  }
+
+  TopologyCustomerTemplateColo {
+    edges { node { id name { value } max_segments { value } address_prefix_length { value } } }
+  }
+
+  CloudNetworkSegment {
+    edges { node { id name { value } host_count { value } cidr_block { value } } }
+  }
+
   ManagedVxlanSegment {
     edges {
       node {
         id
         name { value }
         security_zone { node { ...RoutingZoneFields } }
-        customer_deployments { edges { node { id name { value } } } }
+        customer_deployments { edges { node { id __typename name { value } } } }
       }
     }
   }

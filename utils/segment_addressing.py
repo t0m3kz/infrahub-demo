@@ -4,13 +4,63 @@ from __future__ import annotations
 
 from typing import Any
 
-from utils.limits import TENANT_POOL_TEMPLATE
+from utils.limits import (
+    CUSTOMER_POOL_NAME_FORMAT,
+    SEGMENT_HOST_COUNT_MAX,
+    SEGMENT_PREFIX_LENGTH_DEFAULT,
+    SEGMENT_PREFIX_LENGTH_MAX,
+    SEGMENT_RESERVED_ADDRESSES,
+    TENANT_POOL_TEMPLATE,
+)
 from utils.routing_domain import resolve_security_zone
 
 
 def tenant_pool_name(zone_name: str) -> str:
     """The semantic bootstrap pool name; its IPAM namespace remains default."""
     return TENANT_POOL_TEMPLATE.format(namespace=zone_name)
+
+
+def segment_prefix_length(host_count: int | None) -> int:
+    """The prefix length of a segment that must hold ``host_count`` hosts (None: the default /24).
+
+    The smallest prefix that holds the hosts plus the network, broadcast and gateway addresses (a power of two), never
+    smaller than a /29 (``SEGMENT_PREFIX_LENGTH_MAX``). The one sizing rule: the VXLAN segment allocator
+    (generators/topology/segment_ports.py) and the cloud segment check (checks/customer_quota.py) both use it.
+    """
+    if host_count is None:
+        return SEGMENT_PREFIX_LENGTH_DEFAULT
+    if not 1 <= host_count <= SEGMENT_HOST_COUNT_MAX:
+        raise ValueError(f"host_count {host_count} is outside 1..{SEGMENT_HOST_COUNT_MAX}")
+    needed = host_count + SEGMENT_RESERVED_ADDRESSES
+    length = 32 - (needed - 1).bit_length()
+    return min(length, SEGMENT_PREFIX_LENGTH_MAX)
+
+
+FOOTPRINT_KIND_ORDER = ("TopologyCustomerDC", "TopologyCustomerColocation")
+"""The footprint kinds that have a customer pool, in the order that decides which footprint addresses a segment."""
+
+CUSTOMER_POOL_FACILITY = {"TopologyCustomerDC": "dc", "TopologyCustomerColocation": "colocation"}
+"""The facility word in a customer pool's name, by footprint kind."""
+
+
+def addressing_footprint(customer_deployments: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The footprint whose design sizes the customer pool of a segment, or None when it has none (an office).
+
+    The first of the segment's footprints of the first kind in ``FOOTPRINT_KIND_ORDER`` (a data center, else a
+    colocation), by name. ``customer_deployments`` is cleaned query data with ``typename`` and ``name``.
+    """
+    for kind in FOOTPRINT_KIND_ORDER:
+        of_kind = sorted((d for d in customer_deployments if d.get("typename") == kind), key=lambda d: d["name"])
+        if of_kind:
+            return of_kind[0]
+    return None
+
+
+def customer_pool_name(org_id: str, environment: str, footprint_kind: str) -> str:
+    """The name of a customer's prefix pool for one environment and facility kind (``c005-p-dc-ipv4``)."""
+    return CUSTOMER_POOL_NAME_FORMAT.format(
+        owner=org_id.lower(), environment=environment.lower(), facility=CUSTOMER_POOL_FACILITY[footprint_kind]
+    )
 
 
 HOSTING_KINDS = frozenset({"TopologyDataCenter", "TopologyColocationMetro", "TopologyCustomerOffice"})

@@ -6,6 +6,9 @@ query vxlan_segment_data($name: String!) {
         __typename
         name { value }
         environment { value }
+        # The sizing of its prefix (utils/segment_addressing.py) and the customer whose pool it is drawn from
+        host_count { value }
+        owner { node { id org_id { value } } }
         security_zone { node { ...RoutingZoneFields } }
         # Whether it is a routed tenant segment, and its group tag: present
         # means nothing is written (generators/helpers/security_tag.py).
@@ -21,8 +24,12 @@ query vxlan_segment_data($name: String!) {
           edges {
             node {
               id
+              __typename
               name { value }
+              # The design of the footprint that addresses the segment (utils/segment_addressing.py
+              # addressing_footprint): the block its customer pool is carved in.
               ... on TopologyCustomerDC {
+                design { node { id name { value } address_prefix_length { value } } }
                 parent {
                   node {
                     id
@@ -39,6 +46,7 @@ query vxlan_segment_data($name: String!) {
                 }
               }
               ... on TopologyCustomerColocation {
+                design { node { id name { value } address_prefix_length { value } } }
                 parent {
                   node {
                     id

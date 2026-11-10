@@ -207,7 +207,7 @@ Every other DC segment is routed by the fabric, like a well-behaved network. Thi
 names DC10's shared PROD firewall context in `terminated_on` (`shared-fw-dc10101-fw-dc10102-prod`: the context is
 generated when C005-P-DC10 is boarded, in an earlier stage, so the name is the one the generators derive from the
 firewall pair). The firewall pair is its default gateway: the gateway (the `.1` the segment generator allocates from
-`Tenant-PROD-IPv4`, as for every DC segment) is the pair's floating VIP, the border leaves only bridge the segment (a
+the customer's pool, as for every DC segment) is the pair's floating VIP, the border leaves only bridge the segment (a
 VLAN, the L2 VNI, a tagged trunk on the service ports facing the pair, no SVI) and each firewall member renders the
 `<uplink trunk>.<vlan>` sub-interface with the VLAN of the border leaf it is cabled to. `test_64c` asserts the three
 sides on the loaded branch, so the rebel is at least supervised.

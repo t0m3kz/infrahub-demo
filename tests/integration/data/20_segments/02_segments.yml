@@ -13,6 +13,8 @@ spec:
     - owner: "C001"
       customer_name: "web-app"
       environment: "p"
+      # 1 instance(s) + 25% headroom
+      host_count: 2
       security_zone: "PROD"
       stretch_scope: local
       arp_suppression: true

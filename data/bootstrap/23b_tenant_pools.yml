@@ -1,9 +1,13 @@
 ---
-# Per-VRF tenant segment pools: add_vxlan_segment (generators/topology/segment.py)
-# allocates every gateway-less VXLAN tenant segment one /24 from the pool of
-# its environment's routing domain (`p` -> PROD, every other value -> NONPROD),
-# keyed by the segment name, and puts the anycast gateway on .1. A segment
-# whose gateway is authored keeps it.
+# Per-VRF tenant pools: the supernets the customers' own prefix pools are carved from.
+# add_vxlan_segment (generators/topology/segment_addressing.py) addresses every gateway-less
+# VXLAN tenant segment out of its customer's pool ({org_id}-{environment}-{dc|colocation}-ipv4,
+# created by the customer's first segment request from a block of its design's
+# address_prefix_length, grown by another block when it runs out), keyed by the segment name,
+# a /24 unless the segment states a host_count, and puts the anycast gateway on .1. The
+# environment's routing domain (`p` -> PROD, every other value -> NONPROD) picks the pool
+# here. A segment of an office has no design and takes its /24 from this pool directly.
+# A segment whose gateway is authored keeps it.
 #
 # Same shape as 23_transit_pools.yml: every pool and resource prefix uses
 # built-in default IPAM. The pool name selects the segment's routing domain;

@@ -18,6 +18,8 @@ spec:
           data:
             customer_name: "zindra-dev"
             environment: "d"
+            # 4 instance(s) + 25% headroom
+            host_count: 5
             security_zone: "NONPROD"
             customer_deployments:
               - "C010-D-DC12"

@@ -74,6 +74,17 @@ generics:
             label: Cloud Subnet
             description: "Subnet of a cloud virtual network (the provider is the network's account provider)"
             color: "#FF9900"
+      # The size of the segment's prefix is derived from it (utils/segment_addressing.py segment_prefix_length): the
+      # hosts plus the network, broadcast and gateway addresses, rounded up to a power of two. Unset: a /24.
+      - name: host_count
+        kind: Number
+        label: Host Count
+        optional: true
+        order_weight: 260
+        description: "Hosts the segment must hold; sizes its prefix (unset: a /24). A cloud subnet is provider-assigned: only checked."  # yamllint disable-line rule:line-length
+        parameters:
+          min_value: 1
+          max_value: 1021
       - name: isolation_mode
         kind: Dropdown
         label: Isolation Mode

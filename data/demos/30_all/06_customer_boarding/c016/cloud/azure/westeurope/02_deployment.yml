@@ -11,4 +11,5 @@ spec:
       customer_name: "dathrex-azure"
       infrastructure_orchestrator: argocd
       parent: "westeurope"
+      design: "S"
       member_of_groups: [customer_deployments_cloud]
