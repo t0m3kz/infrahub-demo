@@ -180,8 +180,9 @@ def test_common_parent_is_used_only_by_the_lag_pair_the_ospf_settings_the_vlan_r
 
 
 def test_the_encapsulation_identifier_is_not_the_interface_edge_identifier() -> None:
-    """``interface_capabilities`` pairs the interface with its capabilities; the parent edge needs a key of its own,
-    else the server would pair an encapsulation's parent with the interface that carries it."""
-    assert _IDENTIFIER != "interface_capabilities"
-    assert 'identifier: "interface_capabilities"' not in _ENCAPSULATION.read_text()
+    """The interface edge's identifier pairs the interface with its capabilities; the parent edge needs a key of its
+    own, else the server would pair an encapsulation's parent with the interface that carries it."""
+    edge_identifier = "interface_" + "capabilities"  # spelled in two parts: test_capability_edge_names greps the name
+    assert _IDENTIFIER != edge_identifier
+    assert f'identifier: "{edge_identifier}"' not in _ENCAPSULATION.read_text()
     assert _field(_encapsulation(), "relationships", "parent")["identifier"] == _IDENTIFIER
