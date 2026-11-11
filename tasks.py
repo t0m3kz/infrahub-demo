@@ -227,6 +227,10 @@ def _run_integration_suite(context: Context, tests: str, basetemp: str, server_p
         env={
             "INFRAHUB_TESTING_ENABLE_INTEGRATION": "1",
             "INFRAHUB_TESTING_SERVER_PORT": str(server_port),
+            # One API server, not the harness default of two: each uses 7 to 9 GB, and on a machine with little free
+            # memory the stack starves its own task workers (missed heartbeats, validators left failed over
+            # successful checks). The scenarios run one after the other and need no second server.
+            "INFRAHUB_TESTING_API_SERVER_COUNT": "1",
         },
     )
 
