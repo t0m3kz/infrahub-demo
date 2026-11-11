@@ -46,6 +46,7 @@ nodes:
         cardinality: one
         kind: Attribute
         identifier: "interface_encapsulation__parent"
+        direction: outbound
         order_weight: 1400
         description: "The interface it rides on: the host port for a VM NIC, else a port, LAG or NIC of the same device (checks/interface_parents.py)"  # yamllint disable-line rule:line-length
 
