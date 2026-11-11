@@ -7,8 +7,8 @@ edge on the interface: they are derived here.
 - ``context_legs``: the sub-interfaces of a member that are legs of one of its contexts,
   the sub-interfaces of the first uplink whose encapsulation ``vlan_id`` is ``transit_vlan(context vlan, namespace slot)``.
 - ``exchange_legs``: the legs of a routed exchange, the context's legs on a member in the exchange's two VRFs.
-- ``port_contexts`` / ``context_border_ports``: the border-leaf / edge service ports whose cable ends on a member, and
-  the contexts the member belongs to.
+- ``port_contexts``: the border-leaf / edge service ports whose cable ends on a member, and the contexts the member
+  belongs to.
 
 ``leg_interfaces`` / ``contexts_with_legs`` / ``border_contexts`` turn those into the context dicts the transforms and
 checks read: the context's own fields plus ``legs`` (the member's cleaned interface dicts, each with its ``device``
@@ -268,11 +268,6 @@ def port_contexts(device: dict[str, Any]) -> dict[str, dict[str, dict[str, Any]]
         for port, members in port_members(device).items()
         if any(_member_contexts(member) for member in members)
     }
-
-
-def context_border_ports(device: dict[str, Any]) -> dict[str, list[str]]:
-    """``port name -> sorted context ids``: the service ports of a border leaf or edge that face a member of a context."""
-    return {port: sorted(contexts) for port, contexts in port_contexts(device).items()}
 
 
 def border_contexts(device: dict[str, Any]) -> list[dict[str, Any]]:

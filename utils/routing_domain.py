@@ -116,9 +116,3 @@ def interface_security_zone(interface: Mapping[str, Any], *, required: bool = Fa
     if tenant and not vrf:
         raise RoutingDomainError(f"{interface.get('name') or 'interface'}: missing VRF instance")
     return resolve_security_zone(owners, required=tenant, label=str(interface.get("name") or "interface"))
-
-
-def prefix_security_zone(prefix: Mapping[str, Any], *owners: Mapping[str, Any] | None) -> dict[str, Any]:
-    """A neutral prefix's routing context comes exclusively from its non-IPAM owners."""
-    vrf = resolve_vrf(owners, required=True, label=str(prefix.get("prefix") or "prefix"))
-    return resolve_security_zone([vrf], required=True, label=str(prefix.get("prefix") or "prefix"))

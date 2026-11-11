@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from tests.unit.service_contexts_helpers import LB, make_context, make_far, make_iface, make_member, make_switch
 from utils.service_contexts import (
@@ -10,7 +12,6 @@ from utils.service_contexts import (
     ContextLeg,
     attach_device_services,
     border_contexts,
-    context_border_ports,
     context_legs,
     contexts_with_legs,
     device_services,
@@ -19,7 +20,13 @@ from utils.service_contexts import (
     leg_contexts,
     leg_interfaces,
     member_border_ports,
+    port_contexts,
 )
+
+
+def _border_port_ids(device: dict[str, Any]) -> dict[str, list[str]]:
+    """``port name -> sorted context ids`` of the service ports ``port_contexts`` finds on a switch."""
+    return {port: sorted(contexts) for port, contexts in port_contexts(device).items()}
 
 
 def test_physical_member_has_one_leg_per_existing_slot_sub_interface() -> None:
@@ -115,42 +122,42 @@ def test_border_port_faces_the_uplink_of_a_member() -> None:
     """The port cabled to a member's uplink is tagged with each context the member belongs to."""
     member = make_member("fw-1", [make_context("b", 3001), make_context("a", 3000)])
     far = make_far(member, make_iface("fw-1:ethernet1/1", "ethernet1/1", "uplink"))
-    assert context_border_ports(make_switch({"Ethernet1/25": ("firewall", [far])})) == {"Ethernet1/25": ["a", "b"]}
+    assert _border_port_ids(make_switch({"Ethernet1/25": ("firewall", [far])})) == {"Ethernet1/25": ["a", "b"]}
 
 
 def test_border_port_of_another_role_is_not_tagged() -> None:
     """A load-balancer role port facing a firewall member is not a firewall context port."""
     member = make_member("fw-1", [make_context("ctx", 3000)])
     far = make_far(member, make_iface("fw-1:ethernet1/1", "ethernet1/1", "uplink"))
-    assert context_border_ports(make_switch({"Ethernet1/30": ("load-balancer", [far])})) == {}
+    assert _border_port_ids(make_switch({"Ethernet1/30": ("load-balancer", [far])})) == {}
 
 
 def test_border_port_of_load_balancer_role_faces_a_load_balancer_member() -> None:
     """Load-balancer contexts are tagged on load-balancer role ports, and only of load-balancer members."""
     member = make_member("lb-1", [make_context("lbctx", 3100, LB)], role="load-balancer")
     far = make_far(member, make_iface("lb-1:ethernet1/1", "ethernet1/1", "uplink"))
-    assert context_border_ports(make_switch({"Ethernet1/30": ("load-balancer", [far])})) == {"Ethernet1/30": ["lbctx"]}
+    assert _border_port_ids(make_switch({"Ethernet1/30": ("load-balancer", [far])})) == {"Ethernet1/30": ["lbctx"]}
 
 
 def test_far_end_that_is_not_the_first_uplink_is_not_a_member_port() -> None:
     """Only the member's first uplink carries the legs: a cable to its second uplink tags nothing."""
     member = make_member("fw-1", [make_context("ctx", 3000)], uplinks=("ethernet1/1", "ethernet1/2"))
     far = make_far(member, make_iface("fw-1:ethernet1/2", "ethernet1/2", "uplink"))
-    assert context_border_ports(make_switch({"Ethernet1/25": ("firewall", [far])})) == {}
+    assert _border_port_ids(make_switch({"Ethernet1/25": ("firewall", [far])})) == {}
 
 
 def test_far_end_that_is_not_an_uplink_is_not_a_member_port() -> None:
     """A cable to a management port of a firewall is not a context port."""
     member = make_member("fw-1", [make_context("ctx", 3000)])
     far = make_far(member, make_iface("fw-1:mgmt", "mgmt", "management"))
-    assert context_border_ports(make_switch({"Ethernet1/25": ("firewall", [far])})) == {}
+    assert _border_port_ids(make_switch({"Ethernet1/25": ("firewall", [far])})) == {}
 
 
 def test_uncabled_and_patch_panel_ports_are_skipped() -> None:
     """A member with no cabled uplink leaves its border port untagged; a cable ending on a panel is not followed."""
     switch = make_switch({"Ethernet1/25": ("firewall", [{}])})
     switch["service_ports"].append(make_iface("sw:Ethernet1/26", "Ethernet1/26", "firewall"))
-    assert context_border_ports(switch) == {}
+    assert _border_port_ids(switch) == {}
 
 
 def test_virtual_member_is_tagged_through_its_host_port() -> None:
@@ -166,7 +173,7 @@ def test_virtual_member_is_tagged_through_its_host_port() -> None:
         "device": {"id": "host", "name": "host", "role": "server", "shared_capabilities": [], "interfaces": []},
         "encapsulations": [{"capabilities": [nic]}],
     }
-    assert context_border_ports(make_switch({"Ethernet1/25": ("firewall", [host_port])})) == {"Ethernet1/25": ["ctx"]}
+    assert _border_port_ids(make_switch({"Ethernet1/25": ("firewall", [host_port])})) == {"Ethernet1/25": ["ctx"]}
 
 
 def test_unpinned_nic_is_not_a_member_port() -> None:
@@ -179,7 +186,7 @@ def test_unpinned_nic_is_not_a_member_port() -> None:
         "device": {"id": "host", "name": "host", "role": "server", "shared_capabilities": [], "interfaces": []},
         "encapsulations": [],
     }
-    assert context_border_ports(make_switch({"Ethernet1/25": ("firewall", [host_port])})) == {}
+    assert _border_port_ids(make_switch({"Ethernet1/25": ("firewall", [host_port])})) == {}
 
 
 def _leg_iface(member: dict, name: str, address: str = "100.66.0.5/29") -> None:
