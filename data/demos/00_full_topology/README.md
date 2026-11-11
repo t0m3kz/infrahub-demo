@@ -36,7 +36,7 @@ upserts go under `90_bindings/`. Splitting a mixed file retains each complete ne
 | `20_C900/Office/`, `21_C901/Office/` | Barcelona/Lisbon locations, footprints, SD-WAN edges, campus devices and cables; C900 Wi-Fi segments, policies and VLAN rows |
 | `90_bindings/10_dc/` | Tenant port/host tags followed by expanded firewall trunks, shared-cluster SDN link and late footprint-to-context upserts |
 | `90_bindings/20_dci/`, `90_bindings/30_segments/` | DC/cage carrier/session mesh, stretched SVIs and per-DC segment realizations |
-| `90_bindings/40_applications/` | Existing multi-DC application and its nested components |
+| `90_bindings/98_applications/` | Existing multi-DC application and its nested components |
 | `90_bindings/50_connections/`, `90_bindings/60_offices/` | Cloud carriers/session circuits/BGP, SaaS sessions and office tunnels |
 | `90_bindings/70_public_sides/` | Shared public provider ports and service endpoints, after their regions and customer virtual networks |
 | `90_bindings/80_fabric/`, `90_bindings/90_internet/` | 45 preserved EVPN endpoint bindings, six route-target upserts, internet access carriers, routed ports, final VRF membership and routing policies |
@@ -428,7 +428,7 @@ pairs of the first sample keep their chains, which is the whole point of not bre
 Each DC server hosts C900 VMs (`DcimVirtualDevice`, template `LINUX-SVC`, `hosting_device` the server): `ktw1-vm-01` and
 `ktw1-vm-02` in DC-KTW1, `waw1-vm-01`, `gdn1-vm-01`. A VM has no cable (it is a VM, that is rather the point): its NIC `eth0` rides on the host port of its
 role (its encapsulation `parent`, the first uplink `eno1`, the rule of `generators/virtual_nics.py`), and its address is in the
-segment of its DC. The application `c900-web-shop-p` (`90_bindings/40_applications/C900/`) names the VMs as the instances of its
+segment of its DC. The application `c900-web-shop-p` (`90_bindings/98_applications/C900/`) names the VMs as the instances of its
 components: frontend (`c900-web-p`, the KTW1 VMs), backend (`c900-app-p`, WAW1), database (`c900-db-p`, GDN1).
 
 - **L1** of a VM is its NIC and the host's cabling: `vm - eth0 - eno1 - cable - panel - panel - leaf` (or through

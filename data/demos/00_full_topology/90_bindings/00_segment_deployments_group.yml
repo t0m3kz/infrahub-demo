@@ -1,0 +1,52 @@
+---
+# The segment deployments join segment_deployments, the target group of add_segment_deployment_ports. Its `updated`
+# rule dispatches it for every deployment whose ports change and the run refuses a non-member, so this loads BEFORE
+# 95b_segment_requests and 96_segment_ports assign the ports (the deployments are declared under 20_C900).
+# Written by .dev/assign_device_groups.py.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreStandardGroup
+  data:
+    - name: segment_deployments
+      members:
+        - kind: ManagedSegmentDeployment
+          data:
+            segment: c900-app-p
+            deployment: DC-WAW1
+        - kind: ManagedSegmentDeployment
+          data:
+            segment: c900-db-p
+            deployment: DC-GDN1
+        - kind: ManagedSegmentDeployment
+          data:
+            segment: c900-internal-fw-gdn1-p
+            deployment: DC-GDN1
+        - kind: ManagedSegmentDeployment
+          data:
+            segment: c900-internal-fw-ktw1-p
+            deployment: DC-KTW1
+        - kind: ManagedSegmentDeployment
+          data:
+            segment: c900-internal-fw-waw1-p
+            deployment: DC-WAW1
+        - kind: ManagedSegmentDeployment
+          data:
+            segment: c900-sync-p
+            deployment: DC-KTW1
+        - kind: ManagedSegmentDeployment
+          data:
+            segment: c900-sync-p
+            deployment: DC-WAW1
+        - kind: ManagedSegmentDeployment
+          data:
+            segment: c900-web-p
+            deployment: DC-KTW1
+        - kind: ManagedSegmentDeployment
+          data:
+            segment: c900-wifi-corp-p
+            deployment: C900-OFFICE
+        - kind: ManagedSegmentDeployment
+          data:
+            segment: c900-wifi-guest-p
+            deployment: C900-OFFICE

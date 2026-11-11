@@ -2,7 +2,7 @@
 # The VM of C900 on the server gdn1-srv-01, as in 20_C900/DC-KTW1/03_tenant/05_virtual_machines.yml: template
 # LINUX-SVC,
 # eth0 rides on the host port eno1 (the first uplink), its address in c900-db-p (10.93.1.0/24). Its component is in
-# 90_bindings/40_applications/C900/00_application.yml.
+# 90_bindings/98_applications/C900/00_application.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

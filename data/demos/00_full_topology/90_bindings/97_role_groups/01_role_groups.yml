@@ -1,0 +1,268 @@
+---
+# Role-group membership of the authored devices, from the group side (README: a reload keeps the groups the SDK
+# keeps on each object). The sample runs no generator, so nothing else puts a device in the group of its role:
+# the artifact definitions target these groups. A provider's router and a VM are not listed.
+# Written by .dev/assign_device_groups.py from the roles; edit it with the devices.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreStandardGroup
+  data:
+    - name: access-points
+      members:
+        - kind: DcimPhysicalDevice
+          data:
+            name: bcn-office-ap-01
+            owner: C900
+        - kind: DcimPhysicalDevice
+          data:
+            name: bcn-office-ap-02
+            owner: C900
+        - kind: DcimPhysicalDevice
+          data:
+            name: bcn-office-ap-03
+            owner: C900
+        - kind: DcimPhysicalDevice
+          data:
+            name: bcn-office-ap-04
+            owner: C900
+        - kind: DcimPhysicalDevice
+          data:
+            name: lis-office-ap-01
+            owner: C901
+        - kind: DcimPhysicalDevice
+          data:
+            name: lis-office-ap-02
+            owner: C901
+        - kind: DcimPhysicalDevice
+          data:
+            name: lis-office-ap-03
+            owner: C901
+        - kind: DcimPhysicalDevice
+          data:
+            name: lis-office-ap-04
+            owner: C901
+    - name: access-switches
+      members:
+        - kind: DcimPhysicalDevice
+          data:
+            name: bcn-office-as-01
+            owner: C900
+        - kind: DcimPhysicalDevice
+          data:
+            name: bcn-office-as-02
+            owner: C900
+        - kind: DcimPhysicalDevice
+          data:
+            name: lis-office-as-01
+            owner: C901
+        - kind: DcimPhysicalDevice
+          data:
+            name: lis-office-as-02
+            owner: C901
+    - name: border-leafs
+      members:
+        - kind: DcimPhysicalDevice
+          data:
+            name: gdn1-bl-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: gdn1-bl-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-bl-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-bl-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: waw1-bl-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: waw1-bl-02
+            owner: P027
+    - name: distribution-switches
+      members:
+        - kind: DcimPhysicalDevice
+          data:
+            name: bcn-office-ds-01
+            owner: C900
+        - kind: DcimPhysicalDevice
+          data:
+            name: bcn-office-ds-02
+            owner: C900
+        - kind: DcimPhysicalDevice
+          data:
+            name: lis-office-ds-01
+            owner: C901
+        - kind: DcimPhysicalDevice
+          data:
+            name: lis-office-ds-02
+            owner: C901
+    - name: edges
+      members:
+        - kind: DcimPhysicalDevice
+          data:
+            name: ams-colo1-edge-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: bcn-office-edge-01
+            owner: C900
+        - kind: DcimPhysicalDevice
+          data:
+            name: fra-colo1-edge-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: gdn1-edge-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-edge-01
+            owner: P027
+        - kind: DcimVirtualDevice
+          data:
+            name: ktw1-nsx-edge-01
+            owner: P027
+        - kind: DcimVirtualDevice
+          data:
+            name: ktw1-nsx-edge-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: lis-office-edge-01
+            owner: C901
+        - kind: DcimPhysicalDevice
+          data:
+            name: lis-office-edge-02
+            owner: C901
+        - kind: DcimPhysicalDevice
+          data:
+            name: par-colo1-edge-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: waw1-edge-01
+            owner: P027
+    - name: endpoints
+      members:
+        - kind: DcimPhysicalDevice
+          data:
+            name: gdn1-srv-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: gdn1-srv-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-srv-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-srv-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-srv-03
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: par-colo1-srv-01
+            owner: C900
+        - kind: DcimPhysicalDevice
+          data:
+            name: waw1-srv-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: waw1-srv-02
+            owner: P027
+    - name: firewalls
+      members:
+        - kind: DcimPhysicalDevice
+          data:
+            name: gdn1-fw-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: gdn1-fw-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-fw-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-fw-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-xfw-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-xfw-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: par-colo1-xfw-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: par-colo1-xfw-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: waw1-fw-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: waw1-fw-02
+            owner: P027
+    - name: leafs
+      members:
+        - kind: DcimPhysicalDevice
+          data:
+            name: gdn1-leaf-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: gdn1-leaf-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-leaf-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-leaf-02
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: waw1-leaf-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: waw1-leaf-02
+            owner: P027
+    - name: spines
+      members:
+        - kind: DcimPhysicalDevice
+          data:
+            name: gdn1-spine-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: ktw1-spine-01
+            owner: P027
+        - kind: DcimPhysicalDevice
+          data:
+            name: waw1-spine-01
+            owner: P027
