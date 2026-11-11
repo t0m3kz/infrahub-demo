@@ -88,7 +88,7 @@ def test_rule_matches_a_field_of_its_node_kind(rule: dict[str, Any]) -> None:
 
 def test_no_node_rule_bootstraps_on_created_without_a_match() -> None:
     """A `created` node rule with no match fires for every node of its kind and fails for a non-member: a generator
-    bootstraps on its group's trigger instead (99_group_triggers.yml). Only a matched one stays (the endpoint)."""
+    bootstraps on its group's trigger instead (99_group_triggers.yml)."""
     unconditional = [r["name"] for r in trigger_rules() if r["mutation_action"] == "created" and not r.get("matches")]
     assert not unconditional
 
@@ -128,11 +128,16 @@ def test_a_group_started_generator_does_not_read_groups_in_its_definition_query(
 # A group that holds only SOME objects of its kind: the data directory whose objects must join it. The transit peerings
 # are the sessions of the internet topology (`06_internet`); a cloud handoff or a fabric peering is a peering too.
 _PARTIAL_GROUPS = {"transit_peerings": "06_internet"}
+# A group that holds the objects of one kind that have a role: the servers (role endpoint) are the only devices that join.
+_ROLE_GROUPS = {"endpoints": "endpoint"}
 
 
-def _is_member_candidate(group: str, path: Any) -> bool:
-    """Whether the objects of ``path`` must join ``group``: all of them, or those of the partial group's directory."""
-    return group not in _PARTIAL_GROUPS or _PARTIAL_GROUPS[group] in path.parts
+def _is_member_candidate(group: str, obj: Any) -> bool:
+    """Whether ``obj`` must join ``group``: every object of the kind, those of the partial group's directory, or those
+    of the role group's role."""
+    if group in _ROLE_GROUPS:
+        return obj.value("role") == _ROLE_GROUPS[group]
+    return group not in _PARTIAL_GROUPS or _PARTIAL_GROUPS[group] in obj.path.parts
 
 
 @pytest.mark.parametrize("group", sorted({rule["group"] for rule in group_trigger_rules()}))
@@ -144,7 +149,7 @@ def test_declared_objects_are_target_group_members(group: str) -> None:
             f"{obj.kind} {obj.path.relative_to(ROOT)}"
             for kind in GROUP_MEMBER_KINDS[group]
             for obj in declared(kind, *_TRIGGERED_DATA_DIRS)
-            if group not in obj.groups() and _is_member_candidate(group, obj.path)
+            if group not in obj.groups() and _is_member_candidate(group, obj)
         }
     )
     assert not outside, f"objects not in '{group}': {outside}"

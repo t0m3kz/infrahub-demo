@@ -243,24 +243,11 @@ spec:
             value_match: any
 
     # ── Endpoint Connectivity ────────────────────────────────────────────────
-    # Endpoint targets (data/bootstrap/00_groups.yml's `endpoints` group) are
-    # server devices with role=endpoint. `created` bootstraps a fresh server's
-    # uplink cabling immediately. No relationship-based `interfaces added`
-    # trigger here: that fires on ANY DcimPhysicalDevice (border-leafs, ToRs,
-    # spines all gain interfaces during add_rack), and add_endpoint's target
-    # group (`endpoints`) rejects non-member node ids outright — see the
-    # ValueError this caused in production before removal.
-    - name: trigger-endpoint-generator-on-created
-      branch_scope: "other_branches"
-      node_kind: DcimPhysicalDevice
-      mutation_action: "created"
-      action: run-endpoint-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: role
-            value_match: value
-            value: endpoint
+    # add_endpoint starts on its target group (`endpoints`: the servers a data file declares with `member_of_groups`),
+    # see trigger-endpoint-generator-on-added in 99_group_triggers.yml. There is no node rule here: one on the device
+    # role fired for every device of that role, a server with no group included, and the run failed for it
+    # ("Target ... is not part of the group"). Neither is there a relationship-based `interfaces added` trigger: that
+    # fires on ANY DcimPhysicalDevice (border-leafs, ToRs, spines all gain interfaces during add_rack).
 
     # ── MLAG Wiring ───────────────────────────────────────────────────────────
     # Peer-link wiring on domain *creation* is no longer a separate

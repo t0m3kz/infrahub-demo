@@ -383,6 +383,7 @@ GROUP_MEMBER_KINDS: dict[str, tuple[str, ...]] = {
     "carrier_circuits": ("TopologyCarrierCircuit",),
     "virtual_circuits": ("TopologySessionCircuit",),
     "patch_panels": ("DcimPatchPanel",),
+    "endpoints": ("DcimPhysicalDevice",),
     "service_contexts": ("ManagedFirewallContext", "ManagedLoadbalancerContext"),
 }
 
