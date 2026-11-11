@@ -276,7 +276,12 @@ def create_proposed_change(
     source_branch: str,
     destination_branch: str = "main",
 ) -> str:
-    """Create a proposed change. Returns the PC ID."""
+    """Create a proposed change. Returns the PC ID.
+
+    It is created once the queue has been quiet for a minute: the generators the scenario started (a cascade has gaps
+    between its tasks) must have written everything the validators are to judge.
+    """
+    wait_for_no_running_tasks(client, branch=None, stable_zero=QUIET_POLLS_BEFORE_PROPOSED_CHANGE)
     logger.info("Creating proposed change: %s (%s -> %s)", name, source_branch, destination_branch)
 
     diff_mutation = Mutation(
@@ -318,6 +323,13 @@ def create_proposed_change(
 
     logger.info("Proposed change created with ID: %s", pc_id)
     return pc_id
+
+
+# Polls of ``wait_for_no_running_tasks`` (5 s apart) with nothing in flight that a proposed change or a merge needs
+# first. A cascade of generators (a pod swap starts pod_rack_cascade, which starts the pod generator) leaves gaps of
+# a minute on a loaded machine between two of its tasks, and a proposed change created in a gap is validated, then
+# validated again as the next generator writes to its branch: the validators end half old, half new.
+QUIET_POLLS_BEFORE_PROPOSED_CHANGE = 12
 
 
 def wait_for_no_running_tasks(
@@ -585,7 +597,7 @@ def merge_proposed_change(
         # branch's tasks, or other open proposed changes' pipelines that the
         # previous merge into main re-triggered — would fail mid-write. Wait
         # for the whole queue, not just the source branch.
-        wait_for_no_running_tasks(client, branch=None)
+        wait_for_no_running_tasks(client, branch=None, stable_zero=QUIET_POLLS_BEFORE_PROPOSED_CHANGE)
 
         mutation = Mutation(
             mutation="CoreProposedChangeMerge",
