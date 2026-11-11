@@ -65,7 +65,7 @@ def _is_generated_uplink_cable(cable: Any, own_ends: set[str]) -> bool:
 
 
 class EndpointInterfaceData(TypedDict, total=False):
-    """One interface projection (``PhysicalInterfaceFields`` in endpoint.gql)."""
+    """One interface projection (``EndpointInterfaceFields`` in endpoint.gql)."""
 
     id: str
     name: str
@@ -76,7 +76,7 @@ class EndpointInterfaceData(TypedDict, total=False):
 
 
 class EndpointPodRackData(TypedDict):
-    """One rack of the pod (``racks`` of ``PodFields`` in endpoint.gql)."""
+    """One rack of the pod (``racks`` of ``EndpointPodFields`` in endpoint.gql)."""
 
     id: str
     name: str
@@ -86,7 +86,7 @@ class EndpointPodRackData(TypedDict):
 
 
 class EndpointPodData(TypedDict, total=False):
-    """Pod projection (``PodFields`` in endpoint.gql)."""
+    """Pod projection (``EndpointPodFields`` in endpoint.gql)."""
 
     id: str
     name: str
@@ -182,7 +182,7 @@ class EndpointConnectivityGenerator(
                 return
 
             # Filter out empty interface nodes (interfaces matching neither the
-            # PhysicalInterfaceFields nor the BondFields fragment — e.g. a virtual
+            # EndpointInterfaceFields nor the BondFields fragment — e.g. a virtual
             # interface) and split the server's own bonds (DcimLAGInterface, the ones
             # with a lag_id) from its DcimPhysicalInterface members.
             deployment_data = deployment_list[0]
@@ -211,7 +211,7 @@ class EndpointConnectivityGenerator(
         pod = rack.get("deployment") or {}
         if "design" not in pod:
             # Same shape as RackGenerator's guard: LocationRack.deployment takes any
-            # TopologyRackHosting peer, and endpoint.gql's PodFields fragment is on
+            # TopologyRackHosting peer, and endpoint.gql's EndpointPodFields fragment is on
             # TopologyPod, so a colocation cage rack (pod = TopologyColocationZone)
             # arrives as an empty pod dict. There is no fabric to dual-home into —
             # colocation kit is cabled explicitly in the object data (see

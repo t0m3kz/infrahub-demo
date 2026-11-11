@@ -74,7 +74,7 @@ class TestGenerateGuardClauses:
     async def test_colocation_rack_returns_without_touching_the_device(self) -> None:
         """A host in a rack that does not hang off a DC-fabric pod is a no-op.
 
-        endpoint.gql's PodFields fragment is on TopologyPod, so a colocation cage
+        endpoint.gql's EndpointPodFields fragment is on TopologyPod, so a colocation cage
         rack (pod = TopologyColocationZone) arrives as an empty pod dict. There is
         no fabric to dual-home into — that kit is cabled explicitly in the object
         data. The guard must fire before pod["design"] is read, which sits
@@ -104,7 +104,7 @@ class TestGenerateGuardClauses:
     @pytest.mark.asyncio
     async def test_filters_empty_interface_nodes(self) -> None:
         """Empty {} entries in `interfaces` (virtual interfaces matching neither the
-        PhysicalInterfaceFields nor the BondFields fragment) must be dropped before the
+        EndpointInterfaceFields nor the BondFields fragment) must be dropped before the
         data is used."""
         gen = _make_generator()
         gen.client.filters = AsyncMock(side_effect=[[]])  # no uplink interfaces

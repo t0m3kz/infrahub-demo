@@ -322,13 +322,6 @@ query segment_security {
             display_label
           }
         }
-        sdwan_gateway {
-          node {
-            name {
-              value
-            }
-          }
-        }
         lan_prefixes {
           edges {
             node {

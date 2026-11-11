@@ -1,4 +1,4 @@
-fragment PhysicalInterfaceFields on DcimPhysicalInterface {
+fragment EndpointInterfaceFields on DcimPhysicalInterface {
   id
   name { value }
   interface_type { value }
@@ -27,7 +27,7 @@ fragment BondFields on DcimLAGInterface {
   }
 }
 
-fragment PodFields on TopologyPod {
+fragment EndpointPodFields on TopologyPod {
   id
   name { value }
   design {
@@ -66,7 +66,7 @@ fragment RackFields on LocationRack {
   rack_type { value }
   deployment {
     node {
-      ...PodFields
+      ...EndpointPodFields
     }
   }
 }
@@ -93,7 +93,7 @@ query GetEndpointForConnectivity($device_name: String!) {
         interfaces {
           edges {
             node {
-              ...PhysicalInterfaceFields
+              ...EndpointInterfaceFields
               ...BondFields
             }
           }

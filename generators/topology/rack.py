@@ -25,7 +25,7 @@ from ..types import CablingOptions
 
 class TopologyRackParentData(TypedDict, total=False):
     """Shape of the nested TopologyDataCenter projection under
-    TopologyPod.parent (see queries/topology/add/rack.gql's PodFields
+    TopologyPod.parent (see queries/topology/add/rack.gql's RackPodFields
     fragment) — declared here, at the read site, instead of a shared
     Pydantic model file."""
 
@@ -45,7 +45,7 @@ class TopologyRackParentData(TypedDict, total=False):
 
 
 class TopologyRackPodRackData(TypedDict):
-    """One rack of the pod (``racks`` of the PodFields fragment in rack.gql)."""
+    """One rack of the pod (``racks`` of the RackPodFields fragment in rack.gql)."""
 
     id: str
     name: str
@@ -56,7 +56,7 @@ class TopologyRackPodRackData(TypedDict):
 
 class TopologyRackPodData(TypedDict, total=False):
     """Shape of the nested TopologyPod projection under LocationRack.deployment (see
-    queries/topology/add/rack.gql's PodFields fragment)."""
+    queries/topology/add/rack.gql's RackPodFields fragment)."""
 
     id: str
     name: str
@@ -351,7 +351,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         # LocationRack.deployment accepts any TopologyRackHosting peer, not just TopologyPod
         # (e.g. a colocation rack's pod is a TopologyColocationZone). Those don't carry
         # DC-fabric fields like design — nothing for this generator to build.
-        # Checked before anything reads pod["id"]: rack.gql's PodFields fragment is on
+        # Checked before anything reads pod["id"]: rack.gql's RackPodFields fragment is on
         # TopologyPod, so a colocation zone comes back as an empty pod dict and every
         # later access raises. Every LocationRack of topologies_rack reaches this generator
         # (trigger-rack-generator-on-added, data/events/99_group_triggers.yml), a colocation
@@ -385,7 +385,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         deployment_type = pod_deployment_type(pod["design"])
 
         # The grandparent DC's controllers (queries/topology/add/rack.gql's
-        # PodFields fragment), read by create_devices().
+        # RackPodFields fragment), read by create_devices().
         self.set_controllers_from(pod.get("parent", {}))
 
         # A row-dependent (tor/compute) rack's l2-leaf/access-leaf switches cable

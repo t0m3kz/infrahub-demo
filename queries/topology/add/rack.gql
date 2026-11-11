@@ -41,7 +41,7 @@ fragment FabricTemplateFields on TopologyElement {
   }
 }
 
-fragment PodFields on TopologyPod {
+fragment RackPodFields on TopologyPod {
   id
   name {
     value
@@ -196,8 +196,8 @@ fragment PodFields on TopologyPod {
   }
 }
 
-query RackGenerator($name: String) {
-  LocationRack(name__value: $name) {
+query RackGenerator($id: ID!) {
+  LocationRack(ids: [$id]) {
     edges {
       node {
         id
@@ -252,7 +252,7 @@ query RackGenerator($name: String) {
         }
         deployment {
           node {
-            ...PodFields
+            ...RackPodFields
           }
         }
       }

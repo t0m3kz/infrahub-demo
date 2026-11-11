@@ -296,13 +296,6 @@ query routing_invariants {
             display_label
           }
         }
-        sdwan_gateway {
-          node {
-            name {
-              value
-            }
-          }
-        }
         network_segments {
           edges {
             node {

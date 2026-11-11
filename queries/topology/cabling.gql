@@ -1,4 +1,4 @@
-fragment PhysicalInterfaceFields on DcimPhysicalInterface {
+fragment CablingInterfaceFields on DcimPhysicalInterface {
   hfid
   name {
     value
@@ -31,13 +31,13 @@ fragment CableFields on DcimCable {
   endpoints {
     edges {
       node {
-        ...PhysicalInterfaceFields
+        ...CablingInterfaceFields
       }
     }
   }
 }
 
-query topology_cabling($id: ID) {
+query topology_cabling($id: ID!) {
   TopologyPhysicalDeployment(ids: [$id]) {
     edges {
       node {

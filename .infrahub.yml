@@ -779,7 +779,7 @@ generator_definitions:
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
-      name: name__value
+      id: id
   - name: add_endpoint
     file_path: generators/topology/endpoint.py
     targets: endpoints
@@ -824,7 +824,7 @@ generator_definitions:
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
-      name: name__value
+      circuit_id: circuit_id__value
   - name: add_virtual_circuit
     file_path: generators/topology/virtual_circuit.py
     targets: virtual_circuits

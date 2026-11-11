@@ -79,7 +79,7 @@ def _device(name: str) -> MagicMock:
 
 
 def _pod_rack(name: str, rack_type: str, row_index: int = 1, index: int = 1) -> dict[str, Any]:
-    """One entry of the pod's ``racks`` projection (PodFields in rack.gql)."""
+    """One entry of the pod's ``racks`` projection (RackPodFields in rack.gql)."""
     return {"id": f"id-{name}", "name": name, "rack_type": rack_type, "row_index": row_index, "index": index}
 
 
@@ -375,7 +375,7 @@ class TestGenerateRackGating:
         """A rack whose `deployment` is not a TopologyPod must no-op, not raise.
 
         LocationRack.deployment accepts any TopologyRackHosting peer, so a colocation
-        rack's pod is a TopologyColocationZone. rack.gql's PodFields fragment is
+        rack's pod is a TopologyColocationZone. rack.gql's RackPodFields fragment is
         on TopologyPod, so such a pod arrives as an empty dict — the guard has to
         fire before wait_for_parent_generator_and_refetch(…, pod["id"]) reads it.
         Every LocationRack lands here because trigger-rack-generator-on-created
