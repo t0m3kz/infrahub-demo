@@ -117,7 +117,7 @@ def test_routed_segment_uses_zone_and_terminated_segment_has_no_fabric_demand() 
         {"name": {"value": "web"}, "security_zone": zone(), "gateway": {"node": {"address": {"value": "10.0.0.1/24"}}}}
     )
     assert routed_segment_namespace(segment)["name"] == "PROD"
-    segment["terminated_on"] = {"id": "firewall-context"}
+    segment["firewall_gateway"] = True
     assert routed_segment_namespace(segment) == {}
 
 

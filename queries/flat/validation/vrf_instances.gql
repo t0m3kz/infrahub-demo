@@ -145,10 +145,8 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                             name {
                               value
                             }
-                            terminated_on {
-                              node {
-                                id
-                              }
+                            firewall_gateway {
+                              value
                             }
                             stretch_scope {
                               value

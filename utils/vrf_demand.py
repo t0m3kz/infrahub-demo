@@ -5,7 +5,7 @@ an office, utils/segment_addressing.py ``hosting_deployment``). A device is a me
 exactly the non-``default`` namespaces it routes in (demand-driven, never pre-provisioned):
 
 - the gateway namespace of each ROUTED segment row of the device (its ``vlans``; a
-  gateway-less or firewall-terminated segment, ``terminated_on``, is pure L2 on the fabric, and so is a stretched
+  gateway-less or firewall-terminated segment, ``firewall_gateway``, is pure L2 on the fabric, and so is a stretched
   segment on a border leaf, utils/segment_addressing.py ``l2_only_on``), border gateways' stretched rows included;
 - the VRF of each of its SVI objects (an instance is never removed while an SVI still routes in it);
 - the namespace of each address on its own interfaces (handoff /31s, WAN exit sub-interfaces, the upstream

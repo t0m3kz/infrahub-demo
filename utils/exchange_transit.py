@@ -201,7 +201,7 @@ def is_exchange_zone(zone: str | None) -> bool:
 def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
     """A VLAN/VXLAN segment the fabric routes in a tenant SecurityZone, outside the exchange zones.
 
-    A segment a firewall context terminates (``terminated_on``) has no SVI and is not one.
+    A segment a firewall context terminates (``firewall_gateway``) has no SVI and is not one.
     The one definition of a tenant SVI in a shared VRF: the L0 SVI protection
     check and the segment group tags (generators/helpers/security_tag.py,
     transforms/helpers/group_policy/) read it. ``segment`` is cleaned query

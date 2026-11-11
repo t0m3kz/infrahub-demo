@@ -75,6 +75,18 @@ nodes:
             label: Shared
             description: "One VLAN id on every switch, derived from the segment's one VNI of the global pool (VNI 40000-40499 gives VLAN 2500-2999): for L2 trunked between switches that cannot do VXLAN"  # yamllint disable-line rule:line-length
             color: "#E67E22"
+      # The segment's gateway holder. false: the fabric routes it (an anycast SVI on every switch with a routed row).
+      # true: the firewall pair of the segment's one DC footprint owns the gateway as a floating VIP and the fabric only
+      # bridges it (VLAN row and L2 VNI, no SVI, VRF or ACL); `add_vxlan_segment` stores the firewall's sub-interface
+      # (generators/topology/segment_gateway.py). The context is the footprint's internal one, never named here.
+      # checks/segment_placement.py: one DC footprint, a serving internal context, a gateway.
+      - name: firewall_gateway
+        kind: Boolean
+        label: Firewall Gateway
+        optional: false
+        default_value: false
+        order_weight: 14
+        description: "The footprint's firewall pair owns the gateway (floating VIP); the fabric only bridges the segment."  # yamllint disable-line rule:line-length
     relationships:
       # TopologyDeployment, not TopologyCustomer: a TopologyCustomerOffice hosts
       # its own segments (it is TopologySegmentHosting) but is not a

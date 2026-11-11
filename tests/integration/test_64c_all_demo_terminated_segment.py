@@ -1,7 +1,7 @@
 """Integration test - the 30_all segment terminated on a firewall context (continues test_64).
 
-C005's `firewalled-dc10` segment (data/demos/30_all/07_applications/c005/00_segments.yml) names DC10's shared PROD
-firewall context in `terminated_on`. What that has to produce on the branch test_59 built:
+C005's `firewalled-dc10` segment (data/demos/30_all/07_applications/c005/00_segments.yml) sets `firewall_gateway`; DC10's shared PROD
+firewall context is the internal one of its footprint. What `firewall_gateway`. What that has to produce on the branch test_59 built:
 
 - the reconcile (add_vxlan_segment) tags the border service ports facing the pair with the segment, as generated
   edges (an account as `source`), and only those;
@@ -42,7 +42,24 @@ query TerminatedSegment($name: String!) {
       node {
         id
         gateway { node { address { value } } }
-        terminated_on { node { id name { value } } }
+        firewall_gateway { value }
+        customer_deployments {
+          edges {
+            node {
+              ... on TopologyCustomerDC {
+                serving_firewall_contexts {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      shared_devices { edges { node { ... on DcimDeviceManaged { role { value } } } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -51,8 +68,8 @@ query TerminatedSegment($name: String!) {
 
 
 def _terminated_segment_names() -> list[str]:
-    """The names of the 30_all segments that name a `terminated_on` context (computed from the data files)."""
-    return [name(obj) for obj in declared("ManagedVxlanSegment", _DEMO) if "terminated_on" in obj.item]
+    """The names of the 30_all segments with `firewall_gateway` (computed from the data files)."""
+    return [name(obj) for obj in declared("ManagedVxlanSegment", _DEMO) if obj.item.get("firewall_gateway")]
 
 
 class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
@@ -75,8 +92,18 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
         edges = result["ManagedVxlanSegment"]["edges"]
         assert edges, f"segment '{segment_name}' not found on branch '{branch}'"
         node = edges[0]["node"]
-        context = node["terminated_on"]["node"]
-        assert context, f"segment '{segment_name}' is terminated on no context on branch '{branch}'"
+        assert node["firewall_gateway"]["value"], f"segment '{segment_name}' has no firewall gateway on '{branch}'"
+        contexts = [
+            context["node"]
+            for deployment in node["customer_deployments"]["edges"]
+            for context in deployment["node"]["serving_firewall_contexts"]["edges"]
+            if all(
+                member["node"]["role"]["value"] != "external-firewall"
+                for member in context["node"]["shared_devices"]["edges"]
+            )
+        ]
+        assert len(contexts) == 1, f"segment '{segment_name}': internal contexts of its footprint are {contexts}"
+        context = contexts[0]
         inventory = await fetch_transit_inventory(client=client, branch=branch)
         served = next((c for c in inventory["contexts"] if c["id"] == context["id"]), None)
         assert served, f"context {context['name']['value']} is not in the transit inventory on branch '{branch}'"

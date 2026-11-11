@@ -115,7 +115,7 @@ spec:
             customer_name: "firewalled-dc10"
             environment: "p"
             security_zone: "PROD"
-            terminated_on: "shared-fw-dc10101-fw-dc10102-prod"
+            firewall_gateway: true
             customer_deployments:
               - "C005-P-DC10"
             member_of_groups:

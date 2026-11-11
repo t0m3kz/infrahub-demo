@@ -233,7 +233,7 @@ class TestTerminatedServicePorts:
 
     @staticmethod
     def _context(*far_ends: dict[str, Any]) -> dict[str, Any]:
-        """The cleaned ``terminated_on`` of a state segment: one member per far end, its uplink cabled to it (a context
+        """The cleaned state segment with ``firewall_gateway`` and its footprint's internal context: one member per far end, its uplink cabled to it (a context
         has no interface edge; its border ports are derived from its members' cables)."""
         members = [
             {
@@ -251,7 +251,10 @@ class TestTerminatedServicePorts:
             }
             for index, far in enumerate(far_ends)
         ]
-        return {"terminated_on": {"id": "ctx-1", "shared_devices": members}}
+        return {
+            "firewall_gateway": True,
+            "customer_deployments": [{"serving_firewall_contexts": [{"id": "ctx-1", "shared_devices": members}]}],
+        }
 
     @staticmethod
     def _cap(cap_id: str, *, typename: str = "DcimPhysicalInterface", role: str = "firewall") -> dict[str, Any]:
@@ -271,9 +274,9 @@ class TestTerminatedServicePorts:
         assert SegmentPortTagMixin._terminated_service_port_ids(segment) == {"bl-1", "bl-lag"}
 
     def test_a_segment_not_terminated_derives_none(self) -> None:
-        """No ``terminated_on`` (or one with no members): nothing to tag."""
+        """No ``firewall_gateway`` (or a context with no members): nothing to tag."""
         assert SegmentPortTagMixin._terminated_service_port_ids({}) == set()
-        assert SegmentPortTagMixin._terminated_service_port_ids({"terminated_on": None}) == set()
+        assert SegmentPortTagMixin._terminated_service_port_ids({"firewall_gateway": False}) == set()
         assert SegmentPortTagMixin._terminated_service_port_ids(self._context()) == set()
 
     def test_the_service_port_is_added_next_to_the_component_ports(self) -> None:

@@ -634,7 +634,7 @@ def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
     """The exchange-transit firewall (an HA member with the shared context's legs) with a segment terminated on it.
 
     seg-term (10.9.0.0/24, PROD, gateway 10.9.0.1 = the pair's floating VIP) is in the live query shape: the
-    context's ``terminated_segments`` carry its gateway, zone and the VLAN rows of its deployments; the uplink trunk
+    footprint's ``firewall_gateway`` segment carries its gateway, zone and the VLAN rows of its deployments; the uplink trunk
     ethernet1/1 carries the cable whose far end is the border leaf with the row to take. It is also a segment the
     shared deployment serves (so it is a zone member and one of the context's policies' segments), which must not
     make a static route to the border leaves.
@@ -646,14 +646,9 @@ def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
         "id": "seg-term",
         "__typename": "ManagedVxlanSegment",
         "name": _v("seg-term"),
-        "gateway": _node({"ip_prefix": _node({"prefix": _v("10.9.0.0/24")})}),
+        "firewall_gateway": _v(True),
+        "gateway": _node({"address": _v("10.9.0.1/24"), "ip_prefix": _node({"prefix": _v("10.9.0.0/24")})}),
         "security_zone": _node({"name": _v("PROD"), "trust_level": _v(50), "description": _v("")}),
-    }
-    term = {
-        "id": "seg-term",
-        "name": _v("seg-term"),
-        "security_zone": _node({"name": _v("PROD")}),
-        "gateway": _node({"address": _v("10.9.0.1/24")}),
         "segment_deployments": _edges(
             [
                 {
@@ -669,8 +664,11 @@ def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
     }
     # The full context is fetched once through the member's shared capabilities.
     shared = next(edge["node"] for edge in device["shared_capabilities"]["edges"] if edge["node"]["id"] == shared_id)
-    shared["terminated_segments"] = _edges([term])
     shared["served_deployments"]["edges"][0]["node"]["network_segments"]["edges"].append({"node": term_served})
+    # The context is the internal one its footprint lists: the footprint's segment is terminated on it.
+    shared["served_deployments"]["edges"][0]["node"]["serving_firewall_contexts"] = _edges(
+        [{"id": shared_id, "shared_devices": _edges([{"role": _v("internal-firewall")}])}]
+    )
     # The uplink trunk the context legs ride on carries the cable whose far end is the facing border leaf.
     trunk = next(
         edge["node"] for edge in device["interfaces"]["edges"] if edge["node"]["name"]["value"] == "ethernet1/1"

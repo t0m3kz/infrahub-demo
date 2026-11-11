@@ -775,10 +775,8 @@ fragment application__F7 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -903,9 +901,7 @@ fragment application__F8 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }

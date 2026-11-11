@@ -30,6 +30,7 @@ def _payload(
     segment = {
         "id": "segment",
         "name": {"value": "terminated"},
+        "firewall_gateway": {"value": True},
         "gateway": {"node": {"address": {"value": "10.90.2.1/24"}}},
         "security_zone": {"node": {"name": {"value": "PROD"}}},
         "segment_deployments": {
@@ -52,9 +53,27 @@ def _payload(
         "id": "context",
         "name": {"value": "dedicated"},
         "vlan_id": {"value": 3000},
-        "terminated_segments": {"edges": [{"node": segment}]},
         "served_deployments": {
-            "edges": [{"node": {"id": "footprint", "network_segments": {"edges": [{"node": segment}]}}}]
+            "edges": [
+                {
+                    "node": {
+                        "id": "footprint",
+                        "network_segments": {"edges": [{"node": segment}]},
+                        "serving_firewall_contexts": {
+                            "edges": [
+                                {
+                                    "node": {
+                                        "id": "context",
+                                        "shared_devices": {
+                                            "edges": [{"node": {"role": {"value": "internal-firewall"}}}]
+                                        },
+                                    }
+                                }
+                            ]
+                        },
+                    }
+                }
+            ]
         },
     }
     cable = {

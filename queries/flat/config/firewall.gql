@@ -810,63 +810,6 @@ fragment firewall_config__F1 on DcimDeviceManaged {
               }
             }
           }
-          terminated_segments {
-            edges {
-              node {
-                id
-                name {
-                  value
-                }
-                security_zone {
-                  node {
-                    name {
-                      value
-                    }
-                    trust_level {
-                      value
-                    }
-                    description {
-                      value
-                    }
-                    id
-                    l3_vni {
-                      value
-                    }
-                    vrf_type {
-                      value
-                    }
-                  }
-                }
-                gateway {
-                  node {
-                    address {
-                      value
-                    }
-                  }
-                }
-                segment_deployments {
-                  edges {
-                    node {
-                      vlans {
-                        edges {
-                          node {
-                            vlan_id {
-                              value
-                            }
-                            device {
-                              node {
-                                id
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
           served_deployments {
             edges {
               node {
@@ -948,10 +891,8 @@ fragment firewall_config__F1 on DcimDeviceManaged {
                                               }
                                             }
                                           }
-                                          terminated_on {
-                                            node {
-                                              id
-                                            }
+                                          firewall_gateway {
+                                            value
                                           }
                                         }
                                         ... on CloudNetworkSegment {
@@ -985,8 +926,39 @@ fragment firewall_config__F1 on DcimDeviceManaged {
                               }
                             }
                           }
+                          name {
+                            value
+                          }
+                          ... on ManagedVxlanSegment {
+                            firewall_gateway {
+                              value
+                            }
+                            segment_deployments {
+                              edges {
+                                node {
+                                  vlans {
+                                    edges {
+                                      node {
+                                        vlan_id {
+                                          value
+                                        }
+                                        device {
+                                          node {
+                                            id
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
                           gateway {
                             node {
+                              address {
+                                value
+                              }
                               ip_prefix {
                                 node {
                                   prefix {
@@ -1126,10 +1098,8 @@ fragment firewall_config__F1 on DcimDeviceManaged {
                                               }
                                             }
                                           }
-                                          terminated_on {
-                                            node {
-                                              id
-                                            }
+                                          firewall_gateway {
+                                            value
                                           }
                                         }
                                         ... on CloudNetworkSegment {
@@ -1163,8 +1133,39 @@ fragment firewall_config__F1 on DcimDeviceManaged {
                               }
                             }
                           }
+                          name {
+                            value
+                          }
+                          ... on ManagedVxlanSegment {
+                            firewall_gateway {
+                              value
+                            }
+                            segment_deployments {
+                              edges {
+                                node {
+                                  vlans {
+                                    edges {
+                                      node {
+                                        vlan_id {
+                                          value
+                                        }
+                                        device {
+                                          node {
+                                            id
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
                           gateway {
                             node {
+                              address {
+                                value
+                              }
                               ip_prefix {
                                 node {
                                   prefix {
@@ -1537,10 +1538,8 @@ fragment firewall_config__F2 on DcimInterface {
                                           }
                                         }
                                       }
-                                      terminated_on {
-                                        node {
-                                          id
-                                        }
+                                      firewall_gateway {
+                                        value
                                       }
                                     }
                                     ... on CloudNetworkSegment {
@@ -1736,10 +1735,8 @@ fragment firewall_config__F2 on DcimInterface {
                                                 }
                                               }
                                             }
-                                            terminated_on {
-                                              node {
-                                                id
-                                              }
+                                            firewall_gateway {
+                                              value
                                             }
                                           }
                                           ... on CloudNetworkSegment {
@@ -1807,10 +1804,8 @@ fragment firewall_config__F2 on DcimInterface {
                                                 }
                                               }
                                             }
-                                            terminated_on {
-                                              node {
-                                                id
-                                              }
+                                            firewall_gateway {
+                                              value
                                             }
                                           }
                                           ... on CloudNetworkSegment {
@@ -2011,10 +2006,8 @@ fragment firewall_config__F2 on DcimInterface {
                                             }
                                           }
                                         }
-                                        terminated_on {
-                                          node {
-                                            id
-                                          }
+                                        firewall_gateway {
+                                          value
                                         }
                                       }
                                       ... on CloudNetworkSegment {
@@ -2082,10 +2075,8 @@ fragment firewall_config__F2 on DcimInterface {
                                             }
                                           }
                                         }
-                                        terminated_on {
-                                          node {
-                                            id
-                                          }
+                                        firewall_gateway {
+                                          value
                                         }
                                       }
                                       ... on CloudNetworkSegment {
@@ -2169,10 +2160,8 @@ fragment firewall_config__F2 on DcimInterface {
                                                 }
                                               }
                                             }
-                                            terminated_on {
-                                              node {
-                                                id
-                                              }
+                                            firewall_gateway {
+                                              value
                                             }
                                           }
                                           ... on CloudNetworkSegment {
@@ -2232,10 +2221,8 @@ fragment firewall_config__F2 on DcimInterface {
                       stretch_scope {
                         value
                       }
-                      terminated_on {
-                        node {
-                          id
-                        }
+                      firewall_gateway {
+                        value
                       }
                       segment_deployments {
                         edges {
@@ -2340,10 +2327,8 @@ fragment firewall_config__F4 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -2490,10 +2475,8 @@ fragment firewall_config__F7 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -2516,10 +2499,8 @@ fragment firewall_config__F9 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -2666,10 +2647,8 @@ fragment firewall_config__F12 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -2692,10 +2671,8 @@ fragment firewall_config__F14 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -2731,10 +2708,8 @@ fragment firewall_config__F17 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 

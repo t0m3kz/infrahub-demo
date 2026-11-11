@@ -399,11 +399,8 @@ class TestLinkServingFirewallContext:
     """The deployment records every context its segments terminate on: serving_firewall_contexts is many."""
 
     def test_the_colocation_footprint_is_the_one_with_the_many_relationship(self) -> None:
-        gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
-
         assert FIREWALL_CONTEXT.serving_many
         assert FIREWALL_CONTEXT.serving_field == "serving_firewall_contexts"
-        assert gen._relinks_terminated_segments is False
 
     @pytest.mark.asyncio
     async def test_context_is_added_without_a_save(self) -> None:

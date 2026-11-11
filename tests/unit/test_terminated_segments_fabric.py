@@ -1,6 +1,6 @@
 """Unit tests for segments terminated on a firewall context on the fabric (leaf / ToR / border-leaf).
 
-A segment with ``terminated_on`` is gatewayed by that context's firewall pair (its
+A segment with ``firewall_gateway`` is gatewayed by that context's firewall pair (its
 `gateway` is the pair's floating VIP), so every fabric switch carries it as pure L2:
 
   - gateway suppression — _get_segment_gateways / routed_segment_namespace hide
@@ -46,7 +46,7 @@ def _segment(name: str, *, terminated: bool, gateway: str, vrf: str = "VRF_A", l
         "typename": "ManagedVxlanSegment",
         "name": name,
         "customer_name": name,
-        "terminated_on": {"id": "ctx-1"} if terminated else None,
+        "firewall_gateway": terminated,
         "gateway": {
             "address": gateway,
             "ip_prefix": {
@@ -82,12 +82,12 @@ def _activations() -> list[dict[str, Any]]:
 
 
 class TestGatewaySuppression:
-    def test_is_terminated_reads_terminated_on(self) -> None:
-        """Only a segment with a ``terminated_on`` context (an id) is terminated; missing, None or empty is routed."""
+    def test_is_terminated_reads_firewall_gateway(self) -> None:
+        """Only a segment with ``firewall_gateway`` set is terminated; missing, None or false is routed."""
         assert is_terminated(_terminated_segment()) is True
         assert is_terminated(_routed_segment()) is False
-        assert is_terminated({"terminated_on": None}) is False
-        assert is_terminated({"terminated_on": {}}) is False
+        assert is_terminated({"firewall_gateway": None}) is False
+        assert is_terminated({"firewall_gateway": False}) is False
         assert is_terminated({}) is False
 
     def test_segment_gateways_are_hidden_for_terminated_segment(self) -> None:
@@ -160,7 +160,7 @@ class TestEveryFabricConsumerAgrees:
         def tenant(terminated: bool) -> dict:
             return {
                 "typename": "ManagedVxlanSegment",
-                "terminated_on": {"id": "ctx-1"} if terminated else None,
+                "firewall_gateway": terminated,
                 "gateway": {"ip_prefix": {"ip_namespace": {"name": "default"}}},
                 "security_zone": {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
             }

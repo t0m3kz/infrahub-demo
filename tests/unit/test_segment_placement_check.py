@@ -189,15 +189,15 @@ class TestOfficeSegments:
 
 
 class TestTermination:
-    """A segment terminated on a firewall context: the gateway is the pair's VIP inside the segment prefix, the
-    footprints are DC ones, and the context serves each of them."""
+    """A segment with a firewall gateway: the gateway is the pair's VIP inside the segment prefix, it names one DC
+    footprint, and that footprint lists a firewall context."""
 
     @staticmethod
     def _segment(
         *,
         gateway: str | None = "10.9.0.1/24",
         prefix: str | None = "10.9.0.0/24",
-        served: tuple[str, ...] = ("dep-1",),
+        contexts: tuple[str, ...] = ("ctx-1",),
         deployments: tuple[tuple[str, str, str], ...] = (("TopologyCustomerDC", "C001-P-DC10", "dep-1"),),
         terminated: bool = True,
     ) -> dict[str, Any]:
@@ -213,26 +213,22 @@ class TestTermination:
                             "name": name,
                             "id": identifier,
                             "parent": {"typename": "TopologyDataCenter", "name": "DC10"},
+                            "serving_firewall_contexts": [
+                                {"id": context, "shared_devices": [{"role": "internal-firewall"}]}
+                                for context in contexts
+                            ],
                         }
                         for kind, name, identifier in deployments
                     ],
                     "segment_deployments": [],
                     "gateway": {"address": gateway, "ip_prefix": {"prefix": prefix}} if gateway else None,
-                    "terminated_on": (
-                        {
-                            "id": "ctx-1",
-                            "name": "shared-fw-prod",
-                            "served_deployments": [{"id": identifier} for identifier in served],
-                        }
-                        if terminated
-                        else None
-                    ),
+                    "firewall_gateway": terminated,
                 }
             ]
         }
 
     def test_a_well_formed_termination_passes(self) -> None:
-        """VIP in the prefix, one DC footprint, served by the context; a segment not terminated is not examined."""
+        """VIP in the prefix, one DC footprint with a context; a segment without the flag is not examined."""
         check = _check()
 
         check.validate(self._segment())
@@ -247,7 +243,7 @@ class TestTermination:
         check.validate(self._segment(gateway=None))
 
         assert len(check._captured_errors) == 1
-        assert "has no gateway" in check._captured_errors[0]
+        assert "no gateway" in check._captured_errors[0]
 
     def test_a_gateway_outside_the_prefix_is_an_error(self) -> None:
         """The VIP must be an address of the segment's own prefix."""
@@ -264,19 +260,19 @@ class TestTermination:
 
         check.validate(self._segment(deployments=(("TopologyCustomerColocation", "C001-P-FR", "dep-9"),)))
 
-        assert any("only a TopologyCustomerDC can be terminated" in msg for msg in check._captured_errors)
+        assert any("only a TopologyCustomerDC can have a firewall gateway" in msg for msg in check._captured_errors)
 
-    def test_a_footprint_the_context_does_not_serve_is_an_error(self) -> None:
-        """The context holds none of that footprint's rules: refused."""
+    def test_a_footprint_with_no_firewall_context_is_an_error(self) -> None:
+        """No pair to own the VIP: refused."""
         check = _check()
 
-        check.validate(self._segment(served=("dep-other",)))
+        check.validate(self._segment(contexts=()))
 
         assert len(check._captured_errors) == 1
-        assert "is not served by it" in check._captured_errors[0]
+        assert "lists no firewall context" in check._captured_errors[0]
 
-    def test_every_footprint_must_be_served(self) -> None:
-        """A stretched segment names several DC footprints: each one must be served, one error per miss."""
+    def test_a_stretched_segment_is_an_error(self) -> None:
+        """Two footprints would put two pairs on one VIP: exactly one is allowed."""
         check = _check()
         payload = self._segment(
             deployments=(
@@ -288,10 +284,7 @@ class TestTermination:
 
         check.validate(payload)
 
-        assert [msg for msg in check._captured_errors if "not served" in msg] == [
-            "Segment 'seg-web' is terminated on context 'shared-fw-prod' but TopologyCustomerDC 'C001-P-DC11' "
-            "is not served by it"
-        ]
+        assert any("names 2 footprints" in msg for msg in check._captured_errors)
 
 
 class TestCloudSegmentDeployment:
@@ -495,7 +488,8 @@ class TestQueryShape:
         assert "... on TopologyEnvironmentScoped { environment { value } }" in self._QUERY
 
     def test_the_termination_rules_read_their_fields(self) -> None:
-        """The gateway address and prefix, and the context with the footprints it serves, are selected."""
+        """The gateway address and prefix, the flag and the footprint's contexts are selected."""
         block = self._QUERY[self._QUERY.index("ManagedVxlanSegment") : self._QUERY.index("CloudNetworkSegment")]
         assert "gateway { node { address { value } ip_prefix { node { prefix { value } } } } }" in block
-        assert "terminated_on { node { id name { value } served_deployments { edges { node { id } } } } }" in block
+        assert "firewall_gateway { value }" in block
+        assert "serving_firewall_contexts" in block

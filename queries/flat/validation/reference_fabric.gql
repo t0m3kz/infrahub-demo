@@ -384,10 +384,8 @@ fragment reference_fabric__F5 on ManagedVxlanSegment {
   stretch_scope {
     value
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
   segment_deployments {
     edges {

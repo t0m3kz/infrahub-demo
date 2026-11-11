@@ -415,10 +415,8 @@ fragment office_firewall_policy__F2 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -565,10 +563,8 @@ fragment office_firewall_policy__F5 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -591,10 +587,8 @@ fragment office_firewall_policy__F7 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -741,10 +735,8 @@ fragment office_firewall_policy__F10 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -767,10 +759,8 @@ fragment office_firewall_policy__F12 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 
@@ -806,10 +796,8 @@ fragment office_firewall_policy__F15 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 

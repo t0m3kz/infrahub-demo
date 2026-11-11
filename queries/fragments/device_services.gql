@@ -290,10 +290,8 @@ fragment ServiceRowFields on ManagedSegmentVlan {
             name {
               value
             }
-            terminated_on {
-              node {
-                id
-              }
+            firewall_gateway {
+              value
             }
             stretch_scope {
               value

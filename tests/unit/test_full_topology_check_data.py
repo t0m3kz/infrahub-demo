@@ -96,7 +96,7 @@ def test_every_routed_segment_and_its_owner_has_a_unique_routing_tag() -> None:
         segment
         for segment in segments
         if segment.item.get("gateway")
-        and not segment.item.get("terminated_on")
+        and not segment.item.get("firewall_gateway")
         and not is_exchange_zone(segment.item.get("security_zone"))
     ]
     customers = {customer.item["org_id"]: customer for customer in declared("OrganizationCustomer", _FULL)}

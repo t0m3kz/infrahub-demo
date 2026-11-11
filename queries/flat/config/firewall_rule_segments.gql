@@ -61,10 +61,8 @@ fragment firewall_rule_segments__F1 on ManagedVxlanSegment {
       }
     }
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
 }
 

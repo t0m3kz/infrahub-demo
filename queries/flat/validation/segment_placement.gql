@@ -51,20 +51,8 @@ query segment_placement {
             }
           }
         }
-        terminated_on {
-          node {
-            id
-            name {
-              value
-            }
-            served_deployments {
-              edges {
-                node {
-                  id
-                }
-              }
-            }
-          }
+        firewall_gateway {
+          value
         }
         customer_deployments {
           edges {
@@ -108,6 +96,27 @@ query segment_placement {
                     __typename
                     name {
                       value
+                    }
+                  }
+                }
+                serving_firewall_contexts {
+                  edges {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                      shared_devices {
+                        edges {
+                          node {
+                            ... on DcimDeviceManaged {
+                              role {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }

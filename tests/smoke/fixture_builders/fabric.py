@@ -517,7 +517,7 @@ _TERMINATED_SEGMENT_KWARGS: dict[str, Any] = {
 def _make_terminated_segment_node(row_device_id: str) -> dict:
     """The VXLAN segment terminated on a firewall context, with this device's row under its deployment."""
     seg = _make_segment_node(**_TERMINATED_SEGMENT_KWARGS, row_device_id=row_device_id)
-    seg["terminated_on"] = _node({"id": "ctx-dc1-fw-prod"})
+    seg["firewall_gateway"] = {"value": True}
     return seg
 
 

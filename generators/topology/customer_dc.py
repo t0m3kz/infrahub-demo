@@ -61,4 +61,3 @@ class CustomerDeploymentDCExchangeGenerator(
     _parent_label = "Data Center"
     _parent_generators = DC_GENERATORS
     _context_specs = (FIREWALL_CONTEXT, EDGE_CONTEXT, LOADBALANCER_CONTEXT)
-    _relinks_terminated_segments = True

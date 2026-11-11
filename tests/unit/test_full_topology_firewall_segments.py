@@ -120,10 +120,15 @@ def _many(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     return {"edges": [_one(node) for node in nodes]}
 
 
+def _context_name(site: str) -> str:
+    """The internal firewall context of the site's footprint (the one its design lists)."""
+    return _WAW_CONTEXT if site == "waw1" else f"shared-{site}-fw-ha-prod"
+
+
 def _raw_segment(site: str) -> dict[str, Any]:
     """Project actual segment, footprint, context and row declarations into the registered query's raw shape."""
     segment = _segment(site)
-    context_name = segment["terminated_on"]
+    context_name = _context_name(site)
     footprints = [
         item
         for item in _items("TopologyCustomerDC", _site(site))
@@ -143,6 +148,15 @@ def _raw_segment(site: str) -> dict[str, Any]:
         "__typename": "TopologyCustomerDC",
         "name": {"value": footprint_name},
         "environment": {"value": footprint["environment"]},
+        "serving_firewall_contexts": _many(
+            [
+                {
+                    "id": context_name,
+                    "name": {"value": context_name},
+                    "shared_devices": _many([{"role": {"value": "internal-firewall"}}]),
+                }
+            ]
+        ),
     }
     return {
         "id": _segment_name(site),
@@ -157,13 +171,7 @@ def _raw_segment(site: str) -> dict[str, Any]:
             }
         ),
         "customer_deployments": _many([footprint_node]),
-        "terminated_on": _one(
-            {
-                "id": context_name,
-                "name": {"value": context_name},
-                "served_deployments": _many([footprint_node]),
-            }
-        ),
+        "firewall_gateway": {"value": segment["firewall_gateway"]},
         "gateway": _one(
             {
                 "address": {"value": gateway["address"]},
@@ -207,9 +215,7 @@ def render_terminated_from_query(raw_device: dict[str, Any]) -> list[dict[str, A
 def _raw_member(site: str, member: str) -> dict[str, Any]:
     """Build raw query facts from that member's authored context leg, actual cable endpoints and HA membership."""
     segment = _raw_segment(site)
-    context = next(
-        obj for obj in _items("ManagedFirewallContext", _site(site)) if obj["name"] == _segment(site)["terminated_on"]
-    )
+    context = next(obj for obj in _items("ManagedFirewallContext", _site(site)) if obj["name"] == _context_name(site))
     assert member in context["shared_devices"]
     ha = next(obj for obj in _items("ManagedFirewallHA", _site(site)) if member in obj["capabilities"])
     # The PROD leg is derived, never listed on the context: the member's sub-interface tagged with the transit VLAN.
@@ -243,8 +249,9 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
         "__typename": "ManagedFirewallContext",
         "name": {"value": context["name"]},
         "vlan_id": {"value": context["vlan_id"]},
-        "terminated_segments": _many([segment]),
-        "served_deployments": segment["terminated_on"]["node"]["served_deployments"],
+        "served_deployments": _many(
+            [{**segment["customer_deployments"]["edges"][0]["node"], "network_segments": _many([segment])}]
+        ),
     }
     cabled = {
         "name": {"value": physical_trunk[1]},
@@ -324,15 +331,15 @@ def test_local_segment_and_placement_check_agree(site: str) -> None:
     assert segment["gateway"]["ip_prefix"]["prefix"] == prefix
     assert ip_interface(segment["gateway"]["address"]).ip == ip_network(prefix)[1]
     assert authored["customer_deployments"] == [f"C900-P-DC-{site.upper()}"]
-    assert authored["terminated_on"] == (_WAW_CONTEXT if site == "waw1" else f"shared-{site}-fw-ha-prod")
+    assert authored["firewall_gateway"] is True
     check = cast(Any, CheckSegmentPlacement.__new__(CheckSegmentPlacement))
     check.log_error = MagicMock()
     check._validate_termination(segment)
     check.log_error.assert_not_called()
     invalid = deepcopy(segment)
-    invalid["terminated_on"]["served_deployments"] = []
+    invalid["customer_deployments"][0]["serving_firewall_contexts"] = []
     check._validate_termination(invalid)
-    assert "not served" in check.log_error.call_args.kwargs["message"]
+    assert "lists no firewall context" in check.log_error.call_args.kwargs["message"]
 
 
 @pytest.mark.parametrize("site", _SITES)

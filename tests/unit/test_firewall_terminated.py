@@ -161,15 +161,21 @@ class TestTerminatedInterfaces:
 
 class TestContextShape:
     def test_the_context_carries_its_terminated_segments(self) -> None:
-        """get_firewall_contexts keeps the terminated segments of the context beside the served ones."""
-        segment = _segment(rows=[(LEAF_ID, 101)])
+        """get_firewall_contexts finds the terminated segments among the served ones: a ``firewall_gateway`` segment
+        of a footprint this context is the internal one of."""
+        segment = {**_segment(rows=[(LEAF_ID, 101)]), "firewall_gateway": True}
         capability = {
             "typename": "ManagedFirewallContext",
             "id": "ctx-1",
             "name": "shared-fw-prod",
             "vlan_id": 3000,
-            "terminated_segments": [segment],
-            "served_deployments": [{"id": "dep", "network_segments": [{"id": segment["id"]}]}],
+            "served_deployments": [
+                {
+                    "id": "dep",
+                    "network_segments": [segment, {"id": "seg-routed"}],
+                    "serving_firewall_contexts": [{"id": "ctx-1", "shared_devices": [{"role": "internal-firewall"}]}],
+                }
+            ],
         }
         leg = {
             **in_vrf(
@@ -191,7 +197,7 @@ class TestContextShape:
         assert context["legs"][0]["parent_interface"] == {"name": "eth1", "device": {"id": "dev-fw"}}
 
     def test_a_context_without_the_field_terminates_nothing(self) -> None:
-        """A cluster context (colocation) read by a query that has no terminated_segments."""
+        """A cluster context (colocation) has no footprint to terminate a segment for."""
         (context,) = fw_contexts([], HA, [{"id": "ctx-1", "name": "c"}])
 
         assert context["terminated_segments"] == []

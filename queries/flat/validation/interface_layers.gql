@@ -331,10 +331,8 @@ query interface_layers {
                   value
                 }
                 ... on ManagedVxlanSegment {
-                  terminated_on {
-                    node {
-                      id
-                    }
+                  firewall_gateway {
+                    value
                   }
                 }
               }

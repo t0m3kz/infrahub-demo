@@ -3,7 +3,7 @@
 The ports are derived from two places: the instances of every AppComponent on the segment
 (queries/topology/add/segment_components.gql): the interfaces each instance's
 physical host is cabled to (the port-channel for a bonded one); and, for a segment a firewall context terminates
-(``terminated_on``), the border service ports tagged with that context, the ones facing its HA pair. The segment owns
+(``firewall_gateway``), the border service ports tagged with its footprint's internal context, the ones facing its HA pair. The segment owns
 them, so the same reconcile runs from both directions that change the answer:
 
   - add_app_component_segment, when a component's instances or segment change;
@@ -46,6 +46,7 @@ from typing import Any
 from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
+from utils.firewall_split import footprint_contexts, steering_contexts
 from utils.query_flatten import load_flat_query
 from utils.service_contexts import member_border_ports
 
@@ -108,15 +109,22 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
 
     @staticmethod
     def _terminated_service_port_ids(segment: dict[str, Any]) -> set[str]:
-        """The border service ports of the firewall context the segment is terminated on (empty when it is not).
+        """The border service ports of the internal firewall context of the footprint of a segment with ``firewall_gateway`` (empty when it has none).
 
         The ports with the firewall service role that the context's members' uplinks are cabled to: the border leaf
         ports facing the HA pair (utils/service_contexts.py ``member_border_ports``: a context has no interface edge).
         ``segment`` is the cleaned state segment (queries/topology/add/segment_vlans.gql).
         """
-        context = segment.get("terminated_on") or {}
+        if not segment.get("firewall_gateway"):
+            return set()
+        contexts = [
+            context
+            for footprint in segment.get("customer_deployments") or []
+            for context in steering_contexts(footprint_contexts(footprint))
+        ]
         return {
             port["id"]
+            for context in contexts
             for member in context.get("shared_devices") or []
             for port in member_border_ports(member)
             if port.get("id")

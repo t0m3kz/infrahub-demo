@@ -64,10 +64,8 @@ query tenant_svi_protection {
               }
             }
           }
-          terminated_on {
-            node {
-              id
-            }
+          firewall_gateway {
+            value
           }
         }
       }

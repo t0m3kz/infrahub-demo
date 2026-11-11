@@ -195,20 +195,20 @@ spec:
           - relationship_name: customer_deployments
             modification_type: updated
 
-    # Re-run generator when the segment is terminated on, or moved to, another firewall context: the reconcile
-    # tags the border service ports of the context facing its HA pair (generators/topology/segment_ports.py) and
-    # removes the ones of the context it left. The reconcile writes the ports' edges, not this relationship, so the
-    # run raises no event of this rule.
-    - name: trigger-vxlan-segment-terminated-on-updated
+    # Re-run generator when the segment gets, or loses, its firewall gateway: the reconcile tags the border
+    # service ports of its footprint's internal context facing its HA pair (generators/topology/segment_ports.py)
+    # and removes them again. The reconcile writes the ports' edges, not this attribute, so the run raises no
+    # event of this rule.
+    - name: trigger-vxlan-segment-firewall-gateway-updated
       branch_scope: "other_branches"
       node_kind: ManagedVxlanSegment
       mutation_action: "updated"
       action: run-vxlan-segment-generator
       matches:
-        kind: CoreNodeTriggerRelationshipMatch
+        kind: CoreNodeTriggerAttributeMatch
         data:
-          - relationship_name: terminated_on
-            modification_type: updated
+          - attribute_name: firewall_gateway
+            value_match: any
 
     # Re-run the segment reconcile when a port is assigned to, or withdrawn from, a segment deployment (its
     # `capabilities`, the request): the reconcile gives the port its switch's VLAN row. An edit of the edge from either

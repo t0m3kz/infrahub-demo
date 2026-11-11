@@ -1503,63 +1503,6 @@ fragment border_spine_config__F1 on DcimDevice {
                 }
               }
             }
-            terminated_segments {
-              edges {
-                node {
-                  id
-                  name {
-                    value
-                  }
-                  security_zone {
-                    node {
-                      name {
-                        value
-                      }
-                      trust_level {
-                        value
-                      }
-                      description {
-                        value
-                      }
-                      id
-                      l3_vni {
-                        value
-                      }
-                      vrf_type {
-                        value
-                      }
-                    }
-                  }
-                  gateway {
-                    node {
-                      address {
-                        value
-                      }
-                    }
-                  }
-                  segment_deployments {
-                    edges {
-                      node {
-                        vlans {
-                          edges {
-                            node {
-                              vlan_id {
-                                value
-                              }
-                              device {
-                                node {
-                                  id
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
             served_deployments {
               edges {
                 node {
@@ -1641,10 +1584,8 @@ fragment border_spine_config__F1 on DcimDevice {
                                                 }
                                               }
                                             }
-                                            terminated_on {
-                                              node {
-                                                id
-                                              }
+                                            firewall_gateway {
+                                              value
                                             }
                                           }
                                           ... on CloudNetworkSegment {
@@ -1678,8 +1619,39 @@ fragment border_spine_config__F1 on DcimDevice {
                                 }
                               }
                             }
+                            name {
+                              value
+                            }
+                            ... on ManagedVxlanSegment {
+                              firewall_gateway {
+                                value
+                              }
+                              segment_deployments {
+                                edges {
+                                  node {
+                                    vlans {
+                                      edges {
+                                        node {
+                                          vlan_id {
+                                            value
+                                          }
+                                          device {
+                                            node {
+                                              id
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
                             gateway {
                               node {
+                                address {
+                                  value
+                                }
                                 ip_prefix {
                                   node {
                                     prefix {
@@ -1819,10 +1791,8 @@ fragment border_spine_config__F1 on DcimDevice {
                                                 }
                                               }
                                             }
-                                            terminated_on {
-                                              node {
-                                                id
-                                              }
+                                            firewall_gateway {
+                                              value
                                             }
                                           }
                                           ... on CloudNetworkSegment {
@@ -1856,8 +1826,39 @@ fragment border_spine_config__F1 on DcimDevice {
                                 }
                               }
                             }
+                            name {
+                              value
+                            }
+                            ... on ManagedVxlanSegment {
+                              firewall_gateway {
+                                value
+                              }
+                              segment_deployments {
+                                edges {
+                                  node {
+                                    vlans {
+                                      edges {
+                                        node {
+                                          vlan_id {
+                                            value
+                                          }
+                                          device {
+                                            node {
+                                              id
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
                             gateway {
                               node {
+                                address {
+                                  value
+                                }
                                 ip_prefix {
                                   node {
                                     prefix {
@@ -2816,10 +2817,8 @@ fragment border_spine_config__F3 on DcimPhysicalDevice {
                                         }
                                       }
                                     }
-                                    terminated_on {
-                                      node {
-                                        id
-                                      }
+                                    firewall_gateway {
+                                      value
                                     }
                                   }
                                   ... on CloudNetworkSegment {
@@ -3015,10 +3014,8 @@ fragment border_spine_config__F3 on DcimPhysicalDevice {
                                               }
                                             }
                                           }
-                                          terminated_on {
-                                            node {
-                                              id
-                                            }
+                                          firewall_gateway {
+                                            value
                                           }
                                         }
                                         ... on CloudNetworkSegment {
@@ -3086,10 +3083,8 @@ fragment border_spine_config__F3 on DcimPhysicalDevice {
                                               }
                                             }
                                           }
-                                          terminated_on {
-                                            node {
-                                              id
-                                            }
+                                          firewall_gateway {
+                                            value
                                           }
                                         }
                                         ... on CloudNetworkSegment {
@@ -3290,10 +3285,8 @@ fragment border_spine_config__F3 on DcimPhysicalDevice {
                                           }
                                         }
                                       }
-                                      terminated_on {
-                                        node {
-                                          id
-                                        }
+                                      firewall_gateway {
+                                        value
                                       }
                                     }
                                     ... on CloudNetworkSegment {
@@ -3361,10 +3354,8 @@ fragment border_spine_config__F3 on DcimPhysicalDevice {
                                           }
                                         }
                                       }
-                                      terminated_on {
-                                        node {
-                                          id
-                                        }
+                                      firewall_gateway {
+                                        value
                                       }
                                     }
                                     ... on CloudNetworkSegment {
@@ -3448,10 +3439,8 @@ fragment border_spine_config__F3 on DcimPhysicalDevice {
                                               }
                                             }
                                           }
-                                          terminated_on {
-                                            node {
-                                              id
-                                            }
+                                          firewall_gateway {
+                                            value
                                           }
                                         }
                                         ... on CloudNetworkSegment {
@@ -3511,10 +3500,8 @@ fragment border_spine_config__F3 on DcimPhysicalDevice {
                     stretch_scope {
                       value
                     }
-                    terminated_on {
-                      node {
-                        id
-                      }
+                    firewall_gateway {
+                      value
                     }
                     segment_deployments {
                       edges {
@@ -4507,10 +4494,8 @@ fragment border_spine_config__F9 on DcimInterface {
                                           }
                                         }
                                       }
-                                      terminated_on {
-                                        node {
-                                          id
-                                        }
+                                      firewall_gateway {
+                                        value
                                       }
                                     }
                                     ... on CloudNetworkSegment {
@@ -4706,10 +4691,8 @@ fragment border_spine_config__F9 on DcimInterface {
                                                 }
                                               }
                                             }
-                                            terminated_on {
-                                              node {
-                                                id
-                                              }
+                                            firewall_gateway {
+                                              value
                                             }
                                           }
                                           ... on CloudNetworkSegment {
@@ -4777,10 +4760,8 @@ fragment border_spine_config__F9 on DcimInterface {
                                                 }
                                               }
                                             }
-                                            terminated_on {
-                                              node {
-                                                id
-                                              }
+                                            firewall_gateway {
+                                              value
                                             }
                                           }
                                           ... on CloudNetworkSegment {
@@ -4981,10 +4962,8 @@ fragment border_spine_config__F9 on DcimInterface {
                                             }
                                           }
                                         }
-                                        terminated_on {
-                                          node {
-                                            id
-                                          }
+                                        firewall_gateway {
+                                          value
                                         }
                                       }
                                       ... on CloudNetworkSegment {
@@ -5052,10 +5031,8 @@ fragment border_spine_config__F9 on DcimInterface {
                                             }
                                           }
                                         }
-                                        terminated_on {
-                                          node {
-                                            id
-                                          }
+                                        firewall_gateway {
+                                          value
                                         }
                                       }
                                       ... on CloudNetworkSegment {
@@ -5139,10 +5116,8 @@ fragment border_spine_config__F9 on DcimInterface {
                                                 }
                                               }
                                             }
-                                            terminated_on {
-                                              node {
-                                                id
-                                              }
+                                            firewall_gateway {
+                                              value
                                             }
                                           }
                                           ... on CloudNetworkSegment {
@@ -5202,10 +5177,8 @@ fragment border_spine_config__F9 on DcimInterface {
                       stretch_scope {
                         value
                       }
-                      terminated_on {
-                        node {
-                          id
-                        }
+                      firewall_gateway {
+                        value
                       }
                       segment_deployments {
                         edges {
@@ -5359,10 +5332,8 @@ fragment border_spine_config__F14 on ManagedVxlanSegment {
   stretch_scope {
     value
   }
-  terminated_on {
-    node {
-      id
-    }
+  firewall_gateway {
+    value
   }
   segment_deployments {
     edges {
@@ -5710,10 +5681,8 @@ fragment border_spine_config__F19 on DcimPhysicalDevice {
                     name {
                       value
                     }
-                    terminated_on {
-                      node {
-                        id
-                      }
+                    firewall_gateway {
+                      value
                     }
                     stretch_scope {
                       value

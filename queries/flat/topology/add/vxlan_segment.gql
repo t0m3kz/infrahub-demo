@@ -41,10 +41,8 @@ query vxlan_segment_data($name: String!) {
             }
           }
         }
-        terminated_on {
-          node {
-            id
-          }
+        firewall_gateway {
+          value
         }
         security_policy {
           node {

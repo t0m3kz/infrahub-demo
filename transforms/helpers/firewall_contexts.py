@@ -42,6 +42,19 @@ def _served_footprint(deployment: dict[str, Any], external: bool) -> dict[str, A
     }
 
 
+def _terminated_segments(cap: dict[str, Any], footprints: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The segments of the footprints this context is the internal one of that the pair gateways itself
+    (``firewall_gateway``): the Internet edge context never terminates one."""
+    found: dict[str, dict[str, Any]] = {}
+    for footprint in footprints:
+        if cap.get("id") not in {context.get("id") for context in steering_contexts(footprint["contexts"])}:
+            continue
+        for segment in footprint["segments"]:
+            if segment.get("firewall_gateway"):
+                found.setdefault(segment["id"], segment)
+    return list(found.values())
+
+
 def _new_context(cap: dict[str, Any], legs: list[dict[str, Any]]) -> dict[str, Any]:
     """The template-facing shape of one ManagedFirewallContext capability."""
     external = is_external(cap)
@@ -59,7 +72,7 @@ def _new_context(cap: dict[str, Any], legs: list[dict[str, Any]]) -> dict[str, A
         "vlan_id": cap.get("vlan_id"),
         "tenant_name": (cap.get("tenant") or {}).get("name"),
         "segments": list(segments.values()),
-        "terminated_segments": cap.get("terminated_segments") or [],
+        "terminated_segments": _terminated_segments(cap, footprints),
         "snat": _snat_host(cap),
         "legs": legs,
     }
@@ -84,7 +97,8 @@ def get_firewall_contexts(device: dict[str, Any], ha: dict[str, Any] | None = No
     ``segments`` are the segments terminating on the context: every segment
     of a deployment it serves (served_deployments, written by each
     deployment's own boarding run), de-duplicated by id. ``terminated_segments`` are the ones among them the pair
-    gateways itself (``ManagedVxlanSegment.terminated_on``; transforms/helpers/firewall_terminated.py).
+    gateways itself (``ManagedVxlanSegment.firewall_gateway`` of a segment of the footprint this is the internal context of;
+    transforms/helpers/firewall_terminated.py).
     """
     contexts: dict[str, dict[str, Any]] = {}
     legs_by_context: dict[str, list[dict[str, Any]]] = {}

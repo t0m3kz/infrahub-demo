@@ -204,9 +204,8 @@ footprints no context, and no, it will not invent one out of sympathy.
 ### A Segment Terminated on a Firewall Context
 
 Every other DC segment is routed by the fabric, like a well-behaved network. This one is the rebel. C005's `firewalled-dc10` (`07_applications/c005/00_segments.yml`)
-names DC10's shared PROD firewall context in `terminated_on` (`shared-fw-dc10101-fw-dc10102-prod`: the context is
-generated when C005-P-DC10 is boarded, in an earlier stage, so the name is the one the generators derive from the
-firewall pair). The firewall pair is its default gateway: the gateway (the `.1` the segment generator allocates from
+sets `firewall_gateway` (the context is the internal one of C005-P-DC10, generated when it is boarded in an earlier
+stage). The firewall pair is its default gateway: the gateway (the `.1` the segment generator allocates from
 the customer's pool, as for every DC segment) is the pair's floating VIP, the border leaves only bridge the segment (a
 VLAN, the L2 VNI, a tagged trunk on the service ports facing the pair, no SVI) and each firewall member renders the
 `<uplink trunk>.<vlan>` sub-interface with the VLAN of the border leaf it is cabled to. `test_64c` asserts the three

@@ -278,7 +278,7 @@ def _row_with(*members: dict[str, Any], requested: tuple[str, ...] = (), termina
     deployment."""
     segment: dict[str, Any] = {"id": "seg-web", "name": {"value": "web"}}
     if terminated:
-        segment["terminated_on"] = {"node": {"id": "ctx-1"}}
+        segment["firewall_gateway"] = {"value": True}
     return {
         "id": "sv-web-100",
         "vlan_id": {"value": 100},

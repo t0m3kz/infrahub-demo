@@ -209,7 +209,7 @@ def unrequested_members(row: dict[str, Any], hosts: dict[str, set[str]]) -> list
     segment = deployment.get("segment") or {}
     requested = {str(port.get("id")) for port in deployment.get("capabilities") or [] if isinstance(port, dict)}
     segment_hosts = hosts.get(str(segment.get("id")), set())
-    terminated = bool(segment.get("terminated_on"))
+    terminated = bool(segment.get("firewall_gateway"))
     return [
         f"{_row_where(row)} lists '{(port.get('device') or {}).get('name')}' {port.get('name')}, which nobody asked "
         "for (rule R5: not assigned to the deployment and derived from no component; the next segment reconcile "
