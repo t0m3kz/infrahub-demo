@@ -530,7 +530,7 @@ class TestRegistration:
     ) -> None:
         entry = next(q for q in registry["queries"] if q["name"] == query)
 
-        assert entry["file_path"] == f"queries/config/{transform}.gql"
+        assert entry["file_path"] == f"queries/flat/config/{transform}.gql"
         text = (ROOT / entry["file_path"]).read_text()
         assert f"query {query}(" in text
         assert "$device: String!" in text

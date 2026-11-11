@@ -54,8 +54,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
-from utils.graphql_queries import load_query
 from utils.limits import DEFAULT_NAMESPACE
+from utils.query_flatten import load_flat_query
 from utils.vrf_demand import (
     DeviceVrfFacts,
     device_vrf_facts,
@@ -153,7 +153,7 @@ class VrfMixin(SviMixin):
         if not ids:
             return
         result = await self.client.execute_graphql(
-            query=load_query(_VRF_INSTANCES_QUERY_PATH), variables={"device_ids": ids, "with_instances": False}
+            query=load_flat_query(_VRF_INSTANCES_QUERY_PATH), variables={"device_ids": ids, "with_instances": False}
         )
         cleaned = clean_data(result)
         namespaces = namespaces_by_name(cleaned)

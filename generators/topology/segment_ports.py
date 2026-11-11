@@ -46,7 +46,7 @@ from typing import Any
 from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
-from utils.graphql_queries import load_query
+from utils.query_flatten import load_flat_query
 from utils.service_contexts import member_border_ports
 
 from ..far_end import far_end_interfaces
@@ -142,7 +142,7 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
     async def _segment_components(self, segment_id: str) -> list[dict[str, Any]]:
         """Every AppComponent on the segment, with its instances (segment_components.gql)."""
         result = await self.client.execute_graphql(
-            query=load_query(_SEGMENT_COMPONENTS_QUERY_PATH), variables={"segment_id": segment_id}
+            query=load_flat_query(_SEGMENT_COMPONENTS_QUERY_PATH), variables={"segment_id": segment_id}
         )
         return clean_data(result).get("AppComponent") or []
 

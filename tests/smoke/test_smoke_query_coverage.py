@@ -13,11 +13,16 @@ from typing import Any
 
 import pytest
 import yaml
-from infrahub_sdk.analyzer import GraphQLQueryAnalyzer
 
 SMOKE_KIND = "graphql-query-smoke"
 SMOKE_TEST_NAME = "syntax_check"
 FRAGMENTS_DIR = "queries/fragments"
+FLAT_DIR = "queries/flat"
+
+
+def _flat(path: str) -> str:
+    """The registered flat copy of a source query (utils/query_flatten.py)."""
+    return FLAT_DIR + "/" + path.removeprefix("queries/")
 
 
 @pytest.fixture(scope="module")
@@ -29,11 +34,11 @@ def registered_queries(root_dir: Path) -> dict[str, str]:
 
 @pytest.fixture(scope="module")
 def query_files(root_dir: Path) -> list[str]:
-    """Return every queries/**/*.gql (fragment library excluded) as a repo-relative POSIX path."""
+    """Return every source query (fragment library and flat copies excluded) as a repo-relative POSIX path."""
     return sorted(
-        path.relative_to(root_dir).as_posix()
-        for path in (root_dir / "queries").rglob("*.gql")
-        if FRAGMENTS_DIR not in path.relative_to(root_dir).as_posix()
+        rel
+        for rel in (path.relative_to(root_dir).as_posix() for path in (root_dir / "queries").rglob("*.gql"))
+        if not rel.startswith((FRAGMENTS_DIR + "/", FLAT_DIR + "/"))
     )
 
 
@@ -50,9 +55,9 @@ def smoke_entries(root_dir: Path) -> list[tuple[str, str, dict[str, Any]]]:
 
 
 def test_every_query_file_has_a_smoke_entry(query_files: list[str], smoke_entries: list[tuple[str, str, Any]]) -> None:
-    """A query file without a `syntax_check` entry is never parsed by `invoke validate`."""
+    """A query whose registered copy has no `syntax_check` entry is never parsed by `invoke validate`."""
     covered = {path for _, path, _ in smoke_entries}
-    assert not [path for path in query_files if path not in covered]
+    assert not [path for path in query_files if _flat(path) not in covered]
 
 
 def test_smoke_entries_use_the_smoke_kind(smoke_entries: list[tuple[str, str, dict[str, Any]]]) -> None:
@@ -84,21 +89,10 @@ def test_smoke_resource_name_matches_the_registered_query_name(
 
 
 def test_every_non_fragment_query_is_registered(query_files: list[str], registered_queries: dict[str, str]) -> None:
-    """A query file is registered in .infrahub.yml: an unregistered one has no consumer."""
-    assert not [path for path in query_files if path not in registered_queries]
+    """A query file is registered in .infrahub.yml through its flat copy: an unregistered one has no consumer."""
+    assert not [path for path in query_files if _flat(path) not in registered_queries]
 
 
 def test_registered_queries_exist(root_dir: Path, registered_queries: dict[str, str]) -> None:
     """Every `queries:` entry of .infrahub.yml points at a file on disk."""
     assert not [path for path in registered_queries if not (root_dir / path).is_file()]
-
-
-def test_every_query_file_parses_offline(root_dir: Path, query_files: list[str]) -> None:
-    """The analyzer the smoke item uses accepts each query on its own (fragment spreads need not be defined)."""
-    failures: dict[str, str] = {}
-    for path in query_files:
-        try:
-            GraphQLQueryAnalyzer((root_dir / path).read_text())
-        except Exception as error:  # noqa: BLE001 - report every failing file at once
-            failures[path] = str(error)
-    assert not failures

@@ -31,23 +31,6 @@ def test_all_native_query_spreads_are_assembled(root_dir: Path) -> None:
         assert visitor.names <= set(definitions), path
 
 
-def test_every_registered_query_renders_with_the_servers_fragment_resolution(root_dir: Path) -> None:
-    """The server inlines shared fragments from the spreads of the OPERATION only: a fragment defined inside a query
-    file is taken as self-contained, so one that spreads a shared fragment fails the repository sync."""
-    import yaml
-    from infrahub_sdk.graphql.query_renderer import render_query_with_fragments
-
-    fragments = [path.read_text() for path in sorted((root_dir / "queries/fragments").glob("*.gql"))]
-    registered = yaml.safe_load((root_dir / ".infrahub.yml").read_text())["queries"]
-    for query in registered:
-        rendered = render_query_with_fragments((root_dir / query["file_path"]).read_text(), fragments)
-        document = parse(rendered)
-        defined = {d.name.value for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
-        spreads = Spreads()
-        visit(document, spreads)
-        assert spreads.names <= defined, f"{query['name']}: undefined {sorted(spreads.names - defined)}"
-
-
 def test_every_shared_fragment_is_defined_in_one_file_only(root_dir: Path) -> None:
     """.infrahub.yml loads the whole queries/fragments/ directory: a fragment name defined twice there is ambiguous."""
     seen: dict[str, str] = {}

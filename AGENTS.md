@@ -611,7 +611,7 @@ class MyCheck(InfrahubCheck):
   or SVI ACL), the overlay and VXLAN L3 instances, the origination, and `is_routed_tenant_segment` (no group or routing
   tag, no SVI protection to demand). The firewall keeps reading `segment_namespace` and `segment_prefix` (its zone
   members, rules and PBR next hops). A query that returns a segment's gateway for the fabric must select
-  `terminated_on { node { id } }` (`tests/unit/test_terminated_on_queries.py`), else the segment reads as routed.
+  `terminated_on { node { id } }`, else the segment reads as routed.
   - **Ports**: `add_vxlan_segment` and `add_app_component_segment` tag the border service ports of the context (derived,
     a context has no interface edge: the ports with the firewall service role that its members' uplinks are cabled to,
     `utils/service_contexts.py` `member_border_ports`, read through `queries/topology/add/segment_vlans.gql`) with the
@@ -1390,8 +1390,17 @@ stack at a time. Two loops:
 | Templates, transforms, checks and their validation queries | Fast, then subset `01, 02, 59–64` (no `test_65` or `test_66`) plus the smoke golden diff |
 | Docs, tests only | Unit + smoke |
 
-Queries are validated by the smoke tests: every query under `queries/` has a `syntax_check` entry in
-`tests/smoke/test_graphql.yml` (guarded by `tests/unit/test_smoke_query_coverage.py`), run by `uv run invoke validate`.
+Queries are validated by the smoke tests: every registered query has a `syntax_check` entry in
+`tests/smoke/test_graphql.yml` (guarded by `tests/smoke/test_smoke_query_coverage.py`), run by `uv run invoke validate`.
+
+**Registered queries are flattened copies.** The server's cost of a query grows with its fragment use, not with its
+size or depth (a device config query took nearly as long for a device that does not exist as for a real one; written
+out it is 6-14x faster, measured in `.dev/query-performance.md`). So `.infrahub.yml` registers `queries/flat/`, written
+from the sources under `queries/` by `uv run invoke flatten-queries` (`utils/query_flatten.py`): fragments written out
+in place, an inline fragment that would land directly inside another kept as a fragment used once (the server answers
+HTTP 500 to that shape). Edit the source and the fragments, never `queries/flat/`, and run the task after every query or
+fragment change: the server runs only the copies. A generator that executes a query itself uses `load_flat_query`.
+The copies need Infrahub 1.12: on 1.11 a fragment spread inside an inline fragment returns nulls.
 The test stack serves on port 8100 (`--server-port` moves it).
 
 Always, after any run that registers a new check or transform query: run that query against the settled stack
