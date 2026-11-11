@@ -26,6 +26,7 @@ Steps:
 7.  Verify in main
 """
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -78,6 +79,9 @@ query GetPodFabricTemplates($pod_name: String!) {
     }
 }
 """
+
+SPINE_POLLS = 30
+SPINE_POLL_SECONDS = 20  # up to ten minutes for the cascade of generators to add the spine
 
 MUTATION_UPSERT_ELEMENT = """
 mutation UpsertSpineElement($quantity: BigInt!, $template_id: String!) {
@@ -249,7 +253,24 @@ class TestDC6AddSpine(TestInfrahubDockerWithClient):
         """Verify exactly one new POD-1 spine, no other pod touched, and every existing ASN kept."""
         logging.info("=== %s - Step 3: Verify Devices ===", SCENARIO_NAME)
 
-        after = await self._snapshot_spines_by_pod(async_client_main, scenario_branch, SCENARIO_DC_NAME)
+        # The new spine comes from a cascade of generators the swap triggers (pod_rack_cascade, then the pod generator):
+        # the wait for tasks can return in the gap between two of them, a wide gap on a loaded machine. Wait for the
+        # effect, not for the tasks: poll until the pod has its spine, and fail on the count only when it never does.
+        expected = len(workflow_state["dc6_add_spine_before"].get(SCENARIO_POD_1, [])) + SPINES_ADDED
+        for attempt in range(1, SPINE_POLLS + 1):
+            after = await self._snapshot_spines_by_pod(async_client_main, scenario_branch, SCENARIO_DC_NAME)
+            if len(after.get(SCENARIO_POD_1, [])) >= expected:
+                break
+            logging.info(
+                "%s has %d spine(s), expecting %d (poll %d/%d)",
+                SCENARIO_POD_1,
+                len(after.get(SCENARIO_POD_1, [])),
+                expected,
+                attempt,
+                SPINE_POLLS,
+            )
+            await asyncio.sleep(SPINE_POLL_SECONDS)
+            await wait_for_tasks_completion(async_client_main, scenario_branch)
         _assert_pod_spine_delta(workflow_state["dc6_add_spine_before"], after)
 
         counts_before = workflow_state["dc6_add_spine_counts_before"]
