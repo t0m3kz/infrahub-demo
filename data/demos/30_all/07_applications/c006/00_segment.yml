@@ -20,6 +20,8 @@ spec:
           data:
             customer_name: "nordix-prod"
             environment: "p"
+            # 6 instance(s) + 25% headroom
+            host_count: 8
             security_zone: "PROD"
             customer_deployments:
               - "C006-P-DC11"

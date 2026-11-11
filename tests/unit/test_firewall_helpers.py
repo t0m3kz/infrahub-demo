@@ -94,9 +94,6 @@ class TestGetFirewallZones:
     def test_none_returns_empty(self) -> None:
         assert get_firewall_zones(None) == []
 
-    def test_empty_list_returns_empty(self) -> None:
-        assert get_firewall_zones([]) == []
-
     def test_zone_without_name_is_skipped(self) -> None:
         result = get_firewall_zones([{"trust_level": 50}])
         assert result == []

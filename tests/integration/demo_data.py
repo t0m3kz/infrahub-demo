@@ -375,6 +375,7 @@ GROUP_MEMBER_KINDS: dict[str, tuple[str, ...]] = {
     "customer_deployments_dc": ("TopologyCustomerDC",),
     "customer_deployments_colocation": ("TopologyCustomerColocation",),
     "customer_deployments_cloud": ("TopologyCustomerCloud",),
+    "cloud_attachment_ranges": ("CloudGatewayAttachment",),
     "customer_deployments_office": ("TopologyCustomerOffice",),
     "colocation_metros": ("TopologyColocationMetro",),
     "colocation_zones": ("TopologyColocationZone",),

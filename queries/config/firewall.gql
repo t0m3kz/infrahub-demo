@@ -81,6 +81,7 @@ query firewall_config($device: String!) {
               }
               ...FirewallFacingCableFields
               ...InterfaceRoutingZoneFields
+              ...InterfaceEncapsulationCableFields
               ... on DcimPhysicalInterface {
                 ip_address {
                   node {
@@ -98,9 +99,6 @@ query firewall_config($device: String!) {
                 }
               }
               ... on DcimVirtualInterface {
-                vlan_id {
-                  value
-                }
                 device {
                   node {
                     id
@@ -118,19 +116,6 @@ query firewall_config($device: String!) {
                         }
                       }
                     }
-                  }
-                }
-                parent_interface {
-                  node {
-                    name {
-                      value
-                    }
-                    device {
-                      node {
-                        id
-                      }
-                    }
-                    ...FirewallFacingCableFields
                   }
                 }
               }

@@ -6,7 +6,8 @@
 # where a generator runs, the segment reconcile writes it from the deployment's assigned interfaces (the request,
 # 95b_segment_requests) and the component-derived ports; 00_full runs no generator, so both are data and a unit test
 # keeps them equal. A server port carries no membership (checks/virtual_switch.py reads the port groups); a border
-# leaf's Ethernet1/25 is the service port facing the firewall pair that terminates the segment.
+# leaf's Ethernet1/25 is the service port facing the firewall pair that terminates the segment. A routed row also lists
+# its SVI (a role-svi DcimVirtualInterface of the same switch), the one member that is no port.
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -31,6 +32,8 @@ spec:
       capabilities:
         - kind: DcimLAGInterface
           data: {device: waw1-leaf-01, name: "Port-Channel10", lag_id: 10}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-leaf-01, name: Vlan200}
     - device: waw1-leaf-01
       vlan_id: 250
       segment_deployment: ["c900-internal-fw-waw1-p", "DC-WAW1"]
@@ -45,9 +48,23 @@ spec:
       capabilities:
         - kind: DcimLAGInterface
           data: {device: waw1-leaf-02, name: "Port-Channel10", lag_id: 10}
+        - kind: DcimVirtualInterface
+          data: {device: waw1-leaf-02, name: Vlan200}
     - device: waw1-leaf-02
       vlan_id: 250
       segment_deployment: ["c900-internal-fw-waw1-p", "DC-WAW1"]
       capabilities:
         - kind: DcimLAGInterface
           data: {device: waw1-leaf-02, name: "Port-Channel10", lag_id: 10}
+    - device: waw1-leaf-01
+      vlan_id: 2500
+      segment_deployment: ["c900-sync-p", "DC-WAW1"]
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: waw1-leaf-01, name: Vlan2500}
+    - device: waw1-leaf-02
+      vlan_id: 2500
+      segment_deployment: ["c900-sync-p", "DC-WAW1"]
+      capabilities:
+        - kind: DcimVirtualInterface
+          data: {device: waw1-leaf-02, name: Vlan2500}

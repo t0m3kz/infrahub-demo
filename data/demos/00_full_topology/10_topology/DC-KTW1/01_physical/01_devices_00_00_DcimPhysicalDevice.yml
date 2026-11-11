@@ -31,7 +31,11 @@ spec:
             role: cloud
             status: active
             description: AWS site-to-site VPN tunnel 1 (rides on the internet port Ethernet1/2)
-            parent_interface: ["ktw1-edge-01", "Ethernet1/2"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-edge-01:Tunnel1"
+                  parent: ["ktw1-edge-01", "Ethernet1/2"]
             ip_address:
               data:
                 address: "169.254.10.2/30"
@@ -42,7 +46,11 @@ spec:
             role: cloud
             status: active
             description: AWS site-to-site VPN tunnel 2 (rides on the internet port Ethernet1/2)
-            parent_interface: ["ktw1-edge-01", "Ethernet1/2"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-edge-01:Tunnel2"
+                  parent: ["ktw1-edge-01", "Ethernet1/2"]
             ip_address:
               data:
                 address: "169.254.10.6/30"
@@ -53,7 +61,11 @@ spec:
             role: cloud
             status: active
             description: SD-WAN hub end of the C900 office tunnel (rides on the internet port Ethernet1/2)
-            parent_interface: ["ktw1-edge-01", "Ethernet1/2"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-edge-01:Tunnel4"
+                  parent: ["ktw1-edge-01", "Ethernet1/2"]
             ip_address:
               data:
                 address: "169.254.10.14/30"
@@ -64,7 +76,11 @@ spec:
             role: cloud
             status: active
             description: SD-WAN hub end of the C901 office edge 1 tunnel (rides on Ethernet1/2)
-            parent_interface: ["ktw1-edge-01", "Ethernet1/2"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-edge-01:Tunnel5"
+                  parent: ["ktw1-edge-01", "Ethernet1/2"]
             ip_address:
               data:
                 address: "169.254.10.18/30"
@@ -75,7 +91,11 @@ spec:
             role: cloud
             status: active
             description: SD-WAN hub end of the C901 office edge 2 tunnel (rides on Ethernet1/2)
-            parent_interface: ["ktw1-edge-01", "Ethernet1/2"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "ktw1-edge-01:Tunnel6"
+                  parent: ["ktw1-edge-01", "Ethernet1/2"]
             ip_address:
               data:
                 address: "169.254.10.22/30"

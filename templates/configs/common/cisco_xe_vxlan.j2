@@ -30,6 +30,21 @@ vrf definition {{ mapping.vrf_name }}
   route-target import {{ rt }} stitching
 {%- endfor %}
  exit-address-family
+{%- if mapping.ipv6 %}
+ ! U: the IPv6 family of the tenant VRF, explicit route-targets like IPv4 (Catalyst 9000 BGP EVPN VXLAN guide)
+ address-family ipv6
+{%- if mapping.route_target %}
+  route-target export {{ mapping.route_target }}
+  route-target import {{ mapping.route_target }}
+  route-target export {{ mapping.route_target }} stitching
+  route-target import {{ mapping.route_target }} stitching
+{%- endif %}
+{%- for rt in mapping.import_route_targets | default([]) %}
+  route-target import {{ rt }}
+  route-target import {{ rt }} stitching
+{%- endfor %}
+ exit-address-family
+{%- endif %}
 !
 {%- endfor %}
 {%- endif %}
@@ -129,6 +144,13 @@ router bgp {{ bgp_config.local_as.asn }}
   redistribute static route-map RM-VRF-STATIC-2-EVPN-{{ mapping.vrf_name }}
 {%- endif %}
  exit-address-family
+{%- if mapping.ipv6 %}
+ ! U: `advertise l2vpn evpn` and `redistribute connected` inside `address-family ipv6 vrf <vrf>`
+ address-family ipv6 vrf {{ mapping.vrf_name }}
+  advertise l2vpn evpn
+  redistribute connected
+ exit-address-family
+{%- endif %}
 {%- endfor %}
 !
 {%- endfor %}

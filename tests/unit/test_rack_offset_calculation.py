@@ -17,20 +17,15 @@ def _build_generator(
     design: str | None = None,
     rack_index: int = 1,
     row_index: int = 1,
-    maximum_tors_per_row: int | None = None,
-    rows: int = 1,
-    leafs_per_network_rack: int = 0,
 ) -> RackGenerator:
     """Create a RackGenerator instance with minimal data for offset calculation.
 
     RackGenerator.calculate_cabling_offsets is now derived entirely from live
     rack position (row_index/index) and the caller-supplied device_count /
     racks_in_previous_rows — it no longer reads any design capacity
-    numbers (max_rows, max_compute_racks_per_row, max_tors_per_compute_rack, etc).
-    maximum_tors_per_row/rows/leafs_per_network_rack are therefore kept only
-    as documentation of each scenario's intent and are NOT read by the
-    function under test; the pod's deployment type is the only thing that
-    matters, and it is derived from the design (one real design per type).
+    numbers (max_rows, max_compute_racks_per_row, max_tors_per_compute_rack, etc);
+    the pod's deployment type is the only thing that matters, and it is derived
+    from the design (one real design per type).
     """
 
     parent = {
@@ -84,24 +79,6 @@ def test_mixed_leaf_offset_scales_with_row(row_index: int, leafs_per_rack: int, 
     offset = generator.calculate_cabling_offsets(device_count=leafs_per_rack, device_type="leaf")
 
     assert offset == expected
-
-
-def test_mixed_tor_offset_scales_by_row_and_rack_index() -> None:
-    """ToR offsets in mixed deployment account for both row and rack position.
-
-    The mixed/tor formula no longer derives a per-row tor count from any
-    design capacity — the caller now passes racks_in_previous_rows directly
-    (as a live count of sibling racks), same as plain "tor" deployment.
-    racks_in_previous_rows=1 here stands in for "1 rack in the previous row,
-    producing tors_per_row=2 at device_count=2".
-    """
-
-    # offset = ToR block start (S_MIXED: 4 leafs + 1 border-leaf = 5)
-    #        + racks_in_previous_rows * device_count + (rack_index-1) * device_count = 5 + 1*2 + 2*2 = 11
-    generator = _build_generator(deployment_type="mixed", rack_index=3, row_index=2)
-    offset = generator.calculate_cabling_offsets(device_count=2, device_type="tor", racks_in_previous_rows=1)
-
-    assert offset == 11
 
 
 @pytest.mark.parametrize(
@@ -163,27 +140,23 @@ SPINE_DOWNLINKS = 30
         # Row 2: 6 racks in previous row, offset = 12 + in-row
         (2, 1, 6, 12),  # first rack in row 2: 6*2 + 2*(1-1) = 12
         (2, 6, 6, 22),  # last rack in row 2: 6*2 + 2*(6-1) = 22
+        # Omitted: the previous row counts as empty, 0 + 2*(6-1) = 10, WRONG if row 1 actually had 6 racks (it
+        # would collide with row-1 offsets). No design-capacity fallback: it could underestimate (wasting spine
+        # ports) or overestimate (overflowing them), so the caller MUST pass the live rack count.
+        pytest.param(2, 6, None, 10, id="omitted-previous-rows-count-as-empty"),
     ],
 )
 def test_dc1_pod3_tor_offset_with_actual_rack_count(
     row_index: int,
     rack_index: int,
-    racks_in_previous_rows: int,
+    racks_in_previous_rows: int | None,
     expected: int,
 ) -> None:
     """DC1 Pod 3 (small_tor_rack): offsets stay within 30 spine downlinks when using actual rack counts."""
 
-    generator = _build_generator(
-        deployment_type="tor",
-        rack_index=rack_index,
-        row_index=row_index,
-        maximum_tors_per_row=20,  # 10 racks × 2 tors = design max
-    )
-    offset = generator.calculate_cabling_offsets(
-        device_count=2,
-        device_type="tor",
-        racks_in_previous_rows=racks_in_previous_rows,
-    )
+    generator = _build_generator(deployment_type="tor", rack_index=rack_index, row_index=row_index)
+    kwargs = {} if racks_in_previous_rows is None else {"racks_in_previous_rows": racks_in_previous_rows}
+    offset = generator.calculate_cabling_offsets(device_count=2, device_type="tor", **kwargs)
 
     assert offset == expected
     # With 2 tors per rack, the highest interface index used is offset + 1
@@ -204,6 +177,9 @@ def test_dc1_pod3_tor_offset_with_actual_rack_count(
         (1, 9, 0, 2, 21),  # last rack position in row 1 (mixed: network=1 + compute=8) → 5 + 8*2
         (2, 1, 9, 2, 23),  # first rack, second row, 9 positions in prior row → 5 + 9*2 = 23
         (2, 5, 9, 2, 31),  # row 2, rack 5 → 23 + 4*2 = 31
+        # racks_in_previous_rows=1 stands in for "1 rack in the previous row": no per-row ToR count is derived
+        # from a design capacity, the caller passes the live count, as for a plain "tor" deployment.
+        (2, 3, 1, 2, 11),  # 5 + 1*2 + (3-1)*2 = 11
     ],
 )
 def test_mixed_tor_offset_row_and_rack(
@@ -235,29 +211,15 @@ def test_no_collision_mixed_two_rows() -> None:
     leaf-vs-leaf disjointness that calculate_cabling_offsets still owns.
     """
 
-    # S_MIXED: 2 rows, 1 network rack/row with 2 leafs, 8 compute racks/row with 2 ToRs
-    rows, leafs_per_rack, tors_per_row = 2, 2, 16
-
-    def get_offset(
-        deployment_type: Literal["middle_rack", "tor", "mixed"], device_type: str, row_index: int, rack_index: int = 1
-    ) -> int:
-        g = _build_generator(
-            deployment_type=deployment_type,
-            rack_index=rack_index,
-            row_index=row_index,
-            rows=rows,
-            leafs_per_network_rack=leafs_per_rack,
-            maximum_tors_per_row=tors_per_row,
-        )
-        return g.calculate_cabling_offsets(
-            device_count=leafs_per_rack,
-            device_type=device_type,
-        )
+    # S_MIXED: 2 rows, 1 network rack/row with 2 leafs
+    leafs_per_rack = 2
 
     # Collect all port ranges [offset, offset+count)
     ranges: list[tuple[str, int, int]] = []
     for row in (1, 2):
-        leaf_off = get_offset("mixed", "leaf", row)
+        leaf_off = _build_generator(deployment_type="mixed", row_index=row).calculate_cabling_offsets(
+            device_count=leafs_per_rack, device_type="leaf"
+        )
         ranges.append((f"leaf-row{row}", leaf_off, leaf_off + leafs_per_rack))
 
     # Check no two ranges overlap
@@ -265,37 +227,6 @@ def test_no_collision_mixed_two_rows() -> None:
         for name_b, start_b, end_b in ranges[i + 1 :]:
             overlap = max(0, min(end_a, end_b) - max(start_a, start_b))
             assert overlap == 0, f"Port collision: {name_a} [{start_a},{end_a}) overlaps {name_b} [{start_b},{end_b})"
-
-
-def test_dc1_pod3_missing_racks_in_previous_rows_defaults_to_zero() -> None:
-    """DC1 Pod 3: omitting racks_in_previous_rows treats the previous row as
-    empty (offset=0 contribution from it) rather than falling back to any
-    design-declared per-row capacity — the design-capacity fallback was
-    removed because it could either underestimate (wasting spine ports) or
-    overestimate (overflowing them) versus what was actually deployed. This
-    demonstrates why the caller MUST pass the live rack count explicitly.
-    """
-
-    generator = _build_generator(
-        deployment_type="tor",
-        rack_index=6,
-        row_index=2,
-    )
-    # Without racks_in_previous_rows, previous-row contribution is 0 → offset = 0 + 10 = 10
-    offset_missing = generator.calculate_cabling_offsets(
-        device_count=2,
-        device_type="tor",
-    )
-    assert offset_missing == 10  # WRONG if row 1 actually had 6 racks (would collide with row-1 offsets)
-
-    # With actual rack count (6 racks in row 1) → offset = 12 + 10 = 22
-    offset_actual = generator.calculate_cabling_offsets(
-        device_count=2,
-        device_type="tor",
-        racks_in_previous_rows=6,
-    )
-    assert offset_actual == 22  # safely within 30 downlinks
-    assert offset_actual < SPINE_DOWNLINKS
 
 
 @pytest.mark.parametrize("name", POD_DESIGN_NAMES)

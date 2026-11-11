@@ -68,6 +68,7 @@ query spine_config($device: String!) {
                 value
               }
               ...InterfaceRoutingZoneFields
+              ...InterfaceEncapsulationFields
               ... on DcimPhysicalInterface {
                 interface_type {
                   value
@@ -123,9 +124,6 @@ query spine_config($device: String!) {
                 }
               }
               ... on DcimVirtualInterface {
-                vlan_id {
-                  value
-                }
                 ip_address {
                   node {
                     address {

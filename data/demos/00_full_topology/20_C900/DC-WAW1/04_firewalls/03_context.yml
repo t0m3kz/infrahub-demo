@@ -16,5 +16,6 @@ spec:
           environment: p
           parent: DC-WAW1
           infrastructure_orchestrator: ansible_automation_platform
+          design: M_INTERNAL
       vlan_id: 3001
       snat_address: ["192.0.2.0/32", "default"]

@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from transforms.config.controller import ControllerPayload
 
 
@@ -209,11 +210,14 @@ def _raw_iface(device: str, name: str, address: str, namespace: str, vlan_id: in
     """A peering's interface; its tag is ``vlan_id`` (by default the number a ``<port>.<vlan>`` name ends in)."""
     suffix = name.rsplit(".", 1)[-1]
     tag = int(suffix) if "." in name and suffix.isdigit() else None
+    tag = tag if vlan_id == -1 else vlan_id
+    # an interface that rides on a parent has the encapsulation with its tag; an untagged port has none
+    encapsulation = raw_encapsulation(tag, {"name": {"value": name.rsplit(".", 1)[0]}}) if tag is not None else {}
     return {
         "node": {
             **(interface_vrf_capability(routing_vrf(namespace)) if namespace != "default" else {}),
             "name": {"value": name},
-            "vlan_id": {"value": tag if vlan_id == -1 else vlan_id},
+            **encapsulation,
             "ip_address": {
                 "node": {"address": {"value": address}, "ip_namespace": {"node": {"name": {"value": "default"}}}}
             },

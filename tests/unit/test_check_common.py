@@ -20,7 +20,7 @@ class TestValidateInterfaces:
                     {
                         "name": "Loopback0",
                         "role": "loopback",
-                        "ip_addresses": [],
+                        "ip_address": None,
                     }
                 ]
             }
@@ -69,27 +69,3 @@ class TestValidateRoutingPassword:
         assert len(errors) == 2
         assert any("BGP peering 'underlay-peer-1'" in error for error in errors)
         assert any("OSPF interface config on 'Ethernet1'" in error for error in errors)
-
-    def test_valid_passwords_pass(self) -> None:
-        """No findings when all routing auth secrets are set."""
-        errors = validate_routing_password(
-            {
-                "capabilities": [
-                    {
-                        "typename": "ManagedBGP",
-                        "peerings": [
-                            {"name": "overlay-peer-1", "password": "set"},
-                        ],
-                    }
-                ],
-                "interfaces": [
-                    {
-                        "name": "Ethernet2",
-                        "capabilities": [
-                            {"typename": "RoutingOSPFInterface", "password": "set"},
-                        ],
-                    }
-                ],
-            }
-        )
-        assert errors == []

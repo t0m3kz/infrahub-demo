@@ -10,8 +10,8 @@ from .all_demo_constants import _ALL_DEMO_ROOT, ALL_DEMO_DC_NAMES, ALL_DEMO_EXPE
 from .demo_data import ROOT, declared, name
 
 # One shared (tenant-less) firewall context per (firewall cluster, tenant namespace): per DC and per serving
-# colocation zone with a firewall pair, which every footprint of the zone's metro shares (a colocation has no design, so
-# never a dedicated context), one for each of PROD and NONPROD that has a footprint. PROD and NONPROD never meet
+# colocation zone with a firewall pair, which every footprint of the zone's metro shares (a colocation footprint never gets a
+# dedicated context), one for each of PROD and NONPROD that has a footprint. PROD and NONPROD never meet
 # on one context (`shared-{cluster}-prod`, `shared-{cluster}-nonprod`). The colocation context carries transit
 # legs like a DC one (its legs face the zone's two edges, whose firewall ports are tagged with the context) ...
 # The count, ALL_DEMO_SHARED_FIREWALL_CONTEXTS, is derived below from ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS.
@@ -31,8 +31,8 @@ def _dedicated_tenants(flag: str) -> dict[str, str]:
 
 
 # ... plus one dedicated context per customer whose design blueprint sets
-# dedicated_firewall (data/bootstrap/21_customer_templates.yml: L_DC and
-# XL_DC do, S_DC and M_DC do not). Maps tenant deployment -> design.
+# dedicated_firewall (data/bootstrap/21_customer_templates.yml: L and XL
+# do, S and M do not). Maps tenant deployment -> design.
 ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = _dedicated_tenants("dedicated_firewall")
 
 
@@ -126,7 +126,7 @@ ALL_DEMO_MANAGEMENT_RULES: dict[str, tuple[str, int]] = {
 
 # The tenant segment those rules start from, read from 05_security_policy.yml.
 # Its prefix and its local VLAN on each switch are derived (add_vxlan_segment:
-# a /24 from its environment's tenant pool, one VLAN per VLAN domain), so
+# a prefix from its customer's pool, a /24 without a host_count, one VLAN per VLAN domain), so
 # test_64 reads both from the graph.
 # Exactly one (the unpacking raises otherwise).
 (MANAGEMENT_CLIENT_SEGMENT,) = sorted(
@@ -213,7 +213,7 @@ def _expected_transit_context(site: str, tenant: str | None, deployments: tuple[
 def expected_transit_contexts() -> list[ExpectedTransitContext]:
     """The shared contexts of every 30_all DC (one per tenant namespace), then its dedicated ones
     (ALL_DEMO_DEDICATED_FIREWALL_TENANTS), then the shared contexts of every serving colocation zone (never a
-    dedicated one: no design)."""
+    dedicated one)."""
     contexts: list[ExpectedTransitContext] = []
     for dc, deployments in ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS.items():
         dedicated = tuple(d for d in deployments if d in ALL_DEMO_DEDICATED_FIREWALL_TENANTS)

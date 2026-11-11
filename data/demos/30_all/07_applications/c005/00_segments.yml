@@ -8,9 +8,10 @@
 # computed name (C005-P-DC10 and C005-P-DC12; every segment here is prod, like
 # payment-core, so each sits only on prod footprints).
 #
-# No gateway is typed: add_vxlan_segment allocates each segment's /24 and its
-# anycast gateway (.1) from Tenant-PROD-IPv4 (data/bootstrap/23b_tenant_pools.yml),
-# keyed by the segment name, once.
+# No gateway is typed: add_vxlan_segment allocates each segment's prefix and its
+# anycast gateway (.1) from C005's own pool (c005-p-dc-ipv4, carved on the first request from
+# Tenant-PROD-IPv4, data/bootstrap/23b_tenant_pools.yml, in a block of its design's size), keyed
+# by the segment name, once. A /24 unless the segment states a host_count.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -25,6 +26,8 @@ spec:
           data:
             customer_name: "web-frontend-local-dc10"
             environment: "p"
+            # 4 instance(s) + 25% headroom
+            host_count: 5
             security_zone: "PROD"
             customer_deployments:
               - "C005-P-DC10"
@@ -35,6 +38,8 @@ spec:
           data:
             customer_name: "app-backend-stretch"
             environment: "p"
+            # 2 instance(s) + 25% headroom
+            host_count: 3
             security_zone: "PROD"
             stretch_scope: dc_pair
             # No explicit isolation_mode: AppApplicationGenerator derives
@@ -55,6 +60,8 @@ spec:
           data:
             customer_name: "database-local-dc12"
             environment: "p"
+            # 2 instance(s) + 25% headroom
+            host_count: 3
             security_zone: "PROD"
             customer_deployments:
               - "C005-P-DC12"
@@ -65,6 +72,8 @@ spec:
           data:
             customer_name: "message-queue-stretch"
             environment: "p"
+            # 2 instance(s) + 25% headroom
+            host_count: 3
             security_zone: "PROD"
             stretch_scope: dc_pair
             customer_deployments:
@@ -95,7 +104,7 @@ spec:
               - vxlan_segments
 
         # Terminated on DC10's shared PROD firewall context: its gateway (the .1 add_vxlan_segment takes from
-        # Tenant-PROD-IPv4, like every DC segment) is the floating VIP of the Check Point pair, with no address on a
+        # C005's PROD pool, like every DC segment) is the floating VIP of the Check Point pair, with no address on a
         # member. The fabric only bridges the segment (a VLAN row and the L2 VNI on the border leaves, no SVI, VRF or
         # ACL) and the firewall renders the `<uplink trunk>.<vlan>` sub-interface with the VLAN of the border leaf
         # it is cabled to; add_vxlan_segment tags the border service ports facing the pair with the segment. The

@@ -4,7 +4,8 @@ import hashlib
 from ipaddress import ip_interface, ip_network
 from typing import Any
 
-from transforms.helpers.acl import _PROTO_MAP, _port_match
+from transforms.helpers.acl import _acl_protocol, _port_match
+from transforms.helpers.address_table import UnresolvedEndpointError, endpoint_ref
 from transforms.helpers.policy import active_rules, enabled_policies, rule_endpoint, rule_zone
 from utils.exchange_transit import (
     FIREWALL_CONTEXT_KIND,
@@ -16,7 +17,7 @@ from utils.exchange_transit import (
 from utils.fabric_roles import FIREWALL_ROLES
 from utils.limits import ACL_CLOSING_SEQ, DEFAULT_NAMESPACE, VLAN_NAME_MAX
 from utils.routing_domain import interface_security_zone, interface_vrf
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import IPV4, own_prefix, prefix_family
 
 
 def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -46,7 +47,7 @@ def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[d
             continue
         member_cidrs: list[str] = []
         for seg in zone.get("network_segments") or []:
-            prefix = segment_prefix(seg)
+            prefix = own_prefix(seg)
             if prefix:
                 member_cidrs.append(prefix)
         zones.append(
@@ -120,6 +121,9 @@ def get_firewall_static_routes(
             continue
 
         for cidr in zone_cidrs.get(zone_name) or []:
+            # An interface routes the prefixes of its own family: the nexthop is its neighbour's address.
+            if prefix_family(cidr) != prefix_family(ip_addr):
+                continue
             routes.append(
                 {
                     "vrf": ns_name,
@@ -320,6 +324,27 @@ def _snat_host(cap: dict[str, Any]) -> str | None:
     return str(ip_interface(address).ip) if address else None
 
 
+def _resolved_endpoint(rule: dict[str, Any], side: str) -> str | None:
+    """The CIDR a rule matches on ``side`` (None: any), or an error when a segment or selector it names has none.
+
+    A rule that names a segment (or a prefix selector) whose address is missing would otherwise render as ``any``.
+    """
+    endpoint = rule_endpoint(rule, side)
+    segment = rule.get(f"{side}_segment") or {}
+    if endpoint is None and (segment.get("id") or segment.get("name")):
+        raise UnresolvedEndpointError(
+            f"rule '{rule.get('name')}': the {side} segment '{segment.get('name') or segment.get('id')}' has no prefix; "
+            "refusing to render it as any"
+        )
+    endpoint_ref(endpoint)
+    return endpoint
+
+
+def _ipv6_ref(cidr: str | None) -> str | None:
+    """The table name of an IPv6 endpoint; IPv4 endpoints stay inline in the templates (byte-identical IPv4 configs)."""
+    return endpoint_ref(cidr) if cidr and prefix_family(cidr) == "ipv6" else None
+
+
 def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Build a rule table from SecurityPolicy dicts (place_policies_in_contexts).
 
@@ -365,13 +390,13 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
             seq += 10
 
             protocol = rule.get("protocol") or "any"
-            acl_proto = _PROTO_MAP.get(protocol, "ip")
+            acl_proto = _acl_protocol(rule, IPV4)
 
             src_zone = rule_zone(rule, "source")
             dst_zone = rule_zone(rule, "destination")
 
-            src = rule_endpoint(rule, "source")
-            dst = rule_endpoint(rule, "destination")
+            src = _resolved_endpoint(rule, "source")
+            dst = _resolved_endpoint(rule, "destination")
 
             port_start = rule.get("port_start")
             port_end = rule.get("port_end")
@@ -397,6 +422,9 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
                     "dst_zone": dst_zone,
                     "src": src,
                     "dst": dst,
+                    # The table names (transforms/helpers/address_table.py); an IPv6 endpoint is rendered by name.
+                    "src_ref": _ipv6_ref(src),
+                    "dst_ref": _ipv6_ref(dst),
                     "dst_port": dst_port,
                     "log": bool(rule.get("log")),
                     "description": rule.get("description") or "",
@@ -410,6 +438,7 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
             # falls through to the implicit deny below.
             seq += 10
             segment = policy.get("segment") or {}
+            src = own_prefix(segment) if segment else None
             rules.append(
                 {
                     "seq": seq,
@@ -421,8 +450,10 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
                     "port_end": None,
                     "src_zone": (segment.get("security_zone") or {}).get("name") or None,
                     "dst_zone": None,
-                    "src": segment_prefix(segment) if segment else None,
+                    "src": src,
                     "dst": None,
+                    "src_ref": _ipv6_ref(src),
+                    "dst_ref": None,
                     "dst_port": None,
                     "log": False,
                     "description": f"Default action of {policy.get('name') or 'policy'}",

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from transforms.config.loadbalancer import LoadBalancer
 
 # ===========================================================================
@@ -112,7 +113,7 @@ def _onprem_data(
             ),
             "__typename": "DcimVirtualInterface",
             "name": _v("eth1.3100"),
-            "vlan_id": _v(3100),
+            **raw_encapsulation(3100, {"name": _v("eth1"), "device": {"node": {"id": "dev-lb-01"}}}),
             "role": _v("service"),
             "ip_address": {
                 "node": {
@@ -120,7 +121,6 @@ def _onprem_data(
                     "ip_namespace": {"node": {"name": {"value": "default"}}},
                 }
             },
-            "parent_interface": {"node": {"name": _v("eth1"), "device": {"node": {"id": "dev-lb-01"}}}},
             "device": {"node": {"id": "dev-lb-01"}},
             "capabilities": _edges([]),
         },

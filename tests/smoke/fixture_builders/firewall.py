@@ -7,6 +7,7 @@ from typing import Any
 
 from tests.smoke.fixture_builders.common import (
     _edges,
+    _encapsulation,
     _make_interface,
     _make_policy_rule,
     _make_segment_node,
@@ -29,7 +30,7 @@ def _make_firewall_interface(
     trust_level: int,
     description: str = "",
     vlan_id: int | None = None,
-    parent_interface_name: str | None = None,
+    parent_name: str | None = None,
     namespace_name: str | None = None,
 ) -> dict:
     """A firewall sub-interface with one explicit routing/policy zone.
@@ -43,7 +44,7 @@ def _make_firewall_interface(
     }
     if namespace_name is not None and routing_zone(namespace_name)["name"] != zone_node["name"]:
         raise ValueError(f"Firewall leg {name}: routing and policy zones disagree")
-    if vlan_id is not None and parent_interface_name is not None and name != f"{parent_interface_name}.{vlan_id}":
+    if vlan_id is not None and parent_name is not None and name != f"{parent_name}.{vlan_id}":
         raise ValueError(f"Firewall leg {name}: explicit VLAN does not match its sub-interface")
     return {
         "security_zone": _node(zone_node),
@@ -53,9 +54,10 @@ def _make_firewall_interface(
         "status": _v("active"),
         "role": _v("uplink"),
         "device": _node({"id": "dev-fw"}),
-        "vlan_id": _v(int(name.rsplit(".", 1)[1]) if parent_interface_name else None),
-        "parent_interface": _node(
-            {"name": _v(parent_interface_name), "device": _node({"id": "dev-fw"})} if parent_interface_name else None
+        **(
+            _encapsulation(int(name.rsplit(".", 1)[1]), {"name": _v(parent_name), "device": _node({"id": "dev-fw"})})
+            if parent_name
+            else {}
         ),
         "ip_address": _node(
             {
@@ -295,7 +297,7 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
             trust_level=100,
             description="Internal LAN link",
             vlan_id=10,
-            parent_interface_name="ethernet1/1",
+            parent_name="ethernet1/1",
             namespace_name="VRF-INTERNAL",
         ),
         _make_firewall_interface(
@@ -305,7 +307,7 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
             trust_level=50,
             description="DMZ link",
             vlan_id=20,
-            parent_interface_name="ethernet1/1",
+            parent_name="ethernet1/1",
             namespace_name="VRF-DMZ",
         ),
         _make_firewall_interface(
@@ -315,7 +317,7 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
             trust_level=0,
             description="External link",
             vlan_id=30,
-            parent_interface_name="ethernet1/1",
+            parent_name="ethernet1/1",
             namespace_name="VRF-EXTERNAL",
         ),
     ]
@@ -621,7 +623,7 @@ def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
                 trust_level=100,
                 description="Internal LAN link",
                 vlan_id=10,
-                parent_interface_name="ethernet1/1",
+                parent_name="ethernet1/1",
                 namespace_name="VRF-INTERNAL",
             ),
             _make_firewall_interface(
@@ -631,7 +633,7 @@ def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
                 trust_level=0,
                 description="Internet link",
                 vlan_id=30,
-                parent_interface_name="ethernet1/1",
+                parent_name="ethernet1/1",
                 namespace_name="VRF-EXTERNAL",
             ),
         ]

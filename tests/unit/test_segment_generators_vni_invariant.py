@@ -77,7 +77,6 @@ def _stateful_gen(store: _FakeSegmentDeploymentStore) -> Any:
     gen.client.filters = AsyncMock(side_effect=store.filters)
     gen.client.create = AsyncMock(side_effect=store.create)
     gen.client.get = AsyncMock(return_value=MagicMock(id="pool-global"))
-    gen._create_inline_sub_interfaces = AsyncMock()
     return gen
 
 

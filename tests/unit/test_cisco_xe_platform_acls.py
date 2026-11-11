@@ -21,7 +21,8 @@ from transforms.config.access_leaf import AccessLeaf
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
-from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
+from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes
+from utils.segment_addressing import AddressFamilyMismatchError
 
 # ---------------------------------------------------------------------------
 # 6. Segment ACLs and inter-VRF statics: transforms/helpers/cisco_xe.py + the cisco_xe_acl / cisco_xe_vrf_static templates
@@ -185,10 +186,10 @@ class TestCiscoXeAclTranslation:
     @pytest.mark.parametrize(
         ("rule", "message"),
         [
-            (_rule(src="2001:db8::/32"), "'2001:db8::/32' is IPv6"),
-            (_rule(dst="2001:db8::1"), "'2001:db8::1' is IPv6"),
-            (_rule(dst="10.1.1.10/24"), "'10.1.1.10/24' is not an IPv4 network address"),
-            (_rule(dst="web-servers"), "'web-servers' is not an IPv4 network address"),
+            (_rule(src="2001:db8::/32"), "'2001:db8::/32' is IPv6, in an IPv4 ACL"),
+            (_rule(dst="2001:db8::1"), "'2001:db8::1' is IPv6, in an IPv4 ACL"),
+            (_rule(dst="10.1.1.10/24"), "'10.1.1.10/24' is not a network address"),
+            (_rule(dst="web-servers"), "'web-servers' is not a network address"),
             (_rule(protocol="gre"), "protocol 'gre'"),
             (_rule(action="reject"), "action 'reject'"),
             (_rule(dst_port="gt 1024"), "port match 'gt 1024'"),
@@ -259,40 +260,17 @@ class TestCiscoXeVrfRoutes:
         assert [r["exported"] for r in routes] == [False]
 
 
-class TestCiscoXeIpv6SviIsRefused:
-    """An IPv6 gateway SVI cannot be protected by the IPv4 segment ACL."""
+class TestCiscoXeIpv6SegmentAcl:
+    """A segment with an IPv6 gateway gets an `ipv6 access-list`; a rule naming an IPv4 endpoint is refused."""
 
-    def test_an_ipv6_gateway_svi_with_an_acl_is_refused(self) -> None:
-        """An `ip access-group` ACL never filters an IPv6 SVI: refuse rather than ship it open."""
-        with pytest.raises(ValueError, match="the segment ACL of VLAN 300: its gateway SVI is IPv6"):
-            refuse_unfiltered_ipv6(
-                [
-                    {"vlan_id": 100, "acl_name": "ACL-VLAN100-IN", "gateway_ipv6": None},
-                    {"vlan_id": 300, "acl_name": "ACL-VLAN300-IN", "gateway_ipv6": "2001:db8::1/64"},
-                ],
-                "leaf",
-            )
-
-    def test_an_ipv6_svi_without_an_acl_and_ipv4_svis_pass(self) -> None:
-        """No ACL on the IPv6 SVI (no security policy in the query): nothing to protect, nothing to refuse."""
-        refuse_unfiltered_ipv6(
-            [
-                {"vlan_id": 100, "acl_name": "ACL-VLAN100-IN", "gateway_ipv6": None},
-                {"vlan_id": 300, "acl_name": None, "gateway_ipv6": "2001:db8::1/64"},
-            ],
-            "leaf",
-        )
-
-    def test_through_transform(self) -> None:
-        """An IPv6 gateway on the ACL-protected segment makes transform() raise."""
+    def test_a_rule_naming_an_ipv4_endpoint_is_refused_through_the_transform(self) -> None:
+        """The golden policy names IPv4 peers (allow-rtp to 10.200.0.0/24): in an IPv6 segment's ACL no line can match."""
         data = _golden_input(ACL_EVPN)
         gateway = _host_segment(data)["gateway"]["node"]
         gateway["address"]["value"] = "2001:db8:100::1/64"
         gateway["ip_prefix"]["node"]["prefix"]["value"] = "2001:db8:100::/64"
 
-        with pytest.raises(
-            ValueError, match="cisco_xe leaf cannot render the segment ACL of VLAN 100: its gateway SVI"
-        ):
+        with pytest.raises(AddressFamilyMismatchError, match="no ACL can express it"):
             run_transform(Leaf, data)
 
 
@@ -379,17 +357,14 @@ class TestCiscoXeAclRenderingThroughTransform:
     def test_an_ipv6_rule_endpoint_is_refused_through_transform(
         self, golden: str, transform_cls: type[BaseDeviceTransform], role: str
     ) -> None:
-        """A rule whose destination is an IPv6 prefix cannot go into an `ip access-list extended`."""
+        """A rule whose destination is an IPv6 prefix cannot go into the IPv4 ACL of an IPv4 segment: refused, never dropped."""
         data = _golden_input(golden)
         rule = _first_policy_rule(data)
         rule["destination_zone"] = {"node": {"name": {"value": "PROD"}}}
         rule["destination_ip_addresses"] = {"edges": [{"node": {"address": {"value": "2001:db8::/32"}}}]}
 
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(AddressFamilyMismatchError, match="'allow-https' matches 2001:db8::/32, an ipv6 endpoint"):
             run_transform(transform_cls, data)
-
-        assert str(excinfo.value).startswith(f"cisco_xe {role} cannot render ACL ACL-VLAN100-IN rule 'allow-https': ")
-        assert "IPv6" in str(excinfo.value)
 
     def test_access_leaf_renders_the_acl_too(self) -> None:
         """The access-leaf shares the leaf template: the same input renders the same ACL block."""

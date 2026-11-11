@@ -4,6 +4,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from tests.integration.circuit_helpers import fetch_interconnect_inventory
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.integration_scenario_helpers_helpers import _no_propagation_delay  # noqa: F401 (autouse fixture)
 
 
@@ -140,14 +141,15 @@ async def test_fetch_interconnect_inventory_parses_location_and_end_placement() 
                         "__typename": "DcimVirtualInterface",
                         "name": value("Ethernet1/13.1000"),
                         "ip_address": {"node": None},
-                        "parent_interface": {
-                            "node": {
+                        **raw_encapsulation(
+                            1000,
+                            {
                                 "id": "if-parent",
                                 "name": value("Ethernet1/13"),
                                 "cable": {"node": None},
                                 "capabilities": {"edges": [{"node": carrier("XC-EQXFR2-AWS-EUC1")}]},
-                            }
-                        },
+                            },
+                        ),
                     },
                 ),
             ]

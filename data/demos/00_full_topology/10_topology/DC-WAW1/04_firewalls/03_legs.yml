@@ -6,9 +6,13 @@ spec:
   kind: DcimVirtualInterface
   data:
     - name: "ethernet1/1.3000"
-      vlan_id: 3000
       device: waw1-fw-01
-      parent_interface: ["waw1-fw-01", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "waw1-fw-01:ethernet1/1.3000"
+            vlan_id: 3000
+            parent: ["waw1-fw-01", "ethernet1/1"]
       role: service
       status: active
       ip_address:
@@ -16,9 +20,13 @@ spec:
           address: "100.66.0.21/29"
           ip_namespace: "default"
     - name: "ethernet1/1.3000"
-      vlan_id: 3000
       device: waw1-fw-02
-      parent_interface: ["waw1-fw-02", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "waw1-fw-02:ethernet1/1.3000"
+            vlan_id: 3000
+            parent: ["waw1-fw-02", "ethernet1/1"]
       role: service
       status: active
       ip_address:

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     import logging
     from .common import CommonGenerator
 
+from utils.interface_encapsulation import encapsulation_name
 from utils.limits import DEFAULT_NAMESPACE, WAIT_FOR_PEER_GENERATOR
 
 from .far_end import ports_free_for
@@ -28,6 +29,7 @@ from .protocols import (
     IpamIPAddress,
     LocationRack,
     LocationSuite,
+    ManagedInterfaceEncapsulation,
 )
 from .types import CablingOptions, ChainHop
 
@@ -536,7 +538,8 @@ class CablingMixin:
         role: str = "service",
     ) -> Any | None:
         """Upsert a VLAN-tagged DcimVirtualInterface on trunk_iface, named
-        <trunk>.<vlan_id> by convention and stating the tag in ``vlan_id``, and put in the VRF instance ``vrf_id``
+        <trunk>.<vlan_id> by convention, riding on the trunk with the tag in its ``ManagedInterfaceEncapsulation`` (saved
+        with the interface, so it is reclaimed with it), and put in the VRF instance ``vrf_id``
         (generators/helpers/interface_vrf.py: it leaves another instance). Nothing else is linked to it: the context
         and the exchanges a firewall-context leg belongs to are derived from the member's uplink and the leg's VRF
         (utils/service_contexts.py). Trunk-interface resolution stays with the caller since the fallback behavior
@@ -553,8 +556,6 @@ class CablingMixin:
         sub_iface_data: dict[str, Any] = {
             "name": sub_iface_name,
             "device": {"id": device_id},
-            "parent_interface": {"id": trunk_iface.id},
-            "vlan_id": vlan_id_value,
             "status": "active",
             "role": role,
             **({"ip_address": {"id": ip_address_id}} if ip_address_id else {}),
@@ -563,6 +564,16 @@ class CablingMixin:
         try:
             sub_iface = await self.client.create(kind=DcimVirtualInterface, data=sub_iface_data)
             await sub_iface.save(**tracked_save_kwargs(track))
+            encapsulation = await self.client.create(
+                kind=ManagedInterfaceEncapsulation,
+                data={
+                    "name": encapsulation_name(device_name, sub_iface_name),
+                    "parent": {"id": trunk_iface.id},
+                    "vlan_id": vlan_id_value,
+                    "capabilities": [{"id": sub_iface.id}],
+                },
+            )
+            await encapsulation.save(**tracked_save_kwargs(track))
             if vrf_id:
                 # A node built from create(data) does not know the capabilities the server already holds: one get with
                 # the relationship included (only the peer ids are read). The edges are written one by one, never as a

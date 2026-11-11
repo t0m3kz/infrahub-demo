@@ -71,6 +71,7 @@ query distribution_switch_config($device: String!) {
               }
               ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
               ...InterfaceRoutingZoneFields
+              ...InterfaceEncapsulationFields
               ... on DcimPhysicalInterface {
                 interface_type {
                   value
@@ -126,9 +127,6 @@ query distribution_switch_config($device: String!) {
                 }
               }
               ... on DcimVirtualInterface {
-                vlan_id {
-                  value
-                }
                 device {
                   node {
                     id
@@ -144,18 +142,6 @@ query distribution_switch_config($device: String!) {
                         name {
                           value
                         }
-                      }
-                    }
-                  }
-                }
-                parent_interface {
-                  node {
-                    name {
-                      value
-                    }
-                    device {
-                      node {
-                        id
                       }
                     }
                   }

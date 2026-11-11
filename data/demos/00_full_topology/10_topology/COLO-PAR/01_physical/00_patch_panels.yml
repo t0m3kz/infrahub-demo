@@ -1,7 +1,8 @@
 ---
 # The patch panel of the cage (PP-EQX-FR2-01 of 30_all): a passive panel in the rack, not a device. Type lc-24:
-# add_patch_panel builds its 24 rear and 24 front ports; the one used jack is declared as a nested front port on its
-# rear port (front "1" -> rear "1"), so the cables land on it in the same load.
+# its 24 rear and 24 front ports are in 00_patch_panels_01_00 and _02_00 (no generator runs here); the one used
+# jack is declared as a nested front port on its rear port (front "1" -> rear "1"), so the cables land on it in
+# the same load.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

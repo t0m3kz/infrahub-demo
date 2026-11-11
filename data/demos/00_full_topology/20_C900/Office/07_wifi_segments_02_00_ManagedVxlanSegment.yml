@@ -6,6 +6,7 @@ spec:
   data:
     - owner: C900
       customer_name: wifi-corp
+      routing_tag: 105
       environment: p
       description: "Staff Wi-Fi: the intranet and the internet"
       customer_deployments: ["C900-OFFICE"]
@@ -24,6 +25,7 @@ spec:
               description: Office segment c900-wifi-corp-p
     - owner: C900
       customer_name: wifi-guest
+      routing_tag: 106
       environment: p
       description: "Guest Wi-Fi: the internet and nothing else"
       customer_deployments: ["C900-OFFICE"]

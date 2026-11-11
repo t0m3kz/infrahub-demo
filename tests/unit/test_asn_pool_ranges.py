@@ -16,40 +16,22 @@ from generators.helpers.pools import calculate_fabric_asn_block_size, name_to_as
 from utils.limits import PRIVATE_ASN32_START
 
 
-def test_block_size_small_fabric() -> None:
-    """Small fabric (≤50 estimated ASNs) gets 200 ASNs."""
-    # 1 + 0 + 1*(1+30) = 32 → 200
-    assert calculate_fabric_asn_block_size(max_pods=1) == 200
-
-
-def test_block_size_medium_fabric() -> None:
-    """Medium fabric (≤200 estimated ASNs) gets 500 ASNs."""
-    # 1 + 0 + 3*(1+30) = 94 → 500
-    assert calculate_fabric_asn_block_size(max_pods=3) == 500
-
-
-def test_block_size_large_fabric() -> None:
-    """Large fabric (>200 estimated ASNs) gets 2000 ASNs."""
-    # 1 + 0 + 8*(1+30) = 249 → 2000
-    assert calculate_fabric_asn_block_size(max_pods=8) == 2000
-
-
-def test_block_size_scales_with_border_leafs() -> None:
-    """More border-leafs (not MLAG-paired — still one ASN each) increases
-    the estimate and block size; pod count alone does the same."""
-    # 1 pod, no border-leafs: 1 + 0 + 1*31 = 32 → 200
-    assert calculate_fabric_asn_block_size(max_pods=1, max_border_leafs_per_fabric=0) == 200
-    # 1 pod, 20 border-leafs: 1 + 20 + 1*31 = 52 → 500
-    assert calculate_fabric_asn_block_size(max_pods=1, max_border_leafs_per_fabric=20) == 500
-    # 2 pods, no border-leafs: 1 + 0 + 2*31 = 63 → 500
-    assert calculate_fabric_asn_block_size(max_pods=2, max_border_leafs_per_fabric=0) == 500
-
-
-def test_name_to_asn_range_deterministic() -> None:
-    """Same name always produces the same range."""
-    r1 = name_to_asn_range("DC1", max_pods=2)
-    r2 = name_to_asn_range("DC1", max_pods=2)
-    assert r1 == r2
+@pytest.mark.parametrize(
+    ("max_pods", "max_border_leafs_per_fabric", "expected"),
+    [
+        pytest.param(1, None, 200, id="small"),  # 1 + 0 + 1*(1+30) = 32 -> 200
+        pytest.param(3, None, 500, id="medium"),  # 1 + 0 + 3*(1+30) = 94 -> 500
+        pytest.param(8, None, 2000, id="large"),  # 1 + 0 + 8*(1+30) = 249 -> 2000
+        pytest.param(1, 0, 200, id="1-pod-no-border-leafs"),  # 1 + 0 + 1*31 = 32 -> 200
+        pytest.param(1, 20, 500, id="1-pod-20-border-leafs"),  # 1 + 20 + 1*31 = 52 -> 500
+        pytest.param(2, 0, 500, id="2-pods-no-border-leafs"),  # 1 + 0 + 2*31 = 63 -> 500
+    ],
+)
+def test_block_size(max_pods: int, max_border_leafs_per_fabric: int | None, expected: int) -> None:
+    """Small (<=50 estimated ASNs) gets 200, medium (<=200) 500, large 2000; more border-leafs (not MLAG-paired,
+    still one ASN each) increase the estimate and block size, and pod count alone does the same."""
+    kwargs = {} if max_border_leafs_per_fabric is None else {"max_border_leafs_per_fabric": max_border_leafs_per_fabric}
+    assert calculate_fabric_asn_block_size(max_pods=max_pods, **kwargs) == expected
 
 
 def test_name_to_asn_range_unique_per_dc() -> None:
@@ -72,19 +54,19 @@ def test_name_to_asn_range_within_private_space() -> None:
         assert end <= 4294967295
 
 
-def test_name_to_asn_range_block_size_matches_fabric() -> None:
+@pytest.mark.parametrize(
+    ("name", "max_pods", "size"),
+    [
+        pytest.param("TINY", 1, 200, id="small"),
+        pytest.param("MED", 3, 500, id="medium"),
+        # A 2000 block, less the slot's last ASN (the overlay AS)
+        pytest.param("BIG", 8, 1999, id="large"),
+    ],
+)
+def test_name_to_asn_range_block_size_matches_fabric(name: str, max_pods: int, size: int) -> None:
     """Block size in range matches fabric size estimate."""
-    # Small fabric → 200 block
-    start, end = name_to_asn_range("TINY", max_pods=1)
-    assert end - start + 1 == 200
-
-    # Medium fabric → 500 block
-    start, end = name_to_asn_range("MED", max_pods=3)
-    assert end - start + 1 == 500
-
-    # Large fabric → 2000 block, less the slot's last ASN (the overlay AS)
-    start, end = name_to_asn_range("BIG", max_pods=8)
-    assert end - start + 1 == 1999
+    start, end = name_to_asn_range(name, max_pods=max_pods)
+    assert end - start + 1 == size
 
 
 @pytest.mark.parametrize("max_pods", [1, 3, 8])

@@ -9,7 +9,7 @@ add service-{{ rule.raw_protocol }} name {{ svc_name }} port {{ rule.port_start 
 {%- else %}
 {%- set svc_name = 'Any' %}
 {%- endif %}
-add access-rule layer "Network" position {{ rule.seq }} name "{{ rule.name }}" action {{ 'accept' if rule.action == 'permit' else 'drop' }} source {{ rule.src or 'Any' }} destination {{ rule.dst or 'Any' }} service {{ svc_name }} track {{ 'Log' if rule.log else 'None' }}
+add access-rule layer "Network" position {{ rule.seq }} name "{{ rule.name }}" action {{ 'accept' if rule.action == 'permit' else 'drop' }} source {{ rule.src_ref or rule.src or 'Any' }} destination {{ rule.dst_ref or rule.dst or 'Any' }} service {{ svc_name }} track {{ 'Log' if rule.log else 'None' }}
 {%- if rule.src_zone %}
 set access-rule layer "Network" name "{{ rule.name }}" source {{ rule.src_zone }}
 {%- endif %}
@@ -56,11 +56,17 @@ set interface {{ iface.name }} comments "{{ iface.description }}"
 {%- endif %}
 {%- if static_routes %}
 ! --- Static Routes (return path to leaf per zone) ---
+{#- I: an IPv6 static route is `set ipv6 static-route` (Gaia clish). #}
 {%- for route in static_routes %}
-set static-route {{ route.destination }} nexthop gateway address {{ route.nexthop }} on
+set {{ 'ipv6 ' if ':' in route.destination else '' }}static-route {{ route.destination }} nexthop gateway address {{ route.nexthop }} on
 {%- endfor %}
 !
 {%- endif %}
+{#- U: an IPv6 network object of the management API (`add network ... subnet6 ... mask-length6`), one per IPv6 endpoint
+    or zone member of the address table; the rule names it. Run against the SmartCenter like the other mgmt_cli lines. #}
+{%- for entry in address_table | default([]) if entry.family == 6 %}
+mgmt_cli add network name "{{ entry.name }}" subnet6 "{{ entry.cidr.split('/')[0] }}" mask-length6 {{ entry.cidr.split('/')[1] }}
+{%- endfor %}
 {%- if zone_policies %}{{ security_policies(zone_policies) }}
 {%- endif %}
 {%- if contexts %}

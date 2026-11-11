@@ -149,8 +149,8 @@ nodes:
         description: "The logical circuits that ride on this transport"
 
   # The interface of the cloud: the L3 termination of one session, the same for every operator. A DcimInterface of
-  # its transport (`device`), riding on a port or LAG of it (`parent_interface`), so a session circuit ends on it
-  # through the shared interface edge like on any port. The provider side address and AS are the
+  # its transport (`device`), riding on a port or LAG of it (its ManagedInterfaceEncapsulation `parent`), so a session
+  # circuit ends on it through the shared interface edge like on any port. The provider side address and AS are the
   # TopologyConnectorRouting edges (peer_ip, peer_asn); OUR side is a sub-interface of ours and our BGP process. Where
   # it lands is the gateway. Account, region and owner are the transport's.
   - name: PeeringInterface
@@ -162,7 +162,6 @@ nodes:
     inherit_from:
       - DcimInterface
       - DcimHasIPAddress
-      - DcimSubInterface
       - TopologyConnectorRouting
     attributes:
       - name: cloud_id
@@ -246,8 +245,9 @@ nodes:
             description: "GRE tunnel, no encryption"
             color: "#95A5A6"
     relationships:
-      # What it rides on (a VIF on its LAG, a VLAN attachment on its port) is parent_interface of DcimSubInterface, the
-      # same edge as a sub-interface of a managed device; the same-transport rule is checks/interface_parents.py.
+      # What it rides on (a VIF on its LAG, a VLAN attachment on its port) is the `parent` of its
+      # ManagedInterfaceEncapsulation, the same object as a sub-interface of a managed device; the
+      # same-transport rule is checks/interface_parents.py.
       - name: gateway
         label: Gateway
         peer: CloudGateway

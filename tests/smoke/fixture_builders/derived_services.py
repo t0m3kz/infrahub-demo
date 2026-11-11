@@ -22,6 +22,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from tests.smoke.fixture_builders.common import _encapsulation
 from tests.smoke.fixture_builders.vrf import routing_zone
 from tests.unit.vrf_instances_helpers import raw_footprint, raw_row
 from transforms.common import BaseDeviceTransform
@@ -113,8 +114,7 @@ def _leg_interface(leg: dict[str, Any], vlan: int | None, index: int, member_id:
         **node,
         "name": {"value": f"{UPLINK}.{tag}"},
         "role": {"value": "service"},
-        "vlan_id": {"value": tag},
-        "parent_interface": {"node": {"name": {"value": UPLINK}, "device": {"node": {"id": member_id}}}},
+        **_encapsulation(tag, {"name": {"value": UPLINK}, "device": {"node": {"id": member_id}}}),
     }
 
 
@@ -188,7 +188,7 @@ def _service_port(interface: dict[str, Any], contexts: list[dict[str, Any]]) -> 
         "name": {"value": UPLINK},
         "role": {"value": "uplink"},
         "device": {"node": member},
-        "sub_interfaces": _edges(),
+        "encapsulations": _edges(),
     }
     own = {
         "__typename": _PHYSICAL,
@@ -236,7 +236,7 @@ def _own_contexts(device: dict[str, Any]) -> None:
             owner = _value(((leg.get("device") or {}).get("node") or {}).get("name"))
             iface = own.get(_value(leg.get("name")))
             if iface is not None and owner == _value(device.get("name")):
-                for key in ("ip_address", "zone_capabilities", "vlan_id", "parent_interface"):
+                for key in ("ip_address", "zone_capabilities", "encapsulation_capabilities"):
                     if key in leg and not iface.get(key):
                         iface[key] = leg[key]
         context.pop("capabilities", None)

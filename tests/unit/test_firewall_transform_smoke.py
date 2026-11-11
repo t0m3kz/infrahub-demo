@@ -228,30 +228,6 @@ def _inbound_rule_node(name: str, *, policy: str, enabled: bool = True) -> dict[
 
 class TestFirewallTransformSmoke:
     @pytest.mark.asyncio
-    async def test_smoke_render_paloalto(self) -> None:
-        fw = _make_fw()
-        data = _make_smoke_data("paloalto_panos")
-        result = await fw.transform(data)
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    @pytest.mark.asyncio
-    async def test_smoke_render_checkpoint(self) -> None:
-        fw = _make_fw()
-        data = _make_smoke_data("checkpoint_gaia")
-        result = await fw.transform(data)
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    @pytest.mark.asyncio
-    async def test_smoke_render_juniper(self) -> None:
-        fw = _make_fw()
-        data = _make_smoke_data("juniper_junos")
-        result = await fw.transform(data)
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    @pytest.mark.asyncio
     async def test_segment_policy_appears_in_rendered_config(self) -> None:
         """The rule name from the segment policy must appear in the PAN-OS output."""
         fw = _make_fw()

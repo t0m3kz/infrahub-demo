@@ -37,9 +37,3 @@ def test_the_tunnel_root_filters_on_the_tunnel_circuit_type(path: Path) -> None:
     (root,) = _session_roots(path)
     arguments = {a.name.value: a.value.value for a in root.arguments if isinstance(a.value, StringValueNode)}
     assert arguments == {"circuit_type__value": "tunnel"}
-
-
-@pytest.mark.parametrize("path", _TUNNEL_QUERIES, ids=lambda p: p.name)
-def test_no_query_names_a_removed_circuit_kind(path: Path) -> None:
-    """The tunnel kind is gone from the query text."""
-    assert "TopologyTunnelCircuit" not in path.read_text()

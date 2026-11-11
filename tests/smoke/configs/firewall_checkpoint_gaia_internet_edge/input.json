@@ -92,20 +92,29 @@
                       "id": "dev-fw"
                     }
                   },
-                  "vlan_id": {
-                    "value": 3002
-                  },
-                  "parent_interface": {
-                    "node": {
-                      "name": {
-                        "value": "ethernet1/1"
-                      },
-                      "device": {
+                  "encapsulation_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "dev-fw"
+                          "__typename": "ManagedInterfaceEncapsulation",
+                          "vlan_id": {
+                            "value": 3002
+                          },
+                          "parent": {
+                            "node": {
+                              "name": {
+                                "value": "ethernet1/1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "dev-fw"
+                                }
+                              }
+                            }
+                          }
                         }
                       }
-                    }
+                    ]
                   },
                   "ip_address": {
                     "node": {
@@ -181,20 +190,29 @@
                       "id": "dev-fw"
                     }
                   },
-                  "vlan_id": {
-                    "value": 3402
-                  },
-                  "parent_interface": {
-                    "node": {
-                      "name": {
-                        "value": "ethernet1/1"
-                      },
-                      "device": {
+                  "encapsulation_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "dev-fw"
+                          "__typename": "ManagedInterfaceEncapsulation",
+                          "vlan_id": {
+                            "value": 3402
+                          },
+                          "parent": {
+                            "node": {
+                              "name": {
+                                "value": "ethernet1/1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "dev-fw"
+                                }
+                              }
+                            }
+                          }
                         }
                       }
-                    }
+                    ]
                   },
                   "ip_address": {
                     "node": {

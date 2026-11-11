@@ -55,19 +55,13 @@ class TestRowIsAChildOfItsSwitchUnderTheSegmentDeployment:
     def test_the_row_lists_its_ports_of_its_own_switch_only(
         self, segment_schema: dict[str, Any], root_dir: Path
     ) -> None:
-        """A port is a member of its switch's row: the row inherits the interface edge and re-declares it with
-        ``common_parent: device``, so the server refuses another switch's port; nothing else names a port."""
+        """A port is a member of its switch's row: the row inherits the interface edge as it is (no re-declaration, no
+        ``common_parent``: checks/interface_layers.py R6 holds that a port is of the row's switch); nothing else
+        names a port."""
         row = _node(segment_schema, "SegmentVlan")
 
         assert "ManagedGenericInterfaces" in row["inherit_from"]
-        ports = _relationship(row, "capabilities")
-        generic = _load(root_dir, "schemas/extensions/capabilities/capabilities.yml")
-        edge = _relationship(next(g for g in generic["generics"] if g["name"] == "GenericInterfaces"), "capabilities")
-        assert (ports["peer"], ports["identifier"], ports["common_parent"]) == (
-            "DcimInterface",
-            edge["identifier"],
-            "device",
-        )
+        assert "capabilities" not in {r["name"] for r in row["relationships"]}
         assert not {r["name"] for r in row["relationships"]} & {"interfaces", "interface", "ports"}
         # The deployment keeps the interface edge too: the ports a person asks for (the request, not the realization).
         assert "ManagedGenericInterfaces" in _node(segment_schema, "SegmentDeployment")["inherit_from"]
@@ -107,8 +101,9 @@ class TestRowIsAChildOfItsSwitchUnderTheSegmentDeployment:
 
 class TestTheRowPointsAtItsDevice:
     def test_the_row_has_a_mandatory_device_and_no_svi_link(self, segment_schema: dict[str, Any]) -> None:
-        """The SVI of a row is found by (device, ``Vlan<vlan_id>``): no edge links them in either direction (a Component
-        under a row whose device is its Parent breaks the server's object-template walk)."""
+        """The SVI is a member of its row through the row's existing interface edge, so the row has no relationship of
+        its own to it and DcimVirtualInterface is not extended (a Component under a row whose device is its Parent
+        breaks the server's object-template walk)."""
         row = _node(segment_schema, "SegmentVlan")
 
         device = _relationship(row, "device")
@@ -116,24 +111,3 @@ class TestTheRowPointsAtItsDevice:
         assert {"svi", "vlan_domain"}.isdisjoint(r["name"] for r in row["relationships"])
         extended = {n["kind"] for n in segment_schema["extensions"]["nodes"]}
         assert "DcimVirtualInterface" not in extended
-
-    def test_the_vlan_domain_generic_is_gone(self, root_dir: Path) -> None:
-        """No domain object and no marker generic: a device inherits nothing for it, an MLAG neither."""
-        dcim = _load(root_dir, "schemas/base/dcim.yml")
-        mlag = _load(root_dir, "schemas/extensions/capabilities/mlag.yml")
-
-        assert "ManagedGenericVlanDomain" not in {g["name"] for g in dcim["generics"]}
-        assert "ManagedGenericVlanDomain" not in _node(dcim, "PhysicalDevice")["inherit_from"]
-        assert "ManagedGenericVlanDomain" not in _node(mlag, "MLAG")["inherit_from"]
-
-    def test_no_standalone_domain_kind_is_left(self, root_dir: Path) -> None:
-        offenders = [
-            str(path.relative_to(root_dir))
-            for directory in ("schemas", "generators", "transforms", "checks", "queries", "data")
-            for path in (root_dir / directory).rglob("*")
-            if path.is_file()
-            and path.suffix in {".yml", ".py", ".gql", ".j2"}
-            and "StandaloneVlanDomain" in path.read_text()
-        ]
-
-        assert offenders == []

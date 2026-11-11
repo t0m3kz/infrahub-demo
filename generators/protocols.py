@@ -74,9 +74,11 @@ class TopologyCustomer(CoreNode):
 
 
 class TopologyCustomerTemplate(CoreNode):
+    address_prefix_length: Integer
     dedicated_firewall: Boolean
     dedicated_loadbalancer: Boolean
     description: StringOptional
+    max_segments: Integer
     name: String
 
 
@@ -202,16 +204,6 @@ class AppInstance(CoreNode):
     name: String
 
 
-class DcimHasSubInterface(CoreNode):
-    sub_interfaces: RelationshipManager[DcimSubInterface]
-
-
-class DcimSubInterface(CoreNode):
-    inner_vlan_id: IntegerOptional
-    vlan_id: IntegerOptional
-    parent_interface: RelationshipAttribute[DcimInterface]
-
-
 class DcimProviderPort(CoreNode):
     bandwidth: IntegerOptional
     provider: RelationshipAttribute[OrganizationProvider]
@@ -233,6 +225,7 @@ class DcimInterface(CoreNode):
     role: DropdownOptional
     status: Dropdown
     device: RelationshipAttribute[DcimDevice]
+    encapsulations: RelationshipManager[ManagedInterfaceEncapsulation]
     tags: RelationshipManager[BuiltinTag]
 
 
@@ -249,6 +242,8 @@ class ManagedNetworkSegment(CoreNode):
     customer_name: String
     description: StringOptional
     environment: Dropdown
+    host_count: IntegerOptional
+    ip_version: Dropdown
     isolation_mode: Dropdown
     name: String
     routing_tag: IntegerOptional
@@ -508,6 +503,7 @@ class TopologyCustomerCloud(
     customer_name: String
     name: StringOptional
     account: RelationshipAttribute[CloudAccount]
+    design: RelationshipAttribute[TopologyCustomerTemplateCloud]
     network_segments: RelationshipManager[CloudNetworkSegment]
 
 
@@ -515,6 +511,7 @@ class TopologyCustomerColocation(
     TopologyCustomer, TopologyEnvironmentScoped, TopologyDeployment, TopologyConnectableLocation, ManagedTenantScoped
 ):
     name: StringOptional
+    design: RelationshipAttribute[TopologyCustomerTemplateColo]
     network_segments: RelationshipManager[ManagedVxlanSegment]
     serving_firewall_contexts: RelationshipManager[ManagedFirewallContext]
 
@@ -546,8 +543,21 @@ class TopologyCustomerOffice(
     owner: RelationshipAttribute[OrganizationEntity]
 
 
-class TopologyCustomerTemplateDC(TopologyCustomerTemplate):
-    max_segments: Integer
+class TopologyCustomerTemplateSizing(CoreNode):
+    ipv6_prefix_length: Integer
+    ipv6_segment_prefix_length: Integer
+    segment_prefix_length: Integer
+
+
+class TopologyCustomerTemplateCloud(TopologyCustomerTemplate):
+    max_virtual_networks: Integer
+
+
+class TopologyCustomerTemplateColo(TopologyCustomerTemplate, TopologyCustomerTemplateSizing):
+    pass
+
+
+class TopologyCustomerTemplateDC(TopologyCustomerTemplate, TopologyCustomerTemplateSizing):
     ports_100g: Integer
     ports_25g: Integer
 
@@ -679,7 +689,7 @@ class CloudInstance(CloudResource, AppInstance):
     deployment: RelationshipAttribute[TopologyCloudHosting]
 
 
-class DcimLAGInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress, DcimSwitchedInterface):
+class DcimLAGInterface(DcimInterface, DcimHasIPAddress, DcimSwitchedInterface):
     lacp_mode: Dropdown
     lag_id: Integer
     minimum_links: Integer
@@ -783,8 +793,6 @@ class RoutingOSPFInterface(ManagedGeneric, ManagedGenericInterfaces):
     metric: IntegerOptional
     mode: Dropdown
     name: String
-    device: RelationshipAttribute[DcimPhysicalDevice]
-    capabilities: RelationshipManager[DcimInterface]
     password: RelationshipAttribute[RoutingPassword]
 
 
@@ -813,13 +821,12 @@ class TopologyCarrierCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
 
 class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppInstance):
     vlans: RelationshipManager[ManagedSegmentVlan]
-    ospf_interfaces: RelationshipManager[RoutingOSPFInterface]
     position: IntegerOptional
     rack_face: Dropdown
     serial: StringOptional
 
 
-class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimHasSubInterface, DcimHasIPAddress, DcimSwitchedInterface):
+class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimHasIPAddress, DcimSwitchedInterface):
     interface_type: Dropdown
     lag: RelationshipAttribute[DcimLAGInterface]
 
@@ -1011,6 +1018,11 @@ class ManagedSegmentVlan(ManagedGenericInterfaces):
     device: RelationshipAttribute[DcimPhysicalDevice]
 
 
+class ManagedInterfaceEncapsulation(ManagedGeneric, ManagedGenericInterfaces):
+    vlan_id: IntegerOptional
+    parent: RelationshipAttribute[DcimInterface]
+
+
 class DcimSoftwareImage(CoreNode):
     description: StringOptional
     name: String
@@ -1092,7 +1104,7 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimDeviceManaged, AppIn
     hosting_device: RelationshipAttribute[DcimPhysicalDevice]
 
 
-class DcimVirtualInterface(DcimInterface, DcimHasSubInterface, DcimHasIPAddress, DcimSubInterface):
+class DcimVirtualInterface(DcimInterface, DcimHasIPAddress):
     pass
 
 
@@ -1136,7 +1148,7 @@ class SecurityIPsecProfile(ManagedGeneric):
     pfs_group: IntegerOptional
 
 
-class CloudPeeringInterface(DcimInterface, DcimHasIPAddress, DcimSubInterface, TopologyConnectorRouting):
+class CloudPeeringInterface(DcimInterface, DcimHasIPAddress, TopologyConnectorRouting):
     bfd: Boolean
     cloud_id: StringOptional
     endpoint_ip: IPHostOptional

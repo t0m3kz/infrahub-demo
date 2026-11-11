@@ -21,7 +21,7 @@ from utils.exchange_transit import (
 )
 from utils.group_policy import MICROSEGMENTED, RESERVED_GROUPS, tag_pool
 from utils.ownership import customer_owner
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import own_prefix
 
 from .base import WarningCheck
 
@@ -162,7 +162,7 @@ class CheckSegmentSecurity(WarningCheck):
                 if not endpoint.get("id") or rule.get(f"{side}_prefixes") or rule.get(f"{side}_ip_addresses"):
                     continue
                 segment = by_id.get(endpoint["id"], endpoint)
-                if segment_prefix(segment):
+                if own_prefix(segment):
                     continue
                 self.log_warning(
                     message=(

@@ -106,7 +106,7 @@ class TestHandoffEnds:
         assert _run(handoffs=[_handoff("HO-DX", None, [untagged, _peering(3101)])]) == []
 
     def test_a_name_with_a_number_is_no_sub_interface_without_a_parent(self) -> None:
-        """<port>.<vlan> in a name alone makes no sub-interface: it needs a parent_interface."""
+        """<port>.<vlan> in a name alone makes no sub-interface: it needs an encapsulation."""
         loose = _vport("eg-fr201", "Ethernet1/13.3101", (XC,), kind="DcimVirtualInterface")
         (message,) = _run(handoffs=[_handoff("HO-DX", None, [loose, _peering()])])
         assert "is neither a sub-interface" in message
@@ -149,7 +149,7 @@ class TestHandoffEnds:
         (message,) = _run(handoffs=[_handoff("HO-BARE", None, [_routed("eg-fr201", "Ethernet1/13", (XC,)), bare])])
         assert message == (
             "Handoff circuit 'HO-BARE' end 'EXT-AWS-DX-FR2:et-0/0/0' is neither a sub-interface (a "
-            "virtual interface on a parent_interface) nor a routed physical port (an IP address, no VLAN) nor a "
+            "virtual interface with an encapsulation) nor a routed physical port (an IP address, no VLAN) nor a "
             "cloud peering interface: a physical port with no IP address and no VLAN cannot carry a handoff."
         )
 

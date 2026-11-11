@@ -13,7 +13,7 @@ contexts) needs:
 
 1. exactly two member devices (``shared_devices``), both with role ``internal-firewall`` (``external-firewall`` for
    the Internet edge context);
-2. for every member, an INTERNET leg: a sub-interface of the context tagged with ``vlan_id`` (the transit VLAN of the
+2. for every member, an INTERNET leg: a sub-interface of the context tagged with the encapsulation ``vlan_id`` (the transit VLAN of the
    INTERNET slot, utils/exchange_transit.py) with an address in the INTERNET namespace;
 3. a ``TopologyRoutedExchange`` of the context between the tenant VRF and INTERNET, with every INTERNET leg in its
    INTERNET VRF (generators/firewall_context.py names it ``{context}-{A}-{Z}``; its legs are derived,
@@ -50,6 +50,7 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, namespace_type_for_environment, transit_vlan
 from utils.fabric_roles import CARRIER_ROLES, EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
 from utils.firewall_split import footprint_contexts, internet_contexts, is_external
+from utils.interface_encapsulation import vlan_of
 from utils.routing_domain import interface_security_zone
 from utils.service_contexts import exchange_legs, leg_interfaces, member_border_ports
 
@@ -134,7 +135,7 @@ def _leg_gaps(
         (
             leg
             for leg in legs
-            if (wanted_vlan is not None and leg.get("vlan_id") == wanted_vlan)
+            if (wanted_vlan is not None and vlan_of(leg) == wanted_vlan)
             or interface_security_zone(leg).get("vrf_type") == INTERNET_TYPE
         ),
         key=_name,
@@ -351,6 +352,11 @@ def footprint_gaps(kind: str, footprint: dict[str, Any], cleaned: dict[str, Any]
     return [gap for context in sorted(holders, key=_name) for gap in context_gaps(context, exchanges)]
 
 
+def _ip_version(segment: dict[str, Any] | str) -> str:
+    """The segment's ``ip_version`` (``ipv4`` when the query row is only an id)."""
+    return (segment.get("ip_version") if isinstance(segment, dict) else None) or "ipv4"
+
+
 def internet_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The enabled rules that name the internet and a source segment, by name."""
     return sorted(
@@ -360,6 +366,9 @@ def internet_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if rule_enabled(rule)
             and (rule.get("destination_zone") or {}).get("name") == INTERNET_ZONE
             and _id(rule.get("source_segment"))
+            # An IPv6 source is not translated (accepted gap, like cloud and office egress): the check demands no
+            # snat_address for it, which is an IPv4 address.
+            and _ip_version(rule["source_segment"]) != "ipv6"
         ),
         key=_name,
     )

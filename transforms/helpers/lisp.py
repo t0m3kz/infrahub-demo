@@ -100,6 +100,7 @@ def _border_records(segment_deployments: Iterable[dict[str, Any]]) -> tuple[tupl
         if not vni:
             continue
         l2_ids.add(vni)
+        # IPv4 only by design: the LISP renderer has no `service ipv6` and refuses an IPv6 segment itself.
         if segment_prefix(segment, "ipv6"):
             raise ValueError(
                 f"LISP segment {segment.get('customer_name') or segment.get('name')} has an IPv6 prefix "

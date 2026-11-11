@@ -1,3 +1,4 @@
+{#- U: `ipv6 traffic-filter <name> in` binds the IPv6 ACL of a segment with an IPv6 gateway (Cisco Nexus 9000 Security Configuration guide: IPv6 ACLs); the anycast flag covers both families. -#}
 {#- Anycast-gateway MAC and per-VLAN SVIs, shared by the NX-OS leaf and border-leaf. -#}
 {%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
 ! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
@@ -30,7 +31,11 @@ interface Vlan{{ vlan.vlan_id }}
 {%- endif %}
   no shutdown
 {%- if vlan.acl_name %}
+{%- if vlan.acl_family == 'ipv6' %}
+  ipv6 traffic-filter {{ vlan.acl_name }} in
+{%- else %}
   ip access-group {{ vlan.acl_name }} in
+{%- endif %}
 {%- endif %}
 !
 {%- endif %}

@@ -97,9 +97,38 @@ query GetInterconnectInventory {
                   }
                 }
               }
-              ... on CloudPeeringInterface {
-                vlan_id {
-                  value
+              encapsulation_capabilities: capabilities {
+                edges {
+                  node {
+                    __typename
+                    ... on ManagedInterfaceEncapsulation {
+                      vlan_id {
+                        value
+                      }
+                      parent {
+                        node {
+                          id
+                          name {
+                            value
+                          }
+                          ... on DcimPhysicalInterface {
+                            cable {
+                              node {
+                                id
+                              }
+                            }
+                          }
+                          capabilities {
+                            edges {
+                              node {
+                                ...CircuitCarrier
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
               ... on DcimVirtualInterface {
@@ -107,28 +136,6 @@ query GetInterconnectInventory {
                   node {
                     address {
                       value
-                    }
-                  }
-                }
-                parent_interface {
-                  node {
-                    id
-                    name {
-                      value
-                    }
-                    ... on DcimPhysicalInterface {
-                      cable {
-                        node {
-                          id
-                        }
-                      }
-                    }
-                    capabilities {
-                      edges {
-                        node {
-                          ...CircuitCarrier
-                        }
-                      }
                     }
                   }
                 }

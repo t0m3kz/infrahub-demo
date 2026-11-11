@@ -777,20 +777,29 @@
                       "id": "dev-ds-c005-office01"
                     }
                   },
-                  "vlan_id": {
-                    "value": 3800
-                  },
-                  "parent_interface": {
-                    "node": {
-                      "name": {
-                        "value": "GigabitEthernet1/0/26"
-                      },
-                      "device": {
+                  "encapsulation_capabilities": {
+                    "edges": [
+                      {
                         "node": {
-                          "id": "dev-ds-c005-office01"
+                          "__typename": "ManagedInterfaceEncapsulation",
+                          "vlan_id": {
+                            "value": 3800
+                          },
+                          "parent": {
+                            "node": {
+                              "name": {
+                                "value": "GigabitEthernet1/0/26"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "dev-ds-c005-office01"
+                                }
+                              }
+                            }
+                          }
                         }
                       }
-                    }
+                    ]
                   },
                   "zone_capabilities": {
                     "edges": [

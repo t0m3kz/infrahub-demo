@@ -14,9 +14,10 @@ from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
 from typing import Any
 
 from utils.limits import XE_REMARK_MAX
+from utils.segment_addressing import IPV4, prefix_family
 
 # IOS-XE ACL protocols the neutral model uses: get_acls maps any/tcp/udp/icmp to ip/tcp/udp/icmp.
-_PROTOCOLS = frozenset({"ip", "tcp", "udp", "icmp"})
+_PROTOCOLS = frozenset({"ip", "ipv6", "tcp", "udp", "icmp"})
 _ACTIONS = frozenset({"permit", "deny"})
 # `eq N` or `range N M`, as _port_match (transforms/helpers/acl.py) writes it.
 _PORT = re.compile(r"^(?:eq (\d+)|range (\d+) (\d+))$")
@@ -30,23 +31,27 @@ def _refusal(role: str, what: str) -> ValueError:
     return ValueError(f"cisco_xe {role} cannot render {what}; refusing incomplete config")
 
 
-def _address(value: str, role: str, where: str) -> str:
-    """One ACL endpoint in IOS-XE form: ``any``, ``host A.B.C.D`` or ``A.B.C.D W.W.W.W`` (wildcard mask)."""
+def _address(value: str, role: str, where: str, family: str) -> str:
+    """One ACL endpoint in IOS-XE form: ``any``, ``host A``, and ``A.B.C.D W.W.W.W`` (IPv4 wildcard mask) or
+    ``prefix/len`` (IPv6, the form of ``ipv6 access-list``)."""
     if value == "any":
         return "any"
     try:
         network = ip_network(value, strict=True)
     except ValueError:
-        raise _refusal(role, f"{where}: '{value}' is not an IPv4 network address (host bits set?)") from None
-    if not isinstance(network, IPv4Network):
+        raise _refusal(role, f"{where}: '{value}' is not a network address (host bits set?)") from None
+    if prefix_family(value) != family:
         raise _refusal(
-            role, f"{where}: '{value}' is IPv6, and the segment ACLs are IPv4 `ip access-list extended` only"
+            role,
+            f"{where}: '{value}' is {prefix_family(value).upper().replace('IPV', 'IPv')}, in an {family.upper().replace('IPV', 'IPv')} ACL",
         )
     if network.prefixlen == 0:
         return "any"
-    if network.prefixlen == 32:
+    if network.prefixlen == network.max_prefixlen:
         return f"host {network.network_address}"
-    return f"{network.network_address} {network.hostmask}"
+    if isinstance(network, IPv4Network):
+        return f"{network.network_address} {network.hostmask}"
+    return str(network)
 
 
 def _port(value: str | None, role: str, where: str) -> str | None:
@@ -81,7 +86,7 @@ def _rule_remarks(rule: dict[str, Any]) -> list[str]:
     return [_remark(text) for text in remarks]
 
 
-def _acl_entry(rule: dict[str, Any], role: str, where: str) -> dict[str, Any]:
+def _acl_entry(rule: dict[str, Any], role: str, where: str, family: str) -> dict[str, Any]:
     """One rule of the neutral ACL model as the fields of an IOS-XE ``permit|deny`` line."""
     action, protocol = rule.get("action"), rule.get("protocol")
     if action not in _ACTIONS:
@@ -97,9 +102,9 @@ def _acl_entry(rule: dict[str, Any], role: str, where: str) -> dict[str, Any]:
     return {
         "action": action,
         "protocol": protocol,
-        "src": _address(rule.get("src") or "any", role, where),
+        "src": _address(rule.get("src") or "any", role, where, family),
         "src_port": src_port,
-        "dst": _address(rule.get("dst") or "any", role, where),
+        "dst": _address(rule.get("dst") or "any", role, where, family),
         "dst_port": dst_port,
         "established": bool(rule.get("established")),
         "log": bool(rule.get("log")),
@@ -117,34 +122,21 @@ def get_cisco_xe_acls(acls: Iterable[dict[str, Any]] | None, role: str) -> list[
     result = []
     for acl in acls or []:
         lines: list[dict[str, Any]] = []
+        family = acl.get("family") or IPV4
         for rule in acl["rules"]:
             where = f"ACL {acl['name']} rule '{rule.get('name') or rule.get('seq')}'"
-            entry = _acl_entry(rule, role, where)
+            entry = _acl_entry(rule, role, where, family)
             lines.extend({"remark": remark} for remark in _rule_remarks(rule))
             lines.append(entry)
         result.append(
             {
                 "name": acl["name"],
                 "vlan_id": acl.get("vlan_id"),
+                "family": family,
                 "lines": [{"seq": (i + 1) * _SEQ_STEP, **line} for i, line in enumerate(lines)],
             }
         )
     return result
-
-
-def refuse_unfiltered_ipv6(vlans: Iterable[dict[str, Any]], role: str) -> None:
-    """Raise when an IPv6 gateway SVI would carry a segment ACL.
-
-    A segment has one gateway address, IPv4 or IPv6. The ACL is an IPv4 ``ip access-list extended`` bound with
-    ``ip access-group``, which an IPv6 SVI never evaluates: the segment would pass everything under a policy that says
-    deny by default. The NX-OS and EOS templates have the same gap; cisco_xe refuses it.
-    """
-    ipv6 = [str(v["vlan_id"]) for v in vlans if v.get("acl_name") and v.get("gateway_ipv6")]
-    if ipv6:
-        raise _refusal(
-            role,
-            f"the segment ACL of VLAN {', '.join(ipv6)}: its gateway SVI is IPv6 and no `ipv6 access-list` is rendered",
-        )
 
 
 def get_cisco_xe_vrf_routes(

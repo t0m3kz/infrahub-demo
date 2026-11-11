@@ -247,7 +247,7 @@ class MyCheck(InfrahubCheck):
 
 | Namespace | Holds |
 | --------- | ----- |
-| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
+| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the individual device edge, `capabilities`, cascades), `ManagedGenericSharedDevice` (the shared device edge, `shared_capabilities`, never cascades), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer`, `ManagedInterfaceEncapsulation` (what an interface rides on, see **Interface encapsulation**), and `ManagedVRF` (a namespace realized in one topology, a shared kind) |
 | Cloud | Provider-hosted resources (public cloud and provider-hosted network services); every resource inherits `CloudResource`, except `CloudNetworkAppliance`, a provider-hosted network function (Equinix Network Edge) that inherits the device generics (`DcimDevice`, `DcimDeviceManaged`) so its interfaces (virtual NICs: no hardware), BGP and HA stay device-shaped, and the two transports `CloudDirectConnect` and `CloudVPNConnection`, which inherit `CloudResource`, `CloudTransport` and only the slim `DcimDevice` (see **Device generics**); a cloud region hosts nothing but the provider's connect devices (`TopologyProviderConnect`). The cloud and SaaS side of a connection is one provider-neutral model (see **Cloud and SaaS connections**): the transport devices (`CloudDirectConnect`, `CloudVPNConnection`, generic `CloudTransport` with `account`, `region` or `saas_region`, `owner`), the peering interface `CloudPeeringInterface` (a `DcimInterface` of its transport), the gateway `CloudGateway` (`hub`, `edge` or `customer`) with `CloudGatewayAttachment` and `CloudGatewayRouteTable`, `CloudVirtualNetwork` and `CloudServiceEndpoint` |
 | Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyCarrierCircuit` and `TopologySessionCircuit`, whose role is its `circuit_type`: `dci`, `handoff`, `tunnel`, `vpn`; neither has an `owner`, see **Circuit placement**), the one meeting point of every internet connection `TopologyInternet` (bootstrap data, see **Circuit placement**) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
@@ -260,8 +260,9 @@ class MyCheck(InfrahubCheck):
 - **Segments are VXLAN only**: there is no VLAN segment kind. The VLAN of a port is generated per switch (see
   **VLAN rows**), a segment has no manual `vlan_id` and lists its footprints in `customer_deployments`.
   Every segment has a gateway: an authored one is kept, else `add_vxlan_segment` (`ensure_segment_addressing`) allocates
-  the segment a /24 from its environment's tenant pool and puts the anycast gateway on `.1`; there is no segment without
-  one. The `INFRA` pseudo-customer's segment (`infra-core-dns-ntp-p`, management zone) is such a segment with an authored
+  the segment a prefix of its `ip_version` (`ipv4` by default, `ipv6`; one family, no dual stack), sized from its
+  `host_count` or its design's `segment_prefix_length`, from its customer's pool (see **Service tiers and customer
+  pools**) and puts the anycast gateway on the first address; there is no segment without one. The `INFRA` pseudo-customer's segment (`infra-core-dns-ntp-p`, management zone) is such a segment with an authored
   gateway. A segment is pure L2 on the fabric only when a firewall terminates it (`terminated_on`, see **VLAN rows**).
   A fixed VLAN number is only needed towards an outside party, and that is a handoff circuit's `<port>.<vlan>`
   sub-interface, not a segment.
@@ -328,8 +329,8 @@ class MyCheck(InfrahubCheck):
     `checks/carrier_circuit_ports.py`: a port is an end of at most one carrier and both ends
     are physical ports, EXCEPT a `virtual_connection` (a provider port hosts one connection per S-tag, and an end may be
     the `DcimVirtualInterface` NIC of a provider-hosted appliance, or a `TopologyProviderInterface`: the end of ONE
-    Fabric connection on the provider's port, unshared, with its S-tag `vlan_id`, C-tag `inner_vlan_id` and
-    `bandwidth`, riding on that port through `parent_interface`; the port is a `TopologyProviderConnect`, placed by
+    Fabric connection on the provider's port, unshared, with its S-tag (the encapsulation's `vlan_id`) and
+    `bandwidth` (no C-tag is modelled: nothing reads it), riding on that port through its `ManagedInterfaceEncapsulation` (`parent`, with the tag); the port is a `TopologyProviderConnect`, placed by
     its `location`, the zone, so that zone is the circuit's location); the other types on
     the same port still hold both. A carrier whose far end is such a NIC is a provider-delivered
     `virtual_connection`; a physical `cross_connect` joins physical ports only (our cage edge and a Fabric port or a
@@ -364,8 +365,10 @@ class MyCheck(InfrahubCheck):
     `redundancy.priority` stays out: the name or description says which is primary). Per-end VLAN tags are not carrier
     attributes (Fabric `vlan_s_tag`/`vlan_c_tag` and Megaport `ordered_vlan` live per end).
   - **Tunnel** (`circuit_type: tunnel`): two locations and two ports, one location a `TopologyCustomerOffice` (its owner
-    is the tunnel's, derived; the only type with `registered_prefixes`), no handoff-only field, every end port rides a
-    live internet carrier circuit of its own (no contiguity rule).
+    is the tunnel's, derived; the only type with `registered_prefixes`), no handoff-only field, every end port of ours
+    rides a live internet carrier circuit of its own (no contiguity rule); an end that is a `CloudPeeringInterface` (the
+    tunnel of a cloud or SaaS transport, Zscaler) is the provider's side: its internet access is the provider's and
+    it rides no carrier of ours.
   - **Interconnect** (`dci`): no office owner, no handoff-only field, two locations and two ports, both ports carried, the
     carriers found at the two ports
     form one contiguous path between the two locations and a single carrier is pure fibre (its two ends are the
@@ -373,10 +376,10 @@ class MyCheck(InfrahubCheck):
   - **Handoff** (`handoff`): no office owner, with an `ip_namespace` (required here, optional in the schema); `password`
     belongs to the handoff and the `vpn` only; one or two locations (both ends may
     sit in one cage); at least one end on a physical device is
-    carried (a live carrier circuit or a `DcimCable` on the port or its `parent_interface`, a cable to a patch panel port
+    carried (a live carrier circuit or a `DcimCable` on the port or its encapsulation `parent`, a cable to a patch panel port
     counts: the cross-connect through a panel is cables, see **Patch panels**); the ends are sub-interfaces
     `<port>.<vlan>` with the same VLAN, or a routed physical port (an IP and no VLAN); a `CloudPeeringInterface` end
-    (the far end of a cloud leg) fits either shape and needs no carrier of its own, and its `vlan_id` (when set) is the
+    (the far end of a cloud leg) fits either shape and needs no carrier of its own, and its encapsulation `vlan_id` (when set) is the
     VLAN. The session of a cloud leg is authored, `add_virtual_circuit` builds none.
   - **VPN** (`vpn`): an IPsec or GRE tunnel over the internet, one session on a tunnel interface pair; no office owner, no
     `registered_prefixes`, an `ip_namespace`, one or two locations, two end ports. Model only: no IPsec or tunnel
@@ -401,9 +404,9 @@ class MyCheck(InfrahubCheck):
   `account` it has no `owner`, without one (Webex, Zscaler) it has `saas_region` and an `owner` customer.
   `CloudPeeringInterface` is the L3/BGP termination on the cloud side, a `DcimInterface` of its transport (an AWS VIF, an
   ExpressRoute peering, a GCP VLAN attachment, a VPN tunnel, a SaaS peering) riding on a port or LAG of the provider connect that
-  holds it (`parent_interface`, the edge of the marker `DcimSubInterface` it shares with a sub-interface, and with a VM NIC the
-  only parent that sits on another device, `checks/interface_parents.py`: the port's and the LAG's
-  `sub_interfaces` list it, and it holds its `ip_address` like any interface): `scope` (`private`, `public`, `saas`), `routing`, `vlan_id` or
+  holds it (its `ManagedInterfaceEncapsulation`: `parent` the port or LAG and `vlan_id` the tag, the same object as a
+  sub-interface, see **Interface encapsulation**; the port's and the LAG's `encapsulations` list it, and it holds its
+  `ip_address` like any interface): `scope` (`private`, `public`, `saas`), `routing`, the tag (`vlan_id` of the encapsulation) or
   `tunnel_index`, the provider's `peer_ip` and `peer_asn`, `auth`, and for a tunnel `endpoint_ip`, `tunnel_mode`,
   `crypto_profile` (`SecurityIPsecProfile`) and `tunnel_key`. A circuit ends on a provider connect's port or LAG, or on a peering, through
   `capabilities` like on any interface; our side is always an interface of one of our devices (a sub-interface, or a
@@ -432,7 +435,7 @@ class MyCheck(InfrahubCheck):
   (`VirtualCircuitSessionGenerator`, planners keyed by `circuit_type`), builds the sessions of `dci`, `handoff` and
   `vpn` circuits; `add_circuit` only derives carrier locations and fans out to it (one `filters` on `circuit_type__values`). The
   carrier of a session circuit is derived, never listed: the
-  carrier circuits (or a `DcimCable` inside one facility) on its port or its `parent_interface`
+  carrier circuits (or a `DcimCable` inside one facility) on its port or its encapsulation `parent`
   (`utils/circuit_underlay.py`). The only role that is an output is `ManagedBGPPeering.peering_role` (`regular`,
   `dci`, `dci-underlay`, `fabric`, `overlay`, `underlay`). The tunnel readers (`edge.gql`, `routing_invariants.gql`,
   `segment_security.gql`) root at `TopologySessionCircuit(circuit_type__value: "tunnel")` and read its `capabilities`.
@@ -485,10 +488,98 @@ class MyCheck(InfrahubCheck):
   table closed by one implicit deny, and each segment's `default_action`. A guest Wi-Fi segment is a segment whose only
   permit rule is to `INTERNET`; a corporate one adds the segments and prefixes it may reach. A dedicated guest zone is
   not modelled: the office is PROD, and the exchange zones are tied to the namespaces.
-- **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
-  holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
-  host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint
-  with no `design` is not metered. `add_customer_deployment_dc` (triggered on creation only) adds the footprint's
+- **Service tiers and customer pools**: every footprint (`TopologyCustomerDC`, `TopologyCustomerColocation`,
+  `TopologyCustomerCloud`) has a REQUIRED `design`, a template of its own kind (`TopologyCustomerTemplateDC`,
+  `TopologyCustomerTemplateColo`, `TopologyCustomerTemplateCloud`; the colocation kind is short because a kind is at
+  most 32 characters), so every footprint is metered. The tiers are named `S`, `M`, `L` and `XL` in every kind
+  (`data/bootstrap/21_customer_templates.yml`, S 2 segments / M 6 / L 12 / XL 24), so the template generic has NO
+  uniqueness constraint, NO `human_friendly_id` and no `unique` name: the server would enforce them across the kinds
+  (a colocation `S` found the DC `S`, NODE_NOT_FOUND); each node has its own (`tests/unit/test_customer_template_data.py`).
+  The generic `TopologyCustomerTemplate` carries `max_segments` and `address_prefix_length` (16 to 28); the DC kind adds
+  `ports_25g`, `ports_100g` (0 = no host-facing ports of that speed) and keeps `dedicated_firewall` and
+  `dedicated_loadbalancer` (L and XL), the cloud kind adds `max_virtual_networks` (S 1, M 3, L 6, XL 12). The DC and
+  colocation kinds share `TopologyCustomerTemplateSizing` and state FOUR numbers per tier: `address_prefix_length`
+  (the IPv4 customer block: S /23, M /21, L /20, XL /19), `segment_prefix_length` (the IPv4 subnet of a segment with no
+  `host_count`: /24 in every tier), `ipv6_prefix_length` (the IPv6 customer block, 32 to 64: S /60, M /58, L /56,
+  XL /52) and `ipv6_segment_prefix_length` (the IPv6 subnet of a segment, 64 to 120: /64 in every tier, anything else
+  breaks SLAAC). For cloud, `address_prefix_length` is the routed range of the footprint (one account in one cloud
+  region, S /28, M /27, L /26, XL /25), IPv4 only, not the address space of its segments, and a cloud tier has none of
+  the other three. `checks/customer_quota.py` enforces `max_segments` for all three kinds (a cloud footprint counts
+  its cloud segments), the ports (DC) and `max_virtual_networks` (the account's networks in the footprint's region),
+  requires the IPv4 block of a DC or colocation tier to hold its segments (`2^(segment_prefix_length -
+  address_prefix_length) >= max_segments`), the IPv6 block likewise (`2^(ipv6_segment_prefix_length -
+  ipv6_prefix_length) >= max_segments`) and a segment never larger than its block (ERRORs naming the tier). A cloud tier is
+  judged on its routed range only: `2^(29 - address_prefix_length) >= max_virtual_networks` (ERROR). `checks/customer_quota.py`
+  also WARNs about an attachment to a footprint's virtual network with no `allowed_prefixes`, and requires a cloud segment with a `host_count` and a `cidr_block` to have a block of the size
+  `host_count` needs, a gateway prefix of the segment's `ip_version` (ERROR), a cloud segment to be IPv4 (ERROR: it
+  carries a provider `cidr_block`), warns about a `host_count` on an IPv6 segment (it sizes nothing there) and about a
+  segment whose footprints are of different kinds.
+  **Segment prefix and customer pools**: `ManagedNetworkSegment.ip_version` (`ipv4` default, `ipv6`, required, no
+  `dual`) names the segment's one family. `host_count` (optional, 1 to 1021) sizes an IPv4 segment's prefix: the
+  smallest that holds the hosts plus network, broadcast and gateway (a /29 to a /22); with none the prefix is the
+  design's `segment_prefix_length` (an office segment, which has no design, takes the default length of the global tenant
+  pool), the one function `utils/segment_addressing.py` `segment_prefix_length` (the VXLAN allocator and the cloud
+  check). An IPv6 segment is the design's `ipv6_segment_prefix_length`. The prefix comes from the customer's pool of its
+  family, `{org_id}-{environment}-{dc|colocation}-{ipv4|ipv6}` (a cloud footprint: `{org_id}-{environment}-cloud-ipv4`),
+  which is created WHEN THE FOOTPRINT IS BOARDED, by `add_customer_deployment_dc`, `add_customer_deployment_colocation`
+  and `add_customer_deployment_cloud` (the group trigger of `customer_deployments_cloud`; every cloud footprint declares
+  the group), all through the one function `SegmentAddressingMixin.ensure_customer_pools`
+  (`generators/topology/segment_addressing.py`); `ensure_segment_addressing` calls the same function again (idempotent,
+  it repairs a missing pool). A block of the design's `address_prefix_length` (IPv6: `ipv6_prefix_length`) carved from
+  the environment's global tenant pool (`Tenant-PROD-IPv4`, `Tenant-NONPROD-IPv4` and `Tenant-PROD-IPv6`,
+  `Tenant-NONPROD-IPv6`, ULA `fd5a:1760::/32` and `fd5a:1840::/32`, in `data/bootstrap/23b_tenant_pools.yml`) is its first
+  resource, and a request it cannot satisfy carves one more block of that length into the same pool (`<pool>-<n>`, under
+  the pool's lock, never re-allocated). A customer's footprints of the same kind and environment share the pool (the
+  second finds it); the pool is saved outside any run's tracking, so no run's cleanup reclaims it. The cloud pool's consumer is the routed range of each virtual network: `ensure_cloud_ranges`
+  (`generators/topology/cloud_range.py`) draws one `CLOUD_RANGE_PREFIX_LENGTH` (/29, `utils/limits.py`) slice per
+  `CloudVirtualNetwork` of the footprint's account in its region, identifier `{account}/{network}`, and writes it as the
+  `allowed_prefixes` of the `CloudGatewayAttachment`s of that network, edge by edge. Authored `allowed_prefixes` win: an
+  attachment that has any is left alone, and a network with no attachment gets no slice. It is called by
+  `add_customer_deployment_cloud` (the footprint is boarded) and by `add_cloud_attachment_range` (group
+  `cloud_attachment_ranges`: an attachment joins it, or an `updated` rule on its `virtual_network`; an event runs a
+  generator on the node that fired it, so no rule on an attachment can run the footprint's generator; every attachment
+  declares the group). The slice replaces the network's CIDR blocks as what `bgp_cloud.py` accepts from that attachment.
+  Not followed up: a hand edit of `allowed_prefixes`, and an attachment retargeted away from a network (its old slice
+  stays). The footprint whose design decides the segment's pool is the first of its footprints of the first kind
+  in DC, colocation order (by name). The anycast gateway stays on the first address; an authored gateway is kept. The
+  server refuses another length for an allocated identifier, so a changed `host_count` (or tier length) is reported with
+  its remedy, never re-allocated.
+  **IPv6 segments, status per consumer**: a segment has ONE gateway of ONE family, and the gateway's family is the signal
+  (`utils/segment_addressing.py` `segment_family`, `has_ipv6_gateway`, `prefix_family`).
+  - **Fabric switches** (`cisco_nxos`, `arista_eos`, `cisco_xe`, `sonic`, `dell_sonic`; leaf, tor, access-leaf, and the
+    border leaf where it renders ACLs and PBR at all) render it in IPv6 form: the SVI `ipv6 address` (EOS `ipv6 address
+    virtual`), the anycast flag (either family, `build_overlay_node`), the VRF's IPv6 address family with the same explicit
+    RD and route-targets as IPv4 (`l3_vni_mappings[].ipv6`, set when a segment of the VRF is IPv6; IPv4 is always there:
+    the exchange statics and handoff sessions are IPv4) and its EVPN type-5 origination (`address-family ipv6`), the
+    segment's ingress ACL in IPv6 form (`transforms/helpers/acl.py`: the ACL carries its `family`; `ipv6 access-list` with
+    protocol `ipv6`, `ipv6 traffic-filter` / `ipv6 access-group` on the SVI, SONiC table type `L3V6` with `SRC_IPV6` /
+    `DST_IPV6`, IOS XE `ipv6 access-list` in prefix notation) and the routing-identity origination (an `ipv6 prefix-list` and
+    `match ipv6 address` in the same route-map as the IPv4 sequences; IOS XE renders none). The internet band of a permit
+    to `INTERNET` denies `NON_INTERNET_PREFIXES_IPV6` (`utils/internet_space.py`: ULA, link-local, multicast, loopback,
+    mapped and NAT64 space) for an IPv6 segment before `permit ... any`. A device may carry both families
+    (`leaf_cisco_nxos_dual_stack`). A rule of an IPv6 segment that names an endpoint of the other family is refused
+    (`AddressFamilyMismatchError`: no ACL of either family matches it). The BGP route protection needs nothing new: the
+    segment's prefix reaches the type-5 and the IPv6 lists from the zone's segments. Every IPv6 line is evidence U (no
+    lab, and the vendor guides are not in the repo); the template comments say which.
+  - **Firewalls and the office policy** render it through the ADDRESS TABLE (`transforms/helpers/address_table.py`): one
+    named object per prefix, family-agnostic, built once by the transform (`build_address_table`: zone members, then the
+    rule endpoints that are no member) with deterministic names (`addr-` and the prefix with `/`, `.`, `:` as `-`). A rule
+    carries the CIDR (`src`, `dst`) and, for an IPv6 endpoint, the table name (`src_ref`, `dst_ref`); the templates render
+    the name (PAN-OS `ip-netmask` and a `routing-table ipv6` route, Junos zone and global address-book and the `inet6.0`
+    table of the instance, Check Point `add network ... subnet6 ... mask-length6` and `set ipv6 static-route`; evidence I
+    for PAN-OS and Junos, U for Check Point). A rule endpoint that resolves to no address (a segment with no prefix) is an
+    error of the transform (`UnresolvedEndpointError`), never `any`. An IPv4 endpoint that is no zone member stays inline,
+    so the IPv4 configs are byte-identical; naming it too is one template variable. The office policy JSON carries the
+    same table as `addresses`. The switch ACLs keep inline prefixes (`rule_endpoint`).
+  - **Accepted gaps and what stays refused** (`Ipv6SegmentNotRenderedError`, one gate per consumer): the PBR to a firewall
+    context (`BaseDeviceTransform._firewall_pbr`, `get_overlay_pbr_rules`) and the transit legs of a firewall context with
+    legs (`apply_context_routes`: the leg pools, VIPs and anycast next hops are IPv4, so an IPv6 segment has no next hop;
+    a firewall with no legs, as in the colocation and standalone policy cases, renders IPv6); an office switch's LISP
+    renderer (`service ipv6`). Internet egress of an IPv6 segment is an accepted gap like the cloud and office one: no NAT
+    is rendered for an IPv6 source, and `checks/internet_egress.py` does not judge a rule whose source segment is IPv6
+    (it demands an IPv4 `snat_address`). Not gated: the load balancer and the external (cloud, SD-WAN) tenant sessions,
+    which drop the prefix and fail closed.
+  `add_customer_deployment_dc` (triggered on creation only) adds the footprint's
   internal firewall context and, when the DC has an `external-firewall` pair, the DC's Internet edge context to its
   `serving_firewall_contexts` (converged like the colocation set, below), and links its
   `serving_loadbalancer_context`; when a re-run moves it to another context (dedicated <-> shared), it re-runs
@@ -528,11 +619,11 @@ class MyCheck(InfrahubCheck):
     and remove the edge once the port is no longer derived. The ports are not host-facing: `checks/customer_quota.py` does not count them. A change of `terminated_on` re-runs
     `add_vxlan_segment` (`data/events/99_actions.yml`).
   - **Firewall side**: the sub-interface is derived, never stored. `transforms/helpers/firewall_terminated.py` names it
-    `<uplink trunk>.<vlan>` (the trunk is the `parent_interface` of the context's legs; the VLAN is the segment's row on
+    `<uplink trunk>.<vlan>` (the trunk is the encapsulation `parent` of the context's legs; the VLAN is the segment's row on
     the device at the far end of the trunk's cable, the tag both ends use), gives it the gateway as `virtual_ip` and the
     segment's zone, and `Firewall.transform` renders it through the same interface path as any other. A segment with no
     row on the facing leaf yet, no gateway, or a trunk with no facing device (an unpinned hosted firewall NIC, a colocation
-    context with no legs) is left out with a warning. A hosted NIC follows its `parent_interface` to the physical
+    context with no legs) is left out with a warning. A hosted NIC follows its encapsulation `parent` to the physical
     chassis port's cable, never an invented direct cable. The derived gateway interface is attached to its serving
     context's policy and routing table, not the appliance's root table. The context never routes a terminated prefix to
     the border leaves
@@ -577,7 +668,7 @@ class MyCheck(InfrahubCheck):
   `uplinks`, the host ports or bonds (a generic peer without a HFID, so a data file names them as nested objects with an
   explicit kind). `ManagedPortGroup` is a component of the switch: a `vlan_id` and the fabric `segment` it is, and it lists the
   VM NICs in it (`nics`, one-sided: `DcimVirtualInterface` is not extended; a NIC still rides on its host port through
-  `parent_interface`). A server port carries NO segment membership: an uplink trunks the VLANs of the switch's port
+  its encapsulation). A server port carries NO segment membership: an uplink trunks the VLANs of the switch's port
   groups (`vlan_id`, `segment`), its allowed VLAN list. `checks/virtual_switch.py`: VS1 the uplinks
   are ports of the cluster's hosts and every host has one; VS2 a VLAN id is used once per switch; VS3 the segment of every
   port group has a deployment in the hosting deployment of every uplink's host (read from the port groups and the
@@ -736,34 +827,50 @@ class MyCheck(InfrahubCheck):
   deployment enforces, a WARNING where it stages: turn the switch on only where it reports no error.
 - **Virtual NICs**: the base NICs of a hosted virtual device (a dedicated firewall or load balancer, built from a
   `*_CUSTOMER_*` template) are `DcimVirtualInterface`, never `DcimPhysicalInterface`. Only the physical host is cabled:
-  `generators/virtual_nics.py` pins each NIC through its `parent_interface` to the host port of its role (`management`,
+  `generators/virtual_nics.py` pins each NIC to the host port of its role (`management`,
   `uplink`, `ha`; n-th by interface order; only cabled host ports qualify for an uplink, and a NIC with no host port
-  left stays unpinned). A stale generated pin is removed with RelationshipRemove (SDK save omits a None single
-  relationship), and a context sub-interface
-  rides on the NIC through `parent_interface` too, so border leaf -> host port -> NIC -> sub-interface is a path in the
-  graph. `_resolve_transit_members` follows `parent_interface`, not a name. A controller keeps physical ports;
+  left stays unpinned) by upserting its `ManagedInterfaceEncapsulation` (`parent` the host port, no tag, see
+  **Interface encapsulation**). A stale generated pin is deleted with its encapsulation (the parent is mandatory), and a
+  context sub-interface rides on the NIC through its encapsulation too, so border leaf -> host port -> NIC ->
+  sub-interface is a path in the graph. `_resolve_transit_members` follows the encapsulation `parent`, not a name. A
+  controller keeps physical ports;
   a provider-hosted `CloudNetworkAppliance` has no hardware, so its ports are virtual NICs with no host (and no cable).
-- **Interface parents**: `parent_interface` is the one "rides on" link, declared once on the marker generic
-  `DcimSubInterface` that `DcimVirtualInterface` and `CloudPeeringInterface` inherit (a generic cannot inherit a generic,
-  so each kind lists it): a sub-interface's parent is a port, LAG or NIC of its own device, a VM NIC's is the port of its
-  `hosting_device` it is pinned to, a cloud peering's is a port or LAG of its transport. It and its inverse
-  `sub_interfaces` (declared once on the marker generic `DcimHasSubInterface`, many, peer `DcimSubInterface`: a NIC
-  parents several sub-interfaces, a host port several NICs, a transport LAG several peerings; `checks/interface_layers.py`
-  reads it as an L3 signal, a port with sub-interfaces is routed; the generators filter on `parent_interface__ids`) carry
-  no `common_parent`, so the cross-device rule is `checks/interface_parents.py` (rooted on `DcimSubInterface`): a parent
-  on another device is an ERROR unless the interface is a NIC of a `DcimVirtualDevice` pinned to a port of its
-  `hosting_device`, a NIC's parent is a physical port, and an uplink's host port is cabled. The transforms render a
-  `parent_interface` only for a parent on the interface's own device (`transforms/helpers/addressing.py` `sub_interface_parent`; the
-  queries select both `device` ids). The VLAN tag of a sub-interface is its `vlan_id` and `inner_vlan_id` (QinQ C-tag), declared once on
-  `DcimSubInterface` (unset: untagged); `<parent>.<vlan>` is only the default name the generators give, nothing parses it.
-  `common_parent: device`
-  stays on the LAG pair `lag` / `member_interfaces`, on a VLAN row's ports (`ManagedSegmentVlan.capabilities`: the
-  row's `device` is its Parent, so the server refuses another switch's port, measured on 1.11.9) and on the OSPF
-  settings of interfaces of ONE device (`RoutingOSPFInterface`: a child of its device, `device` `kind: Parent`, peer
-  `DcimPhysicalDevice`, reverse `ospf_interfaces`, cascade, its interface edge re-declared with `common_parent:
-  device`); `common_parent` works only on a node with a `kind: Parent` relationship and a peer with one (the
-  interfaces' `device`, the row's and the OSPF settings' `device`, `CloudNetworkSegment`'s `virtual_network`), every
-  other "same parent" rule is a check.
+- **Interface encapsulation**: what an interface "rides on", with which tag, is ONE capability kind,
+  `ManagedInterfaceEncapsulation` (`schemas/extensions/capabilities/encapsulation.yml`, `ManagedGeneric` +
+  `ManagedGenericInterfaces`): a dot1q sub-interface, a firewall context leg on a trunk, the NIC of a VM pinned to a host
+  port, a `CloudPeeringInterface` on a port or LAG of the provider connect, a `TopologyProviderInterface` on a provider
+  port. There is NO `parent_interface`, NO sub-interface `vlan_id` and NO marker generic (`DcimSubInterface` and
+  `DcimHasSubInterface` are gone): the interface that rides has the object among its own `capabilities` (the standard
+  interface edge, no re-declaration), with the optional `vlan_id` (1..4094; unset: untagged, a VM NIC or a LAG peering) and
+  the mandatory `parent` (a plain Attribute relationship to a `DcimInterface`, `common_parent` nowhere: a NIC's parent is
+  on another device). The port lists its sub-interfaces in `encapsulations`, the reverse edge declared ONCE on
+  `DcimInterface` by the same schema file (a NIC parents several sub-interfaces, a host port several NICs, a transport
+  LAG several peerings); the interfaces that ride on a port are the `capabilities` of those encapsulations. An interface
+  WITHOUT a parent (an SVI, a loopback, a tunnel that rides on nothing) needs none. The name is `<device>:<interface>`
+  (`utils/interface_encapsulation.py` `encapsulation_name`), so a data file or a generator upserts it; the interface name
+  `<parent>.<vlan>` is only a convention, nothing parses it. A data file authors it as a nested object under the
+  interface's `capabilities` (`- kind: ManagedInterfaceEncapsulation`, `data: {name, vlan_id, parent: [device, port]}`).
+  ONE reader, `utils/interface_encapsulation.py` (`parent_of`, `vlan_of`, `sub_interfaces_of`, `encapsulation_of`): queries
+  select it under the alias `encapsulation_capabilities` (`queries/fragments/interface_encapsulation.gql`, one of the three
+  fragments per interface object; the plain `capabilities` is selected by other fragments and the server answers only the
+  first selection of a field) and the reverse edge as `encapsulations { capabilities }`; generators read and write it with
+  `generators/helpers/encapsulation.py` (`parent_ids_of`, `sub_interfaces_on`, `riding_interface_ids`). A generator that
+  creates a sub-interface saves its encapsulation with it, tracked like the interface (`ensure_vlan_subinterface`), and
+  one that deletes interfaces deletes their encapsulations (the pod decommission): the interface does not take the object
+  with it. `checks/interface_layers.py` reads the reverse edge as an L3 signal (a port with sub-interfaces is routed),
+  except for a VM base NIC pinned to a host port (`is_host_nic`), which may sit on a bond member. The server holds no
+  same-device rule, so `checks/interface_parents.py` (rooted on `ManagedInterfaceEncapsulation`): a parent on another
+  device is an ERROR unless the interface is a NIC of a `DcimVirtualDevice` pinned to a port of its `hosting_device` (a
+  physical port, cabled for an uplink) or a cloud peering on a `TopologyProviderConnect`; an interface has at most one
+  encapsulation and an encapsulation is on one interface; an interface is not its own parent (ERRORs); an encapsulation
+  on no interface is a WARNING. The transforms render a parent only for one on the interface's own device
+  (`transforms/helpers/addressing.py` `sub_interface_parent`; the queries select both `device` ids); the payload keys
+  `parent_interface` and `vlan_id` that the config templates read are the rendering contract, not the schema.
+  `common_parent: device` stays on the LAG pair `lag` / `member_interfaces` and `common_parent: panel` on the patch panel
+  ports (see **Patch panels**), the only two uses; it works only on a node with a `kind: Parent` relationship and a peer
+  with one (the interfaces' `device`, a patch panel port's `panel`). Every other "same parent" rule is a check: the
+  ports and the SVI of a VLAN row are of the row's switch (R6) and the interfaces of an OSPF interface setting are of one device (R7),
+  both in `checks/interface_layers.py`.
 - **Interface addresses and layers**: `ip_address` is declared once, on the marker generic `DcimHasIPAddress`
   (inherited by a physical port, a LAG, a virtual interface and a cloud peering interface, not a console port): an
   Attribute with no cascade (a multisite VIP is one address on two loopbacks, a segment's anycast gateway one address
@@ -778,10 +885,15 @@ class MyCheck(InfrahubCheck):
   too): a port then shows both, and every reader of what a port carries reads the row, never the deployment, so
   nothing counts a port twice. An assignment from either side fires `updated` on the deployment (measured on
   1.11.9), which re-runs the reconcile (see **VLAN rows**).
-  `checks/interface_layers.py` holds what the schema cannot: a deployment or a row lists only physical ports and LAGs
-  (`DcimSwitchedInterface`, a marker; R3), one row of a segment per port (R4), both ERRORs, and a WARNING for a row
+  `checks/interface_layers.py` holds what the schema cannot: a deployment lists only physical ports and LAGs, a row
+  only those and its SVI (`DcimSwitchedInterface`, a marker; R3), one row of a segment per port (R4), both ERRORs, and a WARNING for a row
   member nobody asked for (R5: not assigned to the deployment, derived from no component and no firewall service port
-  of a terminated segment; the next reconcile removes it). Every writer of an interface's `capabilities` adds and
+  of a terminated segment; the next reconcile removes it), a row lists only ports and its SVI of its own switch (R6, ERROR: no
+  `common_parent` on the edge) and at most one SVI (R10, ERROR). The same check holds the OSPF interface settings (`RoutingOSPFInterface`: on the
+  standard interface edge, no device field, so they do not go with a device): all their interfaces are on one device (R7,
+  ERROR), a setting with no interface left is reported (R8, WARNING: a deleted device or interface leaves it behind, the
+  routing generator's tracking reclaims it on its next run) and its device is one that runs a process of its peering
+  (R9, ERROR; a setting with no peering is not judged). Every writer of an interface's `capabilities` adds and
   removes single edges (`generators/helpers/edges.py`), never saves the list. A segment itself is on no interface's
   `capabilities`. The layer of a port is its content, not its kind: a row or a deployment means switchport, an
   address, sub-interfaces or a routed capability (BGP peering, OSPF interface settings, interconnect, tunnel or handoff
@@ -800,7 +912,7 @@ class MyCheck(InfrahubCheck):
   vlan_id], HFID [device name, vlan_id] (a data file upserts a row). **Request and realization**: a person asks for a
   port by assigning it to the segment's deployment (the deployment's `capabilities`, "this port carries this segment
   in this DC"); the reconcile realizes the request and the ports its components derive as the port's membership of its
-  switch's row (the row's `capabilities`, `common_parent: device`). Only the reconcile creates a row and writes a
+  switch's row (the row's `capabilities`, the inherited interface edge: `checks/interface_layers.py` R6 holds that a port is of the row's switch). Only the reconcile creates a row and writes a
   port -> row edge; a person never tags a row, and nothing creates a row because of a hand edit of the row's ports (the
   check reports it, R5). In `data/demos/00_full_topology`, where no generator runs, both are data and agree: the
   requests in `90_bindings/95b_segment_requests` and the rows' ports in `90_bindings/96_segment_ports`
@@ -845,17 +957,26 @@ class MyCheck(InfrahubCheck):
   L2-only view, `is_fabric_l2`). A switch renders every segment it has a row of, with or without a port of it
   (`transforms/common.py` `_collect_row_activations`).
   A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a STORED `DcimVirtualInterface` with role
-  `svi` named `Vlan<vlan_id>` on the row's switch, with NO link to its row (no edge either way: a Component under a row
-  whose `device` is its Parent breaks the server's object-template walk, measured on 1.11.9; a reader of "the SVI of
-  this row" keys it by the row's device and `Vlan<vlan_id>`), carrying the segment's anycast gateway as its
+  `svi` named `Vlan<vlan_id>` on the row's switch, which is a MEMBER of its row through the row's interface edge
+  (`ManagedSegmentVlan.capabilities`, the plain generic edge a port is a member through; not a Component of the row: a
+  Component under a row whose `device` is its Parent broke the server's object-template walk, measured on 1.11.9; no
+  new relationship, no `common_parent`), so the VLAN, segment, VNI and deployment of an SVI are its row's
+  (`utils/segment_vlan.py` `svi_rows`, `DeviceVrfFacts.svi_row`) and nothing finds "the SVI of this row" by the name
+  `Vlan<vlan_id>`, the interface's own name (the transform's `svi_vrfs` reads the row's `vlan_id`, so a config query
+  selects the row under `zone_capabilities`, `queries/fragments/routing_zone.gql`). It carries the segment's anycast gateway as its
   `ip_address` (THE `segment.gateway` object, the same address on every SVI of the segment) and in the `ManagedVRF` of
-  its device's topology (the instance lists it in its `capabilities`, the SVI's only capability; its save writes it);
-  the SVI is not a port. `generators/helpers/svi.py` writes it in the VRF pass of the segment reconcile, upserted by
-  (device, `Vlan<id>`), sets its address and follows a change of the gateway, and deletes every role-svi interface of
-  the device that no routed row of it wants (the row is gone, it became L2 only, its segment lost its gateway, the
-  device carries no VRF): nothing deletes an SVI with its row, a deleted device takes its interfaces.
-  `checks/vrf_instances.py` S1-S5 judge it (S2 an SVI with no routed row of its device behind it, S5 one whose address
-  is not its segment's gateway: WARNINGs the next VRF pass fixes). The transform renders `vrf member` from it and the
+  its device's topology (the instance lists it in its `capabilities`; its VRF and its row are its only capabilities; its
+  save writes the VRF); the SVI is not a port. `generators/helpers/svi.py` writes it in the VRF pass of the segment
+  reconcile (after the rows and the instances exist): created as `Vlan<id>`, then added to its row by one
+  RelationshipAdd after every save (a save replaces the edge set), idempotent; it sets its address and follows a change
+  of the gateway, removes a membership of a row it does not realize edge by edge, and deletes every role-svi interface
+  of the device that is a member of no routed row of it (the row is gone, it became L2 only, its segment lost its
+  gateway, the device carries no VRF, the SVI joined no row): nothing deletes an SVI with its row (the row's edges go
+  with it), a deleted device takes its interfaces.
+  `checks/vrf_instances.py` S1-S5 judge it (S1 a routed row without an SVI member, S2 an SVI that is a member of no
+  routed row of its device, S5 one whose address is not its segment's gateway: WARNINGs the next VRF pass fixes);
+  `checks/interface_layers.py` R3 allows the role-`svi` virtual interface among a row's members, R6 holds that it is
+  on the row's switch and R10 that a row has at most one. The transform renders `vrf member` from it and the
   gateway from `segment.gateway`, never from the SVI's address; the VRF demand does not read the SVI's address (its
   VRF is a source of its own). The L3 VNI SVI (`ip forward`, `3900 + TRANSIT_SLOT[namespace_type]`,
   `utils/exchange_transit.py` `l3vni_svi_vlan`) and the transit-leg SVIs of the firewall and load-balancer contexts stay
@@ -966,7 +1087,7 @@ class MyCheck(InfrahubCheck):
 - **Rule destinations**: a `SecurityPolicyRule` targets a segment (`destination_segment`, narrowed by prefixes or
   addresses), prefixes, addresses, a group tag or a zone (`destination_zone`). The internet is the `INTERNET`, not a
   segment: a rule to it has `destination_zone: INTERNET` and nothing else (the firewall renders `to INTERNET`,
-  destination any; the leaf ACL denies `NON_INTERNET_PREFIXES` before the permit to any). Only that zone is accepted,
+  destination any; the leaf ACL denies `NON_INTERNET_PREFIXES` (`NON_INTERNET_PREFIXES_IPV6` in an IPv6 segment's ACL) before the permit to any). Only that zone is accepted,
   and `checks/segment_security.py` refuses a zone next to a segment or group tag (a zone qualifies a prefix or address selector).
 - **A device's functions are capabilities**: anything a device (or a cloud instance) does or is configured with beyond its
   identity is a capability object on the device edge, never an attribute or a relationship of the device kind. The device
@@ -975,7 +1096,7 @@ class MyCheck(InfrahubCheck):
   cascades with the device: a BGP or OSPF process, an MLAG domain, an HA pair, `ManagedPBR`); one object several devices
   are members of is a shared capability (`ManagedGenericSharedDevice`, never cascades: a VRF instance, a service context,
   an NTP, SNMP or AAA profile). An interface-side object (on `ManagedGenericInterfaces`) exists only when the interface
-  has a setting of its own (`RoutingOSPFInterface`: metric, mode, authentication); a binding that carries no setting is
+  has a setting of its own (`RoutingOSPFInterface`: metric, mode, authentication; one device's interfaces, held by a check); a binding that carries no setting is
   derived when the device is rendered, never stored (the steered SVIs of PBR, the legs and border ports of a context:
   `utils/device_services.py`). So a transform reads what a device does in ONE place, its `capabilities` and
   `shared_capabilities` (a typename filter), nested under the device, and derives the rest from that and the device's own
@@ -1007,8 +1128,8 @@ class MyCheck(InfrahubCheck):
     a service context is not either (its legs and border ports are derived from its members,
     `utils/service_contexts.py`), nor is a routed exchange (its legs are the context's legs in its two VRFs,
     `exchange_legs`) or an OSPF peering (its interfaces are those of its `ospf_interface` settings); the kinds on
-    `ManagedGenericInterfaces` are the VRF, the segment deployment and the VLAN row, the BGP peering and the OSPF
-    interface settings.
+    `ManagedGenericInterfaces` are the VRF, the segment deployment and the VLAN row, the BGP peering, the OSPF
+    interface settings and the interface encapsulation (what an interface rides on).
     The circuits are on it too: their two ends are their `capabilities` (see **Circuit placement**).
 
 #### Schema Best Practices
@@ -1252,13 +1373,15 @@ Integration runs go through `uv run invoke test-integration` (see the `infrahub-
 stack at a time. Two loops:
 
 - **Fast (minutes)**: `uv run invoke test-integration-fast` (`test_01` setup, `test_02` repository sync, `test_03` loads
-  `data/demos/00_full_topology` onto the stack's `main`). For a review stack, run it with `INFRAHUB_TESTING_KEEP_STACK=1`:
-  the stack stays up on :8100 with the sample on `main`. Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
+  `data/demos/00_full_topology` onto the branch `full-topology`, never onto `main`, which the other scenarios deploy into;
+  the scenarios share one session). For a review stack, run it with `INFRAHUB_TESTING_KEEP_STACK=1`:
+  the stack stays up on :8100 with the sample on that branch. Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
   against the live schema, so a field the schema rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict")
   fails there, where the full subset costs tens of minutes (the task worker log names the field).
 - **Full 30_all subset**: `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`; `64` is `test_64`,
   `64b`, `64c`). `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the
-  branch) runs last. The fast loop loads its topology onto the stack's `main`: `uv run invoke clean-testcontainers` first.
+  branch) runs last. The fast loop loads its topology onto its own branch, so it can share a session with the scenarios; `uv run invoke
+  clean-testcontainers` first.
 
 | Change touches | Run |
 | --- | --- |

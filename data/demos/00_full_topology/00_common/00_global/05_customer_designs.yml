@@ -1,13 +1,44 @@
-# Internal-only dedicated appliances; load-balancer service remains shared.
+# Custom DC tiers of the sample (the bootstrap tiers S, M, L and XL stay as they are).
+# M_INTERNAL: internal-only dedicated appliances; load-balancer service remains shared.
+# S_100G and M_100G: the S and M tiers (shared firewall and load balancer, same segments, blocks and 25G ports) with
+# 100G host ports. The leaf customer ports of the sample are 100G (N9K-C9364C-GX), and the bootstrap shared tiers allow
+# none (ports_100g 0), so the footprints that tag them (C900-P-DC-GDN1 three, C900-P-DC-KTW1 five) need a tier of
+# their own; L and XL would also bring a dedicated firewall and load balancer the sample does not build there.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyCustomerTemplateDC
   data:
-    - name: M_INTERNAL_DC
+    - name: M_INTERNAL
       description: "Dedicated internal firewall pair; shared LB. Up to 6 segments, 12 x 25G and 4 x 100G host ports."
       dedicated_firewall: true
       dedicated_loadbalancer: false
       max_segments: 6
+      address_prefix_length: 21
+      segment_prefix_length: 24
+      ipv6_prefix_length: 58
+      ipv6_segment_prefix_length: 64
       ports_25g: 12
       ports_100g: 4
+    - name: S_100G
+      description: "Shared firewall/LB. Up to 2 segments, 6 x 25G and 4 x 100G host ports, a /23 address block."
+      dedicated_firewall: false
+      dedicated_loadbalancer: false
+      max_segments: 2
+      address_prefix_length: 23
+      segment_prefix_length: 24
+      ipv6_prefix_length: 60
+      ipv6_segment_prefix_length: 64
+      ports_25g: 6
+      ports_100g: 4
+    - name: M_100G
+      description: "Shared firewall/LB. Up to 6 segments, 12 x 25G and 6 x 100G host ports, a /21 address block."
+      dedicated_firewall: false
+      dedicated_loadbalancer: false
+      max_segments: 6
+      address_prefix_length: 21
+      segment_prefix_length: 24
+      ipv6_prefix_length: 58
+      ipv6_segment_prefix_length: 64
+      ports_25g: 12
+      ports_100g: 6

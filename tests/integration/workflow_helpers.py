@@ -276,7 +276,12 @@ def create_proposed_change(
     source_branch: str,
     destination_branch: str = "main",
 ) -> str:
-    """Create a proposed change. Returns the PC ID."""
+    """Create a proposed change. Returns the PC ID.
+
+    It is created once the queue has been quiet for a minute: the generators the scenario started (a cascade has gaps
+    between its tasks) must have written everything the validators are to judge.
+    """
+    wait_for_no_running_tasks(client, branch=None, stable_zero=QUIET_POLLS_BEFORE_PROPOSED_CHANGE)
     logger.info("Creating proposed change: %s (%s -> %s)", name, source_branch, destination_branch)
 
     diff_mutation = Mutation(
@@ -318,6 +323,13 @@ def create_proposed_change(
 
     logger.info("Proposed change created with ID: %s", pc_id)
     return pc_id
+
+
+# Polls of ``wait_for_no_running_tasks`` (5 s apart) with nothing in flight that a proposed change or a merge needs
+# first. A cascade of generators (a pod swap starts pod_rack_cascade, which starts the pod generator) leaves gaps of
+# a minute on a loaded machine between two of its tasks, and a proposed change created in a gap is validated, then
+# validated again as the next generator writes to its branch: the validators end half old, half new.
+QUIET_POLLS_BEFORE_PROPOSED_CHANGE = 12
 
 
 def wait_for_no_running_tasks(
@@ -467,6 +479,8 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
                             edges {
                                 node {
                                     label { value }
+                                    state { value }
+                                    conclusion { value }
                                     checks {
                                         edges {
                                             node {
@@ -498,6 +512,23 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
             validator = validation_edge.get("node") or {}
             validator_label = (validator.get("label") or {}).get("value") or "<unnamed validator>"
             checks = (validator.get("checks") or {}).get("edges") or []
+            # The merge is refused for a validator that is not green even when no check under it failed (a validator
+            # that never concluded, or one that says failure over successful checks): name it, with what it says.
+            validator_state = (validator.get("state") or {}).get("value")
+            validator_conclusion = (validator.get("conclusion") or {}).get("value")
+            if validator_conclusion != "success" or validator_state != "completed":
+                descriptions.append(
+                    f"[{validator_label}] validator state={validator_state} conclusion={validator_conclusion} "
+                    f"({len(checks)} check(s) under it)"
+                )
+                # What each of its checks says, whatever its conclusion: the verdict of the validator and the one of
+                # its checks can differ, and the message is the only thing that names the object.
+                for check_edge in checks:
+                    check = check_edge.get("node") or {}
+                    descriptions.append(
+                        f"[{validator_label}] check conclusion={(check.get('conclusion') or {}).get('value')}: "
+                        f"{((check.get('message') or {}).get('value') or '<no message>')[:600]}"
+                    )
             for check_edge in checks:
                 check = check_edge.get("node") or {}
                 conclusion = (check.get("conclusion") or {}).get("value")
@@ -508,6 +539,33 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
                 message = (check.get("message") or {}).get("value") or "<no message>"
                 descriptions.append(f"[{validator_label}] {kind} '{label}': {message}")
     return descriptions
+
+
+def _rerun_unfinished_validators(client: InfrahubClientSync, pc_id: str) -> None:
+    """Run the checks of the proposed change again when its validators are not all green and no check failed.
+
+    The platform refuses a merge while a validator has not concluded or says failure, and a repeated merge changes
+    nothing: a validator starved under load (queued, an import check with no conclusion, a verdict of failure over
+    successful checks) only changes when the checks run again, which is what the "run checks" button of the GUI does.
+    A check that really failed is left alone (it is the finding) and the call is only made when none did.
+    """
+    descriptions = _fetch_failed_checks(client, pc_id)
+    if not descriptions:
+        return
+    if any(
+        not description.split("] ", 1)[1].startswith(("validator state=", "check conclusion="))
+        for description in descriptions
+    ):
+        return
+    logger.warning(
+        "Validators not green and no failing check, running the checks again:\n  - %s", "\n  - ".join(descriptions)
+    )
+    client.execute_graphql(
+        query="mutation ($id: String!) { CoreProposedChangeRunCheck(data: {id: $id, check_type: ALL}) { ok } }",
+        variables={"id": pc_id},
+    )
+    time.sleep(10)
+    wait_for_validations(client=client, pc_id=pc_id, pc_name=pc_id, allow_failures=True)
 
 
 def merge_proposed_change(
@@ -539,7 +597,7 @@ def merge_proposed_change(
         # branch's tasks, or other open proposed changes' pipelines that the
         # previous merge into main re-triggered — would fail mid-write. Wait
         # for the whole queue, not just the source branch.
-        wait_for_no_running_tasks(client, branch=None)
+        wait_for_no_running_tasks(client, branch=None, stable_zero=QUIET_POLLS_BEFORE_PROPOSED_CHANGE)
 
         mutation = Mutation(
             mutation="CoreProposedChangeMerge",
@@ -626,6 +684,7 @@ def merge_proposed_change(
                 retry_delay,
             )
             time.sleep(retry_delay)
+            _rerun_unfinished_validators(client, pc_id)
         else:
             failed_checks = _fetch_failed_checks(client, pc_id)
             logger.error(

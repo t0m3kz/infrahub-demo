@@ -70,6 +70,7 @@ query border_leaf_config($device: String!) {
               }
               ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
               ...InterfaceRoutingZoneFields
+              ...InterfaceEncapsulationFields
               ... on DcimPhysicalInterface {
                 interface_type {
                   value
@@ -125,9 +126,6 @@ query border_leaf_config($device: String!) {
                 }
               }
               ... on DcimVirtualInterface {
-                vlan_id {
-                  value
-                }
                 device {
                   node {
                     id
@@ -143,18 +141,6 @@ query border_leaf_config($device: String!) {
                         name {
                           value
                         }
-                      }
-                    }
-                  }
-                }
-                parent_interface {
-                  node {
-                    name {
-                      value
-                    }
-                    device {
-                      node {
-                        id
                       }
                     }
                   }

@@ -6,6 +6,7 @@ from tests.smoke.fixture_builders.cisco_xe import _add_cisco_xe_acl_rules, _inte
 from tests.smoke.fixture_builders.common import (
     _af_edges,
     _edges,
+    _encapsulation,
     _make_bgp_peering,
     _make_interface,
     _node,
@@ -158,9 +159,8 @@ def build_office_wan_exit_data(*, device_name: str, role: str) -> dict:
                     name=sub_interface, device_name=device_name, role="uplink", typename="DcimVirtualInterface"
                 ),
                 "device": _node({"id": f"dev-{device_name}"}),
-                "vlan_id": _v(OFFICE_EXIT_VLAN),
-                "parent_interface": _node(
-                    {"name": _v(OFFICE_EXIT_PORT), "device": _node({"id": f"dev-{device_name}"})}
+                **_encapsulation(
+                    OFFICE_EXIT_VLAN, {"name": _v(OFFICE_EXIT_PORT), "device": _node({"id": f"dev-{device_name}"})}
                 ),
                 "ip_address": _node(
                     {

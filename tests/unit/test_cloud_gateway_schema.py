@@ -44,14 +44,6 @@ def _extension(kind: str) -> dict[str, Any]:
     raise AssertionError(f"no extension of {kind}")
 
 
-def test_the_transit_gateway_kinds_are_merged_into_the_gateway() -> None:
-    """No CloudTransitGateway, attachment or route table of the old names remain."""
-    kinds = set(_nodes())
-
-    assert {"CloudGateway", "CloudGatewayAttachment", "CloudGatewayRouteTable"} <= kinds
-    assert not {k for k in kinds if "TransitGateway" in k}
-
-
 def test_gateway_types_are_hub_edge_customer_and_the_region_is_optional() -> None:
     """The type is neutral and a global gateway has no region."""
     gateway = _nodes()["CloudGateway"]
@@ -128,11 +120,14 @@ def test_a_peering_is_an_interface_of_its_transport_and_keeps_no_transport_edges
     """DcimInterface gives device, name and mtu; account, region, saas_region, owner and transport are the transport's."""
     peering = _nodes()["CloudPeeringInterface"]
 
-    assert {"DcimInterface", "DcimSubInterface", "DcimHasIPAddress"} <= set(peering["inherit_from"])
-    assert "parent_interface" not in _names(peering, "relationships")  # the marker DcimSubInterface holds it
+    assert {"DcimInterface", "DcimHasIPAddress"} <= set(peering["inherit_from"])
+    assert (
+        "DcimSubInterface" not in peering["inherit_from"]
+    )  # the marker is gone: the encapsulation capability holds it
+    assert not {"parent_interface", "sub_interfaces"} & _names(peering, "relationships")
     assert not {"transport", "account", "region", "saas_region", "owner"} & _names(peering, "relationships")
     assert "mtu" not in _names(peering, "attributes")
-    assert not {"vlan_id", "inner_vlan_id"} & _names(peering, "attributes")  # the marker DcimSubInterface holds them
+    assert not {"vlan_id"} & _names(peering, "attributes")  # the tag is the ManagedInterfaceEncapsulation's
 
 
 def test_virtual_network_peers_are_symmetric_on_one_identifier() -> None:

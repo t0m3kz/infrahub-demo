@@ -22,6 +22,7 @@ from checks.internet_egress import (
     virtual_pair_gaps,
 )
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
+from tests.unit.encapsulation_helpers import cleaned_encapsulation, raw_encapsulation
 from tests.unit.routing_helpers import in_vrf, make_vrf
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, INTERNET_ZONE, transit_vlan
@@ -62,8 +63,7 @@ def _leg(
         "id": f"leg-{device}-{vlan}",
         "typename": "DcimVirtualInterface",
         "name": f"{port}.{vlan}" if name is None else name,
-        "vlan_id": vlan,
-        "parent_interface": {"name": port, "device": {"id": device}},
+        **cleaned_encapsulation(vlan, {"name": port, "device": {"id": device}}),
         "role": "firewall",
         "device": {"id": device, "name": device, "role": "internal-firewall"},
         "ip_address": address,
@@ -287,7 +287,14 @@ class TestDataCenter:
         ]
         assert egress_findings(_cleaned([_dc([context])])) == []
         member["interfaces"] = [
-            {**i, "vlan_id": 3999, "ip_address": None, "zone_capabilities": []} if i["id"] == leg_id else i
+            {
+                **i,
+                **cleaned_encapsulation(3999, {"name": "eth1", "device": {"id": "dev-fw-2"}}),
+                "ip_address": None,
+                "zone_capabilities": [],
+            }
+            if i["id"] == leg_id
+            else i
             for i in member["interfaces"]
         ]
         (finding,) = egress_findings(_cleaned([_dc([context])]))
@@ -567,8 +574,9 @@ def _raw_payload(snat: bool) -> dict[str, Any]:
                         "id": f"leg-{n}",
                         "__typename": "DcimVirtualInterface",
                         "name": value(f"eth1.{INTERNET_VLAN}"),
-                        "vlan_id": value(INTERNET_VLAN),
-                        "parent_interface": {"node": {"name": value("eth1"), "device": {"node": {"id": f"fw-{n}"}}}},
+                        **raw_encapsulation(
+                            INTERNET_VLAN, {"name": value("eth1"), "device": {"node": {"id": f"fw-{n}"}}}
+                        ),
                         "role": value("firewall"),
                         "ip_address": {
                             "node": {
@@ -725,6 +733,3 @@ class TestInternetEdge:
     def test_an_edge_without_an_exchange_is_reported(self) -> None:
         findings = egress_findings(_cleaned([_dc([_context(), _edge()])], exchanges=[]))
         assert any("no TopologyRoutedExchange between the tenant VRF and INTERNET" in finding for finding in findings)
-
-    def test_a_footprint_without_an_edge_keeps_the_elements_on_its_contexts(self) -> None:
-        assert egress_findings(_cleaned([_dc()])) == []

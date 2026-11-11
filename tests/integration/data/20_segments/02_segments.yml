@@ -1,10 +1,10 @@
 ---
-# Two local (single-deployment) C001 prod VXLAN segments activated in DC6
+# Three local (single-deployment) C001 prod VXLAN segments (two IPv4, one IPv6) activated in DC6
 # through the C001-P-DC6 footprint. add_vxlan_segment resolves the
 # footprint's parent (DC6) and creates one ManagedSegmentDeployment per
-# segment there, with a VNI from DC6's own vni pool. No gateway: the scenario
-# covers the L2 activation path only (same as the local segments in
-# data/demos/30_all/07_applications/c005/00_segments.yml).
+# segment there, with a VNI from DC6's own vni pool. No gateway is authored: the generator addresses each from the
+# customer's pool, sized by host_count (a /29 for web-app, the /24 default for db-backend), and the scenario checks it
+# (tests/integration/test_19_dc6_segments.py).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -13,6 +13,8 @@ spec:
     - owner: "C001"
       customer_name: "web-app"
       environment: "p"
+      # 1 instance(s) + 25% headroom
+      host_count: 2
       security_zone: "PROD"
       stretch_scope: local
       arp_suppression: true
@@ -24,6 +26,22 @@ spec:
     - owner: "C001"
       customer_name: "db-backend"
       environment: "p"
+      security_zone: "PROD"
+      stretch_scope: local
+      arp_suppression: true
+      customer_deployments:
+        - "C001-P-DC6"
+      member_of_groups:
+        - vxlan_segments
+
+    # An IPv6 segment on the same footprint: a /64 (the tier M's ipv6_segment_prefix_length) from the customer's
+    # IPv6 pool, c001-p-dc-ipv6, whose block is the tier's ipv6_prefix_length (/58); the gateway is the first address.
+    # Nothing is cabled to it, so no VLAN row, no SVI and nothing for a device to render (no renderer exists for
+    # IPv6 segments: transforms refuse them, see tests/unit/test_ipv6_segment_refusal.py).
+    - owner: "C001"
+      customer_name: "ipv6-app"
+      environment: "p"
+      ip_version: ipv6
       security_zone: "PROD"
       stretch_scope: local
       arp_suppression: true

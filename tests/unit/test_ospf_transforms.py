@@ -31,11 +31,14 @@ def _ospf_service(
 
 
 class TestGetOspfNoServices:
-    def test_empty_capabilities_returns_empty_list(self) -> None:
-        assert get_ospf([]) == []
-
-    def test_no_ospf_typename_returns_empty_list(self) -> None:
-        caps = [{"typename": "ManagedBGP"}, {"typename": "ManagedMLAG"}]
+    @pytest.mark.parametrize(
+        "caps",
+        [
+            pytest.param([], id="empty"),
+            pytest.param([{"typename": "ManagedBGP"}, {"typename": "ManagedMLAG"}], id="no-ospf"),
+        ],
+    )
+    def test_no_ospf_service_returns_empty_list(self, caps: list[dict]) -> None:
         assert get_ospf(caps) == []
 
 
@@ -74,29 +77,29 @@ class TestGetOspfExtraction:
 class TestGetOspfReferenceBandwidthFromInterfaces:
     """reference_bandwidth is derived from the fastest physical interface when available."""
 
-    def test_derived_from_fastest_interface_overrides_schema_default(self) -> None:
-        interfaces = [
-            {"interface_type": "100gbase-x-qsfp28"},
-            {"interface_type": "25gbase-x-sfp28"},
-        ]
-        result = get_ospf([_ospf_service(reference_bandwidth=100000)], interfaces)
-        assert result[0]["reference_bandwidth"] == 100000  # 100 Gbps -> 100000 Mbps
+    @pytest.mark.parametrize(
+        ("interfaces", "expected"),
+        [
+            pytest.param(
+                [{"interface_type": "100gbase-x-qsfp28"}, {"interface_type": "25gbase-x-sfp28"}], 100000, id="100g"
+            ),
+            pytest.param([{"interface_type": "400gbase-x-qsfpdd"}], 400000, id="400g"),
+        ],
+    )
+    def test_derived_from_fastest_interface_overrides_schema_value(self, interfaces: list[dict], expected: int) -> None:
+        """The schema value (40000) differs from every derived one, so the derivation is what is asserted."""
+        result = get_ospf([_ospf_service(reference_bandwidth=40000)], interfaces)
+        assert result[0]["reference_bandwidth"] == expected
 
-    def test_400g_interface_overrides_schema_default(self) -> None:
-        interfaces = [{"interface_type": "400gbase-x-qsfpdd"}]
-        result = get_ospf([_ospf_service(reference_bandwidth=100000)], interfaces)
-        assert result[0]["reference_bandwidth"] == 400000
-
-    def test_no_interfaces_falls_back_to_schema_value(self) -> None:
-        result = get_ospf([_ospf_service(reference_bandwidth=40000)], [])
-        assert result[0]["reference_bandwidth"] == 40000
-
-    def test_none_interfaces_falls_back_to_schema_value(self) -> None:
-        result = get_ospf([_ospf_service(reference_bandwidth=40000)], None)
-        assert result[0]["reference_bandwidth"] == 40000
-
-    def test_interfaces_without_recognizable_speed_fall_back_to_schema_value(self) -> None:
-        interfaces = [{"interface_type": "other"}, {"interface_type": None}]
+    @pytest.mark.parametrize(
+        "interfaces",
+        [
+            pytest.param([], id="empty"),
+            pytest.param(None, id="none"),
+            pytest.param([{"interface_type": "other"}, {"interface_type": None}], id="unrecognized-speed"),
+        ],
+    )
+    def test_falls_back_to_schema_value(self, interfaces: list[dict] | None) -> None:
         result = get_ospf([_ospf_service(reference_bandwidth=40000)], interfaces)
         assert result[0]["reference_bandwidth"] == 40000
 

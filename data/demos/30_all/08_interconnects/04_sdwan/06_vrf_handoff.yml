@@ -28,19 +28,27 @@ spec:
   kind: DcimVirtualInterface
   data:
     - name: "Ethernet1/12.1900"
-      vlan_id: 1900
       device: "eg-fr201"
       role: uplink
       status: active
       description: "PROD handoff to EQX-FR2-SDWAN-GW1"
-      parent_interface: ["eg-fr201", "Ethernet1/12"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "eg-fr201:Ethernet1/12.1900"
+            vlan_id: 1900
+            parent: ["eg-fr201", "Ethernet1/12"]
     - name: "eth0.1900"
-      vlan_id: 1900
       device: "EQX-FR2-SDWAN-GW1"
       role: uplink
       status: active
       description: "PROD handoff to eg-fr201"
-      parent_interface: ["EQX-FR2-SDWAN-GW1", "eth0"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "EQX-FR2-SDWAN-GW1:eth0.1900"
+            vlan_id: 1900
+            parent: ["EQX-FR2-SDWAN-GW1", "eth0"]
     # GW1's router-id: a loopback, not a handoff address (those are generated at circuit
     # creation). 10.255.64.0/24 holds the loopbacks of the party devices modelled as stubs,
     # clear of the handoff pools.

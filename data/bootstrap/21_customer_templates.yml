@@ -1,61 +1,153 @@
 ---
-# Customer Deployment Templates - DC service tiers
-# The reusable tiers a DC customer footprint picks with `design`. Loaded at
-# bootstrap time, referenced by TopologyCustomerDC instances.
-#
-# Naming convention: {TIER}_DC (S_DC, M_DC, L_DC, XL_DC). S and M use the
-# shared firewall/load balancer capacity, L and XL are dedicated.
+# Customer Deployment Templates - the service tiers
+# The reusable tiers a customer footprint picks with `design`, one kind per facility (data center, colocation,
+# cloud). Loaded at bootstrap time, referenced by TopologyCustomerDC, TopologyCustomerColocation and
+# TopologyCustomerCloud instances. The tiers are named S, M, L and XL in every kind (the kinds are distinct nodes).
+# In the DC kind S and M use the shared firewall/load balancer capacity, L and XL are dedicated.
 #
 # What reads a row:
-#   dedicated_firewall / dedicated_loadbalancer - generators/firewall_context.py
-#   max_segments, ports_25g, ports_100g         - checks/customer_quota.py, an
-#     ERROR when a footprint with this design goes above them. A footprint
-#     without a design is not metered.
+#   dedicated_firewall / dedicated_loadbalancer - generators/firewall_context.py (DC)
+#   max_segments  - checks/customer_quota.py, an ERROR when a footprint with this design has more network
+#     segments (naming the footprint in customer_deployments, or its cloud subnets) than the tier allows
+#   ports_<n>g    - checks/customer_quota.py (DC), host-facing leaf/access ports of that speed tagged with the
+#     footprint's segments (0 = none of that speed allowed)
+#   max_virtual_networks - checks/customer_quota.py (cloud), the virtual networks of the footprint's account
+#   address_prefix_length - DC and colocation: the IPv4 block generators/topology/segment_addressing.py carves from
+#     the environment's tenant pool (Tenant-PROD-IPv4 / Tenant-NONPROD-IPv4) for the customer's own prefix pool when
+#     the footprint is boarded; the customer's segments are addressed from it.
+#     Cloud: the routed range of the footprint (one account in one cloud region), IPv4 only, carved at boarding
+#     into the customer's cloud pool; nothing draws from that pool yet (it exists for the later routed-range
+#     allocation per virtual network), and the cloud tiers have none of the three numbers below.
+#   segment_prefix_length - DC and colocation: the IPv4 prefix of a segment that states no host_count (24 in every
+#     tier; a host_count sizes the prefix instead).
+#   ipv6_prefix_length - DC and colocation: the IPv6 block carved from Tenant-PROD-IPv6 / Tenant-NONPROD-IPv6 for
+#     the customer's IPv6 pool.
+#   ipv6_segment_prefix_length - DC and colocation: the prefix of an IPv6 segment (64 in every tier: anything else
+#     breaks SLAAC).
+#   checks/customer_quota.py requires the IPv4 block to hold max_segments segments of segment_prefix_length and
+#   the IPv6 block max_segments segments of ipv6_segment_prefix_length.
 #
-#   max_segments  network segments naming the footprint in customer_deployments
-#   ports_<n>g    host-facing leaf/access ports of that speed tagged with the
-#                 footprint's segments (0 = none of that speed allowed)
-#
-# The numbers are the highest use in data/demos/30_all (S: 1 segment, 4 x 25G;
-# M: 4 segments, 8 x 25G; L: 3 segments, 4 x 25G; XL: unused) with headroom: about
-# 1.5x the tier's highest use, at least one segment more, rounded to a clean number.
-# Every column grows from tier to tier (L doubles M, XL doubles L, whatever the
-# demo uses of them) so a larger tier is never entitled to less. No footprint
-# uses 100G host ports (the server NICs are 25G); the dedicated tiers allow some.
+# The DC numbers are the highest use in data/demos/30_all (S: 1 segment, 4 x 25G; M: 4 segments, 8 x 25G; L: 3
+# segments, 4 x 25G; XL: unused) with headroom: about 1.5x the tier's highest use, at least one segment more, rounded
+# to a clean number. Every column grows from tier to tier (L doubles M, XL doubles L, whatever the demo uses of them)
+# so a larger tier is never entitled to less. No footprint uses 100G host ports (the server NICs are 25G); the
+# dedicated tiers allow some. The colocation and cloud tiers share the segment quota of the DC ones.
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyCustomerTemplateDC
   data:
-    - name: "S_DC"
-      description: "Shared firewall/LB. Up to 2 segments, 6 x 25G host ports."
+    - name: "S"
+      description: "Shared firewall/LB. Up to 2 segments, 6 x 25G host ports, a /23 address block."
       dedicated_firewall: false
       dedicated_loadbalancer: false
       max_segments: 2
+      address_prefix_length: 23
+      segment_prefix_length: 24
+      ipv6_prefix_length: 60
+      ipv6_segment_prefix_length: 64
       ports_25g: 6
       ports_100g: 0
 
-    - name: "M_DC"
-      description: "Shared firewall/LB. Up to 6 segments, 12 x 25G host ports."
+    - name: "M"
+      description: "Shared firewall/LB. Up to 6 segments, 12 x 25G host ports, a /21 address block."
       dedicated_firewall: false
       dedicated_loadbalancer: false
       max_segments: 6
+      address_prefix_length: 21
+      segment_prefix_length: 24
+      ipv6_prefix_length: 58
+      ipv6_segment_prefix_length: 64
       ports_25g: 12
       ports_100g: 0
 
-    - name: "L_DC"
-      description: "Dedicated firewall and LB. Up to 12 segments, 24 x 25G and 4 x 100G host ports."
+    - name: "L"
+      description: "Dedicated firewall and LB. Up to 12 segments, 24 x 25G and 4 x 100G ports, a /20 address block."
       dedicated_firewall: true
       dedicated_loadbalancer: true
       max_segments: 12
+      address_prefix_length: 20
+      segment_prefix_length: 24
+      ipv6_prefix_length: 56
+      ipv6_segment_prefix_length: 64
       ports_25g: 24
       ports_100g: 4
 
-    - name: "XL_DC"
-      description: "Dedicated firewall and LB. Up to 24 segments, 48 x 25G and 8 x 100G host ports."
+    - name: "XL"
+      description: "Dedicated firewall and LB. Up to 24 segments, 48 x 25G and 8 x 100G ports, a /19 address block."
       dedicated_firewall: true
       dedicated_loadbalancer: true
       max_segments: 24
+      address_prefix_length: 19
+      segment_prefix_length: 24
+      ipv6_prefix_length: 52
+      ipv6_segment_prefix_length: 64
       ports_25g: 48
       ports_100g: 8
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerTemplateColo
+  data:
+    - name: "S"
+      description: "Up to 2 segments, a /23 address block."
+      max_segments: 2
+      address_prefix_length: 23
+      segment_prefix_length: 24
+      ipv6_prefix_length: 60
+      ipv6_segment_prefix_length: 64
+
+    - name: "M"
+      description: "Up to 6 segments, a /21 address block."
+      max_segments: 6
+      address_prefix_length: 21
+      segment_prefix_length: 24
+      ipv6_prefix_length: 58
+      ipv6_segment_prefix_length: 64
+
+    - name: "L"
+      description: "Up to 12 segments, a /20 address block."
+      max_segments: 12
+      address_prefix_length: 20
+      segment_prefix_length: 24
+      ipv6_prefix_length: 56
+      ipv6_segment_prefix_length: 64
+
+    - name: "XL"
+      description: "Up to 24 segments, a /19 address block."
+      max_segments: 24
+      address_prefix_length: 19
+      segment_prefix_length: 24
+      ipv6_prefix_length: 52
+      ipv6_segment_prefix_length: 64
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerTemplateCloud
+  data:
+    - name: "S"
+      description: "Up to 2 segments in 1 virtual network, a /28 routed range."
+      max_segments: 2
+      max_virtual_networks: 1
+      address_prefix_length: 28
+
+    - name: "M"
+      description: "Up to 6 segments in 3 virtual networks, a /27 routed range."
+      max_segments: 6
+      max_virtual_networks: 3
+      address_prefix_length: 27
+
+    - name: "L"
+      description: "Up to 12 segments in 6 virtual networks, a /26 routed range."
+      max_segments: 12
+      max_virtual_networks: 6
+      address_prefix_length: 26
+
+    - name: "XL"
+      description: "Up to 24 segments in 12 virtual networks, a /25 routed range."
+      max_segments: 24
+      max_virtual_networks: 12
+      address_prefix_length: 25

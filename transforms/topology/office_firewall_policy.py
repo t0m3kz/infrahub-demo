@@ -15,10 +15,11 @@ from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
 
+from transforms.helpers.address_table import build_address_table
 from transforms.helpers.firewall import get_zone_policies
 from transforms.helpers.policy import enabled_policies, segment_policies, segment_rule_policies
 from utils.data_cleaning import clean_data
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import own_prefix
 
 OFFICE_KIND = "TopologyCustomerOffice"
 
@@ -51,11 +52,13 @@ def build_office_policy(office: dict[str, Any]) -> dict[str, Any]:
         "office": office.get("name"),
         "owner": (office.get("owner") or {}).get("org_id"),
         "zones": zones,
+        # The prefixes the rules name, once, family-agnostic (the same table the firewall templates render).
+        "addresses": build_address_table([], rules),
         "segments": [
             {
                 "name": segment.get("name"),
                 "zone": _zone(segment),
-                "prefix": segment_prefix(segment),
+                "prefix": own_prefix(segment),
                 "default_action": _default_action(segment),
             }
             for segment in sorted(segments, key=lambda s: str(s.get("name")))

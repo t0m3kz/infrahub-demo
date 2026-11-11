@@ -25,6 +25,7 @@ from transforms.helpers.segments import interface_segments, segment_vlan_ids
 from transforms.helpers.vrf import device_vrfs
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 from utils.fabric_roles import BORDER_ROLES
+from utils.interface_encapsulation import vlan_of
 from utils.limits import DEFAULT_NAMESPACE, MAX_ENCODABLE_VNI
 from utils.routing_domain import interface_security_zone
 from utils.segment_addressing import routed_segment_namespace
@@ -217,9 +218,9 @@ def get_interfaces(
         )
         # A plain routed sub-interface (e.g. the colocation edge's VRF handoff
         # to the SD-WAN gateway) has no context capability: its tag is its own
-        # vlan_id (None: untagged), never read off its name.
+        # encapsulation vlan_id (None: untagged), never read off its name.
         if context_vlan_id is None and iface.get("typename") == "DcimVirtualInterface":
-            context_vlan_id = iface.get("vlan_id")
+            context_vlan_id = vlan_of(iface)
 
         # A port tagged with a context that has transit legs is a tagged trunk
         # for those VLANs; its context vlan_id is NOT a sub-interface tag here.
@@ -565,6 +566,11 @@ def evpn_vxlan_context(node: OverlayNode, evpn_inputs: EvpnInputs, platform: str
 
     l2_vni_mappings = [_l2_mapping(l2) for l2 in node.l2]
     l3_vni_mappings = [_l3_mapping(l3) for l3 in node.l3]
+    # A VRF carries the IPv6 address family (and its route-targets) once one of its segments has an IPv6 gateway; the
+    # IPv4 family is always there (the exchange statics and the handoff sessions of a VRF are IPv4).
+    ipv6_vrfs = {l2.vrf for l2 in node.l2 if l2.gateway_ipv6}
+    for mapping in l3_vni_mappings:
+        mapping["ipv6"] = mapping["vrf_name"] in ipv6_vrfs
 
     # RT admin field: fabric-wide constant, NOT this device's local ASN.
     # Under ebgp-ebgp every VTEP runs its own ASN, so `{local_as}:{vni}` makes

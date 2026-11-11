@@ -351,19 +351,31 @@ class PoolMixin:
         role: str,
         kind: Literal["address", "prefix"],
         namespace: str = DEFAULT_NAMESPACE,
+        member_type: str | None = None,
+        is_pool: bool = False,
+        track: bool = True,
     ) -> Any:
         """Slice one prefix out of a bootstrap parent pool and upsert a pool around it.
 
         The slice is keyed by pool_name, so re-runs get the same prefix back.
         The pool hands out the slice's own length unless a caller names one,
-        and its own identifier is pool_name.
+        and its own identifier is pool_name. ``member_type`` and ``is_pool`` are
+        set on the slice when a caller states them (a block that is itself
+        carved into prefixes: ``member_type="prefix"``, ``is_pool``). ``track=False``
+        saves the pool outside the run's tracking group, for a pool several runs
+        share (a customer's, drawn from by every footprint and segment of it), so no
+        run's delete_unused_nodes can reclaim it.
+
+        The upsert REPLACES the pool's resources with the slice: call it for a pool
+        that does not exist yet, never to re-run one that was grown with more resources.
         """
         parent_pool = await self._get_parent_pool_with_retry(parent_pool_name)
         allocated_prefix = await self.client.allocate_next_ip_prefix(
             resource_pool=parent_pool,
             identifier=pool_name,
             prefix_length=prefix_length,
-            data={"role": role},
+            data={"role": role, **({"is_pool": True} if is_pool else {})},
+            **({"member_type": member_type} if member_type else {}),
         )
         pool_kind, default_type = (
             (CoreIPAddressPool, {"default_address_type": "IpamIPAddress"})
@@ -381,7 +393,7 @@ class PoolMixin:
                 "resources": [allocated_prefix],
             },
         )
-        await pool.save(allow_upsert=True)
+        await pool.save(**({} if track else {"update_group_context": False}), allow_upsert=True)
         self.logger.info(f"- Created [{pool_kind.__name__}] {pool_name}")
         return pool
 

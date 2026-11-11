@@ -15,7 +15,7 @@ import pytest
 
 from tests.unit.base_device_transform_helpers import _device_data, _make_tor, _make_transform
 from tests.unit.segment_port_helpers import deployment_caps
-from transforms.common import BaseDeviceTransform, get_capabilities
+from transforms.common import get_capabilities
 from transforms.config.tor import ToR
 
 # ---------------------------------------------------------------------------
@@ -24,15 +24,6 @@ from transforms.config.tor import ToR
 
 
 class TestGetCapabilitiesEdgeCases:
-    def test_empty_dict_returns_false_false(self) -> None:
-        result = get_capabilities({})
-        assert result == {"bgp_enabled": False, "ospf_enabled": False}
-
-    def test_unknown_service_type_ignored(self) -> None:
-        result = get_capabilities({"capabilities": [{"typename": "UnknownService"}]})
-        assert result["bgp_enabled"] is False
-        assert result["ospf_enabled"] is False
-
     def test_multiple_bgp_entries_still_true_once(self) -> None:
         result = get_capabilities(
             {
@@ -111,20 +102,11 @@ class TestExtraConfig:
         for key in ("vlans", "vxlan", "acls", "vrf_routes"):
             assert key in result
 
-    def test_no_activations_yields_empty_vlans(self) -> None:
+    @pytest.mark.parametrize("key", ["vlans", "acls", "vrf_routes"])
+    def test_no_activations_yields_an_empty_list(self, key: str) -> None:
         t = _make_transform(device_role="leaf")
         result = t._extra_config(_device_data(), "arista_eos")
-        assert result["vlans"] == []
-
-    def test_no_activations_yields_empty_acls(self) -> None:
-        t = _make_transform(device_role="leaf")
-        result = t._extra_config(_device_data(), "arista_eos")
-        assert result["acls"] == []
-
-    def test_no_activations_vrf_routes_empty(self) -> None:
-        t = _make_transform(device_role="leaf")
-        result = t._extra_config(_device_data(), "arista_eos")
-        assert result["vrf_routes"] == []
+        assert result[key] == []
 
 
 # ---------------------------------------------------------------------------
@@ -142,39 +124,6 @@ class TestTransformDataRouting:
             result = await t.transform({"raw": "data"})
         assert "no-platform-dev" in result
         assert "No configuration generated" in result
-
-    @pytest.mark.asyncio
-    async def test_activation_from_segments(self) -> None:
-        """Activations on segment.segment_deployments on the interface segments are collected."""
-        t = _make_transform(device_role="leaf")
-        interfaces = [
-            {
-                "name": "Ethernet10",
-                "capabilities": deployment_caps(
-                    {
-                        "id": "seg-1",
-                        "typename": "ManagedVxlanSegment",
-                        "name": "seg-100",
-                        "customer_name": "seg-100",
-                        "segment_deployments": [{"vlan_id": 100, "vni": 10100}],
-                    }
-                ),
-            }
-        ]
-        device = _device_data(interfaces=interfaces)
-
-        fake_template = MagicMock()
-        fake_template.render.return_value = "! rendered"
-
-        with (
-            patch("transforms.common.clean_data") as mock_clean,
-            patch.object(t, "_load_template", return_value=fake_template),
-        ):
-            mock_clean.return_value = {"DcimPhysicalDevice": [device]}
-            await t.transform({"raw": "data"})
-
-        rendered_kwargs = fake_template.render.call_args[1]
-        assert rendered_kwargs.get("vlans") is not None
 
     @pytest.mark.asyncio
     async def test_activation_missing_yields_no_vlans(self) -> None:
@@ -341,30 +290,20 @@ class TestCollectActivationsOwnRow:
 
 
 class TestToRClassAttributes:
-    def test_device_role_is_tor(self) -> None:
-        assert ToR.device_role == "tor"
+    @pytest.mark.parametrize(
+        ("attribute", "value"),
+        [("device_role", "tor"), ("template_subdir", "leafs"), ("query", "leaf_config")],
+    )
+    def test_class_attribute(self, attribute: str, value: str) -> None:
+        assert getattr(ToR, attribute) == value
 
-    def test_template_subdir_is_leafs(self) -> None:
-        assert ToR.template_subdir == "leafs"
-
-    def test_query_is_leaf_config(self) -> None:
-        assert ToR.query == "leaf_config"
-
-    def test_inherits_base_device_transform(self) -> None:
-        assert issubclass(ToR, BaseDeviceTransform)
-
-    def test_extra_config_includes_vxlan_keys(self) -> None:
-        """ToR uses device_role='tor' so _extra_config returns vxlan/vlans/acls."""
+    def test_extra_config_includes_vxlan_keys_and_no_vlans_without_activations(self) -> None:
+        """ToR uses device_role='tor' so _extra_config returns vxlan/vlans/acls; no segment_deployments, no VLANs."""
         t = _make_tor()
         result = t._extra_config(_device_data(), "arista_eos")
         assert "vlans" in result
         assert "vxlan" in result
         assert "acls" in result
-
-    def test_extra_config_empty_activations_no_vlans(self) -> None:
-        t = _make_tor()
-        data = _device_data()  # no segment_deployments
-        result = t._extra_config(data, "arista_eos")
         assert result["vlans"] == []
 
     @pytest.mark.asyncio

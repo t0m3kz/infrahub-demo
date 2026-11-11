@@ -189,7 +189,7 @@ class TestAclRuleEndpointResolver:
             "destination_zone": {"name": "PROD"},
             "destination_prefixes": [{"prefix": "10.40.0.0/16"}],
         }
-        acl_rule = _build_acl_rule(rule)
+        acl_rule = _build_acl_rule(rule, "ipv4")
         assert (acl_rule["src"], acl_rule["dst"]) == ("10.1.0.0/24", "10.40.0.0/16")
 
     def test_destination_ip_selector_without_segment(self) -> None:
@@ -198,7 +198,7 @@ class TestAclRuleEndpointResolver:
             "destination_zone": {"name": "PROD"},
             "destination_ip_addresses": [{"address": "198.51.100.7/32"}],
         }
-        assert _build_acl_rule(rule)["dst"] == "198.51.100.7/32"
+        assert _build_acl_rule(rule, "ipv4")["dst"] == "198.51.100.7/32"
 
     def test_segment_prefix_wins_over_selectors(self) -> None:
         rule = {
@@ -206,10 +206,10 @@ class TestAclRuleEndpointResolver:
             "destination_zone": {"name": "PROD"},
             "destination_prefixes": [{"prefix": "10.40.0.0/16"}],
         }
-        assert _build_acl_rule(rule)["dst"] == "10.2.0.0/24"
+        assert _build_acl_rule(rule, "ipv4")["dst"] == "10.2.0.0/24"
 
     def test_no_segment_and_no_selector_is_any(self) -> None:
-        assert _build_acl_rule(_rule())["dst"] == "any"
+        assert _build_acl_rule(_rule(), "ipv4")["dst"] == "any"
 
     def test_return_leg_of_an_inbound_rule_uses_the_same_resolver(self) -> None:
         """The reply goes back to what the forward rule matched as its source."""
@@ -714,5 +714,5 @@ class TestGetAclsIsolationMode:
             "protocol": "tcp",
             "apply_on_switch": True,
         }
-        result = _build_acl_rule(rule_dict)
+        result = _build_acl_rule(rule_dict, "ipv4")
         assert result["action"] == "permit"

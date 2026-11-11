@@ -6,6 +6,10 @@
 hostname {{ name }}
 !
 ip routing
+{%- if vlans | selectattr('gateway_ipv6') | list %}
+! U: IPv6 routing is its own global switch on IOS-XE
+ipv6 unicast-routing
+{%- endif %}
 spanning-tree mode rapid-pvst
 !
 {#- VLAN Configuration -#}

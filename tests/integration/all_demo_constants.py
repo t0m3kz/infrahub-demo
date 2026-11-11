@@ -55,6 +55,8 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
         "add_app_dependency",
         "add_customer_deployment_dc",
         "add_customer_deployment_colocation",
+        "add_customer_deployment_cloud",
+        "add_cloud_attachment_range",
         "add_sdwan_edge",
         "add_office_fabric",
         "add_application_orchestrator_routing",

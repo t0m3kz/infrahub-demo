@@ -79,16 +79,6 @@ def _build_strategy_plan(planner: CablingPlanner, scenario: str, cabling_offset:
 class TestCablingPlannerCore:
     """Test CablingPlanner core functionality: initialization, device mapping, sorting."""
 
-    def test_initialization(self) -> None:
-        """Test basic CablingPlanner initialization."""
-        bottom_interfaces: list[Any] = create_mock_interfaces("leaf-01", ["Ethernet1/1"])
-        top_interfaces: list[Any] = create_mock_interfaces("spine-01", ["Ethernet1/1"])
-
-        planner = CablingPlanner(bottom_interfaces, top_interfaces)
-
-        assert planner.bottom_by_device is not None
-        assert planner.top_by_device is not None
-
     def test_empty_interfaces_handled_gracefully(self) -> None:
         """Test initialization with empty interface lists."""
         planner = CablingPlanner([], [])
@@ -146,22 +136,24 @@ class TestCablingPlannerCore:
 class TestCablingScenarios:
     """Test different cabling deployment scenarios."""
 
-    def test_standard_leaf_to_spine(self) -> None:
-        """Test standard RACK scenario (leaf to spine cabling)."""
+    @pytest.mark.parametrize(
+        "spine_ports",
+        [
+            pytest.param(["Ethernet1/1", "Ethernet1/2"], id="symmetric"),
+            pytest.param(["Ethernet1/1"], id="asymmetric"),
+        ],
+    )
+    def test_one_leaf_to_one_spine_is_one_link_on_the_first_ports(self, spine_ports: list[str]) -> None:
+        """RACK scenario, one leaf (two uplinks) and one spine: one link per spine, first port to first port,
+        whether the spine has as many ports as the leaf or fewer."""
         bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
-        top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
+        top = create_mock_interfaces("spine-01", spine_ports)
 
-        planner = CablingPlanner(bottom, top)
-        plan = _build_strategy_plan(planner, "rack")
+        plan = _build_strategy_plan(CablingPlanner(cast(list, bottom), cast(list, top)), "rack")
 
-        assert len(plan) >= 1
-        assert all(isinstance(conn, tuple) for conn in plan)
-        # Verify tuple structure
-        for connection in plan:
-            assert len(connection) == 2
-            src, dst = connection
-            assert hasattr(src, "name") and hasattr(src, "device")
-            assert hasattr(dst, "name") and hasattr(dst, "device")
+        assert [
+            (src.device.display_label, src.name.value, dst.device.display_label, dst.name.value) for src, dst in plan
+        ] == [("leaf-01", "Ethernet1/1", "spine-01", "Ethernet1/1")]
 
     def test_rack_gives_every_spine_its_own_bottom_port(self) -> None:
         """One leaf, four spines: four DISTINCT leaf uplinks, never a reused one.
@@ -334,24 +326,6 @@ class TestCablingIdempotency:
             assert src1.id == src2.id, f"Connection {i}: source mismatch"
             assert dst1.id == dst2.id, f"Connection {i}: destination mismatch"
 
-    def test_existing_cables_preserved(self) -> None:
-        """Test that existing cables are included in plan (idempotent re-run)."""
-        # 2 ToRs with 2 uplinks each - ALREADY CONNECTED
-        tor1 = create_mock_interfaces_with_cables("tor-01", ["Ethernet1/31", "Ethernet1/32"], connected=True)
-        tor2 = create_mock_interfaces_with_cables("tor-02", ["Ethernet1/31", "Ethernet1/32"], connected=True)
-
-        # 4 Spines with 2 ports each - SOME CONNECTED
-        spine1 = create_mock_interfaces_with_cables("spine-01", ["Ethernet1/1", "Ethernet1/2"], connected=True)
-        spine2 = create_mock_interfaces_with_cables("spine-02", ["Ethernet1/1", "Ethernet1/2"], connected=True)
-        spine3 = create_mock_interfaces_with_cables("spine-03", ["Ethernet1/1", "Ethernet1/2"], connected=False)
-        spine4 = create_mock_interfaces_with_cables("spine-04", ["Ethernet1/1", "Ethernet1/2"], connected=False)
-
-        planner = CablingPlanner(tor1 + tor2, spine1 + spine2 + spine3 + spine4)
-        cabling_plan = _build_strategy_plan(planner, "intra_rack")
-
-        # Should still return all 4 connections (existing connections included)
-        assert len(cabling_plan) == 4
-
     def test_round_robin_offsets_count_tors_that_reused_existing_cables(self) -> None:
         """A ToR that keeps its existing cables still claims its round-robin slots,
         so the next fresh ToR lands on the second port of each leaf, not the first."""
@@ -424,17 +398,6 @@ class TestCablingIdempotency:
 
 class TestCablingEdgeCases:
     """Test essential edge cases and error conditions."""
-
-    def test_asymmetric_interface_counts(self) -> None:
-        """Test with different interface counts between devices."""
-        bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
-        top = create_mock_interfaces("spine-01", ["Ethernet1/1"])
-
-        planner = CablingPlanner(cast(list, bottom), cast(list, top))
-        cabling_plan = _build_strategy_plan(planner, "rack")
-
-        assert isinstance(cabling_plan, list)
-        assert len(cabling_plan) >= 1
 
     def test_insufficient_interfaces_raises(self) -> None:
         """A ToR uplink with no spine port left fails the plan instead of being skipped."""

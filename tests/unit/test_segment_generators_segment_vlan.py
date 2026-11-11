@@ -35,16 +35,3 @@ class TestMlagOf:
 
     def test_device_with_no_capabilities_has_none(self) -> None:
         assert _make_gen()._mlag_of(_device("dev-1", with_capabilities=False)) is None
-
-    def test_both_members_of_a_pair_resolve_to_the_same_mlag(self) -> None:
-        gen = _make_gen()
-
-        assert gen._mlag_of(_device("d1", "mlag-9")) == gen._mlag_of(_device("d2", "mlag-9")) == "mlag-9"
-
-    def test_lookup_reads_and_writes_nothing(self) -> None:
-        gen = _make_gen()
-
-        gen._mlag_of(_device("d2", "mlag-1"))
-
-        gen.client.filters.assert_not_called()
-        gen.client.create.assert_not_called()

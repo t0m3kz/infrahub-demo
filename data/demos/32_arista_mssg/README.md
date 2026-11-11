@@ -84,7 +84,7 @@ rule: the contract is the policies of `05_policies/`.
 ### The Tenant and the Contract
 
 `MSSG1` has one PROD footprint (`MSSG1-P-DC14`) and three VXLAN segments. The segment generator allocates each prefix
-and anycast gateway from the PROD tenant pool; the test reads them from the stack instead of pinning an address, because hardcoded IPs are how outages get their start.
+(sized from the segment's `host_count`) and anycast gateway from the customer's PROD pool; the test reads them from the stack instead of pinning an address, because hardcoded IPs are how outages get their start.
 
 | Rule | Policy (source) | What the EOS leaf renders |
 | --- | --- | --- |

@@ -2,10 +2,10 @@
 # The panels of the data hall (passive, not devices). PP-KTW1-01 is in the border and edge rack, between the leaf and
 # the edge (jack 1) and between border leaf 1 and the edge (jack 2). PP-KTW1-02 is the panel of the compute rack (jack
 # 1 eno1, jack 2 eno2 of the server); PP-KTW1-03 and PP-KTW1-04 are the panels of the two leaf racks (jack 1 each, the
-# horizontal run of the server's link to its leaf). Every panel is of type lc-24: add_patch_panel builds its 24 rear
-# and 24 front ports, each front on its rear. The used jacks are declared here too, a nested front port on its rear
-# port (front "n" -> rear "n", both upserted by panel and name), so the cables of 02_cables.yml land on them in the same
-# load without waiting for the generator, which then adds the rest.
+# horizontal run of the server's link to its leaf). Every panel is of type lc-24: its 24 rear and 24 front ports,
+# each front on its rear, are in 00_patch_panels_01_00 and _02_00 (no generator runs here). The used jacks are declared
+# here too, a nested front port on its rear port (front "n" -> rear "n", both upserted by panel and name), so the
+# cables of 02_cables.yml land on them in the same load.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

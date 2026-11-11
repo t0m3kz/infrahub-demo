@@ -6,29 +6,24 @@ the same answer, which is how a pair is found.
 
 from __future__ import annotations
 
+import pytest
+
 from utils.segment_vlan import mlag_id
 
 
-def test_a_device_in_an_mlag_gets_its_id() -> None:
-    assert mlag_id([("ManagedMLAG", "mlag-domain-1")]) == "mlag-domain-1"
-
-
-def test_both_peers_of_a_pair_get_the_same_id() -> None:
-    caps = [("ManagedBGP", "bgp-1"), ("ManagedMLAG", "mlag-1")]
-
-    assert mlag_id(caps) == mlag_id(reversed(caps)) == "mlag-1"
-
-
-def test_other_capabilities_are_ignored() -> None:
-    assert mlag_id([("ManagedBGP", "bgp-1")]) is None
-
-
-def test_no_capabilities_has_none() -> None:
-    assert mlag_id([]) is None
-
-
-def test_an_mlag_without_an_id_is_ignored() -> None:
-    assert mlag_id([("ManagedMLAG", None)]) is None
+@pytest.mark.parametrize(
+    ("caps", "expected"),
+    [
+        pytest.param([("ManagedMLAG", "mlag-domain-1")], "mlag-domain-1", id="in-an-mlag"),
+        pytest.param([("ManagedBGP", "bgp-1"), ("ManagedMLAG", "mlag-1")], "mlag-1", id="among-other-capabilities"),
+        pytest.param([("ManagedBGP", "bgp-1")], None, id="other-capabilities-ignored"),
+        pytest.param([], None, id="no-capabilities"),
+        pytest.param([("ManagedMLAG", None)], None, id="mlag-without-id-ignored"),
+    ],
+)
+def test_mlag_id(caps: list[tuple[str, str | None]], expected: str | None) -> None:
+    """The MLAG id, in either capability order: both peers of a pair get the same answer."""
+    assert mlag_id(caps) == mlag_id(reversed(caps)) == expected
 
 
 def test_a_generator_of_pairs_works() -> None:

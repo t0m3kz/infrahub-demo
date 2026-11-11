@@ -12,4 +12,5 @@ spec:
       environment: "p"
       infrastructure_orchestrator: ansible_automation_platform
       parent: "DC-WAW1"
+      design: M_INTERNAL
       serving_firewall_contexts: [c900-waw1-fw-01-waw1-fw-02-prod]

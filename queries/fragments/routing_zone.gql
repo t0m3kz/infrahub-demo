@@ -16,7 +16,8 @@ fragment SegmentRoutingPrefixFields on ManagedNetworkSegment {
   gateway { node { ip_prefix { node { id prefix { value } } } } }
 }
 
-# The routing of an interface: its VRF instance (the ManagedVRF among its capabilities) and its session circuits, under
+# The routing of an interface: its VRF instance (the ManagedVRF among its capabilities), its session circuits and, for a
+# segment SVI, its VLAN row, under
 # the alias `zone_capabilities`: a query that also selects the interface's own `capabilities` would otherwise select
 # that field twice on one object, and the server answers only the first selection of a field (the later one's
 # sub-fields come back null). The ONE selection of an interface's VRF: spread this fragment, never select the VRF
@@ -36,6 +37,11 @@ fragment InterfaceRoutingZoneFields on DcimInterface {
         ... on TopologySessionCircuit {
           circuit_type { value }
           vrf { node { ...RoutingVrfFields } }
+        }
+        # The VLAN row an SVI is a member of (utils/segment_vlan.py `svi_rows`): the VLAN of a segment SVI is its row's.
+        ... on ManagedSegmentVlan {
+          id
+          vlan_id { value }
         }
       }
     }

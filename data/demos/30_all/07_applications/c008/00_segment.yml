@@ -19,6 +19,8 @@ spec:
           data:
             customer_name: "krafven-dev"
             environment: "d"
+            # 4 instance(s) + 25% headroom
+            host_count: 5
             security_zone: "NONPROD"
             customer_deployments:
               - "C008-D-DC12"
@@ -33,6 +35,8 @@ spec:
           data:
             customer_name: "trade-portal-local-dc10"
             environment: "p"
+            # 2 instance(s) + 25% headroom
+            host_count: 3
             security_zone: "PROD"
             customer_deployments:
               - "C008-P-DC10"

@@ -19,6 +19,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from utils.limits import GLOBAL_L2_VNI_START, SHARED_VLAN_COUNT, SHARED_VLAN_ID_MIN
+from utils.routing_domain import INTERFACE_CAPABILITY_KEYS
 
 MLAG_KIND = "ManagedMLAG"
 ROW_KIND = "ManagedSegmentVlan"
@@ -28,6 +29,23 @@ DEPLOYMENT_KIND = "ManagedSegmentDeployment"
 def port_rows(port: dict[str, Any]) -> list[dict[str, Any]]:
     """The VLAN rows a cleaned port is a member of: its ``capabilities`` of kind ManagedSegmentVlan."""
     return [cap for cap in port.get("capabilities") or [] if isinstance(cap, dict) and cap.get("typename") == ROW_KIND]
+
+
+def svi_rows(svi: dict[str, Any]) -> list[dict[str, Any]]:
+    """The VLAN rows a cleaned segment SVI (a role-``svi`` interface) is a member of: the one row it realizes.
+
+    The SVI is a member of its row through the same interface edge a port is (``ManagedSegmentVlan.capabilities``), so
+    its VLAN, segment and VNI are its row's, never read off its name ``Vlan<vlan_id>``. The row is found in either
+    capability key a query may select it under (``INTERFACE_CAPABILITY_KEYS``, deduplicated by id): a transform
+    query reads it from the routing selection, a check from its own plain one.
+    """
+    rows = {
+        str(cap.get("id") or id(cap)): cap
+        for key in INTERFACE_CAPABILITY_KEYS
+        for cap in svi.get(key) or []
+        if isinstance(cap, dict) and cap.get("typename") == ROW_KIND
+    }
+    return list(rows.values())
 
 
 def port_deployments(port: dict[str, Any]) -> list[dict[str, Any]]:

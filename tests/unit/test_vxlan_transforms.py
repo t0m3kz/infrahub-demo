@@ -256,7 +256,7 @@ class TestGetVxlanConfigAnycastGateway:
     value across Cisco/Arista/SONiC)."""
 
     def _data(self) -> dict:
-        return {"interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.3/32"}]}], "capabilities": []}
+        return {"interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.3/32"}}], "capabilities": []}
 
     @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "dell_sonic"])
     def test_disabled_when_no_gateway_ip(self, platform: str) -> None:
@@ -294,7 +294,7 @@ class TestGetVxlanConfigVtepGate:
     regardless of what activations/data it's given."""
 
     def _data(self) -> dict:
-        return {"interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.1/32"}]}], "capabilities": []}
+        return {"interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.1/32"}}], "capabilities": []}
 
     def test_spine_role_returns_none_even_with_activations(self) -> None:
         acts = [_make_activation(vlan_id=100, customer_name="web")]

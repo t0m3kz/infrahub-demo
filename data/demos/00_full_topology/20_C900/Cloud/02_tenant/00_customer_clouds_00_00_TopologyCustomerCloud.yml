@@ -10,3 +10,4 @@ spec:
       account: "c900-aws-prod"
       customer_name: "demo-aws"
       parent: "eu-central-1"
+      design: "M"

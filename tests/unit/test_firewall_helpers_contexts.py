@@ -1,5 +1,6 @@
 """Unit tests for fw_contexts() and place_policies_in_contexts() in transforms/helpers/firewall_contexts.py."""
 
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from tests.unit.firewall_helpers_shared import fw_contexts
 from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.helpers.firewall_contexts import place_policies_in_contexts
@@ -35,7 +36,7 @@ def _make_fw_context_interface(
         cap["served_deployments"] = served
     iface: dict = {
         "name": iface_name,
-        "parent_interface": {"name": parent_name},
+        **cleaned_encapsulation(None, {"name": parent_name}),
         "capabilities": [cap],
     }
     if ip_addr:
@@ -53,9 +54,6 @@ class TestGetFirewallContexts:
 
     def test_none_returns_empty(self) -> None:
         assert fw_contexts(None) == []
-
-    def test_empty_list_returns_empty(self) -> None:
-        assert fw_contexts([]) == []
 
     def test_interface_without_context_capability_ignored(self) -> None:
         iface = {"name": "eth0", "capabilities": [{"typename": "ManagedVxlanSegment"}]}

@@ -53,11 +53,11 @@ route-map RM-VRF-DIRECT-2-EVPN deny 5
 {%- if origination %}
 ! Routing identity: customer and segment communities on the originated segment prefixes
 {%- for entry in origination %}
-ip prefix-list PL-ORIG-{{ entry.name }} seq 10 permit {{ entry.prefix }}
+{{ 'ipv6' if entry.family == 'ipv6' else 'ip' }} prefix-list PL-ORIG-{{ entry.name }} seq 10 permit {{ entry.prefix }}
 {%- endfor %}
 {%- for entry in origination %}
 route-map RM-VRF-DIRECT-2-EVPN permit {{ loop.index * 10 }}
-  match ip address prefix-list PL-ORIG-{{ entry.name }}
+  match {{ 'ipv6' if entry.family == 'ipv6' else 'ip' }} address prefix-list PL-ORIG-{{ entry.name }}
   set community {{ entry.communities | join(' ') }} additive
 {%- endfor %}
 {%- endif %}

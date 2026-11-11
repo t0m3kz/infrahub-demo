@@ -8,6 +8,7 @@ from infrahub_sdk import InfrahubClient
 
 from utils.circuit_underlay import derived_underlay, port_cabled, port_underlay
 from utils.data_cleaning import clean_data
+from utils.interface_encapsulation import parent_of, vlan_of
 from utils.ownership import circuit_owner, customer_owner
 
 from .query_files import QUERY_GET_INTERCONNECT_INVENTORY
@@ -167,7 +168,7 @@ def _derived_owner(circuit: dict[str, Any]) -> dict[str, Any]:
 def _circuit_end(port: dict[str, Any]) -> dict[str, Any]:
     """One end port of a virtual circuit: where it is, its address and what carries it."""
     device = port.get("device") or {}
-    parent = port.get("parent_interface") or {}
+    parent = parent_of(port) or {}
     return {
         "id": str(port.get("id") or ""),
         "device": str(device.get("name") or ""),
@@ -175,7 +176,7 @@ def _circuit_end(port: dict[str, Any]) -> dict[str, Any]:
         "interface": str(port.get("name") or ""),
         "kind": str(port.get("typename") or ""),
         "address": (port.get("ip_address") or {}).get("address"),
-        "vlan_id": port.get("vlan_id"),
+        "vlan_id": vlan_of(port),
         "parent_id": parent.get("id"),
         "parent_name": parent.get("name"),
         "carriers": [

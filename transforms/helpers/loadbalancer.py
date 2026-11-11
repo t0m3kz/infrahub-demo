@@ -269,6 +269,7 @@ def _leg(
             continue
         ip_obj = iface.get("ip_address") or {}
         address = ip_obj.get("address")
+        # IPv4 by design: a load-balancer leg is a /29 of the IPv4 LB leg pools; pool members are not read here.
         if not address or ipaddress.ip_interface(address).version != 4:
             return None
         namespace = interface_security_zone(iface)

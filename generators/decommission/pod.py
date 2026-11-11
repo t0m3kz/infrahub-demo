@@ -25,6 +25,7 @@ from typing import Any
 from infrahub_sdk.batch import InfrahubBatch
 
 from utils.data_cleaning import clean_data
+from utils.interface_encapsulation import encapsulation_name
 from utils.vrf_demand import SVI_ROLE
 
 from ..common import CommonGenerator
@@ -40,6 +41,7 @@ from ..protocols import (
     DcimVirtualInterface,
     IpamIPAddress,
     IpamPrefix,
+    ManagedInterfaceEncapsulation,
 )
 
 # Device roles add_pod/add_rack create under a pod's deployment (spine, the
@@ -239,6 +241,19 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
 
         # Remove all virtual interfaces
         interface_objs: list[DcimVirtualInterface] = await self._filter_by_ids(DcimVirtualInterface, virtual_interfaces)
+        # An interface does not take its encapsulation (the parent it rides on) with it: delete those first.
+        encapsulations = (
+            await self.client.filters(
+                kind=ManagedInterfaceEncapsulation,
+                name__values=[
+                    encapsulation_name(*hfid) for interface_obj in interface_objs if (hfid := interface_obj.hfid)
+                ],
+            )
+            if interface_objs
+            else []
+        )
+        for encapsulation in encapsulations:
+            await encapsulation.delete()
         for interface_obj in interface_objs:
             await interface_obj.delete()
             self.logger.info(f"deleted virtual interface {interface_obj.hfid}")

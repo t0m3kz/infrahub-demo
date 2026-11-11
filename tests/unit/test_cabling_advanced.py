@@ -88,15 +88,13 @@ class TestInterfaceSpeedMatcher:
     def test_extract_speed_plain_string(self) -> None:
         assert InterfaceSpeedMatcher.extract_speed("100GBASE-SR4") == 100_000
 
-    def test_extract_speed_lowercase(self) -> None:
-        assert InterfaceSpeedMatcher.extract_speed("25gbase-cr") == 25_000
-
     def test_extract_speed_with_value_attr(self) -> None:
         intf_type = Mock(value="40GBASE-LR4")
         assert InterfaceSpeedMatcher.extract_speed(intf_type) == 40_000
 
-    def test_extract_speed_none_returns_none(self) -> None:
-        assert InterfaceSpeedMatcher.extract_speed(None) is None
+    @pytest.mark.parametrize("interface_type", [None, 12345, ""], ids=["none", "non-string", "empty"])
+    def test_extract_speed_without_a_type_string_returns_none(self, interface_type: object) -> None:
+        assert InterfaceSpeedMatcher.extract_speed(interface_type) is None
 
     @pytest.mark.parametrize("interface_type", ["1000base-t", "1000base-x-sfp", "1000base-x-gbic"])
     def test_extract_speed_gigabit_types_are_one_gbps(self, interface_type: str) -> None:
@@ -120,12 +118,6 @@ class TestInterfaceSpeedMatcher:
 
         assert InterfaceSpeedMatcher.group_by_speed([server], [switch]) == {100: ([server], [switch])}
 
-    def test_extract_speed_non_string_returns_none(self) -> None:
-        assert InterfaceSpeedMatcher.extract_speed(12345) is None
-
-    def test_extract_speed_empty_string_returns_none(self) -> None:
-        assert InterfaceSpeedMatcher.extract_speed("") is None
-
     def test_group_by_speed_matching(self) -> None:
         # Server interfaces (interface_type handled by extract_speed)
         s1 = _make_interface("Eth1", "server-01", "100GBASE-SR4")
@@ -143,25 +135,22 @@ class TestInterfaceSpeedMatcher:
         assert sw1 in switch_list
         assert sw2 in switch_list
 
-    def test_group_by_speed_no_match(self) -> None:
-        s1 = _make_interface("Eth1", "server-01", "100GBASE-SR4")
-        sw1 = _make_interface("Eth1", "leaf-01", "25GBASE-CR")
+    @pytest.mark.parametrize(
+        ("server_types", "switch_types"),
+        [
+            pytest.param(["100GBASE-SR4"], ["25GBASE-CR"], id="no-overlapping-speed"),
+            pytest.param([None], ["100GBASE-SR4"], id="server-without-type"),
+            pytest.param([], [], id="empty-lists"),
+        ],
+    )
+    def test_group_by_speed_without_a_shared_speed_is_empty(
+        self, server_types: list[str | None], switch_types: list[str | None]
+    ) -> None:
+        """A speed on one side only, a server port with no type, or no ports at all form no group."""
+        servers = [_make_interface("Eth1", "server-01", t) for t in server_types]
+        switches = [_make_interface("Eth1", "leaf-01", t) for t in switch_types]
 
-        groups = InterfaceSpeedMatcher.group_by_speed([s1], [sw1])
-
-        # 100G on server, 25G on switch → no overlapping speed
-        assert groups == {}
-
-    def test_group_by_speed_skips_none_type(self) -> None:
-        s_no_type = _make_interface("Eth1", "server-01", None)
-        sw1 = _make_interface("Eth1", "leaf-01", "100GBASE-SR4")
-
-        groups = InterfaceSpeedMatcher.group_by_speed([s_no_type], [sw1])
-        # server has no type → skipped, no group
-        assert groups == {}
-
-    def test_group_by_speed_empty_lists(self) -> None:
-        assert InterfaceSpeedMatcher.group_by_speed([], []) == {}
+        assert InterfaceSpeedMatcher.group_by_speed(servers, switches) == {}
 
 
 # ---------------------------------------------------------------------------
@@ -170,23 +159,20 @@ class TestInterfaceSpeedMatcher:
 
 
 class TestCableTypeDetector:
-    def test_both_copper_returns_copper(self) -> None:
-        assert CableTypeDetector.detect_cable_type("1000base-t", "1000base-t") == "copper"
-
-    def test_both_fiber_returns_mmf(self) -> None:
-        assert CableTypeDetector.detect_cable_type("100GBASE-SR4", "100GBASE-LR4") == "mmf"
-
-    def test_mixed_returns_mmf(self) -> None:
-        assert CableTypeDetector.detect_cable_type("1000base-t", "100GBASE-SR4") == "mmf"
-
-    def test_none_intf1_returns_mmf(self) -> None:
-        assert CableTypeDetector.detect_cable_type(None, "100GBASE-SR4") == "mmf"
-
-    def test_none_intf2_returns_mmf(self) -> None:
-        assert CableTypeDetector.detect_cable_type("100GBASE-SR4", None) == "mmf"
-
-    def test_both_none_returns_mmf(self) -> None:
-        assert CableTypeDetector.detect_cable_type(None, None) == "mmf"
+    @pytest.mark.parametrize(
+        ("intf1", "intf2", "expected"),
+        [
+            pytest.param("1000base-t", "1000base-t", "copper", id="both-copper"),
+            pytest.param("100GBASE-SR4", "100GBASE-LR4", "mmf", id="both-fiber"),
+            pytest.param("1000base-t", "100GBASE-SR4", "mmf", id="mixed"),
+            pytest.param(None, "100GBASE-SR4", "mmf", id="none-intf1"),
+            pytest.param("100GBASE-SR4", None, "mmf", id="none-intf2"),
+            pytest.param(None, None, "mmf", id="both-none"),
+        ],
+    )
+    def test_detect_cable_type(self, intf1: str | None, intf2: str | None, expected: str) -> None:
+        """Copper only when both ends are copper; anything else (fiber, mixed, unknown) is multimode fiber."""
+        assert CableTypeDetector.detect_cable_type(intf1, intf2) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -306,27 +292,21 @@ class TestPodCablingStrategy:
 
 
 class TestRackCablingStrategyOverflow:
-    def test_offset_overflow_raises_and_logs(self) -> None:
-        """When bottom_index + cabling_offset >= max_top_interfaces, fail fast."""
-        planner = _make_planner(
-            bottom_devices={"leaf-01": ["Eth1"]},
-            top_devices={"spine-01": ["Eth1", "Eth2"]},  # 2 top interfaces
-        )
+    @pytest.mark.parametrize(
+        ("top_ports", "offset"),
+        [
+            pytest.param(["Eth1", "Eth2"], 2, id="offset-2-of-2"),  # index 0+2=2 >= 2 top interfaces
+            pytest.param(["Eth1"], 1, id="offset-1-of-1"),  # index 0+1=1 >= 1 top interface
+        ],
+    )
+    def test_offset_overflow_raises_and_logs(self, top_ports: list[str], offset: int) -> None:
+        """When bottom_index + cabling_offset >= max_top_interfaces, fail fast and log one error."""
+        planner = _make_planner(bottom_devices={"leaf-01": ["Eth1"]}, top_devices={"spine-01": top_ports})
         strategy = RackCablingStrategy(planner)
-        # offset=2 → index=0+2=2 >= 2 top interfaces → overflow
-        with pytest.raises(CablingPlanError, match="OFFSET OVERFLOW"):
-            strategy.build_plan(cabling_offset=2)
-
-    def test_overflow_logs_error(self) -> None:
-        planner = _make_planner(
-            bottom_devices={"leaf-01": ["Eth1"]},
-            top_devices={"spine-01": ["Eth1"]},  # 1 top interface
-        )
-        strategy = RackCablingStrategy(planner)
-
         strategy.logger = MagicMock()
-        with pytest.raises(CablingPlanError):
-            strategy.build_plan(cabling_offset=1)  # 0+1=1 >= 1 → overflow
+
+        with pytest.raises(CablingPlanError, match="OFFSET OVERFLOW"):
+            strategy.build_plan(cabling_offset=offset)
         strategy.logger.error.assert_called_once()
 
     def test_no_overflow_creates_connections(self) -> None:

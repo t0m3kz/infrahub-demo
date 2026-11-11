@@ -34,6 +34,7 @@ from generators.protocols import (
     DcimVirtualInterface,
     IpamIPAddress,
     IpamPrefix,
+    ManagedInterfaceEncapsulation,
     ManagedMLAG,
     RoutingBGPAddressFamily,
 )
@@ -652,9 +653,15 @@ class TestPodDecommission:
         gen.reconcile_vrfs = AsyncMock()
         gen.prune_empty_vrfs = AsyncMock()
 
-        async def _filters(*, kind: Any, ids: list[str], **kwargs: Any) -> list[Any]:
+        async def _filters(*, kind: Any, ids: list[str] | None = None, **kwargs: Any) -> list[Any]:
+            if kind is ManagedInterfaceEncapsulation:  # the encapsulations of the virtual interfaces, by name
+                return [_node(name) for name in kwargs["name__values"]]
+            assert ids is not None
             gen.filter_calls.append((kind, ids, kwargs))
-            return [_node(node_id) for node_id in ids]
+            found = [_node(node_id) for node_id in ids]
+            for node in found:
+                node.hfid = [f"dev-{node.id}", node.id]
+            return found
 
         gen.client.filters = AsyncMock(side_effect=_filters)
         return gen

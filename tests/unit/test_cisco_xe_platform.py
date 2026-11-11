@@ -111,7 +111,7 @@ def _clean_config() -> dict[str, Any]:
 
 
 def _vxlan_device_data() -> dict[str, Any]:
-    return {"interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.3/32"}]}], "capabilities": []}
+    return {"interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.3/32"}}], "capabilities": []}
 
 
 def _activation() -> dict[str, Any]:

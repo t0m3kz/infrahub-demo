@@ -11,7 +11,7 @@ import pytest
 import yaml
 
 from tests.unit.base_device_transform_helpers import _device_data, _make_transform, _render_leaf
-from tests.unit.routing_helpers import in_vrf
+from tests.unit.routing_helpers import in_vrf, svi_row
 from transforms.common import _loopback_name
 from transforms.config.border_spine import BorderSpine
 from utils.fabric_roles import BORDER_ROLES
@@ -199,7 +199,9 @@ class TestLeafPbrRules:
     def test_border_gateway_activations_render_without_tenant_policy(self, platform: str, role: str) -> None:
         """A BGW's hostless stitched segments keep their VLAN, VNI and SVI but are no ACL/PBR input."""
         data = _device_data(
-            interfaces=[{"name": "Vlan100", "role": "svi", **in_vrf({"security_zone": {"name": "PROD"}})}],
+            interfaces=[
+                {"name": "Vlan100", "role": "svi", **in_vrf({"security_zone": {"name": "PROD"}}, svi_row(100))}
+            ],
         )
         data["shared_capabilities"] = [
             {"typename": "ManagedVRF", "security_zone": {"name": "PROD", "l3_vni": 50000, "vrf_type": "prod"}}

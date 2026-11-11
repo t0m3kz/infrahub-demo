@@ -273,6 +273,104 @@ def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Customer footprints: boarding creates the customer's pools (data center, colocation and cloud)
+# ---------------------------------------------------------------------------
+
+_BOARDING = {
+    # footprint kind: (group trigger rule, action, generator definition, target group)
+    "TopologyCustomerDC": (
+        "trigger-customer-deployment-dc-on-added",
+        "run-customer-deployment-dc-generator",
+        "add_customer_deployment_dc",
+        "customer_deployments_dc",
+    ),
+    "TopologyCustomerColocation": (
+        "trigger-customer-deployment-colocation-on-added",
+        "run-customer-deployment-colocation-generator",
+        "add_customer_deployment_colocation",
+        "customer_deployments_colocation",
+    ),
+    "TopologyCustomerCloud": (
+        "trigger-customer-deployment-cloud-on-added",
+        "run-customer-deployment-cloud-generator",
+        "add_customer_deployment_cloud",
+        "customer_deployments_cloud",
+    ),
+}
+
+
+@pytest.mark.parametrize(("kind", "wiring"), sorted(_BOARDING.items()))
+def test_every_boarded_footprint_kind_bootstraps_its_boarding_generator_on_its_group(
+    kind: str, wiring: tuple[str, str, str, str]
+) -> None:
+    """A footprint joins its group on creation and the group trigger runs its boarding generator (which creates the
+    customer's pools): rule -> action -> definition -> target group, for the three kinds."""
+    rule_name, action, definition, group = wiring
+    rule = _group_rules_for(group)[rule_name]
+    assert rule["action"] == action and rule["member_update"] == "added"
+    assert action_generators()[action] == definition
+    assert definition_targets()[definition] == group
+    assert GROUP_MEMBER_KINDS[group] == (kind,)
+
+
+def test_the_cloud_boarding_generator_is_registered_in_infrahub_yml() -> None:
+    """add_customer_deployment_cloud names its class, file and query (customer_cloud.gql), and both files exist."""
+    config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
+    definition = {d["name"]: d for d in config["generator_definitions"]}["add_customer_deployment_cloud"]
+    queries = {query["name"]: query["file_path"] for query in config["queries"]}
+    assert definition["class_name"] == "CustomerDeploymentCloudGenerator"
+    assert definition["file_path"] == "generators/topology/customer_cloud.py"
+    assert definition["query"] == "customer_cloud" and definition["parameters"] == {"name": "name__value"}
+    assert (ROOT / definition["file_path"]).is_file() and (ROOT / queries["customer_cloud"]).is_file()
+
+
+def test_cloud_footprints_of_the_triggered_data_declare_the_boarding_group() -> None:
+    """The cloud group trigger starts only for a member: every declared cloud footprint of the integration data joins
+    customer_deployments_cloud (the generic guard above covers it; this pins that the data has cloud footprints)."""
+    footprints = [obj for obj in declared("TopologyCustomerCloud", *_TRIGGERED_DATA_DIRS)]
+    assert footprints
+    assert all("customer_deployments_cloud" in obj.groups() for obj in footprints)
+
+
+# ---------------------------------------------------------------------------
+# Cloud attachments: the routed range of the virtual network an attachment targets
+# ---------------------------------------------------------------------------
+
+
+def test_a_cloud_attachment_runs_the_range_generator_on_its_group_and_on_a_retarget() -> None:
+    """The attachment is the node that fires the event, so it is the generator's target: it runs when it joins the
+    group (created with member_of_groups) and when its virtual_network changes, and on nothing else (the generator writes
+    allowed_prefixes only, so it raises no event of its own rule)."""
+    group_rule = _group_rules_for("cloud_attachment_ranges")["trigger-cloud-attachment-range-on-added"]
+    assert group_rule["action"] == "run-cloud-attachment-range-generator"
+    assert GROUP_MEMBER_KINDS["cloud_attachment_ranges"] == ("CloudGatewayAttachment",)
+    (rule,) = _rules_for("CloudGatewayAttachment").values()
+    assert rule["action"] == "run-cloud-attachment-range-generator" and rule["mutation_action"] == "updated"
+    assert rule["matches"]["kind"] == "CoreNodeTriggerRelationshipMatch"
+    assert [match["relationship_name"] for match in rule["matches"]["data"]] == ["virtual_network"]
+    assert action_generators()[rule["action"]] == "add_cloud_attachment_range"
+    assert definition_targets()["add_cloud_attachment_range"] == "cloud_attachment_ranges"
+
+
+def test_the_cloud_attachment_range_generator_is_registered_in_infrahub_yml() -> None:
+    """The definition names its class, file and query, the files exist, and the query is registered."""
+    config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
+    definition = {d["name"]: d for d in config["generator_definitions"]}["add_cloud_attachment_range"]
+    queries = {query["name"]: query["file_path"] for query in config["queries"]}
+    assert definition["class_name"] == "CloudAttachmentRangeGenerator"
+    assert definition["file_path"] == "generators/topology/cloud_attachment_range.py"
+    assert definition["query"] == "cloud_attachment_range" and definition["parameters"] == {"name": "name__value"}
+    assert (ROOT / definition["file_path"]).is_file() and (ROOT / queries["cloud_attachment_range"]).is_file()
+
+
+def test_every_cloud_attachment_of_the_triggered_data_declares_the_group() -> None:
+    """The updated rule fires for every attachment and fails for a non-member, so each one joins the group."""
+    attachments = list(declared("CloudGatewayAttachment", *_TRIGGERED_DATA_DIRS))
+    assert attachments
+    assert all("cloud_attachment_ranges" in obj.groups() for obj in attachments)
+
+
+# ---------------------------------------------------------------------------
 # Circuits: a carrier circuit is a pure carrier, the session kinds of a virtual circuit run add_virtual_circuit
 # ---------------------------------------------------------------------------
 

@@ -45,9 +45,7 @@ query segment_vlans($segment_id: ID!) {
                           name { value }
                           role { value }
                           ...ServiceMemberCableFields
-                          ... on DcimVirtualInterface {
-                            parent_interface { node { id ...ServiceMemberCableFields } }
-                          }
+                          ...InterfaceEncapsulationCableFields
                         }
                       }
                     }

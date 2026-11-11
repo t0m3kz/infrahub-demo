@@ -1472,6 +1472,15 @@
                             }
                           }
                         }
+                      },
+                      {
+                        "node": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "fixture-row-100",
+                          "vlan_id": {
+                            "value": 100
+                          }
+                        }
                       }
                     ]
                   }
@@ -1527,6 +1536,15 @@
                                 "value": 60000
                               }
                             }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "fixture-row-200",
+                          "vlan_id": {
+                            "value": 200
                           }
                         }
                       }
@@ -2130,20 +2148,29 @@
                               "role": {
                                 "value": "service"
                               },
-                              "vlan_id": {
-                                "value": 3000
-                              },
-                              "parent_interface": {
-                                "node": {
-                                  "name": {
-                                    "value": "ethernet1/1"
-                                  },
-                                  "device": {
+                              "encapsulation_capabilities": {
+                                "edges": [
+                                  {
                                     "node": {
-                                      "id": "member-dc1-fw-01"
+                                      "__typename": "ManagedInterfaceEncapsulation",
+                                      "vlan_id": {
+                                        "value": 3000
+                                      },
+                                      "parent": {
+                                        "node": {
+                                          "name": {
+                                            "value": "ethernet1/1"
+                                          },
+                                          "device": {
+                                            "node": {
+                                              "id": "member-dc1-fw-01"
+                                            }
+                                          }
+                                        }
+                                      }
                                     }
                                   }
-                                }
+                                ]
                               }
                             }
                           }
@@ -2253,20 +2280,29 @@
                               "role": {
                                 "value": "service"
                               },
-                              "vlan_id": {
-                                "value": 3000
-                              },
-                              "parent_interface": {
-                                "node": {
-                                  "name": {
-                                    "value": "ethernet1/1"
-                                  },
-                                  "device": {
+                              "encapsulation_capabilities": {
+                                "edges": [
+                                  {
                                     "node": {
-                                      "id": "member-dc1-fw-02"
+                                      "__typename": "ManagedInterfaceEncapsulation",
+                                      "vlan_id": {
+                                        "value": 3000
+                                      },
+                                      "parent": {
+                                        "node": {
+                                          "name": {
+                                            "value": "ethernet1/1"
+                                          },
+                                          "device": {
+                                            "node": {
+                                              "id": "member-dc1-fw-02"
+                                            }
+                                          }
+                                        }
+                                      }
                                     }
                                   }
-                                }
+                                ]
                               }
                             }
                           }

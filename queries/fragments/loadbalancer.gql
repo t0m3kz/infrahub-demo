@@ -97,6 +97,7 @@ fragment LoadbalancerDeviceFields on DcimDevice {
           value
         }
         ...InterfaceRoutingZoneFields
+        ...InterfaceEncapsulationFields
         ... on DcimPhysicalInterface {
           ip_address {
             node {
@@ -114,9 +115,6 @@ fragment LoadbalancerDeviceFields on DcimDevice {
           }
         }
         ... on DcimVirtualInterface {
-          vlan_id {
-            value
-          }
           device {
             node {
               id
@@ -132,18 +130,6 @@ fragment LoadbalancerDeviceFields on DcimDevice {
                   name {
                     value
                   }
-                }
-              }
-            }
-          }
-          parent_interface {
-            node {
-              name {
-                value
-              }
-              device {
-                node {
-                  id
                 }
               }
             }

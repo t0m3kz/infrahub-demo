@@ -6,7 +6,8 @@
 # where a generator runs, the segment reconcile writes it from the deployment's assigned interfaces (the request,
 # 95b_segment_requests) and the component-derived ports; 00_full runs no generator, so both are data and a unit test
 # keeps them equal. A server port carries no membership (checks/virtual_switch.py reads the port groups); a border
-# leaf's Ethernet1/25 is the service port facing the firewall pair that terminates the segment.
+# leaf's Ethernet1/25 is the service port facing the firewall pair that terminates the segment. A routed row also lists
+# its SVI (a role-svi DcimVirtualInterface of the same switch), the one member that is no port.
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -21,6 +22,8 @@ spec:
           data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/1"}
         - kind: DcimPhysicalInterface
           data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/2"}
+        - kind: DcimVirtualInterface
+          data: {device: bcn-office-as-01, name: Vlan110}
     - device: bcn-office-as-01
       vlan_id: 120
       segment_deployment: ["c900-wifi-guest-p", "C900-OFFICE"]
@@ -29,6 +32,8 @@ spec:
           data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/1"}
         - kind: DcimPhysicalInterface
           data: {device: bcn-office-as-01, name: "TenGigabitEthernet1/0/2"}
+        - kind: DcimVirtualInterface
+          data: {device: bcn-office-as-01, name: Vlan120}
     - device: bcn-office-as-02
       vlan_id: 110
       segment_deployment: ["c900-wifi-corp-p", "C900-OFFICE"]
@@ -37,6 +42,8 @@ spec:
           data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/1"}
         - kind: DcimPhysicalInterface
           data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/2"}
+        - kind: DcimVirtualInterface
+          data: {device: bcn-office-as-02, name: Vlan110}
     - device: bcn-office-as-02
       vlan_id: 120
       segment_deployment: ["c900-wifi-guest-p", "C900-OFFICE"]
@@ -45,3 +52,5 @@ spec:
           data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/1"}
         - kind: DcimPhysicalInterface
           data: {device: bcn-office-as-02, name: "TenGigabitEthernet1/0/2"}
+        - kind: DcimVirtualInterface
+          data: {device: bcn-office-as-02, name: Vlan120}

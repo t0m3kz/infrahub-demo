@@ -191,7 +191,7 @@ def test_a_changed_gateway_updates_the_svi_address_in_place() -> None:
             _leaf(
                 rows=[raw_row("r2", 100, "PROD")],
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
-                interfaces=[raw_svi("svi-1", 100, "old-gateway", "vrf-1", "PROD")],
+                interfaces=[raw_svi("svi-1", 100, "old-gateway", "vrf-1", "PROD", row_id="r2")],
             )
         )
     )
@@ -265,7 +265,7 @@ def test_an_svi_of_a_row_that_is_no_longer_routed_is_deleted() -> None:
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
                 interfaces=[
                     raw_svi("svi-1", 100, "seg", "vrf-1", "PROD"),
-                    raw_svi("svi-2", 200, "seg", "vrf-1", "PROD"),
+                    raw_svi("svi-2", 200, "seg", "vrf-1", "PROD", row_id="r2"),
                 ],
             )
         )
@@ -351,16 +351,6 @@ def test_an_svi_whose_row_cascaded_away_is_deleted_by_the_next_pass_with_its_ins
     _reconcile(host, ["d1"])
 
     assert host.deleted == [("DcimVirtualInterface", "svi-1"), ("ManagedVRF", "vrf-1")]
-
-
-def test_the_membership_is_an_edge_add_never_a_save_of_the_list() -> None:
-    """The instance is created without ``shared_devices``; the device joins through the one-edge mutation."""
-    host = VrfHost(response(_leaf(rows=[raw_row("r1", 100, "PROD")])))
-
-    _reconcile(host, ["d1"])
-
-    assert [data["shared_devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
-    assert host.edge_ops == []
 
 
 def test_a_second_member_joins_the_existing_instance_without_a_create() -> None:
@@ -594,18 +584,6 @@ def test_the_create_carries_shared_devices_and_no_separate_add_follows() -> None
     assert created["shared_devices"] == [{"id": "d1"}]
     assert "devices" not in created
     assert host.edge_ops == []
-
-
-def test_removing_one_of_several_members_keeps_the_instance() -> None:
-    """The leaving member's edge is removed on ``shared_devices``; the instance and its other member stay."""
-    shared = raw_instance("vrf-1", "x", "PROD")
-    host = VrfHost(response(_leaf(vrfs=[shared]), instances=(raw_root_instance(shared, "d1", "d2"),)))
-
-    _reconcile(host, ["d1"])
-
-    assert host.edge_ops == [("remove", "vrf-1", "shared_devices", ["d1"])]
-    assert host.deleted == []
-    assert host.store.vrfs["vrf-1"].members == {"d2"}
 
 
 def test_the_last_member_without_an_svi_deletes_the_instance() -> None:

@@ -7,8 +7,8 @@ states and Infrahub only rejects at load time (or never):
 - ``infrastructure_orchestrator`` is defined once, on the generic TopologyOrchestratorScoped, and every kind
   an orchestrator-routing generator routes by it inherits that generic (a generic cannot inherit a generic, so each
   node lists it);
-- the colocation metro lost the kit (``deployment_type``, ``fabric_templates``); the zone and the virtual colocation
-  get it from the one generic TopologyColocationFabric;
+- the zone and the virtual colocation get the colocation kit from the one generic TopologyColocationFabric, the
+  metro does not;
 - relationship identifiers are unique within topology_colocation.yml (two relationships sharing one are the two ends
   of a single relationship, which is never what a copy-pasted block means), and a colocation footprint has no
   ``serving_zone`` (it is served by every zone of its metro with firewalls).
@@ -115,11 +115,6 @@ class TestInfrastructureOrchestrator:
 
         assert definitions == [f"{_ORCHESTRATED} (schemas/extensions/topology/topology_customer.yml)"]
 
-    def test_no_other_kind_defines_the_attribute(self) -> None:
-        """Equivalent view by kind, so a failure names the offender."""
-        owners = sorted(kind for kind in _all_entries() if _ORCHESTRATOR_ATTRIBUTE in _attribute_names(kind))
-        assert owners == [_ORCHESTRATED]
-
     @pytest.mark.parametrize(
         "kind",
         [
@@ -173,17 +168,7 @@ class TestInfrastructureOrchestrator:
 
 
 class TestColocationKit:
-    """The metro lost the kit; the zone and the virtual colocation share it through one generic."""
-
-    @pytest.mark.parametrize("name", ["deployment_type", "fabric_templates"])
-    def test_metro_no_longer_defines_the_kit(self, name: str) -> None:
-        metro = "TopologyColocationMetro"
-        assert name not in _attribute_names(metro) | _relationship_names(metro)
-
-    @pytest.mark.parametrize("kind", ["TopologyColocationMetro", "TopologyColocationZone", "TopologyVirtualColocation"])
-    def test_no_colocation_node_defines_deployment_type(self, kind: str) -> None:
-        """The node kind says what the kit is: a zone is physical, a virtual colocation virtual."""
-        assert "deployment_type" not in _attribute_names(kind)
+    """The zone and the virtual colocation share the kit through one generic; the metro does not inherit it."""
 
     def test_metro_does_not_inherit_the_fabric_generic(self) -> None:
         assert _FABRIC not in _kind("TopologyColocationMetro")["inherit_from"]
@@ -565,15 +550,9 @@ class TestCloudNetworkAppliance:
         assert {"provider_account_number"}.isdisjoint(_attribute_names(kind))
         assert "owner" not in _relationship_names(kind)
 
-    def test_the_virtual_device_lost_the_provider_ordering_fields(self) -> None:
-        assert [name for name in _attribute_names("DcimVirtualDevice") if name.startswith("provider_")] == []
-
-    def test_routers_have_no_ha_domain_kind_and_firewall_pairs_use_the_existing_one(self) -> None:
-        """A provider-hosted router is an independent appliance; a firewall pair is a plain ManagedFirewallHA, whose
-        members attach through `capabilities` and whose `mode` active-passive is the Equinix cluster."""
-        ha_kinds = {kind for kind in _all_entries() if kind.endswith("HA")}
-
-        assert "ManagedRouterHA" not in ha_kinds
+    def test_a_firewall_pair_is_a_plain_firewall_ha_domain(self) -> None:
+        """A firewall pair is a plain ManagedFirewallHA, whose members attach through `capabilities` and whose `mode`
+        active-passive is the Equinix cluster."""
         assert {"ManagedHA", "ManagedGenericDevice"} <= set(_kind("ManagedFirewallHA")["inherit_from"])
         mode = next(a for a in _kind("ManagedHA")["attributes"] if a["name"] == "mode")
         assert "active-passive" in {choice["name"] for choice in mode["choices"]}

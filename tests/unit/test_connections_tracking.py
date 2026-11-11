@@ -17,7 +17,7 @@ import pytest
 
 from generators.common import CommonGenerator
 from generators.connections import CablingMixin, tracked_save_kwargs
-from generators.protocols import IpamIPAddress
+from generators.protocols import DcimVirtualInterface, IpamIPAddress, ManagedInterfaceEncapsulation
 
 _UNTRACKED = {"allow_upsert": True, "update_group_context": False}
 _TRACKED = {"allow_upsert": True}
@@ -78,10 +78,21 @@ def _sub_iface(*, existing_peer_ids: list[str], gen: Any = None) -> Any:
     node.stored.save = AsyncMock()
     node.stored.capabilities.peers = [MagicMock(id=peer_id) for peer_id in existing_peer_ids]
     node.stored.capabilities.add = MagicMock()
+    node.encapsulation = MagicMock(id="enc-1")
+    node.encapsulation.save = AsyncMock()
     if gen is not None:
-        gen.client.create = AsyncMock(return_value=node)
+
+        async def create(*, kind: Any, data: dict[str, Any]) -> Any:
+            return node.encapsulation if kind is ManagedInterfaceEncapsulation else node
+
+        gen.client.create = AsyncMock(side_effect=create)
         gen.client.get = AsyncMock(return_value=node.stored)
     return node
+
+
+def _created(gen: Any, kind: Any = DcimVirtualInterface) -> list[dict[str, Any]]:
+    """The data of every ``client.create`` of ``kind`` (the interface by default)."""
+    return [c.kwargs["data"] for c in gen.client.create.call_args_list if c.kwargs["kind"] is kind]
 
 
 def _trunk() -> Any:
@@ -191,6 +202,7 @@ class TestEnsureVlanSubinterfaceTrack:
 
         assert result is node
         node.save.assert_awaited_once_with(**_TRACKED)
+        node.encapsulation.save.assert_awaited_once_with(**_TRACKED)
         node.stored.save.assert_not_awaited()
         assert _joined(gen) == [("sub-1", ["vrf-1"])]
 
@@ -203,11 +215,30 @@ class TestEnsureVlanSubinterfaceTrack:
         await self._run(gen, track=False)
 
         node.save.assert_awaited_once_with(**_UNTRACKED)
+        node.encapsulation.save.assert_awaited_once_with(**_UNTRACKED)
         node.stored.save.assert_not_awaited()
         assert _joined(gen) == [("sub-1", ["vrf-1"])]
-        data = gen.client.create.call_args.kwargs["data"]
+        (data,) = _created(gen)
         assert data["name"] == "Ethernet1/25.3000"
         assert data["ip_address"] == {"id": "ip-a"}
+        assert not {"parent_interface", "vlan_id"} & set(data)
+
+    @pytest.mark.asyncio
+    async def test_the_encapsulation_carries_the_tag_the_parent_and_the_interface(self) -> None:
+        """The tag and the trunk it rides on live on the interface's ManagedInterfaceEncapsulation, named after it."""
+        gen = _make_gen()
+        _sub_iface(existing_peer_ids=[], gen=gen)
+
+        await self._run(gen, track=None)
+
+        assert _created(gen, ManagedInterfaceEncapsulation) == [
+            {
+                "name": "FW1:Ethernet1/25.3000",
+                "parent": {"id": "trunk-1"},
+                "vlan_id": 3000,
+                "capabilities": [{"id": "sub-1"}],
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_track_false_with_the_vrf_already_linked_saves_once_untracked(self) -> None:
@@ -308,7 +339,7 @@ class TestEnsureVlanSubinterfaceWithoutCapability:
             device_id="d", device_name="D", trunk_iface=_trunk(), vlan_id_value=3800, role="uplink"
         )
 
-        roles = [c.kwargs["data"]["role"] for c in gen.client.create.call_args_list]
+        roles = [data["role"] for data in _created(gen)]
         assert roles == ["service", "uplink"]
 
 
@@ -379,7 +410,7 @@ class TestEnsureVlanSubinterfaceVrf:
             vrf_id="vrf-new",
         )
 
-        data = gen.client.create.call_args.kwargs["data"]
+        (data,) = _created(gen)
         assert "vrf" not in data and "capabilities" not in data
         assert _joined(gen) == [("sub-1", ["vrf-new"])]
         node.stored.save.assert_not_awaited()

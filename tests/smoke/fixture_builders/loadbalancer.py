@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.smoke.fixture_builders.common import _edges, _node, _v, write_data_fixtures
+from tests.smoke.fixture_builders.common import _edges, _encapsulation, _node, _v, write_data_fixtures
 from transforms.config.loadbalancer import LoadBalancer
 
 LB_PLATFORMS = ["f5_tmos", "haproxy_technologies", "netscaler"]
@@ -31,9 +31,10 @@ def _lb_leg_iface(*, device: str, name: str, address: str, namespace: str) -> di
         "security_zone": _node({"name": _v(namespace), "vrf_type": _v(ns["vrf_type"]), "l3_vni": _v(ns["l3_vni"])}),
         "__typename": "DcimVirtualInterface",
         "name": _v(name),
-        "vlan_id": _v(int(name.rsplit(".", 1)[1])),
         "device": _node({"id": f"dev-{device}", "name": _v(device), "role": _v("load-balancer")}),
-        "parent_interface": _node({"name": _v(name.split(".")[0]), "device": _node({"id": f"dev-{device}"})}),
+        **_encapsulation(
+            int(name.rsplit(".", 1)[1]), {"name": _v(name.split(".")[0]), "device": _node({"id": f"dev-{device}"})}
+        ),
         "ip_address": _node(
             {
                 "address": _v(address),
@@ -153,7 +154,9 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
                 "role": _v("uplink"),
                 "ip_address": _node({"address": _v(f"{leg_base}.5/29")}),
                 "device": _node({"id": "dev-lb"}),
-                "parent_interface": _node({"name": _v("eth1"), "device": _node({"id": "dev-lb"})}),
+                **_encapsulation(
+                    int(leg_name.rsplit(".", 1)[1]), {"name": _v("eth1"), "device": _node({"id": "dev-lb"})}
+                ),
                 "capabilities": _edges([{"__typename": "ManagedLoadbalancerContext"}]),
             }
         )

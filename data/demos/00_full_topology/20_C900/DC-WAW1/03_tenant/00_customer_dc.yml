@@ -9,4 +9,4 @@ spec:
       environment: "p"
       infrastructure_orchestrator: ansible_automation_platform
       parent: "DC-WAW1"
-      design: M_INTERNAL_DC
+      design: M_INTERNAL

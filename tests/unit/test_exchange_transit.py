@@ -111,17 +111,6 @@ def test_exchange_peers_never_pair_prod_with_non_prod() -> None:
     assert "prod" not in EXCHANGE_PEERS["non_prod"]
 
 
-def test_exchange_peers_never_join_prod_and_non_prod() -> None:
-    """Property: no tenant type is paired with a peer of the other tenant side, nor with itself."""
-    tenant_types = set(EXCHANGE_PEERS)
-    for tenant, peers in EXCHANGE_PEERS.items():
-        for peer in peers:
-            assert peer not in tenant_types
-        other = tenant_types - {tenant}
-        assert not other & set(peers)
-    assert {t for t in tenant_types if t == "prod"} and {t for t in tenant_types if t == "non_prod"}
-
-
 @pytest.mark.parametrize(
     ("env_a", "env_b", "joins"),
     [

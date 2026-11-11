@@ -2,7 +2,7 @@
 # The office's SD-WAN branch edge (VCE-610, the template add_sdwan_edge uses) with its interfaces from the template:
 # GE1 is the uplink (role uplink), the end of the office's internet access bcn-office-ispa-48212-isp-a
 # (90_bindings/90_internet/02_circuits). The device is owned by the office's tenant, as the generator
-# would write it. The tunnel interfaces ride on the internet port GE1 (parent_interface) and are nested under the
+# would write it. The tunnel interfaces ride on the internet port GE1 (encapsulation parent) and are nested under the
 # device; the hub end is on the DC edge (10_topology). Tunnel2 is the one to Zscaler.
 apiVersion: infrahub.app/v1
 kind: Object
@@ -24,7 +24,11 @@ spec:
             role: cloud
             status: active
             description: SD-WAN tunnel to the DC edge (rides on the internet port GE1)
-            parent_interface: ["bcn-office-edge-01", "GE1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "bcn-office-edge-01:Tunnel1"
+                  parent: ["bcn-office-edge-01", "GE1"]
             ip_address:
               data:
                 address: "169.254.10.13/30"
@@ -35,7 +39,11 @@ spec:
             role: saas
             status: active
             description: Zscaler tunnel (rides on the internet port GE1)
-            parent_interface: ["bcn-office-edge-01", "GE1"]
+            capabilities:
+              - kind: ManagedInterfaceEncapsulation
+                data:
+                  name: "bcn-office-edge-01:Tunnel2"
+                  parent: ["bcn-office-edge-01", "GE1"]
             ip_address:
               data:
                 address: "169.254.10.10/30"

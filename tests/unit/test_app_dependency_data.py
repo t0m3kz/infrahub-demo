@@ -31,17 +31,6 @@ _APP_DATA_DIRS = (
     _ROOT / "data" / "demos" / "13_applications",
     _ROOT / "tests" / "integration" / "data" / "60_app_catalogue",
 )
-_REMOVED_KEYS = {
-    "slug",
-    "load_balancer",
-    "protocol",
-    "port_start",
-    "port_end",
-    "endpoint_type",
-    "service_ports",
-    "access_profile",
-    "depends_on",
-}
 
 
 @dataclass(frozen=True)
@@ -111,15 +100,6 @@ def _keys(node: Any) -> set[str]:
     return set()
 
 
-def _kinds(node: Any) -> set[str]:
-    if isinstance(node, dict):
-        own = {node["kind"]} if isinstance(node.get("kind"), str) else set()
-        return own | {k for value in node.values() for k in _kinds(value)}
-    if isinstance(node, list):
-        return {k for item in node for k in _kinds(item)}
-    return set()
-
-
 _DEPENDENCIES = [(d, dep) for d in _APP_DATA_DIRS for dep in _entries(d, "AppDependency")]
 _DEPENDENCY_IDS = [f"{d.name}/{dep['name']}" for d, dep in _DEPENDENCIES]
 _COMPONENTS = [component for d in _APP_DATA_DIRS for component in _components(d)]
@@ -147,12 +127,10 @@ def test_the_scan_finds_the_app_data() -> None:
 
 
 @pytest.mark.parametrize("directory", _APP_DATA_DIRS, ids=lambda d: d.name)
-def test_no_removed_kinds_or_fields(directory: Path) -> None:
-    """AppEndpoint is gone, and so are slugs, per-dependency protocol/port_start/port_end
-    and the older ports/profile/depends_on fields."""
+def test_no_component_authors_the_depends_on_reverse_edge(directory: Path) -> None:
+    """``depends_on`` is the inbound reverse of ``AppDependency.source``: a dependency is an AppDependency object."""
     for path, doc in _documents(directory):
-        assert "AppEndpoint" not in _kinds(doc), path
-        assert not _keys(doc) & _REMOVED_KEYS, (path, _keys(doc) & _REMOVED_KEYS)
+        assert "depends_on" not in _keys(doc), path
 
 
 @pytest.mark.parametrize("component", _COMPONENTS, ids=_COMPONENT_IDS)

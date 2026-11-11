@@ -9,3 +9,4 @@ spec:
       environment: "p"
       infrastructure_orchestrator: ansible_automation_platform
       parent: "DC-GDN1"
+      design: S_100G

@@ -68,25 +68,14 @@ fragment ContextRoutesMemberFields on DcimDeviceManaged {
             value
           }
           ...InterfaceRoutingZoneFields
+          ...InterfaceEncapsulationCableFields
           ...ServiceMemberCableFields
           ... on DcimVirtualInterface {
-            vlan_id {
-              value
-            }
             ip_address {
               node {
                 address {
                   value
                 }
-              }
-            }
-            parent_interface {
-              node {
-                id
-                name {
-                  value
-                }
-                ...ServiceMemberCableFields
               }
             }
           }

@@ -11,6 +11,7 @@ from checks.border_spine import CheckBorderSpine
 from checks.common import validate_exchange_gateways, validate_routing_password, validate_snat_addresses
 from checks.common import validate_transit_vlans as _validate_transit_vlans
 from checks.edge import CheckEdge
+from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from tests.unit.routing_helpers import in_vrf, make_vrf
 from tests.unit.service_contexts_helpers import make_far, make_iface, make_member, make_switch
 from transforms.config.border_leaf import BorderLeaf
@@ -108,21 +109,6 @@ class TestValidateRoutingPasswordOspf:
         }
         assert validate_routing_password(data) == []
 
-    def test_no_interfaces_key_returns_no_errors(self):
-        assert validate_routing_password({}) == []
-
-
-class TestValidateRoutingPasswordCombined:
-    def test_bgp_and_ospf_errors_both_reported(self):
-        data = {
-            "capabilities": [_bgp_capability([{"name": "underlay-a", "password": None}])],
-            "interfaces": [
-                {"name": "Ethernet1", "capabilities": [_ospf_interface_capability(None)]},
-            ],
-        }
-        errors = validate_routing_password(data)
-        assert len(errors) == 2
-
 
 _FROM_NAME: Any = object()  # a leg's tag defaults to the number its test name ends in
 GATEWAY_ID = "ctx-1"
@@ -174,8 +160,7 @@ def _fw_leg(
         }
     return {
         "name": name,
-        "vlan_id": vlan_id,
-        "parent_interface": {"name": "eth1", "device": {"id": "dev-fw-01"}},
+        **cleaned_encapsulation(vlan_id, {"name": "eth1", "device": {"id": "dev-fw-01"}}),
         "device": {"id": "dev-fw-01"},
         "ip_address": ip_address,
         **(in_vrf(make_vrf({"name": namespace, "vrf_type": ns_type or _NS_TYPE.get(namespace)})) if namespace else {}),

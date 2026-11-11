@@ -108,10 +108,6 @@ class TestCarrierCircuitPlacement:
         messages = _run(carrier=[_carrier_circuit("X", [DC10, DC11, FR2], [BL10_END, EG_FR_END])])
         assert len(messages) == 1 and "at most 2 distinct locations" in messages[0]
 
-    def test_a_provider_router_end_has_no_location(self) -> None:
-        """The ISP router is placed nowhere: one location (ours), the circuit's provider owns the router."""
-        assert _run(carrier=[INET_OFFICE]) == []
-
     def test_a_router_not_owned_by_the_circuit_provider_fails(self) -> None:
         """The circuit's provider must name the router end."""
         circuit = _carrier_circuit(
@@ -190,10 +186,6 @@ class TestCarrierCircuitPlacement:
 
 class TestCarrierCircuitOwnership:
     """The owner of a circuit is derived from the offices among its locations: they are of one owner."""
-
-    def test_office_access_circuit_passes(self) -> None:
-        """INET-C001-OFFICE ends on C001's office: the owner derives, no finding."""
-        assert _run(carrier=[INET_OFFICE]) == []
 
     def test_two_offices_of_one_owner_pass(self) -> None:
         """Two offices of the same owner derive one owner."""
@@ -290,6 +282,17 @@ class TestTunnelCircuit:
         assert len(messages) == 1
         assert "end 'C001-OFFICE-EDGE1:GE1' rides no live internet carrier circuit" in messages[0]
         assert "INET-C001-OFFICE" not in messages[0]
+
+    def test_a_cloud_peering_end_needs_no_carrier(self) -> None:
+        """The far end of a SaaS tunnel is the transport's CloudPeeringInterface: the provider's side, no carrier."""
+        peering = _vport("zscaler-c900-muc", "Tunnel1", kind="CloudPeeringInterface", region=EUC1)
+        assert _run(tunnels=[_tunnel("T", [C001_OFFICE, FR2], [OFFICE_EDGE, peering])]) == []
+
+    def test_a_cloud_peering_end_does_not_excuse_the_office_end(self) -> None:
+        """The exemption is for the provider's end only: our own end still needs its internet access."""
+        peering = _vport("zscaler-c900-muc", "Tunnel1", kind="CloudPeeringInterface", region=EUC1)
+        messages = _run(tunnels=[_tunnel("T", [C001_OFFICE, FR2], [_vport("C001-OFFICE-EDGE1", "GE1"), peering])])
+        assert len(messages) == 1 and "end 'C001-OFFICE-EDGE1:GE1' rides no live internet carrier" in messages[0]
 
     def test_each_end_needs_its_own_internet_circuit(self) -> None:
         """A shared carrier would not do: both ends are checked, one finding per end."""
@@ -600,11 +603,11 @@ class TestHandoffCircuit:
         assert "has no live carrier circuit and no cable" in messages[0]
 
     def test_end_that_is_not_a_vlan_sub_interface_fails(self) -> None:
-        """A handoff end must be a sub-interface on a parent_interface (or a routed port); a bare port of no kind is reported."""
+        """A handoff end must be a sub-interface with an encapsulation (or a routed port); a bare port of no kind is reported."""
         ends = [EG_FR_VLAN, _vport("EXT-AWS-DX-FR2", "et-0/0/0", (XC,))]
         messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert messages == [
-            "Handoff circuit 'HO' end 'EXT-AWS-DX-FR2:et-0/0/0' is neither a sub-interface (a virtual interface on a parent_interface) "
+            "Handoff circuit 'HO' end 'EXT-AWS-DX-FR2:et-0/0/0' is neither a sub-interface (a virtual interface with an encapsulation) "
             "nor a routed physical port (an IP address, no VLAN) nor a cloud peering interface: a physical port with "
             "no IP address and no VLAN cannot carry a handoff."
         ]

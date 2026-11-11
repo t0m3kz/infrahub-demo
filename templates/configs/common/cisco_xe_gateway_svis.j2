@@ -37,7 +37,11 @@ interface Vlan{{ vlan.vlan_id }}
  ipv6 address {{ vlan.gateway_ipv6 }}
 {%- endif %}
 {%- if vlan.acl_name %}
+{%- if vlan.acl_family == 'ipv6' %}
+ ipv6 traffic-filter {{ vlan.acl_name }} in
+{%- else %}
  ip access-group {{ vlan.acl_name }} in
+{%- endif %}
 {%- endif %}
 {%- if lisp_mobility is defined and lisp_mobility and vlan.vrf %}
  lisp mobility {{ vlan.vrf }}-IPV4

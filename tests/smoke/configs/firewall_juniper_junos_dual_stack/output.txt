@@ -1,0 +1,53 @@
+set system host-name dc1-fw-01
+#
+#
+# --- Interfaces & Zone Assignments ---
+set interfaces ethernet1/1 unit 10 vlan-id 10
+set interfaces ethernet1/1 unit 10 family inet address 10.0.1.1/30
+set interfaces ethernet1/1 unit 10 description "Internal LAN link"
+set security zones security-zone PROD interfaces ethernet1/1.10
+set interfaces ethernet1/1 unit 20 vlan-id 20
+set interfaces ethernet1/1 unit 20 family inet6 address fd5a:1760:0:2::1/126
+set interfaces ethernet1/1 unit 20 description "DMZ link"
+set security zones security-zone NONPROD interfaces ethernet1/1.20
+set interfaces ethernet1/1 unit 30 vlan-id 30
+set interfaces ethernet1/1 unit 30 family inet address 10.0.3.1/30
+set interfaces ethernet1/1 unit 30 description "External link"
+set security zones security-zone INTERNET interfaces ethernet1/1.30
+#
+#
+# --- Address Books (one per zone) ---
+set security zones security-zone PROD address-book address addr-10-0-1-0-24 10.0.1.0/24
+set security zones security-zone PROD address-book address addr-10-0-10-0-24 10.0.10.0/24
+set security zones security-zone NONPROD address-book address addr-fd5a-1760-0-2---64 fd5a:1760:0:2::/64
+#
+#
+# --- Static Routes (return path to leaf per zone) ---
+set routing-instances NONPROD routing-options rib NONPROD.inet6.0 static route fd5a:1760:0:2::/64 next-hop fd5a:1760:0:2::2
+set routing-instances PROD routing-options static route 10.0.1.0/24 next-hop 10.0.1.2
+set routing-instances PROD routing-options static route 10.0.10.0/24 next-hop 10.0.1.2
+#
+#
+# --- Security Policies in tenant system shared-dc1-fw-01-policy ---
+set tenants shared-dc1-fw-01-policy security policies from-zone NONPROD to-zone PROD policy allow-https match source-address addr-fd5a-1760-0-2---64
+set tenants shared-dc1-fw-01-policy security policies from-zone NONPROD to-zone PROD policy allow-https match destination-address 10.0.1.0/24
+set applications application app-tcp-443 protocol tcp destination-port 443
+set tenants shared-dc1-fw-01-policy security policies from-zone NONPROD to-zone PROD policy allow-https match application app-tcp-443
+set tenants shared-dc1-fw-01-policy security policies from-zone NONPROD to-zone PROD policy allow-https then permit
+set tenants shared-dc1-fw-01-policy security policies from-zone NONPROD to-zone PROD policy allow-https then log session-close
+set tenants shared-dc1-fw-01-policy security policies from-zone NONPROD to-zone PROD policy allow-ssh match source-address addr-fd5a-1760-0-2---64
+set tenants shared-dc1-fw-01-policy security policies from-zone NONPROD to-zone PROD policy allow-ssh match destination-address 10.0.1.0/24
+set applications application app-tcp-22 protocol tcp destination-port 22
+set tenants shared-dc1-fw-01-policy security policies from-zone NONPROD to-zone PROD policy allow-ssh match application app-tcp-22
+set tenants shared-dc1-fw-01-policy security policies from-zone NONPROD to-zone PROD policy allow-ssh then permit
+set tenants shared-dc1-fw-01-policy security policies from-zone NONPROD to-zone PROD policy allow-ssh then log session-close
+set tenants shared-dc1-fw-01-policy security policies from-zone PROD to-zone NONPROD policy allow-any match source-address 10.0.1.0/24
+set tenants shared-dc1-fw-01-policy security policies from-zone PROD to-zone NONPROD policy allow-any match destination-address addr-fd5a-1760-0-2---64
+set tenants shared-dc1-fw-01-policy security policies from-zone PROD to-zone NONPROD policy allow-any match application any
+set tenants shared-dc1-fw-01-policy security policies from-zone PROD to-zone NONPROD policy allow-any then permit
+set tenants shared-dc1-fw-01-policy security policies from-zone any to-zone any policy implicit-deny-all match source-address any
+set tenants shared-dc1-fw-01-policy security policies from-zone any to-zone any policy implicit-deny-all match destination-address any
+set tenants shared-dc1-fw-01-policy security policies from-zone any to-zone any policy implicit-deny-all match application any
+set tenants shared-dc1-fw-01-policy security policies from-zone any to-zone any policy implicit-deny-all then deny
+set tenants shared-dc1-fw-01-policy security policies from-zone any to-zone any policy implicit-deny-all then log session-close
+#

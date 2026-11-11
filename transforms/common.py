@@ -10,7 +10,7 @@ from netutils.utils import jinja2_convenience_function
 from transforms.helpers.acl import get_acls
 from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.bgp_facts import annotate_bgp_policy
-from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
+from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes
 from transforms.helpers.firewall import (
     get_exchange_transits,
     get_leaf_firewall_transits,
@@ -37,7 +37,7 @@ from utils.data_cleaning import clean_data
 from utils.device_services import has_pbr, overlay_pbr_bindings, pbr_bindings
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
-from utils.segment_addressing import l2_only_on, l2_only_view, segment_hosting_candidates
+from utils.segment_addressing import l2_only_on, l2_only_view, refuse_ipv6_segment, segment_hosting_candidates
 from utils.service_contexts import (
     DEVICE_SERVICES_ROOT,
     attach_device_services,
@@ -413,7 +413,6 @@ class BaseDeviceTransform(InfrahubTransform):
         """
         if platform_name != "cisco_xe" or self.device_role not in self._CISCO_XE_FABRIC_ROLES:
             return {}
-        refuse_unfiltered_ipv6(config.get("vlans") or [], self.device_role)
         lisp = config.get(OVERLAY_CONFIG_KEYS["lisp"])
         defined_vrfs = l3_vrf_names(lisp, config.get("vxlan"))
         return {
@@ -553,9 +552,11 @@ class BaseDeviceTransform(InfrahubTransform):
         vrf_routes = get_static_routes(data.get("capabilities"))
 
         acls = get_acls(activations=routed)
-        acl_names = {acl["vlan_id"]: acl["name"] for acl in acls}
+        acl_by_vlan = {acl["vlan_id"]: acl for acl in acls}
         for vlan in vlans:
-            vlan["acl_name"] = acl_names.get(vlan["vlan_id"])
+            acl = acl_by_vlan.get(vlan["vlan_id"]) or {}
+            vlan["acl_name"] = acl.get("name")
+            vlan["acl_family"] = acl.get("family")
 
         if self.device_role in BORDER_ROLES:
             self._refuse_unprotected_tenant_svis(self.device_role, platform_name, acls, leaf_pbr_rules)
@@ -636,6 +637,12 @@ class BaseDeviceTransform(InfrahubTransform):
         steered_vlans = {vlan for name in bindings if (vlan := svi_vlan_id(name)) is not None}
         refuse_unresolvable_contexts(set(bindings.values()), firewall_contexts, device_name=data.get("name", ""))
         rules = get_customer_pbr_rules(routed, firewall_contexts, steered_vlans=steered_vlans)
+        # The next hop of a firewall context is its IPv4 leg and the PBR ACLs are IPv4: an IPv6 segment that gets a
+        # rule is refused, never left unsteered (PBR in IPv6 form needs the contexts' IPv6 legs, a later change).
+        pbr_vlans = {rule["vlan_id"] for rule in rules}
+        for act in routed:
+            if act.get("vlan_id") in pbr_vlans:
+                refuse_ipv6_segment(act.get("segment") or {}, f"the {self.device_role} PBR to a firewall context")
         if self.device_role not in self._LEAF_ROLES:
             return rules, []
         return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))

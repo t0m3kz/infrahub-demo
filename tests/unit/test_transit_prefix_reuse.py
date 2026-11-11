@@ -37,6 +37,15 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
         )
         for m in members
     ]
+    # Each leg rides on the trunk with the transit tag: its encapsulation.
+    encapsulations = [
+        SimpleNamespace(
+            parent=SimpleNamespace(id="trunk"),
+            vlan_id=SimpleNamespace(value=3001),
+            capabilities=SimpleNamespace(peers=[SimpleNamespace(id=leg.id)]),
+        )
+        for leg in interfaces
+    ]
     # The legs' VRF instance with its zone: it lists the legs in its capabilities (the interface edge).
     vrfs = {
         "vrf-prod": SimpleNamespace(
@@ -59,6 +68,8 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
     async def filters(*, kind: Any, **kwargs: Any) -> list[Any]:
         """Answer each read by its kind, so the order of the reads is free."""
         name = getattr(kind, "__name__", str(kind))
+        if name == "ManagedInterfaceEncapsulation":
+            return encapsulations
         if name == "DcimVirtualInterface":
             return interfaces
         if name == "ManagedVRF":

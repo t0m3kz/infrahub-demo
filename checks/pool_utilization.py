@@ -71,7 +71,7 @@ def _name(node: Any) -> str:
 
 
 def _assignable(net: IPNetwork) -> int:
-    """Addresses an address pool hands out of ``net``."""
+    """Addresses an address pool hands out of ``net`` (family-aware: IPv4 and IPv6 are both counted)."""
     reserved = (2 if net.prefixlen < 31 else 0) if net.version == 4 else (1 if net.prefixlen < 127 else 0)
     return net.num_addresses - reserved
 

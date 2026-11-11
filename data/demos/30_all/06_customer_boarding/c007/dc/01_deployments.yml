@@ -8,5 +8,5 @@ spec:
     - owner: "C007"
       environment: "p"
       parent: "DC10"
-      design: "L_DC"
+      design: "L"
       member_of_groups: [customer_deployments_dc]

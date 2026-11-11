@@ -9,10 +9,10 @@ spec:
     - owner: "C002"
       environment: "p"
       parent: "DC6"
-      design: "M_DC"
+      design: "M"
       member_of_groups: [customer_deployments_dc]
     - owner: "C002"
       environment: "d"
       parent: "DC6"
-      design: "S_DC"
+      design: "S"
       member_of_groups: [customer_deployments_dc]

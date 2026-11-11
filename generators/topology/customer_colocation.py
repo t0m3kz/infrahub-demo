@@ -17,7 +17,8 @@ footprint's policies in each. The metro owns no devices; the zones are the tier
 that does. A zone without firewalls does nothing (an info log) and a
 TopologyVirtualColocation (provider-hosted appliances, no contexts of ours) is
 never a zone of this query; a metro with no firewall zone gives the footprint
-no context. No zone is chosen by data. A colocation footprint has no design, so
+no context. No zone is chosen by data. A colocation footprint's design never asks for a
+dedicated context (customer_dc.py reads those flags, this generator does not), so
 each context is the zone's shared one: written untracked, named from the zone's
 cluster, so footprints of one metro share it, and a re-run after a zone gained
 or lost its firewalls converges the link set (a context of a zone that lost

@@ -202,15 +202,18 @@ nodes:
   # with its deployment too (the deployment's cascading `vlans`); a row of a device that no longer needs the segment
   # is deleted by the next reconcile.
   #
+  # The row's one routed realization, its SVI (a role-svi DcimVirtualInterface of the same switch), is a member of the
+  # same edge, written by the VRF pass (generators/helpers/svi.py): the SVI's VLAN is its row's, not read off its name.
+  # checks/interface_layers.py R3, R6, R10 hold it (a plain generic edge, not a Component of the row).
   # The switch ports (physical, LAG) of the row's device that carry the segment are its interface `capabilities`
   # (ManagedGenericInterfaces, the interface edge): a port is a member of its switch's row, so the VLAN of a port is
   # its row's vlan_id and the VNI and segment come through `segment_deployment`: the REALIZATION. Only the reconcile
   # (generators/topology/segment_ports.py) writes these edges, AFTER the rows: for the ports its components derive and
   # the ports assigned to the deployment (a person's intent lives there, never on this edge). A port then shows both in
   # its `capabilities`, its deployment (asked) and its row (realized); a reader of a port's segment reads the row. The
-  # server holds that a port is of the row's own switch (`common_parent: device` on the edge);
-  # checks/interface_layers.py holds a physical port or LAG only, one row of a segment per port, and reports a
-  # membership nobody asked for.
+  # schema holds no same-switch rule on the edge (no common_parent); checks/interface_layers.py holds a port of the
+  # row's own switch (R6), a physical port or LAG only, one row of a segment per port, and reports a membership
+  # nobody asked for.
   # Read by: the switch transforms, from the device's `vlans` and the port's capabilities.
   - name: SegmentVlan
     namespace: Managed
@@ -251,8 +254,7 @@ nodes:
         identifier: "segmentvlan__segment_deployment"
         description: "The segment's realization in the DC or metro this switch belongs to"
       # The Parent: the row is a child of its switch (DcimPhysicalDevice.vlans, Component, cascade: a row dies with its
-      # switch), which lets `capabilities` below hold `common_parent: device`. The reconcile also deletes the rows of
-      # a device that no longer needs the segment.
+      # switch). The reconcile also deletes the rows of a device that no longer needs the segment.
       - name: device
         peer: DcimPhysicalDevice
         label: Device
@@ -262,19 +264,6 @@ nodes:
         order_weight: 2100
         identifier: "segmentvlan__device"
         description: "The switch this VLAN ID realization is on"
-      # The interface edge of ManagedGenericInterfaces, re-declared to add `common_parent: device`: the server refuses
-      # a port of another switch on create and on update (measured on 1.11.9). Physical ports and LAGs only, one row of
-      # a segment per port: checks/interface_layers.py.
-      - name: capabilities
-        peer: DcimInterface
-        label: Ports
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: interface_capabilities
-        common_parent: device
-        order_weight: 2300
-        description: "The switch ports (physical, LAG) of the row's switch that carry the segment with this VLAN ID"
 
 extensions:
   nodes:

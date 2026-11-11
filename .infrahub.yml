@@ -710,6 +710,10 @@ queries:
     file_path: queries/topology/add/customer_dc.gql
   - name: customer_colocation
     file_path: queries/topology/add/customer_colocation.gql
+  - name: customer_cloud
+    file_path: queries/topology/add/customer_cloud.gql
+  - name: cloud_attachment_range
+    file_path: queries/topology/add/cloud_attachment_range.gql
   - name: customer_office_sdwan
     file_path: queries/topology/add/customer_office_sdwan.gql
   - name: application_orchestrator_routing
@@ -916,6 +920,24 @@ generator_definitions:
     targets: customer_deployments_colocation
     query: customer_colocation
     class_name: CustomerDeploymentColocationExchangeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_customer_deployment_cloud
+    file_path: generators/topology/customer_cloud.py
+    targets: customer_deployments_cloud
+    query: customer_cloud
+    class_name: CustomerDeploymentCloudGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_cloud_attachment_range
+    file_path: generators/topology/cloud_attachment_range.py
+    targets: cloud_attachment_ranges
+    query: cloud_attachment_range
+    class_name: CloudAttachmentRangeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

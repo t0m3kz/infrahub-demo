@@ -11,11 +11,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
 from generators.logger import GeneratorError
 from generators.protocols import ManagedSegmentVlan
@@ -243,15 +241,6 @@ class TestIsolation:
 
         assert world.events.index(f"delete:{stale}") < world.events.index("read:ManagedSegmentVlan")
         assert world.vlan_ids("seg-1") == {"sw-b": 100}
-
-    def test_uniqueness_is_enforced_by_the_schema_too(self, root_dir: Path) -> None:
-        """The DB-level backstop: a VLAN id is unique per device, and there is no VLAN domain generic any more."""
-        segment_schema = yaml.safe_load((root_dir / "schemas/extensions/service/segment.yml").read_text())
-        node = next(n for n in segment_schema["nodes"] if n["name"] == "SegmentVlan")
-        assert ["segment_deployment", "device"] in node["uniqueness_constraints"]
-        assert ["device", "vlan_id__value"] in node["uniqueness_constraints"]
-        dcim_schema = yaml.safe_load((root_dir / "schemas/base/dcim.yml").read_text())
-        assert "GenericVlanDomain" not in {g["name"] for g in dcim_schema["generics"]}
 
 
 class TestIdempotency:

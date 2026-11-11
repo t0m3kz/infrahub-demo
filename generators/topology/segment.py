@@ -1,10 +1,10 @@
 """Generator for VXLAN segment deployment activations.
 
 VxlanSegmentGenerator handles:
-  0. Address a segment without a gateway: a prefix from the tenant pool of
-     its environment's VRF namespace (Tenant-<namespace>-IPv4, keyed by the
-     segment name) and the anycast gateway on its .1, once
-     (ensure_segment_addressing). An authored gateway is kept.
+  0. Address a segment without a gateway: a prefix sized from its host_count
+     (a /24 without one) out of its customer's pool, keyed by the segment name,
+     and the anycast gateway on its .1, once (ensure_segment_addressing,
+     generators/topology/segment_addressing.py). An authored gateway is kept.
   1. Determine target customer deployments from segment.customer_deployments
   2. Resolve each customer deployment's hosting node — the VNI pool and
      SegmentDeployment record live on the TopologySegmentHosting node: the
@@ -55,10 +55,11 @@ from ..pools import PoolMixin
 from ..protocols import (
     ManagedSegmentDeployment,
 )
+from .segment_addressing import SegmentAddressingMixin
 from .segment_ports import SegmentPortTagMixin
 
 
-class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, CommonGenerator):
+class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentAddressingMixin, SegmentPortTagMixin, CommonGenerator):
     """VXLAN segment generator — allocates a VNI from the DC's pool,
     reconciles the segment's LOCAL VLAN ID activations (border gateways of a
     stretched segment included). Customer-facing interface assignment is not done here — see

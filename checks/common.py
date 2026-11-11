@@ -17,6 +17,7 @@ from utils.exchange_transit import (
     transit_addresses,
     transit_vlan,
 )
+from utils.interface_encapsulation import vlan_of
 from utils.limits import OFFSET_MEMBER_A, OFFSET_MEMBER_B, TRANSIT_PREFIXLEN
 from utils.routing_domain import interface_security_zone
 from utils.service_contexts import (
@@ -85,11 +86,7 @@ def validate_interfaces(data: dict[str, Any]) -> list[str]:
         errors.append("Device has no interfaces configured. At least one interface is required.")
 
     for interface in data.get("interfaces", []):
-        if (
-            interface.get("role") == "loopback"
-            and not interface.get("ip_addresses")
-            and not interface.get("ip_address")
-        ):
+        if interface.get("role") == "loopback" and not interface.get("ip_address"):
             errors.append(f"Loopback interface '{interface.get('name', 'unknown')}' has no IP address assigned.")
 
     return errors
@@ -244,9 +241,7 @@ def _validate_exchange(
             continue
         by_namespace.setdefault(namespace_name, []).append(iface_name)
         types[namespace_name] = namespace.get("vrf_type")
-        errors.extend(
-            _validate_leg(label, iface_name, interface.get("vlan_id"), address, namespace.get("vrf_type"), context)
-        )
+        errors.extend(_validate_leg(label, iface_name, vlan_of(interface), address, namespace.get("vrf_type"), context))
 
     for namespace_name, iface_names in by_namespace.items():
         if len(iface_names) != 1:
@@ -345,6 +340,7 @@ def _validate_leg(
     """Address and VLAN rules of one leg of ``context`` (see validate_exchange_gateways)."""
     errors: list[str] = []
     network = ip_interface(address).network
+    # IPv4 by design: a context leg is a /29 of the IPv4 transit pools (utils/exchange_transit.py).
     if network.version != 4 or network.prefixlen != TRANSIT_PREFIXLEN:
         errors.append(f"{label}: leg '{iface_name}' address {address} is not inside a /{TRANSIT_PREFIXLEN}.")
     elif address.split("/")[0] not in transit_addresses(str(network))["members"]:

@@ -16,9 +16,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from generators.common import CommonGenerator
 from generators.firewall_context import FIREWALL_CONTEXT
-from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 from tests.unit.customer_dc_transit_helpers import (
     _LB_DEVICES,
     _LB_PROD,
@@ -34,10 +32,6 @@ from tests.unit.customer_dc_transit_helpers import (
     _World,
 )
 from utils.exchange_transit import transit_vlan
-
-
-def test_generator_is_a_common_generator() -> None:
-    assert issubclass(CustomerDeploymentDCExchangeGenerator, CommonGenerator)
 
 
 class TestFreshSharedBoarding:
@@ -59,6 +53,27 @@ class TestFreshSharedBoarding:
         assert f"Ethernet1/25.{transit_vlan(vlan, 'internet')}" == "Ethernet1/25.3400"
         assert f"Ethernet1/25.{transit_vlan(vlan, 'management')}" == "Ethernet1/25.3600"
         gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_each_leg_rides_on_the_member_uplink_with_its_transit_tag(self) -> None:
+        """A leg's parent and tag are its encapsulation: the uplink of its member, the transit VLAN of its namespace."""
+        world = _World()
+        gen, _ = _make_gen(world)
+
+        await _run(gen, world, _payload())
+
+        vlan = world.contexts[_SHARED].vlan_id.value
+        assert {
+            (enc.parent.id, enc.vlan_id.value, enc.capabilities.peers[0].id) for enc in world.encapsulations.values()
+        } == {
+            (
+                f"up-{device}",
+                transit_vlan(vlan, ns_type),
+                world.sub_interfaces[(device, f"Ethernet1/25.{transit_vlan(vlan, ns_type)}")].id,
+            )
+            for device in ("fw-1", "fw-2")
+            for ns_type in ("prod", "internet", "management")
+        }
 
     @pytest.mark.asyncio
     async def test_addresses_follow_the_fixed_offsets_per_namespace(self) -> None:
@@ -143,6 +158,7 @@ class TestFreshSharedBoarding:
             "IpamIPAddress",
             "TopologyRoutedExchange",
             "DcimVirtualInterface",
+            "ManagedInterfaceEncapsulation",
         }
         for kind, label, kwargs in world.saves:
             assert kwargs == _UNTRACKED, (kind, label)
@@ -566,8 +582,9 @@ class TestTransitMemberResolution:
                 typename="DcimVirtualInterface",
                 name=SimpleNamespace(value="eth1"),
                 device=SimpleNamespace(id=f"v{host}"),
-                parent_interface=SimpleNamespace(id=f"up-{host}" if pinned else None),
             )
+            if pinned:
+                world.pin(f"up-v{host}", f"up-{host}", device=f"v{host}")
         return [
             SimpleNamespace(
                 id=f"v{host}",
@@ -601,7 +618,7 @@ class TestTransitMemberResolution:
 
     @pytest.mark.asyncio
     async def test_virtual_uplink_not_pinned_to_a_host_port_is_an_error_without_writes(self) -> None:
-        """No parent_interface, no way to the border service port: nothing is created for the context."""
+        """No encapsulation, no way to the border service port: nothing is created for the context."""
         world = _World()
         gen, _ = _make_gen(world)
         members = self._hosted_members(world, pinned=False)

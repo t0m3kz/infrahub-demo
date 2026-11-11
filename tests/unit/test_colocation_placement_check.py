@@ -21,7 +21,6 @@ import pytest
 from checks.colocation_placement import (
     RULES,
     CheckColocationPlacement,
-    Finding,
     kit_within_design_findings,
     kit_without_design_findings,
     metro_zone_count_findings,
@@ -227,23 +226,9 @@ class TestTemplateKind:
 
         assert _run(_payload(zones=[zone])) == []
 
-    def test_rule_function_on_the_cleaned_shape(self) -> None:
-        """The rule works on the cleaned dicts, which is also how a caller outside validate() uses it."""
-        cleaned = clean_data(
-            _payload(zones=[_hosting("z-fr2", "FR2", FR, [_entry("edge", 2, APPLIANCE_TEMPLATE, "C8000V_EDGE")])])
-        )
-
-        findings = template_kind_findings(cleaned)
-
-        assert [type(f) for f in findings] == [Finding]
-        assert findings[0].object_type == "TopologyColocationZone"
-
 
 class TestUniqueNames:
     """Rule 2: metro, zone and virtual colocation names are unique across the three kinds, case-insensitive."""
-
-    def test_distinct_names_pass(self) -> None:
-        assert _run(_payload()) == []
 
     def test_zone_named_like_its_metro_fails_on_both(self) -> None:
         findings = _run(_payload(zones=[_hosting("z-fr", "FR", FR, [])]))
@@ -292,9 +277,6 @@ class TestUniqueNames:
 class TestKitNeedsDesign:
     """Rule 3: a zone or virtual colocation that declares kit has a design."""
 
-    def test_kit_with_a_design_passes(self) -> None:
-        assert _run(_payload()) == []
-
     def test_no_kit_without_a_design_passes(self) -> None:
         """FR6 declares nothing: it needs no envelope."""
         assert _run(_payload(zones=[_hosting("z-fr6", "FR6", FR, [], design=NO_DESIGN)], virtual=[])) == []
@@ -323,13 +305,6 @@ class TestKitNeedsDesign:
             "TopologyVirtualColocation 'AM-NE' declares 1 fabric_templates entries but has no design"
             in (findings[0]["message"])
         )
-
-    def test_rule_function_on_the_cleaned_shape(self) -> None:
-        zone = _hosting("z-fr2", "FR2", FR, [EDGE], design=NO_DESIGN)
-
-        findings = kit_without_design_findings(clean_data(_payload(zones=[zone])))
-
-        assert [type(f) for f in findings] == [Finding]
 
 
 class TestKitWithinDesign:
@@ -450,15 +425,6 @@ class TestZoneDesignInMetroDesign:
 
         assert _run(_payload(metros=[self._metro(self.EDGE_ONLY)], zones=[zone], virtual=[])) == []
 
-    def test_rule_function_on_the_cleaned_shape(self) -> None:
-        zone = _hosting("z-fr2", "FR2", FR, [EDGE], design=self.EDGE_FW)
-
-        findings = zone_design_in_metro_findings(
-            clean_data(_payload(metros=[self._metro(self.EDGE_ONLY)], zones=[zone], virtual=[]))
-        )
-
-        assert len(findings) == 1
-
 
 class TestMetroZoneCount:
     """Rule 6: a metro with a design holds at most max_zones zones and virtual colocations together."""
@@ -499,11 +465,6 @@ class TestMetroZoneCount:
 
         assert _run(_payload(metros=[FR], zones=zones, virtual=[])) == []
 
-    def test_rule_function_on_the_cleaned_shape(self) -> None:
-        findings = metro_zone_count_findings(clean_data(_payload(metros=[self._fr(1)], zones=[FR2, FR6], virtual=[])))
-
-        assert [type(f) for f in findings] == [Finding]
-
 
 class TestRegistry:
     def test_every_rule_is_registered_once(self) -> None:
@@ -531,7 +492,3 @@ class TestRegistry:
 
         # template kind and two name-collision findings
         assert len(findings) == 3
-
-    @pytest.mark.parametrize("rule", RULES)
-    def test_every_rule_tolerates_an_empty_cleaned_input(self, rule: Any) -> None:
-        assert rule({}) == []

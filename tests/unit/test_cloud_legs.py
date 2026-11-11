@@ -244,6 +244,45 @@ def gateway_ref(name: str) -> dict[str, Any]:
     return {"id": f"gw-{name}", "name": name}
 
 
+class TestAttachmentPoint:
+    """The sessions that land on gateways of one hub chain are ONE attachment point (rule 8 of routing_invariants)."""
+
+    @staticmethod
+    def _aws() -> tuple[dict[str, Any], ...]:
+        """00_full: a Direct Connect gateway associated with the transit gateway, a VPC on the transit gateway."""
+        return (
+            attachment("assoc", "tgw", peer="dxgw"),
+            attachment("vpc", "tgw", network="v", blocks=(prefix("10.200.0.0/16"),)),
+        )
+
+    def test_a_transit_vif_and_a_vpn_to_the_associated_hub_are_one_point(self) -> None:
+        """dxgw -> tgw and the VPN on tgw reach the same network: the prefix behind both is not a conflict."""
+        legs = _legs(
+            peering("vif", "dx", on="dxgw"),
+            peering("t1", "vpn", on=None, kind="CloudVPNConnection", transport_gateway="tgw", circuit_type="vpn"),
+            attachments=self._aws(),
+        )
+        assert {leg.group for leg in legs} == {"dxgw+tgw"}
+        assert {leg.point for leg in legs} == {"cloud gateway 'dxgw+tgw'"}
+        points = registered_by_attachment([], [], legs)
+        assert list(points) == ["cloud gateway 'dxgw+tgw'"]
+
+    def test_a_gateway_with_no_gateway_neighbour_is_its_own_point(self) -> None:
+        """The virtual private gateway of a VPC joins no chain: a prefix behind it AND the hub stays a conflict."""
+        legs = _legs(
+            peering("vif-t", "dx", on="dxgw"),
+            peering("vif-v", "dx", on="vgw"),
+            attachments=(*self._aws(), attachment("vgwa", "vgw", network="v", blocks=(prefix("10.200.0.0/16"),))),
+        )
+        assert {leg.peering: leg.group for leg in legs} == {"vif-t": "dxgw+tgw", "vif-v": "vgw"}
+
+    def test_the_chain_follows_the_association_either_way_and_through_two_hubs(self) -> None:
+        """A chain of three gateways is one point from any of its ends."""
+        attachments = (attachment("a1", "tgw-1", peer="dxgw"), attachment("a2", "tgw-2", peer="tgw-1"))
+        legs = _legs(peering("x", "dx", on="tgw-2"), peering("y", "dx", on="dxgw"), attachments=attachments)
+        assert {leg.group for leg in legs} == {"dxgw+tgw-1+tgw-2"}
+
+
 class TestFarEnd:
     """The session builder sees the cloud peering interface as the remote end."""
 

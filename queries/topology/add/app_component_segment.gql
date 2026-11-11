@@ -17,8 +17,49 @@ query app_component_segment($fqdn: String!) {
             __typename
             name { value }
             environment { value }
+            # What ensure_segment_addressing reads (generators/topology/segment_addressing.py): the sizing, the
+            # customer whose pool addresses the segment and the design of each footprint (vxlan_segment.gql selects
+            # the same). The prefix of the gateway is how a changed host_count is detected.
+            host_count { value }
+            ip_version { value }
+            owner { node { id org_id { value } } }
             security_zone { node { ...RoutingZoneFields } }
-            gateway { node { id address { value } } }
+            gateway { node { id address { value } ip_prefix { node { id prefix { value } } } } }
+            ... on ManagedVxlanSegment {
+              customer_deployments {
+                edges {
+                  node {
+                    id
+                    __typename
+                    name { value }
+                    ... on TopologyCustomerDC {
+                      design {
+                        node {
+                          id
+                          name { value }
+                          address_prefix_length { value }
+                          segment_prefix_length { value }
+                          ipv6_prefix_length { value }
+                          ipv6_segment_prefix_length { value }
+                        }
+                      }
+                    }
+                    ... on TopologyCustomerColocation {
+                      design {
+                        node {
+                          id
+                          name { value }
+                          address_prefix_length { value }
+                          segment_prefix_length { value }
+                          ipv6_prefix_length { value }
+                          ipv6_segment_prefix_length { value }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         instances {

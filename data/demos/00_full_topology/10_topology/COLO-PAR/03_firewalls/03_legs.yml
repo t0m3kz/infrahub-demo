@@ -7,9 +7,13 @@ spec:
   kind: DcimVirtualInterface
   data:
     - name: "ethernet1/1.3001"
-      vlan_id: 3001
       device: par-colo1-xfw-01
-      parent_interface: ["par-colo1-xfw-01", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "par-colo1-xfw-01:ethernet1/1.3001"
+            vlan_id: 3001
+            parent: ["par-colo1-xfw-01", "ethernet1/1"]
       role: service
       status: active
       ip_address:
@@ -17,9 +21,13 @@ spec:
           address: "100.66.0.29/29"
           ip_namespace: "default"
     - name: "ethernet1/1.3001"
-      vlan_id: 3001
       device: par-colo1-xfw-02
-      parent_interface: ["par-colo1-xfw-02", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "par-colo1-xfw-02:ethernet1/1.3001"
+            vlan_id: 3001
+            parent: ["par-colo1-xfw-02", "ethernet1/1"]
       role: service
       status: active
       ip_address:
@@ -27,9 +35,13 @@ spec:
           address: "100.66.0.30/29"
           ip_namespace: "default"
     - name: "ethernet1/1.3401"
-      vlan_id: 3401
       device: par-colo1-xfw-01
-      parent_interface: ["par-colo1-xfw-01", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "par-colo1-xfw-01:ethernet1/1.3401"
+            vlan_id: 3401
+            parent: ["par-colo1-xfw-01", "ethernet1/1"]
       role: service
       status: active
       ip_address:
@@ -37,9 +49,13 @@ spec:
           address: "100.66.32.29/29"
           ip_namespace: "default"
     - name: "ethernet1/1.3401"
-      vlan_id: 3401
       device: par-colo1-xfw-02
-      parent_interface: ["par-colo1-xfw-02", "ethernet1/1"]
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "par-colo1-xfw-02:ethernet1/1.3401"
+            vlan_id: 3401
+            parent: ["par-colo1-xfw-02", "ethernet1/1"]
       role: service
       status: active
       ip_address:

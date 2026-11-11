@@ -12,64 +12,42 @@ from utils.data_cleaning import clean_data, get_data
 class TestValueExtraction:
     """Test extraction of various GraphQL wrapper patterns."""
 
-    def test_extract_value_field(self) -> None:
-        """Test extraction of value field."""
-        data = {"name": {"value": "DC-1"}}
-        result = clean_data(data)
-        assert result == {"name": "DC-1"}
-
-    def test_extract_count_field(self) -> None:
-        """Test extraction of count field from aggregations."""
-        data = {"spine_count": {"count": 4}}
-        result = clean_data(data)
-        assert result == {"spine_count": 4}
-
-    def test_extract_id_field(self) -> None:
-        """Test extraction of id field."""
-        data = {"device": {"id": "123e4567-e89b-12d3-a456-426614174000"}}
-        result = clean_data(data)
-        assert result == {"device": "123e4567-e89b-12d3-a456-426614174000"}
-
-    def test_extract_node_field(self) -> None:
-        """Test unwrapping node field."""
-        data = {"device": {"node": {"name": {"value": "leaf-01"}}}}
-        result = clean_data(data)
-        assert result == {"device": {"name": "leaf-01"}}
-
-    def test_extract_edges_field(self) -> None:
-        """Test unwrapping edges field."""
-        data = {
-            "interfaces": {
-                "edges": [
-                    {"node": {"name": {"value": "eth0"}}},
-                    {"node": {"name": {"value": "eth1"}}},
-                ]
-            }
-        }
-        result = clean_data(data)
-        assert result == {"interfaces": [{"name": "eth0"}, {"name": "eth1"}]}
+    @pytest.mark.parametrize(
+        ("data", "expected"),
+        [
+            pytest.param({"name": {"value": "DC-1"}}, {"name": "DC-1"}, id="value"),
+            pytest.param({"spine_count": {"count": 4}}, {"spine_count": 4}, id="count"),
+            pytest.param(
+                {"device": {"id": "123e4567-e89b-12d3-a456-426614174000"}},
+                {"device": "123e4567-e89b-12d3-a456-426614174000"},
+                id="id",
+            ),
+            pytest.param(
+                {"device": {"node": {"name": {"value": "leaf-01"}}}}, {"device": {"name": "leaf-01"}}, id="node"
+            ),
+            pytest.param(
+                {
+                    "interfaces": {
+                        "edges": [{"node": {"name": {"value": "eth0"}}}, {"node": {"name": {"value": "eth1"}}}]
+                    }
+                },
+                {"interfaces": [{"name": "eth0"}, {"name": "eth1"}]},
+                id="edges",
+            ),
+        ],
+    )
+    def test_wrapper_is_unwrapped(self, data: dict, expected: dict) -> None:
+        """value, count, id, node and edges wrappers are each unwrapped to their content."""
+        assert clean_data(data) == expected
 
 
 class TestEdgeCaseValues:
     """Test handling of special values (None, 0, empty string)."""
 
-    def test_handle_zero_value(self) -> None:
-        """Test that value of 0 is not treated as falsy."""
-        data = {"count": {"value": 0}}
-        result = clean_data(data)
-        assert result == {"count": 0}
-
-    def test_handle_none_value(self) -> None:
-        """Test that None values are preserved."""
-        data = {"optional_field": {"value": None}}
-        result = clean_data(data)
-        assert result == {"optional_field": None}
-
-    def test_value_wrapper_with_empty_string(self) -> None:
-        """Test clean_data with value wrapper containing empty string."""
-        data = {"field": {"value": ""}}
-        result = clean_data(data)
-        assert result == {"field": ""}
+    @pytest.mark.parametrize("value", [0, None, ""], ids=["zero", "none", "empty-string"])
+    def test_falsy_value_is_preserved(self, value: object) -> None:
+        """A falsy ``value`` is kept as it is, never treated as missing."""
+        assert clean_data({"field": {"value": value}}) == {"field": value}
 
 
 class TestComplexStructures:
@@ -150,28 +128,23 @@ class TestComplexStructures:
 class TestWrapperPriority:
     """Test that wrappers are processed in correct priority order."""
 
-    def test_priority_value_over_count(self) -> None:
-        """Test that value takes priority over count when both present."""
-        data = {"field": {"value": 5, "count": 10}}
-        result = clean_data(data)
-        assert result == {"field": 5}
-
-    def test_priority_value_over_id(self) -> None:
-        """Test that value takes priority over id when both present."""
-        data = {"field": {"value": "name-value", "id": "some-id"}}
-        result = clean_data(data)
-        assert result == {"field": "name-value"}
-
-    def test_priority_edges_over_count(self) -> None:
-        """Test that edges take priority over count when both present."""
-        data = {
-            "interfaces": {
-                "count": 48,
-                "edges": [{"node": {"name": {"value": "eth0"}}}],
-            }
-        }
-        result = clean_data(data)
-        assert result == {"interfaces": [{"name": "eth0"}]}
+    @pytest.mark.parametrize(
+        ("data", "expected"),
+        [
+            pytest.param({"field": {"value": 5, "count": 10}}, {"field": 5}, id="value-over-count"),
+            pytest.param(
+                {"field": {"value": "name-value", "id": "some-id"}}, {"field": "name-value"}, id="value-over-id"
+            ),
+            pytest.param(
+                {"interfaces": {"count": 48, "edges": [{"node": {"name": {"value": "eth0"}}}]}},
+                {"interfaces": [{"name": "eth0"}]},
+                id="edges-over-count",
+            ),
+        ],
+    )
+    def test_priority(self, data: dict, expected: dict) -> None:
+        """value wins over count and id, edges over count, when both are present."""
+        assert clean_data(data) == expected
 
 
 class TestGraphQLTypenames:
@@ -388,33 +361,25 @@ class TestRealGraphQLResponses:
 class TestGetData:
     """Test cases for get_data function."""
 
-    def test_extract_first_value_from_dict(self) -> None:
-        """Test extraction of first value from cleaned dictionary."""
-        data = {"DcimDevice": {"edges": [{"node": {"name": {"value": "leaf-01"}}}]}}
-        result = get_data(data)
-        assert result == {"name": "leaf-01"}
+    @pytest.mark.parametrize(
+        ("data", "expected"),
+        [
+            pytest.param(
+                {"DcimDevice": {"edges": [{"node": {"name": {"value": "leaf-01"}}}]}}, {"name": "leaf-01"}, id="edges"
+            ),
+            pytest.param({"TopologyDataCenter": [{"name": {"value": "DC-1"}}]}, {"name": "DC-1"}, id="list"),
+            pytest.param({"Device": {"name": {"value": "spine-01"}}}, {"name": "spine-01"}, id="single-value"),
+        ],
+    )
+    def test_extract_first_item(self, data: dict, expected: dict) -> None:
+        """The first value of the cleaned response, or the first item when it is a list."""
+        assert get_data(data) == expected
 
-    def test_extract_first_item_from_list(self) -> None:
-        """Test extraction when first value is a list."""
-        data = {"TopologyDataCenter": [{"name": {"value": "DC-1"}}]}
-        result = get_data(data)
-        assert result == {"name": "DC-1"}
-
-    def test_extract_single_value(self) -> None:
-        """Test extraction of single non-list value."""
-        data = {"Device": {"name": {"value": "spine-01"}}}
-        result = get_data(data)
-        assert result == {"name": "spine-01"}
-
-    def test_raise_on_empty_dict(self) -> None:
-        """Test that ValueError is raised on empty dictionary."""
+    @pytest.mark.parametrize("data", [{}, [1, 2, 3]], ids=["empty-dict", "non-dict"])
+    def test_raise_on_no_non_empty_dict(self, data: object) -> None:
+        """An empty dictionary or a non-dictionary input raises ValueError."""
         with pytest.raises(ValueError, match="did not return a non-empty dictionary"):
-            get_data({})
-
-    def test_raise_on_non_dict(self) -> None:
-        """Test that ValueError is raised on non-dictionary input."""
-        with pytest.raises(ValueError, match="did not return a non-empty dictionary"):
-            get_data([1, 2, 3])
+            get_data(data)
 
     def test_complex_query_response(self) -> None:
         """Test realistic GraphQL query response."""

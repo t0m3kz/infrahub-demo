@@ -12,18 +12,18 @@ spec:
     # the two customers' segments, and every other flow between them is denied
     # (transforms/helpers/group_policy.py).
     #
-    # design M_DC: no dedicated firewall, so DC10's shared context serves it,
+    # design M: no dedicated firewall, so DC10's shared context serves it,
     # like C005-P-DC10.
     - owner: "C008"
       environment: "p"
       infrastructure_orchestrator: github_actions
       parent: "DC10"
-      design: "M_DC"
+      design: "M"
       member_of_groups: [customer_deployments_dc]
     - owner: "C008"
       environment: "p"
       parent: "DC12"
-      design: "S_DC"
+      design: "S"
       member_of_groups: [customer_deployments_dc]
     # Development footprint next to the production one (C008-P-DC12). The
     # inventory-sync dev VMs run on the shared DC12 hosts owned by the
@@ -33,5 +33,5 @@ spec:
     - owner: "C008"
       environment: "d"
       parent: "DC12"
-      design: "M_DC"
+      design: "M"
       member_of_groups: [customer_deployments_dc]

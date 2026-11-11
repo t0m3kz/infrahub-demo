@@ -5,15 +5,18 @@ spec:
   kind: DcimVirtualInterface
   data:
     - name: "Ethernet1/13.1000"
-      vlan_id: 1000
       device: "eg-fr201"
       role: cloud
       status: active
       description: "PROD handoff to the AWS Direct Connect VIF (C001)"
-      parent_interface: ["eg-fr201", "Ethernet1/13"]
-      # Its VRF instance, authored like the rest of this handoff (add_virtual_circuit builds nothing for a cloud end):
-      # a handoff end needs its own VRF, the circuit's `vrf` only validates it (utils/routing_domain.py).
       capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "eg-fr201:Ethernet1/13.1000"
+            vlan_id: 1000
+            parent: ["eg-fr201", "Ethernet1/13"]
+        # Its VRF instance, authored like the rest of this handoff (add_virtual_circuit builds nothing for a cloud end):
+        # a handoff end needs its own VRF, the circuit's `vrf` only validates it (utils/routing_domain.py).
         - kind: ManagedVRF
           data: {name: "fr-vrf-prod", deployment: FR, security_zone: "PROD"}
       ip_address:

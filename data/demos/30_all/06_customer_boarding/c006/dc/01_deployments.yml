@@ -9,5 +9,5 @@ spec:
       environment: "p"
       infrastructure_orchestrator: github_actions
       parent: "DC11"
-      design: "S_DC"
+      design: "S"
       member_of_groups: [customer_deployments_dc]

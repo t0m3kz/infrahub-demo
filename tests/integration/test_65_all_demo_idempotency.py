@@ -66,6 +66,8 @@ RERUN_GENERATORS = {
     "add_customer_routing_tag": "customers",
     "add_customer_deployment_dc": "customer_deployments_dc",
     "add_customer_deployment_colocation": "customer_deployments_colocation",
+    "add_customer_deployment_cloud": "customer_deployments_cloud",
+    "add_cloud_attachment_range": "cloud_attachment_ranges",
     "add_application_orchestrator_routing": "app_applications",
     "add_customer_dc_orchestrator_routing": "customer_deployments_dc",
     "add_customer_colocation_orchestrator_routing": "customer_deployments_colocation",
@@ -183,8 +185,17 @@ query {
                       name { value }
                       role { value }
                       ... on DcimVirtualInterface {
-                        vlan_id { value }
-                        parent_interface { node { name { value } } }
+                        encapsulation_capabilities: capabilities {
+                          edges {
+                            node {
+                              __typename
+                              ... on ManagedInterfaceEncapsulation {
+                                vlan_id { value }
+                                parent { node { id __typename name { value } device { node { id } } } }
+                              }
+                            }
+                          }
+                        }
                         ip_address { node { id address { value } } }
                       }
                     }

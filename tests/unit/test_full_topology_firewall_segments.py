@@ -15,6 +15,7 @@ import yaml
 from checks.segment_placement import CheckSegmentPlacement
 from tests.integration.demo_data import BOOTSTRAP, declared, human_friendly_id, identity, name, object_templates
 from tests.smoke.fixture_builders.vrf import routing_vrf
+from tests.unit.encapsulation_helpers import raw_encapsulation
 from transforms.helpers.firewall_contexts import get_firewall_contexts
 from transforms.helpers.firewall_terminated import terminated_interfaces
 from transforms.helpers.ha import get_ha
@@ -95,6 +96,18 @@ def _segment(site: str) -> dict[str, Any]:
 def _segment_name(site: str) -> str:
     """Use the actual schema's computed-name implementation shared by other inventory tests."""
     return name(next(iter(declared("ManagedVxlanSegment", _site(site) / "05_firewall_tenant"))))
+
+
+def _encapsulation(interface: dict[str, Any]) -> dict[str, Any]:
+    """The authored ``ManagedInterfaceEncapsulation`` data of an interface object (``{}``: it rides on nothing)."""
+    return next(
+        (
+            cap["data"]
+            for cap in interface.get("capabilities") or []
+            if isinstance(cap, dict) and cap.get("kind") == "ManagedInterfaceEncapsulation"
+        ),
+        {},
+    )
 
 
 def _one(node: dict[str, Any]) -> dict[str, Any]:
@@ -203,14 +216,14 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
     leg = next(
         obj
         for obj in _items("DcimVirtualInterface", _site(site))
-        if obj["device"] == member and obj.get("vlan_id") == transit_vlan(context["vlan_id"], PROD_TYPE)
+        if obj["device"] == member and _encapsulation(obj).get("vlan_id") == transit_vlan(context["vlan_id"], PROD_TYPE)
     )
-    trunk = leg["parent_interface"]
+    trunk = _encapsulation(leg)["parent"]
     physical_trunk = trunk
     if site == "waw1":
         device = next(obj for obj in _items("DcimVirtualDevice", _site(site)) if obj["name"] == member)
         nic = next(obj for obj in device["interfaces"]["data"] if obj["name"] == trunk[1])
-        physical_trunk = nic["parent_interface"]
+        physical_trunk = _encapsulation(nic)["parent"]
         assert physical_trunk == [device["hosting_device"], "ethernet1/1"]
     cable = next(
         obj
@@ -256,7 +269,7 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
         "role": {"value": "uplink"},
     }
     if site == "waw1":
-        uplink["parent_interface"] = _one(cabled)
+        uplink.update(raw_encapsulation(None, cabled))
     else:
         uplink["cable"] = cabled["cable"]
     return {
@@ -281,9 +294,10 @@ def _raw_member(site: str, member: str) -> dict[str, Any]:
                 {
                     "zone_capabilities": _many([routing_vrf(zone_name)]),
                     "name": {"value": leg["name"]},
-                    "vlan_id": {"value": leg["vlan_id"]},
+                    **raw_encapsulation(
+                        _encapsulation(leg)["vlan_id"], {"name": {"value": trunk[1]}, "device": _one({"id": member})}
+                    ),
                     "device": _one({"id": member}),
-                    "parent_interface": _one({"name": {"value": trunk[1]}, "device": _one({"id": member})}),
                     "ip_address": _one(
                         {
                             "address": {"value": address["data"]["address"]},
@@ -339,7 +353,7 @@ def test_both_cabled_firewall_members_render_the_vip_not_a_fabric_gateway(site: 
         uplink = no_cable["interfaces"]["edges"][0]["node"]
         if site == "waw1":
             assert "cable" not in uplink
-            uplink["parent_interface"]["node"]["cable"] = None
+            uplink["encapsulation_capabilities"]["edges"][0]["node"]["parent"]["node"]["cable"] = None
         else:
             uplink["cable"] = None
         assert render_terminated_from_query(no_cable) == []
@@ -395,7 +409,7 @@ def test_vm_port_group_and_all_upstream_trunks_keep_the_physical_host_path(site:
     assert vm["hosting_device"] in cluster["hosts"]
     (nic,) = vm["interfaces"]
     assert nic["kind"] == "DcimVirtualInterface"
-    parent = nic["data"]["parent_interface"]
+    parent = _encapsulation(nic["data"])["parent"]
     assert parent == [vm["hosting_device"], "eno1"]
     assert nic["data"]["ip_address"]["data"]["address"] == f"{ip_network(prefix)[11]}/24"
     group = next(pg for pg in switch["port_groups"]["data"] if pg["segment"] == segment)
@@ -420,7 +434,7 @@ def test_vm_port_group_and_all_upstream_trunks_keep_the_physical_host_path(site:
             for item in _items("DcimPhysicalInterface", _DATA)
             if (item.get("device"), item.get("name")) == (f"{site}-bl-{index}", "Ethernet1/25")
         ]
-        assert not any({"ip_address", "parent_interface"} & item.keys() for item in border)
+        assert not any("ip_address" in item or _encapsulation(item) for item in border)
 
 
 @pytest.mark.parametrize("site", _SITES)

@@ -12,7 +12,7 @@ from typing import Any
 import yaml
 
 from tests.integration.demo_data import ROOT
-from utils.fabric_roles import EXTERNAL_FIREWALL_ROLE, FIREWALL_ROLES, INTERNAL_FIREWALL_ROLE
+from utils.fabric_roles import FIREWALL_ROLES
 
 
 def _role_choices(path: str, kind: str) -> set[str]:
@@ -33,11 +33,6 @@ _ELEMENT = _role_choices("schemas/extensions/topology/topology_dc.yml", "Element
 def test_both_firewall_roles_are_choices_of_the_device_and_of_the_design_element() -> None:
     for choices in (_DEVICE, _ELEMENT):
         assert FIREWALL_ROLES <= choices
-
-
-def test_the_old_firewall_role_is_gone_from_both_dropdowns() -> None:
-    assert INTERNAL_FIREWALL_ROLE == "internal-firewall" and EXTERNAL_FIREWALL_ROLE == "external-firewall"
-    assert "firewall" not in _DEVICE and "firewall" not in _ELEMENT
 
 
 def test_every_role_of_a_bootstrap_design_element_is_a_choice() -> None:

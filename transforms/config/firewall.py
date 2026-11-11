@@ -1,6 +1,7 @@
 from typing import Any
 
 from transforms.common import BaseDeviceTransform
+from transforms.helpers.address_table import build_address_table
 from transforms.helpers.addressing import sub_interface_parent
 from transforms.helpers.firewall import get_firewall_static_routes, get_firewall_zones, get_zone_policies
 from transforms.helpers.firewall_contexts import (
@@ -17,8 +18,9 @@ from utils.exchange_transit import (
     MANAGEMENT_TYPE,
     ZONE_BY_NS_TYPE,
 )
+from utils.interface_encapsulation import vlan_of
 from utils.routing_domain import interface_security_zone, interface_vrfs
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import Ipv6SegmentNotRenderedError, own_prefix, prefix_family, refuse_ipv6_segment
 from utils.service_contexts import leg_contexts
 
 DEFAULT_ROUTE = "0.0.0.0/0"
@@ -64,7 +66,7 @@ def _build_fw_interfaces(
             if seg.get("name") in seg_vlan and vlan_id is None:
                 vlan_id = seg_vlan[seg["name"]]
         if vlan_id is None and parent:
-            vlan_id = iface.get("vlan_id")
+            vlan_id = vlan_of(iface)
         context = leg_contexts.get(str(iface.get("name")))
         if context and not context.get("name"):
             raise ValueError(f"firewall interface {iface.get('name')!r} has an incomplete context owner")
@@ -93,7 +95,7 @@ def _segment_prefixes(zones_data: list[dict[str, Any]] | None) -> dict[str, tupl
     }
     for zone in zones_data or []:
         for segment in zone.get("network_segments") or []:
-            prefix = segment_prefix(segment)
+            prefix = own_prefix(segment)
             if segment.get("id") and prefix:
                 prefixes[segment["id"]] = (zone.get("name"), prefix)
     return prefixes
@@ -131,9 +133,11 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
         # A segment the pair terminates is connected to it: no route to the border leaves' gateway.
         if segment.get("id") in terminated:
             continue
+        # The transit legs are IPv4 (their pools, VIPs and anycast gateways): an IPv6 segment has no next hop to reach it.
+        refuse_ipv6_segment(segment, "the transit legs of a firewall context (IPv4 only)")
         root_zone, root_prefix = segment_prefixes.get(segment.get("id"), (None, None))
         # A referenced policy endpoint can supply the same segment's prefix.
-        prefix = segment_prefix(segment) or root_prefix
+        prefix = own_prefix(segment) or root_prefix
         zone = (segment.get("security_zone") or {}).get("name") or root_zone
         if not prefix:
             continue
@@ -152,8 +156,14 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
         zone_prefixes.update(
             prefix
             for segment in context.get("segments") or []
-            if (segment.get("security_zone") or {}).get("name") == leg["zone"] and (prefix := segment_prefix(segment))
+            if (segment.get("security_zone") or {}).get("name") == leg["zone"] and (prefix := own_prefix(segment))
         )
+        v6 = sorted(prefix for prefix in zone_prefixes if prefix_family(prefix) == "ipv6")
+        if v6:
+            raise Ipv6SegmentNotRenderedError(
+                f"Prefix {v6[0]}: IPv6 segments are not rendered by the transit legs of a firewall context (IPv4 only) "
+                "yet; refusing incomplete config"
+            )
         leg["prefixes"] = sorted(zone_prefixes)
 
     routes = [
@@ -261,7 +271,6 @@ class Firewall(BaseDeviceTransform):
             return self._no_platform_config(device)
 
         activations, contexts, root_policies_data, context_policies_data = self.collect_policies(device)
-
         ha = get_ha(device.get("capabilities"), device.get("interfaces"), device.get("name"))
         # A transit leg renders inside its context, not as a root interface.
         leg_interfaces = {leg["interface"] for context in contexts for leg in context["legs"]}
@@ -295,13 +304,18 @@ class Firewall(BaseDeviceTransform):
         # Contexts are visited by name; retain the environment order for equal-trust zones.
         zone_order = {name: rank for rank, name in enumerate(ZONE_BY_NS_TYPE.values())}
         zones.sort(key=lambda zone: (-zone["trust_level"], zone_order.get(zone["name"], 0)))
+        zone_policies = get_zone_policies(root_policies_data)
         config = self._build_config(device, platform_name)
         root_interfaces = [iface for iface in fw_interfaces if not iface.get("context_name")]
         config.update(
             {
                 "fw_interfaces": fw_interfaces,
                 "zones": zones,
-                "zone_policies": get_zone_policies(root_policies_data),
+                "zone_policies": zone_policies,
+                # Every prefix the zones and rules name, once (transforms/helpers/address_table.py).
+                "address_table": build_address_table(
+                    zones, [*zone_policies, *(p for context in contexts for p in context["policies"])]
+                ),
                 "static_routes": get_firewall_static_routes(root_interfaces, zones),
                 "default_vr_interfaces": _default_vr_interfaces(root_interfaces),
                 "ha": ha,

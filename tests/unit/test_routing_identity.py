@@ -161,10 +161,17 @@ class TestOrigination:
             {
                 "name": "seg-100",
                 "vrf": "VRF_A",
+                "family": "ipv4",
                 "prefix": "10.100.0.0/24",
                 "communities": ["64496:5", "64497:12"],
             }
         ]
+
+    def test_an_ipv6_segment_originates_its_prefix_in_the_ipv6_family(self) -> None:
+        """The entry carries the family so the templates write an `ipv6 prefix-list` for it."""
+        segment = _raw_segment("seg-v6", prefix="fd5a:1760:0:100::/64", address="fd5a:1760:0:100::1/64")
+        (entry,) = get_origination(_activations(segment), ["VRF_A"])
+        assert (entry["family"], entry["prefix"]) == ("ipv6", "fd5a:1760:0:100::/64")
 
     def test_an_untagged_segment_originates_nothing(self) -> None:
         """No tag, no entry: the device renders exactly as before."""
@@ -196,13 +203,12 @@ class TestOrigination:
         "segment",
         [
             _raw_segment("seg-nogw", prefix=None),
-            _raw_segment("seg-v6", prefix="2001:db8::/64", address="2001:db8::1/64"),
             _raw_segment("seg-other-vrf", zone="VRF_B"),
         ],
         ids=lambda segment: segment["name"]["value"],
     )
     def test_a_segment_the_fabric_does_not_route_into_evpn_is_skipped(self, segment: dict[str, Any]) -> None:
-        """Gateway-less, IPv6 and unrealized-zone segments have no SVI export."""
+        """Gateway-less and unrealized-zone segments have no SVI export."""
         assert get_origination(_activations(segment), ["VRF_A"]) == []
 
     def test_the_vrfs_are_the_ones_that_redistribute_into_evpn(self) -> None:
