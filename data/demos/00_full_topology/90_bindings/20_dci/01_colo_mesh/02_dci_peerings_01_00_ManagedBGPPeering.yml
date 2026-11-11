@@ -10,6 +10,7 @@ spec:
       description: "DCI EVPN multihop ktw1-bl-01 <-> fra-colo1-edge-01 over ktw1-dci-a-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "ktw1-dci-a-fra1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -20,6 +21,7 @@ spec:
       description: "DCI EVPN multihop ktw1-bl-02 <-> fra-colo1-edge-01 over ktw1-dci-b-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "ktw1-dci-b-fra1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -30,6 +32,7 @@ spec:
       description: "DCI EVPN multihop ktw1-bl-01 <-> ams-colo1-edge-01 over ktw1-dci-a-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "ktw1-dci-a-ams1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -40,6 +43,7 @@ spec:
       description: "DCI EVPN multihop ktw1-bl-02 <-> ams-colo1-edge-01 over ktw1-dci-b-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "ktw1-dci-b-ams1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -50,6 +54,7 @@ spec:
       description: "DCI EVPN multihop waw1-bl-01 <-> par-colo1-edge-01 over waw1-dci-a-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "waw1-dci-a-par1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -60,6 +65,7 @@ spec:
       description: "DCI EVPN multihop waw1-bl-02 <-> par-colo1-edge-01 over waw1-dci-b-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "waw1-dci-b-par1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -70,6 +76,7 @@ spec:
       description: "DCI EVPN multihop waw1-bl-01 <-> fra-colo1-edge-01 over waw1-dci-a-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "waw1-dci-a-fra1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -80,6 +87,7 @@ spec:
       description: "DCI EVPN multihop waw1-bl-02 <-> fra-colo1-edge-01 over waw1-dci-b-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "waw1-dci-b-fra1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -90,6 +98,7 @@ spec:
       description: "DCI EVPN multihop waw1-bl-01 <-> ams-colo1-edge-01 over waw1-dci-a-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "waw1-dci-a-ams1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -100,6 +109,7 @@ spec:
       description: "DCI EVPN multihop waw1-bl-02 <-> ams-colo1-edge-01 over waw1-dci-b-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "waw1-dci-b-ams1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -110,6 +120,7 @@ spec:
       description: "DCI EVPN multihop gdn1-bl-01 <-> par-colo1-edge-01 over gdn1-dci-a-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "gdn1-dci-a-par1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -120,6 +131,7 @@ spec:
       description: "DCI EVPN multihop gdn1-bl-02 <-> par-colo1-edge-01 over gdn1-dci-b-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "gdn1-dci-b-par1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -130,6 +142,7 @@ spec:
       description: "DCI EVPN multihop gdn1-bl-01 <-> fra-colo1-edge-01 over gdn1-dci-a-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "gdn1-dci-a-fra1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -140,6 +153,7 @@ spec:
       description: "DCI EVPN multihop gdn1-bl-02 <-> fra-colo1-edge-01 over gdn1-dci-b-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "gdn1-dci-b-fra1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -150,6 +164,7 @@ spec:
       description: "DCI EVPN multihop gdn1-bl-01 <-> ams-colo1-edge-01 over gdn1-dci-a-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "gdn1-dci-a-ams1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -160,6 +175,7 @@ spec:
       description: "DCI EVPN multihop gdn1-bl-02 <-> ams-colo1-edge-01 over gdn1-dci-b-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "gdn1-dci-b-ams1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -170,6 +186,7 @@ spec:
       description: "DCI EVPN multihop par-colo1-edge-01 <-> fra-colo1-edge-01 over par1-dci-a-fra1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "par1-dci-a-fra1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -180,6 +197,7 @@ spec:
       description: "DCI EVPN multihop par-colo1-edge-01 <-> ams-colo1-edge-01 over par1-dci-a-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "par1-dci-a-ams1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -190,6 +208,7 @@ spec:
       description: "DCI EVPN multihop fra-colo1-edge-01 <-> ams-colo1-edge-01 over fra1-dci-a-ams1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "fra1-dci-a-ams1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]

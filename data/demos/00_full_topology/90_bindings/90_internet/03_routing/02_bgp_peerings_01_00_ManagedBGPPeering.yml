@@ -8,6 +8,7 @@ spec:
       description: "eBGP transit of the cage to the second ISP: default route in, our public prefixes out"
       session_type: EBGP
       peering_role: regular
+      password: "bgp-par1-edge01-isp-b-key"
       address_families:
         - ["ipv4", "unicast"]
       bgp_processes:
