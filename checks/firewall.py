@@ -1,35 +1,22 @@
-"""Validate the policy rules a firewall enforces."""
+"""Validate what a firewall pair is set up with: its exchange legs, SNAT addresses and context members."""
 
 from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from transforms.config.firewall import Firewall, read_rules
-from transforms.helpers.policy import is_internet_destination
+from transforms.config.firewall import Firewall
 
 from .common import validate_context_members, validate_exchange_gateways, validate_snat_addresses
 
 
 class CheckFirewall(InfrahubCheck):
-    """Validate the rules this firewall gets — the same ones its config renders
-    (Firewall.collect_policies: its served segments' policies and the rules
-    into them, per context). Every rule lives in its source segment's policy,
-    so a rule whose source is another segment is an error, as is a rule with
-    no destination (segment, prefix, IP or the internet zone). A rule's zone is its
-    segment's security_zone (mandatory in the schema). A rule to the
-    internet zone must not be apply_on_switch. Its exchange legs
-    (checks/common.py validate_exchange_gateways), SNAT addresses
-    (validate_snat_addresses) and the members of its contexts (validate_context_members: exactly
-    its HA pair) are validated too."""
+    """Validate the infrastructure of a firewall: its exchange legs (checks/common.py validate_exchange_gateways),
+    SNAT addresses (validate_snat_addresses) and the members of its contexts (validate_context_members: exactly its
+    HA pair). The policy rules it enforces are judged once, for every firewall and switch alike, by
+    ``checks/segment_security.py`` (``_validate_policy_rules``): a rule is valid or not wherever it is rendered, so
+    this check no longer reads them."""
 
     query = "firewall_config"
-
-    async def run(self, data: dict | None = None) -> bool:
-        """Fill in the served segments' rules (the query selects their ids) before ``validate`` reads them."""
-        if not data:
-            data = await self.collect_data()
-        await read_rules(self, data)
-        return await super().run(data=data)
 
     def validate(self, data: Any) -> None:
         device, _, _ = Firewall._device_and_platform(data)
@@ -39,49 +26,3 @@ class CheckFirewall(InfrahubCheck):
             *validate_context_members(device),
         ]:
             self.log_error(message=error)
-        # collect_policies only reads class attributes, no client: the check
-        # validates exactly what the transform places, not a second copy.
-        _, _, root, by_context = Firewall.__new__(Firewall).collect_policies(device)
-
-        seen: set[str] = set()
-        for policy in [*root, *(policy for policies in by_context.values() for policy in policies)]:
-            if not policy.get("enabled", True):
-                continue
-            policy_name = policy.get("name", "<unnamed>")
-            policy_segment = (policy.get("segment") or {}).get("id")
-            for rule in policy.get("rules") or []:
-                rule_id = str(rule.get("id") or (policy_name, rule.get("name")))
-                if rule.get("disabled") or rule_id in seen:
-                    continue
-                seen.add(rule_id)
-                self._validate_rule(rule, policy_name, policy_segment)
-
-    def _validate_rule(self, rule: dict[str, Any], policy_name: str, policy_segment: str | None) -> None:
-        rule_name = rule.get("name", "<unnamed>")
-        source = rule.get("source_segment") or {}
-        if not policy_segment or source.get("id") != policy_segment:
-            self.log_error(
-                message=(
-                    f"Policy '{policy_name}' rule '{rule_name}': source segment "
-                    f"'{source.get('name') or source.get('id') or '<none>'}' is not the policy's segment — "
-                    "a rule belongs in its source segment's policy"
-                )
-            )
-        destination = rule.get("destination_segment") or {}
-        if not (
-            destination.get("id")
-            or rule.get("destination_zone")
-            or rule.get("destination_prefixes")
-            or rule.get("destination_ip_addresses")
-        ):
-            self.log_error(
-                message=(f"Policy '{policy_name}' rule '{rule_name}' has no destination (segment, zone, IP, or prefix)")
-            )
-        if rule.get("apply_on_switch") and is_internet_destination(rule):
-            self.log_error(
-                message=(
-                    f"Policy '{policy_name}' rule '{rule_name}': apply_on_switch to the internet zone — "
-                    "the leaf ACL can only approximate it by denying the internal ranges first, and it would "
-                    "force the whole ACL of a firewalled segment onto the switch"
-                )
-            )

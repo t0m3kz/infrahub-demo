@@ -55,6 +55,9 @@ query segment_security {
         disabled {
           value
         }
+        apply_on_switch {
+          value
+        }
         policy {
           node {
             id
@@ -63,6 +66,11 @@ query segment_security {
             }
             enabled {
               value
+            }
+            segment {
+              node {
+                id
+              }
             }
           }
         }

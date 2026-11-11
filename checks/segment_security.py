@@ -8,7 +8,7 @@ from typing import Any
 from transforms.helpers.bgp_cloud import CloudLeg, cloud_legs
 from transforms.helpers.bgp_external import registered_by_attachment
 from transforms.helpers.group_policy import get_vrf_contracts, rule_groups, segment_groups
-from transforms.helpers.policy import rule_enabled, segment_flows
+from transforms.helpers.policy import is_internet_destination, rule_enabled, segment_flows
 from utils.circuit_underlay import SESSION_CIRCUIT
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import (
@@ -90,6 +90,7 @@ class CheckSegmentSecurity(WarningCheck):
             self._validate_gateway_zone(segment)
         self._validate_unique_names(segments)
         self._validate_rule_endpoints(segments, rules)
+        self._validate_policy_rules(rules)
         self._validate_environment_separation(rules)
         self._validate_selector_zones(rules)
         self._validate_rule_destinations(rules)
@@ -170,6 +171,47 @@ class CheckSegmentSecurity(WarningCheck):
                     message=(
                         f"rule '{rule.get('name', rule.get('id'))}': {side} segment "
                         f"'{segment.get('name', endpoint['id'])}' resolves to no prefix — it would render as any"
+                    )
+                )
+
+    def _validate_policy_rules(self, rules: list[dict[str, Any]]) -> None:
+        """What a rule must hold wherever it is rendered: the one place for these (the firewall check judged them too).
+
+        * A rule lives in its source segment's policy: a policy that names a segment holds only rules whose source is
+          that segment. A policy with no segment holds the rules the load balancer generator writes (their source is a
+          prefix), so it is not judged.
+        * A rule has a destination: a segment, the internet zone, a prefix or an address.
+        * A rule to the internet zone is not ``apply_on_switch``: the leaf ACL can only approximate it by denying the
+          internal ranges first, and it would force the whole ACL of a firewalled segment onto the switch.
+        """
+        for rule in rules:
+            if not rule_enabled(rule):
+                continue
+            name = rule.get("name", rule.get("id"))
+            policy = rule.get("policy") or {}
+            policy_segment = (policy.get("segment") or {}).get("id")
+            source = rule.get("source_segment") or {}
+            if policy_segment and source.get("id") != policy_segment:
+                self.log_error(
+                    message=(
+                        f"Policy '{policy.get('name', policy.get('id'))}' rule '{name}': source segment "
+                        f"'{source.get('name') or source.get('id') or '<none>'}' is not the policy's segment — "
+                        "a rule belongs in its source segment's policy"
+                    )
+                )
+            if not (
+                (rule.get("destination_segment") or {}).get("id")
+                or rule.get("destination_zone")
+                or rule.get("destination_prefixes")
+                or rule.get("destination_ip_addresses")
+            ):
+                self.log_error(message=f"rule '{name}' has no destination (segment, zone, IP, or prefix)")
+            if rule.get("apply_on_switch") and is_internet_destination(rule):
+                self.log_error(
+                    message=(
+                        f"rule '{name}': apply_on_switch to the internet zone — the leaf ACL can only approximate it "
+                        "by denying the internal ranges first, and it would force the whole ACL of a firewalled "
+                        "segment onto the switch"
                     )
                 )
 
