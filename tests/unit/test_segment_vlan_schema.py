@@ -101,8 +101,9 @@ class TestRowIsAChildOfItsSwitchUnderTheSegmentDeployment:
 
 class TestTheRowPointsAtItsDevice:
     def test_the_row_has_a_mandatory_device_and_no_svi_link(self, segment_schema: dict[str, Any]) -> None:
-        """The SVI of a row is found by (device, ``Vlan<vlan_id>``): no edge links them in either direction (a Component
-        under a row whose device is its Parent breaks the server's object-template walk)."""
+        """The SVI is a member of its row through the row's existing interface edge, so the row has no relationship of
+        its own to it and DcimVirtualInterface is not extended (a Component under a row whose device is its Parent
+        breaks the server's object-template walk)."""
         row = _node(segment_schema, "SegmentVlan")
 
         device = _relationship(row, "device")

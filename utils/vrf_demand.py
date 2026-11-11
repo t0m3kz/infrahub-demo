@@ -38,6 +38,7 @@ from utils.fabric_roles import BORDER_ROLES
 from utils.limits import DEFAULT_NAMESPACE, GROUP_PROVIDER_STUBS
 from utils.routing_domain import VRF_KIND, interface_security_zone, interface_vrfs
 from utils.segment_addressing import hosting_deployment, l2_only_on, routed_segment_namespace
+from utils.segment_vlan import ROW_KIND, svi_rows
 from utils.service_contexts import border_contexts, service_footprints
 
 PBR_KIND = "ManagedPBR"
@@ -210,11 +211,12 @@ class RoutedRow:
 
 @dataclass(frozen=True)
 class SviFacts:
-    """One role-svi interface of the device. It has no link to its row: the row it realizes is the routed row of
-    the device whose ``svi_name`` it bears (``DeviceVrfFacts.desired_svis``)."""
+    """One role-svi interface of the device. It is a member of the VLAN row it realizes (the row's interface edge,
+    ``row_ids``): the row is read from the membership, never from the name ``Vlan<vlan_id>``."""
 
     id: str
     name: str
+    row_ids: tuple[str, ...]
     vrf_id: str | None
     vrf_namespace: str | None
     vrf_deployment_id: str | None
@@ -332,10 +334,16 @@ class DeviceVrfFacts:
         return any(self.pbr_footprints_by_name().values())
 
     def desired_svis(self) -> dict[str, RoutedRow]:
-        """``Vlan<id>`` -> the routed row it realizes; empty for a device that carries no VRF."""
+        """``Vlan<id>`` -> the routed row it realizes; empty for a device that carries no VRF. The name is the one an
+        SVI is CREATED with: an existing SVI is matched to its row by membership (``svi_row``), not by this name."""
         if not self.carries_vrfs:
             return {}
         return {svi_name(row.vlan_id): row for row in sorted(self.routed_rows, key=lambda row: row.vlan_id)}
+
+    def svi_row(self, svi: SviFacts) -> RoutedRow | None:
+        """The routed row the SVI is a member of (lowest VLAN when it is a member of several), None when it is a
+        member of none: the SVI realizes nothing."""
+        return next((row for row in self.desired_svis().values() if row.id in svi.row_ids), None)
 
 
 def _routed_row(row: dict[str, Any], role: str | None) -> RoutedRow | None:
@@ -387,12 +395,13 @@ def _svi(iface: dict[str, Any]) -> SviFacts:
     return SviFacts(
         id=iface.get("id") or "",
         name=iface.get("name") or "",
+        row_ids=tuple(row["id"] for row in svi_rows(iface) if row.get("id")),
         vrf_id=vrf.get("id"),
         vrf_namespace=(vrf.get("security_zone") or {}).get("name"),
         vrf_deployment_id=(vrf.get("deployment") or {}).get("id"),
         address_id=(iface.get("ip_address") or {}).get("id"),
-        # Its VRF instance is the only capability an SVI may have (rule S4 judges the rest).
-        has_capabilities=any(cap.get("typename") != VRF_KIND for cap in capabilities),
+        # Its VRF instance and its row are the only capabilities an SVI may have (rule S4 judges the rest).
+        has_capabilities=any(cap.get("typename") not in (VRF_KIND, ROW_KIND) for cap in capabilities),
     )
 
 

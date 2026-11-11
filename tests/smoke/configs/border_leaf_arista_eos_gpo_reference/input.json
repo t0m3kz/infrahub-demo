@@ -1508,6 +1508,15 @@
                             }
                           }
                         }
+                      },
+                      {
+                        "node": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "fixture-row-110",
+                          "vlan_id": {
+                            "value": 110
+                          }
+                        }
                       }
                     ]
                   }
@@ -1563,6 +1572,15 @@
                                 "value": 60001
                               }
                             }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "fixture-row-120",
+                          "vlan_id": {
+                            "value": 120
                           }
                         }
                       }
@@ -1622,6 +1640,15 @@
                             }
                           }
                         }
+                      },
+                      {
+                        "node": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "fixture-row-130",
+                          "vlan_id": {
+                            "value": 130
+                          }
+                        }
                       }
                     ]
                   }
@@ -1679,6 +1706,15 @@
                             }
                           }
                         }
+                      },
+                      {
+                        "node": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "fixture-row-210",
+                          "vlan_id": {
+                            "value": 210
+                          }
+                        }
                       }
                     ]
                   }
@@ -1734,6 +1770,15 @@
                                 "value": 60000
                               }
                             }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "fixture-row-220",
+                          "vlan_id": {
+                            "value": 220
                           }
                         }
                       }

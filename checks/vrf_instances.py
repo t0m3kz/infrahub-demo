@@ -24,16 +24,18 @@ device, ``hosting_deployment``); every device of that topology that routes in th
 - (i) ERROR: the device steers a tenant SVI to a firewall (``DeviceVrfFacts.steers``) but has no ``ManagedPBR``: its
   config renders no PBR; WARNING: it has one and steers nothing (the next reconcile deletes it).
 
-Segment SVIs (``DcimVirtualInterface`` with role ``svi``, one per routed row of the device). An SVI has no link to its
-row: the row behind it is the routed row of its device whose VLAN its name ``Vlan<vlan_id>`` bears.
+Segment SVIs (``DcimVirtualInterface`` with role ``svi``, one per routed row of the device). An SVI is a member of the
+row it realizes (the row's interface edge, ``ManagedSegmentVlan.capabilities``): the row behind it is the routed row of
+its device it is a member of, never the one whose VLAN its name ``Vlan<vlan_id>`` bears. That the SVI is on the row's
+own switch and that a row has one SVI is checks/interface_layers.py (R6, R10).
 
-- S1 ERROR: each routed row of the device has an SVI named ``Vlan<vlan_id>``;
-- S2 WARNING: an SVI that no routed row of its device is behind (the row is gone or not routed), or any SVI left on a
-  decommissioned device (the VRF pass deletes it on its next run; S1, S3, S4 and S5 do not report a decommissioned
-  device);
+- S1 ERROR: each routed row of the device has an SVI that is a member of it;
+- S2 WARNING: an SVI that is a member of no routed row of its device (the row is gone, not routed, or the SVI joined
+  none), or any SVI left on a decommissioned device (the VRF pass deletes it on its next run; S1, S3, S4 and S5 do not
+  report a decommissioned device);
 - S3 ERROR: its VRF (the instance that lists it) is the instance of (the device's hosting deployment, the row's
   namespace) and the device is one of its members (it may be in none only for a ``default`` row);
-- S4 ERROR: it has no capability but its VRF;
+- S4 ERROR: it has no capability but its VRF and its row;
 - S5 WARNING: its address is its segment's anycast gateway (``segment.gateway``, the one address every SVI of the
   segment carries; the VRF pass sets it and follows a change of the gateway).
 """
@@ -185,26 +187,30 @@ def uncarried_instance_errors(facts: DeviceVrfFacts) -> list[str]:
 
 
 def svi_missing_errors(facts: DeviceVrfFacts) -> list[str]:
-    """S1 each routed row of the device has a role-svi interface ``Vlan<vlan_id>``."""
-    present = {svi.name for svi in facts.svis}
+    """S1 each routed row of the device has a role-svi interface that is a member of it."""
+    present = {row_id for svi in facts.svis for row_id in svi.row_ids}
     return [
-        f"SVI (S1): device '{facts.name}' has no svi interface '{name}' for its row of segment "
-        f"'{row.segment_name}' (VLAN {row.vlan_id}). Re-run add_vxlan_segment for the segment to converge it."
+        f"SVI (S1): device '{facts.name}' has no svi interface in its row of segment "
+        f"'{row.segment_name}' (VLAN {row.vlan_id}, SVI '{name}'). Re-run add_vxlan_segment for the segment to "
+        "converge it."
         for name, row in facts.desired_svis().items()
-        if name not in present
+        if row.id not in present
     ]
 
 
 def svi_orphan_warnings(facts: DeviceVrfFacts) -> list[str]:
-    """S2 an SVI that no routed row of its device is behind, or any SVI of a decommissioned device."""
+    """S2 an SVI that is a member of no routed row of its device, or any SVI of a decommissioned device."""
     decommissioned = _decommissioned(facts)
-    desired = facts.desired_svis()
     return [
         f"SVI (S2): svi interface '{svi.name}' on device '{facts.name}' "
-        + ("is left on a decommissioned device" if decommissioned else "has no routed VLAN row of its device behind it")
+        + (
+            "is left on a decommissioned device"
+            if decommissioned
+            else "is a member of no routed VLAN row of its device"
+        )
         + ". The VRF pass deletes it on its next run, or delete it."
         for svi in facts.svis
-        if decommissioned or svi.name not in desired
+        if decommissioned or facts.svi_row(svi) is None
     ]
 
 
@@ -237,10 +243,9 @@ def unneeded_pbr_warnings(facts: DeviceVrfFacts) -> list[str]:
 def svi_vrf_errors(facts: DeviceVrfFacts) -> list[str]:
     """S3 the SVI is in a VRF (unless the row is ``default``), the instance of (the device's hosting deployment, the
     row's namespace), which the device is a member of."""
-    rows = facts.desired_svis()
     errors = []
     for svi in () if _decommissioned(facts) else facts.svis:
-        row = rows.get(svi.name)
+        row = facts.svi_row(svi)
         if row is None:
             continue
         where = f"svi interface '{svi.name}' on device '{facts.name}'"
@@ -269,12 +274,12 @@ def svi_vrf_errors(facts: DeviceVrfFacts) -> list[str]:
 
 
 def svi_content_errors(facts: DeviceVrfFacts) -> list[str]:
-    """S4 an SVI has no capability but its VRF (a decommissioned device's leftovers are S2's warning)."""
+    """S4 an SVI has no capability but its VRF and its row (a decommissioned device's leftovers are S2's warning)."""
     if _decommissioned(facts):
         return []
     return [
         f"SVI (S4): svi interface '{svi.name}' on device '{facts.name}' has a capability other than its VRF "
-        "(a port carries the segment, not its SVI). Remove it."
+        "and its row (a port carries the segment, not its SVI). Remove it."
         for svi in facts.svis
         if svi.has_capabilities
     ]
@@ -284,14 +289,13 @@ def svi_address_warnings(facts: DeviceVrfFacts) -> list[str]:
     """S5 an SVI carries its segment's anycast gateway (an SVI with no row behind it is S2's warning)."""
     if _decommissioned(facts):
         return []
-    rows = facts.desired_svis()
     return [
         f"SVI (S5): svi interface '{svi.name}' on device '{facts.name}' "
         + ("has no address" if svi.address_id is None else "has an address that is not")
         + f" the anycast gateway of segment '{row.segment_name}'. The VRF pass sets it on its next run "
         "(re-run add_vxlan_segment for the segment)."
         for svi in facts.svis
-        if (row := rows.get(svi.name)) is not None and svi.address_id != row.gateway_id
+        if (row := facts.svi_row(svi)) is not None and svi.address_id != row.gateway_id
     ]
 
 

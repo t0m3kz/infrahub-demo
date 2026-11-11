@@ -30,6 +30,12 @@ def in_vrf(vrf: Mapping[str, Any], *circuits: Mapping[str, Any]) -> dict[str, An
     return {"zone_capabilities": [{**vrf, "typename": "ManagedVRF"}, *circuits]}
 
 
+def svi_row(vlan_id: int) -> dict[str, Any]:
+    """The cleaned VLAN row a segment SVI is a member of (its ``zone_capabilities`` entry), for ``in_vrf``'s extras:
+    ``in_vrf(vrf, svi_row(100))``. The VLAN of the SVI is the row's, not the number in its name."""
+    return {"typename": "ManagedSegmentVlan", "id": f"row-{vlan_id}", "vlan_id": vlan_id}
+
+
 def make_loopback(name: str, device_id: str, role: str, ip: str, lb_id: str | None = None) -> MagicMock:
     """A loopback interface of ``name`` (id ``lb-<device_id>`` unless ``lb_id``) carrying ``<ip>/32``."""
     lb = MagicMock()

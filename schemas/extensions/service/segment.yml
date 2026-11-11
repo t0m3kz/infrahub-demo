@@ -202,6 +202,9 @@ nodes:
   # with its deployment too (the deployment's cascading `vlans`); a row of a device that no longer needs the segment
   # is deleted by the next reconcile.
   #
+  # The row's one routed realization, its SVI (a role-svi DcimVirtualInterface of the same switch), is a member of the
+  # same edge, written by the VRF pass (generators/helpers/svi.py): the SVI's VLAN is its row's, not read off its name.
+  # checks/interface_layers.py R3, R6, R10 hold it (a plain generic edge, not a Component of the row).
   # The switch ports (physical, LAG) of the row's device that carry the segment are its interface `capabilities`
   # (ManagedGenericInterfaces, the interface edge): a port is a member of its switch's row, so the VLAN of a port is
   # its row's vlan_id and the VNI and segment come through `segment_deployment`: the REALIZATION. Only the reconcile

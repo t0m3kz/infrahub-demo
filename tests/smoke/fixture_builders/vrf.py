@@ -15,6 +15,7 @@ from typing import Any, TypedDict
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.vrf import VrfRequirements, vrf_requirements
 from utils.device_services import has_pbr, pbr_bindings
+from utils.segment_vlan import ROW_KIND
 from utils.service_contexts import device_services
 from utils.vrf_demand import PBR_KIND, SVI_ROLE, VRF_KIND, svi_name
 
@@ -114,6 +115,10 @@ def _svi_node(vlan_id: int, namespace: ZoneMetadata, gateway: dict[str, Any] | N
     ``segment.gateway``) as its address, in the raw shape."""
     address = (gateway or {}).get("address")
     node = {"id": (gateway or {}).get("id") or f"fixture-gateway-{vlan_id}", "address": _value(address)}
+    # The SVI is in its VRF and a member of the VLAN row it realizes: both are among its capabilities.
+    row = {"__typename": ROW_KIND, "id": f"fixture-row-{vlan_id}", "vlan_id": _value(vlan_id)}
+    capabilities = interface_vrf_capability(routing_vrf(namespace["name"]))
+    capabilities["zone_capabilities"]["edges"].append({"node": row})
     return {
         "__typename": "DcimVirtualInterface",
         "name": _value(svi_name(vlan_id)),
@@ -121,7 +126,7 @@ def _svi_node(vlan_id: int, namespace: ZoneMetadata, gateway: dict[str, Any] | N
         "status": _value("active"),
         "role": _value(SVI_ROLE),
         "ip_address": {"node": node if address else None},
-        **interface_vrf_capability(routing_vrf(namespace["name"])),
+        **capabilities,
     }
 
 
