@@ -64,6 +64,17 @@ def test_a_validator_that_never_concluded_is_reported_with_its_state() -> None:
     ]
 
 
+def test_the_checks_of_a_validator_that_is_not_green_are_listed_with_their_message() -> None:
+    """A failing validator over a check that does not say failure still shows what that check says."""
+    client = _client(
+        _response(_validator("Check: validate_x", "completed", "failure", [_check("unknown", "rack R1 over the grid")]))
+    )
+    assert _fetch_failed_checks(client, "pc") == [
+        "[Check: validate_x] validator state=completed conclusion=failure (1 check(s) under it)",
+        "[Check: validate_x] check conclusion=unknown: rack R1 over the grid",
+    ]
+
+
 def test_a_green_validator_is_not_reported() -> None:
     """A completed validator with a success conclusion adds nothing."""
     client = _client(_response(_validator("Check: ok", "completed", "success", [_check("success")])))
@@ -76,6 +87,7 @@ def test_the_checks_run_again_when_only_a_validator_is_not_green(_no_waiting: Ma
     _rerun_unfinished_validators(client, "pc-1")
     mutation = client.execute_graphql.call_args_list[-1]
     assert "CoreProposedChangeRunCheck" in mutation.kwargs["query"]
+    assert "check_type: ALL" in mutation.kwargs["query"]
     assert mutation.kwargs["variables"] == {"id": "pc-1"}
     _no_waiting.assert_called_once()
 

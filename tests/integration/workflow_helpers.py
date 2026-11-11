@@ -509,6 +509,14 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
                     f"[{validator_label}] validator state={validator_state} conclusion={validator_conclusion} "
                     f"({len(checks)} check(s) under it)"
                 )
+                # What each of its checks says, whatever its conclusion: the verdict of the validator and the one of
+                # its checks can differ, and the message is the only thing that names the object.
+                for check_edge in checks:
+                    check = check_edge.get("node") or {}
+                    descriptions.append(
+                        f"[{validator_label}] check conclusion={(check.get('conclusion') or {}).get('value')}: "
+                        f"{((check.get('message') or {}).get('value') or '<no message>')[:600]}"
+                    )
             for check_edge in checks:
                 check = check_edge.get("node") or {}
                 conclusion = (check.get("conclusion") or {}).get("value")
@@ -532,13 +540,16 @@ def _rerun_unfinished_validators(client: InfrahubClientSync, pc_id: str) -> None
     descriptions = _fetch_failed_checks(client, pc_id)
     if not descriptions:
         return
-    if any(not description.split("] ", 1)[1].startswith("validator state=") for description in descriptions):
+    if any(
+        not description.split("] ", 1)[1].startswith(("validator state=", "check conclusion="))
+        for description in descriptions
+    ):
         return
     logger.warning(
         "Validators not green and no failing check, running the checks again:\n  - %s", "\n  - ".join(descriptions)
     )
     client.execute_graphql(
-        query="mutation ($id: String!) { CoreProposedChangeRunCheck(data: {id: $id, check_type: all}) { ok } }",
+        query="mutation ($id: String!) { CoreProposedChangeRunCheck(data: {id: $id, check_type: ALL}) { ok } }",
         variables={"id": pc_id},
     )
     time.sleep(10)
