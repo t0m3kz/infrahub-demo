@@ -2,19 +2,25 @@
 
 The SVI carries the segment's anycast gateway as its ``ip_address`` (THE ``segment.gateway`` object, the same address on
 the SVI of every switch with a routed row of the segment: ``ip_address`` is a plain edge with no cascade) and is an
-interface of the VRF the switch routes it in (the ``ManagedVRF`` among its ``capabilities``). It has no link to its
-row: the row it realizes is the routed row of its device whose ``Vlan<vlan id>`` it bears. An SVI's only capability is its VRF (checks/vrf_instances.py S4), so the save of the SVI writes its
-``capabilities`` as the one-instance list (generators/helpers/interface_vrf.py ``vrf_capability``): one write, which is
-safe even right after the instance was created in the same pass, where a RelationshipAdd on the new node can reach the
-other replica first. What a device needs is derived by ``utils.vrf_demand.device_vrf_facts`` (a border leaf has none
+interface of the VRF the switch routes it in (the ``ManagedVRF`` among its ``capabilities``). It is a MEMBER of the
+VLAN row it realizes, through the row's interface edge (``ManagedSegmentVlan.capabilities``, the edge a switch port is a
+member of its row through): the row is read from the membership, never from the name ``Vlan<vlan id>``. It is a plain
+generic edge, not a Component of the row (a Component under a row whose ``device`` is its Parent broke the server's
+object-template walk, measured on 1.11.9). An SVI's only capabilities are its VRF and its row (checks/vrf_instances.py
+S4). The save of the SVI writes its ``capabilities`` as the one-instance VRF list (generators/helpers/interface_vrf.py
+``vrf_capability``): one write, which is safe even right after the instance was created in the same pass, where a
+RelationshipAdd on the new node can reach the other replica first. A list save replaces the edge set, so the row is
+added edge by edge AFTER every save (``join_capabilities``, one RelationshipAdd, a no-op when the edge exists), and an
+extra row is removed edge by edge. What a device needs is derived by ``utils.vrf_demand.device_vrf_facts`` (a border leaf has none
 for a stretched segment: it carries it L2 only, utils/segment_addressing.py ``l2_only_on``); this module only turns
 the difference with what exists into writes.
 
-Identity: an SVI is found by its own uniqueness, (device, ``Vlan<vlan id>``), among the device's role-svi interfaces
-(a row moving between deployments needs no delete-before-create ordering): a row keeps its VLAN id for life, a
-different row gets a different name. Nothing deletes an SVI with its row: this pass deletes every role-svi interface
-of the device that no routed row of it wants (the row is gone, it became L2 only, its segment lost its gateway, or the
-device carries no VRF any more); a deleted device takes its interfaces.
+Identity: an existing SVI is the member of a routed row of its device (the row it realizes); a new one is created as
+``Vlan<vlan id>``, the interface's own name (unique on its device). Nothing deletes an SVI with its row: this pass
+deletes every role-svi interface of the device that is a member of no routed row of it (the row is gone, it became L2
+only, its segment lost its gateway, or the device carries no VRF any more), and one that is a member of no row at
+all and bears the name a new SVI needs is deleted first; a deleted device takes its interfaces, a deleted row
+its edges.
 
 Written untracked (``update_group_context=False``), like the rows: an SVI belongs to no single run.
 """
@@ -27,10 +33,14 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from utils.limits import DEFAULT_NAMESPACE
-from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, DeviceVrfFacts, RoutedRow
+from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, DeviceVrfFacts, RoutedRow, SviFacts
 
 from ..protocols import DcimVirtualInterface
-from .interface_vrf import vrf_capability
+from .edges import remove_edge
+from .interface_vrf import join_capabilities, vrf_capability
+
+_ROW_RELATION = "capabilities"
+"""The interface edge an SVI is a member of its VLAN row through."""
 
 
 @dataclass(frozen=True)
@@ -38,6 +48,7 @@ class SviWrite:
     """One SVI to write: ``existing_id`` is set for an in-place update, None for a create."""
 
     name: str
+    row_id: str
     address_id: str | None
     vrf_id: str | None
     existing_id: str | None = None
@@ -45,14 +56,18 @@ class SviWrite:
 
 @dataclass(frozen=True)
 class SviPlan:
-    """What to do to a device's SVIs; ``recreate_ids`` are deleted before the writes, ``stale_ids`` after them."""
+    """What to do to a device's SVIs; ``recreate_ids`` are deleted before the writes, ``stale_ids`` after them.
+
+    ``leave`` are the (SVI id, row id) memberships removed edge by edge: an SVI that is a member of a row besides the
+    one it realizes."""
 
     writes: tuple[SviWrite, ...] = ()
     recreate_ids: tuple[str, ...] = ()
     stale_ids: tuple[str, ...] = ()
+    leave: tuple[tuple[str, str], ...] = ()
 
     def __bool__(self) -> bool:
-        return bool(self.writes or self.recreate_ids or self.stale_ids)
+        return bool(self.writes or self.recreate_ids or self.stale_ids or self.leave)
 
 
 def desired_vrf_id(row: RoutedRow, instance_ids: Mapping[str, str]) -> str | None:
@@ -69,23 +84,37 @@ def plan_svis(facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> SviPlan
     created again, because a relationship cannot be cleared through a save of a node read without it.
     """
     desired = facts.desired_svis()
-    existing = {svi.name: svi for svi in facts.svis}
+    # Each SVI realizes the first desired row it is a member of; a row has one SVI (a second is stale).
+    matched: dict[str, SviFacts] = {}
+    leave: list[tuple[str, str]] = []
+    unmatched: list[SviFacts] = []
+    for svi in sorted(facts.svis, key=lambda item: item.id):
+        row = next((row for row in desired.values() if row.id in svi.row_ids and row.id not in matched), None)
+        if row is None:
+            unmatched.append(svi)
+            continue
+        matched[row.id] = svi
+        leave.extend((svi.id, row_id) for row_id in svi.row_ids if row_id != row.id)
     writes: list[SviWrite] = []
     recreate: list[str] = []
     for name, row in desired.items():
         vrf_id = desired_vrf_id(row, instance_ids)
-        current = existing.get(name)
+        current = matched.get(row.id)
         if current is None:
-            writes.append(SviWrite(name, row.gateway_id, vrf_id))
-        elif current.address_id == row.gateway_id and current.vrf_id == vrf_id:
+            writes.append(SviWrite(name, row.id, row.gateway_id, vrf_id))
+        elif current.name == name and current.address_id == row.gateway_id and current.vrf_id == vrf_id:
             continue
         elif (vrf_id is None and current.vrf_id is not None) or (row.gateway_id is None and current.address_id):
             recreate.append(current.id)
-            writes.append(SviWrite(name, row.gateway_id, vrf_id))
+            writes.append(SviWrite(name, row.id, row.gateway_id, vrf_id))
         else:
-            writes.append(SviWrite(name, row.gateway_id, vrf_id, existing_id=current.id))
-    stale = sorted(svi.id for name, svi in existing.items() if name not in desired)
-    return SviPlan(tuple(writes), tuple(sorted(recreate)), tuple(stale))
+            writes.append(SviWrite(name, row.id, row.gateway_id, vrf_id, existing_id=current.id))
+    # An SVI of no wanted row goes after the writes, unless it bears a name an SVI is written with: the name is
+    # unique on the device, so it goes first.
+    created = {write.name for write in writes}
+    recreate.extend(svi.id for svi in unmatched if svi.name in created)
+    stale = sorted(svi.id for svi in unmatched if svi.name not in created)
+    return SviPlan(tuple(writes), tuple(sorted(recreate)), tuple(stale), tuple(sorted(leave)))
 
 
 @dataclass(frozen=True)
@@ -206,6 +235,10 @@ class SviMixin:
                 data["id"] = write.existing_id
             svi = await self.client.create(kind=DcimVirtualInterface, data=data)
             await svi.save(allow_upsert=True, update_group_context=False)
+            # After the save, which replaces the edge set: the row (created by the segment reconcile before this pass).
+            await join_capabilities(self.client, self.logger, svi.id, [write.row_id])
+        for svi_id, row_id in plan.leave:
+            await remove_edge(self.client, node_id=svi_id, relation=_ROW_RELATION, peer_id=row_id)
         for svi_id in plan.stale_ids:
             await self.client.delete(kind=DcimVirtualInterface, id=svi_id)
         if plan:

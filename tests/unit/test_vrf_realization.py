@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 
 from tests.smoke.fixture_builders.common import make_transform
-from tests.unit.routing_helpers import in_vrf
+from tests.unit.routing_helpers import in_vrf, svi_row
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.leaf import Leaf
@@ -138,9 +138,23 @@ class TestRefusal:
         data = _raw(_LEAF)
         for edge in _node(data)["interfaces"]["edges"]:
             if edge["node"]["name"]["value"] == "Vlan100":
-                edge["node"]["zone_capabilities"] = {"edges": []}
+                # Out of its VRF, still a member of its row.
+                zone = edge["node"]["zone_capabilities"]["edges"]
+                zone[:] = [cap for cap in zone if cap["node"].get("__typename") != "ManagedVRF"]
+                assert zone
 
         with pytest.raises(VrfRealizationError, match="SVI Vlan100 is in VRF default, its segment routes in PROD"):
+            _render(Leaf, data)
+
+    def test_an_svi_that_is_a_member_of_no_row_realizes_no_vlan_and_is_refused(self) -> None:
+        """The row of an SVI is the one it is a member of: named Vlan100 but in no row, it does not satisfy the VLAN."""
+        data = _raw(_LEAF)
+        for edge in _node(data)["interfaces"]["edges"]:
+            if edge["node"]["name"]["value"] == "Vlan100":
+                zone = edge["node"]["zone_capabilities"]["edges"]
+                zone[:] = [cap for cap in zone if cap["node"].get("__typename") != "ManagedSegmentVlan"]
+
+        with pytest.raises(VrfRealizationError, match="no SVI Vlan100 for a routed segment"):
             _render(Leaf, data)
 
     def test_one_raise_lists_everything_missing(self) -> None:
@@ -240,13 +254,27 @@ class TestReaders:
 
     def test_svi_vrfs_maps_the_vlan_to_the_vrf_name(self) -> None:
         interfaces = [
-            {"name": "Vlan100", "role": "svi", **in_vrf({"id": "vrf-1", "security_zone": {"name": "PROD"}})},
-            {"name": "Vlan200", "role": "svi", "zone_capabilities": []},
+            {
+                "name": "Vlan100",
+                "role": "svi",
+                **in_vrf({"id": "vrf-1", "security_zone": {"name": "PROD"}}, svi_row(100)),
+            },
+            {"name": "Vlan200", "role": "svi", "zone_capabilities": [svi_row(200)]},
             {"name": "Vlan4094", "role": "mlag-control"},
             {"name": "Vlanx", "role": "svi"},
         ]
         assert svi_vrfs(interfaces) == {100: "PROD", 200: None}
         assert svi_vrfs(None) == {}
+
+    def test_svi_vrfs_reads_the_vlan_from_the_row_the_svi_is_a_member_of_not_from_its_name(self) -> None:
+        """An SVI named for one VLAN but a member of the row of another realizes the row's VLAN; one that is a member of
+        no row realizes none."""
+        vrf = {"id": "vrf-1", "security_zone": {"name": "PROD"}}
+        interfaces = [
+            {"name": "Vlan100", "role": "svi", **in_vrf(vrf, svi_row(300))},
+            {"name": "Vlan101", "role": "svi", **in_vrf(vrf)},
+        ]
+        assert svi_vrfs(interfaces) == {300: "PROD"}
 
     def test_l3_vrf_names_prefers_the_lisp_site(self) -> None:
         assert l3_vrf_names({"l3_instances": [{"vrf": "A"}]}, {"l3_vni_mappings": [{"vrf_name": "B"}]}) == ["A"]

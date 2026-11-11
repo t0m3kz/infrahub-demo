@@ -24,6 +24,7 @@ def _documents() -> list[tuple[Path, dict[str, Any]]]:
 
 
 _STRETCHED = "c900-sync-p"
+_SVI_KIND = "DcimVirtualInterface"
 
 
 def _nodes() -> dict[str, dict[str, Any]]:
@@ -99,8 +100,9 @@ def _row_bindings() -> list[dict]:
 
 
 def test_every_svi_is_a_row_of_its_device_and_carries_its_segment_s_gateway() -> None:
-    """A row names no SVI: the SVI of a row is its device's ``Vlan<vlan_id>``, and it carries the segment's anycast
-    gateway (the existing address object, referenced by [address, namespace])."""
+    """The deployment's nested row names no SVI (the SVI is a member of the row, 96_segment_ports); the SVI is named for
+    its row's VLAN on the row's device, and it carries the segment's anycast gateway (the existing address object,
+    referenced by [address, namespace])."""
     segment_of = {
         (vlan["device"], f"Vlan{vlan['vlan_id']}"): row["segment"]
         for row in _deployment_rows()
@@ -113,6 +115,15 @@ def test_every_svi_is_a_row_of_its_device_and_carries_its_segment_s_gateway() ->
     for key, ip_address in svis.items():
         assert key in segment_of, key
         assert ip_address == gateways[segment_of[key]], key
+
+
+def _ports(row: dict) -> list[dict]:
+    """The members of a row's ``capabilities`` that are ports (its SVI is the one member that is not)."""
+    return [member for member in row["capabilities"] if member["kind"] != _SVI_KIND]
+
+
+def _svi_members(row: dict) -> list[dict]:
+    return [member for member in row["capabilities"] if member["kind"] == _SVI_KIND]
 
 
 def test_every_port_of_a_row_is_a_switch_port_of_the_row_s_switch() -> None:
@@ -129,7 +140,7 @@ def test_every_port_of_a_row_is_a_switch_port_of_the_row_s_switch() -> None:
     assert bindings and len(keys) == len(set(keys))
     for row in bindings:
         assert declared.get((row["device"], row["vlan_id"])) == tuple(row["segment_deployment"]), row
-        for port in row["capabilities"]:
+        for port in _ports(row):
             assert port["kind"] in {"DcimPhysicalInterface", "DcimLAGInterface"}, port
             assert port["data"]["device"] == row["device"], (row["device"], port)
 
@@ -139,7 +150,7 @@ def test_one_row_of_a_segment_per_port() -> None:
     seen: dict[tuple[str, str, str], list[int]] = {}
     for row in _row_bindings():
         segment = row["segment_deployment"][0]
-        for port in row["capabilities"]:
+        for port in _ports(row):
             seen.setdefault((port["data"]["device"], port["data"]["name"], segment), []).append(row["vlan_id"])
     assert {key: vlans for key, vlans in seen.items() if len(vlans) > 1} == {}
 
@@ -238,9 +249,28 @@ def test_the_memberships_are_exactly_the_requests_per_deployment() -> None:
             requests[key] = {_port_key(port) for port in row["capabilities"]}
     memberships: dict[tuple[str, str], set[tuple[str, str, str]]] = {}
     for row in _row_bindings():
-        memberships.setdefault(tuple(row["segment_deployment"]), set()).update(
-            _port_key(port) for port in row["capabilities"]
-        )
+        if ports := _ports(row):  # a row that lists only its SVI has no request behind it
+            memberships.setdefault(tuple(row["segment_deployment"]), set()).update(_port_key(port) for port in ports)
     assert requests and requests == memberships
     for ports in requests.values():
         assert {kind for kind, _, _ in ports} <= {"DcimPhysicalInterface", "DcimLAGInterface"}
+
+
+def test_every_authored_svi_is_a_member_of_exactly_the_row_of_its_device_and_segment() -> None:
+    """The SVI is a member of its row (the row's ``capabilities``, the interface edge a port is a member through): the
+    row of its device whose VLAN its name bears and whose segment's gateway it carries; a row has at most one SVI and
+    every SVI member is an authored one."""
+    segment_of = {
+        (vlan["device"], vlan["vlan_id"]): row["segment"] for row in _deployment_rows() for vlan in row["vlans"]["data"]
+    }
+    gateways, svis = _gateways(), _svis()
+    seen: set[tuple[str, str]] = set()
+    for row in _row_bindings():
+        members = _svi_members(row)
+        assert len(members) <= 1, row
+        for member in members:
+            device, name = member["data"]["device"], member["data"]["name"]
+            assert device == row["device"] and name == f"Vlan{row['vlan_id']}", member
+            assert svis[(device, name)] == gateways[segment_of[(device, row["vlan_id"])]], member
+            seen.add((device, name))
+    assert seen == set(svis), set(svis) - seen

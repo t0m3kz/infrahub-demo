@@ -167,6 +167,8 @@ def _tagged_ports(segment: str, deployment: str) -> set[tuple[str, str]]:
             if list(pair or []) != [segment, deployment]:
                 continue
             for capability in obj.item.get("capabilities") or []:
+                if capability["kind"] == "DcimVirtualInterface":
+                    continue  # a row's SVI is a member, not a host-facing port
                 data = capability["data"]
                 key = (data["device"], data["name"])
                 ports.update(members.get(key, [key]))

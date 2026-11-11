@@ -33,7 +33,7 @@ query ($hosts: [String]) {
 }
 """
 
-# An SVI has no link to its row: the segment's SVIs are the role-svi interfaces that carry its anycast gateway.
+# The segment's SVIs are the role-svi interfaces that carry its anycast gateway (each is also a member of its row).
 _SWITCH_VRF_QUERY = """
 query ($devices: [String]) {
   ManagedVxlanSegment(name__value: "SEGMENT_NAME") {

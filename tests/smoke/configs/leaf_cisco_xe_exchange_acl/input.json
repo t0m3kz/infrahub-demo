@@ -1450,6 +1450,15 @@
                             }
                           }
                         }
+                      },
+                      {
+                        "node": {
+                          "__typename": "ManagedSegmentVlan",
+                          "id": "fixture-row-100",
+                          "vlan_id": {
+                            "value": 100
+                          }
+                        }
                       }
                     ]
                   }

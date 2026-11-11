@@ -175,10 +175,12 @@ def raw_svi(
     capabilities: list[dict[str, Any]] | None = None,
     name: str | None = None,
     vrf_deployment_id: str | None = HOSTING_ID,
+    row_id: str | None = "r1",
 ) -> dict[str, Any]:
     """A role-svi DcimVirtualInterface carrying the anycast gateway of the ``raw_row`` segment ``segment`` (None: no
-    address), or ``addr``."""
-    node = raw_interface(svi_id, name or f"Vlan{vlan_id}", "svi", addr, capabilities, "DcimVirtualInterface")
+    address), or ``addr``. It is a member of the row ``row_id`` (the ``raw_row`` id; None: of no row)."""
+    members = [*(capabilities or []), *([{"__typename": "ManagedSegmentVlan", "id": row_id}] if row_id else [])]
+    node = raw_interface(svi_id, name or f"Vlan{vlan_id}", "svi", addr, members, "DcimVirtualInterface")
     if segment and not addr:
         node["ip_address"] = {"node": {"id": gateway_id(segment), "address": {"value": "10.0.0.1/24"}}}
     node.update(

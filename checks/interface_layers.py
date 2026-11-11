@@ -17,8 +17,9 @@ Rules:
 
 * R1 a physical or LAG port (not a LAG member) has both an L2 tag and an L3 signal;
 * R2 a LAG member (``lag`` set) has an L2 tag or an L3 signal: its LAG carries them;
-* R3 a segment deployment or a VLAN row lists only physical ports and LAGs (their interface edge peers any
-  ``DcimInterface``);
+* R3 a segment deployment lists only physical ports and LAGs, and a VLAN row only physical ports, LAGs and its SVI (the
+  interface edge peers any ``DcimInterface``; the SVI is the role-``svi`` virtual interface a routed row is realized
+  as, utils/segment_vlan.py ``svi_rows``);
 * R4 a port is a member of at most one row of a segment;
 * R5 (WARNING) a port is a member of a row nobody asked for: the port is not assigned to the row's deployment, it faces
   no host of an instance of a component on the segment (its cable, or a LAG member's, ends on an uplink or LAG NIC of
@@ -26,14 +27,17 @@ Rules:
   segment. Only the segment reconcile writes a membership, and its next run removes this one: a hand edit is visible
   here until then.
 
-* R6 a row lists only ports of its own switch (its ``device``): the interface edge holds no same-device rule in the
-  schema (no ``common_parent``), so this check does;
+* R6 a row lists only ports and its SVI of its own switch (its ``device``): the interface edge holds no same-device
+  rule in the schema (no ``common_parent``), so this check does;
 * R7 the interfaces of an OSPF interface setting (``RoutingOSPFInterface``) are all on ONE device: the setting has no
   device of its own, so that is all the check can judge of the setting by itself;
 * R8 (WARNING) an OSPF interface setting lists no interface: it no longer goes with a device, so a setting left behind
   by a deleted device or interface shows here (the generator's next run does not reclaim it);
 * R9 an OSPF interface setting that is part of a peering is on a device that one of the peering's processes runs on
   (``ManagedOSPF.capabilities``). A setting with no peering, or a peering with no process, is not judged.
+* R10 a row has at most one SVI among its members. An SVI of another switch is R6's (the SVI is a member of its row
+  through the same edge as a port, with no same-device rule in the schema); that the SVI is the row's routed one and
+  carries the segment's gateway is checks/vrf_instances.py (S1, S2, S5).
 
 A segment itself cannot sit in the ``capabilities`` of a port: it does not inherit the interface-edge generic
 (tests/unit/test_capability_edge_names.py).
@@ -51,6 +55,7 @@ from utils.data_cleaning import clean_data
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 from utils.interface_encapsulation import sub_interfaces_of
 from utils.segment_vlan import DEPLOYMENT_KIND, port_rows
+from utils.vrf_demand import SVI_ROLE
 
 L3_SIGNAL_KINDS = frozenset(
     {
@@ -69,6 +74,14 @@ def capability_kinds(port: dict[str, Any]) -> set[str]:
 
 SWITCHED_PORT_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface"})
 """The interface kinds that may be assigned to a segment deployment or be a member of a row (DcimSwitchedInterface)."""
+
+SVI_KIND = "DcimVirtualInterface"
+"""A row's one non-port member is the segment SVI: a virtual interface of role ``svi``."""
+
+
+def is_svi(member: dict[str, Any]) -> bool:
+    """Whether a cleaned member of a row is its SVI (not a port)."""
+    return member.get("typename") == SVI_KIND and member.get("role") == SVI_ROLE
 
 
 def l2_tags(port: dict[str, Any]) -> list[str]:
@@ -176,13 +189,16 @@ def is_derived(port: dict[str, Any], hosts: set[str], terminated: bool) -> bool:
     return port.get("role") != LAG_MEMBER_ROLE and _faces_a_host(port, hosts)
 
 
-def kind_errors(owner: str, ports: list[Any]) -> list[str]:
-    """R3: the ports ``owner`` (a cleaned deployment's or row's label) lists that are no physical port or LAG."""
+def kind_errors(owner: str, ports: list[Any], *, allow_svi: bool = False) -> list[str]:
+    """R3: the ports ``owner`` (a cleaned deployment's or row's label) lists that are no physical port or LAG (a row's
+    SVI is no port and is allowed there: ``allow_svi``)."""
     return [
         f"{owner} lists {port.get('typename')} '{(port.get('device') or {}).get('name')}' {port.get('name')} "
         "(rule R3: only a physical port or a LAG carries a segment)."
         for port in ports
-        if isinstance(port, dict) and port.get("typename") not in SWITCHED_PORT_KINDS
+        if isinstance(port, dict)
+        and port.get("typename") not in SWITCHED_PORT_KINDS
+        and not (allow_svi and is_svi(port))
     ]
 
 
@@ -200,6 +216,7 @@ def unrequested_members(row: dict[str, Any], hosts: dict[str, set[str]]) -> list
         "removes it)."
         for port in row.get("capabilities") or []
         if isinstance(port, dict)
+        and not is_svi(port)
         and str(port.get("id")) not in requested
         and not is_derived(port, segment_hosts, terminated)
     ]
@@ -210,9 +227,20 @@ def row_device_errors(row: dict[str, Any]) -> list[str]:
     owner = (row.get("device") or {}).get("name")
     return [
         f"{_row_where(row)} lists '{(port.get('device') or {}).get('name')}' {port.get('name')}, a port of another "
-        "device (rule R6: a row lists only ports of its own switch)."
+        "device (rule R6: a row lists only ports and the SVI of its own switch)."
         for port in row.get("capabilities") or []
         if isinstance(port, dict) and (port.get("device") or {}).get("name") != owner
+    ]
+
+
+def row_svi_errors(row: dict[str, Any]) -> list[str]:
+    """R10 of one cleaned ManagedSegmentVlan node: more than one SVI among its members."""
+    svis = [member for member in row.get("capabilities") or [] if isinstance(member, dict) and is_svi(member)]
+    if len(svis) < 2:
+        return []
+    return [
+        f"{_row_where(row)} has {len(svis)} SVIs ({', '.join(sorted(str(svi.get('name')) for svi in svis))}) "
+        "(rule R10: a row is realized as one SVI)."
     ]
 
 
@@ -249,8 +277,8 @@ def ospf_setting_issues(setting: dict[str, Any]) -> tuple[list[str], list[str]]:
 
 class CheckInterfaceLayers(WarningCheck):
     """A port is a switchport or a routed port, a LAG member carries neither (R1, R2); a segment deployment or a row
-    lists only switch ports (R3); one row of a segment per port (R4); a row member nobody asked for is a WARNING
-    (R5); a row lists ports of its own switch (R6); an OSPF interface setting is on one device (R7), lists an
+    lists only switch ports (R3, a row also its SVI); one row of a segment per port (R4); a row member nobody asked for is a WARNING
+    (R5); a row lists ports and an SVI of its own switch (R6) and at most one SVI (R10); an OSPF interface setting is on one device (R7), lists an
     interface (R8, WARNING) and is on a device of its peering (R9)."""
 
     query = "interface_layers"
@@ -269,7 +297,11 @@ class CheckInterfaceLayers(WarningCheck):
                 self.log_error(message=message, object_id=deployment.get("id"))
         hosts = component_hosts(cleaned.get("AppComponent") or [])
         for row in cleaned.get("ManagedSegmentVlan") or []:
-            for message in kind_errors(_row_where(row), row.get("capabilities") or []) + row_device_errors(row):
+            for message in (
+                kind_errors(_row_where(row), row.get("capabilities") or [], allow_svi=True)
+                + row_device_errors(row)
+                + row_svi_errors(row)
+            ):
                 self.log_error(message=message, object_id=row.get("id"))
             for message in unrequested_members(row, hosts):
                 self.log_warning(message=message)

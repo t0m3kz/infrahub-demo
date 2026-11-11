@@ -191,7 +191,7 @@ def test_a_changed_gateway_updates_the_svi_address_in_place() -> None:
             _leaf(
                 rows=[raw_row("r2", 100, "PROD")],
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
-                interfaces=[raw_svi("svi-1", 100, "old-gateway", "vrf-1", "PROD")],
+                interfaces=[raw_svi("svi-1", 100, "old-gateway", "vrf-1", "PROD", row_id="r2")],
             )
         )
     )
@@ -265,7 +265,7 @@ def test_an_svi_of_a_row_that_is_no_longer_routed_is_deleted() -> None:
                 capabilities=[raw_instance("vrf-1", "leaf-1", "PROD")],
                 interfaces=[
                     raw_svi("svi-1", 100, "seg", "vrf-1", "PROD"),
-                    raw_svi("svi-2", 200, "seg", "vrf-1", "PROD"),
+                    raw_svi("svi-2", 200, "seg", "vrf-1", "PROD", row_id="r2"),
                 ],
             )
         )

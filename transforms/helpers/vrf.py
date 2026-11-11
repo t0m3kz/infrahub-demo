@@ -22,6 +22,7 @@ from typing import Any
 from utils.limits import DEFAULT_NAMESPACE
 from utils.routing_domain import interface_vrf
 from utils.segment_addressing import routed_segment_namespace
+from utils.segment_vlan import svi_rows
 from utils.service_contexts import border_contexts, device_services
 from utils.vrf_demand import (
     SVI_ROLE,
@@ -31,7 +32,6 @@ from utils.vrf_demand import (
     device_memberships,
     leg_namespaces,
     svi_name,
-    svi_vlan_id,
     vrf_demand,
 )
 
@@ -77,12 +77,17 @@ def plain_vrf_names(data: dict[str, Any], bgp: list[dict[str, Any]] | None, vxla
 
 
 def svi_vrfs(interfaces: list[dict[str, Any]] | None) -> dict[int, str | None]:
-    """VLAN -> the VRF namespace name of each role-``svi`` interface (None: no VRF, the default table)."""
+    """VLAN -> the VRF namespace name of each role-``svi`` interface (None: no VRF, the default table).
+
+    The VLAN of an SVI is the ``vlan_id`` of the row it is a member of (``utils.segment_vlan.svi_rows``), not the
+    number in its name; an SVI that is a member of no row realizes no VLAN and is not listed."""
     found: dict[int, str | None] = {}
     for iface in interfaces or []:
-        vlan_id = svi_vlan_id(iface.get("name"))
-        if iface.get("role") == SVI_ROLE and vlan_id is not None:
-            found[vlan_id] = (interface_vrf(iface).get("security_zone") or {}).get("name")
+        if iface.get("role") != SVI_ROLE:
+            continue
+        for row in svi_rows(iface):
+            if isinstance(row.get("vlan_id"), int):
+                found[row["vlan_id"]] = (interface_vrf(iface).get("security_zone") or {}).get("name")
     return found
 
 

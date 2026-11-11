@@ -112,7 +112,7 @@ def test_s5_each_member_of_a_pair_holds_an_svi_on_its_own_row() -> None:
             rows=[raw_row(f"r{i}", 100, "PROD", segment="web")],
             capabilities=[raw_mlag("mlag-1")],
             vrfs=[raw_instance("v1", f"leaf-{i}", "PROD")],
-            interfaces=[raw_svi(f"s{i}", 100, "web", "v1", "PROD")],
+            interfaces=[raw_svi(f"s{i}", 100, "web", "v1", "PROD", row_id=f"r{i}")],
         )
         for i in (1, 2)
     ]

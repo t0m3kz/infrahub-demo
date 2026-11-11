@@ -414,3 +414,40 @@ def test_r9_an_ospf_setting_is_on_a_device_of_its_peering() -> None:
     assert _run(ospf=[_ospf("ospf-a", ("leaf-1", "E1"))]) == ([], [])
     errors = _errors(ospf=[_ospf("ospf-a", ("leaf-3", "E1"), peer_processes=(("p1", "leaf-1"), ("p2", "spine-1")))])
     assert len(errors) == 1 and "rule R9" in errors[0] and "leaf-1, spine-1" in errors[0]
+
+
+def _svi_member(name: str = "Vlan100", *, device: str = "leaf-1", role: str = "svi") -> dict[str, Any]:
+    """A raw segment SVI listed by a row: a virtual interface of ``role`` on ``device``."""
+    return {
+        "__typename": "DcimVirtualInterface",
+        "id": f"if-{device}-{name}",
+        "name": {"value": name},
+        "role": {"value": role},
+        "device": {"node": {"name": {"value": device}}},
+    }
+
+
+def test_r3_r5_a_row_s_svi_is_a_member_that_needs_no_request_and_no_host() -> None:
+    """The SVI of a routed row is a member of it (not a port): R3 allows it, R5 does not ask who requested it."""
+    row = _row_with(_member("E1", host="srv-1"), _svi_member())
+    assert _run(rows=[row], components=[_component("web", "srv-1")]) == ([], [])
+    assert _run(rows=[_row_with(_svi_member())]) == ([], [])
+
+
+def test_r3_only_a_role_svi_virtual_interface_is_allowed_in_a_row() -> None:
+    """R3: a virtual interface of another role (a NIC, a service sub-interface) is still no member of a row."""
+    errors, _ = _run(rows=[_row_with(_svi_member(role="service"))])
+    assert len(errors) == 1 and "rule R3" in errors[0]
+
+
+def test_r6_the_svi_of_another_switch_in_a_row_fails() -> None:
+    """R6: the edge has no same-device rule in the schema, so an SVI of leaf-2 on the row of leaf-1 is an ERROR."""
+    errors = _errors(rows=[_row_with(_svi_member(device="leaf-2"))])
+    assert len(errors) == 1 and "rule R6" in errors[0] and "'leaf-2' Vlan100" in errors[0]
+
+
+def test_r10_a_row_has_at_most_one_svi() -> None:
+    """R10: two SVIs in one row are an ERROR naming both; one is fine."""
+    assert _errors(rows=[_row_with(_svi_member())]) == []
+    errors = _errors(rows=[_row_with(_svi_member("Vlan100"), _svi_member("Vlan101"))])
+    assert len(errors) == 1 and "rule R10" in errors[0] and "Vlan100, Vlan101" in errors[0]

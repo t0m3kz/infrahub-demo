@@ -869,7 +869,7 @@ class MyCheck(InfrahubCheck):
   `common_parent: device` stays on the LAG pair `lag` / `member_interfaces` and `common_parent: panel` on the patch panel
   ports (see **Patch panels**), the only two uses; it works only on a node with a `kind: Parent` relationship and a peer
   with one (the interfaces' `device`, a patch panel port's `panel`). Every other "same parent" rule is a check: the
-  ports of a VLAN row are of the row's switch (R6) and the interfaces of an OSPF interface setting are of one device (R7),
+  ports and the SVI of a VLAN row are of the row's switch (R6) and the interfaces of an OSPF interface setting are of one device (R7),
   both in `checks/interface_layers.py`.
 - **Interface addresses and layers**: `ip_address` is declared once, on the marker generic `DcimHasIPAddress`
   (inherited by a physical port, a LAG, a virtual interface and a cloud peering interface, not a console port): an
@@ -885,11 +885,11 @@ class MyCheck(InfrahubCheck):
   too): a port then shows both, and every reader of what a port carries reads the row, never the deployment, so
   nothing counts a port twice. An assignment from either side fires `updated` on the deployment (measured on
   1.11.9), which re-runs the reconcile (see **VLAN rows**).
-  `checks/interface_layers.py` holds what the schema cannot: a deployment or a row lists only physical ports and LAGs
-  (`DcimSwitchedInterface`, a marker; R3), one row of a segment per port (R4), both ERRORs, and a WARNING for a row
+  `checks/interface_layers.py` holds what the schema cannot: a deployment lists only physical ports and LAGs, a row
+  only those and its SVI (`DcimSwitchedInterface`, a marker; R3), one row of a segment per port (R4), both ERRORs, and a WARNING for a row
   member nobody asked for (R5: not assigned to the deployment, derived from no component and no firewall service port
-  of a terminated segment; the next reconcile removes it), a row lists only ports of its own switch (R6, ERROR: no
-  `common_parent` on the edge). The same check holds the OSPF interface settings (`RoutingOSPFInterface`: on the
+  of a terminated segment; the next reconcile removes it), a row lists only ports and its SVI of its own switch (R6, ERROR: no
+  `common_parent` on the edge) and at most one SVI (R10, ERROR). The same check holds the OSPF interface settings (`RoutingOSPFInterface`: on the
   standard interface edge, no device field, so they do not go with a device): all their interfaces are on one device (R7,
   ERROR), a setting with no interface left is reported (R8, WARNING: a deleted device or interface leaves it behind, the
   routing generator's tracking reclaims it on its next run) and its device is one that runs a process of its peering
@@ -957,17 +957,26 @@ class MyCheck(InfrahubCheck):
   L2-only view, `is_fabric_l2`). A switch renders every segment it has a row of, with or without a port of it
   (`transforms/common.py` `_collect_row_activations`).
   A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a STORED `DcimVirtualInterface` with role
-  `svi` named `Vlan<vlan_id>` on the row's switch, with NO link to its row (no edge either way: a Component under a row
-  whose `device` is its Parent breaks the server's object-template walk, measured on 1.11.9; a reader of "the SVI of
-  this row" keys it by the row's device and `Vlan<vlan_id>`), carrying the segment's anycast gateway as its
+  `svi` named `Vlan<vlan_id>` on the row's switch, which is a MEMBER of its row through the row's interface edge
+  (`ManagedSegmentVlan.capabilities`, the plain generic edge a port is a member through; not a Component of the row: a
+  Component under a row whose `device` is its Parent broke the server's object-template walk, measured on 1.11.9; no
+  new relationship, no `common_parent`), so the VLAN, segment, VNI and deployment of an SVI are its row's
+  (`utils/segment_vlan.py` `svi_rows`, `DeviceVrfFacts.svi_row`) and nothing finds "the SVI of this row" by the name
+  `Vlan<vlan_id>`, the interface's own name (the transform's `svi_vrfs` reads the row's `vlan_id`, so a config query
+  selects the row under `zone_capabilities`, `queries/fragments/routing_zone.gql`). It carries the segment's anycast gateway as its
   `ip_address` (THE `segment.gateway` object, the same address on every SVI of the segment) and in the `ManagedVRF` of
-  its device's topology (the instance lists it in its `capabilities`, the SVI's only capability; its save writes it);
-  the SVI is not a port. `generators/helpers/svi.py` writes it in the VRF pass of the segment reconcile, upserted by
-  (device, `Vlan<id>`), sets its address and follows a change of the gateway, and deletes every role-svi interface of
-  the device that no routed row of it wants (the row is gone, it became L2 only, its segment lost its gateway, the
-  device carries no VRF): nothing deletes an SVI with its row, a deleted device takes its interfaces.
-  `checks/vrf_instances.py` S1-S5 judge it (S2 an SVI with no routed row of its device behind it, S5 one whose address
-  is not its segment's gateway: WARNINGs the next VRF pass fixes). The transform renders `vrf member` from it and the
+  its device's topology (the instance lists it in its `capabilities`; its VRF and its row are its only capabilities; its
+  save writes the VRF); the SVI is not a port. `generators/helpers/svi.py` writes it in the VRF pass of the segment
+  reconcile (after the rows and the instances exist): created as `Vlan<id>`, then added to its row by one
+  RelationshipAdd after every save (a save replaces the edge set), idempotent; it sets its address and follows a change
+  of the gateway, removes a membership of a row it does not realize edge by edge, and deletes every role-svi interface
+  of the device that is a member of no routed row of it (the row is gone, it became L2 only, its segment lost its
+  gateway, the device carries no VRF, the SVI joined no row): nothing deletes an SVI with its row (the row's edges go
+  with it), a deleted device takes its interfaces.
+  `checks/vrf_instances.py` S1-S5 judge it (S1 a routed row without an SVI member, S2 an SVI that is a member of no
+  routed row of its device, S5 one whose address is not its segment's gateway: WARNINGs the next VRF pass fixes);
+  `checks/interface_layers.py` R3 allows the role-`svi` virtual interface among a row's members, R6 holds that it is
+  on the row's switch and R10 that a row has at most one. The transform renders `vrf member` from it and the
   gateway from `segment.gateway`, never from the SVI's address; the VRF demand does not read the SVI's address (its
   VRF is a source of its own). The L3 VNI SVI (`ip forward`, `3900 + TRANSIT_SLOT[namespace_type]`,
   `utils/exchange_transit.py` `l3vni_svi_vlan`) and the transit-leg SVIs of the firewall and load-balancer contexts stay
