@@ -26,7 +26,6 @@ Steps:
 7.  Verify in main
 """
 
-import asyncio
 import json
 import logging
 from typing import Any
@@ -45,7 +44,9 @@ from .suite_constants import SCENARIO_DC_NAME, SCENARIO_POD_1, SCENARIO_UNDERLAY
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,
+    snapshot_generator_task_ids,
     verify_no_failed_tasks,
+    wait_for_new_generator_run,
     wait_for_tasks_completion,
 )
 
@@ -79,9 +80,6 @@ query GetPodFabricTemplates($pod_name: String!) {
     }
 }
 """
-
-SPINE_POLLS = 30
-SPINE_POLL_SECONDS = 20  # up to ten minutes for the cascade of generators to add the spine
 
 MUTATION_UPSERT_ELEMENT = """
 mutation UpsertSpineElement($quantity: BigInt!, $template_id: String!) {
@@ -203,6 +201,10 @@ class TestDC6AddSpine(TestInfrahubDockerWithClient):
             TopologyPodUpdate(data: {{ id: $pod_id, fabric_templates: [{related}] }}) {{ ok }}
         }}
         """
+        workflow_state["dc6_add_spine_pod_id"] = pod["id"]
+        workflow_state["dc6_add_spine_known_tasks"] = await snapshot_generator_task_ids(
+            async_client_main, scenario_branch, pod["id"]
+        )
         update = await async_client_main.execute_graphql(query=mutation, variables={"pod_id": pod["id"]})
         assert update["TopologyPodUpdate"]["ok"], f"Failed to update {SCENARIO_POD_1} fabric_templates: {update}"
 
@@ -214,11 +216,19 @@ class TestDC6AddSpine(TestInfrahubDockerWithClient):
     async def test_02_wait_for_tasks(
         self,
         async_client_main: InfrahubClient,
+        workflow_state: dict[str, Any],
         scenario_branch: str,
     ) -> None:
-        """Wait for event-triggered generators to complete."""
+        """Wait for the generators the swap triggers: pod_rack_cascade runs again for the pod, then the pod generator."""
         logging.info("=== %s - Step 2: Wait for Tasks ===", SCENARIO_NAME)
 
+        await wait_for_new_generator_run(
+            async_client_main,
+            scenario_branch,
+            ["pod_rack_cascade", "add_pod"],
+            workflow_state["dc6_add_spine_pod_id"],
+            workflow_state["dc6_add_spine_known_tasks"],
+        )
         await wait_for_tasks_completion(async_client_main, scenario_branch)
 
         logging.info("All tasks completed")
@@ -253,24 +263,7 @@ class TestDC6AddSpine(TestInfrahubDockerWithClient):
         """Verify exactly one new POD-1 spine, no other pod touched, and every existing ASN kept."""
         logging.info("=== %s - Step 3: Verify Devices ===", SCENARIO_NAME)
 
-        # The new spine comes from a cascade of generators the swap triggers (pod_rack_cascade, then the pod generator):
-        # the wait for tasks can return in the gap between two of them, a wide gap on a loaded machine. Wait for the
-        # effect, not for the tasks: poll until the pod has its spine, and fail on the count only when it never does.
-        expected = len(workflow_state["dc6_add_spine_before"].get(SCENARIO_POD_1, [])) + SPINES_ADDED
-        for attempt in range(1, SPINE_POLLS + 1):
-            after = await self._snapshot_spines_by_pod(async_client_main, scenario_branch, SCENARIO_DC_NAME)
-            if len(after.get(SCENARIO_POD_1, [])) >= expected:
-                break
-            logging.info(
-                "%s has %d spine(s), expecting %d (poll %d/%d)",
-                SCENARIO_POD_1,
-                len(after.get(SCENARIO_POD_1, [])),
-                expected,
-                attempt,
-                SPINE_POLLS,
-            )
-            await asyncio.sleep(SPINE_POLL_SECONDS)
-            await wait_for_tasks_completion(async_client_main, scenario_branch)
+        after = await self._snapshot_spines_by_pod(async_client_main, scenario_branch, SCENARIO_DC_NAME)
         _assert_pod_spine_delta(workflow_state["dc6_add_spine_before"], after)
 
         counts_before = workflow_state["dc6_add_spine_counts_before"]

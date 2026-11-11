@@ -16,6 +16,7 @@ from infrahub_sdk.exceptions import NodeNotFoundError
 from infrahub_sdk.graphql import Mutation
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
+from generators.common import wait_for_generator_tasks
 from generators.protocols import TopologyDataCenter
 
 from .dc_topology_helpers import fetch_underlay_asn_drift
@@ -330,6 +331,88 @@ def create_proposed_change(
 # a minute on a loaded machine between two of its tasks, and a proposed change created in a gap is validated, then
 # validated again as the next generator writes to its branch: the validators end half old, half new.
 QUIET_POLLS_BEFORE_PROPOSED_CHANGE = 12
+
+
+async def snapshot_generator_task_ids(client: InfrahubClient, branch: str, node_id: str) -> set[str]:
+    """The ids of every task related to ``node_id`` on ``branch`` now: the baseline of ``wait_for_new_generator_run``."""
+    tasks = await client.task.filter(
+        filter=TaskFilter(
+            branch=branch,
+            related_node__ids=[node_id],
+            state=[
+                TaskState.PENDING,
+                TaskState.RUNNING,
+                TaskState.SCHEDULED,
+                TaskState.COMPLETED,
+                TaskState.FAILED,
+                TaskState.CRASHED,
+                TaskState.CANCELLED,
+                TaskState.CANCELLING,
+            ],
+        )
+    )
+    return {task.id for task in tasks}
+
+
+async def wait_for_new_generator_run(
+    client: InfrahubClient,
+    branch: str,
+    generator_names: list[str],
+    node_id: str,
+    known_task_ids: set[str],
+    timeout: int = 900,
+    poll_interval: int = 10,
+) -> None:
+    """Wait until the first of ``generator_names`` has run AGAIN for ``node_id`` and every named run is complete.
+
+    An event rule starts a generator some time after the edit that fired it, and a cascade (the first generator starts
+    the next) leaves gaps between its tasks on a loaded machine, so "no task in flight" proves nothing right after the
+    edit. This waits for the effect's cause instead: a task titled ``Run generator <first name>`` for the node that is
+    not in ``known_task_ids`` (the ``snapshot_generator_task_ids`` taken before the edit), then for every named
+    generator through the one shared wait (``generators.common.wait_for_generator_tasks``). A new run that failed raises.
+    """
+    in_flight_and_done = [
+        TaskState.PENDING,
+        TaskState.RUNNING,
+        TaskState.SCHEDULED,
+        TaskState.COMPLETED,
+        TaskState.FAILED,
+        TaskState.CRASHED,
+        TaskState.CANCELLED,
+        TaskState.CANCELLING,
+    ]
+    titles = {f"Run generator {name}" for name in generator_names}
+    first_title = f"Run generator {generator_names[0]}"
+    deadline = time.monotonic() + timeout
+    new_runs: list[Any] = []
+    while True:
+        tasks = await client.task.filter(
+            filter=TaskFilter(branch=branch, related_node__ids=[node_id], state=in_flight_and_done)
+        )
+        new_runs = [task for task in tasks if task.id not in known_task_ids and task.title in titles]
+        if any(task.title == first_title for task in new_runs):
+            break
+        if time.monotonic() >= deadline:
+            raise AssertionError(
+                f"'{generator_names[0]}' did not run again for {node_id} on '{branch}' within {timeout}s; "
+                f"runs seen since the edit: {sorted(task.title for task in new_runs) or 'none'}"
+            )
+        logger.info("Waiting for '%s' to run for %s (%d new run(s) so far)", generator_names[0], node_id, len(new_runs))
+        await asyncio.sleep(poll_interval)
+
+    await wait_for_generator_tasks(client, branch, generator_names, node_id, logger)
+
+    tasks = await client.task.filter(
+        filter=TaskFilter(branch=branch, related_node__ids=[node_id], state=in_flight_and_done)
+    )
+    failed = [
+        f"{task.title} ({task.state})"
+        for task in tasks
+        if task.id not in known_task_ids
+        and task.title in titles
+        and task.state in (TaskState.FAILED, TaskState.CRASHED, TaskState.CANCELLED)
+    ]
+    assert not failed, f"Generator run(s) failed for {node_id} on '{branch}': {failed}"
 
 
 def wait_for_no_running_tasks(
