@@ -1,4 +1,4 @@
-"""Validate AppDependency source/target shape, ports, and cross-owner approvals."""
+"""Validate AppDependency source/target shape, ports, cross-owner approvals and prod/non-prod separation."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from generators.helpers.lb_vip import component_ref, vip_ports
+from generators.helpers.rules import RulesPlanner
 from utils.data_cleaning import clean_data
 from utils.dependency_access import component_owner_org_id, crosses_owners, dependency_access_status
 from utils.ports import PortProfileHelper, PortSpec
@@ -83,6 +84,9 @@ class CheckAppDependency(InfrahubCheck):
                         )
                     )
             return
+
+        if source and (reason := RulesPlanner.cross_environment_reason(source, target)):
+            self.log_error(message=f"{label} is refused by the generator and opens no rule: {reason}.")
 
         if crosses_owners(source, target) and dependency_access_status(dep) == "approved":
             flow = f"{component_owner_org_id(source)} -> {component_owner_org_id(target)}"

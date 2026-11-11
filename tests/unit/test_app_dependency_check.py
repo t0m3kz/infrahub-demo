@@ -528,3 +528,88 @@ class TestLoadBalancedComponent:
         components = (root_dir / "queries/validation/app_dependency.gql").read_text().split("AppDependency", 1)[0]
         assert "load_balanced { value }" in components
         assert "instances { count }" in components
+
+
+# ===========================================================================
+# Prod and non-prod separation
+# ===========================================================================
+
+
+def _in_segment(component: dict[str, Any], environment: str | None, zone: str = "PROD") -> dict[str, Any]:
+    """The component with the segment it sits in: its environment and security zone, as the query returns them."""
+    return {
+        **component,
+        "network_segment": {
+            "node": {
+                "name": {"value": f"seg-{environment}"},
+                "environment": {"value": environment},
+                "security_zone": {"node": {"name": {"value": zone}}},
+            }
+        },
+    }
+
+
+class TestEnvironmentSeparation:
+    """Prod and non-prod never connect: the generator refuses such a dependency, so the check reports it."""
+
+    @pytest.mark.parametrize(("src_env", "dst_env"), [("p", "d"), ("d", "p"), ("p", "t")])
+    def test_a_dependency_between_prod_and_non_prod_segments_is_an_error(self, src_env: str, dst_env: str) -> None:
+        """Either direction, any non-prod environment: the message says the generator opens no rule."""
+        errors = _errors(
+            _dependency(
+                ports=["tcp/5432"],
+                source=_in_segment(_source(), src_env),
+                target=_in_segment(DB, dst_env),
+            )
+        )
+
+        assert len(errors) == 1
+        assert "backend-to-db" in errors[0] and "opens no rule" in errors[0]
+        assert f"{src_env}->{dst_env}" in errors[0]
+
+    @pytest.mark.parametrize("environment", ["p", "d"])
+    def test_a_dependency_inside_one_environment_is_fine(self, environment: str) -> None:
+        """Two non-prod environments (d and t) are both non-prod; prod to prod is prod."""
+        assert (
+            _errors(
+                _dependency(
+                    ports=["tcp/5432"], source=_in_segment(_source(), environment), target=_in_segment(DB, environment)
+                )
+            )
+            == []
+        )
+
+    def test_two_different_non_prod_environments_are_one_namespace(self) -> None:
+        """`d` and `t` are both the non-prod namespace: no join."""
+        assert (
+            _errors(_dependency(ports=["tcp/5432"], source=_in_segment(_source(), "d"), target=_in_segment(DB, "t")))
+            == []
+        )
+
+    def test_an_unknown_segment_environment_fails_closed(self) -> None:
+        """A segment with no environment cannot be told apart, which the planner treats as a join."""
+        errors = _errors(
+            _dependency(ports=["tcp/5432"], source=_in_segment(_source(), None), target=_in_segment(DB, "p"))
+        )
+
+        assert len(errors) == 1 and "?->p" in errors[0]
+
+    @pytest.mark.parametrize("zone", ["INTERNET", "MANAGEMENT"])
+    def test_an_exchange_zone_segment_is_not_judged(self, zone: str) -> None:
+        """INTERNET and MANAGEMENT segments are governed by the exchange peers, not by this rule."""
+        assert (
+            _errors(
+                _dependency(
+                    ports=["tcp/5432"], source=_in_segment(_source(), "p"), target=_in_segment(DB, "d", zone=zone)
+                )
+            )
+            == []
+        )
+
+    def test_a_dependency_without_segments_is_not_judged(self) -> None:
+        """A component with no segment (or an access profile as the source) has nothing to join."""
+        assert _errors(_dependency(ports=["tcp/5432"], target=DB)) == []
+        assert (
+            _errors(_dependency(ports=["tcp/5432"], source=None, source_profile=True, target=_in_segment(DB, "d")))
+            == []
+        )

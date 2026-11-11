@@ -48,6 +48,23 @@ query app_dependency_validation {
               fqdn {
                 value
               }
+              network_segment {
+                node {
+                  name {
+                    value
+                  }
+                  environment {
+                    value
+                  }
+                  security_zone {
+                    node {
+                      name {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
               parent {
                 node {
                   __typename
@@ -82,6 +99,23 @@ query app_dependency_validation {
               }
               ports {
                 value
+              }
+              network_segment {
+                node {
+                  name {
+                    value
+                  }
+                  environment {
+                    value
+                  }
+                  security_zone {
+                    node {
+                      name {
+                        value
+                      }
+                    }
+                  }
+                }
               }
               parent {
                 node {
