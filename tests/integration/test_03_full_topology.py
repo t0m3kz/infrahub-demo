@@ -39,9 +39,19 @@ class TestFullTopology:
 
         The sample is authored data no generator completes, so the checks (circuit placement, quota, patch panel
         pairing, routing tags, interface parents...) judge it as written. A failing check raises with its messages.
-        The proposed change is not merged.
+        The proposed change is not merged and is closed afterwards.
         """
         result = create_and_validate_proposed_change(
             client=client_main, name="Full topology sample", source_branch=BRANCH
         )
         logging.info("full topology: %d validations, none failing", len(result["validations"]))
+        # An open proposed change is validated again whenever main changes (about 70 validators each time), which
+        # starves the validators of the proposed changes the other scenarios merge: close it, the proof is made.
+        client_main.execute_graphql(
+            query="""
+            mutation ($id: String!) {
+                CoreProposedChangeUpdate(data: {id: $id, state: {value: "closed"}}) { ok }
+            }
+            """,
+            variables={"id": result["pc_id"]},
+        )
