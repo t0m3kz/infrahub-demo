@@ -250,6 +250,71 @@ _PREFIX = {"edges": [{"node": {"id": "p", "prefix": _v("10.10.0.0/16")}}]}
 _ADDRESS = {"edges": [{"node": {"id": "i", "address": _v("100.66.96.65/32")}}]}
 
 
+def _zoned(seg_id: str, vrf_type: str) -> dict[str, Any]:
+    """A rule end: a segment node in the zone of ``vrf_type`` (the shape the check's query returns)."""
+    return {
+        "node": {
+            "id": seg_id,
+            "name": _v(seg_id),
+            "security_zone": {"node": {"id": f"z-{vrf_type}", "name": _v(vrf_type.upper()), "vrf_type": _v(vrf_type)}},
+        }
+    }
+
+
+def _crossing(rule_id: str, src_type: str, dst_type: str, **extra: Any) -> dict[str, Any]:
+    """A rule from a segment in ``src_type``'s zone to one in ``dst_type``'s."""
+    return _rule(
+        rule_id,
+        "src",
+        "dst",
+        source_segment=_zoned("src", src_type),
+        destination_segment=_zoned("dst", dst_type),
+        **extra,
+    )
+
+
+def _separation_errors(*rules: dict[str, Any]) -> list[str]:
+    """The 'never connect' errors the check reports for the rules."""
+    return [e for e in _run([], list(rules))._captured_errors if "never connect" in e]
+
+
+class TestEnvironmentSeparation:
+    """Prod and non-prod never connect: a rule between a PROD and a NON-PROD segment is an error."""
+
+    @pytest.mark.parametrize(("src", "dst"), [("prod", "non_prod"), ("non_prod", "prod")])
+    def test_a_rule_between_prod_and_non_prod_is_an_error_in_either_direction(self, src: str, dst: str) -> None:
+        """The error names the rule, both segments and both namespaces."""
+        errors = _separation_errors(_crossing("r1", src, dst))
+
+        assert len(errors) == 1
+        assert "rule 'r1'" in errors[0] and f"{src} namespace" in errors[0] and f"{dst} one" in errors[0]
+
+    @pytest.mark.parametrize("zone", ["prod", "non_prod"])
+    def test_a_rule_inside_one_environment_is_fine(self, zone: str) -> None:
+        """Two segments of the same tenant namespace may talk."""
+        assert _separation_errors(_crossing("r1", zone, zone)) == []
+
+    @pytest.mark.parametrize("other", ["internet", "management"])
+    def test_an_exchange_zone_segment_is_not_a_tenant_segment(self, other: str) -> None:
+        """A segment in INTERNET or MANAGEMENT is not judged (tenants reach those through the exchange)."""
+        assert _separation_errors(_crossing("r1", "prod", other), _crossing("r2", other, "non_prod")) == []
+
+    def test_a_disabled_rule_or_one_in_a_disabled_policy_is_not_judged(self) -> None:
+        """Only an enabled rule counts, like every other rule check."""
+        disabled = _crossing("r1", "prod", "non_prod", disabled=_v(True))
+        in_disabled_policy = _crossing(
+            "r2", "prod", "non_prod", policy={"node": {"id": "pol", "name": _v("pol"), "enabled": _v(False)}}
+        )
+
+        assert _separation_errors(disabled, in_disabled_policy) == []
+
+    def test_a_rule_side_without_a_segment_is_not_judged(self) -> None:
+        """A prefix or address selector names no segment; the destination checks judge those."""
+        no_destination = _rule("r1", "src", None, source_segment=_zoned("src", "prod"))
+
+        assert _separation_errors(no_destination) == []
+
+
 class TestSelectorZones:
     """A rule side with a selector and no segment names the zone the selector is routed in."""
 

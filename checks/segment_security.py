@@ -15,6 +15,7 @@ from utils.exchange_transit import (
     EXCHANGE_PEERS,
     INTERNET_ZONE,
     ROUTED_SEGMENT_KINDS,
+    TENANT_NAMESPACE_TYPES,
     is_exchange_zone,
     namespace_type_for_environment,
     zone_name_for_namespace_type,
@@ -89,6 +90,7 @@ class CheckSegmentSecurity(WarningCheck):
             self._validate_gateway_zone(segment)
         self._validate_unique_names(segments)
         self._validate_rule_endpoints(segments, rules)
+        self._validate_environment_separation(rules)
         self._validate_selector_zones(rules)
         self._validate_rule_destinations(rules)
         self._validate_destination_prefixes(cleaned, segments, rules)
@@ -168,6 +170,27 @@ class CheckSegmentSecurity(WarningCheck):
                     message=(
                         f"rule '{rule.get('name', rule.get('id'))}': {side} segment "
                         f"'{segment.get('name', endpoint['id'])}' resolves to no prefix — it would render as any"
+                    )
+                )
+
+    def _validate_environment_separation(self, rules: list[dict[str, Any]]) -> None:
+        """Prod and non-prod never connect: an enabled rule between a PROD and a NON-PROD segment is an error.
+
+        The zone decides (``vrf_type`` of the segment's ``security_zone``, the routing authority), not the
+        ``environment`` attribute; a segment in an exchange zone (INTERNET, MANAGEMENT) is not a tenant segment and a
+        rule side that is a prefix or address selector names no segment, so neither is judged here.
+        """
+        for rule in rules:
+            if not rule_enabled(rule):
+                continue
+            source = _tenant_zone(rule.get("source_segment"))
+            destination = _tenant_zone(rule.get("destination_segment"))
+            if source and destination and source[1] != destination[1]:
+                self.log_error(
+                    message=(
+                        f"rule '{rule.get('name', rule.get('id'))}': source segment '{source[0]}' is in the "
+                        f"{source[1]} namespace and destination segment '{destination[0]}' in the {destination[1]} one; "
+                        "prod and non-prod never connect"
                     )
                 )
 
@@ -415,6 +438,15 @@ class CheckSegmentSecurity(WarningCheck):
                     self.log_error(
                         message=f"Rule '{name}' between groups {pair[0]} -> {pair[1]} has no group contract row"
                     )
+
+
+def _tenant_zone(segment: dict[str, Any] | None) -> tuple[str, str] | None:
+    """(segment name, namespace type) of a rule end in a tenant zone (PROD or NON-PROD), else None."""
+    segment = segment or {}
+    namespace_type = (segment.get("security_zone") or {}).get("vrf_type")
+    if not segment.get("id") or namespace_type not in TENANT_NAMESPACE_TYPES:
+        return None
+    return str(segment.get("name") or segment["id"]), namespace_type
 
 
 def _network(cidr: str | None) -> _Network | None:
