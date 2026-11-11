@@ -4,7 +4,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from transforms.config.firewall import Firewall
+from transforms.config.firewall import Firewall, read_rules
 from transforms.helpers.policy import is_internet_destination
 
 from .common import validate_context_members, validate_exchange_gateways, validate_snat_addresses
@@ -23,6 +23,13 @@ class CheckFirewall(InfrahubCheck):
     its HA pair) are validated too."""
 
     query = "firewall_config"
+
+    async def run(self, data: dict | None = None) -> bool:
+        """Fill in the served segments' rules (the query selects their ids) before ``validate`` reads them."""
+        if not data:
+            data = await self.collect_data()
+        await read_rules(self, data)
+        return await super().run(data=data)
 
     def validate(self, data: Any) -> None:
         device, _, _ = Firewall._device_and_platform(data)

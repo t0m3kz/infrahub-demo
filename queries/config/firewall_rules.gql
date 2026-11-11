@@ -1,0 +1,15 @@
+# The rules a firewall's served segments name by id (fragment SegmentRuleIdsFields of the registered firewall_config
+# query), read in pages by transforms/helpers/firewall_rules.py: each rule once, its two segment ends and its policy's
+# segment as ids, which firewall_rule_segments reads once each.
+query firewall_rules($ids: [ID]) {
+  SecurityPolicyRule(ids: $ids) {
+    edges {
+      node {
+        ...SecurityPolicyRuleScalarFields
+        source_segment { node { id } }
+        destination_segment { node { id } }
+        policy { node { ...SecurityPolicyScalarFields segment { node { id } } } }
+      }
+    }
+  }
+}

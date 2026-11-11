@@ -1770,15 +1770,17 @@ fragment border_leaf_config__F1 on DcimDevice {
                               security_policy {
                                 node {
                                   ... on SecurityPolicy {
-                                    id
-                                    name {
-                                      value
-                                    }
-                                    enabled {
-                                      value
-                                    }
-                                    default_action {
-                                      value
+                                    ... on SecurityPolicy {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      enabled {
+                                        value
+                                      }
+                                      default_action {
+                                        value
+                                      }
                                     }
                                     segment {
                                       node {
@@ -1855,271 +1857,7 @@ fragment border_leaf_config__F1 on DcimDevice {
                                   rules {
                                     edges {
                                       node {
-                                        ... on SecurityPolicyRule {
-                                          id
-                                          index {
-                                            value
-                                          }
-                                          name {
-                                            value
-                                          }
-                                          action {
-                                            value
-                                          }
-                                          protocol {
-                                            value
-                                          }
-                                          port_start {
-                                            value
-                                          }
-                                          port_end {
-                                            value
-                                          }
-                                          log {
-                                            value
-                                          }
-                                          disabled {
-                                            value
-                                          }
-                                          description {
-                                            value
-                                          }
-                                          apply_on_switch {
-                                            value
-                                          }
-                                          security_profile {
-                                            node {
-                                              name {
-                                                value
-                                              }
-                                            }
-                                          }
-                                          source_segment {
-                                            node {
-                                              ... on ManagedNetworkSegment {
-                                                id
-                                                name {
-                                                  value
-                                                }
-                                                customer_name {
-                                                  value
-                                                }
-                                                environment {
-                                                  value
-                                                }
-                                                security_zone {
-                                                  node {
-                                                    name {
-                                                      value
-                                                    }
-                                                    trust_level {
-                                                      value
-                                                    }
-                                                    description {
-                                                      value
-                                                    }
-                                                    id
-                                                    l3_vni {
-                                                      value
-                                                    }
-                                                    vrf_type {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                                gateway {
-                                                  node {
-                                                    ip_prefix {
-                                                      node {
-                                                        prefix {
-                                                          value
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                                ... on ManagedVxlanSegment {
-                                                  customer_deployments {
-                                                    edges {
-                                                      node {
-                                                        id
-                                                      }
-                                                    }
-                                                  }
-                                                  terminated_on {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                                ... on CloudNetworkSegment {
-                                                  cidr_block {
-                                                    value
-                                                  }
-                                                  customer_deployment {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                          destination_segment {
-                                            node {
-                                              ... on ManagedNetworkSegment {
-                                                id
-                                                name {
-                                                  value
-                                                }
-                                                customer_name {
-                                                  value
-                                                }
-                                                environment {
-                                                  value
-                                                }
-                                                security_zone {
-                                                  node {
-                                                    name {
-                                                      value
-                                                    }
-                                                    trust_level {
-                                                      value
-                                                    }
-                                                    description {
-                                                      value
-                                                    }
-                                                    id
-                                                    l3_vni {
-                                                      value
-                                                    }
-                                                    vrf_type {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                                gateway {
-                                                  node {
-                                                    ip_prefix {
-                                                      node {
-                                                        prefix {
-                                                          value
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                                ... on ManagedVxlanSegment {
-                                                  customer_deployments {
-                                                    edges {
-                                                      node {
-                                                        id
-                                                      }
-                                                    }
-                                                  }
-                                                  terminated_on {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                                ... on CloudNetworkSegment {
-                                                  cidr_block {
-                                                    value
-                                                  }
-                                                  customer_deployment {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                          destination_zone {
-                                            node {
-                                              name {
-                                                value
-                                              }
-                                              trust_level {
-                                                value
-                                              }
-                                              description {
-                                                value
-                                              }
-                                            }
-                                          }
-                                          source_zone {
-                                            node {
-                                              ... on SecurityZone {
-                                                id
-                                                name {
-                                                  value
-                                                }
-                                                vrf_type {
-                                                  value
-                                                }
-                                                l3_vni {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                          }
-                                          source_prefixes {
-                                            edges {
-                                              node {
-                                                id
-                                                prefix {
-                                                  value
-                                                }
-                                                ip_namespace {
-                                                  node {
-                                                    name {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                          destination_prefixes {
-                                            edges {
-                                              node {
-                                                id
-                                                prefix {
-                                                  value
-                                                }
-                                                ip_namespace {
-                                                  node {
-                                                    name {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                          source_ip_addresses {
-                                            edges {
-                                              node {
-                                                id
-                                                address {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                          }
-                                          destination_ip_addresses {
-                                            edges {
-                                              node {
-                                                id
-                                                address {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
+                                        id
                                       }
                                     }
                                   }
@@ -2128,358 +1866,7 @@ fragment border_leaf_config__F1 on DcimDevice {
                               inbound_rules {
                                 edges {
                                   node {
-                                    ... on SecurityPolicyRule {
-                                      id
-                                      index {
-                                        value
-                                      }
-                                      name {
-                                        value
-                                      }
-                                      action {
-                                        value
-                                      }
-                                      protocol {
-                                        value
-                                      }
-                                      port_start {
-                                        value
-                                      }
-                                      port_end {
-                                        value
-                                      }
-                                      log {
-                                        value
-                                      }
-                                      disabled {
-                                        value
-                                      }
-                                      description {
-                                        value
-                                      }
-                                      apply_on_switch {
-                                        value
-                                      }
-                                      security_profile {
-                                        node {
-                                          name {
-                                            value
-                                          }
-                                        }
-                                      }
-                                      source_segment {
-                                        node {
-                                          ... on ManagedNetworkSegment {
-                                            id
-                                            name {
-                                              value
-                                            }
-                                            customer_name {
-                                              value
-                                            }
-                                            environment {
-                                              value
-                                            }
-                                            security_zone {
-                                              node {
-                                                name {
-                                                  value
-                                                }
-                                                trust_level {
-                                                  value
-                                                }
-                                                description {
-                                                  value
-                                                }
-                                                id
-                                                l3_vni {
-                                                  value
-                                                }
-                                                vrf_type {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                            gateway {
-                                              node {
-                                                ip_prefix {
-                                                  node {
-                                                    prefix {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                            ... on ManagedVxlanSegment {
-                                              customer_deployments {
-                                                edges {
-                                                  node {
-                                                    id
-                                                  }
-                                                }
-                                              }
-                                              terminated_on {
-                                                node {
-                                                  id
-                                                }
-                                              }
-                                            }
-                                            ... on CloudNetworkSegment {
-                                              cidr_block {
-                                                value
-                                              }
-                                              customer_deployment {
-                                                node {
-                                                  id
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                      destination_segment {
-                                        node {
-                                          ... on ManagedNetworkSegment {
-                                            id
-                                            name {
-                                              value
-                                            }
-                                            customer_name {
-                                              value
-                                            }
-                                            environment {
-                                              value
-                                            }
-                                            security_zone {
-                                              node {
-                                                name {
-                                                  value
-                                                }
-                                                trust_level {
-                                                  value
-                                                }
-                                                description {
-                                                  value
-                                                }
-                                                id
-                                                l3_vni {
-                                                  value
-                                                }
-                                                vrf_type {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                            gateway {
-                                              node {
-                                                ip_prefix {
-                                                  node {
-                                                    prefix {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                            ... on ManagedVxlanSegment {
-                                              customer_deployments {
-                                                edges {
-                                                  node {
-                                                    id
-                                                  }
-                                                }
-                                              }
-                                              terminated_on {
-                                                node {
-                                                  id
-                                                }
-                                              }
-                                            }
-                                            ... on CloudNetworkSegment {
-                                              cidr_block {
-                                                value
-                                              }
-                                              customer_deployment {
-                                                node {
-                                                  id
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                      destination_zone {
-                                        node {
-                                          name {
-                                            value
-                                          }
-                                          trust_level {
-                                            value
-                                          }
-                                          description {
-                                            value
-                                          }
-                                        }
-                                      }
-                                      source_zone {
-                                        node {
-                                          ... on SecurityZone {
-                                            id
-                                            name {
-                                              value
-                                            }
-                                            vrf_type {
-                                              value
-                                            }
-                                            l3_vni {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                      source_prefixes {
-                                        edges {
-                                          node {
-                                            id
-                                            prefix {
-                                              value
-                                            }
-                                            ip_namespace {
-                                              node {
-                                                name {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                      destination_prefixes {
-                                        edges {
-                                          node {
-                                            id
-                                            prefix {
-                                              value
-                                            }
-                                            ip_namespace {
-                                              node {
-                                                name {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                      source_ip_addresses {
-                                        edges {
-                                          node {
-                                            id
-                                            address {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                      destination_ip_addresses {
-                                        edges {
-                                          node {
-                                            id
-                                            address {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                    policy {
-                                      node {
-                                        ... on SecurityPolicy {
-                                          id
-                                          name {
-                                            value
-                                          }
-                                          enabled {
-                                            value
-                                          }
-                                          default_action {
-                                            value
-                                          }
-                                          segment {
-                                            node {
-                                              ... on ManagedNetworkSegment {
-                                                id
-                                                name {
-                                                  value
-                                                }
-                                                customer_name {
-                                                  value
-                                                }
-                                                environment {
-                                                  value
-                                                }
-                                                security_zone {
-                                                  node {
-                                                    name {
-                                                      value
-                                                    }
-                                                    trust_level {
-                                                      value
-                                                    }
-                                                    description {
-                                                      value
-                                                    }
-                                                    id
-                                                    l3_vni {
-                                                      value
-                                                    }
-                                                    vrf_type {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                                gateway {
-                                                  node {
-                                                    ip_prefix {
-                                                      node {
-                                                        prefix {
-                                                          value
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                                ... on ManagedVxlanSegment {
-                                                  customer_deployments {
-                                                    edges {
-                                                      node {
-                                                        id
-                                                      }
-                                                    }
-                                                  }
-                                                  terminated_on {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                                ... on CloudNetworkSegment {
-                                                  cidr_block {
-                                                    value
-                                                  }
-                                                  customer_deployment {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
+                                    id
                                   }
                                 }
                               }
@@ -2561,15 +1948,17 @@ fragment border_leaf_config__F1 on DcimDevice {
                               security_policy {
                                 node {
                                   ... on SecurityPolicy {
-                                    id
-                                    name {
-                                      value
-                                    }
-                                    enabled {
-                                      value
-                                    }
-                                    default_action {
-                                      value
+                                    ... on SecurityPolicy {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      enabled {
+                                        value
+                                      }
+                                      default_action {
+                                        value
+                                      }
                                     }
                                     segment {
                                       node {
@@ -2646,271 +2035,7 @@ fragment border_leaf_config__F1 on DcimDevice {
                                   rules {
                                     edges {
                                       node {
-                                        ... on SecurityPolicyRule {
-                                          id
-                                          index {
-                                            value
-                                          }
-                                          name {
-                                            value
-                                          }
-                                          action {
-                                            value
-                                          }
-                                          protocol {
-                                            value
-                                          }
-                                          port_start {
-                                            value
-                                          }
-                                          port_end {
-                                            value
-                                          }
-                                          log {
-                                            value
-                                          }
-                                          disabled {
-                                            value
-                                          }
-                                          description {
-                                            value
-                                          }
-                                          apply_on_switch {
-                                            value
-                                          }
-                                          security_profile {
-                                            node {
-                                              name {
-                                                value
-                                              }
-                                            }
-                                          }
-                                          source_segment {
-                                            node {
-                                              ... on ManagedNetworkSegment {
-                                                id
-                                                name {
-                                                  value
-                                                }
-                                                customer_name {
-                                                  value
-                                                }
-                                                environment {
-                                                  value
-                                                }
-                                                security_zone {
-                                                  node {
-                                                    name {
-                                                      value
-                                                    }
-                                                    trust_level {
-                                                      value
-                                                    }
-                                                    description {
-                                                      value
-                                                    }
-                                                    id
-                                                    l3_vni {
-                                                      value
-                                                    }
-                                                    vrf_type {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                                gateway {
-                                                  node {
-                                                    ip_prefix {
-                                                      node {
-                                                        prefix {
-                                                          value
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                                ... on ManagedVxlanSegment {
-                                                  customer_deployments {
-                                                    edges {
-                                                      node {
-                                                        id
-                                                      }
-                                                    }
-                                                  }
-                                                  terminated_on {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                                ... on CloudNetworkSegment {
-                                                  cidr_block {
-                                                    value
-                                                  }
-                                                  customer_deployment {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                          destination_segment {
-                                            node {
-                                              ... on ManagedNetworkSegment {
-                                                id
-                                                name {
-                                                  value
-                                                }
-                                                customer_name {
-                                                  value
-                                                }
-                                                environment {
-                                                  value
-                                                }
-                                                security_zone {
-                                                  node {
-                                                    name {
-                                                      value
-                                                    }
-                                                    trust_level {
-                                                      value
-                                                    }
-                                                    description {
-                                                      value
-                                                    }
-                                                    id
-                                                    l3_vni {
-                                                      value
-                                                    }
-                                                    vrf_type {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                                gateway {
-                                                  node {
-                                                    ip_prefix {
-                                                      node {
-                                                        prefix {
-                                                          value
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                                ... on ManagedVxlanSegment {
-                                                  customer_deployments {
-                                                    edges {
-                                                      node {
-                                                        id
-                                                      }
-                                                    }
-                                                  }
-                                                  terminated_on {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                                ... on CloudNetworkSegment {
-                                                  cidr_block {
-                                                    value
-                                                  }
-                                                  customer_deployment {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                          destination_zone {
-                                            node {
-                                              name {
-                                                value
-                                              }
-                                              trust_level {
-                                                value
-                                              }
-                                              description {
-                                                value
-                                              }
-                                            }
-                                          }
-                                          source_zone {
-                                            node {
-                                              ... on SecurityZone {
-                                                id
-                                                name {
-                                                  value
-                                                }
-                                                vrf_type {
-                                                  value
-                                                }
-                                                l3_vni {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                          }
-                                          source_prefixes {
-                                            edges {
-                                              node {
-                                                id
-                                                prefix {
-                                                  value
-                                                }
-                                                ip_namespace {
-                                                  node {
-                                                    name {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                          destination_prefixes {
-                                            edges {
-                                              node {
-                                                id
-                                                prefix {
-                                                  value
-                                                }
-                                                ip_namespace {
-                                                  node {
-                                                    name {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                          source_ip_addresses {
-                                            edges {
-                                              node {
-                                                id
-                                                address {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                          }
-                                          destination_ip_addresses {
-                                            edges {
-                                              node {
-                                                id
-                                                address {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
+                                        id
                                       }
                                     }
                                   }
@@ -2919,358 +2044,7 @@ fragment border_leaf_config__F1 on DcimDevice {
                               inbound_rules {
                                 edges {
                                   node {
-                                    ... on SecurityPolicyRule {
-                                      id
-                                      index {
-                                        value
-                                      }
-                                      name {
-                                        value
-                                      }
-                                      action {
-                                        value
-                                      }
-                                      protocol {
-                                        value
-                                      }
-                                      port_start {
-                                        value
-                                      }
-                                      port_end {
-                                        value
-                                      }
-                                      log {
-                                        value
-                                      }
-                                      disabled {
-                                        value
-                                      }
-                                      description {
-                                        value
-                                      }
-                                      apply_on_switch {
-                                        value
-                                      }
-                                      security_profile {
-                                        node {
-                                          name {
-                                            value
-                                          }
-                                        }
-                                      }
-                                      source_segment {
-                                        node {
-                                          ... on ManagedNetworkSegment {
-                                            id
-                                            name {
-                                              value
-                                            }
-                                            customer_name {
-                                              value
-                                            }
-                                            environment {
-                                              value
-                                            }
-                                            security_zone {
-                                              node {
-                                                name {
-                                                  value
-                                                }
-                                                trust_level {
-                                                  value
-                                                }
-                                                description {
-                                                  value
-                                                }
-                                                id
-                                                l3_vni {
-                                                  value
-                                                }
-                                                vrf_type {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                            gateway {
-                                              node {
-                                                ip_prefix {
-                                                  node {
-                                                    prefix {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                            ... on ManagedVxlanSegment {
-                                              customer_deployments {
-                                                edges {
-                                                  node {
-                                                    id
-                                                  }
-                                                }
-                                              }
-                                              terminated_on {
-                                                node {
-                                                  id
-                                                }
-                                              }
-                                            }
-                                            ... on CloudNetworkSegment {
-                                              cidr_block {
-                                                value
-                                              }
-                                              customer_deployment {
-                                                node {
-                                                  id
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                      destination_segment {
-                                        node {
-                                          ... on ManagedNetworkSegment {
-                                            id
-                                            name {
-                                              value
-                                            }
-                                            customer_name {
-                                              value
-                                            }
-                                            environment {
-                                              value
-                                            }
-                                            security_zone {
-                                              node {
-                                                name {
-                                                  value
-                                                }
-                                                trust_level {
-                                                  value
-                                                }
-                                                description {
-                                                  value
-                                                }
-                                                id
-                                                l3_vni {
-                                                  value
-                                                }
-                                                vrf_type {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                            gateway {
-                                              node {
-                                                ip_prefix {
-                                                  node {
-                                                    prefix {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                            ... on ManagedVxlanSegment {
-                                              customer_deployments {
-                                                edges {
-                                                  node {
-                                                    id
-                                                  }
-                                                }
-                                              }
-                                              terminated_on {
-                                                node {
-                                                  id
-                                                }
-                                              }
-                                            }
-                                            ... on CloudNetworkSegment {
-                                              cidr_block {
-                                                value
-                                              }
-                                              customer_deployment {
-                                                node {
-                                                  id
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                      destination_zone {
-                                        node {
-                                          name {
-                                            value
-                                          }
-                                          trust_level {
-                                            value
-                                          }
-                                          description {
-                                            value
-                                          }
-                                        }
-                                      }
-                                      source_zone {
-                                        node {
-                                          ... on SecurityZone {
-                                            id
-                                            name {
-                                              value
-                                            }
-                                            vrf_type {
-                                              value
-                                            }
-                                            l3_vni {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                      source_prefixes {
-                                        edges {
-                                          node {
-                                            id
-                                            prefix {
-                                              value
-                                            }
-                                            ip_namespace {
-                                              node {
-                                                name {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                      destination_prefixes {
-                                        edges {
-                                          node {
-                                            id
-                                            prefix {
-                                              value
-                                            }
-                                            ip_namespace {
-                                              node {
-                                                name {
-                                                  value
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                      source_ip_addresses {
-                                        edges {
-                                          node {
-                                            id
-                                            address {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                      destination_ip_addresses {
-                                        edges {
-                                          node {
-                                            id
-                                            address {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                    policy {
-                                      node {
-                                        ... on SecurityPolicy {
-                                          id
-                                          name {
-                                            value
-                                          }
-                                          enabled {
-                                            value
-                                          }
-                                          default_action {
-                                            value
-                                          }
-                                          segment {
-                                            node {
-                                              ... on ManagedNetworkSegment {
-                                                id
-                                                name {
-                                                  value
-                                                }
-                                                customer_name {
-                                                  value
-                                                }
-                                                environment {
-                                                  value
-                                                }
-                                                security_zone {
-                                                  node {
-                                                    name {
-                                                      value
-                                                    }
-                                                    trust_level {
-                                                      value
-                                                    }
-                                                    description {
-                                                      value
-                                                    }
-                                                    id
-                                                    l3_vni {
-                                                      value
-                                                    }
-                                                    vrf_type {
-                                                      value
-                                                    }
-                                                  }
-                                                }
-                                                gateway {
-                                                  node {
-                                                    ip_prefix {
-                                                      node {
-                                                        prefix {
-                                                          value
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                                ... on ManagedVxlanSegment {
-                                                  customer_deployments {
-                                                    edges {
-                                                      node {
-                                                        id
-                                                      }
-                                                    }
-                                                  }
-                                                  terminated_on {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                                ... on CloudNetworkSegment {
-                                                  cidr_block {
-                                                    value
-                                                  }
-                                                  customer_deployment {
-                                                    node {
-                                                      id
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
+                                    id
                                   }
                                 }
                               }
@@ -4171,15 +2945,17 @@ fragment border_leaf_config__F3 on DcimPhysicalDevice {
                       security_policy {
                         node {
                           ... on SecurityPolicy {
-                            id
-                            name {
-                              value
-                            }
-                            enabled {
-                              value
-                            }
-                            default_action {
-                              value
+                            ... on SecurityPolicy {
+                              id
+                              name {
+                                value
+                              }
+                              enabled {
+                                value
+                              }
+                              default_action {
+                                value
+                              }
                             }
                             segment {
                               node {
@@ -4257,41 +3033,126 @@ fragment border_leaf_config__F3 on DcimPhysicalDevice {
                             edges {
                               node {
                                 ... on SecurityPolicyRule {
-                                  id
-                                  index {
-                                    value
-                                  }
-                                  name {
-                                    value
-                                  }
-                                  action {
-                                    value
-                                  }
-                                  protocol {
-                                    value
-                                  }
-                                  port_start {
-                                    value
-                                  }
-                                  port_end {
-                                    value
-                                  }
-                                  log {
-                                    value
-                                  }
-                                  disabled {
-                                    value
-                                  }
-                                  description {
-                                    value
-                                  }
-                                  apply_on_switch {
-                                    value
-                                  }
-                                  security_profile {
-                                    node {
-                                      name {
-                                        value
+                                  ... on SecurityPolicyRule {
+                                    id
+                                    index {
+                                      value
+                                    }
+                                    name {
+                                      value
+                                    }
+                                    action {
+                                      value
+                                    }
+                                    protocol {
+                                      value
+                                    }
+                                    port_start {
+                                      value
+                                    }
+                                    port_end {
+                                      value
+                                    }
+                                    log {
+                                      value
+                                    }
+                                    disabled {
+                                      value
+                                    }
+                                    description {
+                                      value
+                                    }
+                                    apply_on_switch {
+                                      value
+                                    }
+                                    security_profile {
+                                      node {
+                                        name {
+                                          value
+                                        }
+                                      }
+                                    }
+                                    destination_zone {
+                                      node {
+                                        name {
+                                          value
+                                        }
+                                        trust_level {
+                                          value
+                                        }
+                                        description {
+                                          value
+                                        }
+                                      }
+                                    }
+                                    source_zone {
+                                      node {
+                                        ... on SecurityZone {
+                                          id
+                                          name {
+                                            value
+                                          }
+                                          vrf_type {
+                                            value
+                                          }
+                                          l3_vni {
+                                            value
+                                          }
+                                        }
+                                      }
+                                    }
+                                    source_prefixes {
+                                      edges {
+                                        node {
+                                          id
+                                          prefix {
+                                            value
+                                          }
+                                          ip_namespace {
+                                            node {
+                                              name {
+                                                value
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                    destination_prefixes {
+                                      edges {
+                                        node {
+                                          id
+                                          prefix {
+                                            value
+                                          }
+                                          ip_namespace {
+                                            node {
+                                              name {
+                                                value
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                    source_ip_addresses {
+                                      edges {
+                                        node {
+                                          id
+                                          address {
+                                            value
+                                          }
+                                        }
+                                      }
+                                    }
+                                    destination_ip_addresses {
+                                      edges {
+                                        node {
+                                          id
+                                          address {
+                                            value
+                                          }
+                                        }
                                       }
                                     }
                                   }
@@ -4437,89 +3298,6 @@ fragment border_leaf_config__F3 on DcimPhysicalDevice {
                                       }
                                     }
                                   }
-                                  destination_zone {
-                                    node {
-                                      name {
-                                        value
-                                      }
-                                      trust_level {
-                                        value
-                                      }
-                                      description {
-                                        value
-                                      }
-                                    }
-                                  }
-                                  source_zone {
-                                    node {
-                                      ... on SecurityZone {
-                                        id
-                                        name {
-                                          value
-                                        }
-                                        vrf_type {
-                                          value
-                                        }
-                                        l3_vni {
-                                          value
-                                        }
-                                      }
-                                    }
-                                  }
-                                  source_prefixes {
-                                    edges {
-                                      node {
-                                        id
-                                        prefix {
-                                          value
-                                        }
-                                        ip_namespace {
-                                          node {
-                                            name {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                  destination_prefixes {
-                                    edges {
-                                      node {
-                                        id
-                                        prefix {
-                                          value
-                                        }
-                                        ip_namespace {
-                                          node {
-                                            name {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                  source_ip_addresses {
-                                    edges {
-                                      node {
-                                        id
-                                        address {
-                                          value
-                                        }
-                                      }
-                                    }
-                                  }
-                                  destination_ip_addresses {
-                                    edges {
-                                      node {
-                                        id
-                                        address {
-                                          value
-                                        }
-                                      }
-                                    }
-                                  }
                                 }
                               }
                             }
@@ -4530,41 +3308,126 @@ fragment border_leaf_config__F3 on DcimPhysicalDevice {
                         edges {
                           node {
                             ... on SecurityPolicyRule {
-                              id
-                              index {
-                                value
-                              }
-                              name {
-                                value
-                              }
-                              action {
-                                value
-                              }
-                              protocol {
-                                value
-                              }
-                              port_start {
-                                value
-                              }
-                              port_end {
-                                value
-                              }
-                              log {
-                                value
-                              }
-                              disabled {
-                                value
-                              }
-                              description {
-                                value
-                              }
-                              apply_on_switch {
-                                value
-                              }
-                              security_profile {
-                                node {
-                                  name {
-                                    value
+                              ... on SecurityPolicyRule {
+                                id
+                                index {
+                                  value
+                                }
+                                name {
+                                  value
+                                }
+                                action {
+                                  value
+                                }
+                                protocol {
+                                  value
+                                }
+                                port_start {
+                                  value
+                                }
+                                port_end {
+                                  value
+                                }
+                                log {
+                                  value
+                                }
+                                disabled {
+                                  value
+                                }
+                                description {
+                                  value
+                                }
+                                apply_on_switch {
+                                  value
+                                }
+                                security_profile {
+                                  node {
+                                    name {
+                                      value
+                                    }
+                                  }
+                                }
+                                destination_zone {
+                                  node {
+                                    name {
+                                      value
+                                    }
+                                    trust_level {
+                                      value
+                                    }
+                                    description {
+                                      value
+                                    }
+                                  }
+                                }
+                                source_zone {
+                                  node {
+                                    ... on SecurityZone {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      vrf_type {
+                                        value
+                                      }
+                                      l3_vni {
+                                        value
+                                      }
+                                    }
+                                  }
+                                }
+                                source_prefixes {
+                                  edges {
+                                    node {
+                                      id
+                                      prefix {
+                                        value
+                                      }
+                                      ip_namespace {
+                                        node {
+                                          name {
+                                            value
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                                destination_prefixes {
+                                  edges {
+                                    node {
+                                      id
+                                      prefix {
+                                        value
+                                      }
+                                      ip_namespace {
+                                        node {
+                                          name {
+                                            value
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                                source_ip_addresses {
+                                  edges {
+                                    node {
+                                      id
+                                      address {
+                                        value
+                                      }
+                                    }
+                                  }
+                                }
+                                destination_ip_addresses {
+                                  edges {
+                                    node {
+                                      id
+                                      address {
+                                        value
+                                      }
+                                    }
                                   }
                                 }
                               }
@@ -4710,102 +3573,21 @@ fragment border_leaf_config__F3 on DcimPhysicalDevice {
                                   }
                                 }
                               }
-                              destination_zone {
-                                node {
-                                  name {
-                                    value
-                                  }
-                                  trust_level {
-                                    value
-                                  }
-                                  description {
-                                    value
-                                  }
-                                }
-                              }
-                              source_zone {
-                                node {
-                                  ... on SecurityZone {
-                                    id
-                                    name {
-                                      value
-                                    }
-                                    vrf_type {
-                                      value
-                                    }
-                                    l3_vni {
-                                      value
-                                    }
-                                  }
-                                }
-                              }
-                              source_prefixes {
-                                edges {
-                                  node {
-                                    id
-                                    prefix {
-                                      value
-                                    }
-                                    ip_namespace {
-                                      node {
-                                        name {
-                                          value
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                              destination_prefixes {
-                                edges {
-                                  node {
-                                    id
-                                    prefix {
-                                      value
-                                    }
-                                    ip_namespace {
-                                      node {
-                                        name {
-                                          value
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                              source_ip_addresses {
-                                edges {
-                                  node {
-                                    id
-                                    address {
-                                      value
-                                    }
-                                  }
-                                }
-                              }
-                              destination_ip_addresses {
-                                edges {
-                                  node {
-                                    id
-                                    address {
-                                      value
-                                    }
-                                  }
-                                }
-                              }
                             }
                             policy {
                               node {
                                 ... on SecurityPolicy {
-                                  id
-                                  name {
-                                    value
-                                  }
-                                  enabled {
-                                    value
-                                  }
-                                  default_action {
-                                    value
+                                  ... on SecurityPolicy {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                    enabled {
+                                      value
+                                    }
+                                    default_action {
+                                      value
+                                    }
                                   }
                                   segment {
                                     node {
@@ -5854,15 +4636,17 @@ fragment border_leaf_config__F9 on DcimInterface {
                         security_policy {
                           node {
                             ... on SecurityPolicy {
-                              id
-                              name {
-                                value
-                              }
-                              enabled {
-                                value
-                              }
-                              default_action {
-                                value
+                              ... on SecurityPolicy {
+                                id
+                                name {
+                                  value
+                                }
+                                enabled {
+                                  value
+                                }
+                                default_action {
+                                  value
+                                }
                               }
                               segment {
                                 node {
@@ -5940,41 +4724,126 @@ fragment border_leaf_config__F9 on DcimInterface {
                               edges {
                                 node {
                                   ... on SecurityPolicyRule {
-                                    id
-                                    index {
-                                      value
-                                    }
-                                    name {
-                                      value
-                                    }
-                                    action {
-                                      value
-                                    }
-                                    protocol {
-                                      value
-                                    }
-                                    port_start {
-                                      value
-                                    }
-                                    port_end {
-                                      value
-                                    }
-                                    log {
-                                      value
-                                    }
-                                    disabled {
-                                      value
-                                    }
-                                    description {
-                                      value
-                                    }
-                                    apply_on_switch {
-                                      value
-                                    }
-                                    security_profile {
-                                      node {
-                                        name {
-                                          value
+                                    ... on SecurityPolicyRule {
+                                      id
+                                      index {
+                                        value
+                                      }
+                                      name {
+                                        value
+                                      }
+                                      action {
+                                        value
+                                      }
+                                      protocol {
+                                        value
+                                      }
+                                      port_start {
+                                        value
+                                      }
+                                      port_end {
+                                        value
+                                      }
+                                      log {
+                                        value
+                                      }
+                                      disabled {
+                                        value
+                                      }
+                                      description {
+                                        value
+                                      }
+                                      apply_on_switch {
+                                        value
+                                      }
+                                      security_profile {
+                                        node {
+                                          name {
+                                            value
+                                          }
+                                        }
+                                      }
+                                      destination_zone {
+                                        node {
+                                          name {
+                                            value
+                                          }
+                                          trust_level {
+                                            value
+                                          }
+                                          description {
+                                            value
+                                          }
+                                        }
+                                      }
+                                      source_zone {
+                                        node {
+                                          ... on SecurityZone {
+                                            id
+                                            name {
+                                              value
+                                            }
+                                            vrf_type {
+                                              value
+                                            }
+                                            l3_vni {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
+                                      source_prefixes {
+                                        edges {
+                                          node {
+                                            id
+                                            prefix {
+                                              value
+                                            }
+                                            ip_namespace {
+                                              node {
+                                                name {
+                                                  value
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                      destination_prefixes {
+                                        edges {
+                                          node {
+                                            id
+                                            prefix {
+                                              value
+                                            }
+                                            ip_namespace {
+                                              node {
+                                                name {
+                                                  value
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                      source_ip_addresses {
+                                        edges {
+                                          node {
+                                            id
+                                            address {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
+                                      destination_ip_addresses {
+                                        edges {
+                                          node {
+                                            id
+                                            address {
+                                              value
+                                            }
+                                          }
                                         }
                                       }
                                     }
@@ -6120,89 +4989,6 @@ fragment border_leaf_config__F9 on DcimInterface {
                                         }
                                       }
                                     }
-                                    destination_zone {
-                                      node {
-                                        name {
-                                          value
-                                        }
-                                        trust_level {
-                                          value
-                                        }
-                                        description {
-                                          value
-                                        }
-                                      }
-                                    }
-                                    source_zone {
-                                      node {
-                                        ... on SecurityZone {
-                                          id
-                                          name {
-                                            value
-                                          }
-                                          vrf_type {
-                                            value
-                                          }
-                                          l3_vni {
-                                            value
-                                          }
-                                        }
-                                      }
-                                    }
-                                    source_prefixes {
-                                      edges {
-                                        node {
-                                          id
-                                          prefix {
-                                            value
-                                          }
-                                          ip_namespace {
-                                            node {
-                                              name {
-                                                value
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                    destination_prefixes {
-                                      edges {
-                                        node {
-                                          id
-                                          prefix {
-                                            value
-                                          }
-                                          ip_namespace {
-                                            node {
-                                              name {
-                                                value
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                    source_ip_addresses {
-                                      edges {
-                                        node {
-                                          id
-                                          address {
-                                            value
-                                          }
-                                        }
-                                      }
-                                    }
-                                    destination_ip_addresses {
-                                      edges {
-                                        node {
-                                          id
-                                          address {
-                                            value
-                                          }
-                                        }
-                                      }
-                                    }
                                   }
                                 }
                               }
@@ -6213,41 +4999,126 @@ fragment border_leaf_config__F9 on DcimInterface {
                           edges {
                             node {
                               ... on SecurityPolicyRule {
-                                id
-                                index {
-                                  value
-                                }
-                                name {
-                                  value
-                                }
-                                action {
-                                  value
-                                }
-                                protocol {
-                                  value
-                                }
-                                port_start {
-                                  value
-                                }
-                                port_end {
-                                  value
-                                }
-                                log {
-                                  value
-                                }
-                                disabled {
-                                  value
-                                }
-                                description {
-                                  value
-                                }
-                                apply_on_switch {
-                                  value
-                                }
-                                security_profile {
-                                  node {
-                                    name {
-                                      value
+                                ... on SecurityPolicyRule {
+                                  id
+                                  index {
+                                    value
+                                  }
+                                  name {
+                                    value
+                                  }
+                                  action {
+                                    value
+                                  }
+                                  protocol {
+                                    value
+                                  }
+                                  port_start {
+                                    value
+                                  }
+                                  port_end {
+                                    value
+                                  }
+                                  log {
+                                    value
+                                  }
+                                  disabled {
+                                    value
+                                  }
+                                  description {
+                                    value
+                                  }
+                                  apply_on_switch {
+                                    value
+                                  }
+                                  security_profile {
+                                    node {
+                                      name {
+                                        value
+                                      }
+                                    }
+                                  }
+                                  destination_zone {
+                                    node {
+                                      name {
+                                        value
+                                      }
+                                      trust_level {
+                                        value
+                                      }
+                                      description {
+                                        value
+                                      }
+                                    }
+                                  }
+                                  source_zone {
+                                    node {
+                                      ... on SecurityZone {
+                                        id
+                                        name {
+                                          value
+                                        }
+                                        vrf_type {
+                                          value
+                                        }
+                                        l3_vni {
+                                          value
+                                        }
+                                      }
+                                    }
+                                  }
+                                  source_prefixes {
+                                    edges {
+                                      node {
+                                        id
+                                        prefix {
+                                          value
+                                        }
+                                        ip_namespace {
+                                          node {
+                                            name {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                  destination_prefixes {
+                                    edges {
+                                      node {
+                                        id
+                                        prefix {
+                                          value
+                                        }
+                                        ip_namespace {
+                                          node {
+                                            name {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                  source_ip_addresses {
+                                    edges {
+                                      node {
+                                        id
+                                        address {
+                                          value
+                                        }
+                                      }
+                                    }
+                                  }
+                                  destination_ip_addresses {
+                                    edges {
+                                      node {
+                                        id
+                                        address {
+                                          value
+                                        }
+                                      }
                                     }
                                   }
                                 }
@@ -6393,102 +5264,21 @@ fragment border_leaf_config__F9 on DcimInterface {
                                     }
                                   }
                                 }
-                                destination_zone {
-                                  node {
-                                    name {
-                                      value
-                                    }
-                                    trust_level {
-                                      value
-                                    }
-                                    description {
-                                      value
-                                    }
-                                  }
-                                }
-                                source_zone {
-                                  node {
-                                    ... on SecurityZone {
-                                      id
-                                      name {
-                                        value
-                                      }
-                                      vrf_type {
-                                        value
-                                      }
-                                      l3_vni {
-                                        value
-                                      }
-                                    }
-                                  }
-                                }
-                                source_prefixes {
-                                  edges {
-                                    node {
-                                      id
-                                      prefix {
-                                        value
-                                      }
-                                      ip_namespace {
-                                        node {
-                                          name {
-                                            value
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                                destination_prefixes {
-                                  edges {
-                                    node {
-                                      id
-                                      prefix {
-                                        value
-                                      }
-                                      ip_namespace {
-                                        node {
-                                          name {
-                                            value
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                                source_ip_addresses {
-                                  edges {
-                                    node {
-                                      id
-                                      address {
-                                        value
-                                      }
-                                    }
-                                  }
-                                }
-                                destination_ip_addresses {
-                                  edges {
-                                    node {
-                                      id
-                                      address {
-                                        value
-                                      }
-                                    }
-                                  }
-                                }
                               }
                               policy {
                                 node {
                                   ... on SecurityPolicy {
-                                    id
-                                    name {
-                                      value
-                                    }
-                                    enabled {
-                                      value
-                                    }
-                                    default_action {
-                                      value
+                                    ... on SecurityPolicy {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      enabled {
+                                        value
+                                      }
+                                      default_action {
+                                        value
+                                      }
                                     }
                                     segment {
                                       node {

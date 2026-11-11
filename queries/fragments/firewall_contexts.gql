@@ -294,7 +294,7 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
 }
 
 fragment ContextServedSegmentFields on ManagedNetworkSegment {
-  ...SegmentRulesFields
+  ...SegmentRuleIdsFields
   gateway {
     node {
       ip_prefix {

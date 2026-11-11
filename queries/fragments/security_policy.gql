@@ -25,16 +25,22 @@ fragment PolicyRuleSegmentFields on ManagedNetworkSegment {
   }
 }
 
-fragment SecurityPolicyFields on SecurityPolicy {
+fragment SecurityPolicyScalarFields on SecurityPolicy {
   id
   name { value }
   enabled { value }
   default_action { value }
+}
+
+fragment SecurityPolicyFields on SecurityPolicy {
+  ...SecurityPolicyScalarFields
   # The segment the policy governs — what its default action applies to.
   segment { node { ...PolicyRuleSegmentFields } }
 }
 
-fragment SecurityPolicyRuleFields on SecurityPolicyRule {
+# A rule without its two segment ends: the firewall reads a large rule set by id with only the ids of the segments it
+# names (queries/config/firewall_rules.gql) and the segments once (transforms/helpers/firewall_rules.py).
+fragment SecurityPolicyRuleScalarFields on SecurityPolicyRule {
   id
   index { value }
   name { value }
@@ -47,8 +53,6 @@ fragment SecurityPolicyRuleFields on SecurityPolicyRule {
   description { value }
   apply_on_switch { value }
   security_profile { node { name { value } } }
-  source_segment { node { ...PolicyRuleSegmentFields } }
-  destination_segment { node { ...PolicyRuleSegmentFields } }
   # The internet: a rule to it names the zone (INTERNET), not a segment.
   destination_zone { node { name { value } trust_level { value } description { value } } }
   source_zone { node { ...RoutingZoneFields } }
@@ -56,6 +60,12 @@ fragment SecurityPolicyRuleFields on SecurityPolicyRule {
   destination_prefixes { edges { node { id prefix { value } ip_namespace { node { name { value } } } } } }
   source_ip_addresses { edges { node { id address { value } } } }
   destination_ip_addresses { edges { node { id address { value } } } }
+}
+
+fragment SecurityPolicyRuleFields on SecurityPolicyRule {
+  ...SecurityPolicyRuleScalarFields
+  source_segment { node { ...PolicyRuleSegmentFields } }
+  destination_segment { node { ...PolicyRuleSegmentFields } }
 }
 
 fragment SegmentRulesFields on ManagedNetworkSegment {
@@ -73,4 +83,17 @@ fragment SegmentRulesFields on ManagedNetworkSegment {
       }
     }
   }
+}
+
+# The rules of a segment as ids only: what a firewall's served segments select (ContextServedSegmentFields), so the
+# registered firewall_config query names every rule it depends on without reading each one twice with its segments.
+# transforms/helpers/firewall_rules.py fills the rules in before the transform reads them, in the SegmentRulesFields shape.
+fragment SegmentRuleIdsFields on ManagedNetworkSegment {
+  security_policy {
+    node {
+      ...SecurityPolicyFields
+      rules { edges { node { id } } }
+    }
+  }
+  inbound_rules { edges { node { id } } }
 }

@@ -43,6 +43,22 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: firewall_rules
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/flat/config/firewall_rules.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: firewall_rule_segments
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/flat/config/firewall_rule_segments.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: loadbalancer_config
     tests:
       - name: syntax_check

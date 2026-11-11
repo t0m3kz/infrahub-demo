@@ -1,3 +1,5 @@
+import asyncio
+from pathlib import Path
 from typing import Any
 
 from transforms.common import BaseDeviceTransform
@@ -9,6 +11,14 @@ from transforms.helpers.firewall_contexts import (
     get_firewall_contexts,
     place_policies_in_contexts,
 )
+from transforms.helpers.firewall_rules import (
+    FirewallRulesError,
+    bare_rule_edges,
+    chunks,
+    put_rules_back,
+    rule_ids,
+    segment_ids,
+)
 from transforms.helpers.firewall_terminated import terminated_interfaces
 from transforms.helpers.ha import get_ha
 from transforms.helpers.segments import interface_segments, segment_vlan_ids
@@ -19,11 +29,54 @@ from utils.exchange_transit import (
     ZONE_BY_NS_TYPE,
 )
 from utils.interface_encapsulation import vlan_of
+from utils.query_flatten import load_flat_query
 from utils.routing_domain import interface_security_zone, interface_vrfs
 from utils.segment_addressing import Ipv6SegmentNotRenderedError, own_prefix, prefix_family, refuse_ipv6_segment
 from utils.service_contexts import leg_contexts
 
 DEFAULT_ROUTE = "0.0.0.0/0"
+
+_QUERIES = Path(__file__).resolve().parents[2] / "queries" / "config"
+RULES_QUERY = _QUERIES / "firewall_rules.gql"
+SEGMENTS_QUERY = _QUERIES / "firewall_rule_segments.gql"
+RULE_PAGE_SIZE = 1000
+"""Ids per request of the rule and segment reads: a page is one ``ids`` filter; the pages are requested together."""
+
+
+async def _read_by_id(
+    client: Any, branch: str | None, query: str, root: str, ids: list[str]
+) -> dict[str, dict[str, Any]]:
+    """id -> node of ``root`` for ``ids``, read in concurrent pages."""
+    pages = await asyncio.gather(
+        *(
+            client.execute_graphql(query=query, variables={"ids": page}, branch_name=branch)
+            for page in chunks(ids, RULE_PAGE_SIZE)
+        )
+    )
+    return {edge["node"]["id"]: edge["node"] for page in pages for edge in page[root]["edges"]}
+
+
+async def read_rules(operation: Any, data: Any) -> int:
+    """Read the rules the registered query named by id, and the segments they name, and put them into ``data``.
+
+    The registered ``firewall_config`` query selects the rules of the served segments as ids only
+    (``SegmentRuleIdsFields``); this reads them once each, in pages, with ``queries/config/firewall_rules.gql`` and
+    ``firewall_rule_segments.gql``, and puts back the shape ``SegmentRulesFields`` had (``put_rules_back``). Returns
+    how many rule edges were filled. ``operation`` is the transform or check: its ``client`` and ``branch_name`` are
+    read only when there is something to read, so a payload that already carries its rules needs neither.
+    """
+    edges = list(bare_rule_edges(data))
+    if not edges:
+        return 0
+    try:
+        client, branch = operation.client, operation.branch_name
+    except Exception as exc:  # noqa: BLE001 - an operation built without a client raises its own error type
+        raise FirewallRulesError(f"{len(edges)} rules to read but no client: {exc}") from exc
+    rules = await _read_by_id(client, branch, load_flat_query(RULES_QUERY), "SecurityPolicyRule", rule_ids(edges))
+    segments = await _read_by_id(
+        client, branch, load_flat_query(SEGMENTS_QUERY), "ManagedNetworkSegment", segment_ids(rules)
+    )
+    return put_rules_back(edges, rules, segments)
 
 
 def _default_vr_interfaces(fw_interfaces: list[dict[str, Any]]) -> list[str]:
@@ -266,6 +319,7 @@ class Firewall(BaseDeviceTransform):
         return activations, contexts, root, by_context
 
     async def transform(self, data: Any) -> Any:
+        await read_rules(self, data)
         device, roots, platform_name = self._device_and_platform(data)
         if not platform_name:
             return self._no_platform_config(device)

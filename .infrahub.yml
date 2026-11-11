@@ -591,6 +591,10 @@ queries:
     file_path: queries/flat/config/proxy_cloud.gql
   - name: firewall_config
     file_path: queries/flat/config/firewall.gql
+  - name: firewall_rules
+    file_path: queries/flat/config/firewall_rules.gql
+  - name: firewall_rule_segments
+    file_path: queries/flat/config/firewall_rule_segments.gql
   - name: controller_payload
     file_path: queries/flat/config/controller.gql
   - name: pod_decommission
