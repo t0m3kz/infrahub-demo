@@ -467,6 +467,8 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
                             edges {
                                 node {
                                     label { value }
+                                    state { value }
+                                    conclusion { value }
                                     checks {
                                         edges {
                                             node {
@@ -498,6 +500,15 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
             validator = validation_edge.get("node") or {}
             validator_label = (validator.get("label") or {}).get("value") or "<unnamed validator>"
             checks = (validator.get("checks") or {}).get("edges") or []
+            # The merge is refused for a validator that is not green even when no check under it failed (a validator
+            # that never concluded, or one that says failure over successful checks): name it, with what it says.
+            validator_state = (validator.get("state") or {}).get("value")
+            validator_conclusion = (validator.get("conclusion") or {}).get("value")
+            if validator_conclusion != "success" or validator_state != "completed":
+                descriptions.append(
+                    f"[{validator_label}] validator state={validator_state} conclusion={validator_conclusion} "
+                    f"({len(checks)} check(s) under it)"
+                )
             for check_edge in checks:
                 check = check_edge.get("node") or {}
                 conclusion = (check.get("conclusion") or {}).get("value")
@@ -508,6 +519,30 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
                 message = (check.get("message") or {}).get("value") or "<no message>"
                 descriptions.append(f"[{validator_label}] {kind} '{label}': {message}")
     return descriptions
+
+
+def _rerun_unfinished_validators(client: InfrahubClientSync, pc_id: str) -> None:
+    """Run the checks of the proposed change again when its validators are not all green and no check failed.
+
+    The platform refuses a merge while a validator has not concluded or says failure, and a repeated merge changes
+    nothing: a validator starved under load (queued, an import check with no conclusion, a verdict of failure over
+    successful checks) only changes when the checks run again, which is what the "run checks" button of the GUI does.
+    A check that really failed is left alone (it is the finding) and the call is only made when none did.
+    """
+    descriptions = _fetch_failed_checks(client, pc_id)
+    if not descriptions:
+        return
+    if any(not description.split("] ", 1)[1].startswith("validator state=") for description in descriptions):
+        return
+    logger.warning(
+        "Validators not green and no failing check, running the checks again:\n  - %s", "\n  - ".join(descriptions)
+    )
+    client.execute_graphql(
+        query="mutation ($id: String!) { CoreProposedChangeRunCheck(data: {id: $id, check_type: all}) { ok } }",
+        variables={"id": pc_id},
+    )
+    time.sleep(10)
+    wait_for_validations(client=client, pc_id=pc_id, pc_name=pc_id, allow_failures=True)
 
 
 def merge_proposed_change(
@@ -626,6 +661,7 @@ def merge_proposed_change(
                 retry_delay,
             )
             time.sleep(retry_delay)
+            _rerun_unfinished_validators(client, pc_id)
         else:
             failed_checks = _fetch_failed_checks(client, pc_id)
             logger.error(
