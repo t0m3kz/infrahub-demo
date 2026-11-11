@@ -35,6 +35,38 @@ def _make_gen() -> Any:
 # ===========================================================================
 
 
+class TestEnsureSegmentPolicy:
+    """ensure_segment_policy is what the segment generator calls: the segment's policy under its deterministic name."""
+
+    def test_a_segment_without_a_policy_gets_one_closed_by_default(self) -> None:
+        """Default action deny, enabled, the segment set, the name the application rule path would have used."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        policy = MagicMock(id="pol-1")
+        policy.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=policy)
+        segment = {"id": "seg-1", "name": "c900-web-p"}
+
+        asyncio.run(gen.ensure_segment_policy(segment))
+
+        data = gen.client.create.call_args.kwargs["data"]
+        assert data["name"] == RulesPlanner.segment_policy_name(segment)
+        assert data["default_action"] == "deny"
+        assert data["enabled"] is True
+        assert data["segment"] == {"id": "seg-1"}
+
+    def test_a_segment_with_a_policy_keeps_it(self) -> None:
+        """A hand-written or generated policy is not touched and no second one is created."""
+        gen = _make_gen()
+
+        asyncio.run(
+            gen.ensure_segment_policy({"id": "seg-1", "name": "c900-web-p", "security_policy": {"id": "pol-x"}})
+        )
+
+        gen.client.create.assert_not_called()
+        gen.client.filters.assert_not_awaited()
+
+
 class TestSegmentPolicy:
     """The source segment's one SecurityPolicy, shared by every application
     with a component on it and by its hand-written rules: written untracked,

@@ -58,7 +58,52 @@ def _next_free_rule_index(used: set[int]) -> int:
     return rule_index
 
 
-class SegmentFirewallMixin(GetOrCreateByNameMixin):
+class SegmentPolicyMixin(GetOrCreateByNameMixin):
+    """The one default-deny SecurityPolicy of a segment.
+
+    Shared by the segment generator, which creates it with the segment, and by the application rule path
+    (SegmentFirewallMixin), which writes its rules into it. Expects the host class to provide ``client`` and ``logger``.
+    """
+
+    client: Any
+    logger: logging.Logger
+
+    async def _segment_policy(self, segment: dict[str, Any], policy_name: str) -> Any | None:
+        """The source segment's one SecurityPolicy: the one it already has
+        (from this generator or a hand-written data file), else its
+        deterministic seg-<segment>-egress, created with the segment set.
+        Untracked: every application with a component on that segment writes
+        its rules into this one policy, and hand-written rules live there too,
+        so no application's run owns it (its rules stay owned by the
+        application that produced them).
+
+        The one it already has is known from the application query (the
+        segment's security_policy), and callers read only its id: a holder of
+        that id, not a read of the policy."""
+        existing_id = (segment.get("security_policy") or {}).get("id")
+        if existing_id:
+            return SimpleNamespace(id=existing_id)
+        return await self._get_or_create_by_name(
+            kind=SecurityPolicy,
+            name=policy_name,
+            create_data={
+                "name": policy_name,
+                "description": f"Egress contract of segment {segment.get('name') or segment.get('id')}",
+                "default_action": "deny",
+                "enabled": True,
+                "segment": {"id": segment["id"]},
+            },
+            found_log="Using existing policy: %s",
+            created_log="Created policy: %s",
+            track=False,
+        )
+
+    async def ensure_segment_policy(self, segment: dict[str, Any]) -> None:
+        """Give the segment its policy, default action deny, when it has none (a hand-written one is kept)."""
+        await self._segment_policy(segment, RulesPlanner.segment_policy_name(segment))
+
+
+class SegmentFirewallMixin(SegmentPolicyMixin):
     """Segment-to-segment dependency rules — the SecurityPolicy/
     SecurityPolicyRule path dispatched from _reconcile_application_rules for
     every AppDependency edge to a segment (on-prem or cloud endpoint), as
@@ -290,36 +335,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
                 manager.extend(sorted(wanted_ids - current_ids))
                 changed.append(field)
         return changed
-
-    async def _segment_policy(self, segment: dict[str, Any], policy_name: str) -> Any | None:
-        """The source segment's one SecurityPolicy: the one it already has
-        (from this generator or a hand-written data file), else its
-        deterministic seg-<segment>-egress, created with the segment set.
-        Untracked: every application with a component on that segment writes
-        its rules into this one policy, and hand-written rules live there too,
-        so no application's run owns it (its rules stay owned by the
-        application that produced them).
-
-        The one it already has is known from the application query (the
-        segment's security_policy), and callers read only its id: a holder of
-        that id, not a read of the policy."""
-        existing_id = (segment.get("security_policy") or {}).get("id")
-        if existing_id:
-            return SimpleNamespace(id=existing_id)
-        return await self._get_or_create_by_name(
-            kind=SecurityPolicy,
-            name=policy_name,
-            create_data={
-                "name": policy_name,
-                "description": f"Egress contract of segment {segment.get('name') or segment.get('id')}",
-                "default_action": "deny",
-                "enabled": True,
-                "segment": {"id": segment["id"]},
-            },
-            found_log="Using existing policy: %s",
-            created_log="Created policy: %s",
-            track=False,
-        )
 
     async def _read_policy_rules(self, policy_id: str, rule_indexes: dict[str, set[int]]) -> list[Any]:
         """List the policy's rules from the server, with their selectors; record their indexes in

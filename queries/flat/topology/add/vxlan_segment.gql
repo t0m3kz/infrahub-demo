@@ -46,6 +46,11 @@ query vxlan_segment_data($name: String!) {
             id
           }
         }
+        security_policy {
+          node {
+            id
+          }
+        }
         security_tag {
           node {
             id

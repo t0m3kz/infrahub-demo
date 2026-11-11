@@ -43,7 +43,8 @@ def test_no_segment_nests_its_deployment() -> None:
     nesting = [
         path.relative_to(_DATA)
         for path, doc in _documents()
-        if "segment_deployments" in str((doc.get("spec") or {}).get("data"))
+        if (doc.get("spec") or {}).get("kind") != "CoreStandardGroup"  # the group of that name lists them from its side
+        and "segment_deployments" in str((doc.get("spec") or {}).get("data"))
     ]
     assert nesting == []
 
