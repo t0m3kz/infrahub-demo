@@ -10,8 +10,9 @@ that no generator completes, so its objects would meet their checks and counts. 
 import logging
 
 import pytest
-from infrahub_sdk import InfrahubClient
+from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
+from tests.integration.workflow_helpers import create_and_validate_proposed_change
 from tests.traversal import load_topology
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -30,3 +31,17 @@ class TestFullTopology:
         await async_client_main.branch.create(branch_name=BRANCH, sync_with_git=False, wait_until_completion=True)
         done = await load_topology.apply(async_client_main, BRANCH)
         logging.info("full topology: %s", done)
+
+    @pytest.mark.order(11)
+    @pytest.mark.dependency(scope="session", name="full_topology_checks", depends=["full_topology_load"])
+    def test_02_the_sample_passes_its_checks(self, client_main: InfrahubClientSync) -> None:
+        """Open a proposed change for the branch and require every check to pass.
+
+        The sample is authored data no generator completes, so the checks (circuit placement, quota, patch panel
+        pairing, routing tags, interface parents...) judge it as written. A failing check raises with its messages.
+        The proposed change is not merged.
+        """
+        result = create_and_validate_proposed_change(
+            client=client_main, name="Full topology sample", source_branch=BRANCH
+        )
+        logging.info("full topology: %d validations, none failing", len(result["validations"]))
