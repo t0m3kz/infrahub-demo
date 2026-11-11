@@ -132,5 +132,5 @@ extensions:
           identifier: interface_capabilities
           optional: true
           cardinality: many
-          kind: Generic
+          kind: Attribute  # shown with the interface's attributes, not in a tab of its own
           on_delete: no-action

@@ -59,7 +59,7 @@ extensions:
           peer: ManagedInterfaceEncapsulation
           optional: true
           cardinality: many
-          kind: Generic
+          kind: Attribute  # shown with the port's attributes, not in a tab of its own
           identifier: "interface_encapsulation__parent"
           direction: inbound
           on_delete: no-action
