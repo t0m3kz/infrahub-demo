@@ -64,6 +64,9 @@ This is application-driven infrastructure: the network exists to serve the appli
 
 - Design-driven network automation demo using [Infrahub](https://docs.infrahub.app)
 - Application-driven infrastructure: declare app dependencies once ("app A talks to app B on 443") and let generators materialize the firewall rules, proxy config, security policy, and routing—no three-sprint change request required
+- Change requests: a Proposed Change can carry a ServiceNow-style change request whose description, risk, rollout,
+  backout and test plans are derived from its own diff, gated by a check and rendered as a ServiceNow payload
+  ([docs/change_requests.md](docs/change_requests.md))
 - Example data, schemas, and menu for rapid onboarding
 - Scripts for bootstrapping, demo use cases, and CI integration
 - Modular structure for easy extension and experimentation
@@ -176,6 +179,13 @@ one branch. It has to be loaded stage by stage, so use `uv run invoke load-all-d
 order and waits for the generators in between. The demo README explains why and how to do it by hand.
 
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
+
+## Change requests
+
+A Proposed Change can carry a ServiceNow-style **change request**: its description, risk, rollout, backout and test
+plans are derived from the change's own diff by the `add_change_request` generator, the `validate_change_request` check
+gates the merge on it, and `change_request_servicenow` renders it as a ServiceNow payload. It is opt-in. See
+[docs/change_requests.md](docs/change_requests.md).
 
 ## CI/CD
 
