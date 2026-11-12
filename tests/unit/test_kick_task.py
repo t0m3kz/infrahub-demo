@@ -186,6 +186,40 @@ def test_a_new_failed_task_stops_the_run() -> None:
     assert raised.value.stage == STAGE_NAMES[2]
 
 
+def test_a_failed_task_is_named_in_the_stage_failure() -> None:
+    """The failure lists the titles of the failed tasks, so the Tasks page search starts from them."""
+    manager = FakeTaskManager(failed={1: [_task("boom", "Run generator add_rack")]})
+    with pytest.raises(tasks.StageFailed, match="after the generators: Run generator add_rack"):
+        tasks.run_kick(_client(manager), Loads(manager), ALL_DEMO)
+
+
+def test_a_task_failing_in_the_proposed_change_stops_the_stage_before_the_merge() -> None:
+    """A task that fails after the generators (artifacts, checks) is caught before the merge."""
+
+    class PcFailures(FakeTaskManager):
+        """No failure until the proposed change exists."""
+
+        pc_opened = False
+
+        def filter(self, filter: Any, include_logs: bool = False) -> list[Any]:  # noqa: A002 - SDK signature
+            """A failed artifact task once the proposed change is open."""
+            if filter.state == FAILURE_STATES:
+                return [_task("art", "Generate artifact leaf")] if self.pc_opened else []
+            return super().filter(filter, include_logs)
+
+    manager = PcFailures()
+
+    def open_pc(**_: Any) -> dict[str, str]:
+        manager.pc_opened = True
+        return {"pc_id": "pc-1"}
+
+    create, fetch, merge = _pc_flow()
+    with patch.object(tasks, "create_and_validate_proposed_change", side_effect=open_pc), fetch, merge as merged:
+        with pytest.raises(tasks.StageFailed, match="in the proposed change: Generate artifact leaf"):
+            tasks.run_kick(_client(manager), Loads(manager), _change_kick(Stage(name="one", load=("a",))))
+    merged.assert_not_called()
+
+
 def test_failures_from_before_the_stage_are_ignored() -> None:
     """Failures already on the branch (e.g. before a resume) do not abort the run."""
     manager = FakeTaskManager(failed=dict.fromkeys(range(len(STAGE_NAMES) + 1), [_task("old")]))

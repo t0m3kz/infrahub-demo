@@ -25,9 +25,19 @@ def _v(value: Any) -> dict[str, Any]:
     return {"value": value}
 
 
-def validator_row(state: str = "completed", pc_state: str = "open", branch: str | None = BRANCH) -> dict[str, Any]:
-    """A raw CoreArtifactValidator row of open_change_request.gql."""
-    pc = {"id": "pc1", "name": _v("leaf change"), "state": _v(pc_state), "source_branch": _v(branch)}
+def validator_row(
+    state: str = "completed", pc_state: str = "open", branch: str | None = BRANCH, others: tuple[str, ...] = ()
+) -> dict[str, Any]:
+    """A raw CoreArtifactValidator row of open_change_request.gql; ``others`` are the PC's other artifact validators."""
+    validations = [{"__typename": "CoreArtifactValidator", "state": _v(other)} for other in (state, *others)]
+    validations.append({"__typename": "CoreUserValidator", "state": _v("in_progress")})
+    pc = {
+        "id": "pc1",
+        "name": _v("leaf change"),
+        "state": _v(pc_state),
+        "source_branch": _v(branch),
+        "validations": {"edges": [{"node": node} for node in validations]},
+    }
     return {"id": "v1", "state": _v(state), "proposed_change": {"node": pc}}
 
 
@@ -83,20 +93,21 @@ def _run(client: FakeClient, row: dict[str, Any]) -> Any:
 
 
 def test_a_completed_validator_creates_the_change_request_and_links_it_in_a_comment() -> None:
-    """CHG-<pc> on the source branch in change_requests, untracked, then one comment on the PC with its link."""
+    """CHG-<pc> on the source branch in change_requests, untracked, then a PC thread with one comment linking it."""
     client = FakeClient()
 
     _run(client, validator_row())
 
-    (request, comment) = client.saved
+    (request, thread, comment) = client.saved
     assert request[0] == "ChangeRequest"
     expected = {"branch": BRANCH, "name": "CHG-leaf change", "proposed_change": "pc1", "member_of_groups": ["g-cr"]}
     assert {key: request[1][key] for key in expected} == expected
     assert request[2] == {"allow_upsert": True, "update_group_context": False}
-    assert comment[0] == "CoreChangeComment"
-    assert comment[1]["change"] == "pc1"
+    assert (thread[0], thread[1]["change"], thread[1]["resolved"]) == ("CoreChangeThread", "pc1", False)
+    assert comment[0] == "CoreThreadComment"
+    assert comment[1]["thread"] == "new-CoreChangeThread"
     assert comment[1]["text"] == change_request_comment("CHG-leaf change", "new-ChangeRequest", BRANCH)
-    assert comment[2] == {"update_group_context": False}
+    assert thread[2] == comment[2] == {"update_group_context": False}
     assert client.group_context.related_node_ids == ["v1"]
 
 
@@ -124,6 +135,25 @@ def test_nothing_is_written_until_the_validator_completes_on_an_open_pc(row: dic
 
     assert (client.saved, client.queries, client.filters_calls) == ([], [], [])
     assert client.group_context.related_node_ids == ["v1"]
+
+
+def test_only_the_last_artifact_validator_of_the_pc_acts() -> None:
+    """A PC has one artifact validator per definition: while another is running nothing is looked up or written."""
+    client = FakeClient()
+
+    _run(client, validator_row(others=("completed", "in_progress")))
+
+    assert (client.saved, client.queries, client.filters_calls) == ([], [], [])
+    assert client.group_context.related_node_ids == ["v1"]
+
+
+def test_other_validator_kinds_do_not_hold_the_derivation() -> None:
+    """A running user check is not an artifact validator: the last completed artifact validator still acts."""
+    client = FakeClient()
+
+    _run(client, validator_row(others=("completed",)))
+
+    assert [kind for kind, _, _ in client.saved] == ["ChangeRequest", "CoreChangeThread", "CoreThreadComment"]
 
 
 def test_no_validator_in_the_query_result_fails() -> None:

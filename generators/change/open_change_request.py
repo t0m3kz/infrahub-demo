@@ -1,8 +1,8 @@
 """Give a Proposed Change its change request once its artifacts are computed (open_change_request).
 
-The target is the PC's artifact validator (group artifact_validators). A completed validator of an open PC either
-creates CHG-<pc> on the PC's source branch, which starts add_change_request through the change_requests group, or
-re-runs add_change_request on the existing one. The first creation also posts a comment on the PC with the link.
+The target is the PC's artifact validator (group artifact_validators); a PC has one per artifact definition, and only
+the last to complete acts. It creates CHG-<pc> on the PC's source branch, which starts add_change_request through the
+change_requests group, and posts a PC thread with the link; or it re-runs add_change_request on the existing one.
 """
 
 from __future__ import annotations
@@ -31,6 +31,15 @@ def change_request_name(pc_name: str) -> str:
     return f"CHG-{pc_name}"
 
 
+def artifact_validators_pending(pc: dict[str, Any]) -> int:
+    """How many of the PC's artifact validators have not completed yet."""
+    return sum(
+        1
+        for validator in pc.get("validations") or []
+        if validator.get("typename") == VALIDATOR_KIND and validator.get("state") != COMPLETED_STATE
+    )
+
+
 def change_request_comment(name: str, request_id: str, branch: str) -> str:
     """The PC comment that links its change request."""
     return f"Change request [{name}](/objects/{CHANGE_REQUEST_KIND}/{request_id}?branch={branch}) is derived from this change."
@@ -52,17 +61,24 @@ class OpenChangeRequestGenerator(CommonGenerator):
                 f"Validator {validator['id']}: {validator.get('state')}, PC {pc.get('state')}: nothing to do"
             )
             return
+        if pending := artifact_validators_pending(pc):
+            self.logger.info(f"PC {pc['name']}: {pending} artifact validator(s) still running, the last one derives")
+            return
         branch, name = pc["source_branch"], change_request_name(pc["name"])
         existing = await self.client.filters(kind=CHANGE_REQUEST_KIND, name__value=name, branch=branch)
         if existing:
             await self._rederive(existing[0].id, branch)
             return
         request = await self._create(name, pc["id"], branch)
-        comment = await self.client.create(
-            kind="CoreChangeComment", text=change_request_comment(name, request.id, branch), change=pc["id"]
-        )
-        await comment.save(update_group_context=False)
+        await self._comment(pc["id"], change_request_comment(name, request.id, branch))
         self.logger.info(f"{name}: created on {branch}")
+
+    async def _comment(self, pc_id: str, text: str) -> None:
+        """A PC thread with one comment: the conversation tab lists threads, not bare CoreChangeComment."""
+        thread = await self.client.create(kind="CoreChangeThread", label="Change request", resolved=False, change=pc_id)
+        await thread.save(update_group_context=False)
+        comment = await self.client.create(kind="CoreThreadComment", text=text, thread=thread.id)
+        await comment.save(update_group_context=False)
 
     async def _create(self, name: str, pc_id: str, branch: str) -> Any:
         """CHG-<pc> on the source branch, in change_requests: joining the group starts add_change_request."""

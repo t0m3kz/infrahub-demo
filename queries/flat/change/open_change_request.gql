@@ -19,6 +19,16 @@ query open_change_request($validator_id: ID!) {
             source_branch {
               value
             }
+            validations {
+              edges {
+                node {
+                  __typename
+                  state {
+                    value
+                  }
+                }
+              }
+            }
           }
         }
       }

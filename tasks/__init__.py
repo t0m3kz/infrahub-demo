@@ -351,7 +351,20 @@ def demo_paths(stage: Stage) -> list[str]:
 
 def failed_task_ids(client: InfrahubClientSync, branch: str) -> set[str]:
     """The ids of every failed, crashed or cancelled task on the branch."""
-    return {task.id for task in client.task.filter(filter=TaskFilter(state=FAILURE_STATES, branch=branch))}
+    return set(failed_tasks(client, branch))
+
+
+def failed_tasks(client: InfrahubClientSync, branch: str) -> dict[str, str]:
+    """Title by id of every failed, crashed or cancelled task on the branch."""
+    return {task.id: task.title for task in client.task.filter(filter=TaskFilter(state=FAILURE_STATES, branch=branch))}
+
+
+def refuse_failed_tasks(client: InfrahubClientSync, stage: Stage, branch: str, known: set[str], phase: str) -> None:
+    """StageFailed naming the tasks that failed on the branch since ``known`` was taken; failed tasks must be 0."""
+    new = {task_id: title for task_id, title in failed_tasks(client, branch).items() if task_id not in known}
+    if new:
+        titles = ", ".join(sorted(set(new.values())))
+        raise StageFailed(stage.name, f"{len(new)} task(s) failed on '{branch}' {phase}: {titles}")
 
 
 def wait_for_branch_idle(
@@ -433,9 +446,7 @@ def _apply(
         log.info("Stage %s: running generator %s", stage.name, stage.run)
         run_generator_definition(client, branch, stage.run)
         wait_for_branch_idle(client, branch)
-    new_failures = failed_task_ids(client, branch) - known_failures
-    if new_failures:
-        raise StageFailed(stage.name, f"{len(new_failures)} task(s) failed on '{branch}' (see the Tasks page)")
+    refuse_failed_tasks(client, stage, branch, known_failures, "after the generators")
     timings = {"load": round(loaded - started, 1), "generators": round(time.monotonic() - loaded, 1)}
     if after_stage:
         after_stage(stage, branch, "branch")
@@ -471,6 +482,7 @@ def _deploy(
     if artifacts["failed"]:
         lines = [f"'{a['name']}' for {a['object']}: {a['status']}" for a in artifacts["failed"]]
         raise StageFailed(stage.name, "artifacts not generated:\n  - " + "\n  - ".join(lines))
+    refuse_failed_tasks(client, stage, branch, set(), "in the proposed change")
     timings["artifacts"] = round(time.monotonic() - started, 1)
 
     if stage.merge:
@@ -484,9 +496,7 @@ def _deploy(
                 f"merge failed: PC {result['pc_state_before']} -> {result['pc_state_after']}, task {result['task_state']}"
                 + ("\n  - " + "\n  - ".join(checks) if checks else ""),
             )
-        new_failures = failed_task_ids(client, "main") - known_failures
-        if new_failures:
-            raise StageFailed(stage.name, f"{len(new_failures)} post-merge task(s) failed on main")
+        refuse_failed_tasks(client, stage, "main", known_failures, "after the merge")
         timings["merge"] = round(time.monotonic() - started, 1)
         if after_stage:
             after_stage(stage, "main", "main")

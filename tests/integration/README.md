@@ -21,7 +21,8 @@ kicks of `tasks/kicks.yml` plus an `expect` block per stage. `test_04` runs each
 
 Each stage without `branch:` is one change: branch `<kick>-<stage>` from main, load, generators settle, no failed
 task, the assertions on the branch, the proposed change and its validations (artifacts included), the merge, the
-assertions on main. Every growth stage asserts that no existing BGP process changed its ASN (renumbering a fabric is
+assertions on main. Failed tasks must be zero throughout: they are counted after the generators, after the proposed
+change and its artifacts, and on main after the merge, and a failure names the tasks. Every growth stage asserts that no existing BGP process changed its ASN (renumbering a fabric is
 not a growth strategy) and that the diff removes nothing.
 
 ### Adding a suite kick
