@@ -24,7 +24,7 @@ query routing_tags {
         security_zone { node { ...RoutingZoneFields } }
         gateway { node { ip_prefix { node { ip_namespace { node { name { value }  } } } } } }
         # A terminated segment has no SVI: it is no routed tenant segment.
-        ... on ManagedVxlanSegment { terminated_on { node { id } } }
+        ... on ManagedVxlanSegment { firewall_gateway { value } }
       }
     }
   }

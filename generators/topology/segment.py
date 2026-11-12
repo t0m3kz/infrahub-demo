@@ -55,11 +55,14 @@ from ..pools import PoolMixin
 from ..protocols import (
     ManagedSegmentDeployment,
 )
+from ..segment_firewall import SegmentPolicyMixin
 from .segment_addressing import SegmentAddressingMixin
 from .segment_ports import SegmentPortTagMixin
 
 
-class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentAddressingMixin, SegmentPortTagMixin, CommonGenerator):
+class VxlanSegmentGenerator(
+    PoolMixin, CablingMixin, SegmentAddressingMixin, SegmentPortTagMixin, SegmentPolicyMixin, CommonGenerator
+):
     """VXLAN segment generator — allocates a VNI from the DC's pool,
     reconciles the segment's LOCAL VLAN ID activations (border gateways of a
     stretched segment included). Customer-facing interface assignment is not done here — see
@@ -113,6 +116,8 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, SegmentAddressingMixin, Seg
         self.logger.info(f"Processing segment: {segment_name}")
 
         await self.ensure_segment_addressing(segment)
+        # Its default-deny policy, created with the segment: a segment is closed before any rule opens it.
+        await self.ensure_segment_policy(segment)
         # The segment's group tag (a routed tenant segment only), before any
         # segment lock is taken: the helper takes its own.
         await ensure_segment_tag(self.client, self.resource_lock, segment=segment)

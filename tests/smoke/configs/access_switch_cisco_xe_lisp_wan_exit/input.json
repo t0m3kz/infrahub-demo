@@ -1221,7 +1221,9 @@
                               }
                             }
                           },
-                          "terminated_on": null,
+                          "firewall_gateway": {
+                            "value": false
+                          },
                           "customer_deployments": {
                             "edges": [
                               {
@@ -1302,7 +1304,9 @@
                               }
                             }
                           },
-                          "terminated_on": null,
+                          "firewall_gateway": {
+                            "value": false
+                          },
                           "customer_deployments": {
                             "edges": [
                               {

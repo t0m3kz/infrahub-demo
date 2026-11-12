@@ -318,13 +318,6 @@ query edge_config($device: String!) {
             display_label
           }
         }
-        sdwan_gateway {
-          node {
-            name {
-              value
-            }
-          }
-        }
         lan_prefixes {
           edges {
             node {

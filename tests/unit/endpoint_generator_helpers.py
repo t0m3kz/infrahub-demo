@@ -13,7 +13,7 @@ from tests.unit.simulators.fabric_designs import pod_design
 
 
 def _pod_rack(rack_id: str, *, rack_type: str = "network", row_index: int = 1, index: int = 1) -> dict:
-    """One entry of the pod's ``racks`` projection (endpoint.gql's PodFields)."""
+    """One entry of the pod's ``racks`` projection (endpoint.gql's EndpointPodFields)."""
     return {"id": rack_id, "name": rack_id.upper(), "index": index, "row_index": row_index, "rack_type": rack_type}
 
 

@@ -92,6 +92,28 @@ class RulesPlanner:
         return is_exchange_zone((segment.get("security_zone") or {}).get("name"))
 
     @classmethod
+    def cross_environment_reason(cls, src_comp: dict[str, Any], dst_comp: dict[str, Any]) -> str | None:
+        """Why the flow between two components is never allowed because it joins prod and non-prod, else None.
+
+        Prod and non-prod are never connected, so no approval opens that flow. The decision is made from each
+        segment's own environment (the namespace it lives in), not the application's, which is governance input only.
+        A flow without two segments (proxy to an FQDN) has nothing to join, and an exchange-zone segment
+        (INTERNET/MANAGEMENT) is governed by EXCHANGE_PEERS instead. Used by the planner and by
+        ``checks/app_dependency.py``, which reports the refusal on the proposed change.
+        """
+        src_seg = src_comp.get("network_segment") or {}
+        dst_seg = dst_comp.get("network_segment") or {}
+        if not src_seg or not dst_seg or cls._is_exchange_segment(src_seg) or cls._is_exchange_segment(dst_seg):
+            return None
+        src_env, dst_env = src_seg.get("environment"), dst_seg.get("environment")
+        if not joins_prod_and_nonprod(src_env, dst_env):
+            return None
+        return (
+            f"cross-environment flow {src_env or '?'}->{dst_env or '?'} joins prod and non-prod "
+            "(or a segment environment is unknown) and is never allowed"
+        )
+
+    @classmethod
     def dependency_is_authorized(
         cls,
         src_comp: dict[str, Any],
@@ -102,23 +124,8 @@ class RulesPlanner:
         if status == "denied":
             return False, "explicitly denied"
 
-        # Prod and non-prod are never connected, so no approval opens that
-        # flow. The decision is made from each segment's own environment (the
-        # namespace it lives in), not the application's, which is governance
-        # input only. A flow without two segments (proxy to an FQDN) has
-        # nothing to join, and an exchange-zone segment (INTERNET/MANAGEMENT)
-        # is governed by EXCHANGE_PEERS instead.
-        src_seg = src_comp.get("network_segment") or {}
-        dst_seg = dst_comp.get("network_segment") or {}
-        if src_seg and dst_seg and not cls._is_exchange_segment(src_seg) and not cls._is_exchange_segment(dst_seg):
-            src_env = src_seg.get("environment")
-            dst_env = dst_seg.get("environment")
-            if joins_prod_and_nonprod(src_env, dst_env):
-                return (
-                    False,
-                    f"cross-environment flow {src_env or '?'}->{dst_env or '?'} joins prod and non-prod "
-                    "(or a segment environment is unknown) and is never allowed",
-                )
+        if reason := cls.cross_environment_reason(src_comp, dst_comp):
+            return False, reason
 
         # Inside one owner every flow is auto-approved, across applications
         # and non-prod environments too. Another owner's endpoint opens only

@@ -12,8 +12,8 @@ from .naming import DeviceNameContext, DeviceNamingConfig
 def pod_row_racks(
     pod: Mapping[str, Any], row_index: int, rack_types: Collection[str] | None = None
 ) -> list[dict[str, Any]]:
-    """The racks of one row of a pod, from the pod's ``racks`` projection (``PodFields`` in
-    rack.gql and endpoint.gql), in a deterministic (row, index, name) order for stable
+    """The racks of one row of a pod, from the pod's ``racks`` projection (``RackPodFields`` in
+    rack.gql, ``EndpointPodFields`` in endpoint.gql), in a deterministic (row, index, name) order for stable
     idempotent selections. ``rack_types`` narrows them; None keeps every type.
 
     Racks are data, never a generator's output, so the payload read at the start of the run

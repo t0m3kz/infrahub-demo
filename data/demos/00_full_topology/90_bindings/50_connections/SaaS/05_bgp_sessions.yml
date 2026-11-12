@@ -12,6 +12,7 @@ spec:
       description: eBGP to Webex
       session_type: EBGP
       peering_role: regular
+      password: c900-webex-bgp-key
       ttl: 1
       address_families:
         - - ipv4

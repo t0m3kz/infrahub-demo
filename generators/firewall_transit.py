@@ -176,7 +176,7 @@ class TransitLegsMixin:
         dedicated (tracked) context also needs, as it re-saves every leg anyway.
 
         Its border ports are not tagged: they are the ports cabled to its members' uplinks (utils/service_contexts.py
-        ``context_border_ports``), derived by every reader."""
+        ``port_contexts``), derived by every reader."""
         contexts = await self.client.filters(kind=spec.context_kind, name__value=context_name)
         return _TransitState(context=contexts[0] if contexts else None, complete=False)
 

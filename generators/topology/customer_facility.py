@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
 
-from ..firewall_context import FIREWALL_CONTEXT, FirewallContextMixin
+from ..firewall_context import FirewallContextMixin
 from ..firewall_context_spec import _ContextTarget
 from ..helpers.vrf import VrfMixin
 from .segment_addressing import SegmentAddressingMixin
@@ -40,7 +40,6 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin, SegmentAddressingMix
     _parent_required: bool = True
     # Whether the footprint's segments terminated on a firewall context follow its internal context when it moves
     # (a DC footprint: checks/segment_placement.py holds terminations to DC footprints only).
-    _relinks_terminated_segments: bool = False
 
     # Provided by DeviceMixin.
     if TYPE_CHECKING:
@@ -140,8 +139,6 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin, SegmentAddressingMix
                     complete = False
                 else:
                     served.append(context_id)
-                    if spec == FIREWALL_CONTEXT and self._relinks_terminated_segments:
-                        await self._relink_terminated_segments(customer_id, context_id)
                     await self._reconcile_border_vrfs(target, context_id)
             # A single serving link is replaced by link_serving_context; a many one is converged here, per spec: the
             # firewall list holds the internal and the Internet edge contexts, each spec drops only links of its

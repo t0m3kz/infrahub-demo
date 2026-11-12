@@ -76,7 +76,7 @@ def raw_row(
         "id": f"seg-{segment}",
         "name": {"value": segment},
         "gateway": None,
-        "terminated_on": {"node": {"id": "ctx-1"}} if terminated else None,
+        "firewall_gateway": {"value": terminated},
         "customer_deployments": edges(*(footprints or [])),
     }
     if stretch_scope:

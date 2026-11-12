@@ -84,10 +84,8 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
         }
       }
     }
-    terminated_on {
-      node {
-        id
-      }
+    firewall_gateway {
+      value
     }
   }
 }

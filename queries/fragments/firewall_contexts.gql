@@ -139,63 +139,6 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
       }
     }
   }
-  terminated_segments {
-    edges {
-      node {
-        id
-        name {
-          value
-        }
-        security_zone {
-          node {
-            name {
-              value
-            }
-            trust_level {
-              value
-            }
-            description {
-              value
-            }
-            id
-            l3_vni {
-              value
-            }
-            vrf_type {
-              value
-            }
-          }
-        }
-        gateway {
-          node {
-            address {
-              value
-            }
-          }
-        }
-        segment_deployments {
-          edges {
-            node {
-              vlans {
-                edges {
-                  node {
-                    vlan_id {
-                      value
-                    }
-                    device {
-                      node {
-                        id
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
   served_deployments {
     edges {
       node {
@@ -294,9 +237,42 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
 }
 
 fragment ContextServedSegmentFields on ManagedNetworkSegment {
-  ...SegmentRulesFields
+  ...SegmentRuleIdsFields
+  name {
+    value
+  }
+  # A segment the context's pair terminates (firewall_gateway): its gateway is the pair's floating VIP and its VLAN rows
+  # give the tag on the facing leaf (transforms/helpers/firewall_terminated.py).
+  ... on ManagedVxlanSegment {
+    firewall_gateway {
+      value
+    }
+    segment_deployments {
+      edges {
+        node {
+          vlans {
+            edges {
+              node {
+                vlan_id {
+                  value
+                }
+                device {
+                  node {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   gateway {
     node {
+      address {
+        value
+      }
       ip_prefix {
         node {
           prefix {

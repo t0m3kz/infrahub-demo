@@ -49,13 +49,13 @@ from typing import TYPE_CHECKING, Any
 
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import VTEP_ROLES
-from utils.graphql_queries import load_query
 from utils.limits import (
     CUSTOMER_VLAN_ID_MIN,
     GROUP_PROVIDER_STUBS,
     GROUP_SDWAN_GATEWAYS,
     LOCAL_VLAN_ID_MAX,
 )
+from utils.query_flatten import load_flat_query
 from utils.segment_vlan import ROW_KIND, mlag_id, shared_vlan_id, shared_vni_band
 
 from .protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
@@ -285,7 +285,7 @@ class SegmentVlanMixin:
         "rows": {device id: {"id", "vlan_id"}}, "requested": [assigned port id]}]}, one entry per ManagedSegmentDeployment;
         None when ``segment_id`` is not a ManagedVxlanSegment."""
         result = await self.client.execute_graphql(
-            query=load_query(_SEGMENT_VLAN_DOMAINS_QUERY_PATH), variables={"segment_id": segment_id}
+            query=load_flat_query(_SEGMENT_VLAN_DOMAINS_QUERY_PATH), variables={"segment_id": segment_id}
         )
         cleaned = clean_data(result)
         segments = cleaned.get("ManagedVxlanSegment") or []

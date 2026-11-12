@@ -1090,10 +1090,8 @@
                                       }
                                     ]
                                   },
-                                  "terminated_on": {
-                                    "node": {
-                                      "id": "ctx-dc1-fw-prod"
-                                    }
+                                  "firewall_gateway": {
+                                    "value": true
                                   }
                                 }
                               }
@@ -1230,10 +1228,8 @@
                               }
                             ]
                           },
-                          "terminated_on": {
-                            "node": {
-                              "id": "ctx-dc1-fw-prod"
-                            }
+                          "firewall_gateway": {
+                            "value": true
                           }
                         }
                       }

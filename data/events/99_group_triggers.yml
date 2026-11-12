@@ -8,9 +8,11 @@
 # run then failed for a non-member: "Target ... is not part of the group".)
 #
 # The `updated` rules (99_actions.yml) stay node triggers, a group trigger has no field match: an edit of a non-member
-# still dispatches and fails there. trigger-endpoint-generator-on-created stays a node trigger too (it matches the
-# device role). The names are new (CoreTriggerRule names are unique across both kinds): an instance loaded with the
-# old node rules keeps them until they are deleted.
+# still dispatches and fails there. The endpoint generator starts on its group too (`endpoints`: the servers a data
+# file declares with `member_of_groups`); a node rule on the device role fired for every device of that role, an
+# imported server with no group included, and failed for it. The names are new (CoreTriggerRule names are unique
+# across both kinds): an instance loaded with the old node rules keeps them until they are deleted
+# (trigger-endpoint-generator-on-created included).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -33,6 +35,12 @@ spec:
       member_update: added
       group: topologies_rack
       action: run-rack-generator
+
+    - name: trigger-endpoint-generator-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: endpoints
+      action: run-endpoint-generator
 
     - name: trigger-customer-routing-tag-on-added
       branch_scope: "other_branches"

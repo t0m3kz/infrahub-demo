@@ -6,7 +6,7 @@ import pytest
 
 from transforms.helpers.policy import rule_zone
 from utils.data_cleaning import clean_data
-from utils.routing_domain import RoutingDomainError, interface_security_zone, prefix_security_zone
+from utils.routing_domain import RoutingDomainError, interface_security_zone
 from utils.segment_addressing import routed_segment_namespace
 from utils.vrf_demand import address_namespaces
 
@@ -117,7 +117,7 @@ def test_routed_segment_uses_zone_and_terminated_segment_has_no_fabric_demand() 
         {"name": {"value": "web"}, "security_zone": zone(), "gateway": {"node": {"address": {"value": "10.0.0.1/24"}}}}
     )
     assert routed_segment_namespace(segment)["name"] == "PROD"
-    segment["terminated_on"] = {"id": "firewall-context"}
+    segment["firewall_gateway"] = True
     assert routed_segment_namespace(segment) == {}
 
 
@@ -125,13 +125,3 @@ def test_routed_segment_without_zone_is_rejected() -> None:
     """Gateway presence does not authorize an implicit routing domain."""
     with pytest.raises(RoutingDomainError, match="missing security zone"):
         routed_segment_namespace({"name": "web", "gateway": {"address": "10.0.0.1/24"}})
-
-
-def test_standalone_prefix_requires_its_explicit_registry_zone() -> None:
-    """A prefix-only registration supplies routing authority, not its IPAM namespace."""
-    prefix = clean_data({"prefix": {"value": "198.51.100.0/24"}})
-    owner = clean_data({"vrf": {"node": {"id": "vrf-inet", "security_zone": zone("INTERNET", "internet", 60002)}}})
-    assert prefix_security_zone(prefix, owner)["name"] == "INTERNET"
-    unzoned = clean_data({"vrf": {"node": {"id": "vrf-x", "name": {"value": "x"}}}})
-    with pytest.raises(RoutingDomainError, match="missing security zone"):
-        prefix_security_zone({"prefix": "198.51.100.0/24"}, unzoned)

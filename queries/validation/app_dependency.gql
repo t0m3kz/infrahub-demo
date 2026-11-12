@@ -33,6 +33,7 @@ query app_dependency_validation {
             id
             ... on AppComponent {
               fqdn { value }
+              network_segment { node { name { value } environment { value } security_zone { node { name { value } } } } }
               parent {
                 node {
                   __typename
@@ -60,6 +61,7 @@ query app_dependency_validation {
             ... on AppComponent {
               fqdn { value }
               ports { value }
+              network_segment { node { name { value } environment { value } security_zone { node { name { value } } } } }
               parent {
                 node {
                   __typename

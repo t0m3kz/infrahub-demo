@@ -7,6 +7,7 @@ from typing import Any
 
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import is_exchange_zone
+from utils.firewall_split import footprint_contexts, steering_contexts
 
 from .base import WarningCheck
 
@@ -92,53 +93,52 @@ class CheckSegmentPlacement(WarningCheck):
                 )
 
     def _validate_termination(self, segment: dict[str, Any]) -> None:
-        """A segment terminated on a firewall context (``terminated_on``) is a floating VIP the pair owns.
+        """A segment with ``firewall_gateway`` is a floating VIP the footprint's firewall pair owns.
 
-        - its ``gateway`` is set and inside the segment's prefix (the VIP the firewall transform renders);
-        - every footprint it names is a DC footprint (a colocation firewall has no trunk of its own to the leaf, an
-          office or a cloud has no firewall pair of ours);
-        - the context serves every one of those footprints (``served_deployments``), otherwise the segment would be
-          bridged to a pair that holds none of its rules.
-
-        The context is a firewall context by schema (``terminated_on`` peers ``ManagedFirewallContext`` only).
+        - its ``gateway`` is set and inside the segment's prefix (the VIP the firewall holds);
+        - it names exactly one footprint (a segment stretched over two would put two pairs on one VIP), a DC footprint
+          (a colocation firewall has no trunk of its own to the leaf, an office or a cloud has no pair of ours);
+        - that footprint lists an internal firewall context (``serving_firewall_contexts``), otherwise the segment
+          would be bridged to a pair that holds none of its rules.
         """
-        context = segment.get("terminated_on")
-        if not context:
+        if not segment.get("firewall_gateway"):
             return
         seg_name = segment.get("name", "<unnamed-segment>")
-        context_name = context.get("name", "<unknown>")
         gateway = (segment.get("gateway") or {}).get("address")
         prefix = ((segment.get("gateway") or {}).get("ip_prefix") or {}).get("prefix")
         if not gateway or not prefix:
             self.log_error(
                 message=(
-                    f"Segment '{seg_name}' is terminated on context '{context_name}' but has no gateway: "
-                    "the gateway is the VIP of the firewall pair"
+                    f"Segment '{seg_name}' has firewall_gateway but no gateway: the gateway is the VIP of the firewall pair"
                 )
             )
         elif ip_interface(gateway).ip not in ip_network(prefix, strict=False):
             self.log_error(
+                message=f"Segment '{seg_name}' gateway {gateway} (the firewall VIP) is outside the segment prefix {prefix}"
+            )
+        deployments = segment.get("customer_deployments") or []
+        if len(deployments) != 1:
+            self.log_error(
                 message=(
-                    f"Segment '{seg_name}' gateway {gateway} (the VIP of context '{context_name}') is outside "
-                    f"the segment prefix {prefix}"
+                    f"Segment '{seg_name}' has firewall_gateway but names {len(deployments)} footprints: "
+                    "exactly one (two pairs would own one VIP)"
                 )
             )
-        served = {deployment.get("id") for deployment in context.get("served_deployments") or []}
-        for deployment in segment.get("customer_deployments") or []:
+        for deployment in deployments:
             dep_kind = deployment.get("typename")
             dep_name = deployment.get("name", "<unknown>")
             if dep_kind != "TopologyCustomerDC":
                 self.log_error(
                     message=(
-                        f"Segment '{seg_name}' is terminated on context '{context_name}' but names {dep_kind} "
-                        f"'{dep_name}': only a TopologyCustomerDC can be terminated on a firewall context"
+                        f"Segment '{seg_name}' has firewall_gateway but names {dep_kind} '{dep_name}': "
+                        "only a TopologyCustomerDC can have a firewall gateway"
                     )
                 )
-            elif deployment.get("id") not in served:
+            elif not steering_contexts(footprint_contexts(deployment)):
                 self.log_error(
                     message=(
-                        f"Segment '{seg_name}' is terminated on context '{context_name}' but TopologyCustomerDC "
-                        f"'{dep_name}' is not served by it"
+                        f"Segment '{seg_name}' has firewall_gateway but TopologyCustomerDC '{dep_name}' "
+                        "lists no firewall context"
                     )
                 )
 

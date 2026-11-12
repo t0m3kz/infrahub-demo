@@ -16,6 +16,7 @@ spec:
       description: "DCI EVPN multihop par-colo1-edge-01 <-> ktw1-bl-01 over ktw1-dci-a-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "ktw1-dci-a-par1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]
@@ -26,6 +27,7 @@ spec:
       description: "DCI EVPN multihop par-colo1-edge-01 <-> ktw1-bl-02 over ktw1-dci-b-par1"
       session_type: EBGP_MULTIHOP
       peering_role: dci
+      password: "ktw1-dci-b-par1-dci-key"
       ttl: 2
       address_families:
         - ["l2vpn", "evpn"]

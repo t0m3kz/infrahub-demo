@@ -1,5 +1,6 @@
-# add_circuit (generators/topology/circuit.py). Filters on name, the
-# generator's registered parameter (.infrahub.yml `name: name__value`).
+# add_circuit (generators/topology/circuit.py). Filters on circuit_id, the circuit's key and the
+# generator's registered parameter (.infrahub.yml `circuit_id: circuit_id__value`): the query targets one
+# circuit, so a change regenerates only that circuit's ends. `name` is a display label, not a key.
 #
 # A carrier circuit's ends are one list, capabilities: exactly two
 # interfaces by schema (min_count 1, max_count 2) and by check (two), one per end. Each endpoint
@@ -8,8 +9,8 @@
 # circuit's location there), checked against the circuit's current locations. A cloud
 # transport (the device of a cloud port) is placed by its region or SaaS region instead. THE INTERNET object is a
 # device and a facility at once: the device itself is the location of its end (hence __typename and display_label).
-query circuit_data($name: String!) {
-  TopologyCarrierCircuit(name__value: $name) {
+query circuit_data($circuit_id: String!) {
+  TopologyCarrierCircuit(circuit_id__value: $circuit_id) {
     edges {
       node {
         id

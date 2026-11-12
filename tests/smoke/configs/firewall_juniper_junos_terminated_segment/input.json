@@ -989,8 +989,14 @@
                                   "name": {
                                     "value": "seg-term"
                                   },
+                                  "firewall_gateway": {
+                                    "value": true
+                                  },
                                   "gateway": {
                                     "node": {
+                                      "address": {
+                                        "value": "10.9.0.1/24"
+                                      },
                                       "ip_prefix": {
                                         "node": {
                                           "prefix": {
@@ -1019,6 +1025,62 @@
                                         "value": 60000
                                       }
                                     }
+                                  },
+                                  "segment_deployments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "vlans": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "vlan_id": {
+                                                    "value": 101
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "id": "dev-dc1-border-leaf-01"
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "node": {
+                                                  "vlan_id": {
+                                                    "value": 205
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "id": "dev-dc1-leaf-01"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "serving_firewall_contexts": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "ctx-shared",
+                                  "shared_devices": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "role": {
+                                            "value": "internal-firewall"
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               }
@@ -1034,75 +1096,6 @@
                         "value": "192.0.2.5/32"
                       }
                     }
-                  },
-                  "terminated_segments": {
-                    "edges": [
-                      {
-                        "node": {
-                          "id": "seg-term",
-                          "name": {
-                            "value": "seg-term"
-                          },
-                          "security_zone": {
-                            "node": {
-                              "name": {
-                                "value": "PROD"
-                              },
-                              "id": "fixture-zone-PROD",
-                              "vrf_type": {
-                                "value": "prod"
-                              },
-                              "l3_vni": {
-                                "value": 60000
-                              }
-                            }
-                          },
-                          "gateway": {
-                            "node": {
-                              "address": {
-                                "value": "10.9.0.1/24"
-                              }
-                            }
-                          },
-                          "segment_deployments": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "vlans": {
-                                    "edges": [
-                                      {
-                                        "node": {
-                                          "vlan_id": {
-                                            "value": 101
-                                          },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-dc1-border-leaf-01"
-                                            }
-                                          }
-                                        }
-                                      },
-                                      {
-                                        "node": {
-                                          "vlan_id": {
-                                            "value": 205
-                                          },
-                                          "device": {
-                                            "node": {
-                                              "id": "dev-dc1-leaf-01"
-                                            }
-                                          }
-                                        }
-                                      }
-                                    ]
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    ]
                   },
                   "shared_devices": {
                     "edges": [

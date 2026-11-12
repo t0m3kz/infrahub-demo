@@ -278,9 +278,9 @@ class LoadbalancerVipMixin:
         self.logger.info("Waiting for %s to write %s of %s", owner, field, ", ".join(node_ids))
         for node_id in node_ids:
             await self.wait_for_parent_generators((owner,), node_id)
-        from utils.graphql_queries import load_query
+        from utils.query_flatten import load_flat_query
 
-        text = load_query(query)
+        text = load_flat_query(query)
         pending = node_ids
         for attempt in range(LB_VIP_REREAD.attempts):
             if attempt:

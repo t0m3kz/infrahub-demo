@@ -34,5 +34,4 @@ def make_generator(cls: type[_T]) -> Any:
     # (tests/unit/test_customer_pool_boarding.py), not these tests' target resolution.
     setattr(gen, "ensure_customer_pools", AsyncMock())  # noqa: B010
     # Termination moves have their own real-mixin tests, not target-resolution mocks.
-    setattr(gen, "_relink_terminated_segments", AsyncMock())  # noqa: B010
     return gen

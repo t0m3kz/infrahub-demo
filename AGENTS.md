@@ -263,7 +263,7 @@ class MyCheck(InfrahubCheck):
   the segment a prefix of its `ip_version` (`ipv4` by default, `ipv6`; one family, no dual stack), sized from its
   `host_count` or its design's `segment_prefix_length`, from its customer's pool (see **Service tiers and customer
   pools**) and puts the anycast gateway on the first address; there is no segment without one. The `INFRA` pseudo-customer's segment (`infra-core-dns-ntp-p`, management zone) is such a segment with an authored
-  gateway. A segment is pure L2 on the fabric only when a firewall terminates it (`terminated_on`, see **VLAN rows**).
+  gateway. A segment is pure L2 on the fabric only when a firewall terminates it (`firewall_gateway`, see **VLAN rows**).
   A fixed VLAN number is only needed towards an outside party, and that is a handoff circuit's `<port>.<vlan>`
   sub-interface, not a segment.
 - **Topology.Customer**: Per-facility tenant footprints (`TopologyCustomerDC`, `TopologyCustomerColocation`,
@@ -600,23 +600,25 @@ class MyCheck(InfrahubCheck):
   reads the other end, `FirewallContext.served_deployments`, so each firewall places the footprint's rules in its own
   contexts: which share goes where follows from the footprint's list (see **Firewall roles**). Locks are per context
   and a run holds one at a time.
-- **Terminated segments**: `ManagedVxlanSegment.terminated_on` (Attribute, one, optional) peers a
-  `ManagedFirewallContext`; the reverse is `terminated_segments` on the context (Generic, many; both ends declared in
-  `schemas/extensions/capabilities/ha.yml`, identifier `firewall_context__terminated_segments`, narrowed to the concrete
-  firewall kind so a load-balancer context cannot be named). The pair of that context is the segment's gateway:
-  `segment.gateway` is the pair's floating VIP (the `.1` the segment generator allocates from the tenant pool, like any
-  DC segment; no per-member address) and the fabric only bridges it. ONE gate, `utils/segment_addressing.py`
+- **Terminated segments**: `ManagedVxlanSegment.firewall_gateway` (Boolean, default false) says the firewall pair of the
+  segment's ONE DC footprint owns the gateway. There is no edge to a context: the context is the footprint's internal one
+  (`serving_firewall_contexts`, `utils/firewall_split.py` `steering_contexts`), and whether the segment is stretched is
+  read from the number of its `customer_deployments` (`checks/segment_placement.py` refuses the flag on more than one
+  footprint, a non-DC footprint, or a footprint with no firewall context). `segment.gateway` is the pair's floating VIP
+  (the `.1` the segment generator allocates from the tenant pool, like any DC segment; no per-member address) and the
+  fabric only bridges it. ONE gate, `utils/segment_addressing.py`
   `is_terminated` / `routed_segment_namespace`, hides the gateway from every fabric reader: the VRF demand (no routed
   row, so no SVI and no VRF instance), `_get_segment_gateways` (no gateway, VRF or L3 VNI), `routed_activations` (no PBR
   or SVI ACL), the overlay and VXLAN L3 instances, the origination, and `is_routed_tenant_segment` (no group or routing
   tag, no SVI protection to demand). The firewall keeps reading `segment_namespace` and `segment_prefix` (its zone
   members, rules and PBR next hops). A query that returns a segment's gateway for the fabric must select
-  `terminated_on { node { id } }` (`tests/unit/test_terminated_on_queries.py`), else the segment reads as routed.
+  `firewall_gateway { value }`, else the segment reads as routed. The context's `terminated_segments` is built in
+  `transforms/helpers/firewall_contexts.py` from the flagged segments of the footprints it is the internal context of.
   - **Ports**: `add_vxlan_segment` and `add_app_component_segment` tag the border service ports of the context (derived,
     a context has no interface edge: the ports with the firewall service role that its members' uplinks are cabled to,
     `utils/service_contexts.py` `member_border_ports`, read through `queries/topology/add/segment_vlans.gql`) with the
     VLAN row of their switch (the port -> row edge, see **VLAN rows**), in the SAME reconcile as the component ports,
-    and remove the edge once the port is no longer derived. The ports are not host-facing: `checks/customer_quota.py` does not count them. A change of `terminated_on` re-runs
+    and remove the edge once the port is no longer derived. The ports are not host-facing: `checks/customer_quota.py` does not count them. A change of `firewall_gateway` re-runs
     `add_vxlan_segment` (`data/events/99_actions.yml`).
   - **Firewall side**: the sub-interface is derived, never stored. `transforms/helpers/firewall_terminated.py` names it
     `<uplink trunk>.<vlan>` (the trunk is the encapsulation `parent` of the context's legs; the VLAN is the segment's row on
@@ -629,8 +631,7 @@ class MyCheck(InfrahubCheck):
     the border leaves
     (`apply_context_routes`), and `get_firewall_static_routes` skips an interface with a `virtual_ip`.
   - **Check**: `checks/segment_placement.py` holds a termination to a gateway inside the segment prefix, DC footprints
-    only, each served by the context (`served_deployments`, the reverse of the footprint's
-    `serving_firewall_contexts`). Demo: C005's `firewalled-dc10` in
+    only, exactly one, listing a firewall context (`serving_firewall_contexts`). Demo: C005's `firewalled-dc10` in
     `data/demos/30_all/07_applications/c005/00_segments.yml`, on DC10's shared PROD context (`test_64c`).
 - **Footprint segments**: `network_segments` (the reverse of `segment__customer_deployments`) is declared per kind in
   `schemas/extensions/service/segment.yml`: `ManagedVxlanSegment` on `TopologyCustomerDC`, `TopologyCustomerColocation`
@@ -956,7 +957,7 @@ class MyCheck(InfrahubCheck):
   `utils/segment_addressing.py` `l2_only_on`, the one rule for the generator's SVIs and VRF demand and the transform's
   L2-only view, `is_fabric_l2`). A switch renders every segment it has a row of, with or without a port of it
   (`transforms/common.py` `_collect_row_activations`).
-  A routed row (a gateway, and no `terminated_on`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a STORED `DcimVirtualInterface` with role
+  A routed row (a gateway, and no `firewall_gateway`: a terminated segment is pure L2 on the fabric) is realized on its switch as ONE SVI: a STORED `DcimVirtualInterface` with role
   `svi` named `Vlan<vlan_id>` on the row's switch, which is a MEMBER of its row through the row's interface edge
   (`ManagedSegmentVlan.capabilities`, the plain generic edge a port is a member through; not a Component of the row: a
   Component under a row whose `device` is its Parent broke the server's object-template walk, measured on 1.11.9; no
@@ -1390,8 +1391,17 @@ stack at a time. Two loops:
 | Templates, transforms, checks and their validation queries | Fast, then subset `01, 02, 59–64` (no `test_65` or `test_66`) plus the smoke golden diff |
 | Docs, tests only | Unit + smoke |
 
-Queries are validated by the smoke tests: every query under `queries/` has a `syntax_check` entry in
-`tests/smoke/test_graphql.yml` (guarded by `tests/unit/test_smoke_query_coverage.py`), run by `uv run invoke validate`.
+Queries are validated by the smoke tests: every registered query has a `syntax_check` entry in
+`tests/smoke/test_graphql.yml` (guarded by `tests/smoke/test_smoke_query_coverage.py`), run by `uv run invoke validate`.
+
+**Registered queries are flattened copies.** The server's cost of a query grows with its fragment use, not with its
+size or depth (a device config query took nearly as long for a device that does not exist as for a real one; written
+out it is 6-14x faster, measured in `.dev/query-performance.md`). So `.infrahub.yml` registers `queries/flat/`, written
+from the sources under `queries/` by `uv run invoke flatten-queries` (`utils/query_flatten.py`): fragments written out
+in place, an inline fragment that would land directly inside another kept as a fragment used once (the server answers
+HTTP 500 to that shape). Edit the source and the fragments, never `queries/flat/`, and run the task after every query or
+fragment change: the server runs only the copies. A generator that executes a query itself uses `load_flat_query`.
+The copies need Infrahub 1.12: on 1.11 a fragment spread inside an inline fragment returns nulls.
 The test stack serves on port 8100 (`--server-port` moves it).
 
 Always, after any run that registers a new check or transform query: run that query against the settled stack

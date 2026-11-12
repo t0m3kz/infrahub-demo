@@ -203,7 +203,7 @@ fragment SegmentGroupPolicyFields on ManagedNetworkSegment {
   ... on ManagedVxlanSegment {
     stretch_scope { value }
     # A terminated segment has no SVI: it is no routed tenant segment (utils/exchange_transit.is_routed_tenant_segment).
-    terminated_on { node { id } }
+    firewall_gateway { value }
     segment_deployments {
       edges {
         node {

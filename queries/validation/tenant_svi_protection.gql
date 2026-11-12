@@ -20,8 +20,8 @@ query tenant_svi_protection {
             rules { count }
           }
         }
-        # terminated_on: a segment a firewall context terminates has no SVI to protect.
-        ... on ManagedVxlanSegment { customer_deployments { edges { node { id } } } terminated_on { node { id } } }
+        # firewall_gateway: a segment a firewall context terminates has no SVI to protect.
+        ... on ManagedVxlanSegment { customer_deployments { edges { node { id } } } firewall_gateway { value } }
       }
     }
   }

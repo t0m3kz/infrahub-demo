@@ -8,13 +8,14 @@ from typing import Any
 from transforms.helpers.bgp_cloud import CloudLeg, cloud_legs
 from transforms.helpers.bgp_external import registered_by_attachment
 from transforms.helpers.group_policy import get_vrf_contracts, rule_groups, segment_groups
-from transforms.helpers.policy import rule_enabled, segment_flows
+from transforms.helpers.policy import is_internet_destination, rule_enabled, segment_flows
 from utils.circuit_underlay import SESSION_CIRCUIT
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     INTERNET_ZONE,
     ROUTED_SEGMENT_KINDS,
+    TENANT_NAMESPACE_TYPES,
     is_exchange_zone,
     namespace_type_for_environment,
     zone_name_for_namespace_type,
@@ -89,6 +90,8 @@ class CheckSegmentSecurity(WarningCheck):
             self._validate_gateway_zone(segment)
         self._validate_unique_names(segments)
         self._validate_rule_endpoints(segments, rules)
+        self._validate_policy_rules(rules)
+        self._validate_environment_separation(rules)
         self._validate_selector_zones(rules)
         self._validate_rule_destinations(rules)
         self._validate_destination_prefixes(cleaned, segments, rules)
@@ -168,6 +171,68 @@ class CheckSegmentSecurity(WarningCheck):
                     message=(
                         f"rule '{rule.get('name', rule.get('id'))}': {side} segment "
                         f"'{segment.get('name', endpoint['id'])}' resolves to no prefix — it would render as any"
+                    )
+                )
+
+    def _validate_policy_rules(self, rules: list[dict[str, Any]]) -> None:
+        """What a rule must hold wherever it is rendered: the one place for these (the firewall check judged them too).
+
+        * A rule lives in its source segment's policy: a policy that names a segment holds only rules whose source is
+          that segment. A policy with no segment holds the rules the load balancer generator writes (their source is a
+          prefix), so it is not judged.
+        * A rule has a destination: a segment, the internet zone, a prefix or an address.
+        * A rule to the internet zone is not ``apply_on_switch``: the leaf ACL can only approximate it by denying the
+          internal ranges first, and it would force the whole ACL of a firewalled segment onto the switch.
+        """
+        for rule in rules:
+            if not rule_enabled(rule):
+                continue
+            name = rule.get("name", rule.get("id"))
+            policy = rule.get("policy") or {}
+            policy_segment = (policy.get("segment") or {}).get("id")
+            source = rule.get("source_segment") or {}
+            if policy_segment and source.get("id") != policy_segment:
+                self.log_error(
+                    message=(
+                        f"Policy '{policy.get('name', policy.get('id'))}' rule '{name}': source segment "
+                        f"'{source.get('name') or source.get('id') or '<none>'}' is not the policy's segment — "
+                        "a rule belongs in its source segment's policy"
+                    )
+                )
+            if not (
+                (rule.get("destination_segment") or {}).get("id")
+                or rule.get("destination_zone")
+                or rule.get("destination_prefixes")
+                or rule.get("destination_ip_addresses")
+            ):
+                self.log_error(message=f"rule '{name}' has no destination (segment, zone, IP, or prefix)")
+            if rule.get("apply_on_switch") and is_internet_destination(rule):
+                self.log_error(
+                    message=(
+                        f"rule '{name}': apply_on_switch to the internet zone — the leaf ACL can only approximate it "
+                        "by denying the internal ranges first, and it would force the whole ACL of a firewalled "
+                        "segment onto the switch"
+                    )
+                )
+
+    def _validate_environment_separation(self, rules: list[dict[str, Any]]) -> None:
+        """Prod and non-prod never connect: an enabled rule between a PROD and a NON-PROD segment is an error.
+
+        The zone decides (``vrf_type`` of the segment's ``security_zone``, the routing authority), not the
+        ``environment`` attribute; a segment in an exchange zone (INTERNET, MANAGEMENT) is not a tenant segment and a
+        rule side that is a prefix or address selector names no segment, so neither is judged here.
+        """
+        for rule in rules:
+            if not rule_enabled(rule):
+                continue
+            source = _tenant_zone(rule.get("source_segment"))
+            destination = _tenant_zone(rule.get("destination_segment"))
+            if source and destination and source[1] != destination[1]:
+                self.log_error(
+                    message=(
+                        f"rule '{rule.get('name', rule.get('id'))}': source segment '{source[0]}' is in the "
+                        f"{source[1]} namespace and destination segment '{destination[0]}' in the {destination[1]} one; "
+                        "prod and non-prod never connect"
                     )
                 )
 
@@ -415,6 +480,15 @@ class CheckSegmentSecurity(WarningCheck):
                     self.log_error(
                         message=f"Rule '{name}' between groups {pair[0]} -> {pair[1]} has no group contract row"
                     )
+
+
+def _tenant_zone(segment: dict[str, Any] | None) -> tuple[str, str] | None:
+    """(segment name, namespace type) of a rule end in a tenant zone (PROD or NON-PROD), else None."""
+    segment = segment or {}
+    namespace_type = (segment.get("security_zone") or {}).get("vrf_type")
+    if not segment.get("id") or namespace_type not in TENANT_NAMESPACE_TYPES:
+        return None
+    return str(segment.get("name") or segment["id"]), namespace_type
 
 
 def _network(cidr: str | None) -> _Network | None:

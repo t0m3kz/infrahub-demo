@@ -195,20 +195,20 @@ spec:
           - relationship_name: customer_deployments
             modification_type: updated
 
-    # Re-run generator when the segment is terminated on, or moved to, another firewall context: the reconcile
-    # tags the border service ports of the context facing its HA pair (generators/topology/segment_ports.py) and
-    # removes the ones of the context it left. The reconcile writes the ports' edges, not this relationship, so the
-    # run raises no event of this rule.
-    - name: trigger-vxlan-segment-terminated-on-updated
+    # Re-run generator when the segment gets, or loses, its firewall gateway: the reconcile tags the border
+    # service ports of its footprint's internal context facing its HA pair (generators/topology/segment_ports.py)
+    # and removes them again. The reconcile writes the ports' edges, not this attribute, so the run raises no
+    # event of this rule.
+    - name: trigger-vxlan-segment-firewall-gateway-updated
       branch_scope: "other_branches"
       node_kind: ManagedVxlanSegment
       mutation_action: "updated"
       action: run-vxlan-segment-generator
       matches:
-        kind: CoreNodeTriggerRelationshipMatch
+        kind: CoreNodeTriggerAttributeMatch
         data:
-          - relationship_name: terminated_on
-            modification_type: updated
+          - attribute_name: firewall_gateway
+            value_match: any
 
     # Re-run the segment reconcile when a port is assigned to, or withdrawn from, a segment deployment (its
     # `capabilities`, the request): the reconcile gives the port its switch's VLAN row. An edit of the edge from either
@@ -243,24 +243,11 @@ spec:
             value_match: any
 
     # ── Endpoint Connectivity ────────────────────────────────────────────────
-    # Endpoint targets (data/bootstrap/00_groups.yml's `endpoints` group) are
-    # server devices with role=endpoint. `created` bootstraps a fresh server's
-    # uplink cabling immediately. No relationship-based `interfaces added`
-    # trigger here: that fires on ANY DcimPhysicalDevice (border-leafs, ToRs,
-    # spines all gain interfaces during add_rack), and add_endpoint's target
-    # group (`endpoints`) rejects non-member node ids outright — see the
-    # ValueError this caused in production before removal.
-    - name: trigger-endpoint-generator-on-created
-      branch_scope: "other_branches"
-      node_kind: DcimPhysicalDevice
-      mutation_action: "created"
-      action: run-endpoint-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: role
-            value_match: value
-            value: endpoint
+    # add_endpoint starts on its target group (`endpoints`: the servers a data file declares with `member_of_groups`),
+    # see trigger-endpoint-generator-on-added in 99_group_triggers.yml. There is no node rule here: one on the device
+    # role fired for every device of that role, a server with no group included, and the run failed for it
+    # ("Target ... is not part of the group"). Neither is there a relationship-based `interfaces added` trigger: that
+    # fires on ANY DcimPhysicalDevice (border-leafs, ToRs, spines all gain interfaces during add_rack).
 
     # ── MLAG Wiring ───────────────────────────────────────────────────────────
     # Peer-link wiring on domain *creation* is no longer a separate

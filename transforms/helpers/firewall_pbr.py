@@ -150,7 +150,7 @@ def get_customer_pbr_rules(
     profile between two segments served by the SAME context is not
     bypassed on either side, so both directions cross that context
     (_needs_firewall); and a flow to or from a segment a firewall context
-    terminates (``terminated_on``): the fabric has no route to its prefix
+    terminates (``firewall_gateway``): the fabric has no route to its prefix
     (no SVI), so a bypass would drop it. Between contexts every permit stays on the fabric. Not
     filtered by owner: a cross-owner permit bypasses PBR the same as a
     same-owner one, since intra- and inter-customer traffic use

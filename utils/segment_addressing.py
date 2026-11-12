@@ -132,13 +132,13 @@ def is_terminated(seg: dict[str, Any]) -> bool:
     """True when a firewall context terminates the segment: its L3 gateway is the pair's floating VIP, not the fabric.
 
     A terminated segment still carries a `gateway` (the VIP, rendered by the firewall transform on the
-    ``<uplink trunk>.<vlan>`` sub-interface it derives) but on every fabric switch (leaf, ToR, border leaf) it is pure
+    ``<uplink trunk>.<vlan>`` sub-interface it stores) but on every fabric switch (leaf, ToR, border leaf) it is pure
     L2: VLAN and L2 VNI only, no SVI, no VRF, no L3 VNI, no PBR or SVI ACL. ``routed_segment_namespace`` and
     ``transforms/helpers/segments.py`` ``_get_segment_gateways`` hide the gateway behind this check, so every fabric
-    consumer of them drops the L3 side at once. ``seg`` is cleaned query data: ``terminated_on`` is the context
-    (``{"id": ...}``) or absent (a query that does not select it reads every segment as routed).
+    consumer of them drops the L3 side at once. ``seg`` is cleaned query data: ``firewall_gateway`` is the segment's
+    flag or absent (a query that does not select it reads every segment as routed).
     """
-    return bool((seg.get("terminated_on") or {}).get("id"))
+    return bool(seg.get("firewall_gateway"))
 
 
 BORDER_LEAF_ROLE = "border-leaf"

@@ -654,7 +654,6 @@ class ManagedSecurityContext(CoreNode):
 class ManagedFirewallContext(ManagedGeneric, ManagedSecurityContext, ManagedGenericSharedDevice):
     context_id: StringOptional
     served_deployments: RelationshipManager[ManagedTenantScoped]
-    terminated_segments: RelationshipManager[ManagedVxlanSegment]
     exchanges: RelationshipManager[TopologyRoutedExchange]
     snat_address: RelationshipAttribute[IpamIPAddress]
 
@@ -1123,7 +1122,6 @@ class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment):
     arp_suppression: Boolean
     segment_type: Dropdown
     customer_deployments: RelationshipManager[TopologyDeployment]
-    terminated_on: RelationshipAttribute[ManagedFirewallContext]
 
 
 class SecurityZone(CoreNode):

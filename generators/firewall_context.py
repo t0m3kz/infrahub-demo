@@ -52,11 +52,8 @@ from .protocols import (
     DcimVirtualDevice,
     IpamIPAddress,
     IpamPrefix,
-    ManagedVxlanSegment,
-    TopologyCustomerDC,
     TopologyRoutedExchange,
 )
-from .segment_vlan import segment_lock_key
 from .types import DeviceOptions
 
 if TYPE_CHECKING:
@@ -253,36 +250,6 @@ class FirewallContextMixin(TransitLegsMixin):
             self.logger.info(f"Deployment {customer_id} no longer served by {spec.label} {stale}")
         except Exception as exc:
             self.logger.error(f"Failed to unlink deployment {customer_id} from {spec.label} {stale}: {exc}")
-
-    async def _relink_terminated_segments(self, customer_id: str, context_id: str) -> None:
-        """Keep a DC footprint's existing firewall gateways on its serving internal context."""
-        segments = await self.client.filters(
-            kind=ManagedVxlanSegment,
-            customer_deployments__ids=[customer_id],
-            terminated_on__isnull=False,
-            include=["customer_deployments"],
-        )
-        for segment in segments:
-            if segment.terminated_on.id == context_id:
-                continue
-            async with self.resource_lock(segment_lock_key(segment.id)):
-                # Another footprint may share the same terminated segment. Its service cannot
-                # move with this footprint unless it already uses the destination context.
-                other_ids = [peer.id for peer in segment.customer_deployments.peers if peer.id != customer_id]
-                if other_ids:
-                    others = await self.client.filters(
-                        kind=TopologyCustomerDC, ids=other_ids, include=["serving_firewall_contexts"]
-                    )
-                    if len(others) != len(other_ids) or any(
-                        context_id not in {peer.id for peer in other.serving_firewall_contexts.peers}
-                        for other in others
-                    ):
-                        raise ValueError(
-                            f"Terminated segment {segment.name.value} spans footprints with different "
-                            "serving firewall contexts; split its termination before moving this service"
-                        )
-                segment.terminated_on = context_id
-                await segment.save(allow_upsert=True, update_group_context=False)
 
     async def _resolve_context_target(
         self, spec: ContextSpec, customer: dict[str, Any], customer_id: str, parent: dict[str, Any]

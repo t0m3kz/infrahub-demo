@@ -57,6 +57,20 @@ class TestVxlanSegmentGeneratorGenerate:
         gen.logger.error.assert_called_once()
         assert "No ManagedVxlanSegment" in gen.logger.error.call_args[0][0]
 
+    def test_the_segment_is_given_its_default_deny_policy(self):
+        """generate() closes the segment with its policy before anything opens it, once, for the segment it read."""
+        gen = _make_gen()
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
+        asyncio.run(gen.generate(data))
+        gen.ensure_segment_policy.assert_awaited_once()
+        assert gen.ensure_segment_policy.await_args.args[0]["id"] == "seg-1"
+
+    def test_a_segment_without_id_gets_no_policy(self):
+        """The guard against a segment with no id comes first: nothing is created for it."""
+        gen = _make_gen()
+        asyncio.run(gen.generate(_seg_response(seg_id="", seg_name="vxlan-1000", deployments=[_DEP_1])))
+        gen.ensure_segment_policy.assert_not_awaited()
+
     def test_missing_segment_id_logs_error(self):
         gen = _make_gen()
         # id="" triggers the "missing id or name" guard

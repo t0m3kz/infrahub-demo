@@ -112,7 +112,6 @@ def test_every_platform_the_data_names_is_defined(
 _CATALOG_WITHOUT_TEMPLATE = {
     ("cisco_ios", "access-switch"),
     ("juniper_junos", "edge"),
-    ("linux", "edge"),
     ("linux", "load-balancer"),
 }
 

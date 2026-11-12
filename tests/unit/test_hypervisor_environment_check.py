@@ -13,6 +13,7 @@ import yaml
 
 from checks.hypervisor_environment import CheckHypervisorEnvironment
 from tests.integration.demo_data import declared, distinct, name
+from utils.query_flatten import source_path
 
 _ROOT = Path(__file__).parents[2]
 _ALL_DEMO = _ROOT / "data" / "demos" / "30_all"
@@ -230,7 +231,7 @@ def test_query_is_registered_and_selects_what_the_check_reads() -> None:
     checks = {check["name"]: check for check in config["check_definitions"]}
 
     assert checks["validate_hypervisor_environment"]["class_name"] == "CheckHypervisorEnvironment"
-    query = (_ROOT / queries[CheckHypervisorEnvironment.query]).read_text()
+    query = source_path(_ROOT / queries[CheckHypervisorEnvironment.query]).read_text()  # the source, as written
     assert "... on TopologyEnvironmentScoped { environment { value } }" in query
     assert "TopologyCustomerOffice" not in query  # an office has no environment to select
     assert "... on TopologyCustomer {" not in query

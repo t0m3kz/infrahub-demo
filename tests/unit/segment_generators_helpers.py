@@ -30,6 +30,8 @@ def _make_gen() -> Any:
     gen.reconcile_vxlan_segment = AsyncMock()
     # Tenant addressing has its own test class (TestEnsureSegmentAddressing).
     gen.ensure_segment_addressing = AsyncMock()
+    # The default-deny policy has its own tests (test_segment_firewall_mixin.py TestEnsureSegmentPolicy).
+    gen.ensure_segment_policy = AsyncMock()
     return gen
 
 

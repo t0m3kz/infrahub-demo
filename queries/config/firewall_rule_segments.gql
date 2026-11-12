@@ -1,0 +1,10 @@
+# The segments the rules of firewall_rules name, read once each (transforms/helpers/firewall_rules.py).
+query firewall_rule_segments($ids: [ID]) {
+  ManagedNetworkSegment(ids: $ids) {
+    edges {
+      node {
+        ...PolicyRuleSegmentFields
+      }
+    }
+  }
+}

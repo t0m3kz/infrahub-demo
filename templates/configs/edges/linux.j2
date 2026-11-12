@@ -1,0 +1,86 @@
+{#- Linux edge (NSX Edge node, a software router): FRRouting (frr.conf, vtysh syntax) for BGP and the interface addresses.
+    Evidence U on every line: no FRR guide or lab is in the repo; the syntax follows the IOS-style CLI that FRR documents
+    for `router bgp`, `neighbor`, `route-map` and `ip prefix-list`. Not rendered: VRF neighbours (`router bgp <asn> vrf`),
+    the EVPN address family and routing-identity communities. A session in a tenant VRF is listed in a comment. -#}
+frr version 8
+frr defaults datacenter
+!
+! {{ name }} Configuration
+!
+{%- for line in vrf_banner | default([]) %}
+! {{ line }}
+{%- endfor %}
+hostname {{ name }}
+service integrated-vtysh-config
+!
+! Interfaces (U)
+{%- for interface in interfaces %}
+interface {{ interface.name }}
+{%- if interface.display_description %}
+ description {{ interface.display_description }}
+{%- endif %}
+{%- for ip in interface.ip_addresses | default([]) %}
+{%- if ':' in ip.address %}
+ ipv6 address {{ ip.address }}
+{%- else %}
+ ip address {{ ip.address }}
+{%- endif %}
+{%- endfor %}
+exit
+!
+{%- endfor %}
+{%- if bgp and bgp|length > 0 %}
+{%- from 'common/bgp_filter_objects.j2' import bgp_filter_attachments, bgp_filter_objects, bgp_user_attachments, bgp_user_objects %}
+! BGP Configuration (U)
+{{- bgp_filter_objects(bgp, '', false) }}
+{{- bgp_user_objects(bgp, '', 'ios') }}
+!
+route-map RM-CONN-2-BGP permit 10
+ match interface lo
+exit
+!
+{%- for bgp_config in bgp %}
+router bgp {{ bgp_config.local_as.asn }}
+ bgp router-id {{ bgp_config.router_ip }}
+{%- if bgp_config.multipath %}
+ maximum-paths 4
+{%- endif %}
+{%- for session in bgp_config.sessions if not session.get('vrf') %}
+ neighbor {{ session.neighbor }} remote-as {{ session.remote_as.asn }}
+{%- if session.get('remote_device') %}
+ neighbor {{ session.neighbor }} description {{ session.remote_device }}
+{%- endif %}
+{%- if session.get('ttl') and session.get('ttl') > 1 %}
+ neighbor {{ session.neighbor }} ebgp-multihop {{ session.ttl }}
+{%- endif %}
+{%- if session.get('bfd_enabled') %}
+ neighbor {{ session.neighbor }} bfd
+{%- endif %}
+{%- if session.get('password') %}
+ neighbor {{ session.neighbor }} password {{ session.password }}
+{%- endif %}
+{%- if session.policy.max_total %}
+ neighbor {{ session.neighbor }} maximum-prefix {{ session.policy.max_total.limit }}{{ ' warning-only' if session.policy.max_total.warning_only }}
+{%- endif %}
+{%- endfor %}
+ !
+ address-family ipv4 unicast
+  redistribute connected route-map RM-CONN-2-BGP
+{%- for session in bgp_config.sessions if not session.get('vrf') and 'ipv4' in (session.address_families | default([])) %}
+  neighbor {{ session.neighbor }} activate
+{%- for attached in session.policy.attach if attached.own %}
+  neighbor {{ session.neighbor }} route-map {{ attached.map }} {{ attached.direction }}
+{%- endfor %}
+{{- bgp_filter_attachments(session, 'ipv4', '  ', false, 'neighbor ' ~ session.neighbor ~ ' ') }}
+{{- bgp_user_attachments(session, 'ipv4', '  ', 'neighbor ' ~ session.neighbor ~ ' ') }}
+{%- endfor %}
+ exit-address-family
+{%- for vrf_name, _by_af in bgp_config.vrf_af_sessions.items() %}
+ ! not rendered: sessions in VRF {{ vrf_name }}
+{%- endfor %}
+exit
+!
+{%- endfor %}
+{%- endif %}
+line vty
+!

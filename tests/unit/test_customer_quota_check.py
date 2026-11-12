@@ -349,7 +349,7 @@ def test_check_and_query_are_registered() -> None:
 
     assert checks["validate_customer_quota"]["class_name"] == "CheckCustomerQuota"
     assert "targets" not in checks["validate_customer_quota"]
-    assert queries[CheckCustomerQuota.query] == "queries/validation/customer_quota.gql"
+    assert queries[CheckCustomerQuota.query] == "queries/flat/validation/customer_quota.gql"
     assert (_ROOT / queries[CheckCustomerQuota.query]).is_file()
     assert "resource_name: validate_customer_quota" in (_ROOT / "tests/smoke/test_checks.yml").read_text()
     assert "resource_name: customer_quota" in (_ROOT / "tests/smoke/test_graphql.yml").read_text()

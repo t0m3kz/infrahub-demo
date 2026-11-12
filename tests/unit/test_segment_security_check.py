@@ -242,12 +242,177 @@ class TestRuleEndpoints:
         assert check._captured_errors == []
 
     def test_rule_without_segment_endpoint_is_ignored(self) -> None:
-        """A rule with no segment on a side is not this check's concern."""
-        assert _run([_segment("a")], [_rule("r", "a", None)])._captured_errors == []
+        """A rule with no segment on a side (here: to the internet zone) is not the endpoint check's concern."""
+        rule = _rule("r", "a", None, destination_zone={"node": {"name": _v("INTERNET")}})
+        assert _run([_segment("a")], [rule])._captured_errors == []
 
 
 _PREFIX = {"edges": [{"node": {"id": "p", "prefix": _v("10.10.0.0/16")}}]}
 _ADDRESS = {"edges": [{"node": {"id": "i", "address": _v("100.66.96.65/32")}}]}
+
+
+def _zoned(seg_id: str, vrf_type: str) -> dict[str, Any]:
+    """A rule end: a segment node in the zone of ``vrf_type`` (the shape the check's query returns)."""
+    return {
+        "node": {
+            "id": seg_id,
+            "name": _v(seg_id),
+            "security_zone": {"node": {"id": f"z-{vrf_type}", "name": _v(vrf_type.upper()), "vrf_type": _v(vrf_type)}},
+        }
+    }
+
+
+def _crossing(rule_id: str, src_type: str, dst_type: str, **extra: Any) -> dict[str, Any]:
+    """A rule from a segment in ``src_type``'s zone to one in ``dst_type``'s."""
+    return _rule(
+        rule_id,
+        "src",
+        "dst",
+        source_segment=_zoned("src", src_type),
+        destination_segment=_zoned("dst", dst_type),
+        **extra,
+    )
+
+
+def _separation_errors(*rules: dict[str, Any]) -> list[str]:
+    """The 'never connect' errors the check reports for the rules."""
+    return [e for e in _run([], list(rules))._captured_errors if "never connect" in e]
+
+
+class TestEnvironmentSeparation:
+    """Prod and non-prod never connect: a rule between a PROD and a NON-PROD segment is an error."""
+
+    @pytest.mark.parametrize(("src", "dst"), [("prod", "non_prod"), ("non_prod", "prod")])
+    def test_a_rule_between_prod_and_non_prod_is_an_error_in_either_direction(self, src: str, dst: str) -> None:
+        """The error names the rule, both segments and both namespaces."""
+        errors = _separation_errors(_crossing("r1", src, dst))
+
+        assert len(errors) == 1
+        assert "rule 'r1'" in errors[0] and f"{src} namespace" in errors[0] and f"{dst} one" in errors[0]
+
+    @pytest.mark.parametrize("zone", ["prod", "non_prod"])
+    def test_a_rule_inside_one_environment_is_fine(self, zone: str) -> None:
+        """Two segments of the same tenant namespace may talk."""
+        assert _separation_errors(_crossing("r1", zone, zone)) == []
+
+    @pytest.mark.parametrize("other", ["internet", "management"])
+    def test_an_exchange_zone_segment_is_not_a_tenant_segment(self, other: str) -> None:
+        """A segment in INTERNET or MANAGEMENT is not judged (tenants reach those through the exchange)."""
+        assert _separation_errors(_crossing("r1", "prod", other), _crossing("r2", other, "non_prod")) == []
+
+    def test_a_disabled_rule_or_one_in_a_disabled_policy_is_not_judged(self) -> None:
+        """Only an enabled rule counts, like every other rule check."""
+        disabled = _crossing("r1", "prod", "non_prod", disabled=_v(True))
+        in_disabled_policy = _crossing(
+            "r2", "prod", "non_prod", policy={"node": {"id": "pol", "name": _v("pol"), "enabled": _v(False)}}
+        )
+
+        assert _separation_errors(disabled, in_disabled_policy) == []
+
+    def test_a_rule_side_without_a_segment_is_not_judged(self) -> None:
+        """A prefix or address selector names no segment; the destination checks judge those."""
+        no_destination = _rule("r1", "src", None, source_segment=_zoned("src", "prod"))
+
+        assert _separation_errors(no_destination) == []
+
+
+def _owned_policy(segment: str | None, **extra: Any) -> dict[str, Any]:
+    """A rule's policy node: enabled, holding the rules of ``segment`` (None: the segment-less policy of a load balancer)."""
+    return {
+        "node": {
+            "id": "pol",
+            "name": _v("pol"),
+            "enabled": _v(True),
+            "segment": {"node": {"id": segment} if segment else None},
+            **extra,
+        }
+    }
+
+
+def _policy_errors(*rules: dict[str, Any]) -> list[str]:
+    """The errors of the rule invariants (not the environment ones) the check reports for the rules."""
+    return [e for e in _run([], list(rules))._captured_errors if "never connect" not in e]
+
+
+class TestPolicyRules:
+    """What a rule must hold wherever it is rendered: its policy's segment, a destination, no internet on the switch."""
+
+    def test_a_rule_in_its_source_segments_policy_passes(self) -> None:
+        """A rule from `a` to `b`, held by the policy of `a`."""
+        assert _policy_errors(_rule("r1", "a", "b", policy=_owned_policy("a"))) == []
+
+    def test_a_rule_of_another_segment_in_the_policy_is_an_error(self) -> None:
+        """The rule belongs in its source segment's policy."""
+        errors = _policy_errors(_rule("r1", "x", "b", policy=_owned_policy("a")))
+
+        assert len(errors) == 1
+        assert "source segment 'x' is not the policy's segment" in errors[0]
+
+    def test_the_segment_less_policy_of_a_load_balancer_is_not_judged(self) -> None:
+        """A load balancer's generated rules have a prefix as their source and a policy with no segment."""
+        rule = _rule(
+            "lb-r-server",
+            None,
+            "a",
+            policy=_owned_policy(None),
+            source_prefixes={"edges": [{"node": {"id": "p"}}]},
+            source_zone={"node": {"name": _v("PROD")}},
+        )
+
+        assert _policy_errors(rule) == []
+
+    def test_a_rule_with_no_destination_is_an_error(self) -> None:
+        """No segment, zone, prefix or address."""
+        errors = _policy_errors(_rule("r1", "a", None, policy=_owned_policy("a")))
+
+        assert len(errors) == 1 and "has no destination" in errors[0]
+
+    def test_a_rule_to_the_internet_zone_is_a_complete_destination(self) -> None:
+        """A zone is a destination of its own."""
+        rule = _rule("r1", "a", None, policy=_owned_policy("a"), destination_zone={"node": {"name": _v("INTERNET")}})
+
+        assert _policy_errors(rule) == []
+
+    def test_a_prefix_is_a_complete_destination(self) -> None:
+        """A prefix-only destination needs no segment or zone."""
+        rule = _rule(
+            "r1",
+            "a",
+            None,
+            policy=_owned_policy("a"),
+            destination_prefixes={"edges": [{"node": {"id": "p"}}]},
+            destination_zone={"node": {"name": _v("PROD")}},
+        )
+
+        assert _policy_errors(rule) == []
+
+    def test_apply_on_switch_to_the_internet_zone_is_an_error(self) -> None:
+        """The leaf ACL can only approximate the internet."""
+        rule = _rule(
+            "r1",
+            "a",
+            None,
+            policy=_owned_policy("a"),
+            apply_on_switch=_v(True),
+            destination_zone={"node": {"name": _v("INTERNET")}},
+        )
+
+        errors = _policy_errors(rule)
+
+        assert len(errors) == 1 and "apply_on_switch to the internet zone" in errors[0]
+
+    def test_apply_on_switch_to_a_segment_is_fine(self) -> None:
+        """Only the internet is the problem."""
+        rule = _rule("r1", "a", "b", policy=_owned_policy("a"), apply_on_switch=_v(True))
+
+        assert _policy_errors(rule) == []
+
+    def test_a_disabled_rule_and_a_rule_of_a_disabled_policy_are_skipped(self) -> None:
+        """Both would be wrong, neither counts."""
+        disabled = _rule("r1", "x", None, policy=_owned_policy("a"), disabled=_v(True))
+        in_disabled_policy = _rule("r2", "x", None, policy=_owned_policy("a", enabled=_v(False)))
+
+        assert _policy_errors(disabled, in_disabled_policy) == []
 
 
 class TestSelectorZones:

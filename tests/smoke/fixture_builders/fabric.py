@@ -517,7 +517,7 @@ _TERMINATED_SEGMENT_KWARGS: dict[str, Any] = {
 def _make_terminated_segment_node(row_device_id: str) -> dict:
     """The VXLAN segment terminated on a firewall context, with this device's row under its deployment."""
     seg = _make_segment_node(**_TERMINATED_SEGMENT_KWARGS, row_device_id=row_device_id)
-    seg["terminated_on"] = _node({"id": "ctx-dc1-fw-prod"})
+    seg["firewall_gateway"] = {"value": True}
     return seg
 
 
@@ -589,7 +589,7 @@ DEVICE_CONFIGS: list[tuple[type, str, str, list[str]]] = [
     (ToR, "tor", "tor", FABRIC_PLATFORMS),
     (L2Leaf, "l2-leaf", "l2_leaf", L2_LEAF_PLATFORMS),
     (AccessLeaf, "access-leaf", "access_leaf", FABRIC_PLATFORMS),
-    (Edge, "edge", "edge", ["cisco_nxos", "cisco_ios"]),
+    (Edge, "edge", "edge", ["cisco_nxos", "cisco_ios", "linux"]),
 ]
 
 

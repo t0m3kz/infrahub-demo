@@ -22,7 +22,6 @@ PUBLIC_OUT_LIST = "TRANSIT-OUT-PUBLIC"
 LEARNED_LIST = "CL-LEARNED-FROM-TRANSIT"
 IN_POLICY = "transit-in"
 OUT_POLICY = "transit-out"
-POLICY_NAMES = (IN_POLICY, OUT_POLICY)
 
 
 def _entries(prefixes: list[str]) -> list[dict[str, Any]]:

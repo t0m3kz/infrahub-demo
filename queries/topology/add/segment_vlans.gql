@@ -15,7 +15,7 @@
 #   - each row's device (the devices whose VRF instances and SVIs follow the rows).
 #   - stretch_scope + customer_deployments' hosting parents: a stretched
 #     segment's border gateways need it too (same shape as vxlan_segment.gql)
-#   - terminated_on: the firewall context terminating the segment and its members' uplinks with their cables: the
+#   - firewall_gateway + the DC footprint's serving_firewall_contexts and their members' uplinks with their cables: the
 #     border service ports (role firewall) those are cabled to face its HA pair (utils/service_contexts.py
 #     member_border_ports: a context has no interface edge) and carry the segment as a VLAN like a customer port does
 #     (SegmentPortTagMixin).
@@ -26,40 +26,43 @@ query segment_vlans($segment_id: ID!) {
         id
         stretch_scope { value }
         vlan_scope { value }
-        terminated_on {
-          node {
-            id
-            shared_devices {
-              edges {
-                node {
-                  __typename
-                  id
-                  name { value }
-                  role { value }
-                  ... on DcimDevice {
-                    interfaces(role__values: ["uplink"]) {
-                      edges {
-                        node {
-                          __typename
-                          id
-                          name { value }
-                          role { value }
-                          ...ServiceMemberCableFields
-                          ...InterfaceEncapsulationCableFields
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        firewall_gateway { value }
         customer_deployments {
           edges {
             node {
               id
               ... on TopologyCustomerDC {
+                serving_firewall_contexts {
+                  edges {
+                    node {
+                      id
+                      shared_devices {
+                        edges {
+                          node {
+                            __typename
+                            id
+                            name { value }
+                            role { value }
+                            ... on DcimDevice {
+                              interfaces(role__values: ["uplink"]) {
+                                edges {
+                                  node {
+                                    __typename
+                                    id
+                                    name { value }
+                                    role { value }
+                                    ...ServiceMemberCableFields
+                                    ...InterfaceEncapsulationCableFields
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
                 parent {
                   node {
                     id

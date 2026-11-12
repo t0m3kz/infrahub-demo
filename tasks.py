@@ -413,6 +413,24 @@ def load_objects(context: Context, path: str = "data/bootstrap/", branch: str = 
     context.run(f"uv run infrahubctl object load {path} --branch {branch}", pty=True)
 
 
+@_task
+def flatten_queries(context: Context) -> None:
+    """Write the flat copy of every registered query (queries/flat/), the form the server is fast with.
+
+    The sources under queries/ keep their fragments; .infrahub.yml registers the copies (utils/query_flatten.py).
+    Run after editing a query or a fragment: the server runs the copies, so an edit is live only once flattened.
+
+    Example:
+        uv run invoke flatten-queries
+    """
+    from utils.query_flatten import ROOT, write_flat_queries  # noqa: PLC0415 - keeps graphql out of task start-up
+
+    changed = write_flat_queries()
+    for path in changed:
+        log.info("flattened %s", path.relative_to(ROOT).as_posix())
+    log.info("%d flat quer%s written or removed", len(changed), "y" if len(changed) == 1 else "ies")
+
+
 # ---------------------------------------------------------------------------
 # 30_all — staged load of the everything demo (data/demos/30_all)
 #
@@ -791,6 +809,7 @@ ns.add_task(cast(Task, upgrade))
 ns.add_task(cast(Task, release))
 ns.add_task(cast(Task, load_schema), name="load-schema")
 ns.add_task(cast(Task, load_menu), name="load-menu")
+ns.add_task(cast(Task, flatten_queries), name="flatten-queries")
 ns.add_task(cast(Task, load_objects), name="load-objects")
 ns.add_task(cast(Task, load_all_demo), name="load-all-demo")
 ns.add_task(cast(Task, reset_generator_groups), name="reset-generator-groups")

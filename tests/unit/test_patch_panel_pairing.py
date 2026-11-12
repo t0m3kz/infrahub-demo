@@ -27,6 +27,7 @@ from tests.integration.demo_data import (
     trigger_rules,
 )
 from utils.limits import GROUP_PATCH_PANELS
+from utils.query_flatten import source_path
 
 
 def _rears(count: int, connector: str = "lc-upc") -> list[dict[str, Any]]:
@@ -329,7 +330,9 @@ class TestRegistration:
         assert definition["query"] == "patch_panel_data"
         assert definition["parameters"] == {"panel_id": "panel_id__value"}
         for name in ("patch_panel_data", "patch_panel_pairing"):
-            assert "panel_type { value }" in (ROOT / queries[name]).read_text(), name
+            assert "panel_type { value }" in source_path(ROOT / queries[name]).read_text(), (
+                name
+            )  # the source, as written
         assert checks["validate_patch_panel_pairing"]["class_name"] == "CheckPatchPanelPairing"
         assert CheckPatchPanelPairing.query == "patch_panel_pairing"
 

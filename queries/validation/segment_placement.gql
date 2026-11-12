@@ -10,10 +10,10 @@ query segment_placement {
         environment { value }
         owner { node { id org_id { value } } }
         stretch_scope { value }
-        # terminated_on: the firewall context whose pair owns the gateway (a floating VIP inside the segment prefix)
-        # and the deployments it serves: a terminated segment's DC footprints must all be served by it.
+        # firewall_gateway: the firewall pair of the one DC footprint owns the gateway (a floating VIP inside the segment
+        # prefix); the footprint's serving_firewall_contexts below say which.
         gateway { node { address { value } ip_prefix { node { prefix { value } } } } }
-        terminated_on { node { id name { value } served_deployments { edges { node { id } } } } }
+        firewall_gateway { value }
         customer_deployments {
           edges {
             node {
@@ -25,6 +25,9 @@ query segment_placement {
               ... on TopologyCustomerOffice { owner { node { id __typename org_id { value } } } }
               ... on TopologyCustomerDC {
                 parent { node { id __typename name { value } } }
+                serving_firewall_contexts {
+                  edges { node { id name { value } shared_devices { edges { node { ... on DcimDeviceManaged { role { value } } } } } } }
+                }
               }
               ... on TopologyCustomerColocation {
                 parent { node { id __typename name { value } } }

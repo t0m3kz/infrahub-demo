@@ -8,6 +8,7 @@ spec:
       description: "eBGP transit to the ISP: default route in, our public prefixes out"
       session_type: EBGP
       peering_role: regular
+      password: "bgp-ktw1-edge01-isp-a-key"
       address_families:
         - ["ipv4", "unicast"]
       bgp_processes:

@@ -10,7 +10,7 @@ spec:
       stretch_scope: local
       vlan_scope: local
       customer_deployments: ["C900-P-DC-WAW1"]
-      terminated_on: c900-waw1-fw-01-waw1-fw-02-prod
+      firewall_gateway: true
       security_zone: PROD
       gateway:
         data:
