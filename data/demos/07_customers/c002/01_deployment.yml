@@ -14,5 +14,5 @@ spec:
     - owner: "C002"
       environment: "d"
       parent: "DC6"
-      design: "S"
+      design: "M"  # 3 dev segments in 08_segments/c002: S allows 2
       member_of_groups: [customer_deployments_dc]

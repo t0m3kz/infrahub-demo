@@ -14,5 +14,5 @@ spec:
     - owner: "C001"
       environment: "t"
       parent: "DC6"
-      design: "S"
+      design: "M"  # 4 test segments in 08_segments/c001: S allows 2
       member_of_groups: [customer_deployments_dc]
