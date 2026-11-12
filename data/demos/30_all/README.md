@@ -1,7 +1,9 @@
 # 30_all: The Everything Demo
 
-Every other demo shows one piece. This one loads all of them into one branch: three DC fabrics, colocation
-cages from three operators, three clouds, a SaaS edge, five offices, sixteen customers' footprints, nine
+Everything, everywhere, all on one branch. Bring snacks.
+
+Every other demo shows one piece. This one loads all of them into one branch (subtle, it is not): three DC fabrics,
+colocation cages from three operators, three clouds, a SaaS edge, five offices, sixteen customers' footprints, nine
 applications, and the interconnect layer that ties them together.
 
 It is also the only demo that **must be loaded in order**. The steps below are that order.
@@ -41,7 +43,8 @@ export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
 uv run invoke setup
 ```
 
-Register the repository and load the event actions. Without these, no generator fires and the later stages
+`setup` registers the repository when none is. To register a specific ref and load the event actions again, use
+the task below. Without them, no generator fires and the later stages
 fail with missing references:
 
 ```bash
@@ -70,7 +73,13 @@ uv run invoke load-all-demo --from-stage applications
 ```
 
 `--branch` loads into another branch instead. Stage 1 alone takes a while, so expect the whole run to take
-some time.
+some time. `load-all-demo` is the kick `all-demo`: `uv run invoke kick all-demo` does the same and
+`uv run invoke kicks` lists it with the others. Before it loads anything, the task checks the stack: it waits for a
+syncing repository and runs `invoke setup` when the bootstrap data, the repository or a generator is missing.
+
+To see the start of this demo as reviewed changes instead (each merged into `main` before the next, with a proposed
+change, its checks and its artifacts), run `uv run invoke kick all-demo-reviewed`. It covers the foundation and `dc10`
+only; the rest stays a branch load, because nothing here pretends a whole estate is one review.
 
 ### Loading by Hand
 

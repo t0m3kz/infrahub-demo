@@ -177,10 +177,10 @@ A virtual colocation is re-run the same way with `add_virtual_colocation name=AM
 
 ## Validation
 
-Use `uv run invoke test-integration-fast` to verify shared setup and repository prerequisites before exercising a
-colocation branch manually. Use `uv run invoke test-integration` for the full integration matrix. Note that the
-integration suite loads `data/demos/30_all/`, not this demo — changes here are verified by `uv run invoke kick
-colocation-cloud-saas` (this demo, then `11_cloud` and `12_saas`, each a validated, merged change).
+Deploy it with `uv run invoke kick colocation-cloud-saas` (this demo, then `11_cloud` and `12_saas`, each a
+validated, merged change). No integration test asserts on this demo; the kick only requires that no task fails and
+that the checks and artifacts pass. `uv run invoke test-integration-fast` verifies the shared setup and repository
+prerequisites.
 
 ## Amsterdam Notes
 

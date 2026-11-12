@@ -1,6 +1,9 @@
 # Test Scenario 4: Add New Pod to Existing Data Center
 
-This scenario demonstrates adding a new pod (POD-4) to the existing DC6 data center.
+Three pods were plenty, right up until the fourth one was approved.
+
+This scenario demonstrates adding a new pod (POD-4) to the existing DC6 data center, the networking equivalent of
+adding a room to a house without asking the neighbours.
 
 ## Purpose
 
@@ -50,6 +53,9 @@ The add_pod generator will, in this order:
 - DC6 with super-spines must exist
 
 ## Load Command
+
+As a reviewed change, with DC6 and the earlier growth steps first: `uv run invoke kick dc6-growth --from-stage pod`.
+Or by hand:
 
 ```bash
 uv run infrahubctl object load data/demos/04_pod_dc6/ --branch <branch-name>

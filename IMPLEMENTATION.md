@@ -1,7 +1,10 @@
 # Implementation Guide: Data Center Fabrics
 
+*The part of the design that usually lives in one architect's head and leaves with them.*
+
 This guide explains how the data center generators turn a fabric design into devices, cables and names. It is
-written for network architects and operators who author topology data. For the full data model rules see
+written for network architects and operators who author topology data (and for whoever inherits the fabric after
+them). For the full data model rules see
 [AGENTS.md](AGENTS.md); for the development workflow see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Table of Contents
@@ -56,7 +59,8 @@ The number of switches per tier follows from the envelope:
 
 ## Pod Deployment Types
 
-The deployment type of a pod is **derived from its design, never stored**
+Pick one before the procurement committee picks the switches for you. The deployment type of a pod is **derived from
+its design, never stored**
 ([generators/pod_config.py](generators/pod_config.py) `pod_deployment_type`):
 
 | Design has | Deployment type |
@@ -94,7 +98,8 @@ Pod
     └── (same pattern)
 ```
 
-Use it for dense rows where each row has its own aggregation, with short intra-row cabling.
+Use it for dense rows where each row has its own aggregation, with short intra-row cabling (easier troubleshooting,
+the 2am on-call engineer's favourite property).
 
 ### ToR
 
@@ -111,7 +116,8 @@ Pod
     └── (same pattern)
 ```
 
-Use it for small pods with enough spine port density and no need for an aggregation layer.
+Use it for small pods with enough spine port density and no need for an aggregation layer. No leaf switches means a
+lower bill, and finance reads that line first.
 
 ### Mixed
 
@@ -129,7 +135,8 @@ Pod
     └── (same pattern)
 ```
 
-Use it for large pods that combine directly attached compute racks with row-level aggregation.
+Use it for large pods that combine directly attached compute racks with row-level aggregation. The committee
+compromise, in rack form.
 
 ### Comparison
 
@@ -182,7 +189,8 @@ Spines own an `underlay` BGP process for the eBGP strategies and only the shared
 
 `naming_convention` on the deployment selects one of four strategies (default `standard`,
 [generators/helpers/naming.py](generators/helpers/naming.py)). All four use short role codes and keep the full
-location path, including the DC's fabric index (one DC name may host several fabrics).
+location path, including the DC's fabric index (one DC name may host several fabrics). Renaming every device after
+go-live is possible, in the way that moving a data center over a long weekend is possible.
 
 | Role | Code | Role | Code |
 | ---- | ---- | ---- | ---- |
@@ -206,10 +214,12 @@ A role without a code keeps its full name. The location path is ordered fabric, 
 
 Notes:
 
-- `standard` is the most readable in a device list. Two adjacent double-digit indexes can be ambiguous to parse
-  back; use `computed` when names must be parsed unambiguously.
+- `standard` is the most readable in a device list and the default, though not a hostname you type from memory at
+  2am; your future self, grepping logs in the middle of an outage, will be grateful. Two adjacent double-digit indexes
+  can be ambiguous to parse back; use `computed` when names must be parsed unambiguously.
 - `hierarchical` suits tooling that reads positions rather than labels.
-- `flat` is the shortest form, for systems with strict hostname-length limits.
+- `flat` is the shortest form, for systems with strict hostname-length limits (and for the lab that quietly became
+  production).
 
 ---
 
@@ -217,7 +227,8 @@ Notes:
 
 Every generator-created `DcimCable` carries derived attributes
 ([generators/helpers/cable_attributes.py](generators/helpers/cable_attributes.py)); a rerun writes the same values.
-Cables declared in data are not generated and keep their attributes unset.
+Cables declared in data are not generated and keep their attributes unset. The point is accurate inventory instead of
+a guess at the patch panel about what the spreadsheet meant.
 
 | Attribute | Rule |
 | --------- | ---- |
@@ -225,6 +236,8 @@ Cables declared in data are not generated and keep their attributes unset.
 | `cable_id` | `CBL-` plus the first 10 upper-case hex digits of the SHA-1 of the two sorted endpoint labels (`<device>-<interface>`); depends only on the ends, so it is stable across reruns |
 | `color` | The TIA-598 jacket colour of the type (for example `smf` yellow, `mmf` aqua) |
 | `length_cm` | Derived from the suite layout, rounded up to the next 50 cm |
+
+Both ends copper is also how you find the switch that has been "temporary" since 2019.
 
 The length uses the suite grid (`rows`, `racks_per_row`) and its pitches (`rack_pitch_cm` along a row,
 `row_pitch_cm` between rows), with 50 cm of service loop per end:
@@ -241,7 +254,8 @@ or a rack coordinate outside the suite grid.
 
 ## Capacity Validation
 
-Racks and suites are data; nothing generates a `LocationRack`. The checks hold them to the designs:
+Racks and suites are data; nothing generates a `LocationRack`. The checks hold them to the designs, rather than
+letting you discover on rack-and-stack day that the design never fitted the room:
 
 - [checks/suite_capacity.py](checks/suite_capacity.py): every rack sits inside its suite's grid
   (`row_index <= rows`, `index <= racks_per_row`), and each suite that hosts a rack of a pod fits the pod's design

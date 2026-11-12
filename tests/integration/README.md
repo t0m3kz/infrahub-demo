@@ -22,8 +22,8 @@ kicks of `tasks/kicks.yml` plus an `expect` block per stage. `test_04` runs each
 Each stage without `branch:` is one change: branch `<kick>-<stage>` from main, load, generators settle, no failed
 task, the assertions on the branch, the proposed change and its validations (artifacts included), the merge, the
 assertions on main. Failed tasks must be zero throughout: they are counted after the generators, after the proposed
-change and its artifacts, and on main after the merge, and a failure names the tasks. Every growth stage asserts that no existing BGP process changed its ASN (renumbering a fabric is
-not a growth strategy) and that the diff removes nothing.
+change and its artifacts, and on main after the merge, and a failure names the tasks. Every growth stage asserts that no existing BGP process changed its ASN (renumbering a
+fabric is not a growth strategy) and that the diff removes nothing.
 
 ### Adding a suite kick
 
@@ -165,7 +165,7 @@ uv run invoke test-integration-fast
 ```
 
 It loads the full-topology sample as a proposed change on its own branch (never merged into `main`) and requires every check to pass; its repository sync (`test_02`) registers every query of `.infrahub.yml` against the live schema, so a field the schema
-rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there in minutes; the task worker log
+rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there in minutes, not tens of minutes into the full suite; the task worker log
 (`docker logs <project>-task-worker-1`) names the field. A query under `tests/` is not registered: the test that runs
 it is its check.
 
@@ -213,7 +213,7 @@ uv run invoke test-integration
 # Run foundation only
 uv run invoke test-integration-fast
 
-# One scenario, with its prerequisites in front
+# One kick, with its prerequisites in front
 uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
   tests/integration/test_02_repository.py tests/integration/test_04_kicks.py -k full-topology-suite"
 

@@ -65,4 +65,4 @@ Alternatively, trigger infrastructure generation in InfraHub UI → Actions → 
 ## Validation
 
 Deploy it as a validated, merged change with `uv run invoke kick dc1` (all seven DCs: `uv run invoke kick dc-deployments`).
-Use `uv run invoke test-integration` for the complete DC matrix. The harness waits for cascading tasks and names any branch that does not settle.
+The kick waits for the cascading tasks, fails on any failed task and names the stage to resume from (`--from-stage`).

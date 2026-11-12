@@ -1,5 +1,7 @@
 # Contributing
 
+*How to get a change into `main` without it starring in next week's post-mortem.*
+
 This guide covers the development workflow: environment, making a change, testing, commits, pull requests and
 releases. The data model rules and conventions are in [AGENTS.md](AGENTS.md); the fabric concepts are in
 [IMPLEMENTATION.md](IMPLEMENTATION.md).
@@ -15,18 +17,23 @@ uv sync --group dev
 uv run invoke setup-precommit   # install the pre-commit hooks
 ```
 
+The hooks run on every commit: the colleague who reads your diff before you do.
+
+One `.yamllint.yml` serves the hook, the IDE and `uv run yamllint`. `uv run invoke upgrade` refreshes the lockfile
+(`uv lock --upgrade`) and the hook revisions (`prek autoupdate`).
+
 A local stack is started and loaded with `uv run invoke setup`, and the repository is registered with
-`uv run invoke register-repo --ref <branch>` (see the [README](README.md#quick-start)).
+`uv run invoke register-repo --ref <branch>` (see the [README](README.md#quickstart)).
 
 ## Invoke Tasks
 
 | Task | Purpose |
 | ---- | ------- |
-| `setup` | Start the containers, load schemas, menu and bootstrap data |
+| `setup` | Start the containers, load schemas, menu and bootstrap data, register the repository when none is |
 | `start`, `stop`, `restart`, `destroy` | Manage the local Infrahub containers (`destroy` removes the volumes) |
 | `register-repo --ref <branch>` | Register this repository and load the event rules |
 | `load-schema`, `load-menu`, `load-objects --path <dir>` | Load schemas, the menu or object files (`--branch` to target a branch) |
-| `kick <name>`, `kicks` | Run a demo or suite kick (`--from-stage` to resume), list them |
+| `kick <name>`, `kicks` | Run a demo or suite kick (`--from-stage` to resume), list them; the stack is checked first and `setup` runs when it lacks bootstrap data, a repository or a generator |
 | `load-all-demo` | The `all-demo` kick: `data/demos/30_all` stage by stage onto one branch (`--branch`, `--from-stage`) |
 | `flatten-queries` | Regenerate `queries/flat/` from the query sources |
 | `validate` | Pre-commit hooks, smoke and unit tests with coverage |
@@ -113,7 +120,7 @@ is a new file there (`tests/integration/README.md` describes the assertions).
 | Change touches | Run |
 | -------------- | --- |
 | Schema, queries, model checks, `data/demos/00_full_topology` | `test-integration-fast` |
-| Generators and their helpers, `data/bootstrap`, `data/demos/30_all`, queries used by generators | `test-integration-fast`, then `uv run invoke kick all-demo` (`load-all-demo`) and `test_04 -k dc6-suite` |
+| Generators and their helpers, `data/bootstrap`, `data/demos/30_all`, queries used by generators | `test-integration-fast`, then `uv run invoke kick all-demo` (`load-all-demo`) and `test_04 -k dc6-suite`; `30_all` has no assertions left, see [what is not covered](tests/integration/README.md#not-covered-after-the-30_all-suite-was-removed) |
 | Templates, transforms, checks and their queries | `test-integration-fast`, plus the smoke golden diff |
 | Documentation or tests only | `uv run invoke validate` |
 
@@ -141,7 +148,8 @@ INFRAHUB_TESTING_ENABLE_INTEGRATION=1 uv run pytest -vv tests/integration --base
 | `docs/` | Documentation only |
 | `refactor/` | Code restructuring |
 
-Do not commit directly to `main`.
+Do not commit directly to `main`. Pick the honest prefix: a `chore/` that changes behaviour is a `feat/` wearing a
+fake moustache.
 
 ## Commit Messages
 
@@ -168,6 +176,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/), 
 | `feat!` / `BREAKING CHANGE:` footer | Breaking change | major |
 
 Scopes (optional): `schema`, `generator`, `template`, `check`, `transform`, `data`, `ci`, `deps`.
+A commit called `final-final-v2` does not get past `commitizen`, however late it is.
 
 ```text
 feat(schema): add VirtCluster node with node pool support
@@ -178,18 +187,20 @@ feat(generator)!: rename add_pod generator parameters
 
 ## Pull Requests
 
-- Target `main` and keep each pull request to one concern.
+- Target `main` and keep each pull request to one concern (a 4,000-line PR titled "small cleanup" is reviewed by
+  nobody).
 - Describe the change and list the test profiles you ran.
 - All CI checks must pass before review. CI runs lint, type checks, smoke and unit tests on every push and pull
-  request; integration tests run in a separate workflow.
+  request; integration tests run in a separate workflow. A robot notices a broken commit long before a customer does, and
+  it never asks for a meeting about it.
 - Squash merge is preferred to keep the `main` history clean.
 
 ## Versioning and Releases
 
 The project follows [Semantic Versioning](https://semver.org/).
 
-Normal pull requests (features, fixes, dependency updates) are merged without a version bump. To publish a release,
-create a dedicated release branch:
+Normal pull requests (features, fixes, dependency updates) are merged without a version bump: no change advisory board, no version
+committee. To publish a release, create a dedicated release branch:
 
 ```bash
 git checkout -b release/vX.Y.Z
@@ -201,4 +212,5 @@ git push && git push --tags              # push the branch and the tag together
 Open a pull request and merge it. When CI sees the `v*` tag it runs the tests and creates the release with generated
 release notes. The tag and the `pyproject.toml` version come from the same `cz bump` run, so they always match.
 
-Never edit the version in `pyproject.toml` by hand.
+Never edit the version in `pyproject.toml` by hand. A hand-edited version is how a tag and a package end up
+disagreeing in public.

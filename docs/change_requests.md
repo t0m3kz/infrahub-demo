@@ -11,8 +11,19 @@ A change request is **opt-in**: a Proposed Change without one is not gated and m
 
 ## Create one
 
+You do not. Infrahub does it. When the **last artifact validator** of an open Proposed Change completes, the generator
+`open_change_request` (a rule on `CoreArtifactValidator`, group `artifact_validators`) acts once, in one of two ways:
+
+- no change request exists: it creates `CHG-<proposed change name>` on the PC's source branch, in the group
+  `change_requests`, which starts `add_change_request`;
+- one exists: it re-runs `add_change_request` on it, so the artifact diff it describes is the complete one.
+
+An earlier validator that completes while others still run does nothing. A change request derived before the
+artifacts exist lists no devices and the gate warns that it is stale (CR5 below); creating it only after the last
+artifact is how it avoids being confident and empty. No outside service is needed for any of this.
+
 The change request lives on the Proposed Change's **source branch**, so reviewers see it in the PC's diff, and it
-merges into `main` with the change as its history. Create it on that branch:
+merges into `main` with the change as its history. Creating one by hand still works, if you enjoy that sort of thing:
 
 | Field | Value |
 | --- | --- |
@@ -21,13 +32,28 @@ merges into `main` with the change as its history. Create it on that branch:
 | `member of groups` | `change_requests` |
 | `justification` | why the change is needed (yours to write) |
 
-Joining the `change_requests` group starts the `add_change_request` generator, which fills in everything else
-(the "why" stays yours: no generator has yet been brave enough to invent a business justification).
+Joining the `change_requests` group starts `add_change_request`, which fills in everything else (the "why" stays
+yours: no generator has yet been brave enough to invent a business justification).
 
-Run it again (**Run generator** on `add_change_request`, on the source branch) once the PC's pipeline has built the
-artifacts, and after every push to the branch. A change request derived before the artifacts exist lists no devices,
-and the gate warns that it is stale (CR5 below). Like a CAB slide written before the design, it is confident and
-empty.
+## Run it again
+
+Nothing to do after the pipeline: the last artifact validator re-derives. To derive on demand anyway (for example after
+a push that changed nothing the pipeline would notice), use **Run generator** on `add_change_request`, on the source
+branch.
+
+## The thread on the Proposed Change
+
+The Infrahub UI shows a Proposed Change only through its fixed pages (the create form, the PC page and the edit
+drawer), and none of them has room for a change request's fields. So `add_change_request` also keeps a conversation
+thread on the PC, labelled "Change request", with one comment (`templates/change/pc_comment.j2`):
+
+- a link to the change request;
+- the change type, the effective risk (after the override) with its score, and the number of devices;
+- the window, in Europe/Warsaw, or "not planned";
+- the ticket (`external_id`), or "not filed yet".
+
+The comment is rewritten when the derivation changes it and left alone when it does not, so the thread does not
+collect a diary of identical updates.
 
 ## What is filled in
 
@@ -51,8 +77,11 @@ from memory ever again.
 | `backout_plan` | Per device, the configuration it returns to, plus a warning when the change removes objects (a configuration rollback does not restore their allocations) |
 | `test_plan` | Per device, the expected state: the BGP sessions the model expects, and that the running configuration's checksum equals the artifact's |
 | `communication_plan` | The customers to notify |
-| `planned_start`, `planned_end` | A normal change goes into the next maintenance window (Thursday 22:00, Europe/Warsaw), sized at 10 minutes per device, at least 30; a standard or emergency change starts now |
+| `planned_start`, `planned_end` | A normal change goes into the next maintenance window (Thursday 22:00, Europe/Warsaw), sized at 10 minutes per device, at least 30; a standard or emergency change starts now (a start already due is kept) |
 | `conflicts` | The other open Proposed Changes whose change request lists the same devices |
+
+The window is fully derived. Edit `planned_start` or `planned_end` by hand and the next derivation overwrites it; the
+calendar is not a negotiation. To move a change, change what it is, or raise `risk_override` for the right reasons.
 
 The generator never writes the fields that belong to people:
 
@@ -94,6 +123,6 @@ which is more than most tickets can say six months in.
 
 ## What is not automated
 
-Nothing in the repository re-runs `add_change_request` when a PC's pipeline finishes, raises the ServiceNow ticket,
-or deploys the change. A change service listening to Infrahub's events does that. Without one, re-run the generator
-by hand after the pipeline: the classic enterprise integration of a person and a calendar reminder.
+The change request itself needs no help any more. Two things are still outside the repository: raising the ServiceNow
+ticket (and writing its number to `external_id`) and deploying the change. A service that listens to Infrahub's events
+does both, or a person does, which is the classic enterprise integration of a person and a calendar reminder.

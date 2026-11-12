@@ -1,6 +1,10 @@
 # 12 - Zscaler Secure Internet Breakout Demo
 
-A quick sample that models Zscaler POPs, underlay tunnels, web policies and where they sit in the topology via SaaS regions.
+Trust nobody, inspect everything, and let somebody else's POP do the worrying.
+
+A quick sample that models Zscaler POPs, underlay tunnels, web policies and where they sit in the topology via SaaS
+regions. Think of it as a polite way to send your traffic through somebody else's data center before it reaches the
+internet it was going to visit anyway.
 
 ## What it shows
 
@@ -31,4 +35,4 @@ uv run infrahubctl object load data/demos/12_saas/ --branch zscaler_demo
 - Give a network segment its egress rules toward the SaaS endpoints in the segment's own `security_policy`
 - Extend rules with `application_categories` if you also populate application data
 
-For the application and proxy acceptance workflow, run `uv run invoke load-all-demo`. Use `uv run invoke test-integration` when the SaaS changes are part of a broader topology update.
+Deploy it with `uv run invoke kick colocation-cloud-saas` (the colocation metros first: Zscaler needs the `fra` and `par` metros). For the application and proxy acceptance workflow, run `uv run invoke kick all-demo`.

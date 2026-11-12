@@ -1040,15 +1040,21 @@ class MyCheck(InfrahubCheck):
   (ERRORs), an instance with no member (WARNING) and the SVI rules.
 - **Change requests**: one `ChangeRequest` (`schemas/extensions/change/change_request.yml`, branch-aware, `CHG-<pc
   name>`) per Proposed Change, created on the PC's source branch with `member_of_groups: [change_requests]` so it shows in
-  the PC diff and merges as history. `add_change_request` (`generators/change/change_request.py`, the group trigger; the
-  change service re-runs it once the PC's artifacts exist) reads the PC through `proposed_change`, the artifact diff
+  the PC diff and merges as history. Infrahub creates it: when the LAST artifact validator of an open PC completes, `open_change_request`
+  (`generators/change/open_change_request.py`, a rule on `CoreArtifactValidator`, group `artifact_validators`) creates
+  `CHG-<pc>` on the source branch, which starts `add_change_request`, or re-runs `add_change_request` on the existing
+  one; no outside service is needed (creating one by hand still works). `add_change_request`
+  (`generators/change/change_request.py`, the group trigger) reads the PC through `proposed_change`, the artifact diff
   (REST `/api/diff/artifacts`) and the data diff (`utils/change_sources.py`: `DiffTreeSummary` counts, never a listing
   of the changed nodes, and one paged `DiffTree` read filtered to the segments, rules, cables, circuits, footprints and
   applications, with their values and the `owner` peers), the artifact targets' role, place and pair in one query
   (`change_request_facts.gql`), and writes what `utils/change_rules.py` derives (the one weight table, the window, the
   `artifact_fingerprint`) and `utils/change_text.py` renders (`templates/change/*.j2`, one per text field, from the
-  facts of `utils/change_facts.py`: devices, links, firewall rules, segments); it never writes the author fields (`justification`, `risk_override`, `risk_override_reason`,
-  `requested_by`) nor `external_id`. `checks/change_request.py` (CR1-CR5) gates a PC that has a change request (opt-in: a PC with none is not gated, so the repository never blocks a merge without a change service); `change_request_servicenow` (a
+  facts of `utils/change_facts.py`: devices, links, firewall rules, segments). It also keeps the PC's "Change request"
+  thread (`CoreChangeThread`, one comment from `templates/change/pc_comment.j2`: link, type, effective risk, devices,
+  window in Europe/Warsaw, ticket; the UI shows a PC only through fixed pages, so the summary is a thread, not
+  fields). `planned_start` and `planned_end` are fully derived, a manual edit is overwritten by the next derivation. It never writes the author fields (`justification`, `risk_override`, `risk_override_reason`,
+  `requested_by`) nor `external_id`. `checks/change_request.py` (CR1-CR5) gates a PC that has a change request (opt-in: a PC with none is not gated, so the repository never blocks a merge without one); `change_request_servicenow` (a
   python transform rendered on demand, not an artifact) is the ServiceNow `change_request` body. Only an `open` PC
   counts: a deleted branch's PC stays as `canceled`.
 - **What the schema refuses, measured on a server (1.11.9)**: `parameters` (min/max of a Number) and `max_count` are
@@ -1399,8 +1405,12 @@ stack at a time. Two loops:
   `unchanged`, `added`, `removed`; `tests/integration/kick_expect.py`) and an optional `run: <generator>`; `test_04`
   runs them (`-k <name>` picks one). The demo kicks of `tasks/kicks.yml` carry no assertions
   (`uv run invoke kick <name>`, `load-all-demo` for `30_all`) and run against a kept stack. There is no
-  30_all integration suite: re-run idempotency, generator cleanup and the 30_all object counts are not covered.
-  `uv run invoke clean-testcontainers` first.
+  30_all integration suite: re-run idempotency, generator cleanup and the 30_all object counts are not covered
+  (`tests/integration/README.md` lists what is). A change stage is: branch `<kick>-<stage>` from main, load, generators
+  settle, no failed task, proposed change, its checks, artifacts, merge; failed tasks must be 0 throughout.
+  `invoke kick` checks the stack first: it waits for a syncing repository, runs `invoke setup` when the bootstrap data,
+  the repository or a generator is missing, and starts the local dev stack only at <http://localhost:8000>.
+  `invoke setup` also registers the repository when none is. Run `uv run invoke clean-testcontainers` before a run.
 
 | Change touches | Run |
 | --- | --- |
