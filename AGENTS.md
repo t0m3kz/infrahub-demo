@@ -253,6 +253,7 @@ class MyCheck(InfrahubCheck):
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
 | Security, Loadbalancer, Proxy, App, Virt | Functional domains |
+| Change | `ChangeRequest`: the ServiceNow-style change request of one Proposed Change (see **Change requests**) |
 
 - **One Managed generic per concept, with an implementation per technology**: `ManagedVxlanSegment` and
   `CloudNetworkSegment` inherit `ManagedNetworkSegment`; `ManagedLoadbalancerHA` and `CloudLoadBalancer` inherit
@@ -1036,6 +1037,16 @@ class MyCheck(InfrahubCheck):
   `deployment` or `role`, or a port taken off a handoff circuit, re-runs nothing. The check also reports demand
   without a membership, a member of another topology's instance, a device with demand and no hosting deployment
   (ERRORs), an instance with no member (WARNING) and the SVI rules.
+- **Change requests**: one `ChangeRequest` (`schemas/extensions/change/change_request.yml`, branch-aware, `CHG-<pc
+  name>`) per Proposed Change, created on the PC's source branch with `member_of_groups: [change_requests]` so it shows in
+  the PC diff and merges as history. `add_change_request` (`generators/change/change_request.py`, the group trigger; the
+  change service re-runs it once the PC's artifacts exist) reads the PC through `proposed_change`, the artifact diff
+  (REST `/api/diff/artifacts`) and the data diff (`DiffTree`, `utils/change_sources.py`), the device facts and owners in
+  one query, and writes what `utils/change_rules.py` derives (the one weight table, the window, the plans, the
+  `artifact_fingerprint`); it never writes the author fields (`justification`, `risk_override`, `risk_override_reason`,
+  `requested_by`) nor `external_id`. `checks/change_request.py` (CR1-CR5) gates the PC; `change_request_servicenow` (a
+  python transform rendered on demand, not an artifact) is the ServiceNow `change_request` body. Only an `open` PC
+  counts: a deleted branch's PC stays as `canceled`.
 - **What the schema refuses, measured on a server (1.11.9)**: `parameters` (min/max of a Number) and `max_count` are
   enforced on create and on update; `min_count` only on update (a member removed below the minimum is refused, a
   domain created with one member of a `min_count: 2` is accepted); `optional: false` refuses an omitted relationship

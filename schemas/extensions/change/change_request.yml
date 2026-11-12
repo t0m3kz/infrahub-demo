@@ -1,0 +1,193 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Change — the change request of a Proposed Change (ServiceNow style)
+# One ChangeRequest per Proposed Change, created on the PC's source branch before review, so it shows in the PC diff
+# and merges into main as history. The generator add_change_request (generators/change/change_request.py) derives
+# every field it can from the model (utils/change_rules.py); the AUTHOR fields (justification, risk_override,
+# risk_override_reason, requested_by) and the external_id (written by the service that files the CHG) are never written
+# by it. checks/change_request.py gates the PC on it; transforms/change/servicenow.py renders it as a ServiceNow
+# change_request payload.
+# ============================================================================
+
+nodes:
+  - name: Request
+    namespace: Change
+    description: "The change request of one Proposed Change: what changes, the risk, the plans and the window."
+    label: Change Request
+    icon: mdi:file-document-outline
+    include_in_menu: false
+    uniqueness_constraints:
+      - ["name__value"]
+      - ["proposed_change"]
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        order_weight: 100
+        description: "CHG-<proposed change name>"
+      - name: short_description
+        kind: Text
+        optional: true
+        order_weight: 150
+        description: "One line: the PC name and the counts of what changes (derived)"
+      - name: description
+        kind: TextArea
+        optional: true
+        order_weight: 200
+        description: "The changed objects by status and kind, then the PC description (derived)"
+      - name: justification
+        kind: TextArea
+        optional: true
+        order_weight: 250
+        description: "Why the change is made (author)"
+      - name: change_type
+        kind: Dropdown
+        optional: false
+        default_value: normal
+        order_weight: 300
+        description: "emergency on a hotfix/ branch, standard for a low-risk change of standard kinds only (derived)"
+        choices:
+          - name: standard
+            label: Standard
+            color: "#7FBF7F"
+          - name: normal
+            label: Normal
+            color: "#3498DB"
+          - name: emergency
+            label: Emergency
+            color: "#E74C3C"
+      - name: risk
+        kind: Dropdown
+        optional: false
+        default_value: high
+        order_weight: 350
+        description: "The risk from risk_score (derived); risk_override wins where set"
+        choices:
+          - name: low
+            label: Low
+            color: "#7FBF7F"
+          - name: moderate
+            label: Moderate
+            color: "#F5B041"
+          - name: high
+            label: High
+            color: "#E74C3C"
+      - name: risk_score
+        kind: Number
+        optional: true
+        order_weight: 400
+        description: "The weighted score behind risk (derived, utils/change_rules.py)"
+      - name: risk_override
+        kind: Dropdown
+        optional: true
+        order_weight: 450
+        description: "The risk the author sets instead of the derived one (author)"
+        choices:
+          - name: low
+            label: Low
+            color: "#7FBF7F"
+          - name: moderate
+            label: Moderate
+            color: "#F5B041"
+          - name: high
+            label: High
+            color: "#E74C3C"
+      - name: risk_override_reason
+        kind: TextArea
+        optional: true
+        order_weight: 475
+        description: "Why the override is lower than the derived risk (author; required then)"
+      - name: impact
+        kind: Number
+        optional: false
+        default_value: 1
+        order_weight: 500
+        description: "1 high, 2 medium, 3 low: from PROD and the affected customers (derived)"
+        parameters:
+          min_value: 1
+          max_value: 3
+      - name: implementation_plan
+        kind: TextArea
+        optional: true
+        order_weight: 600
+        description: "The devices in order, least critical first, one member of a pair before its peer (derived)"
+      - name: backout_plan
+        kind: TextArea
+        optional: true
+        order_weight: 650
+        description: "The configuration each device returns to (derived)"
+      - name: test_plan
+        kind: TextArea
+        optional: true
+        order_weight: 700
+        description: "The expected state of each device after the change (derived)"
+      - name: communication_plan
+        kind: TextArea
+        optional: true
+        order_weight: 750
+        description: "The customers to notify (derived)"
+      - name: conflicts
+        kind: TextArea
+        optional: true
+        order_weight: 800
+        description: "Other open Proposed Changes whose change request lists a device of this one (derived)"
+      - name: planned_start
+        kind: DateTime
+        optional: true
+        order_weight: 850
+        description: "Now for a standard or emergency change, else the next maintenance window (derived)"
+      - name: planned_end
+        kind: DateTime
+        optional: true
+        order_weight: 875
+        description: "planned_start plus the time the steps take (derived)"
+      - name: external_id
+        kind: Text
+        optional: true
+        order_weight: 900
+        description: "The ServiceNow CHG number (written by the service that files it)"
+      - name: artifact_fingerprint
+        kind: Text
+        optional: true
+        order_weight: 950
+        description: "Hash of the artifact diff the fields were derived from: a differing one means a stale request"
+    relationships:
+      - name: proposed_change
+        peer: CoreProposedChange
+        label: Proposed Change
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: change_request__proposed_change
+        order_weight: 1100
+      - name: requested_by
+        peer: CoreAccount
+        label: Requested By
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: change_request__requested_by
+        order_weight: 1150
+      - name: affected_devices
+        peer: DcimDeviceManaged
+        label: Affected Devices
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: change_request__affected_devices
+        order_weight: 1200
+      - name: affected_customers
+        peer: OrganizationCustomer
+        label: Affected Customers
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: change_request__affected_customers
+        order_weight: 1250

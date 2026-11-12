@@ -1,0 +1,29 @@
+# The change request a ServiceNow change_request payload is rendered from (transforms/change/servicenow.py).
+query change_request_servicenow($name: String!) {
+  ChangeRequest(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        external_id { value }
+        short_description { value }
+        description { value }
+        justification { value }
+        change_type { value }
+        risk { value }
+        risk_override { value }
+        impact { value }
+        implementation_plan { value }
+        backout_plan { value }
+        test_plan { value }
+        communication_plan { value }
+        conflicts { value }
+        planned_start { value }
+        planned_end { value }
+        proposed_change { node { id } }
+        affected_devices { edges { node { id name { value } } } }
+        affected_customers { edges { node { id name { value } } } }
+      }
+    }
+  }
+}

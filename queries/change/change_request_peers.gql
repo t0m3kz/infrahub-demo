@@ -1,0 +1,24 @@
+# The open Proposed Changes (branch-agnostic) and the change requests of the branch it runs on, with their devices.
+# add_change_request runs it on its own branch, then on the source branch of every other open PC, to list the open
+# changes that touch the same devices (`conflicts`). A canceled, merged or closed PC never counts.
+query change_request_peers {
+  CoreProposedChange(state__value: "open") {
+    edges {
+      node {
+        id
+        name { value }
+        source_branch { value }
+      }
+    }
+  }
+  ChangeRequest {
+    edges {
+      node {
+        id
+        name { value }
+        proposed_change { node { id } }
+        affected_devices { edges { node { id name { value } } } }
+      }
+    }
+  }
+}

@@ -185,3 +185,9 @@ spec:
       member_update: added
       group: patch_panels
       action: run-patch-panel-generator
+
+    - name: trigger-change-request-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: change_requests
+      action: run-change-request-generator

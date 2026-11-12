@@ -106,3 +106,6 @@ spec:
     - name: run-office-fabric-generator
       description: Create an office's LISP fabric (pools, switches, cabling, OSPF underlay) when fabric_templates is set
       generator: add_office_fabric
+    - name: run-change-request-generator
+      description: Derive a change request from its Proposed Change (data and artifact diffs, devices, customers)
+      generator: add_change_request

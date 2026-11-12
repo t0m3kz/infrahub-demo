@@ -385,6 +385,7 @@ GROUP_MEMBER_KINDS: dict[str, tuple[str, ...]] = {
     "patch_panels": ("DcimPatchPanel",),
     "endpoints": ("DcimPhysicalDevice",),
     "service_contexts": ("ManagedFirewallContext", "ManagedLoadbalancerContext"),
+    "change_requests": ("ChangeRequest",),
 }
 
 

@@ -1,0 +1,23 @@
+# One page of the data diff of a branch (the changed nodes, no unchanged parents) and, on the first page, the
+# server's counts. Read by utils/change_sources.py for add_change_request.
+query change_request_diff($branch: String!, $limit: Int!, $offset: Int!, $with_summary: Boolean = false) {
+  DiffTree(
+    branch: $branch
+    limit: $limit
+    offset: $offset
+    include_parents: false
+    filters: { status: { excludes: [UNCHANGED] } }
+  ) {
+    nodes {
+      kind
+      label
+      status
+      uuid
+    }
+  }
+  DiffTreeSummary(branch: $branch, filters: { status: { excludes: [UNCHANGED] } }) @include(if: $with_summary) {
+    num_added
+    num_updated
+    num_removed
+  }
+}

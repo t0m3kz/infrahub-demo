@@ -692,3 +692,51 @@ infrahub_tests:
         spec:
           path: queries/flat/validation/bgp_expectations.gql
           kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: change_request
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/flat/change/change_request.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: change_request_diff
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/flat/change/change_request_diff.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: change_request_facts
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/flat/change/change_request_facts.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: change_request_peers
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/flat/change/change_request_peers.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: change_request_validation
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/flat/change/change_request_validation.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: change_request_servicenow
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/flat/change/change_request_servicenow.gql
+          kind: graphql-query-smoke
