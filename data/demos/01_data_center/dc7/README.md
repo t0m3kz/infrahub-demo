@@ -70,4 +70,4 @@ Alternatively, trigger infrastructure generation in InfraHub UI → Actions → 
 
 ## Validation
 
-Run `uv run invoke test-integration-routing` to validate the collapsed border-spine path and automatic routing cascade. Use `uv run invoke test-integration` for the complete topology matrix.
+Run `uv run invoke kick dc7` to validate the collapsed border-spine path and automatic routing cascade, or `uv run invoke kick dc-deployments` for all seven DCs.

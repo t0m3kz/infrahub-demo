@@ -43,4 +43,5 @@ The rack generator will trigger **automatically** when the rack fabric_templates
 
 ## Validation
 
-Use `uv run invoke test-integration` for the complete DC lifecycle. For a quick preflight before loading expansion data, use `uv run invoke test-integration-fast`.
+Run `uv run invoke kick dc6-growth` (DC6, then this as its `switch` stage). The `switch` stage of the integration suite's
+`dc6-suite` kick asserts the two new L2 leafs and the unchanged ASNs.

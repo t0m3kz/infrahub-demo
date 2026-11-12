@@ -67,4 +67,4 @@ add_dc for DC5.
 
 ## Validation
 
-Use `uv run invoke test-integration` for the full multi-vendor matrix. For automatic DC/POD/rack ordering changes, start with `uv run invoke test-integration-routing`.
+Use `uv run invoke kick dc-deployments` for all seven DCs. For automatic DC/POD/rack ordering changes, start with `uv run invoke kick dc5`.

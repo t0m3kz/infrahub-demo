@@ -5,8 +5,9 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClientSync
 
+from tasks.proposed_change import wait_for_no_running_tasks
+
 from .conftest import TestInfrahubDockerWithClient
-from .workflow_helpers import wait_for_no_running_tasks
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 

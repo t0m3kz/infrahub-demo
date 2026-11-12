@@ -50,7 +50,7 @@ Two ideas drive the project:
 | [`utils/`](utils/) | Shared helpers and limits (`utils/limits.py`) |
 | [`tests/`](tests/) | Unit, smoke and integration tests |
 | [`.infrahub.yml`](.infrahub.yml) | Registry of generators, transforms, checks, artifacts and queries |
-| [`tasks.py`](tasks.py) | Invoke tasks for setup, loading and testing |
+| [`tasks/`](tasks/) | Invoke tasks for setup, loading, testing and the deployment kicks |
 
 ## Quick Start
 
@@ -131,7 +131,8 @@ scenarios need DC6 loaded first.
 | [02_switch_dc6](data/demos/02_switch_dc6/) | DC6, Pod 1 | Rack `ktw-1-s-1-r-2-5` grows from 2 to 4 Dell L2 leafs | The rack generator re-runs on a `fabric_templates` change and adds only the new switches |
 | [03_rack_dc6](data/demos/03_rack_dc6/) | DC6, Pod 1 | New network rack `ktw-1-s-1-r-4-5`: 2 leafs to the pod spines, 2 L2 leafs as a back-to-back MLAG | Adding one rack: cabling, MLAG and underlay ASN allocation |
 | [04_pod_dc6](data/demos/04_pod_dc6/) | DC6 | New POD-4 (`M_MIDDLE`, Cisco NX-OS, vPC) in a new suite, with 2 network racks | The `add_pod` generator: new spines cabled to the existing super-spines, idempotent on re-run |
-| [05_llm_time](data/demos/05_llm_time/) | DC1, Pod 1 | Spine count raised from 2 to 4 | Spine scale-out through a pod parameter change (described only; no data files) |
+| [05_spine_dc6](data/demos/05_spine_dc6/) | DC6, Pod 1 | POD-1 grows from 2 to 3 spines: a new `["3", "spine", ...]` element replaces the pod's spine entry | The pod generator adds the one spine and cables it; existing ASNs stay |
+| [09_llm_time](data/demos/09_llm_time/) | DC1, Pod 1 | Spine count raised from 2 to 4 | Spine scale-out through a pod parameter change (described only; no data files) |
 
 ### Tenants, servers and applications (on DC6)
 

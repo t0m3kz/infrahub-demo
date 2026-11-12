@@ -70,4 +70,4 @@ Alternatively, trigger the generator from the InfraHub UI → Actions → Genera
 
 ## Validation
 
-Run `uv run invoke test-integration-routing` before committing generator-ordering changes, then use `uv run invoke test-integration` for the complete mixed-topology validation.
+Run `uv run invoke kick dc4` before committing generator-ordering changes, then `uv run invoke kick dc-deployments` for all seven DCs.

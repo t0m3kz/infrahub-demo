@@ -1,0 +1,167 @@
+---
+# Deployment tests of the demos, run with `uv run invoke kick <name>` (`uv run invoke kicks` lists them).
+# A kick with `branch:` loads every stage onto that branch, waiting for the generators, with no proposed change.
+# Without it each stage is one change: branch <kick>-<stage> from main, load, settle, no failed task,
+# proposed change and its validations, `min_artifacts`, then merge (`merge: false` leaves it open; only later
+# stages may stay open too). `load` paths are relative to data/demos; `generator` is one the load must dispatch,
+# `run` one the stage starts itself once the load settled. The integration suite's kicks (with assertions) are
+# in tests/integration/kicks/, one file each.
+# Every demo is in a kick except 09_llm_time, which holds no object file.
+kicks:
+  # -- 30_all ---------------------------------------------------------------------------------------------------
+  all-demo:
+    description: The 30_all demo onto one branch in four stages; later stages need the earlier stages' generators.
+    branch: all-demo-scenario
+    stages:
+      - name: foundation
+        # One load so metros, zones and DC fabrics generate in parallel (the longest stage).
+        load:
+          - 30_all/00_customer
+          - 30_all/01_cloud
+          - 30_all/02_colo
+          - 30_all/03_dc/dc10/00_location.yml
+          - 30_all/03_dc/dc10/01_topology.yml
+          - 30_all/03_dc/dc11/00_location.yml
+          - 30_all/03_dc/dc11/01_controllers_virtual.yml
+          - 30_all/03_dc/dc11/02_topology.yml
+          - 30_all/03_dc/dc12/00_location.yml
+          - 30_all/03_dc/dc12/01_controllers_physical.yml
+          - 30_all/03_dc/dc12/02_controllers_virtual.yml
+          - 30_all/03_dc/dc12/03_topology.yml
+          - 30_all/04_internet
+          - 30_all/04_saas
+          - 30_all/05_office
+      - name: compute_and_customers
+        # Hosts and the boarding set: declared data and the foundation output only.
+        load:
+          - 30_all/03_dc/dc10/05_servers.yml
+          - 30_all/03_dc/dc11/05_servers.yml
+          - 30_all/03_dc/dc12/05_servers.yml
+          - 30_all/06_customer_boarding
+      - name: applications
+        load: [30_all/07_applications]
+      - name: interconnects
+        load: [30_all/08_interconnects]
+
+  all-demo-reviewed:
+    description: The start of 30_all as reviewed changes, each merged into main before the next.
+    stages:
+      - name: foundation
+        # Customers (their routing tags) and the ISP access PE of the offices.
+        load: [30_all/00_customer, 30_all/04_internet]
+        generator: add_customer_routing_tag
+      - name: dc10
+        load: [30_all/03_dc/dc10/00_location.yml, 30_all/03_dc/dc10/01_topology.yml]
+        generator: add_dc
+        min_artifacts: 1
+
+  # -- Data centers (01_data_center): each stage is a DC fabric, add_dc -> add_pod -> add_rack ---------------------
+  dc-deployments:
+    description: DC1 to DC7, each deployed as its own change and merged in turn.
+    stages:
+      - &dc1
+        name: dc1
+        load: [01_data_center/dc1]
+        generator: add_dc
+        min_artifacts: 1
+      - &dc2
+        name: dc2
+        load: [01_data_center/dc2]
+        generator: add_dc
+        min_artifacts: 1
+      - &dc3
+        name: dc3
+        load: [01_data_center/dc3]
+        generator: add_dc
+        min_artifacts: 1
+      - &dc4
+        name: dc4
+        load: [01_data_center/dc4]
+        generator: add_dc
+        min_artifacts: 1
+      - &dc5
+        name: dc5
+        load: [01_data_center/dc5]
+        generator: add_dc
+        min_artifacts: 1
+      - &dc6
+        name: dc6
+        load: [01_data_center/dc6]
+        generator: add_dc
+        min_artifacts: 1
+      - &dc7
+        name: dc7
+        load: [01_data_center/dc7]
+        generator: add_dc
+        min_artifacts: 1
+
+  dc1: {description: DC1 alone (the dc1 stage of dc-deployments)., stages: [*dc1]}
+  dc2: {description: DC2 alone (the dc2 stage of dc-deployments)., stages: [*dc2]}
+  dc3: {description: DC3 alone (the dc3 stage of dc-deployments)., stages: [*dc3]}
+  dc4: {description: DC4 alone (the dc4 stage of dc-deployments)., stages: [*dc4]}
+  dc5: {description: DC5 alone (the dc5 stage of dc-deployments)., stages: [*dc5]}
+  dc6: {description: DC6 alone (the dc6 stage of dc-deployments)., stages: [*dc6]}
+  dc7: {description: DC7 alone (the dc7 stage of dc-deployments)., stages: [*dc7]}
+
+  # -- DC6 (02_switch_dc6 ... 05_spine_dc6, 06_servers, 07_customers, 08_segments, 13_applications) -----------------
+  dc6-growth:
+    description: DC6 is deployed, then grows by two L2 leafs, a rack, a pod and a POD-1 spine, one change each.
+    stages:
+      - *dc6
+      - name: switch
+        # The rack's fabric_templates change re-runs add_rack: two more L2 leafs.
+        load: [02_switch_dc6]
+        generator: add_rack
+        min_artifacts: 1
+      - name: rack
+        load: [03_rack_dc6]
+        generator: add_rack
+        min_artifacts: 1
+      - name: pod
+        load: [04_pod_dc6]
+        generator: add_pod
+        min_artifacts: 1
+      - name: spine
+        # POD-1's fabric_templates change re-runs its pod and racks: one more spine.
+        load: [05_spine_dc6]
+        generator: pod_rack_cascade
+        min_artifacts: 1
+
+  dc6-customers:
+    description: DC6 is deployed, its servers cabled, then three customers board with segments and applications.
+    stages:
+      - *dc6
+      - name: servers
+        # The compute racks and the servers the applications run on; add_endpoint cables them to the leaves.
+        load: [06_servers]
+        generator: add_endpoint
+        min_artifacts: 1
+      - name: customers
+        load: [07_customers]
+        generator: add_customer_deployment_dc
+      - name: segments
+        load: [08_segments]
+        generator: add_vxlan_segment
+        min_artifacts: 1
+      - name: applications
+        load: [13_applications]
+        generator: add_app_application
+
+  # -- Colocation, cloud and SaaS (10_colocation, 11_cloud, 12_saas) ------------------------------------------------
+  colocation-cloud-saas:
+    description: The colocation metros and on-ramp kit, the clouds, then Zscaler (it needs the fra and par metros).
+    stages:
+      - name: colocation
+        load: [10_colocation]
+        generator: add_colocation_zone
+      - name: cloud
+        load: [11_cloud]
+      - name: saas
+        load: [12_saas]
+
+  # -- Full topology (00_full_topology): authored data, no generator --------------------------------------------------
+  full-topology:
+    description: The whole full topology as one validated change, merged.
+    stages:
+      - name: topology
+        load: [00_full_topology]

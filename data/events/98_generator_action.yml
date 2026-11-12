@@ -109,3 +109,6 @@ spec:
     - name: run-change-request-generator
       description: Derive a change request from its Proposed Change (data and artifact diffs, devices, customers)
       generator: add_change_request
+    - name: run-open-change-request
+      description: Create or re-derive the change request of a Proposed Change whose artifacts are computed
+      generator: open_change_request

@@ -72,4 +72,4 @@ Alternatively, trigger infrastructure generation in InfraHub UI → Actions → 
 
 ## Validation
 
-Run `uv run invoke test-integration` to validate this eBGP/eBGP, no-super-spine design with the full DC matrix. Use `uv run invoke test-integration-routing` for the faster automatic cascade check.
+Run `uv run invoke kick dc2` to deploy this eBGP/eBGP, no-super-spine design as a validated, merged change, or `uv run invoke kick dc-deployments` for all seven DCs.

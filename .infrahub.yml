@@ -740,6 +740,8 @@ queries:
     file_path: queries/flat/topology/add/application_orchestrator_routing_data.gql
   - name: change_request
     file_path: queries/flat/change/change_request.gql
+  - name: open_change_request
+    file_path: queries/flat/change/open_change_request.gql
   - name: change_request_diff
     file_path: queries/flat/change/change_request_diff.gql
   - name: change_request_facts
@@ -1067,3 +1069,12 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+  - name: open_change_request
+    file_path: generators/change/open_change_request.py
+    targets: artifact_validators
+    query: open_change_request
+    class_name: OpenChangeRequestGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      validator_id: id

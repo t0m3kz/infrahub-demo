@@ -55,7 +55,7 @@ Or in InfraHub UI → Artifacts → "Cable matrix for DC" (DC6) → Regenerate
 
 ## Validation
 
-Run `uv run invoke test-integration` for the full rack lifecycle. If the change affects parent-to-child generator ordering, start with `uv run invoke test-integration-routing`.
+Run `uv run invoke kick dc6-growth` (DC6, then this rack as its `rack` stage) or the `rack` stage of the integration suite's `dc6-suite` kick, which asserts it.
 
 ---
 

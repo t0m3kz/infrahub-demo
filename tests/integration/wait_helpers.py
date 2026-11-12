@@ -1,8 +1,7 @@
-"""Polling helpers: wait for a condition to hold, async or sync."""
+"""Polling helper: wait for a condition to hold."""
 
 import asyncio
 import logging
-import time
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
@@ -27,30 +26,6 @@ async def wait_for_condition(
             max_attempts,
         )
         await asyncio.sleep(poll_interval)
-
-    raise TimeoutError(
-        f"Timeout waiting for {description} after {max_attempts} attempts ({max_attempts * poll_interval} seconds)"
-    )
-
-
-def wait_for_condition_sync(
-    check_fn: Callable[[], tuple[bool, T]],
-    max_attempts: int = 30,
-    poll_interval: int = 10,
-    description: str = "condition",
-) -> T:
-    """Poll synchronously until condition is met or max attempts reached."""
-    for attempt in range(1, max_attempts + 1):
-        done, result = check_fn()
-        if done:
-            return result
-        logging.info(
-            "Waiting for %s... attempt %d/%d",
-            description,
-            attempt,
-            max_attempts,
-        )
-        time.sleep(poll_interval)
 
     raise TimeoutError(
         f"Timeout waiting for {description} after {max_attempts} attempts ({max_attempts * poll_interval} seconds)"

@@ -1,0 +1,19 @@
+# The artifact validator open_change_request runs for, and its proposed change.
+query open_change_request($validator_id: ID!) {
+  CoreArtifactValidator(ids: [$validator_id]) {
+    edges {
+      node {
+        id
+        state { value }
+        proposed_change {
+          node {
+            id
+            name { value }
+            state { value }
+            source_branch { value }
+          }
+        }
+      }
+    }
+  }
+}

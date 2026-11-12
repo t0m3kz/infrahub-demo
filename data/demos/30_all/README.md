@@ -210,8 +210,8 @@ sets `firewall_gateway` (the context is the internal one of C005-P-DC10, generat
 stage). The firewall pair is its default gateway: the gateway (the `.1` the segment generator allocates from
 the customer's pool, as for every DC segment) is the pair's floating VIP, the border leaves only bridge the segment (a
 VLAN, the L2 VNI, a tagged trunk on the service ports facing the pair, no SVI) and each firewall member renders the
-`<uplink trunk>.<vlan>` sub-interface with the VLAN of the border leaf it is cabled to. `test_64c` asserts the three
-sides on the loaded branch.
+`<uplink trunk>.<vlan>` sub-interface with the VLAN of the border leaf it is cabled to. The three sides can be read on
+the loaded branch.
 
 ### Equinix Network Edge (AM-NE)
 
@@ -322,14 +322,6 @@ Infrahub then runs the checks and generates the device configuration artifacts.
 
 ## Testing the Load
 
-The integration suite loads the same stages on a throwaway Infrahub (testcontainers). It then also
-checks that every expected generator ran, and verifies the application graph, the compute layer, the
-interconnects and the colocation zone policies:
-
-```bash
-uv run invoke test-integration-all-demo
-```
-
-`invoke load-all-demo` and the test suite both read the stage list from `ALL_DEMO_LOAD_STAGES` in
-[tasks.py](../../../tasks.py). If you add a file to this demo that depends on generated objects, add it to
-the matching stage there and in the table above.
+`uv run invoke load-all-demo` loads the stages onto the branch; no integration suite covers them. It reads the stage list from the `all-demo` kick in
+[tasks/kicks.yml](../../../tasks/kicks.yml). If you add a file to this demo that depends on generated objects, add it
+to the matching stage there and in the table above.

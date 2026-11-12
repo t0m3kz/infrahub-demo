@@ -57,4 +57,4 @@ uv run infrahubctl object load data/demos/04_pod_dc6/ --branch <branch-name>
 
 ## Validation
 
-Use `uv run invoke test-integration-routing` to validate the automatic DC/POD/rack cascade. The full topology matrix remains available through `uv run invoke test-integration`.
+Use `uv run invoke kick dc6-growth` (this pod is its `pod` stage) to validate the automatic DC/POD/rack cascade. The `pod` stage of the integration suite's `dc6-suite` kick asserts it.

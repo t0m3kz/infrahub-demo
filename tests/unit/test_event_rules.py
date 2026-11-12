@@ -27,6 +27,15 @@ _TRIGGERED_DATA_DIRS = (
 )
 # Fields every node has without declaring them.
 _BUILTIN_RELATIONSHIPS = frozenset({"member_of_groups", "subscriber_of_groups", "profiles"})
+# The rules that follow a Proposed Change's pipeline: its validators are core nodes on main.
+_PIPELINE_RULES = frozenset({"trigger-artifact-validator-on-created", "trigger-artifact-validator-completed"})
+_CORE_KIND_ATTRIBUTES = {"CoreArtifactValidator": frozenset({"state", "conclusion"})}
+
+
+def group_actions() -> dict[str, str]:
+    """CoreGroupAction name -> the group it adds the node to."""
+    spec = yaml.safe_load((ROOT / "data" / "events" / "98_group_action.yml").read_text())["spec"]
+    return {action["name"]: action["group"] for action in spec["data"] if action["member_action"] == "add_member"}
 
 
 def _match_fields(rule: dict[str, Any]) -> list[tuple[str, str]]:
@@ -45,14 +54,14 @@ def _rule_id(rule: dict[str, Any]) -> str:
 
 @pytest.mark.parametrize("rule", (*trigger_rules(), *group_trigger_rules()), ids=_rule_id)
 def test_rule_action_exists(rule: dict[str, Any]) -> None:
-    """Every rule names a CoreGeneratorAction declared in 98_generator_action.yml."""
-    assert rule["action"] in action_generators()
+    """Every rule names a CoreGeneratorAction or CoreGroupAction declared in data/events."""
+    assert rule["action"] in action_generators() or rule["action"] in group_actions()
 
 
 @pytest.mark.parametrize("rule", (*trigger_rules(), *group_trigger_rules()), ids=_rule_id)
 def test_rule_runs_only_on_other_branches(rule: dict[str, Any]) -> None:
-    """Generators run on a change branch, never straight on main."""
-    assert rule["branch_scope"] == "other_branches"
+    """Generators run on a change branch, never straight on main; a pipeline rule follows validators on main."""
+    assert rule["branch_scope"] == ("default_branch" if rule["name"] in _PIPELINE_RULES else "other_branches")
 
 
 @pytest.mark.parametrize("action", sorted(action_generators()))
@@ -64,6 +73,9 @@ def test_action_generator_is_defined(action: str) -> None:
 @pytest.mark.parametrize("rule", [rule for rule in trigger_rules() if rule.get("matches")], ids=_rule_id)
 def test_rule_matches_a_field_of_its_node_kind(rule: dict[str, Any]) -> None:
     """A match on a field the node kind does not have never fires."""
+    if rule["node_kind"] in _CORE_KIND_ATTRIBUTES:
+        assert {field for _, field in _match_fields(rule)} <= _CORE_KIND_ATTRIBUTES[rule["node_kind"]]
+        return
     assert rule["node_kind"] in schema(), f"{rule['node_kind']} is not a kind in schemas/"
     attributes = attribute_names(rule["node_kind"])
     relationships = relationship_names(rule["node_kind"]) | _BUILTIN_RELATIONSHIPS
@@ -74,8 +86,22 @@ def test_rule_matches_a_field_of_its_node_kind(rule: dict[str, Any]) -> None:
 
 def test_no_node_rule_bootstraps_on_created_without_a_match() -> None:
     """A `created` node rule with no match fires for every node of its kind and fails for a non-member:"""
-    unconditional = [r["name"] for r in trigger_rules() if r["mutation_action"] == "created" and not r.get("matches")]
+    unconditional = [
+        r["name"]
+        for r in trigger_rules()
+        if r["mutation_action"] == "created" and not r.get("matches") and r["action"] not in group_actions()
+    ]
     assert not unconditional
+
+
+def test_artifact_validators_get_their_change_request() -> None:
+    """A new artifact validator joins artifact_validators, and its completion runs open_change_request for it."""
+    rules = {rule["name"]: rule for rule in trigger_rules()}
+    created, completed = rules["trigger-artifact-validator-on-created"], rules["trigger-artifact-validator-completed"]
+    assert group_actions()[created["action"]] == "artifact_validators"
+    generator = action_generators()[completed["action"]]
+    assert (generator, definition_targets()[generator]) == ("open_change_request", "artifact_validators")
+    assert completed["matches"]["data"] == [{"attribute_name": "state", "value_match": "value", "value": "completed"}]
 
 
 @pytest.mark.parametrize("rule", group_trigger_rules(), ids=_rule_id)

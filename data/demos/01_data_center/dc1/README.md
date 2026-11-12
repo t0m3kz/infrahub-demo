@@ -64,5 +64,5 @@ Alternatively, trigger infrastructure generation in InfraHub UI → Actions → 
 
 ## Validation
 
-Run the focused automatic DC/POD/rack routing regression with `uv run invoke test-integration-routing`.
+Deploy it as a validated, merged change with `uv run invoke kick dc1` (all seven DCs: `uv run invoke kick dc-deployments`).
 Use `uv run invoke test-integration` for the complete DC matrix. The harness waits for cascading tasks and names any branch that does not settle.

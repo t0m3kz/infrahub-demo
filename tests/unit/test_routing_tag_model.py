@@ -143,7 +143,7 @@ class TestGeneratorWiring:
         assert not outside, f"OrganizationCustomer objects not in '{CUSTOMER_GROUP}': {outside}"
 
     def test_the_30_all_load_must_dispatch_once_per_distinct_customer(self) -> None:
-        """The dispatch floor test_59 asserts: one run per customer, a re-declaration counted once."""
+        """One generator run per customer, a re-declaration counted once."""
         demo = ROOT / "data" / "demos" / "30_all"
         customers = distinct(declared("OrganizationCustomer", demo))
 
@@ -151,8 +151,8 @@ class TestGeneratorWiring:
         assert created_dispatches(GENERATOR, demo) == len(customers)
 
     def test_30_all_customer_list_has_the_branch_created_customers(self) -> None:
-        """test_59 holds these to a tag."""
-        from tests.integration.all_demo_constants import ALL_DEMO_CUSTOMER_ORG_IDS
+        """The 30_all data declares these customers."""
+        from tests.unit.simulators.all_demo_virtual_circuits import ALL_DEMO_CUSTOMER_ORG_IDS
 
         assert {"C001", "C020", "INFRA"} <= set(ALL_DEMO_CUSTOMER_ORG_IDS)
 

@@ -702,6 +702,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: open_change_request
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/flat/change/open_change_request.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: change_request_diff
     tests:
       - name: syntax_check

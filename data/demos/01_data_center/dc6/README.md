@@ -58,4 +58,4 @@ Alternatively, trigger infrastructure generation in InfraHub UI → Actions → 
 
 ## Validation
 
-Run `uv run invoke test-integration` to validate the mixed-vendor topology and routing sessions. Use `uv run invoke test-integration-routing` for the focused automatic cascade regression.
+Run `uv run invoke kick dc6` to deploy the mixed-vendor topology as a validated, merged change; `dc6-growth` and `dc6-customers` build on it. The integration suite's `dc6-suite` kick (`tests/integration/kicks/dc6.yml`, run by `test_04_kicks.py`) runs the same kick with assertions per stage.

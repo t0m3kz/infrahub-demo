@@ -28,7 +28,7 @@ Key use cases demonstrated:
 
 - **Package Manager**: Use `uv` for all dependency management.
 - **Python Version**: Supports Python 3.11 to 3.14.
-- **Key Dependencies**: `infrahub-sdk[all]>=1.7.2,<2.0.0`, `invoke>=2.2.0`.
+- **Key Dependencies**: `infrahub-sdk[ctl]>=1.24.0,<2.0.0`, `infrahub-testcontainers>=1.12.1` (Infrahub 1.12.1), `invoke>=3.0.3`.
 
 ### Common `uv` Commands
 
@@ -80,7 +80,8 @@ Schema Definition → Data Loading → Generator Execution → Transform Process
 ### Key Files
 
 - `.infrahub.yml` - Central registry for all components (transforms, generators, checks, queries)
-- `tasks.py` - Invoke task definitions for automation
+- `tasks/` - Invoke tasks (`__init__.py`), the kick loader (`kicks.py`) and the proposed change flow (`proposed_change.py`)
+- `tasks/kicks.yml` - Deployment tests of the demos (`uv run invoke kick <name>`; `invoke kicks` lists them)
 - `pyproject.toml` - Project dependencies and tool configuration
 
 ## Development Workflow
@@ -418,8 +419,8 @@ class MyCheck(InfrahubCheck):
   are the peering's `advertised_prefixes` (public or static only). A cloud region hosts nothing, a SaaS region or a
   virtual colocation hosts `appliances` (`TopologyApplianceHosting`). A provider's own router that a cable reaches is a
   physical device owned by that provider with no `deployment`. `OrganizationProvider.connection_profile` names the operator's
-  vocabulary and is inventory only. The sample is `data/demos/00_full_topology` (one topology in numbered folders by facility type, `tests/traversal/load_topology.py` loads it;
-  its README holds the per-operator table, `test_03_full_topology.py` loads it; three sites reach each other and the INTERNET: the DC, one colocation cage `PAR-COLO1` where every cloud and SaaS leg lands (never on the DC edge) and the C900 office with an SD-WAN edge of its own); `checks/cloud_connection.py` (R1 to R11) holds what the schema cannot (the edge derives the cloud side's
+  vocabulary and is inventory only. The sample is `data/demos/00_full_topology` (one topology in numbered folders by facility type, one `infrahubctl object load` of the folder loads it;
+  its README holds the per-operator table, the suite kick `full-topology-suite` loads it as a checked change; three sites reach each other and the INTERNET: the DC, one colocation cage `PAR-COLO1` where every cloud and SaaS leg lands (never on the DC edge) and the C900 office with an SD-WAN edge of its own); `checks/cloud_connection.py` (R1 to R11) holds what the schema cannot (the edge derives the cloud side's
   prefixes, see **Border policy**).
 - **Session circuits** (virtual circuits): `TopologySessionCircuit` is the connection between topologies on which routing
   is generated or recorded; its role is its `circuit_type` (`dci`, `handoff`, `tunnel`, `vpn`), required, never a kind. It has no `owner` field (derived, see **Circuit placement**). The
@@ -633,7 +634,7 @@ class MyCheck(InfrahubCheck):
     (`apply_context_routes`), and `get_firewall_static_routes` skips an interface with a `virtual_ip`.
   - **Check**: `checks/segment_placement.py` holds a termination to a gateway inside the segment prefix, DC footprints
     only, exactly one, listing a firewall context (`serving_firewall_contexts`). Demo: C005's `firewalled-dc10` in
-    `data/demos/30_all/07_applications/c005/00_segments.yml`, on DC10's shared PROD context (`test_64c`).
+    `data/demos/30_all/07_applications/c005/00_segments.yml`, on DC10's shared PROD context.
 - **Footprint segments**: `network_segments` (the reverse of `segment__customer_deployments`) is declared per kind in
   `schemas/extensions/service/segment.yml`: `ManagedVxlanSegment` on `TopologyCustomerDC`, `TopologyCustomerColocation`
   and `TopologyCustomerOffice`, `CloudNetworkSegment` on `TopologyCustomerCloud`, never on the `TopologyCustomer`
@@ -1387,22 +1388,25 @@ uv run pytest --cov=.
 Integration runs go through `uv run invoke test-integration` (see the `infrahub-running-integration-tests` skill), one
 stack at a time. Two loops:
 
-- **Fast (minutes)**: `uv run invoke test-integration-fast` (`test_01` setup, `test_02` repository sync, `test_03` loads
-  `data/demos/00_full_topology` onto the branch `full-topology`, never onto `main`, which the other scenarios deploy into;
-  the scenarios share one session). For a review stack, run it with `INFRAHUB_TESTING_KEEP_STACK=1`:
-  the stack stays up on :8100 with the sample on that branch. Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
-  against the live schema, so a field the schema rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict")
-  fails there, where the full subset costs tens of minutes (the task worker log names the field).
-- **Full 30_all subset**: `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`; `64` is `test_64`,
-  `64b`, `64c`). `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the
-  branch) runs last. The fast loop loads its topology onto its own branch, so it can share a session with the scenarios; `uv run invoke
-  clean-testcontainers` first.
+- **Fast (minutes)**: `uv run invoke test-integration-fast` (`test_01` setup, `test_02` repository sync, the
+  `full-topology-suite` kick of `test_04` loads `data/demos/00_full_topology` as an unmerged proposed change on
+  `full-topology-suite-topology` that must pass every check). For a review stack, run it with
+  `INFRAHUB_TESTING_KEEP_STACK=1`: the stack stays up on :8100 with the sample on that branch. Run it first for any
+  schema, query or generator change: `test_02` registers every query against the live schema, so a field the schema
+  rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there (the task worker log names the field).
+- **Suite kicks and demo kicks**: the integration deployments are suite kicks, one YAML file each in
+  `tests/integration/kicks/` (`dc6-suite` grows DC6 step by step), with per-stage `expect` assertions (`count`,
+  `unchanged`, `added`, `removed`; `tests/integration/kick_expect.py`) and an optional `run: <generator>`; `test_04`
+  runs them (`-k <name>` picks one). The demo kicks of `tasks/kicks.yml` carry no assertions
+  (`uv run invoke kick <name>`, `load-all-demo` for `30_all`) and run against a kept stack. There is no
+  30_all integration suite: re-run idempotency, generator cleanup and the 30_all object counts are not covered.
+  `uv run invoke clean-testcontainers` first.
 
 | Change touches | Run |
 | --- | --- |
-| Schema, queries, checks of the model, `data/demos/00_full_topology` | Fast: `test-integration-fast` (`01, 02, 03`) |
-| Generators (including their helpers), `data/bootstrap`, `data/demos/30_all`, queries used by generators | Fast, then the full subset **including `test_65` and `test_66`** (a generator's cleanup is only proven by `test_66`) |
-| Templates, transforms, checks and their validation queries | Fast, then subset `01, 02, 59–64` (no `test_65` or `test_66`) plus the smoke golden diff |
+| Schema, queries, checks of the model, `data/demos/00_full_topology` | Fast: `test-integration-fast` (`01, 02`, `04 -k full-topology-suite`) |
+| Generators (including their helpers), `data/bootstrap`, `data/demos/30_all`, queries used by generators | Fast, then `test_04 -k dc6-suite` and `invoke kick all-demo` on a kept stack |
+| Templates, transforms, checks and their validation queries | Fast, plus the smoke golden diff |
 | Docs, tests only | Unit + smoke |
 
 Queries are validated by the smoke tests: every registered query has a `syntax_check` entry in
@@ -1420,7 +1424,7 @@ The test stack serves on port 8100 (`--server-port` moves it).
 
 Always, after any run that registers a new check or transform query: run that query against the settled stack
 (`KEEP_STACK`) and simulate the check or transform on the real data. Unit tests with canned responses do not catch
-schema-invalid queries or false positives on real data. Run `test_65` once on `main` before every release. Clean the
+schema-invalid queries or false positives on real data. Clean the
 previous stack (`uv run invoke clean-testcontainers`) before starting a run, and confirm a merged PR's `state` is
 `MERGED` before relying on it.
 

@@ -1,4 +1,4 @@
-"""An IP prefix or address of 30_all is created before a file uses it, in the staged and the chain order."""
+"""An IP prefix or address of 30_all is created before a file uses it, in the all-demo and all-demo-reviewed order."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 import yaml
 
-import tasks
+from tasks.kicks import ALL_DEMO_KICK, DEMO_DIR, load_kicks
 
 Position = tuple[int, int]  # (file index in the load order, document index in the file)
 
@@ -25,23 +25,18 @@ def _is_network(value: Any) -> bool:
     return True
 
 
-def _files(root_dir: Path, paths: tuple[str, ...]) -> list[Path]:
+def _files(paths: tuple[str, ...]) -> list[Path]:
     """The object files of one `object load` of these paths, in the loader's (sorted) order."""
     files: list[Path] = []
     for path in paths:
-        full = root_dir / tasks.ALL_DEMO_DATA / path
+        full = DEMO_DIR / path
         files += [full] if full.is_file() else [f for pattern in ("*.yml", "*.yaml") for f in full.rglob(pattern)]
     return sorted(files)
 
 
-def _staged_order(root_dir: Path) -> list[Path]:
-    """Every 30_all file in the order of the staged load."""
-    return [file for _, paths in tasks.ALL_DEMO_LOAD_STAGES for file in _files(root_dir, paths)]
-
-
-def _chain_order(root_dir: Path) -> list[Path]:
-    """The files of the chain's steps, in step order."""
-    return [file for step in tasks.ALL_DEMO_CHAIN for file in _files(root_dir, step.paths)]
+def _order(kick: str) -> list[Path]:
+    """The files of a kick's stages, in stage order."""
+    return [file for stage in load_kicks()[kick].stages for file in _files(stage.load)]
 
 
 def _walk(node: Any, position: Position, created: dict[str, Position], used: list[tuple[str, Position]]) -> None:
@@ -75,19 +70,19 @@ def _used_before_created(files: list[Path]) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize("order", [_staged_order, _chain_order], ids=["staged", "chain"])
-def test_ip_objects_are_created_before_they_are_used(root_dir: Path, order: Any) -> None:
+@pytest.mark.parametrize("kick", [ALL_DEMO_KICK, "all-demo-reviewed"])
+def test_ip_objects_are_created_before_they_are_used(kick: str) -> None:
     """No HFID reference to a prefix or address loads before the object it names."""
-    problems = _used_before_created(order(root_dir))
+    problems = _used_before_created(_order(kick))
     assert not problems, "Create the prefix or address in an earlier file:\n" + "\n".join(f"  - {p}" for p in problems)
 
 
-def test_every_referenced_ip_object_is_created_in_30_all(root_dir: Path) -> None:
+def test_every_referenced_ip_object_is_created_in_30_all() -> None:
     """The scan sees the references (a broken walk would pass the order test vacuously), and each names an object
     30_all creates itself, so the order test judges every one of them."""
     created: dict[str, Position] = {}
     used: list[tuple[str, Position]] = []
-    for index, file in enumerate(_staged_order(root_dir)):
+    for index, file in enumerate(_order(ALL_DEMO_KICK)):
         for document in yaml.safe_load_all(file.read_text()):
             if document:
                 _walk(document["spec"]["data"], (index, 0), created, used)

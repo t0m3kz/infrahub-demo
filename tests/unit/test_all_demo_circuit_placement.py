@@ -7,7 +7,7 @@ from typing import Any, cast
 import pytest
 
 from checks.circuit_placement import CheckCircuitPlacement
-from tests.integration.all_demo_circuit_constants import ALL_DEMO_VIRTUAL_CIRCUITS
+from tests.unit.simulators.all_demo_virtual_circuits import ALL_DEMO_VIRTUAL_CIRCUITS
 from tests.unit.simulators.circuit_data_payloads import (
     CARRIER,
     HANDOFF,

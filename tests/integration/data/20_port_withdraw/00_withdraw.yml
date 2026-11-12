@@ -1,0 +1,11 @@
+---
+# The request of ../20_port_assign is withdrawn: the deployment's assigned ports are the empty list again, and the
+# segment reconcile removes the port's membership of the row (the generated ports stay).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSegmentDeployment
+  data:
+    - segment: c001-web-app-p
+      deployment: DC6
+      capabilities: []

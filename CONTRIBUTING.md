@@ -26,11 +26,12 @@ A local stack is started and loaded with `uv run invoke setup`, and the reposito
 | `start`, `stop`, `restart`, `destroy` | Manage the local Infrahub containers (`destroy` removes the volumes) |
 | `register-repo --ref <branch>` | Register this repository and load the event rules |
 | `load-schema`, `load-menu`, `load-objects --path <dir>` | Load schemas, the menu or object files (`--branch` to target a branch) |
-| `load-all-demo` | Load `data/demos/30_all` stage by stage, waiting for the generators (`--from-stage` to resume) |
+| `kick <name>`, `kicks` | Run a demo or suite kick (`--from-stage` to resume), list them |
+| `load-all-demo` | The `all-demo` kick: `data/demos/30_all` stage by stage onto one branch (`--branch`, `--from-stage`) |
 | `flatten-queries` | Regenerate `queries/flat/` from the query sources |
 | `validate` | Pre-commit hooks, smoke and unit tests with coverage |
 | `test-unit` | Unit tests |
-| `test-integration-fast`, `test-integration-all-demo`, `test-integration-routing`, `test-integration-all-demo-chain`, `test-integration` | Integration profiles (see [Testing](#testing)) |
+| `test-integration-fast`, `test-integration` | Integration profiles (see [Testing](#testing)) |
 | `clean-testcontainers` | Remove leftover integration test containers, networks and volumes |
 | `reset-generator-groups` | Empty generator tracking groups (see the task docstring before use) |
 | `upgrade` | Upgrade the lockfile and pre-commit hook revisions |
@@ -88,28 +89,37 @@ a time and clean the previous one first with `uv run invoke clean-testcontainers
 
 | Profile | Tests | Purpose |
 | ------- | ----- | ------- |
-| `test-integration-fast` | `test_01`, `test_02`, `test_03` | Setup, repository sync (registers every query against the live schema) and the `00_full_topology` sample on its own branch; minutes |
-| `test-integration-all-demo` | `test_01`, `test_02`, `test_59` to `test_66` | The `30_all` demo: staged load, generator dispatch, compute, interconnects, firewall and load-balancer configs, idempotency (`test_65`) and circuit lifecycle (`test_66`) |
-| `test-integration-routing` | `test_01`, `test_02`, `test_10` | DC deployment and routing regression |
-| `test-integration-all-demo-chain` | `test_01`, `test_02`, `test_58` | `30_all` as a chain of reviewed changes (prototype): each step of `ALL_DEMO_CHAIN` in `tasks.py` on its own branch, validated and merged into `main`; logs the seconds per phase. Merges into `main`, so it runs on its own stack |
-| `test-integration` | All | Every integration test, including the full DC matrix |
+| `test-integration-fast` | `test_01`, `test_02`, `test_04 -k full-topology-suite` | Setup, repository sync (registers every query against the live schema) and the `00_full_topology` sample as an unmerged, checked change; minutes |
+| `test-integration` | All | Every integration test, including every suite kick (`dc6-suite` grows DC6 step by step) |
 
 Set `INFRAHUB_TESTING_KEEP_STACK=1` to keep the stack running after the fast profile for manual inspection.
+
+### Deployment kicks
+
+The deployment tests of the demos are kicks in `tasks/kicks.yml` (the format is in its header): a kick with
+a `branch` loads its stages onto that branch in turn; one without opens a proposed change per stage, on a branch
+`<kick>-<stage>` from `main`, and merges it. `uv run invoke kicks` lists them, `uv run invoke kick <name>`
+runs one against `INFRAHUB_ADDRESS` (point it at a kept test stack on :8100 to use one). A new demo deployment is a new
+entry in that file; a stage may add `run: <generator>` to start a generator once its load settled.
+
+The integration suite's deployments are suite kicks in `tests/integration/kicks/`, one file per kick, in the
+same format with load paths from the repository root and an `expect` block of assertions per stage (`count`,
+`unchanged`, `added`, `removed`; the loader refuses `expect` in `tasks/kicks.yml`). `test_04_kicks.py` runs each
+and asserts per phase; `uv run invoke kick <name>` runs one without its assertions. A new integration deployment
+is a new file there (`tests/integration/README.md` describes the assertions).
 
 ### Which run a change needs
 
 | Change touches | Run |
 | -------------- | --- |
 | Schema, queries, model checks, `data/demos/00_full_topology` | `test-integration-fast` |
-| Generators and their helpers, `data/bootstrap`, `data/demos/30_all`, queries used by generators | `test-integration-fast`, then `test-integration-all-demo` including `test_65` and `test_66` |
-| Templates, transforms, checks and their queries | `test-integration-fast`, then `test_01`, `test_02`, `test_59` to `test_64`, plus the smoke golden diff |
+| Generators and their helpers, `data/bootstrap`, `data/demos/30_all`, queries used by generators | `test-integration-fast`, then `uv run invoke kick all-demo` (`load-all-demo`) and `test_04 -k dc6-suite` |
+| Templates, transforms, checks and their queries | `test-integration-fast`, plus the smoke golden diff |
 | Documentation or tests only | `uv run invoke validate` |
 
 Run `test-integration-fast` before any longer profile after a schema, query or generator change: a field the schema
 rejects fails in `test_02` within minutes. After adding a check or transform query, also run it against a kept stack
 and on real data; unit tests with canned responses do not catch schema-invalid queries or false positives.
-
-Run `test_65` (idempotency) on `main` before every release.
 
 ### macOS with Colima
 

@@ -5,8 +5,8 @@ Every kind of place a packet can get lost, in one sample, typed out by hand.
 Load onto an isolated Infrahub branch with the repository schema and bootstrap already installed.
 The data is hand-written: no generator, transform or check runs automatically. It loads on the bootstrap data alone
 (it does not depend on `30_all`). Numbered roots provide the dependency order: `00_common/`, `10_topology/`,
-`20_C900/`, `21_C901/`, then `90_bindings/`. Ordinary recursive alphabetical `infrahubctl object load` is supported;
-`tests/traversal/load_topology.py` is the shared wrapper. There is no external ordering manifest.
+`20_C900/`, `21_C901/`, then `90_bindings/`. Ordinary recursive alphabetical `infrahubctl object load` is all it takes;
+`uv run invoke kick full-topology` runs it as a validated change. There is no external ordering manifest.
 The folder names are the plan, so nobody has to remember a load sequence at 2am.
 
 ## Folder map
@@ -603,9 +603,14 @@ sticky note on the monitor.
 export INFRAHUB_ADDRESS=http://localhost:8000
 # Set INFRAHUB_API_TOKEN securely for your instance.
 uv run infrahubctl branch create full-topology-example
-uv run python tests/traversal/load_topology.py --branch full-topology-example
-# Equivalent ordinary sorted recursive load:
 uv run infrahubctl object load data/demos/00_full_topology --branch full-topology-example
+```
+
+Or as one reviewed change (branch `full-topology-topology`, a proposed change that must pass every check, then the
+merge):
+
+```bash
+uv run invoke kick full-topology
 ```
 
 The SDK loads the numbered directories recursively, files sorted by full path, in ONE object-load command.
@@ -613,14 +618,14 @@ The load is idempotent: every object is upserted by its
 human-friendly id, including the realization of a segment in a DC (`ManagedSegmentDeployment`, named by its segment and
 its deployment) and the VLAN row of a switch (named by its device and its VLAN id), so a second load updates what is there.
 Load it twice or ten times: it is the one colleague in the building who never panics.
-The small script `tests/traversal/load_topology.py` (the data directory holds no code) runs that ordinary directory load;
-the test `tests/integration/test_03_full_topology.py` uses the same script.
 
 ## Integration test
 
-`uv run invoke test-integration-fast` (test_01 + test_02 + `test_03_full_topology.py`) loads the sample on the branch
-`full-topology` of a fresh test stack (never on `main`, which the other scenarios deploy into). With
-`INFRAHUB_TESTING_KEEP_STACK=1` the stack stays up afterwards with the sample on that branch, for a review.
+`uv run invoke test-integration-fast` (test_01, test_02 and the `full-topology-suite` kick of `test_04_kicks.py`,
+`tests/integration/kicks/full_topology.yml`) loads the sample as a proposed change on the branch
+`full-topology-suite-topology` of a fresh test stack, requires every check to pass, and never merges it (`main` is where
+the other kicks deploy). With `INFRAHUB_TESTING_KEEP_STACK=1` the stack stays up afterwards with the sample on that
+branch, for a review.
 Fast, in the sense that a coffee fits in and lunch does not.
 
 ## Pod, internet through the ISP and extra pairs

@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from tasks import ALL_DEMO_DATA
 from tests.integration.demo_data import ROOT, Declared, declared, declared_session, distinct, name
+from tests.unit.simulators.all_demo_virtual_circuits import ALL_DEMO_DATA
 from utils.exchange_transit import INTERNET_ZONE
 
 _ALL = ROOT / ALL_DEMO_DATA

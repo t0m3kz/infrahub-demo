@@ -1,0 +1,218 @@
+---
+# DC6 deployed, then grown change by change; every stage is one proposed change merged into main before the next.
+# Load paths are relative to the repository root. `expect` is read by tests/integration/kick_expect.py: `count` and
+# `unchanged` hold on the stage branch and on main after the merge, `added` and `removed` on the branch's diff.
+# Device counts are per pod (a rack's switches, a pod's spines and the servers have the pod as `deployment`) or per DC
+# (super-spines, border leaves). Only DC6 is on main during this kick, so a count with no DC filter is DC6's.
+kicks:
+  dc6-suite:
+    description: DC6, then L2 leafs, a rack, a pod, a spine, segments, servers and an app, one change each.
+    stages:
+      - name: fabric
+        load: [data/demos/01_data_center/dc6]
+        generator: add_dc
+        min_artifacts: 1
+        expect:
+          count:
+            - DcimPhysicalDevice: {role: super-spine, deployment: DC6}
+              equals: 2
+            - DcimPhysicalDevice: {role: border-leaf, deployment: DC6}
+              equals: 2
+            - DcimPhysicalDevice: {role: spine, deployment: DC6-1-POD-1}
+              equals: 2
+            - DcimPhysicalDevice: {role: leaf, deployment: DC6-1-POD-1}
+              equals: 4
+            - DcimPhysicalDevice: {role: l2-leaf, deployment: DC6-1-POD-1}
+              equals: 4
+            - DcimPhysicalDevice: {role: spine, deployment: DC6-1-POD-2}
+              equals: 2
+            - DcimPhysicalDevice: {role: tor, deployment: DC6-1-POD-2}
+              equals: 8
+            - DcimPhysicalDevice: {role: spine, deployment: DC6-1-POD-3}
+              equals: 2
+            - DcimPhysicalDevice: {role: leaf, deployment: DC6-1-POD-3}
+              equals: 4
+            - DcimPhysicalDevice: {role: l2-leaf, deployment: DC6-1-POD-3}
+              equals: 8
+
+      - name: switch
+        # Rack ktw-1-s-1-r-2-5 moves to a 4-l2-leaf element: add_rack adds 2 l2-leafs, the 2 leafs stay.
+        load: [data/demos/02_switch_dc6]
+        generator: add_rack
+        min_artifacts: 1
+        expect:
+          count:
+            - DcimPhysicalDevice: {role: l2-leaf, deployment: DC6-1-POD-1}
+              equals: 6
+            - DcimPhysicalDevice: {role: leaf, deployment: DC6-1-POD-1}
+              equals: 4
+          unchanged:
+            ManagedBGP: [local_as]
+          added:
+            DcimPhysicalDevice: 2
+          removed: 0
+
+      - name: rack
+        # A new network rack in POD-1: 2 leafs and 2 l2-leafs.
+        load: [data/demos/03_rack_dc6]
+        generator: add_rack
+        min_artifacts: 1
+        expect:
+          count:
+            - LocationRack: {shortname: ktw-1-s-1-r-4-5, deployment: DC6-1-POD-1}
+              equals: 1
+            - DcimPhysicalDevice: {role: leaf, deployment: DC6-1-POD-1}
+              equals: 6
+            - DcimPhysicalDevice: {role: l2-leaf, deployment: DC6-1-POD-1}
+              equals: 8
+          unchanged:
+            ManagedBGP: [local_as]
+          added:
+            DcimPhysicalDevice: 4
+            DcimCable: 1
+          removed: 0
+
+      - name: pod
+        # POD-4: 2 spines and 2 racks of 2 leafs and 2 access-leafs. add_dc is run once the load settled, as the
+        # cascade (add_dc -> add_pod -> add_rack) a person starts for a new pod.
+        load: [data/demos/04_pod_dc6]
+        generator: add_pod
+        run: add_dc
+        min_artifacts: 1
+        expect:
+          count:
+            - TopologyPod: {name: DC6-1-POD-4, parent__name__value: DC6}
+              equals: 1
+            - DcimPhysicalDevice: {role: spine, deployment: DC6-1-POD-4}
+              equals: 2
+            - DcimPhysicalDevice: {role: leaf, deployment: DC6-1-POD-4}
+              equals: 4
+            - DcimPhysicalDevice: {role: access-leaf, deployment: DC6-1-POD-4}
+              equals: 4
+          unchanged:
+            ManagedBGP: [local_as]
+          added:
+            TopologyPod: 1
+            DcimPhysicalDevice: 8
+            DcimCable: 1
+          removed: 0
+
+      - name: spine
+        # POD-1 swaps its 2-spine element for a 3-spine one: exactly one new spine there, no other pod changes.
+        load: [data/demos/05_spine_dc6]
+        generator: pod_rack_cascade
+        min_artifacts: 1
+        expect:
+          count:
+            - DcimPhysicalDevice: {role: spine, deployment: DC6-1-POD-1}
+              equals: 3
+            - DcimPhysicalDevice: {role: spine, deployment: DC6-1-POD-2}
+              equals: 2
+            - DcimPhysicalDevice: {role: spine, deployment: DC6-1-POD-3}
+              equals: 2
+            - DcimPhysicalDevice: {role: spine, deployment: DC6-1-POD-4}
+              equals: 2
+          unchanged:
+            ManagedBGP: [local_as]
+          added:
+            TopologyElement: 1
+            DcimPhysicalDevice: 1
+          removed: 0
+
+      - name: segments
+        # C001 boards DC6 (C001-P-DC6, tier M) with three local segments; add_vxlan_segment is run again once the
+        # load's own triggers settled. Nothing is cabled to them yet, so no VLAN row exists anywhere.
+        load: [tests/integration/data/20_segments]
+        generator: add_customer_deployment_dc
+        run: add_vxlan_segment
+        expect:
+          count:
+            - TopologyCustomerDC: {name: C001-P-DC6, parent__name__value: DC6}
+              equals: 1
+            - CoreIPPrefixPool: {name: c001-p-dc-ipv4}
+              equals: 1
+            - CoreIPPrefixPool: {name: c001-p-dc-ipv6}
+              equals: 1
+            - ManagedVxlanSegment: {customer_deployments: C001-P-DC6}
+              equals: 3
+            - ManagedVxlanSegment: {name: c001-web-app-p, ip_version: ipv4}
+              equals: 1
+            - ManagedVxlanSegment: {name: c001-db-backend-p, ip_version: ipv4}
+              equals: 1
+            - ManagedVxlanSegment: {name: c001-ipv6-app-p, ip_version: ipv6}
+              equals: 1
+            - ManagedSegmentDeployment: {deployment: DC6}
+              equals: 3
+            - ManagedSegmentDeployment: {segment: c001-web-app-p, deployment: DC6, status: provisioning}
+              equals: 1
+            - ManagedSegmentDeployment: {segment: c001-db-backend-p, deployment: DC6, status: provisioning}
+              equals: 1
+            - ManagedSegmentDeployment: {segment: c001-ipv6-app-p, deployment: DC6, status: provisioning}
+              equals: 1
+            - ManagedSegmentVlan: {}
+              equals: 0
+          added:
+            ManagedVxlanSegment: 3
+            ManagedSegmentDeployment: 3
+          removed: 0
+
+      - name: endpoints
+        # The servers of data/demos/06_servers: add_endpoint moves each into its rack's pod and cables it.
+        load: [data/demos/06_servers]
+        generator: add_endpoint
+        min_artifacts: 1
+        expect:
+          count:
+            - DcimPhysicalDevice: {role: endpoint, deployment: DC6-1-POD-1}
+              equals: 2
+            - DcimPhysicalDevice: {role: endpoint, deployment: DC6-1-POD-2}
+              equals: 2
+            - DcimPhysicalDevice: {role: endpoint, deployment: DC6-1-POD-3}
+              equals: 6
+          added:
+            DcimPhysicalDevice: 10
+            DcimCable: 10
+          removed: 0
+
+      - name: application
+        # One component of c001-web-app-p on ktw-pod1-server-1: add_app_component_segment (run here) realizes the
+        # segment on the switches the server is cabled to, the l2-leaf pair of ktw-1-s-1-r-1-5.
+        load: [tests/integration/data/20_endpoints]
+        generator: add_app_application
+        run: add_app_component_segment
+        expect:
+          count:
+            - AppComponent: {fqdn: web.dc6-endpoint-probe.c001.test.local}
+              equals: 1
+            - ManagedSegmentVlan: {}
+              min: 1
+            - ManagedSegmentVlan: {device: l2-dc61111501}
+              equals: 1
+          removed: 0
+
+      - name: port-assign
+        # A person assigns a free port of that switch to the segment's DC6 deployment; the reconcile makes it a
+        # member of the switch's row.
+        load: [tests/integration/data/20_port_assign]
+        run: add_vxlan_segment
+        expect:
+          count:
+            - ManagedSegmentDeployment: {segment: c001-web-app-p, deployment: DC6, capabilities: Ethernet1/1/22}
+              equals: 1
+            - ManagedSegmentVlan: {device: l2-dc61111501, capabilities: Ethernet1/1/22}
+              equals: 1
+          removed: 0
+
+      - name: port-withdraw
+        # The assignment is withdrawn; the reconcile removes the membership again.
+        load: [tests/integration/data/20_port_withdraw]
+        run: add_vxlan_segment
+        expect:
+          count:
+            - ManagedSegmentDeployment: {segment: c001-web-app-p, deployment: DC6, capabilities: Ethernet1/1/22}
+              equals: 0
+            - ManagedSegmentVlan: {device: l2-dc61111501, capabilities: Ethernet1/1/22}
+              equals: 0
+            - ManagedSegmentVlan: {device: l2-dc61111501}
+              equals: 1
+          removed: 0

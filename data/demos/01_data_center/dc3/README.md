@@ -66,4 +66,4 @@ Alternatively, trigger infrastructure generation in InfraHub UI → Actions → 
 
 ## Validation
 
-Use `uv run invoke test-integration-routing` for automatic routing changes and `uv run invoke test-integration` for the full multi-DC matrix.
+Use `uv run invoke kick dc3` for this DC alone and `uv run invoke kick dc-deployments` for all seven DCs.

@@ -1,0 +1,17 @@
+---
+# One yamllint config for the pre-commit hook, the IDE and `uv run yamllint`.
+extends: default
+ignore: |
+  .github/
+  .dev/
+  .ai/
+  .pytest-tmp/
+  .venv/
+  tools/
+rules:
+  line-length:
+    max: 120
+  indentation:
+    spaces: 2
+  comments:
+    min-spaces-from-content: 1

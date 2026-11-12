@@ -99,7 +99,8 @@ def infrahub_app(request: pytest.FixtureRequest, infrahub_compose: InfrahubDocke
                     stacklevel=2,
                 )
         if os.getenv("INFRAHUB_TESTING_KEEP_STACK"):
-            # Debugging aid: leave the stack up (port 8100, branch all-demo-scenario) to query it by hand.
+            # Debugging aid: leave the stack up (port 8100) to query it by hand: each suite kick stage keeps its
+            # branch, <kick>-<stage> (full-topology-suite-topology holds the unmerged full topology).
             warnings.warn("INFRAHUB_TESTING_KEEP_STACK set: leaving the docker compose stack running", stacklevel=2)
             return
         try:
@@ -165,49 +166,6 @@ def workflow_state() -> dict[str, Any]:
 
 class TestInfrahubDockerWithClient:
     """Base test class with Infrahub Docker container and clients."""
-
-    async def _snapshot_spines_by_pod(
-        self,
-        client: InfrahubClient,
-        branch: str,
-        dc_name: str,
-    ) -> dict[str, list[str]]:
-        """Snapshot the spine devices of every pod in one DC."""
-        client.default_branch = branch
-
-        query = """
-        query GetDCPodSpines($dc_name: String!) {
-            TopologyPod(parent__name__value: $dc_name) {
-                edges {
-                    node {
-                        name { value }
-                        devices {
-                            edges {
-                                node {
-                                    name { value }
-                                    role { value }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        """
-        result = await client.execute_graphql(query=query, variables={"dc_name": dc_name})
-
-        spines_by_pod: dict[str, list[str]] = {}
-        for pod_edge in result.get("TopologyPod", {}).get("edges", []):
-            pod_node = pod_edge["node"]
-            pod_name = pod_node["name"]["value"]
-            pod_spines: list[str] = []
-            for dev_edge in pod_node.get("devices", {}).get("edges", []):
-                dev = dev_edge["node"]
-                if dev["role"]["value"] == "spine":
-                    pod_spines.append(dev["name"]["value"])
-            spines_by_pod[pod_name] = sorted(pod_spines)
-
-        return spines_by_pod
 
     @staticmethod
     def execute_command(
