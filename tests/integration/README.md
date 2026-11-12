@@ -228,7 +228,7 @@ fast loop before the full `30_all` subset:
 uv run invoke test-integration-fast
 ```
 
-Its `test_03` loads the full-topology sample on main and walks it (L1/L3 traversal asserts); its repository sync (`test_02`) registers every query of `.infrahub.yml` against the live schema, so a field the schema
+Its `test_03` loads the full-topology sample onto its own branch `full-topology` (never `main`) and walks it (L1/L3 traversal asserts); its repository sync (`test_02`) registers every query of `.infrahub.yml` against the live schema, so a field the schema
 rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there in minutes,
 not tens of minutes into the full subset; the task worker log
 (`docker logs <project>-task-worker-1`) names the field. A query under `tests/` is not registered: the test that runs

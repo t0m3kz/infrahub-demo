@@ -76,7 +76,7 @@ If you would rather point and click, trigger infrastructure generation in InfraH
 
 ## Validation
 
-Run `uv run invoke test-integration` to validate this OSPF/iBGP, no-super-spine design with the full DC matrix (go get a proper lunch, a French one, it takes a while). Use `uv run invoke test-integration-routing` for the faster automatic cascade check.
+Run `uv run invoke test-integration` to validate this eBGP/eBGP (`ebgp-ebgp`), no-super-spine design with the full DC matrix (go get a proper lunch, a French one, it takes a while). Use `uv run invoke test-integration-routing` for the faster automatic cascade check.
 
 ## Fun Fact
 

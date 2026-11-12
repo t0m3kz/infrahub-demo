@@ -744,8 +744,12 @@ branch with one box and a prayer is not "full infra". The SD-WAN edge goes (GE3,
 (`C9500-32C_DISTRIBUTION`, role `distribution-switch`), the pair is joined by its interlink and cabled in a square to an access
 pair (`C9300-48UXM_ACCESS_SWITCH`, role `access-switch`), and every access switch feeds two access points
 (`C9130AXI-B_AP`, role `access-point`, `eth0` to `TenGigabitEthernet1/0/1-2`). The role `access-point` is new in the
-schema (the template used to call an AP a `controller`, which it is not). It is inventory only: the office fabric generator
-(`add_office_fabric`) is not run here, so there is no LISP site, no VRF, no address and no wifi. In the rack the switches sit
+schema (the template used to call an AP a `controller`, which it is not). The access points are inventory only. The office fabric
+generator (`add_office_fabric`) is not run here, so what it would build is written by hand (the generator gets a day
+off, the YAML does not): both offices name their LISP site (`lisp_site_key`) and give their distribution switches a
+`Loopback0`, the LISP map-servers (`05a_loopbacks.yml`, `05_loopbacks.yml`); Barcelona also has its VRF
+`c900-office-vrf-prod` and two Wi-Fi segments, `wifi-corp` (`10.96.2.0/24`) and `wifi-guest` (`10.96.1.0/24`), each with
+an egress policy (`07_wifi_segments_*`). In the rack the switches sit
 below the edge (U 39 down in Barcelona, U 38 down in Lisbon); the access points are ceiling devices without a rack.
 
 **The second office, Lisbon** (`21_C901/Office`): the customer is C901
@@ -779,8 +783,8 @@ office - Zscaler tunnel: a packet with a passport full of stamps.
   through it (ExpressRoute and Partner Interconnect, three VLANs on `Ethernet1/1`: 200, 201, 400), each ending on its own `TopologyProviderInterface` of the Fabric port (S-tags 1101, 1102, 1201, with the bandwidth of the connection). The cross-connects
   (AWS, Dedicated Interconnect, Webex) end directly on edge ports, without a panel. The L1 path cage - cloud through the
   panel is physically consistent: edge - cable - panel - cable - Fabric port - carrier - transport port.
-- The office is one SD-WAN edge: no switches, no LAN and no server (no generator runs; the office is more of a state of mind). The first L1 hop of the office is
-  the edge.
+- An office has no server and no generator runs on it (the office is more of a state of mind): its campus below the
+  SD-WAN edge is written by hand (see **Campus below the edges**). The first L1 hop of the office is the edge.
 - The DCI is two dark fibres, two `dci` circuits and two EVPN sessions between the overlay processes; there is no
   underlay subnet (a /31 from the DCI pool) and no underlay eBGP session (the L3 path set from the segment would exceed
   100, the server limit), and no VTEP loopback interfaces (some things are best left unbuilt).
