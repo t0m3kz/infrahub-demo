@@ -1047,7 +1047,7 @@ class MyCheck(InfrahubCheck):
   (`change_request_facts.gql`), and writes what `utils/change_rules.py` derives (the one weight table, the window, the
   `artifact_fingerprint`) and `utils/change_text.py` renders (`templates/change/*.j2`, one per text field, from the
   facts of `utils/change_facts.py`: devices, links, firewall rules, segments); it never writes the author fields (`justification`, `risk_override`, `risk_override_reason`,
-  `requested_by`) nor `external_id`. `checks/change_request.py` (CR1-CR5) gates the PC; `change_request_servicenow` (a
+  `requested_by`) nor `external_id`. `checks/change_request.py` (CR1-CR5) gates a PC that has a change request (opt-in: a PC with none is not gated, so the repository never blocks a merge without a change service); `change_request_servicenow` (a
   python transform rendered on demand, not an artifact) is the ServiceNow `change_request` body. Only an `open` PC
   counts: a deleted branch's PC stays as `canceled`.
 - **What the schema refuses, measured on a server (1.11.9)**: `parameters` (min/max of a Number) and `max_count` are

@@ -3,7 +3,9 @@
 Targetless; it judges the open PC of the branch it runs on (the PC that started it, else the open PC whose source branch
 is the check's branch; a canceled, merged or closed PC never counts) and the ``ChangeRequest``s that name it:
 
-- CR1 the PC has exactly one change request (ERROR when it has none or several);
+- CR1 the PC has at most one change request (ERROR when it has several). A PC with none is not gated: a change
+  request is opt-in (made by the author or a change service), so a repository without one never blocks a merge (a
+  failing user check refuses it, measured on 1.12);
 - CR2 short_description, implementation_plan, backout_plan and test_plan are filled in, and the justification is, or
   the PC has a description (ERROR);
 - CR3 a high effective risk (risk_override where set) or an emergency change has planned_start and planned_end (ERROR);
@@ -78,7 +80,7 @@ def request_findings(
 
 
 class CheckChangeRequest(WarningCheck):
-    """The open PC of the branch has one complete, current change request (CR1 to CR5)."""
+    """The open PC of the branch has at most one change request, complete and current (CR1 to CR5)."""
 
     query = "change_request_validation"
 
@@ -101,11 +103,13 @@ class CheckChangeRequest(WarningCheck):
             for request in cleaned.get(CHANGE_REQUEST_KIND) or []
             if isinstance(request, Mapping) and _id(request.get("proposed_change")) == pc.get("id")
         ]
-        if len(requests) != 1:
-            names = ", ".join(sorted(str(r.get("name")) for r in requests)) or "none"
+        if not requests:
+            return  # not gated: a change request is opt-in
+        if len(requests) > 1:
+            names = ", ".join(sorted(str(r.get("name")) for r in requests))
             self.log_error(
                 message=f"CR1 proposed change {pc.get('name')}: {len(requests)} change requests ({names}), "
-                "expected exactly one",
+                "expected at most one",
                 object_id=pc.get("id"),
                 object_type="CoreProposedChange",
             )

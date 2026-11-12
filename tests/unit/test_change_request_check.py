@@ -89,19 +89,24 @@ def test_a_branch_with_no_open_pc_reports_nothing() -> None:
     assert _logs([_pc(branch="feat/other")], []) == []
 
 
-@pytest.mark.parametrize("count", [0, 2])
-def test_cr1_the_pc_needs_exactly_one_request(count: int) -> None:
-    """None or two requests naming the PC is an ERROR; a request of another PC does not count."""
-    requests = [_request(), {**_request(), "id": "cr-dup", "name": _v("CHG-dup")}][:count] + [_request("pc9")]
+def test_cr1_a_pc_without_a_change_request_is_not_gated() -> None:
+    """A change request is opt-in: a PC with none reports nothing, so a repository without a change service never
+    blocks a merge (a failing user check refuses it). A request of another PC does not count."""
+    assert _logs([_pc()], [_request("pc9")]) == []
+
+
+def test_cr1_two_requests_for_one_pc_are_an_error() -> None:
+    requests = [_request(), {**_request(), "id": "cr-dup", "name": _v("CHG-dup")}, _request("pc9")]
     errors = _errors(_logs([_pc()], requests))
     assert len(errors) == 1
-    assert errors[0].startswith(f"CR1 proposed change pc pc1: {count} change requests")
+    assert errors[0].startswith("CR1 proposed change pc pc1: 2 change requests")
 
 
 def test_cr1_the_pc_that_started_the_check_wins_over_the_branch_match() -> None:
-    """With an initializer PC id, that PC is judged (here it has no request)."""
-    errors = _errors(_logs([_pc(), _pc("pc2", branch="feat/other")], [_request()], pc_id="pc2"))
-    assert errors and errors[0].startswith("CR1 proposed change pc pc2")
+    """With an initializer PC id, that PC is judged: its two requests are reported, the branch match's one is not."""
+    requests = [_request("pc2"), {**_request("pc2"), "id": "cr-dup", "name": _v("CHG-dup")}, _request()]
+    errors = _errors(_logs([_pc(), _pc("pc2", branch="feat/other")], requests, pc_id="pc2"))
+    assert errors and errors[0].startswith("CR1 proposed change pc pc2: 2 change requests")
 
 
 def test_cr2_empty_plans_are_errors() -> None:
