@@ -26,8 +26,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from infrahub_sdk import InfrahubClientSync
+from infrahub_sdk.task.models import TaskState
 
-from tasks.proposed_change import update_diff
+from tasks.proposed_change import DIFF_TASK_TIMEOUT
 
 OPERATORS = {"equals": "==", "min": ">=", "max": "<="}
 _EXPECT_KEYS = {"count", "unchanged", "added", "removed"}
@@ -223,17 +224,35 @@ def _field_value(node: Mapping[str, Any], name: str, fields: KindFields) -> Any:
     return tuple(sorted(edge["node"]["id"] for edge in value.get("edges") or []))
 
 
-def diff_query(kinds: list[str], name: str) -> str:
-    """The DiffTreeSummary roots of a stage diff: the total removed and the added count of each kind."""
-    scope = f"branch: $branch, name: {json.dumps(name)}"
-    changed = "status: {excludes: [UNCHANGED]}"
-    roots = [f"removed: DiffTreeSummary({scope}, filters: {{{changed}}}) {{ num_removed }}"]
-    roots += [
-        f"k{index}: DiffTreeSummary({scope}, filters: {{kind: {{includes: [{json.dumps(kind)}]}}, {changed}}}) "
-        "{ num_added }"
-        for index, kind in enumerate(kinds)
-    ]
-    return "query ($branch: String!) {\n  " + "\n  ".join(roots) + "\n}"
+DIFF_NODES_QUERY = """
+query ($branch: String!) {
+  DiffTree(branch: $branch, filters: {status: {excludes: [UNCHANGED]}}) { nodes { kind status } }
+}
+"""
+DIFF_UPDATE = (
+    "mutation ($branch: String!) { DiffUpdate(data: {branch: $branch, wait_for_completion: false}) { task { id } } }"
+)
+
+
+def diff_object_counts(result: dict[str, Any]) -> tuple[dict[str, int], int]:
+    """Objects added per kind and objects removed in total, from a DiffTree node list.
+
+    DiffTreeSummary counts every changed element (attributes and relationships too), so it cannot count objects.
+    """
+    nodes = (result.get("DiffTree") or {}).get("nodes") or []
+    added: dict[str, int] = {}
+    for node in nodes:
+        if node.get("status") == "ADDED":
+            added[node["kind"]] = added.get(node["kind"], 0) + 1
+    return added, sum(1 for node in nodes if node.get("status") == "REMOVED")
+
+
+def refresh_branch_diff(client: InfrahubClientSync, branch: str) -> None:
+    """Bring the branch's own diff (the one DiffTree reads) up to date."""
+    task_id = client.execute_graphql(query=DIFF_UPDATE, variables={"branch": branch})["DiffUpdate"]["task"]["id"]
+    task = client.task.wait_for_completion(id=task_id, timeout=DIFF_TASK_TIMEOUT)
+    if task.state != TaskState.COMPLETED:
+        raise AssertionError(f"Diff update of '{branch}' ended {task.state}")
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +269,7 @@ class StageChecker:
         kick: str,
         expectations: Mapping[str, Expectation],
         fields_of: FieldsOf | None = None,
-        refresh_diff: Callable[[InfrahubClientSync, str], str] = update_diff,
+        refresh_diff: Callable[[InfrahubClientSync, str], None] = refresh_branch_diff,
     ) -> None:
         """Keep the expectations of ``kick`` by stage name."""
         self.client = client
@@ -335,17 +354,13 @@ class StageChecker:
         """A message per `added` minimum not reached and for more removed objects than `removed` allows."""
         if not expectation.added and expectation.removed is None:
             return []
-        name = self.refresh_diff(self.client, branch)
-        kinds = list(expectation.added)
-        result = self.client.execute_graphql(
-            query=diff_query(kinds, name), variables={"branch": branch}, branch_name=branch
-        )
+        self.refresh_diff(self.client, branch)
+        result = self.client.execute_graphql(query=DIFF_NODES_QUERY, variables={"branch": branch}, branch_name=branch)
+        added, removed = diff_object_counts(result)
         errors = []
-        for index, kind in enumerate(kinds):
-            actual = int((result.get(f"k{index}") or {}).get("num_added") or 0)
-            if actual < expectation.added[kind]:
-                errors.append(f"added {kind}: expected >= {expectation.added[kind]}, got {actual}")
-        removed = int((result.get("removed") or {}).get("num_removed") or 0)
+        for kind, minimum in expectation.added.items():
+            if added.get(kind, 0) < minimum:
+                errors.append(f"added {kind}: expected >= {minimum}, got {added.get(kind, 0)}")
         if expectation.removed is not None and removed > expectation.removed:
             errors.append(f"removed: expected <= {expectation.removed}, got {removed}")
         return errors

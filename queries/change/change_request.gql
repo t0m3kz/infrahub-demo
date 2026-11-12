@@ -20,6 +20,8 @@ query change_request($name: String!) {
         planned_start { value }
         planned_end { value }
         artifact_fingerprint { value }
+        external_id { value }
+        risk_override { value }
         affected_devices { edges { node { id } } }
         affected_customers { edges { node { id } } }
         proposed_change {

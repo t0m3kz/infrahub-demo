@@ -586,21 +586,35 @@ def _unreachable(errors: list[str]) -> bool:
     return any(error.startswith("Infrahub at ") for error in errors)
 
 
-def _ensure_stack(context: Context, kick: Kick) -> None:
-    """Start the local dev stack when none answers and set it up when it lacks what the kick needs."""
-    errors = preflight_errors(_infrahub_client(), kick)
-    if not errors:
-        return
-    if _unreachable(errors) and INFRAHUB_ADDRESS.rstrip("/") != LOCAL_ADDRESS:
-        raise Exit(f"{kick.name}: {errors[0]}; only the local dev stack ({LOCAL_ADDRESS}) is started here", code=1)
-    log.info("Stack not ready (%s): running setup", "; ".join(errors))
-    setup(context)
+def _transient(errors: list[str]) -> bool:
+    """True when the stack only waits on a repository sync (normal for a minute after a commit)."""
+    return all(error.endswith(", not in-sync") and " is syncing" in error for error in errors)
+
+
+def _wait_until_ready(kick: Kick, errors: list[str], why: str) -> None:
+    """Poll the preflight until it passes; Exit naming what is still missing."""
     for _ in range(STACK_READY_POLLS):
         errors = preflight_errors(_infrahub_client(), kick)
         if not errors:
             return
         time.sleep(10)
-    raise Exit(f"{kick.name}: the stack is still not ready after setup ({'; '.join(errors)})", code=1)
+    raise Exit(f"{kick.name}: the stack is still not ready {why} ({'; '.join(errors)})", code=1)
+
+
+def _ensure_stack(context: Context, kick: Kick) -> None:
+    """Start the local dev stack when none answers and set it up when it lacks what the kick needs."""
+    errors = preflight_errors(_infrahub_client(), kick)
+    if not errors:
+        return
+    if _transient(errors):
+        log.info("Waiting for the repository sync (%s)", "; ".join(errors))
+        _wait_until_ready(kick, errors, "after the repository sync")
+        return
+    if _unreachable(errors) and INFRAHUB_ADDRESS.rstrip("/") != LOCAL_ADDRESS:
+        raise Exit(f"{kick.name}: {errors[0]}; only the local dev stack ({LOCAL_ADDRESS}) is started here", code=1)
+    log.info("Stack not ready (%s): running setup", "; ".join(errors))
+    setup(context)
+    _wait_until_ready(kick, errors, "after setup")
 
 
 def _run_kick(context: Context, kick: Kick, from_stage: str, resume: str) -> None:

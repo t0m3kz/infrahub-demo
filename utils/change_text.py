@@ -16,6 +16,7 @@ from utils.change_rules import (
     DESCRIPTION_MAX_CHARS,
     DEVICE_MAX_ITEMS,
     DIFF_TRUNCATED_NOTE,
+    MAINTENANCE_TZ,
     REMOVED,
     SECTION_MAX_ITEMS,
     STATUS_ORDER,
@@ -204,6 +205,32 @@ def render_field(inputs: ChangeInputs, field_name: str, context: dict[str, Any] 
         undefined=StrictUndefined,
     )
     return template.render(**(context if context is not None else build_context(inputs))).strip()
+
+
+PC_COMMENT_TEMPLATE = "pc_comment.j2"
+PC_COMMENT_TIME = "%a %d %b %H:%M"
+
+
+def render_pc_comment(
+    name: str, url: str, derived: dict[str, Any], risk: str | None, devices: int, ticket: str | None
+) -> str:
+    """The PC thread comment: the request's link, type, effective risk, devices, window and ticket."""
+    start, end = derived.get("planned_start"), derived.get("planned_end")
+    template = load_template(
+        str(TEMPLATES), PC_COMMENT_TEMPLATE, trim_blocks=True, lstrip_blocks=True, undefined=StrictUndefined
+    )
+    return template.render(
+        name=name,
+        url=url,
+        change_type=derived["change_type"],
+        risk=risk,
+        score=derived["risk_score"],
+        devices=devices,
+        start=start.astimezone(MAINTENANCE_TZ).strftime(PC_COMMENT_TIME) if start else None,
+        end=end.astimezone(MAINTENANCE_TZ).strftime(PC_COMMENT_TIME) if end else None,
+        tz=MAINTENANCE_TZ.key,
+        ticket=ticket,
+    ).strip()
 
 
 def derive_change_request(inputs: ChangeInputs) -> dict[str, Any]:

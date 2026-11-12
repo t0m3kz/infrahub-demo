@@ -1,0 +1,7 @@
+Change request [{{ name }}]({{ url }}): {{ change_type }} change, risk {{ risk }} ({{ score }}), {{ devices }} {{ "device" if devices == 1 else "devices" }}.
+{% if start %}
+Window: {{ start }} – {{ end }} ({{ tz }}).
+{% else %}
+Window: not planned.
+{% endif %}
+Ticket: {{ ticket or "not filed yet" }}.

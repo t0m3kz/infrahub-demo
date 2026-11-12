@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -36,7 +37,7 @@ def request_row(state: str = "open", **values: Any) -> dict[str, Any]:
     """A raw ChangeRequest row of change_request.gql, the fields unset unless given."""
     fields = (
         "short_description description change_type risk risk_score impact implementation_plan backout_plan "
-        "test_plan communication_plan conflicts planned_start planned_end artifact_fingerprint"
+        "test_plan communication_plan conflicts planned_start planned_end artifact_fingerprint external_id"
     ).split()
     row: dict[str, Any] = {"id": "cr1", "name": _v("CHG-leaf"), **{f: _v(values.get(f)) for f in fields}}
     row["affected_devices"] = _edges(*({"id": i} for i in values.get("devices", [])))
@@ -123,8 +124,12 @@ class FakeClient:
 
     address = "http://infrahub:8000"
 
-    def __init__(self, peers: dict[str, dict[str, Any]] | None = None) -> None:
+    def __init__(
+        self, peers: dict[str, dict[str, Any]] | None = None, threads: list[dict[str, Any]] | None = None
+    ) -> None:
         self.calls: list[tuple[str, str | None, dict[str, Any]]] = []
+        self.threads = threads or []
+        self.created: list[tuple[str, dict[str, Any]]] = []
         self.gets: list[str] = []
         self.group_context = MagicMock(related_node_ids=[])
         self.peers = peers or {BRANCH: {"CoreProposedChange": _edges(), "ChangeRequest": _edges()}}
@@ -147,7 +152,19 @@ class FakeClient:
             return FACTS
         if name == "change_request_peers":
             return self.peers[branch_name or ""]
+        if name == "ChangeRequestPcThread":
+            return {"CoreChangeThread": _edges(*self.threads)}
         return {"ok": True}
+
+    async def create(self, kind: str, **fields: Any) -> Any:
+        """A node that records itself in ``created`` when saved."""
+        client = self
+
+        class _Node(SimpleNamespace):
+            async def save(self, **_: Any) -> None:
+                client.created.append((kind, fields))
+
+        return _Node(id=f"new-{kind}", **fields)
 
     def mutations(self, name: str) -> list[dict[str, Any]]:
         return [variables["data"] for op, _, variables in self.calls if op == name]
@@ -288,12 +305,51 @@ def test_the_reads_of_a_run(monkeypatch: pytest.MonkeyPatch) -> None:
     (diff,) = [variables for op, _, variables in client.calls if op == "change_request_diff"]
     assert diff["with_summary"] is True and diff["offset"] == 0
     assert "SecurityPolicyRule" in diff["kinds"] and "ChangeRequest" in diff["bookkeeping"]
-    assert [op for op, _, _ in client.calls if op not in ("ChangeRequestDerive", "EdgeAdd")] == [
+    writes = ("ChangeRequestDerive", "EdgeAdd", "ChangeRequestPcThread", "ChangeRequestPcComment")
+    assert [op for op, _, _ in client.calls if op not in writes] == [
         "change_request_diff",
         "change_request_facts",
         "change_request_peers",
     ]
     assert client.gets == ["http://infrahub:8000/api/diff/artifacts?branch=feat%2Fleaf"]
+
+
+def _thread(text: str) -> dict[str, Any]:
+    """A raw "Change request" thread with one comment."""
+    return {"id": "t1", "comments": _edges({"id": "c1", "text": _v(text)})}
+
+
+def test_the_first_run_opens_the_pc_thread_with_the_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No thread yet: one "Change request" thread with one comment: link, type, risk, devices, window, ticket."""
+    client = FakeClient()
+
+    _run(client, request_row(), monkeypatch)
+
+    (thread, comment) = client.created
+    assert thread == ("CoreChangeThread", {"label": "Change request", "resolved": False, "change": "pc1"})
+    assert comment[0] == "CoreThreadComment" and comment[1]["thread"] == "new-CoreChangeThread"
+    text = comment[1]["text"]
+    assert text.startswith("Change request [CHG-leaf](/objects/ChangeRequest/cr1?branch=feat/leaf):")
+    assert "2 devices" in text and "(Europe/Warsaw)" in text and "Ticket: not filed yet." in text
+
+
+def test_the_pc_comment_follows_the_request_and_a_settled_one_is_left_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stale comment is rewritten in place (the ticket appeared); the same text again writes nothing."""
+    first = FakeClient()
+    _run(first, request_row(external_id="CHG0012345"), monkeypatch)
+    text = first.created[1][1]["text"]
+    assert "Ticket: CHG0012345." in text
+
+    stale = FakeClient(threads=[_thread("old text")])
+    _run(stale, request_row(external_id="CHG0012345"), monkeypatch)
+    assert stale.created == []
+    ((_, _, update),) = [call for call in stale.calls if call[0] == "ChangeRequestPcComment"]
+    assert update == {"id": "c1", "text": text}
+
+    settled = FakeClient(threads=[_thread(text)])
+    _run(settled, request_row(external_id="CHG0012345"), monkeypatch)
+    assert settled.created == []
+    assert not [call for call in settled.calls if call[0] == "ChangeRequestPcComment"]
 
 
 def test_no_artifact_target_asks_no_facts(monkeypatch: pytest.MonkeyPatch) -> None:

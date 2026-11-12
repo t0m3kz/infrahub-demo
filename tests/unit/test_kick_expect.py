@@ -17,7 +17,7 @@ from tests.integration.kick_expect import (
     KindFields,
     StageChecker,
     count_query,
-    diff_query,
+    diff_object_counts,
     filter_name,
     parse_expect,
     parse_expectations,
@@ -68,7 +68,7 @@ class FakeClient:
     ) -> dict[str, Any]:
         """Answer one of the three query shapes of kick_expect."""
         self.queries.append((query, branch_name))
-        if "DiffTreeSummary" in query:
+        if "DiffTree(" in query:
             return self.diff
         if "ManagedBGP(offset" in query:
             offset, limit = (int(n) for n in re.findall(r"(?:offset|limit): (\d+)", query))
@@ -86,7 +86,7 @@ def _checker(client: FakeClient, raw: dict[str, Any]) -> StageChecker:
         "pb",
         {"s": parse_expect(raw, "pb/s")},
         fields_of=_fields,
-        refresh_diff=lambda _client, branch: f"diff-{branch}",
+        refresh_diff=lambda _client, _branch: None,
     )
 
 
@@ -179,13 +179,24 @@ def test_the_snapshot_query_selects_each_field_by_its_shape() -> None:
         snapshot_query("ManagedBGP", ("asn",), BGP, 0, 1)
 
 
-def test_the_diff_query_reads_the_named_diff_per_kind() -> None:
-    """One DiffTreeSummary for the removed total and one per added kind, all on the named diff."""
-    query = diff_query(["DcimCable"], "diff-b")
-    assert 'removed: DiffTreeSummary(branch: $branch, name: "diff-b", filters: {status: {excludes: [UNCHANGED]}})' in (
-        query
+def _diff_nodes(*nodes: tuple[str, str]) -> dict[str, Any]:
+    """A DiffTree result with (kind, status) nodes."""
+    return {"DiffTree": {"nodes": [{"kind": kind, "status": status} for kind, status in nodes]}}
+
+
+def test_the_diff_counts_objects_not_elements() -> None:
+    """Added per kind and removed in total come from the DiffTree node list, one per object."""
+    added, removed = diff_object_counts(
+        _diff_nodes(
+            ("DcimPhysicalDevice", "ADDED"),
+            ("DcimPhysicalDevice", "ADDED"),
+            ("DcimCable", "ADDED"),
+            ("DcimCable", "UPDATED"),
+            ("IpamIPAddress", "REMOVED"),
+        )
     )
-    assert 'k0: DiffTreeSummary(branch: $branch, name: "diff-b", filters: {kind: {includes: ["DcimCable"]}' in query
+    assert (added, removed) == ({"DcimPhysicalDevice": 2, "DcimCable": 1}, 1)
+    assert diff_object_counts({"DiffTree": None}) == ({}, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +267,12 @@ def test_the_snapshot_reads_every_page() -> None:
 
 def test_the_diff_is_read_on_the_branch_only() -> None:
     """added is a minimum per kind and removed a ceiling on the total, both read at "branch", never at "main"."""
-    diff = {"removed": {"num_removed": 2}, "k0": {"num_added": 1}, "k1": {"num_added": 5}}
+    diff = _diff_nodes(
+        ("DcimPhysicalDevice", "ADDED"),
+        *[("DcimCable", "ADDED")] * 5,
+        ("IpamIPAddress", "REMOVED"),
+        ("IpamPrefix", "REMOVED"),
+    )
     client = FakeClient(diff=diff)
     checker = _checker(client, {"added": {"DcimPhysicalDevice": 2, "DcimCable": 5}, "removed": 0})
     with pytest.raises(AssertionError) as error:

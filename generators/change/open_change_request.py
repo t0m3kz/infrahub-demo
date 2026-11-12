@@ -2,7 +2,8 @@
 
 The target is the PC's artifact validator (group artifact_validators); a PC has one per artifact definition, and only
 the last to complete acts. It creates CHG-<pc> on the PC's source branch, which starts add_change_request through the
-change_requests group, and posts a PC thread with the link; or it re-runs add_change_request on the existing one.
+change_requests group (add_change_request then writes the PC's "Change request" thread); or it re-runs
+add_change_request on the existing one.
 """
 
 from __future__ import annotations
@@ -40,11 +41,6 @@ def artifact_validators_pending(pc: dict[str, Any]) -> int:
     )
 
 
-def change_request_comment(name: str, request_id: str, branch: str) -> str:
-    """The PC comment that links its change request."""
-    return f"Change request [{name}](/objects/{CHANGE_REQUEST_KIND}/{request_id}?branch={branch}) is derived from this change."
-
-
 class OpenChangeRequestGenerator(CommonGenerator):
     """open_change_request: create or re-derive the change request of a completed artifact validator's PC."""
 
@@ -69,16 +65,8 @@ class OpenChangeRequestGenerator(CommonGenerator):
         if existing:
             await self._rederive(existing[0].id, branch)
             return
-        request = await self._create(name, pc["id"], branch)
-        await self._comment(pc["id"], change_request_comment(name, request.id, branch))
+        await self._create(name, pc["id"], branch)
         self.logger.info(f"{name}: created on {branch}")
-
-    async def _comment(self, pc_id: str, text: str) -> None:
-        """A PC thread with one comment: the conversation tab lists threads, not bare CoreChangeComment."""
-        thread = await self.client.create(kind="CoreChangeThread", label="Change request", resolved=False, change=pc_id)
-        await thread.save(update_group_context=False)
-        comment = await self.client.create(kind="CoreThreadComment", text=text, thread=thread.id)
-        await comment.save(update_group_context=False)
 
     async def _create(self, name: str, pc_id: str, branch: str) -> Any:
         """CHG-<pc> on the source branch, in change_requests: joining the group starts add_change_request."""

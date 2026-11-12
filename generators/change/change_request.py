@@ -16,11 +16,12 @@ from utils.change_rules import (
     ChangeInputs,
     affected_customers,
     device_facts,
+    effective_risk,
     parse_datetime,
     prod_objects,
 )
 from utils.change_sources import fetch_artifact_diff, fetch_data_diff
-from utils.change_text import derive_change_request
+from utils.change_text import derive_change_request, render_pc_comment
 from utils.data_cleaning import clean_data
 from utils.query_flatten import load_flat_query
 
@@ -32,6 +33,12 @@ FACTS_QUERY = _QUERIES / "change_request_facts.gql"
 PEERS_QUERY = _QUERIES / "change_request_peers.gql"
 OPEN_STATE = "open"
 DATETIME_FIELDS = frozenset({"planned_start", "planned_end"})
+PC_THREAD_LABEL = "Change request"
+_THREAD_QUERY = (
+    'query ChangeRequestPcThread($pc: ID!) { CoreChangeThread(change__ids: [$pc], label__value: "Change request") '
+    "{ edges { node { id comments { edges { node { id text { value } } } } } } } }"
+)
+_COMMENT_UPDATE = "mutation ChangeRequestPcComment($id: String!, $text: String!) { CoreThreadCommentUpdate(data: {id: $id, text: {value: $text}}) { ok } }"
 _UPDATE_MUTATION = (
     "mutation ChangeRequestDerive($data: ChangeRequestUpdateInput!) { ChangeRequestUpdate(data: $data) { ok } }"
 )
@@ -116,10 +123,38 @@ class ChangeRequestGenerator(CommonGenerator):
             )
         )
         await self._write(request, derived, {d.id for d in devices}, set(customers))
+        risk = effective_risk(derived["risk"], request.get("risk_override"))
+        url = f"/objects/{CHANGE_REQUEST_KIND}/{request['id']}?branch={branch}"
+        text = render_pc_comment(str(request.get("name")), url, derived, risk, len(devices), request.get("external_id"))
+        await self._pc_comment(pc["id"], text)
         self.logger.info(
             f"{request.get('name')}: {derived['change_type']} change, risk {derived['risk']} ({derived['risk_score']}), "
             f"{len(devices)} device(s), {len(customers)} customer(s)"
         )
+
+    async def _pc_comment(self, pc_id: str, text: str) -> None:
+        """Keep the PC's "Change request" thread (the conversation tab lists threads) saying ``text``; untracked."""
+        found = await self.client.execute_graphql(query=_THREAD_QUERY, variables={"pc": pc_id})
+        threads = found["CoreChangeThread"]["edges"]
+        if not threads:
+            thread = await self.client.create(
+                kind="CoreChangeThread", label=PC_THREAD_LABEL, resolved=False, change=pc_id
+            )
+            await thread.save(update_group_context=False)
+            thread_id = thread.id
+            comments: list[Any] = []
+        else:
+            thread_id = threads[0]["node"]["id"]
+            comments = threads[0]["node"]["comments"]["edges"]
+        if comments and comments[0]["node"]["text"]["value"] == text:
+            return
+        if comments:
+            await self.client.execute_graphql(
+                query=_COMMENT_UPDATE, variables={"id": comments[0]["node"]["id"], "text": text}
+            )
+            return
+        comment = await self.client.create(kind="CoreThreadComment", text=text, thread=thread_id)
+        await comment.save(update_group_context=False)
 
     async def _facts(self, branch: str, device_ids: list[str]) -> dict[str, Any]:
         """The device rows of change_request_facts.gql in one round trip."""

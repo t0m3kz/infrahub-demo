@@ -49,6 +49,12 @@ query change_request($name: String!) {
         artifact_fingerprint {
           value
         }
+        external_id {
+          value
+        }
+        risk_override {
+          value
+        }
         affected_devices {
           edges {
             node {

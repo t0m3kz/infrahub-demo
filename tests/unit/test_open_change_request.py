@@ -12,7 +12,6 @@ import yaml
 
 from generators.change.open_change_request import (
     OpenChangeRequestGenerator,
-    change_request_comment,
     change_request_name,
 )
 from generators.logger import GeneratorError
@@ -92,22 +91,17 @@ def _run(client: FakeClient, row: dict[str, Any]) -> Any:
     return gen
 
 
-def test_a_completed_validator_creates_the_change_request_and_links_it_in_a_comment() -> None:
-    """CHG-<pc> on the source branch in change_requests, untracked, then a PC thread with one comment linking it."""
+def test_a_completed_validator_creates_the_change_request() -> None:
+    """CHG-<pc> on the source branch in change_requests, untracked; add_change_request writes the PC thread."""
     client = FakeClient()
 
     _run(client, validator_row())
 
-    (request, thread, comment) = client.saved
+    (request,) = client.saved
     assert request[0] == "ChangeRequest"
     expected = {"branch": BRANCH, "name": "CHG-leaf change", "proposed_change": "pc1", "member_of_groups": ["g-cr"]}
     assert {key: request[1][key] for key in expected} == expected
     assert request[2] == {"allow_upsert": True, "update_group_context": False}
-    assert (thread[0], thread[1]["change"], thread[1]["resolved"]) == ("CoreChangeThread", "pc1", False)
-    assert comment[0] == "CoreThreadComment"
-    assert comment[1]["thread"] == "new-CoreChangeThread"
-    assert comment[1]["text"] == change_request_comment("CHG-leaf change", "new-ChangeRequest", BRANCH)
-    assert thread[2] == comment[2] == {"update_group_context": False}
     assert client.group_context.related_node_ids == ["v1"]
 
 
@@ -153,7 +147,7 @@ def test_other_validator_kinds_do_not_hold_the_derivation() -> None:
 
     _run(client, validator_row(others=("completed",)))
 
-    assert [kind for kind, _, _ in client.saved] == ["ChangeRequest", "CoreChangeThread", "CoreThreadComment"]
+    assert [kind for kind, _, _ in client.saved] == ["ChangeRequest"]
 
 
 def test_no_validator_in_the_query_result_fails() -> None:

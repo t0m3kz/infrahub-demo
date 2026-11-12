@@ -467,6 +467,19 @@ def test_no_local_stack_is_started_and_set_up() -> None:
     setup.assert_called_once()
 
 
+def test_a_syncing_repository_is_waited_for_without_setup() -> None:
+    """A repository still syncing a commit is transient: the kick waits for it and never runs setup."""
+    answers = [["repository demo_repo is syncing, not in-sync"], []]
+    with (
+        patch.object(tasks, "preflight_errors", side_effect=answers),
+        patch.object(tasks, "setup") as setup,
+        patch.object(tasks, "_infrahub_client"),
+        patch.object(tasks.time, "sleep"),
+    ):
+        tasks._ensure_stack(_context(), load_kicks()["dc1"])
+    setup.assert_not_called()
+
+
 def test_a_remote_stack_that_does_not_answer_is_never_started() -> None:
     """An unreachable non-local address exits without running setup."""
     with (
