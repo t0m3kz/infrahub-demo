@@ -71,9 +71,7 @@ def _raw_gateway(gateway: str, namespace: str = "PROD") -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _peering(namespace: dict[str, Any] | None, *, peering_role: str | None = "regular") -> dict[str, Any]:

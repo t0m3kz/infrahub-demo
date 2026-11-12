@@ -1,8 +1,4 @@
-"""Unit tests for the readers of an interface's VXLAN segments and a device's VRF memberships.
-
-A switch port or LAG carries a segment as a member of the segment's deployment, a ManagedSegmentDeployment among its
-``capabilities``; a device's VRF set is ``vrfs`` (its memberships), never ``capabilities``.
-"""
+"""Unit tests for the readers of an interface's VXLAN segments and a device's VRF memberships."""
 
 from __future__ import annotations
 

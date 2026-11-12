@@ -1,0 +1,9 @@
+{% if not rollout %}
+No device configuration changes: merge the data change.
+{% else %}
+{% for d in rollout %}
+{{ loop.index0 * 2 + 1 }}. Deploy {{ d.name }} ({{ d.role or "no role" }}, {{ d.site }}): {% for a in d.artifacts %}{{ a.definition }}: {{ a.change_text }}{{ "; " if not loop.last }}{% endfor %}
+
+{{ loop.index0 * 2 + 2 }}. Verify {{ d.name }} before the next step
+{% endfor %}
+{% endif %}

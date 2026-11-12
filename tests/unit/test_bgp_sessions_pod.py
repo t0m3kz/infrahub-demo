@@ -1,8 +1,4 @@
-"""Unit tests for BGP Session Planner - Pod Deployment Scenarios.
-
-Tests BGP session creation for pod deployments where ToRs connect
-directly to Spines (without Leafs in between).
-"""
+"""Unit tests for BGP Session Planner - Pod Deployment Scenarios."""
 
 import pytest
 
@@ -11,10 +7,7 @@ from generators.helpers.routing import _BGPSessionPlanner as BGPSessionPlanner
 
 
 class TestPodDeploymentSpinesTors:
-    """Test BGP sessions for Pod deployments with only Spines and ToRs.
-
-    In tor-deployment, ToRs are VTEPs and participate in overlay BGP as RR clients.
-    """
+    """Test BGP sessions for Pod deployments with only Spines and ToRs."""
 
     def test_route_reflector_pod_spines_tors_only(self) -> None:
         """In tor-deployment, ToRs are VTEPs — 4 ToRs × 2 Spines = 8 sessions."""

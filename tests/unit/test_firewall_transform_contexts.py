@@ -1,8 +1,4 @@
-"""Unit tests for the per-context rendering of transforms/firewall.py.
-
-Covers address-family aware rendering, per-context policies and the placement
-of contexts on the firewall.
-"""
+"""Unit tests for the per-context rendering of transforms/firewall.py."""
 
 from __future__ import annotations
 
@@ -60,9 +56,7 @@ class TestAddressFamilyAwareRendering:
         assert v6_marker not in out
 
 
-# ===========================================================================
 # Per-context security policies
-# ===========================================================================
 
 _CTX_RULE = {
     "seq": 100,
@@ -213,8 +207,7 @@ class TestFirewallTransformContextPlacement:
 
 
 class TestParentInterfaceOnlyForSubInterfaces:
-    """The encapsulation parent is also a VM NIC's host port: only a parent on the interface's own device is a
-    sub-interface, whatever the names say."""
+    """The encapsulation parent is also a VM NIC's host port:"""
 
     @staticmethod
     def _interfaces(name: str, parent: str, parent_device: str = "dev-1") -> list[dict[str, Any]]:
@@ -245,8 +238,7 @@ class TestParentInterfaceOnlyForSubInterfaces:
         assert sub["vlan_id"] == 210
 
     def test_the_name_plays_no_part(self) -> None:
-        """A sub-interface named otherwise keeps its parent and states its own tag; a NIC named like a sub-interface
-        of its host port is none."""
+        """A sub-interface named otherwise keeps its parent and states its own tag;"""
         interfaces = self._interfaces("unit-7", "ethernet1/1")
         interfaces[0].update(cleaned_encapsulation(210, {"name": "ethernet1/1", "device": {"id": "dev-1"}}))
         (renamed,) = _build_fw_interfaces(interfaces, [], {})

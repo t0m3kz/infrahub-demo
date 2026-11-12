@@ -15,9 +15,7 @@ from .helpers import RoutingStrategy
 from .protocols import RoutingAutonomousSystem, RoutingOSPFArea, RoutingPassword
 
 
-# Names/descriptions of the fabric-wide shared routing objects. They are the
-# idempotency keys: the DC generator creates by them and pod/rack generators
-# look them up by them, so each is spelled once, here.
+# Names/descriptions of the shared routing objects; they are the idempotency keys, spelled once here.
 def _underlay_key_name(fabric_name: str) -> str:
     return f"{fabric_name}-underlay-key"
 
@@ -55,13 +53,11 @@ class SharedRoutingIds(NamedTuple):
 
 
 class SharedRoutingObjectsMixin:
-    """Mixin providing the shared routing objects (auth keys, shared ASes, OSPF area) for RoutingMixin.
-
-    Expects the host class to provide: ``client``, ``logger``, ``fabric_name``, ``data`` and PoolMixin's
-    ``resource_lock`` / ``attach_refs``.
+    """Mixin for the shared routing objects (auth keys, shared ASes, OSPF area); needs ``client``, ``logger``,
+    ``fabric_name``, ``data``, ``resource_lock``, ``attach_refs``.
     """
 
-    # Attribute declarations for the type checker — provided by CommonGenerator / InfrahubGenerator
+    # Type-checker declarations, provided by CommonGenerator / InfrahubGenerator
     client: Any
     logger: logging.Logger
     fabric_name: str
@@ -72,17 +68,8 @@ class SharedRoutingObjectsMixin:
     _shared_password_ids: dict[str, str]
 
     async def _ensure_routing_password(self, *, name: str, description: str, track: bool = True) -> str | None:
-        """Create or reuse a shared RoutingPassword node by deterministic name.
-
-        Serialized per name: add_dc and dc_pod_cascade can reach this together,
-        both find nothing and both create the key, and the loser either fails
-        the uniqueness constraint or leaves a second, untracked key behind.
-
-        track=False: a key no run may own, because its cleanup would delete it
-        whenever the run stops reaching it and the next run would generate a new
-        secret (a rotation). It is neither saved into nor appended to the run's
-        tracking group, so delete_unused_nodes never sees it.
-        """
+        """Create or reuse a shared RoutingPassword by deterministic name, serialized per name.
+        track=False: a run owning a key would delete it in cleanup and rotate the secret."""
         async with self.resource_lock(f"routing-password-{name}"):
             return await self._ensure_routing_password_locked(name=name, description=description, track=track)
 
@@ -94,8 +81,7 @@ class SharedRoutingObjectsMixin:
                     self.client.group_context.related_node_ids.append(existing.id)
                 return existing.id
         except Exception as exc:
-            # Fatal (logger.error raises): add_dc owns this key, and a run that
-            # could not re-track it would delete it in its own cleanup.
+            # Fatal: add_dc owns this key, and a run that could not re-track it would delete it in cleanup
             self.logger.error(f"Error querying RoutingPassword {name}: {exc}")
             return None
 
@@ -108,7 +94,7 @@ class SharedRoutingObjectsMixin:
                     "password": secrets.token_urlsafe(32),
                 },
             )
-            # A save claims the node for this run's group on its own; an untracked key must opt out here.
+            # A save claims the node for the run's group; an untracked key must opt out here.
             await obj.save(allow_upsert=True, **({} if track else {"update_group_context": False}))
             if track:
                 self.client.group_context.related_node_ids.append(obj.id)
@@ -123,24 +109,9 @@ class SharedRoutingObjectsMixin:
         overlay_asn: int,
         asn_pool_id: str | None = None,
     ) -> SharedRoutingIds:
-        """Create shared DC-level routing state used by pod and rack generators.
-
-        add_dc/dc_pod_cascade own all of it and track every object on every
-        run; pod/rack runs only reference it (see create_routing). Every
-        failure here is fatal (logger.error raises): a run that silently
-        skipped one would not re-track it, and its own cleanup would then
-        delete an object every pod still uses.
-
-        Returns the shared super-spine underlay AS id (None when the strategy
-        has no eBGP underlay, or it could not be found or allocated) and the
-        fabric AS id. The caller attaches the fabric AS to the deployment as
-        ``evpn_rt_as`` (so transforms can reach it; without that relationship
-        the AS is only findable by description, which the config transforms
-        cannot query) in the same attach_refs call as its pools.
-
-        ``asn_pool_id``: the DC's own fabric_asn_pool, used ONLY to allocate
-        the single shared super-spine underlay AS (see below) — every other
-        shared object here (overlay AS, OSPF area, passwords) needs no pool.
+        """Create the shared DC-level routing state used by pod and rack generators; every failure is fatal.
+        add_dc/dc_pod_cascade own and track it. Returns the super-spine underlay AS id (None without eBGP) and the
+        fabric AS id (``evpn_rt_as``).
         """
 
         # Two keys, two lock names: they are created side by side.
@@ -157,12 +128,8 @@ class SharedRoutingObjectsMixin:
 
         strategy = self.data.get("routing_strategy", "ebgp-ebgp")
 
-        # Super-spine underlay is eBGP whenever underlay_type == "ebgp" (both
-        # ebgp-ebgp and ebgp-ibgp — only ospf-ibgp skips underlay for
-        # super-spine entirely, see dc.py's skip_underlay branch). All
-        # super-spines fabric-wide share ONE underlay ASN (.dev/bgp.txt) —
-        # same find-or-create-by-deterministic-description idiom as the
-        # overlay AS below.
+        # Super-spines share ONE underlay ASN (.dev/bgp.txt) whenever the underlay is eBGP; same find-or-create idiom as
+        # the overlay AS.
         super_spine_as_id: str | None = None
         if strategy.split("-")[0] == "ebgp":
             try:
@@ -172,18 +139,8 @@ class SharedRoutingObjectsMixin:
             except Exception as exc:
                 self.logger.error(f"Failed to create shared super-spine AS: {exc}")
 
-        # The fabric AS is created for EVERY strategy, not just the iBGP ones.
-        # Under ebgp-ibgp/ospf-ibgp it is the actual overlay BGP local-as. Under
-        # ebgp-ebgp no device uses it as a local-as — but the fabric still needs
-        # exactly one administrative ASN to stamp into EVPN route-targets, or
-        # each VTEP derives the RT from its own per-device ASN and two leaves
-        # never import each other's routes for the same segment. Gating this on
-        # strategy is what left ebgp-ebgp (9 of 10 demo topologies) with no
-        # fabric-constant RT source at all.
-        #
-        # The description string is the idempotency key and deliberately
-        # unchanged, so existing fabrics keep their AS object rather than
-        # silently getting a second one.
+        # The fabric AS is created for every strategy: ebgp-ebgp devices don't use it as local-as, but EVPN
+        # route-targets need one fabric-constant ASN. The description is the idempotency key; keep it unchanged.
         overlay_desc = _overlay_as_description(self.fabric_name)
         overlay_as_id: str | None = None
         try:
@@ -197,25 +154,14 @@ class SharedRoutingObjectsMixin:
         return SharedRoutingIds(super_spine_as_id=super_spine_as_id, overlay_as_id=overlay_as_id)
 
     async def ensure_lisp_site_key(self) -> str | None:
-        """Find or create the office's shared LISP site key.
-
-        The one site key an office fabric's map-servers authenticate the edge
-        ETRs with. The caller attaches it to the office as ``lisp_site_key`` (how
-        transforms reach it, the way the DC overlay AS is reached as evpn_rt_as).
-        Returns the key's id (None when it could not be found or created).
-        """
+        """Find or create the office's shared LISP site key; returns its id (None if not found or created)."""
         return await self._ensure_routing_password(
             name=_lisp_site_key_name(self.fabric_name),
             description=f"Shared LISP map-server site key for {self.fabric_name}",
         )
 
     async def ensure_ospf_area(self) -> str | None:
-        """Find or create the fabric's OSPF backbone area (area 0) and track it in this run's group.
-
-        Returns the area's id, None when it could not be found or created (the
-        failure is logged as an error). Shared by the DC (ospf-ibgp) and the
-        office fabric generator; both own the area and track it on every run.
-        """
+        """Find or create the fabric's OSPF backbone area (area 0), tracked in this run; returns its id or None."""
         area_name = _ospf_area_name(self.fabric_name)
         try:
             area_obj = await self.client.get(kind=RoutingOSPFArea, name__value=area_name, raise_when_missing=False)
@@ -240,11 +186,8 @@ class SharedRoutingObjectsMixin:
             return None
 
     async def _ensure_overlay_as(self, *, description: str, overlay_asn: int) -> str:
-        """Find the fabric's overlay AS by its deterministic description (pinning
-        its ASN to ``overlay_asn``) or create it, and track it in this run's group.
-
-        Same race as ensure_shared_as, so the same per-description lock key: the
-        query and the create both run inside it.
+        """Find the overlay AS by its deterministic description (pinning ``overlay_asn``) or create it, tracked, under
+        the ensure_shared_as lock.
         """
         async with self.resource_lock(f"shared-as-{description}"):
             existing = await self.client.filters(kind=RoutingAutonomousSystem, description__value=description)
@@ -264,20 +207,8 @@ class SharedRoutingObjectsMixin:
             return as_obj.id
 
     async def ensure_shared_as(self, *, description: str, asn_pool_id: str | None, track: bool = True) -> str | None:
-        """Find the AS carrying this deterministic description, or draw a new
-        one from asn_pool_id, and track it in this run's group (unless track=False:
-        an AS several runs share, none of which may own it, like a colocation
-        metro's site AS found by every zone below it).
-
-        The description is the idempotency key: from_pool on a new node would
-        allocate a fresh ASN on every run. Returns None when no such AS exists
-        and there is no pool to draw one from.
-
-        Serialized per description: add_dc and dc_pod_cascade (and sibling pod
-        runs) can reach this at the same moment, both find nothing, and both
-        draw an AS. The untracked twin then breaks the next run's
-        delete_unused_nodes, since a ManagedBGP still uses it as local_as.
-        """
+        """Find the AS with this deterministic description, or draw one from asn_pool_id, tracked unless track=False.
+        The description is the idempotency key; serialized per description. Returns None without a match or pool."""
         async with self.resource_lock(f"shared-as-{description}"):
             return await self._ensure_shared_as_locked(description=description, asn_pool_id=asn_pool_id, track=track)
 
@@ -290,8 +221,7 @@ class SharedRoutingObjectsMixin:
                 kind=RoutingAutonomousSystem,
                 data={"asn": {"from_pool": {"id": asn_pool_id}}, "description": description},
             )
-            # A save claims the node for this run's group on its own; an AS that no run may own must opt out here,
-            # or the creating run owns it and its next run deletes it (still a ManagedBGP local_as) as unused.
+            # A save claims the node for the run's group; an AS no run may own must opt out, or its next run deletes it.
             await as_obj.save(allow_upsert=True, **({} if track else {"update_group_context": False}))
             self.logger.info(f"Created shared AS{as_obj.asn.value} '{description}' ({as_obj.id})")
         else:
@@ -301,20 +231,9 @@ class SharedRoutingObjectsMixin:
         return as_obj.id
 
     async def _resolve_shared_passwords(self) -> tuple[str | None, str | None]:
-        """Find the fabric's shared underlay/overlay RoutingPassword IDs, by deterministic name.
-
-        These are created once by the DC generator (``_create_shared_routing_objects``);
-        pod/rack layers only look them up here — one-shot lookup, no retry: the
-        caller (``create_routing``'s readiness loop) retries this alongside every
-        other shared-object lookup in one combined polling loop. A missing
-        password is non-fatal even after that loop exhausts: it just means auth
-        wasn't configured (e.g. DC generator hasn't run yet, or ran before this
-        feature existed) — routing creation proceeds without it.
-        """
+        """Find the shared underlay/overlay RoutingPassword IDs by name (one-shot); a missing password is non-fatal."""
         underlay_name, overlay_name = _underlay_key_name(self.fabric_name), _overlay_key_name(self.fabric_name)
-        # Found ids only, per run: add_dc owns these keys and keeps them on every
-        # run, so a found id stays valid; a missing one is looked up again on the
-        # next call. A pod run calls create_routing() once per tier.
+        # Found ids only, per run; a missing one is looked up again on the next call
         found: dict[str, str] = getattr(self, "_shared_password_ids", {})
         missing = [name for name in (underlay_name, overlay_name) if name not in found]
         if missing:
@@ -327,15 +246,8 @@ class SharedRoutingObjectsMixin:
         return found.get(underlay_name), found.get(overlay_name)
 
     async def _resolve_shared_objects(self, routing_strategy: str) -> tuple[str | None, str | None]:
-        """Find shared DC-level overlay AS and OSPF area. Returns (overlay_as_id, ospf_area_id).
-
-        One-shot lookup, no retry: the caller (``create_routing``'s readiness
-        loop) retries this alongside every other shared-object lookup in one
-        combined polling loop — see that loop's docstring for the race this
-        closes.
-
-        The resolved IDs are only referenced, never tracked, by this caller:
-        add_dc owns them (see _create_shared_routing_objects).
+        """Find the shared overlay AS and OSPF area; returns (overlay_as_id, ospf_area_id). One-shot, only referenced,
+        never tracked.
         """
         wants_overlay_as = routing_strategy in (RoutingStrategy.EBGP_IBGP.value, RoutingStrategy.OSPF_IBGP.value)
         wants_ospf_area = routing_strategy == RoutingStrategy.OSPF_IBGP.value

@@ -1,19 +1,13 @@
-"""Integration tests for schema and bootstrap data loading.
-
-This module contains tests for:
-1. Loading base schemas
-2. Loading extension schemas
-3. Loading menu definitions
-4. Loading bootstrap data
-"""
+"""Integration tests for schema and bootstrap data loading."""
 
 import logging
 
 import pytest
 from infrahub_sdk import InfrahubClientSync
 
+from tasks.proposed_change import wait_for_no_running_tasks
+
 from .conftest import TestInfrahubDockerWithClient
-from .workflow_helpers import wait_for_no_running_tasks
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -63,12 +57,8 @@ class TestSetup(TestInfrahubDockerWithClient):
             f"  stderr: {load_extensions.stderr}"
         )
 
-        # Loading a schema queues background flows that recompute the HFIDs and
-        # display labels of every kind it touches ("Trigger updates for HFID /
-        # display labels for ..."). They write to the same nodes the menu and
-        # bootstrap loads create next; run concurrently the transactions
-        # deadlock in Neo4j, one is rolled back, and the load fails with
-        # "Unable to find the node <id> / ... in the database". Let them finish.
+        # Loading a schema queues background flows that recompute the HFIDs and display labels of every kind it touches
+        # ("Trigger updates for HFID / display labels for ...").
         wait_for_no_running_tasks(client_main, branch=None)
 
     @pytest.mark.order(3)
@@ -93,28 +83,7 @@ class TestSetup(TestInfrahubDockerWithClient):
     @pytest.mark.order(4)
     @pytest.mark.dependency(scope="session", name="bootstrap_data", depends=["schema_extensions"])
     def test_04_load_bootstrap_data(self, client_main: InfrahubClientSync) -> None:
-        """Load bootstrap data.
-
-        Providers are loaded first, sequentially: hundreds of device/template
-        objects in data/bootstrap/09_*/10_* reference a provider (e.g. owner:
-        "P027") by HFID. Loading the whole directory at high concurrency races
-        those lookups against the provider's own creation in the same run —
-        some referencing objects get dispatched before the provider node they
-        depend on is visible yet, failing with "Unable to find the node <id> /
-        OrganizationEntity in the database." Loading providers alone first (no
-        concurrency) guarantees they're committed before anything concurrently
-        references them.
-
-        The rest of the directory then loads at the default concurrency, not a
-        raised one. The same visibility race exists one level deeper and
-        ordering cannot fix it: every 09_*/10_* template device carries its
-        interfaces as nested objects, so each group's children reference a
-        parent created moments earlier in the same run. Raising concurrency to
-        30 put 30 such groups in flight at once and was observed to fail with
-        "Unable to find the node <id> / TemplateDcimDevice in the database"
-        partway through the Edgecore SONiC spine templates — intermittently,
-        which is worse than slowly.
-        """
+        """Load bootstrap data."""
         logging.info("Starting test: test_04_load_bootstrap_data")
 
         load_providers = self.execute_command(

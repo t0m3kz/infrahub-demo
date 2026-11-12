@@ -1,44 +1,7 @@
-"""add_circuit: the derived facility locations of a TopologyCarrierCircuit.
-
-A carrier circuit is a pure carrier (fibre, cross-connect, internet access): it has no role and no session. This
-generator's one job is its placement. An endpoint device whose ``deployment`` is itself a facility
-(TopologyDataCenter, TopologyCloudRegion, TopologySaasRegion, TopologyColocationZone,
-TopologyVirtualColocation) places that end, so the circuit's locations are the authored ones plus these derived
-ones, at most two distinct. A provider's own router (an ISP or partner PE) has no deployment and no place object: its
-end has no location, the circuit's own ``provider`` names it (checks/circuit_placement.py judges that). An on-ramp edge deploys to its zone or virtual colocation, which is the facility the
-circuit ends on. A derived facility that contradicts an authored one of the same kind, or anything but two
-locations, fails the run before any write; the missing derived ones are added with one RelationshipAdd, so an
-already complete circuit writes nothing. THE INTERNET is a device and a facility at once (it has no ``deployment``):
-an end on its interface is placed by the device itself.
-
-Derived from the devices as they are when the circuit is created or its ends change: no trigger watches an end
-device's ``deployment`` (a rule on a device kind can only dispatch a generator targeting devices, and none targets
-every device). Every producer sets it at device creation, before any circuit names the device; a later edit is
-reported by checks/circuit_placement.py, and a re-run of this generator adds a deployment that was missing but never
-moves a derived location.
-
-The end devices' VRF instances (generators/helpers/vrf.py) are converged as well: a physical port's address in a
-non-default namespace (the INTERNET address of a cage edge, authored in data) demands an instance, and this is the
-generator that runs on the circuit loaded right after it.
-
-The derived locations are written untracked: the circuit is the run's target, not its output (tracked, the cleanup
-could delete it). Nothing else is written.
-
-BGP sessions over a connection between topologies come from the virtual circuits, not from here: the
-dci and handoff session circuit generator (generators/topology/virtual_circuit.py) waits for this
-generator (``CARRIER_CIRCUIT_GENERATOR``) on the carrier circuits it rides and reads their ends. This generator
-never waits for it (no cycle): it only fires it, without waiting, for every session circuit on the circuit's ports
-(or on a sub-interface whose parent is one of them).
-
-What reaches a session: it reruns on its own created / capabilities / status (a handoff also ip_namespace and password),
-and, through this fan-out, when a carrier circuit on its ports (or on a port's parent) is created, has its ends
-changed (capabilities) or its status changed (data/events: joining carrier_circuits, and the capabilities and status rules
-on TopologyCarrierCircuit). It does NOT rerun when a cable is added later, when a port is removed
-from a circuit (the circuit no longer lists the port, so the fan-out does not find the session), or when a circuit's
-type changes (no rule).
-
-No trigger loop: this generator writes only the derived ``locations`` relationship (one RelationshipAdd), never the
-status or the ends that the rules watch.
+"""add_circuit: the derived facility locations of a TopologyCarrierCircuit (see AGENTS.md Circuit placement). Adds
+derived locations with one untracked RelationshipAdd (at most two; a contradiction fails before any write) and converges
+the ends' VRF instances. Fires add_virtual_circuit without waiting for session circuits on its ports; it writes only
+``locations``, so no loop.
 """
 
 from __future__ import annotations
@@ -59,11 +22,8 @@ from ..protocols import TopologyCarrierCircuit
 CARRIER_CIRCUIT_GENERATOR = "add_circuit"
 VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
 
-# Device deployments that are themselves the facility a carrier circuit end
-# terminates on, so that end's location is derived from its device. A colocation
-# zone or virtual colocation is one: the on-ramp edge deploys to it, not to the
-# metro. Not an office (generators/topology/sdwan_edge.py authors its circuit's
-# locations); those ends stay authored.
+# Deployments that are themselves the facility a circuit end terminates on (zone, virtual colocation); not an office
+# (sdwan_edge.py authors those locations).
 _DERIVABLE_FACILITY_KINDS = frozenset(
     {
         "TopologyDataCenter",
@@ -109,9 +69,8 @@ class CircuitEndpoint:
     interface_id: str
     interface_name: str
     device_name: str
-    # The device's deployment, whatever its kind; for a cloud transport (it has none) its region or SaaS region; for the
-    # provider's connect device its location; for THE INTERNET (it has none either) the device itself, which is a
-    # facility. None when it has none.
+    # The device's deployment; for a cloud transport its region or SaaS region; for a provider connect its location; for
+    # THE INTERNET the device itself. None when it has none.
     deployment: CircuitLocation | None
     device_id: str = ""
 
@@ -154,12 +113,8 @@ def circuit_endpoints(circuit: dict[str, Any]) -> list[CircuitEndpoint]:
 def plan_locations(
     current: list[CircuitLocation], endpoints: list[CircuitEndpoint]
 ) -> tuple[list[CircuitLocation], str | None]:
-    """(derived locations the circuit still lacks, problem or None).
-
-    An endpoint device whose deployment is a derivable facility places its end.
-    A current location of a kind some end derives, but not derived itself
-    (DC10 authored while the device sits in DC11), is a contradiction. The
-    current and derived locations together must be exactly two distinct ones.
+    """(derived locations the circuit still lacks, problem or None); a current location of a kind some end derives but
+    not itself is a contradiction.
     """
     derived: dict[str, tuple[CircuitLocation, str]] = {}
     for endpoint in endpoints:
@@ -212,17 +167,14 @@ class CarrierCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
             return
 
         await self._add_locations(circuit["id"], circuit_name, missing_locations)
-        # The INTERNET addresses of a cage edge are authored data, loaded just before the circuit they ride: this run
-        # is the one that sees them, so it converges the end devices' VRF instances (nothing else writes them).
+        # Authored INTERNET addresses of a cage edge are loaded just before the circuit; this run converges the VRF
+        # instances
         await self.reconcile_vrfs({endpoint.device_id for endpoint in endpoints if endpoint.device_id})
         await self._fan_out_sessions(endpoints, circuit_name)
         self.logger.info(f"Carrier circuit {circuit_name} — completed")
 
     async def _add_locations(self, circuit_id: str, circuit_name: str, locations: list[CircuitLocation]) -> None:
-        """Add the derived locations the circuit lacks: one RelationshipAdd, untracked.
-
-        A RelationshipAdd names only these peers, so it never drops an authored location.
-        """
+        """Add the derived locations the circuit lacks: one untracked RelationshipAdd, never dropping an authored one."""
         if not locations:
             return
         node = await self.client.get(kind=TopologyCarrierCircuit, id=circuit_id)
@@ -230,14 +182,8 @@ class CarrierCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
         self.logger.info(f"  {circuit_name}: derived location(s) {', '.join(loc.label for loc in locations)}")
 
     async def _fan_out_sessions(self, endpoints: list[CircuitEndpoint], circuit_name: str) -> None:
-        """Re-run add_virtual_circuit for every session circuit riding this carrier, without waiting.
-
-        A virtual circuit rides this one when it ends on one of its ports or on a sub-interface whose
-        encapsulation ``parent`` is one of them (the derived underlay, utils/circuit_underlay.py). Each of those runs
-        waits for this run itself (wait_for_parent_generator_and_refetch), so it sees what this run wrote.
-
-        This run happens when the circuit is created, its ends change or its status changes; a port removed from
-        the circuit is no longer in ``endpoints``, so the sessions that sat on it are not reached.
+        """Re-run add_virtual_circuit, without waiting, for every session circuit on this carrier's ports or their
+        sub-interfaces.
         """
         port_ids = [endpoint.interface_id for endpoint in endpoints]
         if not port_ids:

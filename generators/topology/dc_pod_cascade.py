@@ -1,21 +1,5 @@
-"""Cascade generator: runs the full add_dc bootstrap, then fans out to every
-existing pod's own cascade (pod_rack_cascade), which in turn fans out to racks.
-
-Subclasses DCTopologyGenerator and reuses its entire generate() via super() —
-this is a superset of add_dc's own work, so every trigger that needs pods (and
-their racks) to reconcile against a DC-level change fires ONLY this generator,
-never add_dc alongside it (see data/events/99_actions.yml's
-trigger-dc-update-* rules — add_dc keeps its own group trigger only, for
-a standalone/bulk-loaded DC that isn't reconciling anything yet).
-
-This avoids the deadlock a naive "add_dc waits on add_pod" would cause: add_pod
-(and, one level down, pod_rack_cascade -> add_rack) already keeps its own task
-RUNNING while waiting on its fan-out target, so nothing here needs to wait for
-add_dc's bootstrap to "complete elsewhere" — it just ran, in this same call.
-This generator itself never needs to wait on anything: it IS the DC-level
-write, not a consumer of one. The consumer-side wait (a plain add_dc bootstrap
-possibly still running independently for the same DC) belongs to add_pod,
-which actually reads DC-level data — see pod.py's generate().
+"""Cascade generator: runs the full add_dc bootstrap, then fans out to every existing pod's cascade. Triggers needing
+pods reconciled fire only this generator (data/events/99_actions.yml); it is the DC-level write, so it waits on nothing.
 """
 
 from __future__ import annotations
@@ -35,7 +19,7 @@ class DCPodCascadeGenerator(DCTopologyGenerator):
         if not dc_data:
             return
 
-        # Read from the DC's own query (never saved) by the parent's generate().
+        # Set by the parent's generate() from the DC's own query.
         existing_pods = getattr(self, "_existing_pods", [])
         if not existing_pods:
             self.logger.info(f"DC {dc_data['name']}: no existing pods to cascade to")

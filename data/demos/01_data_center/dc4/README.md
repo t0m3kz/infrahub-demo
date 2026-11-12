@@ -1,39 +1,39 @@
-# DC4 - Extra Large: When Super-Spine Isn't Enough
+# DC4 - Extra Large (Hyper-Spine Tier)
+
+"Super" was already taken, so the fabric reached for "hyper", as one does in Berlin after midnight.
 
 ## Overview
 
-**Location:** Berlin 🇩🇪 (the hipster capital: your infrastructure is as edgy as the local techno scene, and it also only starts working after midnight)
+**Location:** Berlin, Germany
 
-**Platform:** Arista EOS at the DC level — so API-driven, even the hyper-spine tier could
-probably deploy itself if you left the terminal unattended.
+**Platform:** Arista EOS at the DC level
 
 **Fabric Design:** `XL` + `ebgp-ebgp` routing — the same eBGP-eBGP pattern as DC1/DC3, but Extra Large,
-which means the fabric grew a 4th tier: **hyper-spine** (yes, really; someone looked at "super" and decided it was not enough). Leaf → spine → super-spine →
+which adds a 4th tier: **hyper-spine**. Leaf → spine → super-spine →
 hyper-spine, full-mesh cabled and routed between super-spine and hyper-spine (every
-super-spine talks to every hyper-spine, same fan-out logic as spine↔super-spine, just one
+super-spine talks to every hyper-spine, same fan-out logic as spine↔super-spine, one
 tier higher — and dc.py cables this pair itself, since both tiers live at the DC level).
 
-**Use Case:** When 4 super-spines start feeling like a chokepoint and you need one more
-level of aggregation before things get truly hyperscale. Also: proof that "wymieszane, co
-jest dostępne" (mixed, whatever's available) is a legitimate pod strategy when your fabric
-is big enough that nobody's going to audit every pod's deployment type anyway. (Translation for the non-Polish speakers: the author did not want to choose. We are not judging. Much.)
+**Use Case:** When 4 super-spines become a chokepoint and one more
+level of aggregation is needed. Pods deliberately use mixed deployment types
+(middle_rack, mixed and tor) to demonstrate that deployment type is chosen per pod.
 
 ---
 
-## Architecture (One Tier Higher Than Everyone Else)
+## Architecture
 
 ### Fabric Scale
 
-- **Hyper-Spines:** 2 (Arista DCS-7050CX3-32C-R) — full mesh to every super-spine, nothing above them (finally, a tier with no one to report to)
+- **Hyper-Spines:** 2 (Arista DCS-7050CX3-32C-R) — full mesh to every super-spine, top tier of the fabric
 - **Super-Spines:** 4 (Arista DCS-7050CX3-32C-R)
 - **Border-Leaf:** 2 (Arista DCS-7050CX3-32C-R) — one each in pods 1 and 2, own firewall + load-balancer pair
 - **Pods:** 3, deliberately mixed deployment types
 
-| Pod | Spines | Design   | Deployment  | Personality                         |
-| --- | ------ | -------- | ----------- | ----------------------------------- |
-| 1   | 2      | S_MIDDLE | middle_rack | The Overachiever                    |
-| 2   | 4      | S_MIXED  | mixed       | Can't commit to one rack type       |
-| 3   | 4      | S_TOR    | tor         | Skipped the middle-management layer |
+| Pod | Spines | Design   | Deployment  |
+| --- | ------ | -------- | ----------- |
+| 1   | 2      | S_MIDDLE | middle_rack |
+| 2   | 4      | S_MIXED  | mixed       |
+| 3   | 4      | S_TOR    | tor         |
 
 ### Tier Summary
 
@@ -49,40 +49,25 @@ Leaf → Spine → Super-Spine ⇄ Hyper-Spine (full mesh, DC-level, cabled by d
 # See Deployment Steps below for the current load and generator commands.
 ```
 
-**Warning:** May cause identity crisis. Perfect for flexing multi-deployment AND
-multi-tier skills at the same time, right up until someone asks you to draw it on a whiteboard.
-
 ## Deployment Steps
 
 ```bash
-# really quick
+# Quick path
 # See the manual commands below, or use the automatic created-object trigger.
 
-# I'm the control nerd
+# Manual path
 uv run infrahubctl branch create you_branch
 
-# Load topology (this is the point of no return)
+# Load topology
 uv run infrahubctl object load data/demos/01_data_center/dc4/ --branch you_branch
 
-# Generate fabric (grab coffee)
+# Generate fabric
 uv run infrahubctl generator add_dc name=DC4 --branch you_branch
 
 ```
 
-Alternatively, summon the generator from the InfraHub UI → Actions → Generator Definitions → add_dc for DC4.
+Alternatively, trigger the generator from the InfraHub UI → Actions → Generator Definitions → add_dc for DC4.
 
 ## Validation
 
-Run `uv run invoke test-integration-routing` before committing generator-ordering changes (ordering bugs are the kind that only show up on a Friday), then use `uv run invoke test-integration` for the complete mixed-topology validation.
-
-## Fun Fact
-
-The author owns a piece of the Berlin Wall (a small one, he was not that ambitious)—so if your network ever feels divided, just remember: it can be
-rebuilt, repurposed, or turned into a conversation starter at tech meetups. It's a daily reminder that even
-the toughest partitions eventually fall—sometimes with a little help from automation, sometimes with a
-sledgehammer.
-
-Bonus: The author proudly benefits from Germany's Unity Day, enjoying a free holiday every year thanks to
-history and a chunk of concrete.
-
-Prost to open borders, open networks, and open source! (Closed change windows remain non-negotiable.)
+Run `uv run invoke kick dc4` before committing generator-ordering changes, then `uv run invoke kick dc-deployments` for all seven DCs.

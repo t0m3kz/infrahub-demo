@@ -1,5 +1,4 @@
-"""Unit tests for checks/common.py's validate_routing_password(), validate_exchange_gateways()
-and validate_transit_vlans() for both the border leaf and the edge."""
+"""Unit tests for checks/common.py's validate_routing_password()."""
 
 from functools import partial
 from typing import Any

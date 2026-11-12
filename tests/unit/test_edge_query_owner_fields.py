@@ -1,13 +1,4 @@
-"""The edge config query delivers the owner and process_role fields the external BGP filter reads.
-
-transforms/helpers/bgp_external.py filters the external sessions of the NX-OS colocation edge per owner. It reads the cleaned
-response (utils/data_cleaning.clean_data: ``__typename`` -> ``typename``, ``{node}``/``{edges}`` flattened,
-``{value: x}`` -> x), so these tests pin, offline, that
-
-* the changed .gql files parse,
-* every new field exists on the schema kind it is selected on (schemas/ read through tests/integration/demo_data.py),
-* a raw response shaped like the selection cleans into the shape the transform expects.
-"""
+"""The edge config query delivers the owner and process_role fields the external BGP filter reads."""
 
 from __future__ import annotations
 

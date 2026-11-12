@@ -84,8 +84,7 @@ def _make_bgp_peering(
     password: str | None = None,
 ) -> dict:
     """Build a BGP peering with peering_interfaces and bgp_processes."""
-    # For overlay (TTL!=1): interfaces are loopbacks
-    # For underlay (TTL=1): interfaces are physical P2P links
+    # For overlay (TTL!=1): interfaces are loopbacks.
     local_iface_type = "DcimVirtualInterface" if ttl != 1 else "DcimPhysicalInterface"
     remote_iface_type = "DcimVirtualInterface" if ttl != 1 else "DcimPhysicalInterface"
     if local_iface_name is None:
@@ -253,16 +252,13 @@ def _make_interface(
                 ),
             }
         )
-    # A switch port or LAG carries a segment as a member of its switch's VLAN row, one of the port's `capabilities`
-    # (transforms/helpers/segments.py interface_segments).
+    # A switch port or LAG carries a segment as a member of its switch's VLAN row
     iface["capabilities"] = _edges([*services, *_segment_memberships(segments or [])])
     return iface
 
 
 def _segment_memberships(segments: list[dict]) -> list[dict]:
-    """A port's capability entries for the segments it carries: its switch's VLAN row (ManagedSegmentVlan) of each,
-    with the segment under the row's deployment (queries/fragments/interface_capability_fields.gql
-    InterfaceCapabilitiesWithSegmentFields)."""
+    """A port's capability entries for the segments it carries: its switch's VLAN row (ManagedSegmentVlan) of each."""
     return [
         {
             "__typename": "ManagedSegmentVlan",
@@ -325,27 +321,7 @@ def _make_segment_node(
     l3_vni: int | None = None,
     routing_identity: tuple[int | None, int | None] | None = None,
 ) -> dict:
-    """Build a ManagedVxlanSegment node, as the query returns it.
-
-    ``routing_identity`` is the (segment routing_tag, owner routing_tag) the fragment selects
-    (queries/fragments/network_segment.gql); without it the node carries neither field, as before.
-
-    This is the shape that hangs off a port's segment deployment (``interfaces[].capabilities``, the ``segment`` of
-    a ManagedSegmentDeployment) —
-    the ONLY place BaseDeviceTransform._collect_activations_from_interfaces
-    looks for segments, and therefore the only path that produces VXLAN/EVPN
-    output for leaf/tor/access-leaf roles.
-
-    The VNI comes from ``segment_deployments`` and the LOCAL
-    vlan_id from the ``vlans`` rows under it, matched to this
-    device (``row.device.id``; a paired device uses its own row).
-    A segment with no row for the device is skipped entirely
-    by the transform, so ``row_device_id`` must match or no VXLAN is rendered.
-
-    The routing authority is the segment's explicit ``security_zone``.
-    ``gateway.ip_prefix`` supplies its subnet, whose IPAM identity is always
-    ``default`` and does not select the VRF.
-    """
+    """Build a ManagedVxlanSegment node, as the query returns it."""
     if ns_name == "default":
         ns_name = "PROD"
         l3_vni = 60000
@@ -378,11 +354,7 @@ def _make_segment_node(
             "arp_suppression": _v(True),
             "security_zone": security_zone_node,
             "gateway": _node(gateway_node),
-            # The deployment the segment is realized in: its VNI and, under it, the
-            # per-device LOCAL vlan_id rows. The transform needs a row whose
-            # device.id equals this device's id or it skips the segment
-            # and renders no VXLAN at all; the VNI is the one of the deployment holding
-            # that row.
+            # The deployment the segment is realized in: its VNI and, under it
             "segment_deployments": _edges([{"vni": _v(vni), "vlans": _vlan_rows(vlan_id, row_device_id)}]),
         }
     )
@@ -402,20 +374,14 @@ def _make_segment_node(
 
 
 def _deployment_record(seg: dict, vni: int | None) -> dict:
-    """A ManagedSegmentDeployment record of a device's deployment for a segment node built by _make_segment_node:
-    its VNI and, under the record itself, the rows of the segment's own deployment (a border gateway's VLAN)."""
+    """A ManagedSegmentDeployment record of a device's deployment for a segment node built by _make_segment_node: its
+    VNI and, under the record itself."""
     rows = seg["segment_deployments"]["edges"][0]["node"]["vlans"] if seg.get("segment_deployments") else _edges([])
     return {"vni": _v(vni), "status": _v("active"), "vlans": rows, "segment": _node(seg)}
 
 
 def _make_segment_deployment(**kwargs: Any) -> dict:
-    """Wrap a segment node in a ManagedSegmentDeployment record.
-
-    This is the ``TopologySegmentHosting.segment_deployments`` shape, reached
-    from a device's own ``deployment`` — used by border-leaf for DC-wide PBR
-    rules (see transforms/config/border_leaf.py), NOT for VXLAN. VXLAN comes
-    exclusively from capabilities via _make_segment_node.
-    """
+    """Wrap a segment node in a ManagedSegmentDeployment record."""
     seg = _make_segment_node(**kwargs)
     return {
         "vlan_id": _v(kwargs.get("vlan_id")),
@@ -451,10 +417,7 @@ def _render(instance: Any, data: dict) -> str:
 
 
 def run_transform(transform_cls: type, data: dict) -> str:
-    """Render `data` with `transform_cls`; a device's config is given the VRF instances and SVIs it demands first.
-
-    The unit tests that build their own device data go through here too (the hook is idempotent).
-    """
+    """Render `data` with `transform_cls`; a device's config is given the VRF instances and SVIs it demands first."""
     data = with_context_members(with_interface_vrfs(migrate_zone_owners(data)))
     instance = make_transform(transform_cls)
     if isinstance(instance, BaseDeviceTransform):
@@ -463,13 +426,7 @@ def run_transform(transform_cls: type, data: dict) -> str:
 
 
 def _write_data_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple[int, int]:
-    """Write `data` as input.json and its rendered config as output.txt.
-
-    The one hook every writer goes through: the nested service data (`DeviceServices`) is derived from what the builder
-    declares (tests/smoke/fixture_builders/derived_services.py), then a device that carries VRFs gets the ManagedVRF
-    memberships (`shared_capabilities`) and SVI objects its config demands appended to the input
-    (tests/smoke/fixture_builders/vrf.py), the way the VRF generator leaves them in the model.
-    """
+    """Write `data` as input.json and its rendered config as output.txt."""
     test_dir = SMOKE_DIR / dir_name
     test_dir.mkdir(parents=True, exist_ok=True)
     data = with_context_members(with_interface_vrfs(migrate_zone_owners(data)))
@@ -490,8 +447,7 @@ def _write_data_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple
     try:
         output = _render(instance, data)
         with open(test_dir / "output.txt", "w") as f:
-            # Match end-of-file-fixer's normalization (exactly one trailing
-            # newline) so the pre-commit hook never re-touches this file.
+            # Match end-of-file-fixer's normalization (exactly one trailing newline)
             f.write(output.rstrip("\n") + "\n")
         print(f"  ✓ {dir_name}")
         return 1, 0

@@ -1,9 +1,4 @@
-"""CheckCustomerQuota for the colocation and cloud footprints, the address block of a tier, the cloud segment block
-and the mixed-kind warning (the data center segment and port quota is in test_customer_quota_check.py).
-
-The payloads are raw GraphQL responses shaped like queries/validation/customer_quota.gql; ``validate`` runs them
-through ``clean_data``.
-"""
+"""CheckCustomerQuota for the colocation and cloud footprints, the address block of a tier."""
 
 from __future__ import annotations
 

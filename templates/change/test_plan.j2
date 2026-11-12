@@ -1,0 +1,31 @@
+Deployment verification: the running config checksum equals the artifact checksum on every device.
+{% for d in verify_devices %}
+{{ d.name }} ({{ d.role or "no role" }}): {{ d.bgp_peerings ~ " BGP peering(s) established" if d.bgp_peerings else "no BGP peering" }}
+{% endfor %}
+{% if verify_devices_more %}
+(+{{ verify_devices_more }} more devices)
+{% endif %}
+{% if verify_links.total %}
+Links up:
+{% for g in verify_links.groups %}
+{% for l in g.items %}
+  - {{ l.family }} {{ l.name }}{% if l.ends %}: {{ l.ends | join(" <-> ") }}{% endif %}
+
+{% endfor %}
+{% endfor %}
+{% if verify_links.more %}
+  (+{{ verify_links.more }} more)
+{% endif %}
+{% endif %}
+{% if verify_segments.total %}
+Segment gateways answer:
+{% for g in verify_segments.groups %}
+{% for s in g.items %}
+  - {{ s.name }}{% if s.gateway %}: {{ s.gateway }}{% endif %}
+
+{% endfor %}
+{% endfor %}
+{% if verify_segments.more %}
+  (+{{ verify_segments.more }} more)
+{% endif %}
+{% endif %}

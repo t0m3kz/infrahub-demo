@@ -1,34 +1,4 @@
-"""The routing policy of a BGP session, composed once for every platform.
-
-A neighbour direction carries ONE route-map on every vendor, so everything that shapes what a session sends or
-accepts (the local-preference and MED of the peering, the shared maps of a border-gateway pair, and later the
-protection derived by ``utils/bgp_expectation.py``) is composed here into ``session["policy"]`` and the templates only
-render that structure. A template never decides policy from the raw ``local_pref`` / ``med`` / ``export_local_only``
-flags.
-
-``policy`` is neutral (no vendor syntax):
-
-- ``inbound.own`` / ``outbound.own``: the session's own map, ``{"name": ..., "local_pref": n}`` or ``{"name": ..., "med": n}``,
-  None when the peering sets neither. The template defines it before ``router bgp`` and names it on the neighbour.
-- ``attach``: the maps the neighbour names, in render order, each ``{"map": name, "direction": "in"|"out", "own": bool}``.
-  ``own`` is False for a map another template defines (``RM-FABRIC-OUT``, ``RM-DCI-IN``).
-- ``max``: the maximum-prefix per address family, ``{"ipv4": {"limit": n, "warning_only": bool}}``, derived from the
-  model (utils/bgp_expectation.py); empty when nothing could be derived. ``max_total`` is the same summed over the
-  unicast families, for a vendor whose command is per neighbour and not per family. A limit warns only
-  (``warning_only``) while the hosting deployment stages the protection (``routing_filter_enforce`` false), an external
-  or transit session included: its former typed limit (100) is gone and the derived one (the size of its allowed set
-  plus the slack) must not reset a live session before the owner has seen it. ``enforced`` is the switch itself, for the
-  lines that are rendered only when it is on.
-- ``filters``: the prefix filters derived for the session, one per direction and address family, all families of a
-  direction or none (a direction with a family that cannot be derived stays unfiltered and the check reports it):
-  ``{"direction", "family", "base", "entries", "sets", "attached"}``. ``entries`` are ``{"prefix", "le", "family"}``
-  (the default route included when the class may carry one) and ``sets`` what the same map also sets
-  (``local_pref``, ``med``, ``no_export``). ``base`` names the objects (``RM-<base>``, ``PL-<base>`` for IPv4 entries,
-  ``PL6-<base>`` for IPv6 ones); ``name_filters`` makes it unique per content on a device. ``attached`` is False while
-  the deployment stages: the objects are rendered, the neighbour does not name them, and the maps they replace stay
-  attached. Once attached, a filter map REPLACES the own map and the shared map of its direction (it carries their
-  ``set`` lines), so a neighbour still names one map per direction.
-"""
+"""The routing policy of a BGP session, composed once for every platform."""
 
 from __future__ import annotations
 
@@ -53,8 +23,7 @@ from utils.bgp_expectation import (
 )
 
 # The platforms whose templates render a prefix filter for a unicast session (common/bgp_filter_objects.j2 on the CLI
-# platforms, common/sonic_bgp_policy.j2 on SONiC) and for an EVPN one (NX-OS only: no keyword is known elsewhere, U).
-# checks/bgp_closure.py reports a session on any other platform as unprotected.
+# platforms, common/sonic_bgp_policy.j2 on SONiC) and for an EVPN one.
 UNICAST_FILTER_PLATFORMS = frozenset({"cisco_nxos", "arista_eos", "cisco_xe", "cisco_ios", "sonic", "dell_sonic"})
 EVPN_FILTER_PLATFORMS = frozenset({"cisco_nxos"})
 
@@ -137,11 +106,7 @@ def _filters(session: dict[str, Any], expectation: Expectation, enforce: bool) -
 def compose_policy(
     session: dict[str, Any], expectation: Expectation | None = None, *, enforce: bool = False
 ) -> dict[str, Any]:
-    """The neutral policy of a built session (peer groups already assigned).
-
-    ``expectation`` is utils/bgp_expectation.py's answer for the session, ``enforce`` the hosting deployment's
-    ``routing_filter_enforce``. Without an expectation the policy carries no limit.
-    """
+    """The neutral policy of a built session (peer groups already assigned)."""
     name = session.get("name")
     own_in = (
         {"name": f"{name}-LOCAL-PREF-IN", "local_pref": session["local_pref"]} if session.get("local_pref") else None
@@ -196,13 +161,7 @@ def compose_policy(
 
 
 def name_filters(sessions: list[dict[str, Any]]) -> None:
-    """Give every filter of a device its object names, unique per content.
-
-    Filters with the same ``base`` and the same content share one route-map (a spine's hundred underlay neighbours
-    name ``RM-UNDERLAY-IPV4-IN``); the same ``base`` with different content (the overlay default route comes from a
-    relay but not from a leaf, a local-preference differs) gets a short digest of the content, so a name never means
-    two things on one device.
-    """
+    """Give every filter of a device its object names, unique per content."""
     contents: dict[str, set[str]] = {}
     for session in sessions:
         for flt in session.get("policy", {}).get("filters", []):

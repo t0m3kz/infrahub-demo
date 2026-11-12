@@ -45,8 +45,7 @@ def _port(
     caps: tuple[str, ...] = (),
     rows: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
-    """A raw DcimPhysicalInterface / DcimLAGInterface node on a leaf; ``segments`` rows of distinct segments, plus
-    ``rows`` as given."""
+    """A raw DcimPhysicalInterface / DcimLAGInterface node on a leaf;"""
     members = tuple(_row(f"s{index}", 100 + index) for index in range(segments)) + rows
     return {
         "id": f"id-{name}",
@@ -136,8 +135,7 @@ def test_r1_segment_and_sub_interface_fail() -> None:
 
 
 def test_a_context_is_no_interface_capability_and_no_l2_tag() -> None:
-    """A context has no interface edge: a kind of it among a port's capabilities is no tag (the port is judged by the
-    rest)."""
+    """A context has no interface edge:"""
     assert _errors([_port(ip=True, caps=("ManagedFirewallContext",))]) == []
 
 
@@ -147,8 +145,7 @@ def test_r1_segment_and_bgp_peering_fail() -> None:
 
 
 def test_r1_every_l3_capability_is_a_signal() -> None:
-    """R1: the OSPF interface settings and the session circuit count; a carrier circuit never does (nor an OSPF peering
-    or a routed exchange: neither is on the interface edge)."""
+    """R1:"""
     for kind in ("RoutingOSPFInterface", "TopologySessionCircuit"):
         assert len(_errors([_port(segments=1, caps=(kind,))])) == 1, kind
     assert _errors([_port(segments=1, caps=("TopologyCarrierCircuit",))]) == []
@@ -176,8 +173,7 @@ def test_r2_lag_member_with_a_segment_and_an_address_is_one_error() -> None:
 
 
 def test_the_fixtures_emit_only_fields_the_query_selects_and_the_layer_fields_are_selected() -> None:
-    """The builders match interface_layers.gql, which must select lag, encapsulations and the capability kinds with
-    the rows, their VLAN and their deployment's segment, and per row its requests, ports and their cable ends."""
+    """The builders match interface_layers.gql."""
     tree = query_tree(QUERY)
     assert "DcimVirtualInterface" not in tree
     for root, node in (("DcimPhysicalInterface", _port()), ("DcimLAGInterface", _port("Port-Channel1"))):
@@ -274,8 +270,7 @@ def _lag_member(name: str, *, host: str | None = None) -> dict[str, Any]:
 
 
 def _row_with(*members: dict[str, Any], requested: tuple[str, ...] = (), terminated: bool = False) -> dict[str, Any]:
-    """A raw ManagedSegmentVlan of segment web listing ``members``; ``requested``: the ids of the ports assigned to its
-    deployment."""
+    """A raw ManagedSegmentVlan of segment web listing ``members``;"""
     segment: dict[str, Any] = {"id": "seg-web", "name": {"value": "web"}}
     if terminated:
         segment["firewall_gateway"] = {"value": True}
@@ -313,8 +308,7 @@ def test_r4_two_rows_of_one_segment_on_a_port_fail() -> None:
 
 
 def test_r5_an_assigned_or_derived_member_is_no_warning() -> None:
-    """R5: a port assigned to the deployment, a port facing a host of a component, a LAG whose member faces one, and a firewall
-    service port of a terminated segment were all asked for."""
+    """R5:"""
     assert _run(rows=[_row_with(_member("E1"), requested=("if-E1",))]) == ([], [])
     components = [_component("web", "srv-1")]
     assert _run(rows=[_row_with(_member("E2", host="srv-1"))], components=components) == ([], [])
@@ -323,8 +317,7 @@ def test_r5_an_assigned_or_derived_member_is_no_warning() -> None:
 
 
 def test_r5_a_member_nobody_asked_for_is_a_warning() -> None:
-    """R5: not assigned, facing no host of the segment's components (or one of another segment), not a service port
-    of a terminated segment: the next reconcile removes it, the check shows it meanwhile."""
+    """R5:"""
     components = [_component("other", "srv-1")]
     errors, warnings = _run(
         rows=[_row_with(_member("E1"), _member("E2", host="srv-1"), _member("E3", role="firewall"))],
@@ -362,8 +355,7 @@ def _ospf(
     *ports: tuple[str, str],
     peer_processes: tuple[tuple[str, str], ...] | None = None,
 ) -> dict[str, Any]:
-    """A raw RoutingOSPFInterface listing ``ports`` (device, interface); ``peer_processes``: (process, device) of its
-    peering (no peering for None)."""
+    """A raw RoutingOSPFInterface listing ``ports`` (device, interface);"""
     peering = None
     if peer_processes is not None:
         peering = {

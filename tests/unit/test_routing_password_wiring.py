@@ -1,11 +1,4 @@
-"""Unit tests for shared underlay/overlay RoutingPassword wiring in RoutingPlanner.
-
-Tests verify that when a password_id is supplied, the planner attaches a
-``password: {"id": ...}`` relationship ref to every underlay eBGP peering,
-OSPF underlay interface, and overlay BGP peering it creates — and that it's
-omitted entirely (not set to None/empty) when no password_id is supplied,
-mirroring the existing evpn_af_id conditional-add pattern.
-"""
+"""Unit tests for shared underlay/overlay RoutingPassword wiring in RoutingPlanner."""
 
 from unittest.mock import MagicMock
 
@@ -123,11 +116,7 @@ class TestBuildRoutingPlanPasswordPassthrough:
             make_p2p_interface("if1", "Ethernet1", "l1", "c1"),
             make_p2p_interface("if2", "Ethernet1", "s1", "c1"),
         ]
-        # routing_strategy must be set via the constructor, not attribute
-        # assignment after — RoutingOptions.design is typed as the
-        # HasRoutingStrategy Protocol, and isinstance() against a
-        # runtime_checkable Protocol uses inspect.getattr_static, which only
-        # sees attributes MagicMock pre-registers from constructor kwargs.
+        # Set routing_strategy via the constructor: isinstance() on the Protocol only sees constructor kwargs.
         design = MagicMock(routing_strategy="ebgp-ebgp")
         design.model_dump = MagicMock(return_value={})
 

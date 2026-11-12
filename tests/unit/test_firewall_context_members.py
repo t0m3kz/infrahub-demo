@@ -1,9 +1,4 @@
-"""checks/common.py validate_context_members: the members of a firewall context are exactly one HA pair.
-
-A context holds no HA edge (its members are its ``shared_devices``), so the schema cannot tie the two: a device in an HA
-domain enforces only contexts whose members are that domain's members, a standalone device only contexts of which it is
-the one member. Shapes are cleaned query data (queries/config/firewall.gql).
-"""
+"""checks/common.py validate_context_members:"""
 
 from typing import Any
 

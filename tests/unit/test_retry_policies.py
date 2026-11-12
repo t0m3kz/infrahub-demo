@@ -1,8 +1,4 @@
-"""The retry and polling policy is defined once in utils/limits.py, and every generator reads it from there.
-
-A change of a value changes how long a generator run waits for another one, so what must hold between values is
-tested, not the values.
-"""
+"""The retry and polling policy is defined once in utils/limits.py, and every generator reads it from there."""
 
 from __future__ import annotations
 

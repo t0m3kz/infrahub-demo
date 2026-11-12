@@ -1,9 +1,4 @@
-"""The 30_all segment with a firewall gateway (data/demos/30_all/07_applications/c005/00_segments.yml).
-
-``firewall_gateway`` makes the internal context of the segment's footprint own the gateway, so the data names no
-context. These tests hold the data to what the generators and the check will find: one DC footprint on a shared pair,
-and a gateway the segment generator (not the file) allocates, like every DC tenant segment.
-"""
+"""The 30_all segment with a firewall gateway (data/demos/30_all/07_applications/c005/00_segments.yml)."""
 
 from __future__ import annotations
 
@@ -23,8 +18,7 @@ def test_the_demo_terminates_a_segment_on_a_dc_firewall_context() -> None:
 
 
 def test_a_terminated_segment_names_one_dc_footprint_on_a_shared_pair() -> None:
-    """The footprint is a DC one whose design uses the shared pair (a dedicated pair hosts virtual firewalls, which
-    have no cable of their own to the border leaf)."""
+    """The footprint is a DC one whose design uses the shared pair (a dedicated pair hosts virtual firewalls."""
     designs = {name(design): design for design in declared("TopologyCustomerTemplateDC", BOOTSTRAP)}
     footprints = {name(obj): obj for obj in declared("TopologyCustomerDC", _DEMO)}
     for segment in _terminated_segments():

@@ -371,6 +371,14 @@ spec:
             kind: ProxyPolicy
             icon: "mdi:shield-key-outline"
 
+    # ===================== CHANGE =====================
+    - namespace: Change
+      name: RequestMenu
+      label: Change Requests
+      kind: ChangeRequest
+      icon: "mdi:file-document-outline"
+      description: "The change request of each Proposed Change (risk, plans, window)"
+
     # ──────────────────────────────────────────────────────────────────────────
     # INVENTORY — physical devices and hardware
     # ──────────────────────────────────────────────────────────────────────────

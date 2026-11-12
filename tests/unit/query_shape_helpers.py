@@ -27,7 +27,7 @@ def _merge(into: Tree, other: Tree) -> None:
 
 
 def _selection_tree(selection_set: SelectionSetNode | None, fragments: dict[str, FragmentDefinitionNode]) -> Tree:
-    """The response keys (alias, else field name) selected under a selection set (inline fragments and spreads resolved and merged)."""
+    """The response keys (alias, else field name) selected under a selection set."""
     tree: Tree = {}
     for selection in selection_set.selections if selection_set else ():
         if isinstance(selection, FieldNode):
@@ -71,9 +71,7 @@ def unselected(emitted: Any, tree: Tree, path: str = "") -> list[str]:
 
 
 def compact(text: str) -> str:
-    """A query as one whitespace-normalized line, so a reformatting (one-line vs multi-line selections) cannot matter.
-
-    ``terminated_on { node { id } }`` is found in the result however the file lays the selection out."""
+    """A query as one whitespace-normalized line, so a reformatting (one-line vs multi-line selections) cannot matter."""
     return " ".join(print_ast(parse(text)).split())
 
 

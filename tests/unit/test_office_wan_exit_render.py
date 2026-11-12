@@ -1,19 +1,4 @@
-"""Unit tests for the render side of an office's WAN exit (access-switch and distribution-switch on cisco_xe).
-
-An office whose deployment has an SD-WAN edge (``lisp_wan_edges``, the edge add_sdwan_edge creates) gets the way
-out of its LISP site: the distribution-switch border is the proxy-ETR/ITR, exports the site registrations into each
-VRF's RIB and runs an eBGP session to the edge in the tenant VRF over a dot1q sub-interface (redistributing what the
-site registered); the access-switch edges ``use-petr`` the borders. The generator that builds the session is
-generators/topology/office_fabric.py; the VCO describes the edge's side from the same peering
-(tests/unit/test_controller_transform.py).
-
-Covers:
-  - the signal         — only an office role with an SD-WAN edge on its deployment has a WAN exit
-  - the lisp context   — the border's exit VRFs are the instances it has, the edge's PETRs are the map-servers
-  - the rendered CLI   — golden fixtures plus the lines that must (and must not) be there
-  - refusals           — a session in a VRF the LISP site does not carry; a border with no locator address
-  - the data center    — untouched whatever its deployment lists
-"""
+"""Unit tests for the render side of an office's WAN exit (access-switch and distribution-switch on cisco_xe)."""
 
 from __future__ import annotations
 
@@ -380,11 +365,7 @@ class TestRefusals:
 
 
 class TestExternalSessionPolicyScope:
-    """The WAN-exit session to the office's own SD-WAN edge is internal, so no owner prefix filter is demanded.
-
-    The exit peering is ``regular`` in a tenant VRF, the shape of an external session; what makes it ours is the
-    edge named in ``deployment.lisp_wan_edges`` (transforms/common.py ``_own_devices``).
-    """
+    """The WAN-exit session to the office's own SD-WAN edge is internal, so no owner prefix filter is demanded."""
 
     def test_the_exit_renders_when_its_edge_is_in_lisp_wan_edges(self) -> None:
         """The golden input lists the edge: no refusal, the session to it is rendered."""

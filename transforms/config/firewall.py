@@ -57,14 +57,7 @@ async def _read_by_id(
 
 
 async def read_rules(operation: Any, data: Any) -> int:
-    """Read the rules the registered query named by id, and the segments they name, and put them into ``data``.
-
-    The registered ``firewall_config`` query selects the rules of the served segments as ids only
-    (``SegmentRuleIdsFields``); this reads them once each, in pages, with ``queries/config/firewall_rules.gql`` and
-    ``firewall_rule_segments.gql``, and puts back the shape ``SegmentRulesFields`` had (``put_rules_back``). Returns
-    how many rule edges were filled. ``operation`` is the transform or check: its ``client`` and ``branch_name`` are
-    read only when there is something to read, so a payload that already carries its rules needs neither.
-    """
+    """Read the rules the registered query named by id, and the segments they name, and put them into ``data``."""
     edges = list(bare_rule_edges(data))
     if not edges:
         return 0
@@ -89,13 +82,7 @@ def _build_fw_interfaces(
     activations: list[dict[str, Any]],
     leg_contexts: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Build firewall interfaces with explicit interface or segment routing ownership.
-
-    ``leg_contexts`` maps a leg sub-interface name to the context it is a leg of (utils/service_contexts.py).
-
-    Only interfaces that have an ip_address are included — transit/management
-    interfaces without an IP are skipped for zone rendering purposes.
-    """
+    """Build firewall interfaces with explicit interface or segment routing ownership."""
     seg_zone: dict[str, dict] = {}
     for act in activations:
         seg = act.get("segment") or {}
@@ -155,24 +142,7 @@ def _segment_prefixes(zones_data: list[dict[str, Any]] | None) -> dict[str, tupl
 
 
 def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tuple[str | None, str]]) -> None:
-    """Fill the routing table and isolation of a context that has transit legs.
-
-    One table per context (Check Point VS / Junos
-    routing-instance / PAN-OS per-vsys virtual router): every served tenant
-    segment prefix (but a segment the pair terminates itself, which is connected) goes to the border leaves' anycast
-    gateway (.1) of the tenant leg in its zone's VRF (a segment with no known zone takes the
-    only tenant leg), the CIDRs of the MANAGEMENT zone to the anycast of the
-    MANAGEMENT leg, and 0.0.0.0/0 to the anycast of the INTERNET leg. A
-    context holding both PROD and NON-PROD also gets an explicit PROD<->NONPROD
-    deny (``isolation``), since the two VRFs must never be bridged through it;
-    one with a MANAGEMENT leg also denies MANAGEMENT towards each tenant
-    zone it holds (the services answer, they never initiate).
-
-    Sets ``routes`` ([{destination, nexthop, interface, vrf}], tenant
-    prefixes first), ``isolation`` ([{src_zone, dst_zone}]), ``nat`` (see
-    _nat_entries) and each leg's ``prefixes``. A context without legs
-    (colocation) is left as is.
-    """
+    """Fill the routing table and isolation of a context that has transit legs."""
     legs = context.get("legs") or []
     if not legs:
         return
@@ -200,9 +170,8 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
         if leg and prefix not in leg["prefixes"]:
             leg["prefixes"].append(prefix)
 
-    # An exchange peer (INTERNET, MANAGEMENT) is reached through its own leg:
-    # INTERNET by the default route, any other peer by the CIDRs of the
-    # segments and policy endpoints reached through this context.
+    # An exchange peer (INTERNET, MANAGEMENT) is reached through its own leg: INTERNET by the default route, any other
+    # peer by the CIDRs of the segments and policy endpoints reached through this context.
     peer_legs = [leg for leg in legs if leg["ns_type"] not in EXCHANGE_PEERS and leg["ns_type"] != INTERNET_TYPE]
     for leg in peer_legs:
         zone_prefixes = {prefix for zone, prefix in segment_prefixes.values() if zone == leg["zone"]}
@@ -248,21 +217,7 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
 def _nat_entries(
     context: dict[str, Any], legs: list[dict[str, Any]], tenant_legs: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """The context's source-NAT entries, one per egress leg; every vendor renders them with one loop.
-
-    The tenant legs' traffic leaves
-
-    - the INTERNET leg as the context's one public SNAT address, which the
-      firewall has to own itself (``own_address``: PAN-OS secondary IP); no
-      address, no entry;
-    - the MANAGEMENT leg as that leg's VIP, which it already owns as its
-      interface address (``own_address`` false), so the services see one
-      source and need no tenant return route.
-
-    An entry is {suffix, egress (the leg), address (plain IP), own_address,
-    tenant_legs}. ``suffix`` is appended to the vendor's object names so two
-    entries never collide; INTERNET's is empty (its names predate the list).
-    """
+    """The context's source-NAT entries, one per egress leg; every vendor renders them with one loop."""
     candidates = [
         (next((leg for leg in legs if leg["ns_type"] == ns_type), None), ns_type)
         for ns_type in (INTERNET_TYPE, MANAGEMENT_TYPE)
@@ -307,10 +262,7 @@ class Firewall(BaseDeviceTransform):
     def collect_policies(
         self, device: dict[str, Any]
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
-        """(activations, contexts, root policies, context id -> policies) of a
-        firewall: the rules of the segments it serves, placed in the table of
-        the context they terminate on (place_policies_in_contexts). Shared
-        with checks/firewall.py, which validates exactly these rules."""
+        """(activations, contexts, root policies, context id -> policies) of a firewall."""
         interfaces = device.get("interfaces") or []
         activations = self._collect_activations_from_interfaces(interfaces)
         ha = get_ha(device.get("capabilities"), interfaces, device.get("name"))

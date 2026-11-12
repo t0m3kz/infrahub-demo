@@ -1,9 +1,4 @@
-"""The firewall device roles are one spelling in the schema, the constants and the bootstrap data.
-
-A role is a Dropdown choice in two places (the device role and the role of a design element); the generators, the
-checks and the bootstrap data name it. A role missing from a dropdown is refused by the server only when the data is
-loaded (the design elements of data/bootstrap/14_design_elements.yml), so this reads the files instead.
-"""
+"""The firewall device roles are one spelling in the schema, the constants and the bootstrap data."""
 
 from __future__ import annotations
 

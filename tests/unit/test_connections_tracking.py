@@ -1,12 +1,4 @@
-"""Tracking-ownership flags on CablingMixin's shared write helpers.
-
-ensure_vlan_subinterface() and upsert_p2p_addresses() are reached by callers
-that own what they write (a dedicated FirewallContext, a segment's own
-termination) and by callers that do not (the shared FirewallContext every
-customer on a cluster reaches). ``track`` makes that a per-call decision:
-the default keeps the plain upsert (the run claims the node), track=False
-adds update_group_context=False so no run's delete_unused_nodes can reclaim it.
-"""
+"""Tracking-ownership flags on CablingMixin's shared write helpers."""
 
 from __future__ import annotations
 
@@ -40,8 +32,7 @@ def _make_gen() -> Any:
 
 
 def _joined(gen: Any) -> list[tuple[str, list[str]]]:
-    """(node id, peer ids) of every RelationshipAdd on an interface's ``capabilities`` (interface_vrf
-    ``join_capabilities``): the edges are added one call each, never saved as a list."""
+    """(node id, peer ids) of every RelationshipAdd on an interface's ``capabilities``."""
     calls = []
     for call in gen.client.execute_graphql.await_args_list:
         data = (call.kwargs.get("variables") or {}).get("data") or {}
@@ -66,12 +57,7 @@ def _prefix(value: str = "100.65.0.0/31") -> Any:
 
 
 def _sub_iface(*, existing_peer_ids: list[str], gen: Any = None) -> Any:
-    """A created DcimVirtualInterface; with ``gen``, the stored node its capabilities are read from.
-
-    The created node does not know the capabilities the server holds, so the helper reads them off one
-    get(include=["capabilities"]) of the stored node, which is ``node.stored`` here (never saved: a missing
-    capability is a RelationshipAdd, ``_joined``).
-    """
+    """A created DcimVirtualInterface; with ``gen``, the stored node its capabilities are read from."""
     node = MagicMock(id="sub-1")
     node.save = AsyncMock()
     node.stored = MagicMock(id="sub-1")
@@ -144,8 +130,7 @@ class TestUpsertP2pAddressesTrack:
 
     @pytest.mark.asyncio
     async def test_track_false_resaves_existing_addresses_untracked(self) -> None:
-        """track=False on a re-run: existing addresses are reused (query
-        before create kept) and re-saved untracked — never claimed."""
+        """track=False on a re-run: existing addresses are reused (query before create kept) and re-saved untracked."""
         gen = _make_gen()
         existing = [_address("100.65.0.0/31", "ip-a"), _address("100.65.0.1/31", "ip-b")]
         gen.client.filters = AsyncMock(return_value=existing)
@@ -193,8 +178,7 @@ class TestEnsureVlanSubinterfaceTrack:
 
     @pytest.mark.asyncio
     async def test_default_tracks_the_save_and_adds_the_vrf_as_an_edge(self) -> None:
-        """Default: the sub-interface save is tracked; the VRF is one RelationshipAdd, the stored node is
-        never saved (a list save would replace the port's other edges)."""
+        """Default: the sub-interface save is tracked; the VRF is one RelationshipAdd."""
         gen = _make_gen()
         node = _sub_iface(existing_peer_ids=[], gen=gen)
 
@@ -393,8 +377,7 @@ class TestEnsureVlanSubinterfaceVrf:
 
     @pytest.mark.asyncio
     async def test_the_vrf_is_added_as_an_edge_and_a_stale_one_is_left(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """No ``vrf`` in the create data; the new instance is added in one RelationshipAdd (never a saved list), then
-        the leg leaves the instance it was in."""
+        """No ``vrf`` in the create data; the new instance is added in one RelationshipAdd (never a saved list)."""
         gen = _make_gen()
         node = _sub_iface(existing_peer_ids=["ex-1"], gen=gen)
         old = MagicMock(id="vrf-old", typename="ManagedVRF")

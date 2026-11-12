@@ -1,0 +1,13 @@
+---
+# Patch panel of the FR2 cage; add_patch_panel builds its ports.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPatchPanel
+  data:
+    - name: "PP-EQX-FR2-01"
+      panel_type: lc-24
+      description: "FR2 cage patch panel (cross-connect to the Equinix Fabric port)"
+      rack: fr2-s1-r-1
+      member_of_groups:
+        - patch_panels

@@ -58,8 +58,7 @@ def _tunnel(
     owner_type: str = "OrganizationCustomer",
     namespace: str = "PROD",
 ) -> dict[str, Any]:
-    """A raw tunnel node: the office of ``owner`` in its locations (the tunnel stores no owner), the device of
-    each end port, registered (prefix, namespace) pairs. A second location that is no office selects nothing."""
+    """A raw tunnel node:"""
     return {
         "vrf": {"node": _raw_vrf(namespace)},
         "locations": {"edges": [_office_location(owner, owner_type), {"node": {}}]},

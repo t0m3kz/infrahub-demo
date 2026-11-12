@@ -1,54 +1,7 @@
-"""Generator assigning a segment to the exact switch interface an
-AppComponent's instance is cabled to.
-
-A DC-wide sweep used to tag every leaf/tor customer port in a segment's
-deployment, whether or not that customer had anything cabled there (see
-generators/topology/segment.py, which no longer does this). That
-over-provisions every access switch in the DC for a tenant that may only
-have a handful of servers. This generator instead reacts to AppComponent —
-the thing that actually names where a tenant's compute runs (``instances``)
-and which segment it belongs to (``network_segment``) — and tags only the
-interface(s) that instance is cabled to.
-
-Resolution per instance:
-  - A bare physical device (DcimPhysicalDevice, ManagedControllerPhysical)
-    is used directly.
-  - A virtual instance (DcimVirtualDevice, ManagedControllerVirtual) walks
-    its hosting_device to the physical host actually cabled to the fabric.
-  - Anything else (e.g. CloudInstance) has no on-prem port to tag and is
-    skipped — cloud segmentation is handled in the Cloud namespace, not here.
-
-For a bonded instance (role=lag NICs bundled into a DcimLAGInterface, see
-generators/topology/endpoint.py), the switch-side far end of a member's
-cable is itself a role=lag physical port that is a member of the switch's
-own port-channel — the port-channel is what carries the segment's VLAN
-(ConfigDB/NX-OS trunk config lives on the aggregate, not the raw member),
-so that is what gets tagged, not the raw member port.
-
-A segment with no AppComponent at all referencing it gets no generated customer-port
-assignment — there is intentionally no DC-wide fallback (see
-generators/topology/segment.py's module docstring).
-
-A ManagedVxlanSegment has its VLAN rows reconciled (its local VLAN is per
-switch), then its ports joined to them. Any other segment (a cloud segment)
-has no on-prem port to tag.
-
-Reconciled per SEGMENT, not per component: the triggering component only
-names the segment. The desired ports are the union over every AppComponent
-on it (queries/topology/add/segment_components.gql) plus the ports assigned to
-the segment's deployments (a person's request). The edge is the port's
-membership of its switch's row (the row's ``capabilities``), written only by the
-reconcile; a port no longer desired (an instance moved, a component left, an
-assignment withdrawn) loses it (SegmentPortTagMixin, shared with
-add_vxlan_segment and add_segment_deployment_ports). A component that moves to
-ANOTHER segment leaves the old segment's ports until that segment is reconciled
-again (the next run of any of those generators on it).
-
-An instance's physical device may not be cabled yet (add_endpoint has not
-run, or hasn't reached it) — nothing is tagged until it is. Once add_endpoint
-cables it, that run dispatches this generator for every component instanced
-on the endpoint or a VM it hosts (EndpointConnectivityGenerator.
-_fan_out_component_segments), so the tags follow the cabling.
+"""Generator assigning a segment to the switch interface an AppComponent's instance is cabled to (no DC-wide fallback,
+see segment.py). A physical instance is used directly, a virtual one via its hosting_device, a bonded one on the switch
+port-channel; CloudInstance is skipped. Reconciled per segment (desired ports are the union over its components plus
+assigned ports), via SegmentPortTagMixin.
 """
 
 from __future__ import annotations
@@ -68,18 +21,8 @@ from .segment_ports import SegmentPortTagMixin
 class AppInstanceSegmentGenerator(
     PoolMixin, CablingMixin, SegmentAddressingMixin, SegmentPortTagMixin, CommonGenerator
 ):
-    """Reconciles a segment's customer-facing switch-port tags from the
-    instances of every AppComponent on it, then, for a VXLAN segment, the
-    segment's LOCAL VLAN ID rows on the switches those ports belong to
-    (and their MLAG peers).
-
-    Ownership: a tagged switch port belongs to the device's generator and a
-    row is shared by every component on the segment and by add_vxlan_segment,
-    so this run claims neither. Both are shared desired state of the SEGMENT,
-    written untracked and reconciled explicitly — tags via
-    RelationshipAdd/RelationshipRemove on the port, rows via
-    SegmentVlanMixin — under the per-segment lock. This generator saves
-    nothing into its own tracking group.
+    """Reconcile a segment's customer-port tags from its components' instances, then its VLAN rows (and MLAG peers);
+    untracked.
     """
 
     graphql_root_key = "AppComponent"
@@ -107,14 +50,13 @@ class AppInstanceSegmentGenerator(
             )
             return
         if not component.get("instances"):
-            # Still reconciled: the instances this component used to have
-            # leave their switch ports tagged until the segment is.
+            # Still reconciled: the old instances' ports stay tagged until the segment is
             self.logger.info(f"Component {fqdn}: no instances set — reconciling segment '{segment_name}' anyway")
 
         await self.ensure_segment_addressing(segment)
         tags = await self.reconcile_vxlan_segment(segment_id, segment_name)
         if tags is None:
-            # The segment is gone or is no VXLAN segment: nothing to assign.
+            # The segment is gone or not VXLAN: nothing to assign
             self.logger.info(f"Component {fqdn}: segment {segment_id} is not a VXLAN segment — nothing to assign")
             return
         added, removed = tags

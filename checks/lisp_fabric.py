@@ -1,13 +1,5 @@
-"""Validate the LISP fabric of every office that has one.
-
-An office with a fabric (fabric_templates) is a LISP site by role: its access-switches and distribution-switches
-always run LISP, and the cisco_xe templates render map-server/map-resolver on the distribution-switches and ETRs
-on the access-switches, over an OSPFv2 IPv4 underlay. Anything outside that profile renders config that is
-syntactically valid and silently does not forward, so the profile is enforced here, on the site as a whole, not
-per device: cisco_xe, a distribution-switch map-server, a site key, every segment in a VRF with an L3 instance-id,
-an SD-WAN edge with the BGP process of its WAN exit, one LISP footprint per building.
-
-An office without a fabric produces no output.
+"""Check the LISP fabric of every office that has one (cisco_xe, map-server, site key, VRF instance-ids, SD-WAN edge,
+one footprint per building).
 """
 
 from __future__ import annotations
@@ -41,11 +33,7 @@ def _gateway_problems(activations: list[dict[str, Any]]) -> list[str]:
 
 
 def _vrf_problems(activations: list[dict[str, Any]]) -> list[str]:
-    """One problem per active segment whose gateway is not in a VRF with an L3 instance-id.
-
-    The transform refuses to render such a segment (a host SVI would land in the global table next to the EID
-    tables), so the check says so before an artifact fails.
-    """
+    """One problem per active segment whose gateway is not in a VRF with an L3 instance-id (the transform refuses it)."""
     problems: list[str] = []
     for activation in activations:
         segment = activation.get("segment") or {}
@@ -83,7 +71,7 @@ class CheckLispFabric(InfrahubCheck):
         )
 
     def _validate_offices(self, offices: list[dict[str, Any]]) -> None:
-        """Validate every office that has a fabric: they are the LISP footprints, one allowed per building."""
+        """Validate every office with a fabric (one LISP footprint per building)."""
         offices_by_building: dict[str, list[str]] = {}
         for office in offices:
             for building in office.get("locations") or []:
@@ -114,8 +102,7 @@ class CheckLispFabric(InfrahubCheck):
         if fabric and not office.get("lisp_site_key"):
             problems.append("it has no lisp_site_key, the ETRs cannot authenticate to the map-servers")
 
-        # The exit is built by add_office_fabric for the edge the office has: an edge with no BGP process of its own
-        # means the exit is missing (the generator ran before the edge existed and has not run since).
+        # An edge with no BGP process means add_office_fabric ran before the edge existed.
         for device in office.get("devices") or []:
             if device.get("role") == EDGE_ROLE and not any(
                 capability.get("typename") == "ManagedBGP" for capability in device.get("capabilities") or []

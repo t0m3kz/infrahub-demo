@@ -1,12 +1,4 @@
-"""Unit tests for CommonGenerator.create_chain_cabling() — cabling an ordered
-chain of device groups end to end (e.g. border-leaf<->firewall<->load-balancer
-<->border-leaf), one leg per consecutive pair of hops.
-
-Exercises the real cable-creation path (not mocked out), since this is new
-logic added alongside dc.py's border-leaf/firewall/load-balancer refactor —
-create_cabling() itself is left untouched; create_chain_cabling() only reuses
-its cable/IP-allocation tail via the shared _execute_cabling_plan() helper.
-"""
+"""Unit tests for CommonGenerator.create_chain_cabling() — cabling an ordered chain of device groups end to end."""
 
 from __future__ import annotations
 
@@ -82,11 +74,7 @@ class TestCreateChainCabling:
 
     @pytest.mark.asyncio
     async def test_two_independent_paths_never_cross_cable(self) -> None:
-        """2 border-leafs, 2 firewalls, 2 dedicated ports each: bl-01<->fw-01
-        and bl-02<->fw-02 must form two fully INDEPENDENT chains — bl-01 is
-        never cabled to fw-02, matching the real border-leaf/firewall/
-        load-balancer/ips redundant-path topology (each numbered path is
-        its own chain end to end, not an any-to-any mesh)."""
+        """2 border-leafs, 2 firewalls, 2 dedicated ports each."""
         gen = _make_generator()
         bl_ifaces = [
             _iface("Eth1/25", device="bl-01"),
@@ -156,11 +144,7 @@ class TestCreateChainCabling:
 
     @pytest.mark.asyncio
     async def test_four_hop_chain_with_two_ports_per_device_returns_to_border_leaf(self) -> None:
-        """border-leaf<->firewall<->load-balancer<->border-leaf (the real
-        inline-mode shape) with 2 devices and 2 dedicated ports per hop.
-        Confirms the LAST hop (border-leaf again, on its OWN "load-balancer"
-        -role ports — distinct from the FIRST hop's "firewall"-role ports)
-        gets cabled correctly as the chain's return leg."""
+        """border-leaf<->firewall<->load-balancer<->border-leaf."""
 
         def _two_ports(prefix: str, device: str) -> list[MagicMock]:
             return [_iface(f"{prefix}{p}", device=device) for p in (1, 2)]
@@ -196,13 +180,13 @@ class TestCreateChainCabling:
         assert len(result) == 3
         assert [len(leg) for leg in result] == [4, 4, 4]
         assert gen.client.create.await_count == 12
-        # The return leg (3rd) cabled the same two border-leafs as the first
-        # leg, but on a different port group (bl_lb_ifaces, not bl_fw_ifaces).
+        # The return leg (3rd) cabled the same two border-leafs as the first leg, but on a different port group
+        # (bl_lb_ifaces, not bl_fw_ifaces).
         return_leg_endpoints = {e for pair in result[2] for e in (pair[0].id, pair[1].id)}
         assert return_leg_endpoints == {iface.id for iface in bl_lb_ifaces + lb_down_ifaces}
 
-        # Every leg is index-paired into two independent chains — bl-01's
-        # path never touches fw-02/lb-02, and vice versa.
+        # Every leg is index-paired into two independent chains — bl-01's path never touches fw-02/lb-02, and vice
+        # versa.
         for leg in result:
             device_pairs = {(pair[0].device.display_label, pair[1].device.display_label) for pair in leg}
             devices_in_use = {d for pair in device_pairs for d in pair}
@@ -244,9 +228,7 @@ class TestCreateChainCabling:
 
     @pytest.mark.asyncio
     async def test_speed_mismatch_fails_the_run(self) -> None:
-        """Ports exist on both sides but at incompatible speeds — the speed-aware
-        plan builder raises, so no cable is created and the leg is never silently
-        returned as an empty (green) result."""
+        """Ports exist on both sides but at incompatible speeds — the speed-aware plan builder raises."""
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01", interface_type="100gbase-x-qsfp28")
         fw_iface = _iface("eth1", device="fw-01", interface_type="25gbase-x-sfp28")
@@ -306,11 +288,7 @@ def _existing_address(address: str, ip_id: str) -> AsyncMock:
 
 
 class TestP2PAddressIsQueriedBeforeCreate:
-    """IpamIPAddress's (address, ip_namespace) uniqueness_constraint is only
-    enforced by an async validator, not a synchronous DB constraint (see
-    hfid_index_lag_same_run.md) — a blind client.create() for each P2P host
-    address races a second, overlapping call for the same link and can leave
-    two nodes with the same address. Query first and reuse whatever's there."""
+    """IpamIPAddress's (address, ip_namespace) uniqueness_constraint is only enforced by an async validator."""
 
     @pytest.mark.asyncio
     async def test_creates_when_address_does_not_exist_yet(self) -> None:
@@ -347,8 +325,7 @@ class TestP2PAddressIsQueriedBeforeCreate:
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01")
         fw_iface = _iface("eth1", device="fw-01")
-        # Both addresses already exist — as if an earlier, overlapping call
-        # for this same link already created them.
+        # Both addresses already exist — as if an earlier, overlapping call for this same link already created them.
         existing_ips = [
             _existing_address("100.65.0.1/31", "existing-dst-ip"),
             _existing_address("100.65.0.0/31", "existing-src-ip"),
@@ -369,29 +346,18 @@ class TestP2PAddressIsQueriedBeforeCreate:
         create_data_calls = [c for c in gen.client.create.call_args_list if "address" in c.kwargs.get("data", {})]
         assert create_data_calls == []
         assert {bl_iface.ip_address, fw_iface.ip_address} == {"existing-src-ip", "existing-dst-ip"}
-        # Still saved: an address the run reuses but does not save drops out of
-        # its tracking group, and delete_unused_nodes deletes it on a rerun.
+        # Still saved: an address the run reuses but does not save drops out of its tracking group, and
+        # delete_unused_nodes deletes it on a rerun.
         for ip_obj in existing_ips:
             ip_obj.save.assert_awaited_once_with(allow_upsert=True)
 
 
 class TestCableIsNeverReferencedBeforeItIsVisible:
-    """The cable is created last and its id is never *sent* back to the server on
-    an interface — writing a freshly created node's id into the next mutation
-    intermittently fails with NODE_NOT_FOUND under concurrent generator runs
-    (observed as "Unable to find the node <uuid> / DcimCable in the database").
-    The reverse `endpoints` relationship on the cable establishes the link in the
-    graph while only referencing interfaces that already existed.
-
-    The returned interface objects still get the cable assigned in memory, after
-    their last save: create_routing() derives the underlay peerings from it.
-    """
+    """The cable is created last and its id is never *sent* back to the server on an interface."""
 
     @pytest.mark.asyncio
     async def test_returned_interfaces_carry_the_cable_in_memory(self) -> None:
-        """create_routing() pairs interfaces by `iface.cable.id`, so the objects
-        handed back have to carry the cable even though it was never saved onto
-        them."""
+        """create_routing() pairs interfaces by `iface.cable.id`."""
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01")
         fw_iface = _iface("eth1", device="fw-01")
@@ -412,8 +378,7 @@ class TestCableIsNeverReferencedBeforeItIsVisible:
 
     @pytest.mark.asyncio
     async def test_cable_is_assigned_only_after_both_interfaces_are_saved(self) -> None:
-        """Ordering guard: no interface upsert may be in flight after the cable
-        exists, so none can carry a not-yet-visible cable id to the server."""
+        """Ordering guard: no interface upsert may be in flight after the cable exists."""
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01")
         fw_iface = _iface("eth1", device="fw-01")
@@ -424,8 +389,7 @@ class TestCableIsNeverReferencedBeforeItIsVisible:
 
         def _save_iface(iface: MagicMock, label: str) -> AsyncMock:
             def _record(**_: Any) -> None:
-                # The cable must not be attached yet — otherwise this upsert
-                # would send its id.
+                # The cable must not be attached yet — otherwise this upsert would send its id.
                 assert iface.cable is None
                 calls.append(label)
 

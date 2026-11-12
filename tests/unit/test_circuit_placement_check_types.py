@@ -1,10 +1,4 @@
-"""CheckCircuitPlacement: what the one session kind may carry per ``circuit_type``.
-
-The schema leaves vrf, password and registered_prefixes optional on
-TopologySessionCircuit, so the check holds them per circuit_type (handoff and vpn require vrf;
-dci refuses the handoff fields, tunnels refuse passwords and require vrf for registered prefixes). Payload builders:
-tests/unit/circuit_placement_check_helpers.py.
-"""
+"""CheckCircuitPlacement: what the one session kind may carry per ``circuit_type``."""
 
 from __future__ import annotations
 

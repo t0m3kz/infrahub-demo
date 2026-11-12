@@ -17,9 +17,7 @@ from utils.limits import ROLE_GROUP_NAMES
 
 
 def _controller_dict(controller_type: str, platform_id: str | None = None, id_: str = "ctrl-1") -> dict[str, Any]:
-    """Shape clean_data() produces for one controllers() query edge — see
-    queries/topology/add/dc.gql's fabric_controllers/security_manager_
-    controllers/lb_manager_controllers aliases."""
+    """Shape clean_data() produces for one controllers() query edge."""
     entry: dict[str, Any] = {"id": id_, "controller_type": controller_type}
     if platform_id is not None:
         entry["platform"] = {"id": platform_id}
@@ -27,10 +25,7 @@ def _controller_dict(controller_type: str, platform_id: str | None = None, id_: 
 
 
 class TestResolveRoleController:
-    """DeviceMixin._resolve_role_controller — synchronous, reads
-    self._all_controllers (pre-fetched once per generator run by dc.py/
-    pod.py/rack.py's generate(), merging their own query's role-bucketed
-    controller aliases — no runtime query here)."""
+    """DeviceMixin._resolve_role_controller."""
 
     def _gen(self, controllers: list[dict[str, Any]] | None = None) -> Any:
         gen = DeviceMixin.__new__(DeviceMixin)
@@ -70,8 +65,7 @@ class TestResolveRoleController:
         assert controller is dnac
 
     def test_firewall_requires_platform_match_not_just_controller_type(self) -> None:
-        # security_manager controller for a DIFFERENT platform (paloalto_panos) — must
-        # not match a checkpoint_gaia firewall despite the same controller_type.
+        # A controller of a different platform must not match despite the same controller_type.
         panorama = _controller_dict("security_manager", platform_id="plat-paloalto_panos")
         gen = self._gen(controllers=[panorama])
 
@@ -101,8 +95,7 @@ class TestResolveRoleController:
         assert controller is big_iq
 
     def test_empty_controllers_list_returns_none_without_warning(self) -> None:
-        """No controllers at all isn't controller-managed — shouldn't warn,
-        that's just the normal fully_managed case."""
+        """No controllers at all isn't controller-managed."""
         gen = self._gen(controllers=[])
 
         controller = gen._resolve_role_controller(
@@ -114,8 +107,7 @@ class TestResolveRoleController:
 
 
 class TestCreateDevicesControllerRouting:
-    """End-to-end: create_devices() itself skips group membership and adds
-    to controller.managed_devices when a matching controller is resolved."""
+    """End-to-end:"""
 
     @pytest.mark.asyncio
     async def test_routes_to_controller_instead_of_group(self) -> None:
@@ -141,14 +133,12 @@ class TestCreateDevicesControllerRouting:
 
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["data"]["member_of_groups"] == []
-        # Only the missing device is added, atomically: a save of the whole peer list lets
-        # concurrent racks of one controller overwrite each other's devices.
+        # Only the missing device is added, atomically: a saved peer list lets racks overwrite each other.
         controller_obj.add_relationships.assert_awaited_once_with(
             relation_to_update="managed_devices", related_nodes=[created_device.id]
         )
         controller_obj.save.assert_not_awaited()
-        # The peer ids arrive with the controller itself (include=), never via a
-        # managed_devices.fetch() re-get plus full-node read of every managed device.
+        # Peer ids arrive with the controller (include=), no managed_devices.fetch().
         gen.client.get.assert_awaited_once_with(kind=ManagedController, id="cp-sms-1", include=["managed_devices"])
 
     @pytest.mark.asyncio
@@ -201,8 +191,7 @@ class TestCreateDevicesControllerRouting:
         ],
     )
     async def test_role_joins_its_bootstrap_group(self, role: str, group: str) -> None:
-        """Every caller lands a role in its bootstrap group — load-balancer is
-        "loadbalancers", not the derived "load-balancers" a branch would create."""
+        """Every caller lands a role in its bootstrap group."""
         gen = _make_generator()
         gen.client.create = AsyncMock(return_value=_mock_created_device(DcimPhysicalDevice.__name__, f"dc1-{role}-01"))
 
@@ -220,8 +209,7 @@ class TestCreateDevicesControllerRouting:
 
 
 class TestCampusRoles:
-    """The office fabric's roles create their device and nothing else (a switch is its own VLAN domain, with no
-    record of its own), and neither role joins a derived "access-switchs"-style group."""
+    """The office fabric's roles create their device and nothing else."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("role", ["access-switch", "distribution-switch"])
@@ -242,8 +230,7 @@ class TestCampusRoles:
         assert [call.kwargs["kind"] for call in gen.client.create.call_args_list] == [DcimPhysicalDevice]
 
     def test_every_role_group_is_a_bootstrap_group(self, root_dir: Path) -> None:
-        """A group the bootstrap does not load is created on whichever branch needs it first and then
-        collides with every other branch that creates it (see ROLE_GROUP_NAMES)."""
+        """A group the bootstrap does not load collides across branches (see ROLE_GROUP_NAMES)."""
         groups = {
             entry["name"]
             for document in yaml.safe_load_all((root_dir / "data/bootstrap/00_groups.yml").read_text())

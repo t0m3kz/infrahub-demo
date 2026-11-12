@@ -31,8 +31,7 @@ from .types import RoutingOptions
 EVPN_AF = ("l2vpn", "evpn")
 IPV4_UNICAST_AF = ("ipv4", "unicast")
 IPV6_UNICAST_AF = ("ipv6", "unicast")
-# Attributes a missing address family is created with — the same values the
-# bootstrap data file gives them.
+# Defaults for a missing address family; same values as the bootstrap data.
 _ADDRESS_FAMILY_DATA: dict[tuple[str, str], dict[str, Any]] = {
     IPV4_UNICAST_AF: {"description": "IPv4 unicast"},
     IPV6_UNICAST_AF: {"description": "IPv6 unicast"},
@@ -41,26 +40,19 @@ _ADDRESS_FAMILY_DATA: dict[tuple[str, str], dict[str, Any]] = {
 
 
 def _dci_key_name(circuit_name: str) -> str:
-    """The per-circuit key of a DCI (generators/topology/virtual_circuit.py), not a fabric-wide one."""
+    """The per-circuit key of a DCI, not a fabric-wide one."""
     return f"{circuit_name}-dci-key"
 
 
 class RoutingMixin(SharedRoutingObjectsMixin):
-    """Mixin providing routing configuration methods for CommonGenerator.
+    """Routing methods for CommonGenerator (needs its client, logger, deployment_id, fabric_name, resource_lock)."""
 
-    Expects the host class to provide: ``client``, ``logger``,
-    ``deployment_id``, and ``fabric_name`` attributes (all present on
-    ``CommonGenerator`` via ``InfrahubGenerator``), and PoolMixin's
-    ``resource_lock``.
-    """
-
-    # Attribute declarations for the type checker — provided by CommonGenerator / InfrahubGenerator
+    # Type-checker declarations, provided by CommonGenerator / InfrahubGenerator
     client: Any
     logger: logging.Logger
     deployment_id: str
     fabric_name: str
-    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
-    # nothing shadows them in the MRO.
+    # Type checking only: aliases of the host's other bases, so nothing shadows them in the MRO.
     if TYPE_CHECKING:
         resource_lock = PoolMixin.resource_lock
 
@@ -73,19 +65,9 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         bottom_role: str = "",
         top_role: str = "",
     ) -> None:
-        """Create routing configuration for a layer pair.
-
-        ``p2p_interfaces`` is the list of ``(src, dst)`` interface pairs returned by
-        ``create_cabling``.  Pass ``[]`` when there are no cables yet (process-only
-        calls such as the pre-cable spine BGP seeding in pod.py).
-
-        ``bottom_role``/``top_role`` are the caller's known role for every
-        device in ``bottom_devices``/``top_devices`` (e.g. "leaf"/"spine").
-        Every caller creates or selects these devices for exactly one role,
-        so pass it — it's used as the authoritative role source instead of
-        querying ``DcimDevice.role``, which has been observed to
-        intermittently resolve to None when queried from a different worker
-        process than the one that wrote it.
+        """Create routing for a layer pair from the ``(src, dst)`` cabling pairs (``[]`` for process-only calls).
+        ``bottom_role``/``top_role`` replace querying ``DcimDevice.role``, which intermittently resolved to None from
+        another worker.
         """
         if options is None:
             options = RoutingOptions()
@@ -93,8 +75,7 @@ class RoutingMixin(SharedRoutingObjectsMixin):
             p2p_interfaces = []
         design = options.get("design") or {}
         routing_strategy = design.get("routing_strategy")
-        # An office fabric (options no_overlay) has no overlay BGP, no overlay AS
-        # and no EVPN address family — only the OSPF underlay below.
+        # An office fabric (no_overlay) has no overlay BGP, AS or EVPN family, only the OSPF underlay.
         no_overlay = bool(options.get("no_overlay"))
 
         if not routing_strategy:
@@ -114,19 +95,7 @@ class RoutingMixin(SharedRoutingObjectsMixin):
             f"[strategy={routing_strategy}]"
         )
 
-        # ================================================================
-        # RESOLVE SHARED/CROSS-GENERATOR STATE + DATA COLLECTION
-        # ================================================================
-        # One combined polling loop for everything this call needs but doesn't
-        # own: dc.py-level shared objects (overlay AS, OSPF area, auth keys)
-        # and a sibling pod's overlay BGP (pod.py's decentralized mesh cabling
-        # queries a sibling pod's spines directly, no dc.py-level wait). A
-        # pod's/rack's own task-list check for an in-flight add_dc only catches
-        # "still running" — not the narrow window between add_dc's task
-        # completing and this call's own queries landing, nor a sibling
-        # generator's independent in-flight run. Every such lookup shares one
-        # retry loop and one backoff per round instead of each waiting (and
-        # re-sleeping) independently in sequence.
+        # Resolve shared state (overlay AS, OSPF area, auth keys, sibling pod BGP) in one retry loop with one backoff.
         interfaces = [iface for pair in p2p_interfaces for iface in pair]
 
         needs_overlay_as = (
@@ -143,10 +112,7 @@ class RoutingMixin(SharedRoutingObjectsMixin):
             and not options.get("skip_underlay")
             and routing_strategy == RoutingStrategy.OSPF_IBGP
         )
-        # Shared underlay/overlay BGP/OSPF auth keys — created once by the DC generator.
-        # Unlike overlay AS / OSPF area, a missing key is non-fatal: auth is a hardening
-        # add-on, not required for connectivity, so routing creation proceeds without it
-        # even if the retry loop below never finds them.
+        # Auth keys are created once by the DC generator; a missing key is non-fatal.
         needs_underlay_password = not options.get("underlay_password_id") and not options.get("skip_underlay")
         needs_overlay_password = not no_overlay and not options.get("overlay_password_id")
 
@@ -241,11 +207,7 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         if needs_overlay_password and overlay_password_id:
             options["overlay_password_id"] = overlay_password_id
 
-        # The shared DC-level objects (overlay AS, OSPF area, auth keys) are
-        # only referenced here, never tracked: add_dc/dc_pod_cascade own them
-        # and track them on every run (_create_shared_routing_objects). Tracked
-        # by a pod or rack run too, that run's cleanup would delete them the
-        # run it stops reaching them.
+        # Shared DC-level objects are referenced, never tracked: add_dc/dc_pod_cascade own them.
 
         underlay_type = routing_strategy.split("-")[0]
 
@@ -257,14 +219,10 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         else:
             underlay = [b for b in all_bgp if b.process_role.value == "underlay"]
 
-        # Overlay is always iBGP/eBGP (ManagedBGP) — only the underlay can be OSPF.
+        # Overlay is always BGP; only the underlay can be OSPF.
         overlay = [b for b in all_bgp if b.process_role.value == "overlay"]
 
-        # MLAG-paired devices among the ones being routed share ONE underlay
-        # ASN (.dev/bgp.txt) — build device name -> MLAG domain name, used
-        # by _plan_ebgp_underlay to group AS allocation. Only devices with
-        # exactly 2 member names resolve (a ManagedMLAG's capabilities are
-        # its 2 physical peers, see generators/devices.py's _ensure_mlag_pairs).
+        # Device name -> MLAG domain, so MLAG peers share one underlay ASN (.dev/bgp.txt).
         mlag_pairs: dict[str, str] = {}
         for domain in mlag_domains:
             domain_name = domain.name.value
@@ -280,20 +238,9 @@ class RoutingMixin(SharedRoutingObjectsMixin):
             f"{len(mlag_pairs)} MLAG-paired device(s)"
         )
 
-        # ================================================================
-        # PHASE 2: BUILD ROUTING PLAN (pure helper, no DB access)
-        # ================================================================
+        # Phase 2: build the routing plan (pure)
 
-        # strict=True: refuse to skip a device out of routing. The planner's four
-        # "no router-id / no loopback IP" branches otherwise warn and continue,
-        # leaving a device created, cabled and addressed but with no BGP or OSPF
-        # process — the DC12 shape: indistinguishable from a healthy device
-        # unless you count processes, and the task still reports success. Strict
-        # mode was already implemented and unit-tested (tests/unit/
-        # test_routing_strict_mode.py) but no caller had ever opted in, so every
-        # production run took the tolerant path. A full 30_all load hits none of
-        # the four branches, so this changes no current outcome — it only stops
-        # the next regression from being invisible.
+        # strict: refuse to skip a device (no router-id/loopback) instead of leaving it with no BGP/OSPF process.
         planner = RoutingPlanner(deployment_id=self.deployment_id, logger=self.logger, strict=True)
 
         evpn_af_id = "" if no_overlay else await self.ensure_address_family(*EVPN_AF)
@@ -317,9 +264,7 @@ class RoutingMixin(SharedRoutingObjectsMixin):
             )
         )
 
-        # ================================================================
-        # PHASE 3: CREATE SDK OBJECTS, SAVE IN DEPENDENCY ORDER
-        # ================================================================
+        # Phase 3: create SDK objects, save in dependency order
 
         # Step 1: Create + save AS objects, build device -> AS ID mapping
         device_to_as_id = await self._save_autonomous_systems(plan.autonomous_systems)
@@ -334,22 +279,14 @@ class RoutingMixin(SharedRoutingObjectsMixin):
                 else:
                     self.logger.error(f"Cannot resolve AS for {bgp.get('name')}")
 
-        # Step 3: Create BGP + OSPF SDK objects, save sequentially.
-        # Every process is upserted by its deterministic HFID (name). Re-saving an
-        # existing ManagedBGP is safe: local_as is cardinality-one and upserts cleanly
-        # (replaces, never duplicates — verified on Infrahub 1.9.6), so the upsert
-        # also (re)registers it in the group context with no new/existing split.
+        # Step 3: upsert BGP + OSPF processes by HFID (local_as upserts cleanly, no new/existing split).
         plan.bgp_processes = [await self.client.create(kind=ManagedBGP, data=d) for d in plan.bgp_processes]
         plan.ospf_processes = [await self.client.create(kind=ManagedOSPF, data=d) for d in plan.ospf_processes]
         for obj in plan.bgp_processes + plan.ospf_processes:
             await obj.save(allow_upsert=True)
             self.logger.info(f"  Saved: {getattr(getattr(obj, 'name', None), 'value', obj.id)}")
 
-        # Step 4: Resolve HFID refs to processes saved in this same run into direct id
-        # refs. HFID lookups go through the search index, which can lag just behind a
-        # write that landed a moment earlier in this run (NODE_NOT_FOUND). Refs to
-        # processes from earlier generator runs are left as HFID — no race there,
-        # those have had plenty of time to be indexed.
+        # Step 4: resolve HFID refs to processes saved in this run into ids (search-index lag gives NODE_NOT_FOUND).
         process_id_by_name = {obj.name.value: obj.id for obj in plan.bgp_processes + plan.ospf_processes}
 
         def _resolve_hfid(ref: dict) -> dict:
@@ -361,16 +298,8 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         for ospf_peering in plan.ospf_peerings:
             ospf_peering["ospf_process"] = [_resolve_hfid(ref) for ref in ospf_peering["ospf_process"]]
 
-        # Step 5: Create peering + OSPF interface SDK objects, save sequentially.
-        # ospf_interfaces are created before ospf_peerings so the latter's
-        # ospf_interface HFID refs can be resolved to direct ids the same way
-        # process refs are resolved above — they reference objects created in
-        # this same run, so the same NODE_NOT_FOUND-avoidance applies.
-        # Peerings additionally retry on save (save_with_node_not_found_retry): unlike
-        # processes, a peering can reference a process id created by a DIFFERENT,
-        # concurrently-running create_routing() call against the same shared
-        # device (e.g. every pod's spines peering to the same super-spines) — a
-        # write-contention race the HFID resolution above doesn't cover.
+        # Step 5: save OSPF interfaces before peerings (same id resolution); peerings retry on save because concurrent
+        # runs may create the process they reference.
         plan.bgp_peerings = [await self.client.create(kind=ManagedBGPPeering, data=d) for d in plan.bgp_peerings]
         plan.ospf_interfaces = [
             await self.client.create(kind=RoutingOSPFInterface, data=d) for d in plan.ospf_interfaces
@@ -402,16 +331,10 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         )
         self.logger.info(f"Routing completed: {total} object(s) saved")
 
-    # ----------------------------------------------------------------
     # Batch save helpers
-    # ----------------------------------------------------------------
 
     async def _save_autonomous_systems(self, as_dicts: list[dict]) -> dict[str, str]:
-        """Save AS objects. Returns device_name -> AS ID mapping.
-
-        Existing AS (with _existing_id): register in group context for tracking — no DB write needed.
-        New AS (with from_pool): allocate from pool and save.
-        """
+        """Save AS objects and return the device_name -> AS ID mapping (existing ones are only registered)."""
         device_to_as_id: dict[str, str] = {}
         if not as_dicts:
             return device_to_as_id
@@ -449,17 +372,8 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         return set(device_names).issubset(ready_devices)
 
     async def ensure_address_family(self, afi: str, safi: str) -> str:
-        """Find or create a RoutingBGPAddressFamily and return its id, untracked, under a lock.
-
-        data/bootstrap/15_bgp_address_families.yml provides them on main;
-        creating one here is only a fallback for a branch cut from a main
-        without bootstrap — two such branches each create their own and the
-        second merge fails (uniqueness [afi, safi]).
-
-        One global node every fabric, circuit and colocation run references, so no
-        run may own it (a tracked one is deleted by whichever run stops
-        reaching it). The lock serializes concurrent runs racing to create the
-        same one.
+        """Find or create a RoutingBGPAddressFamily under a lock; untracked (global, shared). Bootstrap data normally
+        provides them.
         """
         async with self.resource_lock(f"bgp-af-{afi}-{safi}"):
             existing = await self.client.filters(kind=RoutingBGPAddressFamily, afi__value=afi, safi__value=safi)
@@ -490,16 +404,9 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         send_community: bool = True,
         send_extended_community: bool = True,
     ) -> None:
-        """Upsert one ManagedBGPPeering, by default directly connected (ttl 1, BFD, standard and extended communities).
-
-        The shared core of the sessions of a virtual circuit (generators/topology/virtual_circuit.py), the metro's
-        edge FABRIC session (add_colocation_zone, add_virtual_colocation) and the office fabric. Peerings share
-        the ManagedGeneric name space with circuits: callers suffix or prefix the name (<vc>-evpn, FABRIC-<a>-<b>).
-        Processes are passed by id, never looked up by name here (search-index lag on same-run objects).
-
-        ``ttl``, ``bfd_enabled``, ``send_community`` and ``send_extended_community`` default to the directly
-        connected shape (both community flags on; a handoff session turns them off). ``password_id`` keys the
-        session; a session without a fabric key (an SD-WAN edge to its gateway) writes no password at all.
+        """Upsert one ManagedBGPPeering, by default directly connected (ttl 1, BFD, both community flags). Shared by
+        session circuits, the metro FABRIC session and the office fabric; processes are passed by id; no ``password_id``
+        means no password.
         """
         peering = await self.client.create(
             kind=ManagedBGPPeering,

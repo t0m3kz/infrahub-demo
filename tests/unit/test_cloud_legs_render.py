@@ -12,9 +12,7 @@ _LOCAL = ("dc1-edge-01", "Ethernet1/13.1000")
 
 
 def _cloud_fixture(**peering_kwargs: Any) -> dict[str, Any]:
-    """The external-peers fixture with its PROD AWS session turned into a cloud leg: the peering lists only our
-    sub-interface, the AWS side is the VIF ``vif-nordix`` of the transport ``dx-nordix`` (C001's account), landing on
-    ``dxgw`` -> ``tgw`` -> ``nordix-vpc-prod`` (10.10.0.0/16, PROD)."""
+    """The external-peers fixture with its PROD AWS session turned into a cloud leg."""
     data = _fixture()
     (peering_node,) = [e["node"] for e in _bgp_node(data)["peerings"]["edges"] if e["node"]["name"]["value"] == _AWS]
     peering_node["capabilities"]["edges"].pop()

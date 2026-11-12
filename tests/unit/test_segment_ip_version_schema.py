@@ -1,9 +1,4 @@
-"""``ManagedNetworkSegment.ip_version``: one address family per segment, IPv4 by default, no dual stack.
-
-Declared once on the generic, so ManagedVxlanSegment and CloudNetworkSegment both have it; a cloud segment must be IPv4
-(checks/customer_quota.py, tests/unit/test_customer_quota_check_kinds.py). The renderers refuse an IPv6 segment
-(tests/unit/test_ipv6_segment_refusal.py).
-"""
+"""``ManagedNetworkSegment.ip_version``"""
 
 from __future__ import annotations
 

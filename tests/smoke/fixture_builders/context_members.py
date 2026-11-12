@@ -1,11 +1,4 @@
-"""Give every firewall context in a raw fixture the members the model holds: the HA pair of the device it sits on.
-
-A ``ManagedFirewallContext`` is a shared capability of the firewalls that enforce it, and the firewall query selects
-its ``shared_devices`` (checks/common.py validate_context_members holds them to one HA pair). The builders place a
-context on its device's ``shared_capabilities``; this hook fills the members a generator would write: the members of
-the device's ``ManagedFirewallHA``, or the device alone when it is in none. A context that already lists its members is
-left as it is, so the hook is idempotent.
-"""
+"""Give every firewall context in a raw fixture the members the model holds: the HA pair of the device it sits on."""
 
 from __future__ import annotations
 

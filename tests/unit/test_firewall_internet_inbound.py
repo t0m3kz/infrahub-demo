@@ -1,10 +1,4 @@
-"""Where a rule from the internet into a customer segment is placed (transforms/helpers/firewall_contexts.py).
-
-The rule is written once, in the destination segment's own policy (``source_zone`` INTERNET). Each firewall selects
-its share by the same split as a rule to the internet, decided per footprint by the contexts it lists
-(utils/firewall_split.py): the Internet edge context of a footprint that also has an internal one holds it, that
-internal context does not, and a footprint's only context holds every rule.
-"""
+"""Where a rule from the internet into a customer segment is placed (transforms/helpers/firewall_contexts.py)."""
 
 from __future__ import annotations
 

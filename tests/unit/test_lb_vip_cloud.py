@@ -1,8 +1,4 @@
-"""Unit tests for the cloud branch of the load balancer VIP producer.
-
-A cloud component's CloudLoadBalancer and its address-less VIPs: placement,
-members, load balancer name and scheme.
-"""
+"""Unit tests for the cloud branch of the load balancer VIP producer."""
 
 from __future__ import annotations
 

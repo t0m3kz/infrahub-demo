@@ -1,12 +1,4 @@
-"""Cabling utilities - connection planning, strategies, and interface utilities.
-
-This module provides comprehensive cabling functionality:
-- CablingPlanner: Main orchestrator for connection planning
-- Cabling strategies for different deployment scenarios
-- InterfaceSpeedMatcher: Speed extraction and grouping
-- CableTypeDetector: Cable type detection (copper/fiber)
-- ConnectionValidator: Connection plan validation
-"""
+"""Cabling utilities: connection planning, strategies and interface utilities."""
 
 from __future__ import annotations
 
@@ -23,9 +15,7 @@ if TYPE_CHECKING:
     from generators.protocols import DcimPhysicalInterface
 
 
-# ============================================================================
 # Constants
-# ============================================================================
 
 MIN_LEAF_DEVICES_FOR_PAIRING = 2
 """Minimum number of leaf devices required for paired ToR connectivity."""
@@ -33,13 +23,7 @@ MIN_LEAF_DEVICES_FOR_PAIRING = 2
 UPLINKS_PER_TOR_IN_PAIRED_MODE = 2
 """Number of uplinks per ToR when using paired leaf mode."""
 
-# ============================================================================
-# Interface Utilities
-# ============================================================================
-#
-# InterfaceSpeedMatcher lives in utils.interface_speed (shared with
-# transforms/, which also derives speed from interface_type for OSPF
-# reference-bandwidth). Re-exported here for existing importers.
+# Interface utilities (InterfaceSpeedMatcher lives in utils.interface_speed; re-exported here for existing importers)
 
 
 class CableTypeDetector:
@@ -64,14 +48,8 @@ def pick_matched_switch_port_name(
     free_names_by_switch: dict[str, list[str]],
     switch_names: tuple[str, str],
 ) -> str | None:
-    """Pick the lowest free interface name shared by BOTH switches of a
-    dual-homed pair (e.g. Ethernet1/1/8 on both), so a server's two links
-    land on matching port numbers instead of independently-chosen ones
-    (port 6 free on one switch, port 8 on the other).
-
-    Returns None when the two switches have no free name in common (e.g.
-    different port-naming schemes) — callers should fall back to picking
-    independently from each switch's own free-port list in that case.
+    """Lowest free interface name shared by BOTH switches of a dual-homed pair (e.g. Ethernet1/1/8), so a server's two
+    links land on matching ports. None when the switches have no free name in common (the caller then picks per switch).
     """
     switch_a, switch_b = switch_names
     common_names = set(free_names_by_switch.get(switch_a, [])) & set(free_names_by_switch.get(switch_b, []))
@@ -85,7 +63,7 @@ class ConnectionValidator:
 
     @staticmethod
     def validate_plan(plan: list[Any], min_connections: int) -> tuple[bool, str]:
-        """Validate connection plan meets requirements."""
+        """Validate that the connection plan meets requirements."""
         if len(plan) < min_connections:
             return False, f"Insufficient connections: {len(plan)} < {min_connections}"
 
@@ -104,9 +82,7 @@ class ConnectionValidator:
         return True, f"Plan validated: {len(plan)} connections"
 
 
-# ============================================================================
-# Cabling Strategies
-# ============================================================================
+# Cabling strategies
 
 
 class CablingPlanError(ValueError):
@@ -126,22 +102,16 @@ class CablingStrategy(ABC):
         pass
 
     def _fail(self, message: str) -> NoReturn:
-        """Log and raise: a cable the plan needs but cannot place fails the
-        generator run. Never log-and-skip — a skipped cable leaves a device
-        silently disconnected while the run still reports success."""
+        """Log and raise: a cable the plan needs but cannot place fails the run (a skipped cable leaves a device
+        silently disconnected).
+        """
         self.logger.error(message)
         raise CablingPlanError(message)
 
     def _validate_bottom_port_count(self) -> None:
-        """Reject a plan where a bottom device has fewer ports than top devices.
-
-        Every strategy that indexes a bottom device's ports by top-device index
-        (rack, pod) needs one port per top device. A physical interface holds
-        exactly one cable, so wrapping the port index double-books it. Infrahub
-        does reject the second cable, but only at save time and with a message
-        about relationship cardinality on an opaque node id — which says nothing
-        about the device template being two ports short. Raising here names the
-        device, the shortfall and the fix instead.
+        """Reject a plan where a bottom device has fewer ports than top devices. Strategies that index a bottom device's
+        ports by top-device index need one port per top device; wrapping would double-book a port. Raising here names
+        the device and the shortfall instead of an opaque save-time cardinality error.
         """
         num_top_devices = len(self.planner._sorted_top_devices)
         for bottom_device in self.planner._sorted_bottom_devices:
@@ -161,12 +131,8 @@ class PodCablingStrategy(CablingStrategy):
     def build_plan(
         self, cabling_offset: int = 0, **kwargs
     ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
-        """Builds a cabling plan between source and destination interfaces based on cabling offset.
-
-        Same fail-fast rules as RackCablingStrategy: the top port index is NOT
-        wrapped modulo the port count (wrapping put pod N and pod N+len(ports)
-        on the same super-spine port), and every bottom device needs one port
-        per top device.
+        """Plan between source and destination interfaces by cabling offset. Fail-fast like RackCablingStrategy: the top
+        port index is not wrapped modulo the port count, and every bottom device needs one port per top device.
         """
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
 
@@ -196,12 +162,9 @@ class RackCablingStrategy(CablingStrategy):
     def build_plan(
         self, cabling_offset: int = 0, **kwargs
     ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
-        """Builds a cabling plan for any-to-any connectivity (e.g., ToRs/Leafs to Spines).
-
-        Every bottom device dual-homes to EVERY top device, so it needs one port per
-        top device. Both sides fail fast rather than degrade: a shortfall on the top
-        side would leave devices silently disconnected, and one on the bottom side
-        would hand the same physical port to two different top devices.
+        """Plan any-to-any connectivity (e.g. ToRs/Leafs to Spines). Every bottom device dual-homes to EVERY top device,
+        so it needs one port per top device; both sides fail fast rather than leave devices disconnected or share a
+        port.
         """
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
 
@@ -226,9 +189,8 @@ class RackCablingStrategy(CablingStrategy):
 
             for top_index, top_device in enumerate(self.planner._sorted_top_devices):
                 top_intf = self.planner.top_by_device[top_device][top_interface_index]
-                # Indexed directly by top_index, NOT modulo the port count: this used
-                # to wrap, which silently gave spine N and spine N+len(ports) the same
-                # bottom port. _validate_bottom_port_count() guarantees the range.
+                # Indexed directly by top_index, not modulo the port count (wrapping gave two spines the same bottom
+                # port); _validate_bottom_port_count() guarantees the range
                 bottom_intf = self.planner.bottom_by_device[bottom_device][top_index]
                 cabling_plan.append((bottom_intf, top_intf))
 
@@ -236,17 +198,15 @@ class RackCablingStrategy(CablingStrategy):
 
 
 class ChainCablingStrategy(CablingStrategy):
-    """Index-paired strategy for multi-hop chains (e.g. border-leaf<->
-    firewall<->load-balancer<->...<->border-leaf): device i on one side
-    cables ONLY to device i on the other, forming N independent redundant
-    paths — never any-to-any like RackCablingStrategy. Fewer devices on one
-    side are reused round-robin (index i % count). Within a pair, every
-    mutually available port becomes its own parallel cable.
+    """Index-paired strategy for multi-hop chains (e.g. border-leaf<->firewall<->load-balancer): device i cables only to
+    device i on the other side, forming N independent paths (not any-to-any); fewer devices on a side are reused
+    round-robin; every mutually available port becomes its own cable.
     """
 
     def build_plan(self, **kwargs) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
-        """Pairs bottom[i % num_bottom] with top[i % num_top] for each index
-        i, using every mutually available port on each pair as a cable."""
+        """Pairs bottom[i % num_bottom] with top[i % num_top], using every mutually available port on each pair as a
+        cable.
+        """
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
 
         num_bottom = len(self.planner._sorted_bottom_devices)
@@ -254,7 +214,7 @@ class ChainCablingStrategy(CablingStrategy):
         if num_bottom == 0 or num_top == 0:
             return cabling_plan
 
-        # Per-device "next free port" cursor for devices reused across pairs.
+        # Per-device "next free port" cursor for devices reused across pairs
         bottom_cursor: dict[str, int] = {device: 0 for device in self.planner._sorted_bottom_devices}
         top_cursor: dict[str, int] = {device: 0 for device in self.planner._sorted_top_devices}
 
@@ -297,9 +257,8 @@ class IntraRackCablingStrategy(CablingStrategy):
 
         existing_connections = self._detect_existing_connections(self.planner._sorted_top_devices)
 
-        # Round-robin slots already claimed on each top device, counted for
-        # EVERY earlier ToR (including ones reusing existing cables) so a ToR's
-        # port offsets do not depend on whether its predecessors were re-runs.
+        # Round-robin slots already claimed on each top device, counted for EVERY earlier ToR (including re-runs) so
+        # port offsets do not depend on history
         claimed_per_top = [0] * num_top_devices
         for tor_index, bottom_device in enumerate(self.planner._sorted_bottom_devices):
             bottom_interfaces = self.planner.bottom_by_device[bottom_device]
@@ -317,8 +276,7 @@ class IntraRackCablingStrategy(CablingStrategy):
     def _claim_round_robin_slots(
         tor_index: int, uplinks_per_tor: int, claimed_per_top: list[int]
     ) -> list[tuple[int, int]]:
-        """Return (top_device_idx, port_offset) per uplink of this ToR and
-        advance the per-top-device claim counters."""
+        """Return (top_device_idx, port_offset) per uplink of this ToR and advance the per-top-device claim counters."""
         num_top_devices = len(claimed_per_top)
         slots = []
         for uplink_idx in range(uplinks_per_tor):
@@ -477,9 +435,7 @@ class IntraRackMixedCablingStrategy(CablingStrategy):
         return cabling_plan
 
 
-# ============================================================================
-# Cabling Planner
-# ============================================================================
+# Cabling planner
 
 
 class CablingPlanner:
@@ -560,10 +516,8 @@ class CablingPlanner:
         scenario: str = "rack",
         cabling_offset: int = 0,
     ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
-        """Build a speed-aware cabling plan using the given scenario strategy.
-
-        Interfaces are grouped by derived speed and each speed group is cabled
-        separately, so a link between mismatched speeds is never planned.
+        """Build a speed-aware plan with the given strategy; each speed group is cabled separately, so mismatched speeds
+        are never linked.
         """
         if scenario not in self._strategies:
             raise ValueError(f"Unknown cabling scenario: {scenario}")
@@ -606,9 +560,7 @@ class CablingPlanner:
                 top_sorting=self._top_sorting,
             )
 
-            # No try/except: a strategy's CablingPlanError (overflow, too few ports)
-            # must fail the run. Catching it here used to drop the whole speed group,
-            # so create_cabling got [] and the devices stayed uncabled on a green run.
+            # No try/except: a CablingPlanError must fail the run (catching it left devices uncabled on a green run)
             speed_plan = temp_planner._strategies[scenario].build_plan(cabling_offset=cabling_offset)
 
             combined_plan.extend(speed_plan)
@@ -618,9 +570,9 @@ class CablingPlanner:
 
 
 def cable_endpoint_device_names(interfaces: list[Any]) -> set[str]:
-    """Device names on either end of each interface's cable, parsed from the
-    cable name convention ("device-interface__device-interface", set by
-    create_cabling). Callers filter out their own device or keep known peers."""
+    """Device names on either end of each interface's cable, parsed from the cable name convention
+    ("device-interface__device-interface"). Callers filter out their own device or keep known peers.
+    """
     names: set[str] = set()
     for intf in interfaces:
         cable = getattr(intf, "cable", None)

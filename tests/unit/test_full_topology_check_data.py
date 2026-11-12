@@ -1,10 +1,4 @@
-"""data/demos/00_full_topology is authored, no generator runs over it, so the checks of a Proposed Change find it as it is.
-
-The sample is loaded onto main and the next branch's Proposed Change runs every check on it. Each test here states one
-rule of such a check against the YAML (no server): the panels hold every port of their type, every routed segment and
-its owner has a routing tag, a footprint stays within its design, a provider interface rides on its own provider
-connect, and an owner's cloud prefix is registered behind one attachment point.
-"""
+"""data/demos/00_full_topology is authored."""
 
 from __future__ import annotations
 
@@ -26,9 +20,7 @@ _FULL = _ROOT / "data" / "demos" / "00_full_topology"
 _BOOTSTRAP = _ROOT / "data" / "bootstrap"
 
 
-# ---------------------------------------------------------------------------
 # validate_patch_panel_pairing
-# ---------------------------------------------------------------------------
 
 
 def _panel_key(obj: Declared) -> tuple[str, str]:
@@ -84,9 +76,7 @@ def test_every_panel_of_the_sample_holds_every_port_of_its_type() -> None:
     assert problems == []
 
 
-# ---------------------------------------------------------------------------
 # validate_routing_tags
-# ---------------------------------------------------------------------------
 
 
 def test_every_routed_segment_and_its_owner_has_a_unique_routing_tag() -> None:
@@ -116,9 +106,7 @@ def test_every_routed_segment_and_its_owner_has_a_unique_routing_tag() -> None:
         assert all(ROUTING_TAG_MIN <= tag <= ROUTING_TAG_MAX for tag in tags)
 
 
-# ---------------------------------------------------------------------------
 # validate_customer_quota
-# ---------------------------------------------------------------------------
 
 
 def _expand(pattern: str) -> list[str]:
@@ -154,11 +142,7 @@ def _members() -> dict[tuple[str, str], list[tuple[str, str]]]:
 
 
 def _tagged_ports(segment: str, deployment: str) -> set[tuple[str, str]]:
-    """The host-facing physical ports tagged with ``segment`` in ``deployment``: its rows and its requests.
-
-    A port-channel counts its members, the border-leaf service ports (``-bl-``) facing the firewall pair are no host
-    port (customer_quota._host_facing_ports).
-    """
+    """The host-facing physical ports tagged with ``segment`` in ``deployment``: its rows and its requests."""
     members = _members()
     ports: set[tuple[str, str]] = set()
     for kind, holder in (("ManagedSegmentVlan", "segment_deployment"), ("ManagedSegmentDeployment", None)):
@@ -224,9 +208,7 @@ def test_the_c900_footprints_that_tag_100g_ports_name_a_tier_that_allows_them() 
         assert designs[name]["dedicated_firewall"] is False and designs[name]["dedicated_loadbalancer"] is False
 
 
-# ---------------------------------------------------------------------------
 # validate_interface_parents
-# ---------------------------------------------------------------------------
 
 
 def _encapsulation(item: dict) -> dict | None:
@@ -255,9 +237,7 @@ def test_a_provider_interface_rides_on_a_port_of_its_own_provider_connect() -> N
     ] == []
 
 
-# ---------------------------------------------------------------------------
 # validate_routing_invariants rule 8 (cloud legs)
-# ---------------------------------------------------------------------------
 
 
 def _cloud_attachment_points() -> dict[str, set[str]]:

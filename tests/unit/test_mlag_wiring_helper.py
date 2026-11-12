@@ -1,13 +1,4 @@
-"""Unit tests for MLAGWiringMixin (generators/mlag.py) — shared by
-DeviceMixin._ensure_mlag_pairs and MLAGGenerator. Mirrors
-test_device_mixin_ha.py's TestEnsureHaInterfaces/TestEnsureHaCable style: a
-bare mixin instance with mocked client/logger, asserting on
-.filters/.create/.save/.delete call args.
-
-Every peer-link interface/cable is always create()+save()'d with the full
-desired state (existing id passed when found) — mirrors create_devices()'s
-own device/loopback pattern — so there's no "already wired, skip" branch
-left to test; these tests instead assert the upsert-with-id-if-found shape."""
+"""Unit tests for MLAGWiringMixin (generators/mlag.py) — shared by DeviceMixin._ensure_mlag_pairs and MLAGGenerator."""
 
 from __future__ import annotations
 
@@ -75,8 +66,7 @@ def _pod_with_parent(*, initialized: bool, parent_id: str = "") -> MagicMock:
 
 
 def _mock_mlag_device(name: str, *, platform: str = "nxos") -> MagicMock:
-    """A device as filters(include=["platform"]) returns it: the platform peer
-    is already in the store, so fetch() must never be needed."""
+    """A device as filters(include=["platform"]) returns it:"""
     dev = MagicMock()
     dev.id = f"id-{name}"
     dev.name = MagicMock(value=name)
@@ -105,9 +95,7 @@ def _mock_mlag_obj(*, virtual_peer_link: bool = False) -> MagicMock:
 
 
 def _pair_client(gen: Any, devices: list[Any], interfaces: dict[tuple[Any, str], list[Any]]) -> None:
-    """gen.client.filters for a whole wiring run: the device pair, no control
-    pool, the given ``(kind, role) -> interfaces`` (each tagged with its device
-    id) filtered by device__ids, and no cable found by name."""
+    """gen.client.filters for a whole wiring run:"""
     by_id = {dev.id: dev for dev in devices}
 
     async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
@@ -137,9 +125,7 @@ def _interface_queries(gen: Any) -> list[dict[str, Any]]:
 class TestEnsureMlagWiring:
     @pytest.mark.asyncio
     async def test_wiring_runs_under_a_per_domain_lock(self) -> None:
-        """The pod/rack generator and the add_mlag trigger can wire the same
-        domain concurrently; both would create the same control address
-        (Schema Integrity failure at merge), so wiring serializes per domain."""
+        """The pod/rack generator and the add_mlag trigger can wire the same domain concurrently;"""
         gen = _gen()
         events: list[str] = []
         gen.acquire_resource_lock.side_effect = lambda key: events.append(f"acquire:{key}") or "lock-id"
@@ -152,8 +138,7 @@ class TestEnsureMlagWiring:
 
     @pytest.mark.asyncio
     async def test_platform_comes_from_the_device_query_without_a_fetch(self) -> None:
-        """The device query includes platform (its peer lands in the store), so
-        the platform name is read without one fetch() per device."""
+        """The device query includes platform."""
         gen = _gen()
         dev_1 = _mock_mlag_device("leaf-01", platform="arista_eos")
         dev_2 = _mock_mlag_device("leaf-02", platform="cisco_nxos")
@@ -218,10 +203,7 @@ class TestEnsureMlagWiring:
 
     @pytest.mark.asyncio
     async def test_back_to_back_reads_each_interface_kind_once_for_the_pair(self) -> None:
-        """Stale virtual peer-links, existing LAGs and the mlag-peer ports are
-        each one query for both devices; the ports read for the LAG feed the
-        cables too. 2 devices, 1 port each: 1 device + 1 pool + 3 interface + 1
-        cable-by-name = 6 reads."""
+        """Stale virtual peer-links, existing LAGs and the mlag-peer ports are each one query for both devices;"""
         gen = _gen()
         dev_1, dev_2 = _mock_mlag_device("tor-01"), _mock_mlag_device("tor-02")
         ports = [
@@ -245,8 +227,7 @@ class TestEnsureMlagWiring:
 
     @pytest.mark.asyncio
     async def test_existing_and_stale_interfaces_go_to_their_own_device(self) -> None:
-        """Grouping by device: only tor-02 has a LAG to upsert and only tor-01 a
-        stale loopback to delete."""
+        """Grouping by device: only tor-02 has a LAG to upsert and only tor-01 a stale loopback to delete."""
         gen = _gen()
         dev_1, dev_2 = _mock_mlag_device("tor-01"), _mock_mlag_device("tor-02")
         _pair_client(
@@ -271,8 +252,7 @@ class TestEnsureMlagWiring:
 
     @pytest.mark.asyncio
     async def test_back_to_back_control_svis_read_once_and_upserted_per_device(self) -> None:
-        """With a control session, the pair's existing control SVIs are one
-        query; each device's SVI is upserted by its own id."""
+        """With a control session, the pair's existing control SVIs are one query;"""
         gen = _gen()
         dev_1, dev_2 = _mock_mlag_device("leaf-01", platform="sonic"), _mock_mlag_device("leaf-02", platform="sonic")
         gen._allocate_control_ips = AsyncMock(return_value={dev_1.id: "ip-1", dev_2.id: "ip-2"})
@@ -380,8 +360,7 @@ class TestEnsureMlagWiring:
 
     @pytest.mark.asyncio
     async def test_virtual_removes_stale_cables_with_one_lookup(self) -> None:
-        """Switched to virtual: the PL<n> cables of the old back-to-back wiring
-        (n up to the larger port count) are found in one name__values query."""
+        """Switched to virtual:"""
         gen = _gen()
         dev_1, dev_2 = _mock_mlag_device("leaf-01"), _mock_mlag_device("leaf-02")
         _pair_client(
@@ -494,10 +473,7 @@ class TestEnsureLagPeerLink:
 
     @pytest.mark.asyncio
     async def test_existing_lag_gets_upserted_by_id_with_current_domain(self) -> None:
-        """Always create()+save()'d with the full desired state, existing id
-        passed when found — no "already correct, skip" branch — so a
-        previously-wired LAG whose domain changed (or nothing changed at
-        all) both converge through the same single upsert call."""
+        """Always create()+save()'d with the full desired state, existing id passed when found."""
         gen = _gen()
         device_obj = _mock_mlag_device("tor-01")
         mlag_obj = _mock_mlag_obj()

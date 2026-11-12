@@ -1,8 +1,4 @@
-"""Unit tests for get_capabilities() transform helper.
-
-Capabilities are derived from device_capabilities (ManagedBGP/ManagedOSPF),
-not from separate capability profile nodes.
-"""
+"""Unit tests for get_capabilities() transform helper."""
 
 import pytest
 

@@ -1,8 +1,4 @@
-"""Customer PBR rules: redirect inter-segment traffic to the serving firewall context, bypass on a permit.
-
-Split out of ``transforms.helpers.firewall`` (the context leg lookup ``_context_leg_ip`` stays there, shared with the
-exchange transits); the context list is built in ``transforms.helpers.firewall_contexts``.
-"""
+"""Customer PBR rules: redirect inter-segment traffic to the serving firewall context, bypass on a permit."""
 
 from collections.abc import Collection, Mapping
 from typing import Any
@@ -18,8 +14,7 @@ from utils.vrf_demand import L3VNI_ROLE, svi_name, svi_vlan_id
 
 
 def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
-    """TopologyCustomer ids a segment serves: customer_deployment on a
-    CloudNetworkSegment, customer_deployments on a VxlanSegment."""
+    """TopologyCustomer ids a segment serves."""
     deployment_ids: list[str] = []
     single_deployment = segment.get("customer_deployment")
     if single_deployment and single_deployment.get("id"):
@@ -41,12 +36,8 @@ def _has_firewall_leg(ctx: dict[str, Any]) -> bool:
 def _resolve_context_nexthops(
     firewall_contexts: list[dict[str, Any]] | None, namespace: str | None = None
 ) -> tuple[dict[str, str], str | None]:
-    """Resolve each FirewallContext's nexthop in ``namespace`` (_context_leg_ip), keyed
-    by dedicated tenant deployment id, plus the one shared (tenant-less) context's
-    nexthop if any. An Internet edge context is never the shared one: it is the next hop of the footprints it serves
-    with no internal context (the only ones it still lists, transforms/helpers/firewall_contexts.py
-    ``_steering_only``).
-    """
+    """Resolve each FirewallContext's nexthop in ``namespace`` (_context_leg_ip), keyed by dedicated tenant
+    deployment id, plus the one shared (tenant-less) context's nexthop if any."""
     context_nexthop_by_deployment: dict[str, str] = {}
     shared_nexthop: str | None = None
     for ctx in firewall_contexts or []:
@@ -76,13 +67,7 @@ def _redirect_nexthop(
 def _serving_context_nexthops(
     firewall_contexts: list[dict[str, Any]] | None, namespace: str | None = None
 ) -> dict[str, str]:
-    """Deployment id -> nexthop (in ``namespace``) of the context its segments terminate on.
-
-    Strict: only a context that names the deployment (its dedicated tenant,
-    or one of its served_deployments) counts. Unlike the redirect nexthop
-    there is no shared fallback, since a deployment served by another DC's
-    firewall would otherwise look like it shares this DC's shared context.
-    """
+    """Deployment id -> nexthop (in ``namespace``) of the context its segments terminate on."""
     serving: dict[str, str] = {}
     for ctx in firewall_contexts or []:
         fw_ip = _context_leg_ip(ctx, namespace)
@@ -98,11 +83,8 @@ def _serving_context_nexthops(
 def _needs_firewall(
     rule: dict[str, Any], own_nexthop: str, peer: dict[str, Any] | None, serving: dict[str, str]
 ) -> bool:
-    """A permit is enforced on the firewall, not bypassed, when it carries a
-    security profile (inspection) and its peer segment terminates on the
-    same context as this one. Both directions then cross that one context,
-    which holds the session. Across contexts no context sees both legs, so
-    the flow stays on the fabric (bypass plus leaf ACL)."""
+    """A permit is enforced on the firewall, not bypassed, when it carries a security profile (inspection) and its
+    peer segment terminates on the same context as this one."""
     if not rule.get("security_profile"):
         return False
     peer_nexthop = next((serving[d] for d in _segment_deployment_ids(peer or {}) if d in serving), None)
@@ -112,11 +94,7 @@ def _needs_firewall(
 def refuse_unresolvable_contexts(
     footprints: Collection[str], firewall_contexts: list[dict[str, Any]] | None, *, device_name: str
 ) -> None:
-    """Raise when a steered footprint is served by a context whose legs cannot be derived (it has no ``vlan_id``).
-
-    A leg is ``<uplink>.<transit VLAN>`` of the context VLAN (utils/service_contexts.py), so a context without one has no
-    legs, no next hop and no PBR rule: the steered segments would route past their firewall silently. A shared context
-    serves every footprint, a dedicated one its tenant."""
+    """Raise when a steered footprint is served by a context whose legs cannot be derived (it has no ``vlan_id``)."""
     if not footprints:
         return
     for ctx in firewall_contexts or []:
@@ -134,55 +112,7 @@ def get_customer_pbr_rules(
     firewall_contexts: list[dict[str, Any]] | None,
     steered_vlans: set[int] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build PBR rules that redirect all traffic to the firewall by default.
-
-    All inter-segment traffic defaults to the firewall (stateful inspection);
-    a SecurityPolicyRule permit is the only bypass — the SAME rule data
-    get_acls() already reads for its ACL rendering (segment_prefix
-    per rule.destination_segment), just consumed here for a different
-    purpose. The bypass is symmetric: a permit A -> B bypasses B on A's
-    VLAN and, via B's inbound_rules, A on B's VLAN, so the reply never
-    reaches a firewall that saw no forward packet. A permit to a pure prefix
-    selector in the segment's own VRF bypasses that CIDR too; one in another
-    VRF (or with no namespace) is redirected, and so is its reply.
-
-    The exceptions are an inspected flow: a permit with a security
-    profile between two segments served by the SAME context is not
-    bypassed on either side, so both directions cross that context
-    (_needs_firewall); and a flow to or from a segment a firewall context
-    terminates (``firewall_gateway``): the fabric has no route to its prefix
-    (no SVI), so a bypass would drop it. Between contexts every permit stays on the fabric. Not
-    filtered by owner: a cross-owner permit bypasses PBR the same as a
-    same-owner one, since intra- and inter-customer traffic use
-    one unified default-redirect model.
-
-    fw_nexthop resolution: `firewall_contexts` comes from
-    _flatten_deployment_firewall_contexts(data["deployment"]) — a
-    device-scoped traversal (this device's own deployment's firewall-role
-    devices -> their ManagedFirewallHA cluster -> contexts), NOT a global
-    query root and NOT scoped to the rendered device's own interfaces
-    either. This matters because the anycast gateway/symmetric-IRB
-    model puts every leaf, not just the border-leaf, in a position to make
-    the PBR redirect decision, and no leaf ever owns a FirewallContext
-    interface itself (only the firewall and, in pbr connectivity_mode, the
-    border-leaf do). The nexthop is the context's /29 leg VIP inside the
-    segment's own tenant VRF, a connected next hop: every leaf that redirects
-    holds that transit leg locally (get_leaf_firewall_transits), bridges to the
-    VIP over the transit L2VNI and never relies on a remote EVPN route to it
-    (which would be routed in the L3VNI and bypass the firewall after the
-    border decapsulates). ``fw_namespace`` names the leg used.
-    inline connectivity_mode never allocates that IP (see
-    generators/topology/customer_dc.py's _ensure_context_subinterface),
-    so contexts without one are skipped — no PBR rule for them, since the
-    firewall is already physically in the forwarding path.
-
-    Dedicated-context matching is by DEPLOYMENT id, not OrganizationCustomer
-    id: FirewallContext.tenant peers TopologyCustomer (the specific
-    deployment footprint the dedicated_firewall flag was set on, e.g.
-    C005-P-DC10), not the customer's org — segment.owner is an
-    OrganizationCustomer and would never equal it. Segments carry their own
-    TopologyCustomer link via customer_deployments (VxlanSegment, cardinality many).
-    """
+    """Build PBR rules that redirect all traffic to the firewall by default."""
     if not activations:
         return []
 
@@ -244,9 +174,8 @@ def get_customer_pbr_rules(
             # The PBR ACLs and next hops are IPv4 by design (an IPv6 segment that is steered is refused).
             prefix = segment_prefix(peer, IPV4) if peer else None
             if not prefix:
-                # A pure selector (cloud/partner CIDR): bypassed only when it lives in
-                # this segment's own VRF, where the leaf can route it. Without a
-                # namespace, or in another one, it stays on the firewall default.
+                # A pure selector (cloud/partner CIDR): bypassed only when it lives in this segment's own VRF, where the
+                # leaf can route it.
                 selector = rule_selector(rule, side)
                 if not selector or selector[1] != own_namespace:
                     return
@@ -262,10 +191,8 @@ def get_customer_pbr_rules(
         for rule in egress["rules"]:
             if rule.get("action") == "permit":
                 _classify(rule, "destination")
-        # Reply leg of every permit INTO this segment: a forward packet that
-        # bypassed the firewall on the source's leaf must be answered past it
-        # too, or the firewall drops the reply with no session. The return
-        # ACL (get_acls) still restricts it to the rule's port.
+        # Reply leg of every permit INTO this segment: a forward packet that bypassed the firewall on the source's leaf
+        # must be answered past it too, or the firewall drops the reply with no session.
         for rule in ingress:
             _classify(rule, "source")
 
@@ -295,18 +222,7 @@ def get_overlay_pbr_rules(
     firewall_contexts: list[dict[str, Any]] | None,
     deployment: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    """PBR of the traffic that enters a VRF from the overlay: the rules of the L3 VNI SVIs of a border leaf.
-
-    Each L3 VNI SVI (role ``l3vni``) steers the footprints whose firewall context is tagged on the device
-    (``bindings``: utils/device_services.py ``overlay_pbr_bindings``, ``Vlan<slot>`` -> footprint ids). The traffic that arrives decapsulated on it and is bound for a segment of a
-    footprint is redirected to that footprint's firewall context, so the context sees the direction the segment's own
-    PBR does not. The destinations are the prefixes of the footprint's routed segments in the VRF of the SVI (the VRF is
-    shared by every footprint, so the interface is never steered as a whole), the next hop the VIP of the leg of the
-    footprint's serving context in that VRF. What returns from the firewall arrives on the transit SVI, which carries no
-    policy, so it is not steered again. A footprint with no context leg or no routed segment in the VRF yields nothing.
-
-    Returns ``[{vlan_id, vrf, steers: [{footprint, acl, prefixes, fw_nexthop}]}]`` sorted by VLAN.
-    """
+    """PBR of the traffic that enters a VRF from the overlay: the rules of the L3 VNI SVIs of a border leaf."""
     segments = [
         sd.get("segment") or {} for sd in ((deployment or {}).get("segment_deployments") or []) if sd.get("segment")
     ]

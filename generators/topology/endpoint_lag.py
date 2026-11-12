@@ -1,9 +1,4 @@
-"""LAG flow of the endpoint generator: a server's bonds wired into a switch pair's ManagedMLAG domain.
-
-Split out of generators/topology/endpoint.py for size/coherence. Shares the target resolution
-(EndpointTargetsMixin) and the device grouping and switch-pair selection (EndpointUplinkMixin) with
-the plain uplink flow.
-"""
+"""LAG flow of the endpoint generator: a server's bonds wired into a switch pair's ManagedMLAG domain."""
 
 from __future__ import annotations
 
@@ -26,12 +21,8 @@ if TYPE_CHECKING:
 
 
 class EndpointLagMixin:
-    """Mixin wiring a LAG-based endpoint's bond(s) to a switch pair's ManagedMLAG domain.
-
-    Expects the host class to provide: ``client``, ``logger``, ``data``, ``planned_connections``,
-    ``create_cabling``, ``_resolve_target_interfaces`` (EndpointTargetsMixin), ``_group_by_device``
-    and ``_select_switch_pair`` (EndpointUplinkMixin). The cross-mixin methods are aliases of the real
-    ones, for the type checker only: nothing is defined at runtime, so nothing shadows them in the MRO.
+    """Mixin wiring a LAG-based endpoint's bond(s) to a switch pair's ManagedMLAG domain; the host provides the
+    attributes below.
     """
 
     client: Any
@@ -47,20 +38,9 @@ class EndpointLagMixin:
     async def _process_lag_endpoint_connections(
         self, members_by_bond: dict[str, list[DcimPhysicalInterface]], deployment_type: str
     ) -> None:
-        """Wire a LAG-based endpoint's bond(s) to a switch pair's ManagedMLAG domain.
-
-        Each server bond fans out to one port-channel on EACH target switch —
-        every switch owns its own port-channel (member = the physical port this
-        bond's cable lands on), and both port-channels reference the same
-        mlag_domain so they act as one logical vPC/MLAG-attached-host link.
-        Mirrors mlag.py's peer-link pattern one level down (server<->switch
-        instead of switch<->switch).
-
-        Requires the target pair to already share exactly one ManagedMLAG
-        domain — per user direction, a pair with no shared domain is skipped
-        with a warning rather than auto-provisioned here (unlike
-        DeviceMixin._ensure_mlag_pairs, which creates the domain for switch
-        pairs it itself creates).
+        """Wire a LAG-based endpoint's bond(s) to a switch pair's ManagedMLAG domain: one port-channel per target switch
+        on the same domain. The pair must share exactly one domain, else it is skipped with an error (none is created
+        here).
         """
         all_target_interfaces = await self._resolve_target_interfaces(deployment_type)
         if not all_target_interfaces:
@@ -114,18 +94,11 @@ class EndpointLagMixin:
             member_names = sort_interface_list([m.name.value for m in members])
             member_by_name = {m.name.value: m for m in members}
 
-            # Resolve each switch's port for this bond: reuse the existing one if
-            # a prior run already cabled this member (read off the far end of its
-            # cable), else claim a free port. Reusing — rather than
-            # skipping outright — keeps the cable/port-channel/switch port
-            # re-touched (create_cabling + the LAG save below are both
-            # allow_upsert=True) so this run's tracking group re-includes them;
-            # otherwise delete_unused_nodes would delete still-valid prior-run
-            # objects that nothing in THIS run touched again.
+            # Reuse the switch port a prior run cabled (read off the far end); else claim a free one. Reusing re-touches
+            # the cable and port-channel so tracking keeps them.
             free_ports_by_switch: dict[str, list[DcimPhysicalInterface]] = {}
             for name, server_interface_name in zip((switch_a_name, switch_b_name), member_names):
-                # A member only takes a switch port of its own type, since
-                # create_cabling refuses a speed mismatch.
+                # A member only takes a switch port of its own type (create_cabling refuses a speed mismatch).
                 member_type = interface_type_of(member_by_name[server_interface_name])
                 free_ports = [
                     p
@@ -145,10 +118,7 @@ class EndpointLagMixin:
                     continue
                 members_needing_fresh_port[switch_name] = server_interface_name
 
-            # When BOTH members need a fresh port, prefer the SAME port name on
-            # both switches (e.g. Ethernet1/1/8 on both) over independently
-            # picking each switch's own first-free port — falls back to
-            # independent picks when no common free name exists.
+            # When both members need a fresh port, prefer the same port name on both switches.
             matched_name = None
             if switch_a_name in members_needing_fresh_port and switch_b_name in members_needing_fresh_port:
                 free_names_by_switch = {
@@ -184,10 +154,7 @@ class EndpointLagMixin:
                 lag_id = self._next_free_lag_id(existing_lag_ids)
                 existing_lag_ids.add(lag_id)
 
-            # Cable both members before either port-channel exists: a
-            # port-channel whose member port has no cable is config for a link
-            # that is not there. create_cabling only warns when it plans
-            # nothing (e.g. a speed mismatch), so an empty result is checked here.
+            # Cable both members before either port-channel exists; create_cabling only warns when it plans nothing.
             all_cabled = True
             for switch_name, server_interface_name in zip((switch_a_name, switch_b_name), member_names):
                 switch_port = switch_port_by_name[switch_name]

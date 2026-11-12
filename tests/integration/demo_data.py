@@ -1,22 +1,4 @@
-"""What the demo object files declare, read from the YAML (no Infrahub needed).
-
-Expectations that echo the data (how many footprints, which segments, which
-applications) are computed from here instead of being typed into
-the *_constants.py modules, so boarding a customer needs no constant edit. The unit
-tests read the same inventory (tests/unit/test_event_rules.py,
-tests/unit/test_demo_data.py).
-
-An object file nests objects three ways, and all three are walked:
-``rel: {kind, data}`` (a list or one object), a list of ``{kind, data}``
-entries, and ``rel: {data}`` without a kind (the peer of ``rel`` in the
-schema). A nested object keeps a link to the object it is declared under, so
-a value it inherits from there (a segment's owner, a pod's DC) resolves.
-
-The same object may be declared twice (a later stage updating it, e.g. an
-office opting into SD-WAN), so counts go through ``distinct``: two
-declarations are one object when their human-friendly ids are equal, a
-computed name being rendered from its Jinja2 template like the server does.
-"""
+"""What the demo object files declare, read from the YAML (no Infrahub needed)."""
 
 from __future__ import annotations
 
@@ -95,9 +77,8 @@ def _lineage(kind: str) -> list[str]:
 
 
 def attribute(kind: str, name: str) -> dict[str, Any] | None:
-    """The definition of attribute ``name`` of ``kind``: a computed one wherever it is defined
-    (a segment's computed name in ManagedNetworkSegment beats ManagedGeneric's plain one, as on
-    the server), else the nearest."""
+    """The definition of attribute ``name`` of ``kind``: a computed one wherever it is defined (a segment's computed
+    name in ManagedNetworkSegment beats ManagedGeneric's plain one, as on the server)"""
     definitions = [schema()[k].attributes[name] for k in _lineage(kind) if name in schema()[k].attributes]
     return next((d for d in definitions if d.get("computed_attribute")), definitions[0] if definitions else None)
 
@@ -118,12 +99,7 @@ def relationship_names(kind: str) -> set[str]:
 
 
 def human_friendly_id(kind: str) -> tuple[str, ...]:
-    """The nearest human_friendly_id of ``kind`` or its generics.
-
-    Without one, the server derives it from a unique attribute, so the fallback is the nearest uniqueness constraint
-    made of attribute values only (a rack is identified by its ``shortname``, the generic's constraint, not by its
-    ``(parent, name)`` pair: the parent is not a value of the object); else the kind's first constraint; empty when
-    there is none."""
+    """The nearest human_friendly_id of ``kind`` or its generics."""
     lineage = _lineage(kind)
     for k in lineage:
         if schema()[k].human_friendly_id:
@@ -170,9 +146,7 @@ class Declared:
     enclosing: Declared | None = field(default=None, repr=False)
 
     def default(self, name: str) -> Any:
-        """What the server sets for attribute ``name`` when the declaration leaves it out:
-        the object template's value when the object is created from one that sets it
-        (a physical device template sets status: provisioning), else the schema default."""
+        """What the server sets for attribute ``name`` when the declaration leaves it out."""
         template = object_templates().get(str(self.item.get("object_template")))
         if template is not None and name in template:
             return template[name]
@@ -213,11 +187,7 @@ def _walk(kind: str, data: Any, path: Path, enclosing: Declared | None) -> Itera
 
 @cache
 def object_documents(*paths: Path) -> tuple[tuple[Path, dict[str, Any]], ...]:
-    """(file, document) for every ``kind: Object`` document under ``paths``, in load order.
-
-    A path is a directory (every *.yml below it) or one object file. This is the raw view
-    (for a scan of the whole structure, comments aside); ``declared_in`` is the per-object one.
-    """
+    """(file, document) for every ``kind: Object`` document under ``paths``, in load order."""
     found: list[tuple[Path, dict[str, Any]]] = []
     for root in paths:
         for path in [root] if root.is_file() else sorted(root.rglob("*.yml")):
@@ -254,15 +224,8 @@ _JINJA = jinja2.Environment(autoescape=False, undefined=jinja2.StrictUndefined)
 
 
 def _resolve(obj: Declared, path: list[str]) -> Any:
-    """The value of a template variable or HFID path (``environment__value``,
-    ``owner__org_id__value``) on a declared object.
-
-    An attribute is the declared value, a computed name rendered, else the
-    schema default. A relationship declared as a one-value HFID reference
-    stands for the peer attribute the path reads (the demo references owners
-    by org_id and parents by name); one left out because the object is nested
-    under its peer resolves on the enclosing object.
-    """
+    """The value of a template variable or HFID path (``environment__value``, ``owner__org_id__value``) on a declared
+    object."""
     if path[-1] == "value":
         path = path[:-1]
     if len(path) == 1:
@@ -306,15 +269,7 @@ def name(obj: Declared) -> str:
 
 
 def identity(obj: Declared) -> tuple[str, ...]:
-    """The object's kind and human-friendly id, as far as the file states it.
-
-    A reference is taken as the HFID string it is written as (a rack's parent
-    suite is its shortname, not its name), which keeps two declarations of one
-    object equal; it is a dedupe key, not always the server's display name.
-
-    A kind without a human_friendly_id (or one whose id cannot be resolved
-    from the file) is identified by its declaration: every declaration counts.
-    """
+    """The object's kind and human-friendly id, as far as the file states it."""
     hfid = human_friendly_id(obj.kind)
     try:
         values = [json.dumps(_resolve(obj, part.split("__")), sort_keys=True, default=str) for part in hfid]
@@ -359,9 +314,7 @@ def group_trigger_rules() -> tuple[dict[str, Any], ...]:
     return tuple(_spec_data(EVENTS / "99_group_triggers.yml"))
 
 
-# The node kinds whose objects join each group a generator starts on. A group trigger names a group, not a kind, so
-# the guard that every declared object of such a kind is a member (test_event_rules.py) and the dispatch count read
-# the kinds here; test_event_rules.py requires an entry for the group of every group trigger.
+# The node kinds whose objects join each group a generator starts on.
 GROUP_MEMBER_KINDS: dict[str, tuple[str, ...]] = {
     "topologies_dc": ("TopologyDataCenter",),
     "topologies_pod": ("TopologyPod",),
@@ -385,6 +338,7 @@ GROUP_MEMBER_KINDS: dict[str, tuple[str, ...]] = {
     "patch_panels": ("DcimPatchPanel",),
     "endpoints": ("DcimPhysicalDevice",),
     "service_contexts": ("ManagedFirewallContext", "ManagedLoadbalancerContext"),
+    "change_requests": ("ChangeRequest",),
 }
 
 
@@ -402,13 +356,7 @@ def definition_targets() -> dict[str, str]:
 
 
 def created_dispatches(generator: str, *directories: Path) -> int:
-    """How many runs of ``generator`` loading ``directories`` must dispatch by itself.
-
-    One per distinct declared object that joins the generator's target group as it is created: of a kind its group
-    trigger watches (GROUP_MEMBER_KINDS), or that a ``created`` node rule of the generator watches (add_endpoint, whose
-    group stands in for the role match the rule makes, the role coming from the device template). A non-member starts
-    no run (no group trigger fires; a node rule's run fails), so it is not counted.
-    """
+    """How many runs of ``generator`` loading ``directories`` must dispatch by itself."""
     group = definition_targets()[generator]
     kinds = {
         rule["node_kind"]

@@ -1,0 +1,35 @@
+# The rows of checks/change_request.py: the open Proposed Changes (branch-agnostic; the check keeps the one of its
+# branch) and the change requests of the branch with the fields the rules judge.
+query change_request_validation {
+  CoreProposedChange(state__value: "open") {
+    edges {
+      node {
+        id
+        name { value }
+        description { value }
+        source_branch { value }
+      }
+    }
+  }
+  ChangeRequest {
+    edges {
+      node {
+        id
+        name { value }
+        short_description { value }
+        implementation_plan { value }
+        backout_plan { value }
+        test_plan { value }
+        justification { value }
+        change_type { value }
+        risk { value }
+        risk_override { value }
+        risk_override_reason { value }
+        planned_start { value }
+        planned_end { value }
+        artifact_fingerprint { value }
+        proposed_change { node { id } }
+      }
+    }
+  }
+}

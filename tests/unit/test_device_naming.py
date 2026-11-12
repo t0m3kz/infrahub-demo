@@ -3,20 +3,10 @@ from generators.helpers import DeviceNameContext, DeviceNamingConfig
 
 
 class TestDeviceNamingSimplified:
-    """Test device naming logic across all 4 strategies.
-
-    All 4 strategies use short role codes (see ROLE_CODES in
-    generators/helpers/naming.py) instead of spelling roles out in full,
-    and keep the DC's own fabric index (position 0, "fab") in the
-    location_path — a DC name can host multiple fabrics
-    (uniqueness_constraints: ["name__value", "index__value"] on
-    TopologyDataCenter), so that index is never redundant with
-    fabric_name and must not be dropped.
-    """
+    """Test device naming logic across all 4 strategies."""
 
     def test_standard_naming_with_three_indexes(self) -> None:
-        """STANDARD: role code first, then fabric_name + concatenated
-        location indexes (unpadded), then the zero-padded role index."""
+        """STANDARD:"""
         config = DeviceNamingConfig(strategy="standard", separator="-", zero_padded=True, pad_width=2)
 
         result = config.format_device_name(
@@ -26,10 +16,7 @@ class TestDeviceNamingSimplified:
         assert result == "lf-fab112305"
 
     def test_standard_naming_with_five_indexes(self) -> None:
-        """STANDARD with the full fab/pod/suite/row/rack hierarchy — this is
-        the case that motivated the format: a rack-scoped device must keep
-        every level to avoid colliding with a same-numbered leaf in a
-        different rack of the same pod."""
+        """STANDARD with the full fab/pod/suite/row/rack hierarchy — this is the case that motivated the format:"""
         config = DeviceNamingConfig(strategy="standard", separator="-", zero_padded=True, pad_width=2)
 
         result = config.format_device_name(
@@ -59,8 +46,7 @@ class TestDeviceNamingSimplified:
         assert result == "ss-dc1101"
 
     def test_standard_naming_distinguishes_fabrics_under_same_dc_name(self) -> None:
-        """Two fabrics under the same DC name (e.g. "dc1" index=1 vs index=2)
-        must not collide — this is the reason the fab index isn't dropped."""
+        """Two fabrics under the same DC name must not collide, so the fab index is kept."""
         config = DeviceNamingConfig(strategy="standard")
 
         fabric_1 = config.format_device_name(
@@ -105,11 +91,7 @@ class TestDeviceNamingSimplified:
         assert result == "fab1123lf05"
 
     def test_flat_naming_dc_scoped_device_has_no_bare_fabric_name_collision(self) -> None:
-        """A DC-scoped device (only the fab index, no pod/suite/row/rack)
-        must still get role+index in its name — regression test for the
-        pre-refactor bug where flat strategy with an empty indexes list
-        collapsed to just the bare fabric_name for every role/index at that
-        scope."""
+        """A DC-scoped device (only the fab index, no pod/suite/row/rack) must still get role+index in its name."""
         config = DeviceNamingConfig(strategy="flat")
 
         first = config.format_device_name(
@@ -124,8 +106,7 @@ class TestDeviceNamingSimplified:
         assert first != second
 
     def test_computed_naming_collapses_path_into_fixed_width_digits(self) -> None:
-        """COMPUTED: location_path collapsed into one fixed-width digit run
-        (pad_width digits per level) instead of separate labeled segments."""
+        """COMPUTED:"""
         config = DeviceNamingConfig(strategy="computed", pad_width=2)
 
         result = config.format_device_name(
@@ -145,8 +126,7 @@ class TestDeviceNamingSimplified:
         assert result == "dc1-ss0201"
 
     def test_computed_naming_fixed_width_avoids_ambiguous_collisions(self) -> None:
-        """Fixed 2-digit-per-level width means pod=1,rack=23 and pod=12,rack=3
-        never collide — a naive concatenation of variable-width numbers would."""
+        """Fixed 2-digit-per-level width means pod=1,rack=23 and pod=12,rack=3 never collide."""
         config = DeviceNamingConfig(strategy="computed", pad_width=2)
 
         a = config.format_device_name(

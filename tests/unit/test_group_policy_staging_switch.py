@@ -1,10 +1,4 @@
-"""The group-policy staging switch (``group_policy_enforce``) across layers, and the schema description limit.
-
-The switch is declared in the schema (TopologyDataCenter), set by the demo data (DC10 true, DC11 and DC12 absent
-and therefore false) and read by the config queries. An integration run once failed on a 233-character
-attribute description (Infrahub caps attribute and relationship descriptions at 128 characters), so the offline
-scan of every schema file is here too.
-"""
+"""The group-policy staging switch (``group_policy_enforce``) across layers, and the schema description limit."""
 
 from __future__ import annotations
 

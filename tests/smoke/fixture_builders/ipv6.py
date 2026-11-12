@@ -1,10 +1,4 @@
-"""Leaf fixtures that carry IPv6 segments (a segment has ONE gateway of ONE family, ``ip_version``).
-
-The IPv4 fixtures are the base: the text of their input swaps each segment's addresses for IPv6 ones (a ULA /64 per
-segment, the gateway on its ``::1``), so the SVI, the VRF's IPv6 family, the ACL (with the internet band) and the
-routing-identity origination are rendered in IPv6 form. ``dual_stack`` turns only seg-100 into IPv6: the VRF then
-carries both families on one device. No demo segment is IPv6, so no existing golden contains these.
-"""
+"""Leaf fixtures that carry IPv6 segments (a segment has ONE gateway of ONE family, ``ip_version``)."""
 
 from __future__ import annotations
 
@@ -54,7 +48,7 @@ def build_dual_stack_leaf_data(*, device_name: str, platform: str) -> dict:
     return _to_ipv6(data, _SEG_100)
 
 
-# The firewall fixture's NONPROD segment and its interface, as IPv6 (the PROD zone stays IPv4: one firewall, both families).
+# The firewall fixture's NONPROD segment and its interface
 _FW_NONPROD = {"10.0.2.0/24": "fd5a:1760:0:2::/64", "10.0.2.1/30": "fd5a:1760:0:2::1/126"}
 _FW_PROD = {
     "10.0.1.0/24": "fd5a:1760:0:1::/64",

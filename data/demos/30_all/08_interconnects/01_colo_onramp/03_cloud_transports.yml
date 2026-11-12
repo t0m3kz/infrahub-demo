@@ -1,0 +1,32 @@
+---
+# Cloud transports: AWS Direct Connect (dedicated and hosted) and Azure ExpressRoute.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudDirectConnect
+  data:
+    - name: "dx-30all-euc1-fr2"
+      description: "AWS Direct Connect of eu-central-1, dedicated 10G port at the FR2 cage (XC-EQXFR2-AWS-EUC1)"
+      status: active
+      connection_type: physical
+      provider: "P004"
+      bandwidth: 10000
+      account: "net-hub-aws-prod"
+      region: "eu-central-1"
+    - name: "dx-30all-euc1-amne"
+      description: "AWS hosted Direct Connect of eu-central-1 through the Network Edge router eg-am-ne02 (FABRIC-AMNE02-AWS-EUC1)"  # yamllint disable-line rule:line-length
+      status: active
+      connection_type: logical
+      provider: "P004"
+      bandwidth: 1000
+      account: "net-hub-aws-prod"
+      partner_account: "equinix-network-edge"
+      region: "eu-central-1"
+    - name: "er-30all-weu"
+      description: "Azure ExpressRoute circuit of westeurope: primary and secondary link (XC-EQXPA4-AZURE-WEU-PRI and -SEC)"  # yamllint disable-line rule:line-length
+      status: active
+      connection_type: logical
+      provider: "P005"
+      bandwidth: 10000
+      account: "net-hub-azure-prod"
+      region: "westeurope"

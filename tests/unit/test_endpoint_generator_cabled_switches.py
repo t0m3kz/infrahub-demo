@@ -1,7 +1,4 @@
-"""Cabled switch names, LAG ids and LAG endpoint connections of EndpointConnectivityGenerator.
-
-The generator lives in generators/topology/endpoint.py; the LAG flow is generators/topology/endpoint_lag.py.
-"""
+"""Cabled switch names, LAG ids and LAG endpoint connections of EndpointConnectivityGenerator."""
 
 from __future__ import annotations
 
@@ -14,9 +11,7 @@ import pytest
 from generators.topology.endpoint import EndpointConnectivityGenerator
 from tests.unit.endpoint_generator_helpers import _iface, _make_generator
 
-# ===========================================================================
 # _extract_device_name()
-# ===========================================================================
 
 
 class TestExtractDeviceName:
@@ -32,9 +27,7 @@ class TestExtractDeviceName:
         assert EndpointConnectivityGenerator._extract_device_name(intf) is None
 
 
-# ===========================================================================
 # _extract_cabled_switch_names()
-# ===========================================================================
 
 
 class TestExtractCabledSwitchNames:
@@ -104,9 +97,7 @@ class TestExtractCabledSwitchNames:
         assert gen._extract_cabled_switch_names([intf]) == set()
 
 
-# ===========================================================================
 # _next_free_lag_id()
-# ===========================================================================
 
 
 class TestNextFreeLagId:
@@ -123,9 +114,7 @@ class TestNextFreeLagId:
         assert EndpointConnectivityGenerator._next_free_lag_id({1, 3}) == 2
 
 
-# ===========================================================================
 # _process_lag_endpoint_connections()
-# ===========================================================================
 
 
 class TestProcessLagEndpointConnections:
@@ -133,8 +122,7 @@ class TestProcessLagEndpointConnections:
         gen = _make_generator()
         gen.data = {"name": "server-1"}
         gen._resolve_target_interfaces = AsyncMock()
-        # _make_generator() stubs this method out for generate()-level tests —
-        # restore the real bound implementation since it's under test here.
+        # Restore the real method that _make_generator() stubs.
         gen._process_lag_endpoint_connections = EndpointConnectivityGenerator._process_lag_endpoint_connections.__get__(
             gen
         )
@@ -276,8 +264,7 @@ class TestProcessLagEndpointConnections:
 
     @pytest.mark.asyncio
     async def test_reuses_existing_cable_far_end_port(self) -> None:
-        """A member interface already cabled from a prior run reuses the far-end
-        switch port instead of claiming a fresh free one."""
+        """A member already cabled from a prior run reuses its far-end switch port."""
         gen = self._gen()
         switch_a, switch_b, mlag_id = self._switches_with_shared_domain()
         switch_a.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
@@ -309,10 +296,7 @@ class TestProcessLagEndpointConnections:
 
         await gen._process_lag_endpoint_connections(bond, "tor")
 
-        # create_cabling is re-touched for both members (idempotent, allow_upsert
-        # server-side) — but member_1's port lookup reused the EXISTING far-end
-        # port instead of claiming a fresh one from the switch's free-port list,
-        # which is the behavior under test here.
+        # member_1 must reuse its existing far-end port, not claim a fresh one.
         assert gen.create_cabling.await_count == 2
         first_call_kwargs = gen.create_cabling.call_args_list[0].kwargs
         assert first_call_kwargs["top_interfaces"] == [far_end_port.name.value]
@@ -320,8 +304,7 @@ class TestProcessLagEndpointConnections:
 
     @pytest.mark.asyncio
     async def test_far_ends_of_all_bonds_are_read_in_one_batch(self) -> None:
-        """Two bonds with a cabled member each: their far ends are looked up together (one cables
-        read, one far-end read), not once per member."""
+        """Two bonds with a cabled member each:"""
         gen = self._gen()
         switch_a, switch_b, _ = self._switches_with_shared_domain()
         switch_a.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))

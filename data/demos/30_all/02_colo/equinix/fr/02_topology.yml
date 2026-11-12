@@ -1,5 +1,5 @@
 ---
-# Frankfurt colocation metro and zones (nested from colocation root)
+# Equinix Frankfurt colocation metro and its zones.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -10,33 +10,6 @@ spec:
       children:
         kind: TopologyColocationMetro
         data:
-          # Frankfurt's on-ramp is declared on the zone that holds it, not on
-          # the metro: add_colocation_zone (generators/topology/colocation_fabric.py)
-          # creates the devices plus FR2's own loopback/management/technical
-          # pools. The metro FR only keeps the EVPN Multi-Site site (its VNI and
-          # ASN pools, from add_colocation_metro). The kit is declared on the
-          # zone for the same reason a DC declares its border-leafs rather than
-          # a pod doing it — one pair fronts the whole metro, and FR6 reaches it
-          # over a cross-connect. Edge pair, interlink and edge<->firewall
-          # cabling all stay inside FR2; a link between zones is a circuit.
-          # N9K-C9316D-GX_EDGE carries the port roles this leg needs —
-          # Ethernet1/[1-7] `customer`, Ethernet1/8 `interlink` (the direct link
-          # to the zone's other edge), Ethernet1/[9-12] `dci` (facing the DC
-          # border leafs), Ethernet1/[13-14] `uplink` (facing the cloud fabric
-          # and the ISPs) and Ethernet1/[15-16] `firewall`. Frankfurt fronts
-          # DC10 and DC11; both edges are Multi-Site border gateways, each with
-          # its own dark fibre to every DC, and peer iBGP over the interlink
-          # (add_colocation_zone: FABRIC-eg-fr201-eg-fr202).
-          #
-          # The firewall pair is the on-ramp's perimeter, declared exactly the
-          # way a DC declares its own: quantity 2 of a template carrying a
-          # role=ha sync port (PA-5260_FIREWALL's HA1/HA2), which is what lets
-          # the generator build the ManagedFirewallHA domain and the sync cable
-          # between the two members. panos matches DC11's firewalls, but unlike
-          # DC11's these are not Panorama-managed — the zone declares no
-          # controllers, so they land in the plain `firewalls` group. The pair is
-          # cabled to the edge pair on Ethernet1/[15-16], index-paired the same
-          # way a DC's border-leafs cable to its own shared services.
           - name: FR
             design: "S"
             location: ["fra"]
@@ -46,8 +19,6 @@ spec:
             children:
               kind: TopologyColocationZone
               data:
-                # FR2 holds the on-ramp kit; FR6 is a customer cage and
-                # declares nothing of its own.
                 - name: FR2
                   design: "EDGE_FW"
                   member_of_groups:

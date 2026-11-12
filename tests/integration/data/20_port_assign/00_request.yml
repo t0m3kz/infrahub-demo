@@ -1,0 +1,16 @@
+---
+# A person asks for one more port of c001-web-app-p in DC6: a free customer port of l2-dc61111501, the first l2-leaf
+# of ktw-1-s-1-r-1-5 (row 1 of POD-1), which add_endpoint cables ktw-pod1-server-1 to and so already holds the
+# segment's VLAN row. The request is the port among the deployment's interface `capabilities`; the segment reconcile
+# realizes it as the port's membership of that switch's row. An upsert of the list replaces it, so it is the whole
+# list: the deployment had no assigned port before.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSegmentDeployment
+  data:
+    - segment: c001-web-app-p
+      deployment: DC6
+      capabilities:
+        - kind: DcimPhysicalInterface
+          data: {device: l2-dc61111501, name: "Ethernet1/1/22"}

@@ -1,0 +1,48 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "et-0/0/0"
+      device: "EXT-EQX-FABRIC-FR2"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
+      status: active
+      description: "Fabric port, cabled to eg-fr201 Ethernet1/1"
+    - name: "et-0/0/1"
+      device: "EXT-EQX-FABRIC-FR2"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
+      status: active
+      description: "Fabric port, cabled to eg-fr202 Ethernet1/2 through PP-EQX-FR2-01"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "dxcon-fr2"
+      device: "EXT-AWS-DX-FR2"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
+      status: active
+      description: "Direct Connect dedicated port, cabled to eg-fr201 Ethernet1/13"
+    - name: "dxcon-amne"
+      device: "EXT-AWS-DX-EUC1"
+      interface_type: 1000base-x-sfp
+      role: cloud
+      status: active
+      description: "Hosted Direct Connect port, leg of the Network Edge router eg-am-ne02"
+    - name: "msee-pri"
+      device: "EXT-AZURE-ER-WEU"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
+      status: active
+      description: "ExpressRoute primary link (primary MSEE)"
+    - name: "msee-sec"
+      device: "EXT-AZURE-ER-WEU"
+      interface_type: 10gbase-x-sfpp
+      role: cloud
+      status: active
+      description: "ExpressRoute secondary link (secondary MSEE)"

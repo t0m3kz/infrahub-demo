@@ -356,6 +356,9 @@ check_definitions:
   - name: validate_pool_utilization
     class_name: CheckPoolUtilization
     file_path: checks/pool_utilization.py
+  - name: validate_change_request
+    class_name: CheckChangeRequest
+    file_path: checks/change_request.py
 
 python_transforms:
   - name: topology_cabling
@@ -549,6 +552,13 @@ python_transforms:
         - transforms/
         - templates/
         - utils/
+  - name: change_request_servicenow
+    class_name: ChangeRequestServiceNow
+    file_path: transforms/change/servicenow.py
+    watch:
+      files:
+        - transforms/
+        - utils/
 graphql_fragments:
   - name: all_fragments
     file_path: queries/fragments/
@@ -728,6 +738,20 @@ queries:
     file_path: queries/flat/topology/add/topology_orchestrator_routing_data.gql
   - name: application_orchestrator_routing_data
     file_path: queries/flat/topology/add/application_orchestrator_routing_data.gql
+  - name: change_request
+    file_path: queries/flat/change/change_request.gql
+  - name: open_change_request
+    file_path: queries/flat/change/open_change_request.gql
+  - name: change_request_diff
+    file_path: queries/flat/change/change_request_diff.gql
+  - name: change_request_facts
+    file_path: queries/flat/change/change_request_facts.gql
+  - name: change_request_peers
+    file_path: queries/flat/change/change_request_peers.gql
+  - name: change_request_validation
+    file_path: queries/flat/change/change_request_validation.gql
+  - name: change_request_servicenow
+    file_path: queries/flat/change/change_request_servicenow.gql
 
 generator_definitions:
   - name: add_dc
@@ -1036,3 +1060,21 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+  - name: add_change_request
+    file_path: generators/change/change_request.py
+    targets: change_requests
+    query: change_request
+    class_name: ChangeRequestGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: open_change_request
+    file_path: generators/change/open_change_request.py
+    targets: artifact_validators
+    query: open_change_request
+    class_name: OpenChangeRequestGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      validator_id: id

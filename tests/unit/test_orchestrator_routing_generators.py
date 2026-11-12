@@ -156,8 +156,7 @@ class TestTopologyOrchestratorRoutingGenerator:
         gen.client.get.assert_not_called()
 
     def test_routing_group_already_on_the_node_is_not_looked_up_when_another_group_changes(self) -> None:
-        """A switched orchestrator: the new routing group is taken from the payload only if the node is
-        already in it; the stale one is dropped."""
+        """A switched orchestrator:"""
         gen = _make_topology_gen()
         updated = _saved_obj()
         gen.client.get = AsyncMock()

@@ -1,9 +1,5 @@
 ---
-# VXLAN segment (local to one footprint) activated in C001's colocation footprint (FR). Loaded before
-# 01_application.yml since components there reference it by human_friendly_id.
-# Nested under OrganizationCustomer (owner) via the network_segments reverse
-# relationship — owner is set automatically from the parent, no need to
-# repeat it on the segment itself.
+# C001 segment in its Frankfurt colocation footprint; loads before the application using it.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

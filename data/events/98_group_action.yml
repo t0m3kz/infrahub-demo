@@ -1,0 +1,11 @@
+---
+# Group actions: a trigger rule adds the node that fired it to a group (the generator of that group then runs for it).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreGroupAction
+  data:
+    - name: add-to-artifact-validators
+      description: Add an artifact validator to artifact_validators (open_change_request runs for its members)
+      member_action: add_member
+      group: artifact_validators

@@ -1,9 +1,4 @@
-"""utils/limits.py mirrors what the schema and the bootstrap data say; this is the test that keeps them equal.
-
-The schema (``parameters``) and ``data/bootstrap`` are the source of truth. Every constant of ``utils/limits.py``
-that mirrors one of them is checked here, and a failure names the constant and the file to change. Constants that
-hold a design relation (the VLAN, VNI and ASN bands that must not overlap) are checked against each other.
-"""
+"""utils/limits.py mirrors what the schema and the bootstrap data say;"""
 
 from __future__ import annotations
 

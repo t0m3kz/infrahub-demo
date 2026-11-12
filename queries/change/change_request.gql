@@ -1,0 +1,39 @@
+# The target of add_change_request (generators/change/change_request.py): the request, the values a re-run compares
+# against (a field already equal is not written), and its Proposed Change (branch-agnostic, read through the edge).
+query change_request($name: String!) {
+  ChangeRequest(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        short_description { value }
+        description { value }
+        change_type { value }
+        risk { value }
+        risk_score { value }
+        impact { value }
+        implementation_plan { value }
+        backout_plan { value }
+        test_plan { value }
+        communication_plan { value }
+        conflicts { value }
+        planned_start { value }
+        planned_end { value }
+        artifact_fingerprint { value }
+        external_id { value }
+        risk_override { value }
+        affected_devices { edges { node { id } } }
+        affected_customers { edges { node { id } } }
+        proposed_change {
+          node {
+            id
+            name { value }
+            description { value }
+            source_branch { value }
+            state { value }
+          }
+        }
+      }
+    }
+  }
+}

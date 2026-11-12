@@ -1,14 +1,4 @@
-"""Unit tests for the derived tenant segment addressing.
-
-VxlanSegmentGenerator.ensure_segment_addressing (generators/topology/segment_addressing.py)
-gives a gateway-less segment of a footprint with no design (an office's)
-a prefix from the tenant pool of its environment's VRF namespace
-(data/bootstrap/23b_tenant_pools.yml), keyed by the segment name, and its
-anycast gateway on .1; an authored gateway is never touched. A segment of a data
-center or colocation footprint is addressed from its customer's pool
-(test_segment_customer_pool.py). The app generator waits for an in-flight add_vxlan_segment run of a
-gateway-less segment it uses (AppApplicationGenerator._await_segment_addressing).
-"""
+"""Unit tests for the derived tenant segment addressing."""
 
 from __future__ import annotations
 
@@ -419,9 +409,7 @@ class TestAppWaitsForSegmentAddressing:
 
 
 def test_all_demo_dc_tenant_segments_declare_no_addressing() -> None:
-    """Every 30_all VXLAN segment in a data center footprint has its gateway and prefix derived: none is typed.
-    The authored gateway (kept by add_vxlan_segment) is for a colocation cage's segment and an exchange-zone
-    service segment (the MANAGEMENT services)."""
+    """Every 30_all VXLAN segment in a data center footprint has its gateway and prefix derived"""
     demo = ROOT / "data" / "demos" / "30_all"
     dc_footprints = {name(obj) for obj in declared("TopologyCustomerDC", demo)}
     segments = declared("ManagedVxlanSegment", demo)

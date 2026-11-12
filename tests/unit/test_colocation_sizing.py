@@ -1,9 +1,4 @@
-"""generators/fabric_sizing.py, colocation part: pool sizes derived from the colocation design envelope.
-
-The designs are the rows of data/bootstrap/14c_colocation_templates.yml (tests/unit/simulators/fabric_designs.py).
-The golden tables were computed from the contract formulas (25% headroom on a pool that addresses devices or links,
-a metro pool exactly as wide as its zones), independently of the module.
-"""
+"""generators/fabric_sizing.py, colocation part: pool sizes derived from the colocation design envelope."""
 
 from __future__ import annotations
 

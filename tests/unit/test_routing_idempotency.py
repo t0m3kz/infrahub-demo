@@ -1,13 +1,4 @@
-"""Regression tests locking in routing-plan stability.
-
-Two properties that make routing "as stable as p2p cabling":
-
-1. Idempotency — building the plan twice from identical input yields identical
-   output (names, AS refs, peerings). Re-runs must not churn.
-2. Order-independence — the order loopbacks/interfaces arrive from the query must
-   not change the plan. In particular router_id selection is deterministic
-   (lowest loopback interface id wins), not "first in query-return order".
-"""
+"""Regression tests locking in routing-plan stability."""
 
 from typing import Any
 from unittest.mock import MagicMock
@@ -145,14 +136,7 @@ class TestOrderIndependence:
 
 
 class TestSelfLoopGuard:
-    """Regression tests for the self-loop peering bug.
-
-    Parallel rack generators can race such that both fabric-p2p endpoints of a
-    cable temporarily appear to belong to the same device (e.g., a spine gets its
-    interface tagged twice before the TOR side is committed).  The planner must
-    silently drop these entries rather than emitting a peering that references
-    only one device.
-    """
+    """Regression tests for the self-loop peering bug."""
 
     def test_self_loop_cable_produces_no_peering(self) -> None:
         """A cable whose both endpoints resolve to the same device must be skipped."""

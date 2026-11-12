@@ -1,15 +1,4 @@
-"""The interface encapsulation in schemas/extensions/capabilities/encapsulation.yml.
-
-An interface that rides on another one (a dot1q sub-interface, a firewall context leg, the NIC of a VM pinned to a
-host port, a cloud peering, the end of a provider connection) has ONE capability object, ``ManagedInterfaceEncapsulation``,
-among its ``capabilities`` (the standard interface edge). It points at the interface it rides on with the mandatory
-``parent`` and carries the optional ``vlan_id`` tag; the port lists the encapsulations that ride on it in the reverse
-edge ``encapsulations``, declared once on ``DcimInterface`` by an extension. The marker generics ``DcimSubInterface``
-and ``DcimHasSubInterface`` and the fields ``parent_interface`` / ``sub_interfaces`` are gone: no interface kind
-declares a parent or a tag of its own. The cross-device rule is held by checks/interface_parents.py, so the pair
-carries no ``common_parent``: in the whole schema only the LAG pair (``common_parent: device``), the OSPF settings, the
-VLAN row ports and the patch panel ports do.
-"""
+"""The interface encapsulation in schemas/extensions/capabilities/encapsulation.yml."""
 
 from __future__ import annotations
 
@@ -81,8 +70,7 @@ def test_no_node_declares_parent_interface_or_sub_interfaces() -> None:
 
 
 def test_the_former_marker_kinds_declare_no_parent_or_tag_of_their_own() -> None:
-    """A cloud peering, a provider interface and a virtual interface ride through the encapsulation, so they hold no
-    parent relationship and no VLAN tag."""
+    """A cloud peering, a provider interface and a virtual interface ride through the encapsulation."""
     nodes = _all_nodes()
     for kind in _FORMER_MARKER_KINDS:
         node = nodes[kind]
@@ -92,8 +80,7 @@ def test_the_former_marker_kinds_declare_no_parent_or_tag_of_their_own() -> None
 
 
 def test_the_encapsulation_is_a_managed_capability_on_the_interface_edge() -> None:
-    """A Managed node that inherits the generic and the interface edge (not a device edge): it is among the
-    ``capabilities`` of the interface that rides."""
+    """A Managed node that inherits the generic and the interface edge (not a device edge):"""
     node = _encapsulation()
 
     assert node["namespace"] == "Managed" and node["name"] == "InterfaceEncapsulation"
@@ -120,8 +107,7 @@ def test_the_parent_is_a_mandatory_one_sided_edge_to_an_interface_with_no_common
 
 
 def test_the_port_lists_its_encapsulations_in_one_reverse_edge_declared_once() -> None:
-    """``DcimInterface.encapsulations`` (many, inbound) pairs with ``parent`` on the same identifier, and is declared
-    only here: no interface kind redeclares it."""
+    """``DcimInterface.encapsulations``."""
     parent = _field(_encapsulation(), "relationships", "parent")
     reverse = _field(_extension("DcimInterface"), "relationships", "encapsulations")
 
@@ -149,8 +135,7 @@ def test_common_parent_stays_on_the_lag_pair() -> None:
 
 
 def test_ip_address_is_declared_once_on_the_marker_generic() -> None:
-    """One Attribute declaration without cascade (a multisite VIP is one address on two loopbacks), inherited by the
-    address-holding kinds (a cloud peering included) and not by the console interface."""
+    """One Attribute declaration without cascade."""
     nodes = _all_nodes()
     ip_address = _field(nodes["DcimHasIPAddress"], "relationships", "ip_address")
     inheritors = {kind for kind, node in nodes.items() if "DcimHasIPAddress" in (node.get("inherit_from") or [])}
@@ -180,8 +165,7 @@ def test_common_parent_is_used_only_by_the_lag_pair_the_ospf_settings_the_vlan_r
 
 
 def test_the_encapsulation_identifier_is_not_the_interface_edge_identifier() -> None:
-    """The interface edge's identifier pairs the interface with its capabilities; the parent edge needs a key of its
-    own, else the server would pair an encapsulation's parent with the interface that carries it."""
+    """The interface edge's identifier pairs the interface with its capabilities;"""
     edge_identifier = "interface_" + "capabilities"  # spelled in two parts: test_capability_edge_names greps the name
     assert _IDENTIFIER != edge_identifier
     assert f'identifier: "{edge_identifier}"' not in _ENCAPSULATION.read_text()

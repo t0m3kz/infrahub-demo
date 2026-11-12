@@ -1,0 +1,26 @@
+---
+# Storefront calls to third-party services, sent through C001's egress proxy.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c001-storefront-p-web-frontend-to-stripe-api
+      source: storefront.c001.demo.local
+      target_fqdn: api.stripe.com
+      ports:
+        - tcp/443
+      access_status: auto
+      description: "Storefront frontend calls the Stripe payment API"
+      member_of_groups:
+        - app_dependencies
+
+    - name: c001-storefront-p-app-backend-to-github-api
+      source: backend.storefront.c001.demo.local
+      target_fqdn: api.github.com
+      ports:
+        - tcp/443
+      access_status: auto
+      description: "Storefront backend calls the GitHub API for deployment status"
+      member_of_groups:
+        - app_dependencies

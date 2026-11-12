@@ -1,11 +1,4 @@
-"""Integration tests for repository management.
-
-This module contains tests for:
-1. Adding Git repository to Infrahub
-2. Waiting for repository sync
-3. Loading event/action definitions (requires generator definitions from repo)
-4. Verifying repository content availability
-"""
+"""Integration tests for repository management."""
 
 import asyncio
 import logging
@@ -46,9 +39,6 @@ class TestRepository(TestInfrahubDockerWithClient):
         client = async_client_main
 
         # NOTE: GitRepo copies the source directory into the remote repo mount.
-        # If the source tree contains a previous `.pytest-tmp/` (or other caches),
-        # that directory may itself contain nested repo copies and cause path
-        # recursion / "File name too long" errors on subsequent runs.
         ignore_patterns = shutil.ignore_patterns(
             ".git",
             ".pytest-tmp",
@@ -154,11 +144,7 @@ class TestRepository(TestInfrahubDockerWithClient):
     @pytest.mark.order(8)
     @pytest.mark.dependency(scope="session", name="events_data", depends=["repository_sync"])
     def test_03_load_events(self, client_main: InfrahubClientSync) -> None:
-        """Load event/action definitions after repository sync.
-
-        Events must be loaded after repository sync because they reference
-        generator definitions that come from .infrahub.yml in the repository.
-        """
+        """Load event/action definitions after repository sync."""
         logging.info("Starting test: test_03_load_events")
 
         load_events = self.execute_command(
@@ -178,27 +164,14 @@ class TestRepository(TestInfrahubDockerWithClient):
     @pytest.mark.dependency(scope="session", name="triggers_active", depends=["events_data"])
     @pytest.mark.asyncio
     async def test_04_wait_for_trigger_activation(self) -> None:
-        """Wait for CoreNodeTriggerRule automations to actually be listening.
-
-        test_03 only confirms the trigger *nodes* exist in the graph — the
-        underlying Prefect automations that watch for created/updated events
-        are registered separately and asynchronously by a background worker,
-        consistently 12-20s behind (see TRIGGER_ACTIVATION_DELAY). Every DC/
-        pod/rack bulk load downstream depends on this, not on events_data
-        directly, so the first DC doesn't race that gap and silently lose
-        pods/racks whose created events fire before anything is listening.
-        """
+        """Wait for CoreNodeTriggerRule automations to actually be listening."""
         logging.info("Waiting %ds for trigger automations to activate", TRIGGER_ACTIVATION_DELAY)
         await asyncio.sleep(TRIGGER_ACTIVATION_DELAY)
 
     @pytest.mark.order(10)
     @pytest.mark.dependency(scope="session", depends=["repository_sync"])
     def test_05_no_query_selects_a_field_twice_on_one_object(self, client_main: InfrahubClientSync) -> None:
-        """Every registered query selects each field once per object (tests/integration/query_field_collisions.py).
-
-        The server answers only the first selection of a field; a later one comes back null, silently. Checked against
-        the live schema, which is what decides whether two inline fragments can meet on one object.
-        """
+        """Every registered query selects each field once per object (tests/integration/query_field_collisions.py)."""
         introspection = cast(IntrospectionQuery, client_main.execute_graphql(query=get_introspection_query()))
         schema = build_client_schema(introspection)
         fragments = [path.read_text() for path in sorted((PROJECT_DIRECTORY / "queries/fragments").glob("*.gql"))]

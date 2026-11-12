@@ -34,11 +34,7 @@ def _peer_link(device: str, name: str = "Port-Channel100", role: str = "mlag-pee
 def _domain(
     name: str, *devices: str, peer_devices: str | None = None, interfaces: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
-    """One ManagedMLAG edge whose members are the given device names (id is 'id-<name>').
-
-    `peer_devices` defaults to the value the generator writes for these members; `interfaces` defaults to one
-    listed peer-link port-channel per member.
-    """
+    """One ManagedMLAG edge whose members are the given device names (id is 'id-<name>')."""
     members = [{"node": {"id": f"id-{device}", "name": {"value": device}}} for device in devices]
     return {
         "node": {

@@ -1,8 +1,4 @@
-"""Unit tests for OfficeFabricGenerator's WAN exit to the office's SD-WAN edge (generators/topology/office_fabric.py).
-
-The mixins that talk to Infrahub are replaced by mocks. The tests pin when the WAN exit is built, what it cables and
-addresses, and that it skips (never raises) while the edge is not there.
-"""
+"""Unit tests for OfficeFabricGenerator's WAN exit to the office's SD-WAN edge."""
 
 from __future__ import annotations
 

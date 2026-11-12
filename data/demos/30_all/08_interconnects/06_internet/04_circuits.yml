@@ -1,6 +1,6 @@
 ---
 # IP transit, cage -> ISP. Unowned like the rest of the on-ramp underlay
-# (../01_colo_onramp/03_carrier_circuits.yml): every tenant's internet traffic
+# (../01_colo_onramp/08_carrier_circuits.yml): every tenant's internet traffic
 # leaves over these. The cage end is the zone the dark fibre also lands in, the
 # far end the ISP's endpoint in the INTERNET topology (../../04_internet/01_topology.yml).
 # Only the cage is listed: add_circuit derives the ISP end from the provider

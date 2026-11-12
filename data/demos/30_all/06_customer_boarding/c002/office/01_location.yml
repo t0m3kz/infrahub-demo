@@ -1,8 +1,5 @@
 ---
-# Office footprint for C002 (SwiftGo GmbH), mirroring c001/office/ and
-# c003/office/. Like every office it opts into generators/topology/
-# sdwan_edge.py's SD-WAN edge provisioning in 02_deployment.yml; it also
-# registers its LAN and asks for a full branch-to-branch mesh.
+# C002 Marseille branch office building.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

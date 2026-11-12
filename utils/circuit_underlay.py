@@ -1,22 +1,6 @@
-"""The physical carrier of a virtual circuit, shared by the generator and the checks.
+"""The physical carrier of a virtual circuit, derived and never declared (shared by the generator and the checks).
 
-A virtual circuit's underlay is derived, never declared. A port is carried by
-
-- a TopologyCarrierCircuit found in the ``capabilities`` of the port, or of its parent interface when the port is a
-  sub-interface (the encapsulation ``parent``: a handoff VLAN on a cage edge port rides the circuit that terminates on the
-  parent): :func:`port_underlay`, :func:`derived_underlay` over every end, or
-- a DcimCable on the port or its parent: :func:`port_cabled`. A carrier circuit needs two distinct facilities, so a
-  hop inside one facility (the gateway and the cage edge in one cage) is a cable, the project's rule for fibre
-  pulled between two chassis in one facility. A cable has no status: a cabled port is always carried.
-
-:func:`has_carrier` is either. Both ``generators/topology/virtual_circuit.py`` (waits, session status) and
-``checks/circuit_placement.py`` (contiguity, carrier presence) read the same cleaned dicts. The cleaned port has
-``cable`` (the cable's id, or None) when the query selects it on a DcimPhysicalInterface, and a sub-interface's
-encapsulation parent has its own ``cable``.
-
-The session circuit kind and its ``circuit_type`` values live here once (strings, no protocols import): the
-generators, the check and the planner mapping all read :data:`SESSION_CIRCUIT_TYPES`. The two rules of a session end that the generator and the check
-must agree on are here too: the overlay BGP processes of a device (:func:`overlay_processes`).
+A port is carried by a carrier circuit (``port_underlay``) or a cable (``port_cabled``); ``has_carrier`` is either.
 """
 
 from __future__ import annotations
@@ -27,36 +11,31 @@ from utils.interface_encapsulation import parent_of
 
 DECOMMISSIONED = "decommissioned"
 CARRIER_CIRCUIT = "TopologyCarrierCircuit"
-# One kind for every circuit that rides a carrier; its role is its ``circuit_type``.
 SESSION_CIRCUIT = "TopologySessionCircuit"
 DCI_TYPE = "dci"
 HANDOFF_TYPE = "handoff"
 TUNNEL_TYPE = "tunnel"
 VPN_TYPE = "vpn"
-# The circuit types that have a session generated (a tunnel has none): a port is an end of at most one.
+# Types with a generated session (a tunnel has none); a port is an end of at most one.
 SESSION_CIRCUIT_TYPES = (DCI_TYPE, HANDOFF_TYPE, VPN_TYPE)
 
 BGP_PROCESS = "ManagedBGP"
 OVERLAY_ROLE = "overlay"
-# A provider-hosted network function (Equinix Network Edge): a device kind we do not administer.
+# A provider-hosted network function we do not administer.
 NETWORK_APPLIANCE_KIND = "CloudNetworkAppliance"
-# The cloud side of a circuit: a peering that rides on a provider's port or LAG, or a port of a transport (a device
-# without role or deployment); the provider's side is authored, never generated.
+# The cloud side of a circuit (authored, never generated): a peering, or a port of a transport.
 CLOUD_PEERING_KIND = "CloudPeeringInterface"
 CLOUD_TRANSPORT_KINDS = ("CloudDirectConnect", "CloudVPNConnection")
-# THE INTERNET: one passive device that is also a facility. An internet carrier ends on its one interface, and the
-# object itself is the location of that end (it has no ``deployment``).
+# THE INTERNET: a passive device that is also a facility; it is the location of its own carrier end.
 INTERNET_KIND = "TopologyInternet"
-# The shared interface of THE INTERNET: the one kind that may be an end of many carriers.
+# The one interface kind that may be an end of many carriers.
 INTERNET_INTERFACE_KIND = "TopologyInternetInterface"
-# A provider's own router (an ISP or partner PE) has no place object and no deployment: its provider is its ``owner``.
+# A provider's own router has no place and no deployment: its provider is its ``owner``.
 PROVIDER_KIND = "OrganizationProvider"
-# A handoff end is a VLAN sub-interface, <parent>.<vlan>: the VLAN lives in the name.
 
 
 def is_provider_device(device: dict[str, Any]) -> bool:
-    """The cleaned device is a provider's own router: owned by an ``OrganizationProvider`` and placed nowhere (no
-    ``deployment``, ``region``, ``saas_region`` or ``location``), so the circuit's own ``provider`` names its end."""
+    """The device is a provider's own router: owned by an ``OrganizationProvider`` and placed nowhere."""
     owner = device.get("owner")
     placed = device.get("deployment") or device.get("region") or device.get("saas_region") or device.get("location")
     return isinstance(owner, dict) and owner.get("typename") == PROVIDER_KIND and not placed
@@ -86,12 +65,7 @@ def _port_and_parent(port: dict[str, Any]) -> tuple[dict[str, Any], dict[str, An
 
 
 def port_underlay(port: dict[str, Any]) -> list[dict[str, Any]]:
-    """The carrier circuits terminating on one port, or on its parent interface when it is a sub-interface.
-
-    Each port's own ``capabilities`` list the entries that terminate on it (segments, peerings, other circuits
-    too); a sub-interface has no carrier of its own, so its encapsulation ``parent`` is read as well, one level. The
-    TopologyCarrierCircuit entries, deduplicated by id in first-seen order, whatever their status.
-    """
+    """The carrier circuits on a port or its encapsulation parent, deduplicated by id, whatever their status."""
     circuits: dict[str, dict[str, Any]] = {}
     for interface in _port_and_parent(port):
         for cap in interface.get("capabilities") or []:
@@ -116,18 +90,8 @@ def has_carrier(port: dict[str, Any]) -> bool:
 
 
 def derived_underlay(circuit: dict[str, Any]) -> list[dict[str, Any]]:
-    """The physical carriers at a virtual circuit's ports: :func:`port_underlay` over every end, deduplicated by id.
-
-    Only circuits: a cable is no entry here (nothing to wait for, nothing to chain). Limitations, all silent: a LAG
-    or other logical port that is not the encapsulation ``parent`` of the port derives nothing; a middle hop of a chain that
-    touches none of the circuit's ports is not found; and a port removed from a carrier circuit, or cabled after the
-    virtual circuit exists, reruns nothing, so the virtual circuits that sat on it keep (or lack) their session until
-    their next run.
-
-    What reaches a session: it reruns on its own created / capabilities / status (a handoff also ip_namespace and
-    password) and, through add_circuit's fan-out (generators/topology/circuit.py), when a physical
-    circuit on its ports (or on a port's parent) is created, has its ends changed or its status changed. It does NOT
-    rerun when a cable is added later, when a port is removed from a circuit, or when a circuit's type changes.
+    """The carrier circuits at a virtual circuit's ports (cables are not entries); a LAG that is not the ``parent``
+    derives nothing.
     """
     underlay: dict[str, dict[str, Any]] = {}
     for port in circuit.get("capabilities") or []:
@@ -137,11 +101,7 @@ def derived_underlay(circuit: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 async def session_circuits_on(client: Any, port_ids: list[str]) -> list[Any]:
-    """Every session circuit (dci, handoff or vpn) with one of ``port_ids`` among its ends.
-
-    A tunnel shares its ports by design (one gateway port serves many tunnels), so it stays out: the filter is on
-    ``circuit_type``, not on the kind.
-    """
+    """Every session circuit (dci, handoff or vpn) ending on one of ``port_ids``; a tunnel shares ports, so it is out."""
     return await client.filters(
         kind=SESSION_CIRCUIT, capabilities__ids=port_ids, circuit_type__values=list(SESSION_CIRCUIT_TYPES)
     )

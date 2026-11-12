@@ -1,9 +1,4 @@
-"""The derived DcimCable attributes: printed ID, jacket colour and length from the suite layout.
-
-Pure-function tests of ``generators/helpers/cable_attributes.py``, the pins between its tables and the schema
-(``schemas/base/dcim.yml`` is the source of the cable types and colours) and the proof that cable IDs do not
-collide over the cables the cabling planner produces.
-"""
+"""The derived DcimCable attributes: printed ID, jacket colour and length from the suite layout."""
 
 from __future__ import annotations
 
@@ -120,7 +115,7 @@ class TestCableLength:
                 assert isinstance(length, int) and length % LENGTH_ROUNDING_CM == 0 and length >= INTRA_RACK_CM
 
     def test_custom_pitches_are_used(self) -> None:
-        """The suite's own pitches replace the defaults: 4 * 70 + 100 = 380 -> 400; 2 rows * 400 + 2 * 70 + 100 = 1040 -> 1050."""
+        """The suite's own pitches replace the defaults: 4 * 70 + 100 = 380 -> 400."""
         assert cable_length_cm(_rack(1, 1, rack_pitch=70), _rack(1, 5, rack_pitch=70)) == 400
         assert (
             cable_length_cm(_rack(1, 1, rack_pitch=70, row_pitch=400), _rack(3, 1, rack_pitch=70, row_pitch=400))
@@ -193,12 +188,7 @@ class TestCableColor:
         assert cable_color(cable_type) is None
 
     def test_cable_id_and_length_attributes_are_declared_by_the_schema(self) -> None:
-        """The attributes the generators write exist on DcimCable: cable_id (not unique), length_cm a Number.
-
-        cable_id must NOT be ``unique``: Infrahub counts an unset value as a value, so the second cable declared in a
-        data file without one fails to load with "Violates uniqueness constraint 'cable_id'" (found on the live stack).
-        The id is a hash of the endpoint labels, as unique as the cable's own name.
-        """
+        """The attributes the generators write exist on DcimCable: cable_id (not unique), length_cm a Number."""
         assert not (attribute("DcimCable", "cable_id") or {}).get("unique")
         assert (attribute("DcimCable", "length_cm") or {}).get("kind") == "Number"
 
@@ -231,11 +221,7 @@ class TestCableId:
         assert endpoint_label("leaf-01", "Ethernet1/49") == "leaf-01-Ethernet1/49"
 
     def test_no_collision_over_the_planner_cables_of_a_large_fabric(self) -> None:
-        """Thousands of the cables the cabling planner really produces get distinct IDs.
-
-        12 DCs x 4 pods x (32 leaves with 4 uplinks to 4 spines): 6 144 leaf-spine cables, plus the 12 x 4 x 8
-        border-leaf to firewall cables, named exactly as connections.py names them.
-        """
+        """Thousands of the cables the cabling planner really produces get distinct IDs."""
         names: list[list[str]] = []
         for dc in range(1, 13):
             for pod in range(1, 5):

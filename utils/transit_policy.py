@@ -1,18 +1,13 @@
-"""The routing policies of an upstream transit session, derived once: what the generator writes and a test compares.
+"""The routing policies of an upstream transit session, derived once (the generator writes, a test compares).
 
-A transit session (a session in a namespace of type ``internet``) takes the default route only and announces only the
-public space of the INTERNET namespace (``utils/internet_prefixes.py``). The policies add what route protection alone
-cannot say: everything learned from a transit is tagged with ``TRANSIT_COMMUNITY`` and preferred less than a route of
-ours (``TRANSIT_LOCAL_PREF``, below the default 100), and a route carrying the tag is never announced back to a transit,
-so two upstream providers cannot be joined through us. Pure: the generator (``generators/topology/transit_policy.py``)
-is the only writer of the objects, ``origin: generated``.
+Default route in only, public INTERNET space out, tagged with ``TRANSIT_COMMUNITY`` at lower local-pref.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-# RFC 5398 documentation ASN, the next one after the customer and segment ranges of utils/routing_identity.py.
+# RFC 5398 documentation ASN, next after utils/routing_identity.py.
 TRANSIT_COMMUNITY_ASN = 64498
 TRANSIT_COMMUNITY = f"{TRANSIT_COMMUNITY_ASN}:1"
 TRANSIT_LOCAL_PREF = 80
@@ -32,10 +27,8 @@ def _entries(prefixes: list[str]) -> list[dict[str, Any]]:
 
 
 def transit_spec(public_prefixes: list[str]) -> dict[str, list[dict[str, Any]]]:
-    """The prefix lists, the community list and the two policies of a transit session.
-
-    ``public_prefixes`` is the sorted public IPv4 space; with none, nothing is announced (the export policy is only the
-    tag filter and denies the rest, as the default action says).
+    """The prefix lists, community list and two policies of a transit session; with no public prefixes nothing is
+    announced.
     """
     prefix_lists = [{"name": DEFAULT_IN_LIST, "family": "ipv4", "entries": _entries(["0.0.0.0/0"])}]
     out_terms: list[dict[str, Any]] = [{"seq": 10, "action": "deny", "community_list": LEARNED_LIST}]

@@ -1,16 +1,4 @@
-"""Unit tests for segments terminated on a firewall context on the fabric (leaf / ToR / border-leaf).
-
-A segment with ``firewall_gateway`` is gatewayed by that context's firewall pair (its
-`gateway` is the pair's floating VIP), so every fabric switch carries it as pure L2:
-
-  - gateway suppression — _get_segment_gateways / routed_segment_namespace hide
-    the gateway, so no SVI, no VRF, no L3 VNI (get_vlans, _l2_from_activations, _l3_instances,
-    get_vxlan_config's anycast gateway)
-  - PBR / SVI-ACL skip — BaseDeviceTransform._extra_config and BorderLeaf feed
-    their PBR and ACL helpers routed_activations() only
-  - trunk mode — get_interfaces marks a firewall/load-balancer service port
-    carrying segment VLANs as mode="trunk"
-"""
+"""Unit tests for segments terminated on a firewall context on the fabric (leaf / ToR / border-leaf)."""
 
 from __future__ import annotations
 
@@ -33,9 +21,7 @@ from transforms.helpers.vxlan import _l2_from_activations, get_interfaces, get_v
 from utils.exchange_transit import is_routed_tenant_segment
 from utils.segment_addressing import is_terminated, routed_segment_namespace, segment_namespace
 
-# ---------------------------------------------------------------------------
 # Helpers (cleaned-data shapes, as clean_data() leaves them)
-# ---------------------------------------------------------------------------
 
 
 def _segment(name: str, *, terminated: bool, gateway: str, vrf: str = "VRF_A", l3_vni: int = 50001) -> dict:
@@ -76,9 +62,7 @@ def _activations() -> list[dict[str, Any]]:
     ]
 
 
-# ---------------------------------------------------------------------------
 # Gateway suppression
-# ---------------------------------------------------------------------------
 
 
 class TestGatewaySuppression:
@@ -188,9 +172,7 @@ class TestEveryFabricConsumerAgrees:
         assert dict(requirements.svis) == {100: "VRF_A"}
 
 
-# ---------------------------------------------------------------------------
 # PBR / SVI ACL skip
-# ---------------------------------------------------------------------------
 
 
 def _make_transform(cls: type[BaseDeviceTransform], device_role: str) -> BaseDeviceTransform:
@@ -246,9 +228,7 @@ class TestPbrAndAclSkip:
         assert [m["vrf_name"] for m in config["vxlan"]["l3_vni_mappings"]] == ["VRF_A"]
 
 
-# ---------------------------------------------------------------------------
 # Trunk mode in get_interfaces
-# ---------------------------------------------------------------------------
 
 
 def _interface(name: str, role: str, segments: list[dict]) -> dict:

@@ -1,20 +1,4 @@
-"""Unit tests for OfficeFabricGenerator (generators/topology/office_fabric.py).
-
-The generator turns an office's ``fabric_templates`` into an SD-Access style LISP
-site: pools, a distribution pair and an access pair, their cabling, an OSPF
-underlay and the site key. The mixins that talk to Infrahub are replaced by
-mocks, so the tests pin what this file decides:
-
-- which fabric_templates entries are usable (and that a bad one warns, never
-  fails the office — FailOnErrorLogger turns error() into a task failure);
-- the pools it asks for, and their kinds and namespaces;
-- which ports it cables and how, and when it skips a link;
-- the order of the steps and what it hands the routing planner: an underlay-only
-  plan over the cabled links, in an area the generator itself created;
-- the names the devices get.
-
-The WAN exit to the office's SD-WAN edge is covered in test_office_fabric_generator_wan_exit.py.
-"""
+"""Unit tests for OfficeFabricGenerator (generators/topology/office_fabric.py)."""
 
 from __future__ import annotations
 
@@ -402,8 +386,7 @@ class TestGenerate:
         await gen.generate(_payload(_office()))
         calls = [call[0] for call in manager.mock_calls]
 
-        # the three IP pools and the VNI pool, the site key and the office's one attach of both references,
-        # then devices, links, area, routing, and last the WAN exit
+        # Pools, site key, attach, then devices, links, area, routing, WAN exit last.
         assert calls[:4] == ["ensure_sliced_pool"] * 3 + ["upsert_number_pool"]
         assert calls[4:] == [
             "ensure_lisp_site_key",

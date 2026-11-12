@@ -1,21 +1,23 @@
 # 30_all: The Everything Demo
 
-Every other demo shows one piece. This one loads all of them into one branch (subtle, it is not): three DC fabrics, colocation
-cages from three operators, three clouds, a SaaS edge, five offices, sixteen customers' footprints, nine
+Everything, everywhere, all on one branch. Bring snacks.
+
+Every other demo shows one piece. This one loads all of them into one branch (subtle, it is not): three DC fabrics,
+colocation cages from three operators, three clouds, a SaaS edge, five offices, sixteen customers' footprints, nine
 applications, and the interconnect layer that ties them together.
 
-It is also the only demo that **must be loaded in order**. The steps below are that order. Yes, the order matters; no, it will not forgive you.
+It is also the only demo that **must be loaded in order**. The steps below are that order.
 
 ---
 
 ## Why It Has to Be Staged
 
 Several files point at objects that no file declares. Generators create those objects, and they run
-asynchronously after the load that triggers them ("asynchronously" being engineering for "whenever they feel like it"):
+asynchronously after the load that triggers them:
 
 - `03_dc/*/05_servers.yml` puts hosts in compute racks. `add_endpoint` then looks for the access-leaf pair
   in the same row, and those leafs only exist once `add_rack` has run.
-- `08_interconnects/01_colo_onramp/03_carrier_circuits.yml` lands the dark fibres on border leafs by name
+- `08_interconnects/01_colo_onramp/08_carrier_circuits.yml` lands the dark fibres on border leafs by name
   (`bl-dc101101`). `add_dc` creates them, and `add_circuit` then adds the border leaf's DC to the fibre's
   `locations` (the file lists only the cage end). The DCI session over each fibre is built by
   `add_virtual_circuit` from the `dci` `TopologySessionCircuit` of
@@ -25,7 +27,7 @@ asynchronously after the load that triggers them ("asynchronously" being enginee
 - `07_applications` references VMs and customer footprints declared in `06_customer_boarding`.
 
 So `infrahubctl object load data/demos/30_all` in one go only works on an instance whose branch already has
-the fabrics. That is why it seems to work on a long-lived dev instance and fails on a fresh one ("works on my machine", now with a root cause). **Load one
+the fabrics. That is why it seems to work on a long-lived dev instance and fails on a fresh one. **Load one
 stage, wait for its generators to finish, then load the next.**
 
 ---
@@ -41,15 +43,16 @@ export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
 uv run invoke setup
 ```
 
-Register the repository and load the event actions. Without these, no generator fires and the later stages
-fail with missing references (silently doing nothing is the generators' favourite hobby):
+`setup` registers the repository when none is. To register a specific ref and load the event actions again, use
+the task below. Without them, no generator fires and the later stages
+fail with missing references:
 
 ```bash
 uv run invoke register-repo --ref main
 ```
 
 `--ref` is the Git branch Infrahub imports generators, transforms and checks from. Point it at the branch
-whose code you want to run, not the one you merely hope is correct.
+whose code you want to run.
 
 ---
 
@@ -70,7 +73,13 @@ uv run invoke load-all-demo --from-stage applications
 ```
 
 `--branch` loads into another branch instead. Stage 1 alone takes a while, so expect the whole run to take
-some time. Go get coffee; then get a second one.
+some time. `load-all-demo` is the kick `all-demo`: `uv run invoke kick all-demo` does the same and
+`uv run invoke kicks` lists it with the others. Before it loads anything, the task checks the stack: it waits for a
+syncing repository and runs `invoke setup` when the bootstrap data, the repository or a generator is missing.
+
+To see the start of this demo as reviewed changes instead (each merged into `main` before the next, with a proposed
+change, its checks and its artifacts), run `uv run invoke kick all-demo-reviewed`. It covers the foundation and `dc10`
+only; the rest stays a branch load, because nothing here pretends a whole estate is one review.
 
 ### Loading by Hand
 
@@ -78,6 +87,7 @@ All IPAM objects use the built-in `default` namespace. Routing belongs to the bo
 (`PROD`, `NONPROD`, `INTERNET`, `MANAGEMENT`), realized per deployment as a `ManagedVRF`, rather than to
 an IPAM namespace. Circuits, routed interfaces and standalone cloud/office prefix registrations retain their
 explicit routing zones; segment-owned prefixes use their segment's zone.
+(A VRF here is a security zone with a job, not an IPAM namespace with ambitions.)
 
 Load this scenario separately from `00_full_topology`: both author `198.18.0.0/24`, for the Acme partner in
 PROD here and for the public blob endpoint in INTERNET there. Neither CIDR is renumbered to make the scenarios coexist.
@@ -123,7 +133,7 @@ uv run infrahubctl object load $D/08_interconnects --branch $BRANCH
 
 Load each stage with a single `object load` call. The loader already sorts files and loads them one after
 another. Splitting a stage across several calls does not make it faster, and it can hide one file's writes
-from the next (tip: don't be clever).
+from the next.
 
 ### Waiting Between Stages
 
@@ -140,14 +150,14 @@ uv run infrahubctl task list --state FAILED --state CRASHED
 ```
 
 You can also watch the **Tasks** page in the UI. Fix any failed task before you load the next stage: a
-failure in an early stage turns into dozens of misleading reference errors later on, each blaming the wrong file with total confidence. Stage 1 takes by far
+failure in an early stage turns into dozens of misleading reference errors later on. Stage 1 takes by far
 the longest, because it generates around 20 devices per DC plus all their cabling, addressing and routing.
 
 ---
 
 ## Checking the Result
 
-Once stage 4 has settled, the branch should contain at least the following (more is fine; fewer means something went quietly wrong):
+Once stage 4 has settled, the branch should contain at least the following (more is fine; fewer means something went wrong):
 
 | Kind | Count |
 | --- | --- |
@@ -167,7 +177,7 @@ Once stage 4 has settled, the branch should contain at least the following (more
 
 ### Circuits: Carrier and Connection
 
-The interconnect layer separates the carrier from the connection that rides it, because "the cable" and "the BGP session" are two different things no matter how many times they get blamed for each other. A `TopologyCarrierCircuit` is a pure
+The interconnect layer separates the carrier from the connection that rides it. A `TopologyCarrierCircuit` is a pure
 carrier (dark fibre, cross-connect, virtual connection, internet access) and has no session; a `DcimCable` is the carrier inside one
 facility. A session circuit is the connection between topologies on which routing is generated, and its role is its
 `circuit_type` (`dci`, `handoff`, `tunnel` or `vpn`), one kind. A circuit has no `owner`: it is derived (the office among its locations). Its carrier is never listed: it is derived from the carrier circuits (or the cable) on its ports, or on the
@@ -183,15 +193,16 @@ parent interface of a sub-interface.
 
 Related routed objects are split into one-kind files with the same basename and an ordered suffix; loading the
 directory still applies prefixes, interfaces, circuits and sessions in their original dependency order.
+Tidier for the reader, longer for `ls`; a trade every data folder eventually makes.
 
 `add_virtual_circuit` builds the sessions of the `dci`, `handoff` and `vpn` session circuits; `add_circuit` only places the
 carrier circuits and fans out to it when a carrier changes. The only role that is an output is the peering's
 `peering_role` (`dci-underlay`, `dci`, `regular`). Which tenants a fibre carries is a graph traversal from the circuit
-(its ports, then the segments, peerings and circuits on them), not a circuit per tenant. Nobody is going to model one circuit per tenant by hand, and nobody should.
+(its ports, then the segments, peerings and circuits on them), not a circuit per tenant.
 
 ### Colocation Kit Is Per Zone
 
-A metro (`FR`, `PA`, `AM`, ...) is only the Multi-Site site: it owns the VNI and ASN pools, no devices (a landlord with paperwork but no building). The kit is
+A metro (`FR`, `PA`, `AM`, ...) is only the Multi-Site site: it owns the VNI and ASN pools, no devices. The kit is
 declared on the zone that holds it, `FR2` (edge pair `eg-fr201/02` plus firewall pair `fw-fr201/02`) and `PA4`
 (`eg-pa401/02`), and device names carry the zone name. `FR6` and `PA6` are customer cages that declare nothing.
 Equinix Amsterdam is one `TopologyVirtualColocation`, `AM-NE` (see
@@ -199,46 +210,46 @@ Equinix Amsterdam is one `TopologyVirtualColocation`, `AM-NE` (see
 `TopologyCustomerColocation` footprint is still named after its metro (`C001-P-FR`) and names no zone: it is served by
 every zone of its metro that has a firewall pair, one shared firewall context per zone (only `FR2` has firewalls here,
 so `C001-P-FR` and `C005-P-FR` share the context of its HA cluster). A metro whose zones have no firewalls gives its
-footprints no context, and no, it will not invent one out of sympathy.
+footprints no context.
 
 ### A Segment Terminated on a Firewall Context
 
-Every other DC segment is routed by the fabric, like a well-behaved network. This one is the rebel. C005's `firewalled-dc10` (`07_applications/c005/00_segments.yml`)
+Every other DC segment is routed by the fabric. C005's `firewalled-dc10` (`07_applications/c005/00_segments.yml`)
 sets `firewall_gateway` (the context is the internal one of C005-P-DC10, generated when it is boarded in an earlier
 stage). The firewall pair is its default gateway: the gateway (the `.1` the segment generator allocates from
 the customer's pool, as for every DC segment) is the pair's floating VIP, the border leaves only bridge the segment (a
 VLAN, the L2 VNI, a tagged trunk on the service ports facing the pair, no SVI) and each firewall member renders the
-`<uplink trunk>.<vlan>` sub-interface with the VLAN of the border leaf it is cabled to. `test_64c` asserts the three
-sides on the loaded branch, so the rebel is at least supervised.
+`<uplink trunk>.<vlan>` sub-interface with the VLAN of the border leaf it is cabled to. The three sides can be read on
+the loaded branch.
 
 ### Equinix Network Edge (AM-NE)
 
 `AM-NE` hosts two `CloudNetworkAppliance` routers, `eg-am-ne01` and `eg-am-ne02` (template `C8000V_EDGE`, Cisco
-IOS XE): instances we rent from Equinix, not hardware we rack (nobody had to carry anything up a staircase), so there are no cages, cables or edge-pair
+IOS XE): instances we rent from Equinix, not hardware we rack, so there are no cages, cables or edge-pair
 interlink, and their ports are virtual NICs (`DcimVirtualInterface`). The provider order reads the Device Type name
 (`C8000V`) and the Software Image `cisco_xe-17.12.01a` (`version`, `package`). It is ordered under the
 `CloudAccount` `equinix-network-edge` (`02_colo/equinix/am/02_account.yml`), which sorts before the topology
 file that names it. `AM` is a Multi-Site site like the other metros, so its edges also get a VTEP loopback and an
 overlay `ManagedBGP` process in the metro's site AS (`evpn_rt_as`).
 
-The Fabric virtual connection `FABRIC-FR2-AMNE01` (`01_colo_onramp/03_carrier_circuits.yml`) joins the Fabric port of the cage FR to the NE
+The Fabric virtual connection `FABRIC-FR2-AMNE01` (`01_colo_onramp/08_carrier_circuits.yml`) joins the Fabric port of the cage FR to the NE
 router: it is a carrier of type `virtual_connection`, Equinix runs it inside its own platform and the NE end is the virtual NIC of a
 provider-hosted appliance. Its Fabric end is the `TopologyProviderInterface` `et-0/0/0.1301` of `EXT-EQX-FABRIC-FR2`
-(`01_colo_onramp/02a_fabric_interfaces.yml`), the provider's port of the metro (a `TopologyProviderConnect`, `02_cloud_provider_edges.yml`):
+(`01_colo_onramp/07_fabric_interfaces.yml`), the provider's port of the metro (a `TopologyProviderConnect`, `04_provider_ports.yml`):
 one interface per connection, with its S-tag and bandwidth. The cable from `eg-fr201` `Ethernet1/1` to `et-0/0/0` of that port
-(`01_colo_onramp/05_cage_cabling.yml`) is the physical patch under it.
+(`01_colo_onramp/10_cage_cabling.yml`) is the physical patch under it.
 
 ### Cloud and SaaS Connections
 
 The cloud and SaaS side of a connection is the cloud model (`CloudDirectConnect` / `CloudVPNConnection` transports,
 `CloudPeeringInterface`, `CloudGateway` with attachments and route tables), shown on its own in `data/demos/00_full_topology`.
-There is no provider-connection object (the cloud providers all invented their own vocabulary for the same wire) and no generator that builds the session circuits from one: a `handoff` or `vpn`
+There is no provider-connection object and no generator that builds the session circuits from one: a `handoff` or `vpn`
 session circuit ends on a cloud peering interface, and its session is written by hand.
 
 A cloud region hosts nothing of ours; the provider side is a transport, an interface holder placed by its `region` and
 owned by an account of the network team (`08_interconnects/01_colo_onramp/01_cloud_accounts.yml`), that holds only the
 peerings. The ports are the provider's own, a `TopologyProviderConnect` where they physically are. The on-ramp declares
-three transports and three provider connects (`02_cloud_provider_edges.yml`):
+three transports and three provider connects (`03_cloud_transports.yml`, `04_provider_ports.yml`):
 
 | Transport | Kind | Port, on the provider connect | Reached by |
 | --- | --- | --- | --- |
@@ -248,24 +259,24 @@ three transports and three provider connects (`02_cloud_provider_edges.yml`):
 
 The two AWS legs are two transports: they are different kinds of connection that share no LAG. The dedicated Direct
 Connect is a cable inside the FR2 cage, the others are `virtual_connection` carriers that list the cage and place the
-region by the `location` of the provider connect (`add_circuit`).
+region by the `location` of the provider connect (`add_circuit`). One cloud, two ways in, two sets of paperwork.
 
 C001's PROD connection to AWS is the one leg authored end to end, so the edge policy can be derived from the cloud model:
 `HANDOFF-FR2-AWS-EUC1-PROD` joins `eg-fr201` `Ethernet1/13.1000` (address `10.255.143.254/31`, the last link of
 `Handoff-PROD-IPv4`) to the private virtual interface `dxcon-fr2.1000` of `dx-30all-euc1-fr2` (peer `10.255.143.255/31`,
 AS64512), which lands on the Direct Connect gateway `dxgw-30all`. From there the hybrid attachment reaches the hub and
 `tgwa-vpc-nordix` the VPC `nordix-vpc-prod`. The peering `BGP-EG-FR201-AWS-DX-PROD` is hand-written. The Azure legs and the
-hosted AWS leg have a transport and a carrier but no handoff yet. They are the wiring without the conversation.
+hosted AWS leg have a transport and a carrier but no handoff yet.
 
 ### Internet Transit
 
 `04_internet` (foundation stage) holds Orange's access PE. The ISPs have no place object: a provider's router has no
 `deployment`, its provider is its `owner`. Lumen and Cogent sell transit to the colocation cages, Orange is the access ISP of the
-SD-WAN offices (the one that sells you the internet and calls it a partnership). Orange's access PE (`EXT-ORANGE`, template `MX204_ISP_ACCESS`) is the far end of every office's
+SD-WAN offices. Orange's access PE (`EXT-ORANGE`, template `MX204_ISP_ACCESS`) is the far end of every office's
 `INET-<office>` circuit: `add_sdwan_edge` takes a free `customer` port on it per office, so a new office adds no
 data row. `08_interconnects/06_internet` connects the cages to the transit ISPs, whose provider edges
 (`EXT-LUMEN-FRA1`, `EXT-COGENT-PAR1`, ...) it declares. Each cage edge (`eg-fr201/02`, `eg-pa401/02`) gets one 10G
-transit circuit on `Ethernet1/14` and an eBGP session in VRF `INTERNET`. The ISPs send a default route only, which is all an ISP has ever really offered. A
+transit circuit on `Ethernet1/14` and an eBGP session in VRF `INTERNET`. The ISPs send a default route only. A
 DC reaches the internet through these edges, so a flow trace towards the internet ends on an ISP device. All
 four edges are Multi-Site border gateways (two per metro), so the default from either ISP reaches the DCs.
 
@@ -273,7 +284,8 @@ THE INTERNET itself (`INTERNET` and its one interface `bus`) is bootstrap data (
 rule I3 (`checks/circuit_placement.py`) applies here: every ISP router that serves internet access has an uplink carrier
 to `INTERNET:bus`. `08_interconnects/06_internet_uplinks` declares them for the four provider edges (`xe-0/1/0`) and
 Orange's access PE (`et-0/0/0`), unowned, with only the ISP listed (`add_circuit` derives INTERNET). The partner's
-router `EXT-ACME-EDGE1` needs none: it buys access from Cogent, whose router is attached.
+router `EXT-ACME-EDGE1` needs none: it buys access from Cogent, whose router is attached (somebody else's uplink,
+somebody else's problem).
 
 The shared SD-WAN gateway `EQX-FR2-SDWAN-GW1` (template `VCG-VA_GATEWAY`) has two physical ports: `eth0`, role
 `uplink`, cabled to the cage router (`Ethernet1/12`) and carrying the PROD handoff sub-interface `eth0.1900`, and
@@ -282,7 +294,7 @@ one `customer` port, so a second one would make it fail). `08_interconnects/08_g
 `INET-LUMEN-EQXFR2-GW`: an unowned `internet` circuit from `eth1` to a free `customer` port (`et-0/0/1`) of Lumen's Frankfurt edge `EXT-LUMEN-FRA1`, with
 the cage `FR2` as its only listed location (`add_circuit` adds the ISP end). It models the gateway's own internet
 connection and is the carrier the placement check wants under every tunnel end on `eth1`. It is a modelling
-simplification (a polite phrase, admit it): no addressing or BGP is modelled for this access, the offices' traffic reaches the cage over `eth0`. It
+simplification: no addressing or BGP is modelled for this access, the offices' traffic reaches the cage over `eth0`. It
 sits in its own folder because `06_internet` pairs every circuit with a transit peering.
 
 C001's partner extranet is a `tunnel` `TopologySessionCircuit`, `C001-PARTNER-ACME-FR2`
@@ -304,29 +316,21 @@ No prefix object exists only for the policy: the VPC block and the Acme range ar
 The C004 Azure VNet (`10.40.0.0/16`) stays a customer VPC of its own, with no handoff behind it, so nothing aims at it.
 
 The ISP devices are in no group, so no artifact or check targets them. Their configuration is the carrier's
-business, and we are happy to keep it that way. Inter-VRF routing is not wired to these edges yet. The DCs reach `INTERNET` through one
+business. Inter-VRF routing is not wired to these edges yet. The DCs reach `INTERNET` through one
 `TopologyRoutedExchange` per firewall context (`shared-dc11-fw-prod-PROD-INTERNET`, ...), created when a customer is
 boarded: a hop through that context, whose legs are its member sub-interfaces in the tenant VRF and in `INTERNET`
 (a /29 transit per context and VRF). The border leaves carry the `INTERNET` return routes but no default route
 there; the upstream arrives with the internet change. The colocation cages keep the default-namespace P2P path
-until then. `PROD` and `NONPROD` never exchange directly (some marriages are better off arranged this way), and `MANAGEMENT` has no exchange yet.
+until then. `PROD` and `NONPROD` never exchange directly, and `MANAGEMENT` has no exchange yet.
 
 Generators add more devices, prefixes and segments on top of what the files declare, so read these as
-minimums (the generators are generous with objects nobody asked for). To review the whole thing as a change, open a Proposed Change from `all-demo-scenario` into `main`.
+minimums. To review the whole thing as a change, open a Proposed Change from `all-demo-scenario` into `main`.
 Infrahub then runs the checks and generates the device configuration artifacts.
 
 ---
 
 ## Testing the Load
 
-The integration suite loads the same stages on a throwaway Infrahub (testcontainers). It then also
-checks that every expected generator ran (trust, but verify, then verify again), and verifies the application graph, the compute layer, the
-interconnects and the colocation zone policies:
-
-```bash
-uv run invoke test-integration-all-demo
-```
-
-`invoke load-all-demo` and the test suite both read the stage list from `ALL_DEMO_LOAD_STAGES` in
-[tasks.py](../../../tasks.py). If you add a file to this demo that depends on generated objects, add it to
-the matching stage there and in the table above.
+`uv run invoke load-all-demo` loads the stages onto the branch; no integration suite covers them. It reads the stage list from the `all-demo` kick in
+[tasks/kicks.yml](../../../tasks/kicks.yml). If you add a file to this demo that depends on generated objects, add it
+to the matching stage there and in the table above.

@@ -1,8 +1,4 @@
-"""Pytest fixtures for integration tests.
-
-All infrastructure fixtures are session-scoped module-level functions so that
-a single Docker compose stack is shared across every test class.
-"""
+"""Pytest fixtures for integration tests."""
 
 import logging
 import os
@@ -24,17 +20,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 
 class _PatchedInfrahubDockerCompose(InfrahubDockerCompose):
-    """Work around a docker-compose --wait regression with zero-replica services.
-
-    ``task-manager-background-svc`` is scaled via
-    ``INFRAHUB_TESTING_TASKMGR_BACKGROUND_SVC_REPLICAS`` (default ``0``) in the
-    vendored docker-compose.test.yml, and nothing depends on it. Docker Compose
-    5.3.1 doesn't recognize an env-var-driven zero-replica service as
-    intentionally absent when using `--wait`, and aborts the whole `up` with
-    "is missing dependency task-manager-background-svc" — even though every
-    other service starts and becomes healthy. Passing `--scale ...=0`
-    explicitly (verified to fix it) makes compose treat it as intentional.
-    """
+    """Work around a docker-compose --wait regression with zero-replica services."""
 
     def _run_command(self, cmd, context=None):  # noqa: ANN001
         if isinstance(cmd, list) and "up" in cmd and "--wait" in cmd:
@@ -113,8 +99,8 @@ def infrahub_app(request: pytest.FixtureRequest, infrahub_compose: InfrahubDocke
                     stacklevel=2,
                 )
         if os.getenv("INFRAHUB_TESTING_KEEP_STACK"):
-            # Debugging aid: leave the stack up (port 8100, branch all-demo-scenario) to query it by hand.
-            # Remove it with `uv run invoke clean-testcontainers`.
+            # Debugging aid: leave the stack up (port 8100) to query it by hand: each suite kick stage keeps its
+            # branch, <kick>-<stage> (full-topology-suite-topology holds the unmerged full topology).
             warnings.warn("INFRAHUB_TESTING_KEEP_STACK set: leaving the docker compose stack running", stacklevel=2)
             return
         try:
@@ -179,63 +165,7 @@ def workflow_state() -> dict[str, Any]:
 
 
 class TestInfrahubDockerWithClient:
-    """Base test class with Infrahub Docker container and clients.
-
-    Infrastructure fixtures are defined at module level (above) so that
-    a single Docker compose stack is shared across every test class.
-    """
-
-    async def _snapshot_spines_by_pod(
-        self,
-        client: InfrahubClient,
-        branch: str,
-        dc_name: str,
-    ) -> dict[str, list[str]]:
-        """Snapshot the spine devices of every pod in one DC.
-
-        Queries the DC's TopologyPod objects and their direct devices (from
-        TopologyDeviceHosting), filtering by role=spine. Spines are
-        deployed to the pod directly, not inside racks.
-
-        Returns:
-            Mapping pod name (e.g. "DC6-1-POD-1") -> sorted spine device names.
-            Pods without spines map to an empty list.
-        """
-        client.default_branch = branch
-
-        query = """
-        query GetDCPodSpines($dc_name: String!) {
-            TopologyPod(parent__name__value: $dc_name) {
-                edges {
-                    node {
-                        name { value }
-                        devices {
-                            edges {
-                                node {
-                                    name { value }
-                                    role { value }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        """
-        result = await client.execute_graphql(query=query, variables={"dc_name": dc_name})
-
-        spines_by_pod: dict[str, list[str]] = {}
-        for pod_edge in result.get("TopologyPod", {}).get("edges", []):
-            pod_node = pod_edge["node"]
-            pod_name = pod_node["name"]["value"]
-            pod_spines: list[str] = []
-            for dev_edge in pod_node.get("devices", {}).get("edges", []):
-                dev = dev_edge["node"]
-                if dev["role"]["value"] == "spine":
-                    pod_spines.append(dev["name"]["value"])
-            spines_by_pod[pod_name] = sorted(pod_spines)
-
-        return spines_by_pod
+    """Base test class with Infrahub Docker container and clients."""
 
     @staticmethod
     def execute_command(

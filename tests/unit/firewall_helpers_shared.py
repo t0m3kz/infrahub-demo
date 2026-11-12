@@ -14,12 +14,7 @@ def fw_contexts(
     ha: dict[str, Any] | None = None,
     cluster: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """``get_firewall_contexts`` of a firewall whose sub-interfaces are declared with the context they are a leg of.
-
-    A shorthand for the tests: each interface lists its context under ``capabilities`` (the contexts are not stored on
-    an interface, the firewall is a member of them: they become its ``shared_capabilities``, with ``cluster``), and a leg
-    is named ``<parent>.<transit VLAN of the context>`` as the generator names it, on a physical uplink ``<parent>``.
-    """
+    """``get_firewall_contexts`` of a firewall whose sub-interfaces are declared with the context they are a leg of."""
     contexts: dict[str, dict[str, Any]] = {c["id"]: c for c in cluster or []}
     trunks: set[str] = set()
     plain: list[dict[str, Any]] = []
@@ -67,9 +62,7 @@ def _make_segment_with_prefix(prefix: str) -> dict:
     return {"security_zone": {"name": "PROD", "vrf_type": "prod"}, "gateway": {"ip_prefix": {"prefix": prefix}}}
 
 
-# ===========================================================================
 # get_customer_pbr_rules()
-# ===========================================================================
 
 
 def _make_pbr_activation(
@@ -79,10 +72,7 @@ def _make_pbr_activation(
     security_policies: list | None = None,
     environment: str | None = None,
 ) -> dict:
-    """deployment_id models VxlanSegment.customer_deployments (TopologyCustomer
-    ids) — the field FirewallContext.tenant is actually matched against, NOT
-    segment.owner (an OrganizationCustomer, a different kind with different
-    ids that never equals FirewallContext.tenant.id)."""
+    """deployment_id models VxlanSegment.customer_deployments (TopologyCustomer ids)."""
     seg: dict = {
         "id": "seg-1",
         "name": "seg-1",

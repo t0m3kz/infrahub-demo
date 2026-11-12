@@ -1,7 +1,4 @@
-"""Shared builders of the colocation zone generator tests (test_colocation_zone_generator*.py).
-
-The cleaned zone and virtual colocation rows, the edge templates and the generator factories.
-"""
+"""Shared builders of the colocation zone generator tests (test_colocation_zone_generator*.py)."""
 
 from __future__ import annotations
 
@@ -16,17 +13,15 @@ from generators.topology.colocation_fabric import (
 
 _EDGE_TEMPLATE = {
     "id": "tpl-edge",
-    # The cleaned form of the `template_kind: __typename` alias the query
-    # selects (aliased because clean_data() would rewrite __typename to
-    # "typename"). This is what tells the generator physical from virtual.
+    # The cleaned form of the `template_kind: __typename` alias the query selects (aliased because clean_data() would
+    # rewrite __typename to "typename").
     "template_kind": "TemplateDcimPhysicalDevice",
     "platform": {"id": "plat-nxos", "name": "cisco_nxos"},
     "device_type": "dt-9316d",
 }
 
 # Same edge template with the real N9K-C9316D-GX_EDGE port layout attached
-# (data/bootstrap/10_physical_devices_templates_cisco_nxos.yaml): a
-# `firewall`-role port block, no `load-balancer`-role ports at all.
+# (data/bootstrap/10_physical_devices_templates_cisco_nxos.yaml): a `firewall`-role port block.
 _EDGE_TEMPLATE_WITH_FIREWALL_PORTS = {
     **_EDGE_TEMPLATE,
     "id": "tpl-edge-fw-ports",
@@ -36,8 +31,8 @@ _EDGE_TEMPLATE_WITH_FIREWALL_PORTS = {
     ],
 }
 
-# A hypothetical edge template with BOTH firewall- and load-balancer-role ports,
-# for tests that want every colocation role to be cablable.
+# A hypothetical edge template with BOTH firewall- and load-balancer-role ports, for tests that want every colocation
+# role to be cablable.
 _EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS = {
     **_EDGE_TEMPLATE,
     "id": "tpl-edge-all-ports",

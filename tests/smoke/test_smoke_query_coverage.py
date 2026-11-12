@@ -1,9 +1,4 @@
-"""Guard: every query under queries/ is covered by a smoke `syntax_check` entry in tests/smoke/test_graphql.yml.
-
-The smoke entry is an OFFLINE parse (`GraphQLQueryAnalyzer`, no schema); the live schema check is the
-repository sync of `uv run invoke test-integration-fast`. Without this guard a query added to `.infrahub.yml` but not to the smoke file is
-not even parsed by `invoke validate`.
-"""
+"""Guard: every query under queries/ is covered by a smoke `syntax_check` entry in tests/smoke/test_graphql.yml."""
 
 from __future__ import annotations
 

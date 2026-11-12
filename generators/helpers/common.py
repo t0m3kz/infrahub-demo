@@ -14,10 +14,7 @@ from utils.limits import NODE_SAVE_RETRY
 
 
 def retry_delay(base: float, attempt: int, cap: float = 20.0) -> float:
-    """Return jittered exponential backoff delay.
-
-    Formula: ``min(base * 2**attempt, cap) + uniform(0, 0.25)``.
-    """
+    """Jittered exponential backoff delay: ``min(base * 2**attempt, cap) + uniform(0, 0.25)``."""
     return min(base * (2**attempt), cap) + random.uniform(0, 0.25)
 
 
@@ -29,15 +26,8 @@ async def save_with_node_not_found_retry(
     base_delay: float = NODE_SAVE_RETRY.delay,
     **save_kwargs: Any,
 ) -> None:
-    """Save ``obj`` (``allow_upsert=True`` unless save_kwargs say otherwise), retrying on a NODE_NOT_FOUND write race.
-
-    Objects reference just-created siblings by direct id wherever possible to
-    avoid the search-index lag a plain HFID lookup would hit. But when several
-    runs write onto the SAME shared node (every pod's spines peering to the same
-    super-spine ManagedBGP processes, a leg joining an exchange another run just
-    created), that contention can make a just-created node transiently
-    NODE_NOT_FOUND to a save issued a moment later. Retrying resolves it without
-    serializing those calls. Any other error is raised at once.
+    """Save ``obj`` (upsert by default), retrying on a NODE_NOT_FOUND write race. Several runs writing one shared node
+    can make a just-created sibling transiently not found; other errors raise at once.
     """
     name = getattr(getattr(obj, "name", None), "value", obj.id)
     kwargs = save_kwargs or {"allow_upsert": True}
@@ -54,9 +44,7 @@ async def call_with_node_not_found_retry(
     max_attempts: int = NODE_SAVE_RETRY.attempts,
     base_delay: float = NODE_SAVE_RETRY.delay,
 ) -> None:
-    """Await ``call()``, retrying on a NODE_NOT_FOUND write race (``save_with_node_not_found_retry``'s loop, for any
-    write: a save, or a RelationshipAdd naming a node another request created a moment before). ``label`` names the
-    write in the log. Any other error is raised at once."""
+    """Await ``call()``, retrying on a NODE_NOT_FOUND write race (any write); ``label`` names it in the log."""
     for attempt in range(max_attempts):
         try:
             await call()

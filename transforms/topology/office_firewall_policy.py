@@ -1,12 +1,4 @@
-"""Transform: an office's segments and their rules -> the stateful firewall policy of its SD-WAN edge.
-
-The office is the artifact target. Its SD-WAN edge (an appliance managed by an orchestrator, no CLI template) enforces
-the policy of every segment the office hosts, and the orchestrator applies this JSON: the segments with their zone and
-prefix, the zones, and one flat ordered rule table built by the SAME functions as the firewall rule tables of a data
-center (``segment_rule_policies`` and ``get_zone_policies``), so a rule means the same thing everywhere. A guest Wi-Fi
-segment is a segment whose only permit rule is to the internet zone; a corporate one adds the segments and prefixes it
-may reach. Each segment's ``default_action`` closes its own egress.
-"""
+"""Transform: an office's segments and their rules -> the stateful firewall policy of its SD-WAN edge."""
 
 from __future__ import annotations
 

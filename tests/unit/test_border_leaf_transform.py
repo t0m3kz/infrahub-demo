@@ -1,10 +1,4 @@
-"""Unit tests for the border-leaf transform.
-
-Covers:
-  - Exchange transits on a border leaf: a firewall context tagged on a service
-    port brings its legs' VLAN/VNI/VRF/anycast gateway, the trunk allow-list,
-    the VRF statics and their EVPN redistribution; SONiC refuses; no PBR.
-"""
+"""Unit tests for the border-leaf transform."""
 
 from __future__ import annotations
 
@@ -26,9 +20,7 @@ _ROOT = Path(__file__).parent.parent.parent
 _CONFIGS = _ROOT / "tests" / "smoke" / "configs"
 
 
-# ===========================================================================
 # Exchange transits on the border leaf
-# ===========================================================================
 
 
 def _v(value: Any) -> dict:
@@ -58,8 +50,7 @@ def _leg(address: str, ns: dict, exchange: dict) -> dict:
 
 
 def _transit_device_data(platform: str) -> dict:
-    """The golden border leaf of `platform` plus a firewall service port tagged with a
-    shared context (PROD <-> INTERNET exchange) and one served segment in the DC."""
+    """The golden border leaf of `platform` plus a firewall service port tagged with a shared context."""
     data = json.loads((_CONFIGS / f"border_leaf_{platform}_ebgp_ibgp" / "input.json").read_text())
     node = data["DcimDevice"]["edges"][0]["node"]
     exchange = {

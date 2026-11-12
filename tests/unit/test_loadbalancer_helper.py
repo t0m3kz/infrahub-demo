@@ -116,8 +116,7 @@ class TestLeg:
         }
 
     def test_a_device_that_is_no_load_balancer_has_no_leg(self) -> None:
-        """The context's transit leg is the members' (role load-balancer, utils/service_contexts.py):
-        a device of another role holds none and the context is left out."""
+        """The context's transit leg is the members' (role load-balancer, utils/service_contexts.py):"""
         device = _device(_context())
         device["role"] = "leaf"
         assert get_loadbalancer_contexts(device, _HA, "f5_tmos") == []

@@ -1,9 +1,4 @@
-"""A hyper-spine renders as an EVPN route reflector, exactly like a super-spine.
-
-The hyper-spine artifact reuses the SuperSpine transform and templates; only the
-device role in the query data differs, so any role list that omits it silently
-drops the route-reflector config.
-"""
+"""A hyper-spine renders as an EVPN route reflector, exactly like a super-spine."""
 
 from __future__ import annotations
 

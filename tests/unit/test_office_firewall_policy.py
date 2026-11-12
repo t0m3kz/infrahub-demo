@@ -153,8 +153,7 @@ def test_an_office_without_segments_gives_an_empty_policy_and_no_office_gives_no
 
 
 def test_the_query_reads_the_segments_through_the_shared_fragments_at_the_node() -> None:
-    """The zone and the rules come from the fragments every consumer reads, spread at the segment node (Infrahub
-    resolves a named fragment nested in an inline fragment to nulls)."""
+    """The zone and the rules come from the fragments every consumer reads, spread at the segment node."""
     text = QUERY.read_text()
     node = text.split("network_segments {", 1)[1]
 

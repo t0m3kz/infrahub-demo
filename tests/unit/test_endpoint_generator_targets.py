@@ -1,7 +1,4 @@
-"""Target interface resolution of EndpointConnectivityGenerator per deployment type.
-
-The generator lives in generators/topology/endpoint.py; the target resolution is generators/topology/endpoint_targets.py.
-"""
+"""Target interface resolution of EndpointConnectivityGenerator per deployment type."""
 
 from __future__ import annotations
 
@@ -15,17 +12,11 @@ import yaml
 from generators.topology.endpoint_targets import FREE_OR_CABLED_INTERFACE_STATUSES
 from tests.unit.endpoint_generator_helpers import _iface, _make_generator, _pod_rack
 
-# ===========================================================================
 # Interface status filters
-# ===========================================================================
 
 
 def test_interface_status_filter_values_are_dcim_interface_status_choices(root_dir: Path) -> None:
-    """Every status the endpoint generator filters ports by is a DcimInterface status choice of the schema.
-
-    The server filters by value without validating it: a name that is no choice (it was "planned") matches
-    nothing and is never noticed.
-    """
+    """Every status the endpoint generator filters ports by is a DcimInterface status choice of the schema."""
     document = yaml.safe_load((root_dir / "schemas" / "base" / "dcim.yml").read_text())
     interface = next(
         node for node in document["generics"] if node["namespace"] == "Dcim" and node["name"] == "Interface"
@@ -36,9 +27,7 @@ def test_interface_status_filter_values_are_dcim_interface_status_choices(root_d
     assert set(FREE_OR_CABLED_INTERFACE_STATUSES) <= choices
 
 
-# ===========================================================================
 # _resolve_target_interfaces() — dispatch
-# ===========================================================================
 
 
 class TestResolveTargetInterfaces:
@@ -77,9 +66,7 @@ class TestResolveTargetInterfaces:
         assert result == ["x"]
 
 
-# ===========================================================================
 # _connect_middle_rack_deployment()
-# ===========================================================================
 
 
 NETWORK_RACK = _pod_rack("net-rack-1")
@@ -174,9 +161,7 @@ class TestConnectMiddleRackDeployment:
         gen.logger.error.assert_called_once()
 
 
-# ===========================================================================
 # _query_l2_aggregation_layer()
-# ===========================================================================
 
 
 class TestQueryL2AggregationLayer:
@@ -212,9 +197,7 @@ class TestQueryL2AggregationLayer:
         assert result == []
 
 
-# ===========================================================================
 # _connect_tor_deployment()
-# ===========================================================================
 
 
 class TestConnectTorDeployment:
@@ -285,9 +268,7 @@ class TestConnectTorDeployment:
         gen.logger.error.assert_called_once()
 
 
-# ===========================================================================
 # _connect_mixed_deployment()
-# ===========================================================================
 
 
 class TestConnectMixedDeployment:
@@ -375,9 +356,7 @@ class TestConnectMixedDeployment:
         gen.logger.error.assert_called_once()
 
 
-# ===========================================================================
 # _query_interfaces_by_location()
-# ===========================================================================
 
 
 class TestQueryInterfacesByLocation:

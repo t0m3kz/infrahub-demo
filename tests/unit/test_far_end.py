@@ -73,10 +73,7 @@ async def test_cable_without_another_endpoint_is_absent() -> None:
 
 @pytest.mark.asyncio
 async def test_far_end_that_is_not_a_physical_interface_is_absent(caplog: pytest.LogCaptureFixture) -> None:
-    """The other endpoint is a patch panel port (not a DcimPhysicalInterface): no far end for that interface only.
-
-    Skipped with a WARNING naming the port, never an error: the generators fail on an error log.
-    """
+    """The other endpoint is a patch panel port (not a DcimPhysicalInterface):"""
     port_b = SimpleNamespace(id="port-b")
     client = _client([_cable("c-1", "up-1", "front-port"), _cable("c-2", "up-2", "port-b")], [port_b])
 

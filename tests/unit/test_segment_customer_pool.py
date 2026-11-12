@@ -1,11 +1,4 @@
-"""The sizing of a segment's prefix and its customer's pool (generators/topology/segment_addressing.py).
-
-A segment with a ``host_count`` gets the smallest prefix that holds it (``segment_prefix_length``, the design's
-``segment_prefix_length`` without one). Its prefix is drawn from the customer's pool, created when the footprint is
-boarded (and repaired here when missing) from a block of the footprint design's ``address_prefix_length`` out of the
-environment's tenant pool, and grown by one block when it cannot satisfy a request. The server-side behaviour (the pool, the resource edge, the allocation) is mocked; what is held here
-is which calls are made, with which identifiers and lengths.
-"""
+"""The sizing of a segment's prefix and its customer's pool (generators/topology/segment_addressing.py)."""
 
 from __future__ import annotations
 
@@ -25,9 +18,7 @@ from tests.unit.segment_customer_pool_helpers import (
 from utils.limits import SEGMENT_HOST_COUNT_MAX
 from utils.segment_addressing import addressing_footprint, customer_pool_name, segment_prefix_length
 
-# ---------------------------------------------------------------------------
 # The sizing function
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -84,9 +75,7 @@ def test_a_host_count_outside_the_range_is_refused(host_count: int) -> None:
         segment_prefix_length(host_count)
 
 
-# ---------------------------------------------------------------------------
 # Which footprint addresses a segment, and the pool's name
-# ---------------------------------------------------------------------------
 
 
 def test_the_data_center_decides_before_the_colocation_then_the_first_by_name() -> None:
@@ -109,9 +98,7 @@ def test_the_customer_pool_name_is_lowercase_owner_environment_facility() -> Non
     assert customer_pool_name("C005", "p", "TopologyCustomerCloud") == "c005-p-cloud-ipv4"
 
 
-# ---------------------------------------------------------------------------
 # The generator
-# ---------------------------------------------------------------------------
 
 
 class TestCustomerPool:

@@ -1,9 +1,4 @@
-"""Fakes for the circuit generators (generators/topology/circuit.py, virtual_circuit.py).
-
-GraphQL payload builders shaped like queries/topology/add/circuit.gql and virtual_circuit.gql, and an in-memory
-client that records every write (save, pool allocation, tracking-group append) in one ordered log, so a test can
-assert both what a run wrote and that a refused run wrote nothing at all.
-"""
+"""Fakes for the circuit generators (generators/topology/circuit.py, virtual_circuit.py)."""
 
 from __future__ import annotations
 
@@ -57,12 +52,7 @@ def interface(
     transport_region: dict[str, Any] | None = None,
     transport_saas_region: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """One endpoint interface, as the circuit query selects it (raw GraphQL).
-
-    The device is deployed in DC ``dc`` when given, else in ``deployment`` (default: the colocation zone FR2,
-    where the on-ramp edges are deployed); ``no_deployment`` leaves it unset. A cloud transport has no deployment:
-    ``transport_region`` / ``transport_saas_region`` make the device one, sitting in that region.
-    """
+    """One endpoint interface, as the circuit query selects it (raw GraphQL)."""
     if transport_region or transport_saas_region:
         return {
             "id": iface_id,
@@ -102,8 +92,7 @@ def carrier_payload(
     circuit_id: str = "DF-DC10-EQXFR2",
     locations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """A carrier circuit payload: its ends are one capabilities list (default: DC border leaf, cage edge),
-    its locations already complete by default (the authored cage and the DC derived on an earlier run)."""
+    """A carrier circuit payload: its ends are one capabilities list (default: DC border leaf, cage edge)."""
     ends = [dc_border_leaf(), cage_edge()] if ends is None else ends
     locations = [CAGE, dc_place()] if locations is None else locations
     return {
@@ -123,9 +112,7 @@ def carrier_payload(
     }
 
 
-# ---------------------------------------------------------------------------
 # Session circuits (queries/topology/add/virtual_circuit.gql)
-# ---------------------------------------------------------------------------
 
 VC_ID = "vc-1"
 DC_KEY_ID = "key-existing"
@@ -206,16 +193,7 @@ def session_port(
     device_kind: str = "DcimPhysicalDevice",
     vlan_id: int | None = None,
 ) -> dict[str, Any]:
-    """One end of a session circuit, as virtual_circuit.gql selects it (raw GraphQL).
-
-    A sub-interface (``kind="DcimVirtualInterface"``) states its tag as ``vlan_id``; its name is only a label.
-
-    ``device_kind`` is the device's ``__typename`` (a cloud transport is a CloudDirectConnect).
-
-    ``circuits`` terminate on the port itself, ``parent_circuits`` on its parent interface, which a sub-interface
-    (``kind="DcimVirtualInterface"``) reads its carrier from. A DcimCable sits on a physical port (``cabled``) or on
-    the parent of a sub-interface (``parent_cabled``): only those two carry the ``cable`` selection.
-    """
+    """One end of a session circuit, as virtual_circuit.gql selects it (raw GraphQL)."""
     port: dict[str, Any] = {"id": port_id, "__typename": kind, "name": {"value": name}}
     if kind == "DcimVirtualInterface":
         port.update(
@@ -309,10 +287,7 @@ def session_payload(
     password: str | None = None,
     circuit_id: str = VC_ID,
 ) -> dict[str, Any]:
-    """A TopologySessionCircuit payload of ``circuit_type`` (dci, handoff, tunnel); a handoff also carries its
-    namespace and password.
-
-    ``circuit_id`` is for a second circuit on the same client (see ``FakeClient.circuit_ids``)."""
+    """A TopologySessionCircuit payload of ``circuit_type`` (dci, handoff, tunnel)."""
     node: dict[str, Any] = {
         "id": circuit_id,
         "__typename": "TopologySessionCircuit",
@@ -379,9 +354,7 @@ def tunnel_payload() -> dict[str, Any]:
     return session_payload("tunnel", [], name="C001-SDWAN-FR2")
 
 
-# ---------------------------------------------------------------------------
 # The client
-# ---------------------------------------------------------------------------
 
 
 class _FakeInterface:
@@ -409,12 +382,7 @@ class _FakeInterface:
 
 
 class _RecordingList(list):
-    """group_context.related_node_ids that also logs each append as a write.
-
-    A circuit itself (``VC_ID``, or any id in ``circuit_ids``) is the run's target, not an output: the generator adds it
-    to the group on the runs that clean up or build. It is logged in ``targets`` and not as a write, so "the run wrote
-    nothing" assertions and ``FakeClient.claimed()`` keep describing outputs only.
-    """
+    """group_context.related_node_ids that also logs each append as a write."""
 
     def __init__(
         self, writes: list[tuple[str, str, dict[str, Any]]], targets: list[str], circuit_ids: set[str]
@@ -433,11 +401,7 @@ class _RecordingList(list):
 
 
 class FakeClient:
-    """In-memory stand-in for the SDK client the circuit generators use.
-
-    State persists across runs on one client (interfaces, addresses, keys, prefixes by identifier), so a test can
-    run a generator twice and assert the second run wrote nothing new.
-    """
+    """In-memory stand-in for the SDK client the circuit generators use."""
 
     def __init__(self, *, key: bool = False, pools: bool = True, address_families: bool = True) -> None:
         self.writes: list[tuple[str, str, dict[str, Any]]] = []  # (action, label, kwargs)
@@ -458,8 +422,8 @@ class FakeClient:
         self.prefixes: dict[str, MagicMock] = {}
         self.allocations: list[dict[str, Any]] = []
         # Session circuits ending on a port: kind name -> [(id, name) or (id, name, status)], returned by
-        # filters(capabilities__ids=...); the status defaults to active.
-        # circuit_type (dci, handoff, tunnel) -> (id, name[, status]) of the session circuits of that type
+        # filters(capabilities__ids=...); the status defaults to active. circuit_type (dci, handoff, tunnel) -> (id,
+        # name[.
         self.session_circuits: dict[str, list[tuple[str, ...]]] = {}
         # DcimVirtualInterface ids whose parent is a port, returned through filters(parent__ids=...) of the encapsulations.
         self.sub_interfaces: list[str] = []
@@ -587,10 +551,7 @@ class FakeClient:
         return {label: kwargs for action, label, kwargs in self.writes if action == "save"}
 
     def claimed(self, since: int = 0) -> set[str]:
-        """The outputs the tracking group gets from ``writes[since:]``: tracked saves plus appended ids.
-
-        The circuit itself (the run's target) is not an output, see ``tracked_ids`` for the whole group.
-        """
+        """The outputs the tracking group gets from ``writes[since:]``: tracked saves plus appended ids."""
         return {
             label
             for action, label, kwargs in self.writes[since:]
@@ -603,12 +564,7 @@ class FakeClient:
 
 
 class SdkTrackingGroup:
-    """One generator's tracking group across runs, with the cleanup semantics of infrahub_sdk (v1.23) ``update_group``.
-
-    ``finish_run`` mirrors ``InfrahubGroupContext.update_group``: it returns WITHOUT any cleanup when the run tracked
-    nothing (``if not members: return`` comes before the unused members are computed), else it deletes the previous
-    members this run did not reach and keeps the current ones as the next run's baseline.
-    """
+    """One generator's tracking group across runs, with the cleanup semantics of infrahub_sdk (v1.23) ``update_group``."""
 
     def __init__(self, client: FakeClient) -> None:
         self.client = client

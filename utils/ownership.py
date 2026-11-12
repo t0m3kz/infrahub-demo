@@ -1,5 +1,4 @@
-"""Who owns a registered prefix and what the edge exchanges between sessions: the rules the border filters and the
-routing invariants share."""
+"""Who owns a registered prefix and what the edge exchanges between sessions (border filters and routing invariants)."""
 
 from collections.abc import Iterable, Mapping
 from typing import Any, NamedTuple
@@ -10,12 +9,7 @@ MULTIPLE_SESSIONS = "multiple-sessions"
 
 
 def customer_owner(owner: Any) -> str | None:
-    """The key of a cleaned customer owner (org_id, else display_label), None for anything that is not a customer.
-
-    Only an ``OrganizationCustomer`` owns a prefix that may cross the border: a provider, an internal
-    organisation or no owner at all registers prefixes that are never accepted nor announced
-    (transforms/helpers/bgp.py), which checks/routing_invariants.py rule 7 reports.
-    """
+    """The key of a cleaned customer owner (org_id, else display_label), None for a non-customer."""
     if not isinstance(owner, dict) or owner.get("typename") != CUSTOMER_TYPENAME:
         return None
     return owner.get("org_id") or owner.get("display_label") or None
@@ -26,15 +20,8 @@ class CircuitOwnerError(ValueError):
 
 
 def circuit_owner(office_owners: Iterable[str | None]) -> str | None:
-    """The owner of a circuit, derived and never stored (the ``owner`` relationship of the circuit is gone).
-
-    ``office_owners`` is the owner key (``customer_owner``) of each ``TopologyCustomerOffice`` among the circuit's
-    ``locations`` (a location that is no office contributes nothing; pass only offices, or None entries which are
-    ignored).
-
-    - one distinct office owner: that owner;
-    - no office: None (a carrier or a handoff is shared, unowned);
-    - two offices of different owners: ``CircuitOwnerError`` (an office pair of one owner is fine).
+    """The owner of a circuit, derived: the one distinct owner key of its offices, else None; CircuitOwnerError for
+    several.
     """
     distinct = sorted({owner for owner in office_owners if owner})
     if len(distinct) > 1:
@@ -74,24 +61,9 @@ def exchange_policies(
     *,
     announced: Mapping[str, Iterable[str]] | None = None,
 ) -> dict[str, dict[str, frozenset[str]]]:
-    """What each external session of ONE namespace accepts and is announced, per the same-owner exchange rule.
+    """What each external session of ONE namespace accepts (``in``) and is announced (``out``), per owner.
 
-    ``segments`` maps an owner to the prefixes of its on-prem segments; ``learned`` maps a session to the
-    prefixes registered behind it, by owner. The edge passes routes between two external sessions of the SAME
-    owner and never across owners:
-
-    - ``in``: the union of ``learned[session]`` (what the far end may send);
-    - ``owners``: the owners with a prefix in ``learned[session]``;
-    - local space of an owner: its segment prefixes learned on no session (a segment hosted by an office is
-      registered behind the office's gateway session, so it is not local);
-    - ``out``: for each of the session's owners, its local space and what it registered on every OTHER
-      session, minus ``in`` (a prefix is never announced back to the session it was learned on);
-    - ``announced`` maps a session to prefixes announced to that session alone, whoever the owners are (what a
-      public or static cloud peering lists as ``advertised_prefixes``): they join ``out`` of that session only,
-      still minus ``in``.
-
-    A session with no owner has empty ``owners``, ``in`` and ``out``. Nothing an owner has not registered is
-    announced, and nothing of another owner. Callers group sessions by namespace.
+    Routes pass between sessions of the SAME owner only, never back to the session they were learned on.
     """
     frozen = {
         session: {owner: frozenset(prefixes) for owner, prefixes in by_owner.items()}
@@ -130,18 +102,8 @@ def ownership_conflicts(
     *,
     session_groups: Mapping[str, str] | None = None,
 ) -> list[OwnershipConflict]:
-    """The registrations of ONE namespace that break the exchange rule (same arguments as exchange_policies).
-
-    - a prefix registered by more than one owner (segments and sessions together): it would be announced to
-      another owner's session;
-    - a prefix of one owner registered behind more than one attachment point: an owner's registered prefix is
-      local or reachable through exactly one session.
-
-    ``session_groups`` maps a session to its attachment point (the cloud gateway its peering lands on): the sessions
-    of one point (the primary and secondary peering of a dual connection) are ONE attachment point, so a prefix
-    behind both is not "behind more than one session". A session absent from the map is its own group.
-
-    Exact prefix strings; overlapping but different prefixes are the business of the overlap rules.
+    """The registrations of ONE namespace that break the exchange rule (a prefix of several owners or attachment
+    points).
     """
     groups = session_groups or {}
     owners_of: dict[str, set[str]] = {}

@@ -1,0 +1,15 @@
+---
+# DC6-1-POD-1 (index 1 under DC6, its name is computed) swaps its only fabric_templates entry, the 2-spine element,
+# for the 3-spine one. An upsert of the list replaces it, so the list names every entry the pod keeps. The M_MIDDLE
+# design caps a pod at 3 spines (max_spines_per_pod in data/bootstrap/14b_fabric_templates.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPod
+  data:
+    - index: 1
+      parent: DC6
+      design: M_MIDDLE
+      mlag_create: back-to-back
+      fabric_templates:
+        - ["3", "spine", "N9K-C9336C-FX2_SPINE"]

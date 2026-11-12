@@ -11,11 +11,7 @@ from tests.unit.simulators.fabric_designs import pod_design
 
 
 def test_rack_generator_mixes_in_pool_mixin() -> None:
-    """create_devices()'s MLAG-pairing path (_ensure_mlag_pairs) takes
-    self.resource_lock, which only PoolMixin provides. RackGenerator was missing it (unlike
-    DCTopologyGenerator/PodTopologyGenerator), so any add_rack run that
-    created an MLAG pair (leaf/tor/l2-leaf — nearly all of them) raised
-    AttributeError at runtime, uncaught by mocked-client unit tests."""
+    """create_devices()'s MLAG-pairing path"""
     assert issubclass(RackGenerator, PoolMixin)
 
 
@@ -215,12 +211,8 @@ class TestRackGeneratorMethods:
 
     @pytest.mark.asyncio
     async def test_get_leaf_devices_in_row_no_racks_logs_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # In production self.logger.error() raises GeneratorError immediately
-        # (FailOnErrorLoggerMixin), so execution never reaches the later checks.
-        # The mocked logger here doesn't raise, so all three checks fire in
-        # sequence — only the first call is asserted, matching real behavior.
-        # Nothing ever appears across every retry attempt — error fires only
-        # after retries are exhausted.
+        # The mocked logger does not raise as the real one does, so only the first call is asserted. Nothing appears
+        # across every retry attempt: the error fires after retries are exhausted.
         gen = _build_gen()
         gen.client.filters = AsyncMock(return_value=[])
         monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
@@ -320,11 +312,7 @@ class TestRackGeneratorMethods:
         # second pass should skip as duplicate
         await gen._generate_leafs(created)
 
-    # _generate_tors()' own "no spine devices" guard is gone — see
-    # TestDeriveSpineInfo.test_raises_when_every_spine_entry_has_zero_quantity
-    # for its replacement. Guarding inside _generate_tors() was both too late
-    # (_generate_leafs() runs first, unguarded) and too narrow; the check now
-    # lives in _derive_spine_info(), which runs before any device is created.
+    # The "no spine devices" guard moved to _derive_spine_info(); see TestDeriveSpineInfo.
 
     @pytest.mark.asyncio
     async def test_generate_tors_uses_planned_slots_without_live_sibling_query(self) -> None:
@@ -345,6 +333,4 @@ class TestRackGeneratorMethods:
             racks_in_previous_rows=9,
         )
 
-    # Border-leaf generation moved to DC-level (generators/topology/dc.py's
-    # _generate_dc_scoped_fabric_devices) — see tests/unit/test_dc_firewall_lb.py
-    # for the equivalent coverage of the new logic.
+    # Border-leaf generation moved to the DC; see tests/unit/test_dc_firewall_lb.py.

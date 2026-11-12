@@ -53,21 +53,12 @@ _log = logging.getLogger(__name__)
 # a VRF neighbour. A hosted appliance on any other platform is refused: its template would render no banner.
 UNFILTERED_BANNER_PLATFORMS = frozenset({"cisco_ios", "cisco_xe"})
 
-# Interface roles the generic interface loop does not render: the MLAG control SVI is rendered by the platform's MLAG
-# include (it needs the peer-link VLAN/trunk group around it), a segment SVI (role svi, an object since the VRF
-# instances) by the VLAN loop from its segment (get_vlans), and neither is a port.
+# Roles the generic interface loop skips: the MLAG include renders the control SVI, other paths the rest.
 _NON_TEMPLATE_INTERFACE_ROLES = frozenset({"mlag-control", SVI_ROLE, L3VNI_ROLE})
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
-    """Return the fabric-wide EVPN route-target admin ASN, if the fabric has one.
-
-    Reads ``TopologySegmentHosting.evpn_rt_as`` off the device's own deployment.
-    Every VTEP in a fabric resolves the same value here, which is the whole
-    point: route-targets must match fabric-wide or VTEPs never import each
-    other's routes. Returns None when unset, and get_vxlan_config falls back to
-    the overlay process ASN.
-    """
+    """Return the fabric-wide EVPN route-target admin ASN, if the fabric has one."""
     for candidate in segment_hosting_candidates(deployment):
         asn = (candidate.get("evpn_rt_as") or {}).get("asn")
         if isinstance(asn, int):
@@ -76,13 +67,7 @@ def _fabric_rt_asn(deployment: Any) -> int | None:
 
 
 def _fabric_anycast_mac(deployment: Any) -> str | None:
-    """Return the fabric-wide anycast-gateway MAC, if the fabric sets one.
-
-    Reads ``TopologySegmentHosting.evpn_anycast_gateway_mac``. Same fabric-wide
-    resolution as _fabric_rt_asn and for the same reason: a host caches its
-    gateway MAC, so two VTEPs answering with different MACs blackhole traffic on
-    whichever one did not answer. None means get_vxlan_config uses its default.
-    """
+    """Return the fabric-wide anycast-gateway MAC, if the fabric sets one."""
     for candidate in segment_hosting_candidates(deployment):
         mac = candidate.get("evpn_anycast_gateway_mac")
         if isinstance(mac, str) and mac.strip():
@@ -91,25 +76,13 @@ def _fabric_anycast_mac(deployment: Any) -> str | None:
 
 
 def _own_devices(deployment: Any) -> frozenset[str]:
-    """Names of the devices the deployment itself owns beyond BGP process roles: an office's SD-WAN edge.
-
-    A BGP session to one of them is internal (transforms/helpers/bgp.py), the office WAN exit for one.
-    """
+    """Names of the devices the deployment itself owns beyond BGP process roles: an office's SD-WAN edge."""
     wan_edges = deployment.get("lisp_wan_edges") if isinstance(deployment, dict) else None
     return frozenset(edge["name"] for edge in wan_edges or [] if isinstance(edge, dict) and edge.get("name"))
 
 
 def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
-    """Derive device capabilities from services.
-
-    Capabilities are derived from device_capabilities (BGP/OSPF presence).
-
-    Args:
-        data: Device data from GraphQL query (after clean_data)
-
-    Returns:
-        Dict with capability flags for template rendering.
-    """
+    """Derive device capabilities from services."""
     typenames = {s.get("typename") for s in data.get("capabilities") or []}
     return {
         "bgp_enabled": "ManagedBGP" in typenames,
@@ -118,12 +91,7 @@ def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _loopback_name(interfaces: list[dict[str, Any]], platform_name: str) -> str:
-    """The loopback the templates source BGP updates and redistribution from.
-
-    The first interface named "loopback" (any case), or with a name of 14+
-    characters starting with it, else the platform's Loopback0 spelling.
-    Shorter names such as "Loopback1" never match, so devices get Loopback0.
-    """
+    """The loopback the templates source BGP updates and redistribution from."""
     for iface in interfaces:
         name = iface["name"].lower()
         if (name if len(name) <= 13 else name[:8]) == "loopback":
@@ -132,12 +100,7 @@ def _loopback_name(interfaces: list[dict[str, Any]], platform_name: str) -> str:
 
 
 def _gpo_host_vlans(group_policy: dict[str, Any] | None) -> dict[str, int] | None:
-    """Host port -> the VLAN to make its native VLAN (``get_interfaces``), or None when there is none.
-
-    A host port a component selector names must be a trunk (spec 3.6: interface+VLAN selectors are
-    documented for trunk ports only): the one mode rule (get_interfaces) trunks the access ones with
-    the segment's VLAN as native VLAN. ``group_policy`` is the device view, None on a non-GPO device.
-    """
+    """Host port -> the VLAN to make its native VLAN (``get_interfaces``), or None when there is none."""
     host_vlans = {
         port["name"]: port["vlan_id"]
         for group in (group_policy or {}).get("groups", [])
@@ -151,22 +114,7 @@ class UngovernedTransitError(ValueError):
 
 
 class BaseDeviceTransform(InfrahubTransform):
-    """Base class for device configuration transforms.
-
-    Eliminates boilerplate shared across device transforms by handling:
-    - GraphQL data extraction and cleaning
-    - Platform detection with null safety
-    - Jinja2 environment setup with netutils filters
-    - Standard config building (interfaces, BGP, OSPF)
-
-    Subclasses set class attributes and optionally override ``_extra_config()``
-    to add device-specific template variables (VLANs, VXLAN, etc.).
-
-    Class attributes:
-        template_subdir: Subdirectory under templates/configs/ for this device type.
-        device_role: Role passed to get_vxlan_config (e.g. "spine", "leaf").
-                     Set to "" to omit VXLAN from the template context.
-    """
+    """Base class for device configuration transforms."""
 
     template_subdir: str = ""
     device_role: str = ""
@@ -177,15 +125,7 @@ class BaseDeviceTransform(InfrahubTransform):
     external_policy_platforms: ClassVar[frozenset[str]] = frozenset()
 
     def _device_activations(self, device: dict[str, Any]) -> list[dict[str, Any]]:
-        """Segment activations of one device: from its ports' segments, the stretched segments its multi-site border
-        gateway carries, and every segment it has a VLAN row of (``vlans``, the device's own rows).
-
-        A row is the realization of a segment on this switch, so it is the complete set: a stretched segment is
-        realized on every VTEP of its sites with or without a port of it (generators/segment_vlan.py), and without the
-        rows such a switch would carry the segment in the model but not in its config. Ports and the border-gateway
-        site list come first, so what they already produced keeps its order and flags. A segment the device carries
-        L2 only (a stretched one on a border leaf, utils/segment_addressing.py ``l2_only_on``) gets the L2-only view:
-        VLAN and VNI, no SVI, VRF, L3 VNI, ACL or PBR."""
+        """Segment activations of one device."""
         interfaces = device.get("interfaces") or []
         activations = self._collect_activations_from_interfaces(interfaces, device_id=device.get("id"))
         if any(iface.get("role") == "multisite-vip" for iface in interfaces):
@@ -223,12 +163,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
     @staticmethod
     def _collect_row_activations(rows: list[dict[str, Any]], *, seen: set[str | None]) -> list[dict[str, Any]]:
-        """One activation per segment the device has its own VLAN row of and no activation yet.
-
-        ``rows`` are the device's rows (queries/fragments/network_segment.gql DeviceSegmentRowsFields): each carries
-        its VLAN id and, through its segment deployment, the VNI and the segment, the same record a port's segment
-        resolves its row from. A row without a VLAN id or a deployment without a VNI is not converged yet and is
-        skipped, as on a port."""
+        """One activation per segment the device has its own VLAN row of and no activation yet."""
         activations: list[dict[str, Any]] = []
         for row in rows:
             deployment = row.get("segment_deployment") or {}
@@ -241,11 +176,7 @@ class BaseDeviceTransform(InfrahubTransform):
         return activations
 
     def prepared_device(self, data: Any) -> tuple[dict, dict, str | None]:
-        """Clean `data` and return (device, the other query roots, platform name), the device ready to render.
-
-        The device carries its segment activations (``segment_deployments``) and the transit legs of the contexts
-        tagged on its service ports (``exchange_transits``: VLAN/VNI/VRF/anycast only, never segment policy input).
-        """
+        """Clean `data` and return (device, the other query roots, platform name), the device ready to render."""
         device_data, extra_roots, platform_name = self._device_and_platform(data)
         if platform_name:
             activations = self._device_activations(device_data)
@@ -269,16 +200,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
     @staticmethod
     def _refuse_unrealized_vrfs(platform_name: str, device_data: dict) -> list[str]:
-        """Raise ``VrfRealizationError`` when the device's config uses a VRF or SVI it has no instance of.
-
-        A VRF instance (ManagedVRF) is the device's only VRF set (transforms/helpers/vrf.py): a routed segment,
-        an SVI, a session or address, or a transit leg in a namespace with no instance, and a routed segment with no
-        SVI object (or one in another VRF), would render a config that routes in a table the device does not have.
-        One raise lists everything missing.
-
-        A provider-hosted ``CloudNetworkAppliance`` on a ``UNFILTERED_BANNER_PLATFORMS`` platform must still get its
-        artifact: the problems are logged as a WARNING and returned as the ``vrf_banner`` comment lines instead.
-        """
+        """Raise ``VrfRealizationError`` when the device's config uses a VRF or SVI it has no instance of."""
         problems = unrealized_vrfs(device_data)
         if not problems:
             return []
@@ -297,13 +219,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
     @staticmethod
     def _refuse_ungoverned_transit_sessions(config: dict) -> None:
-        """Raise when an upstream transit session names no routing policy in a direction.
-
-        A transit session (session["transit"], an eBGP session in an internet namespace) has no derived route
-        protection of its own: the generated policies of utils/transit_policy.py (generators/topology/transit_policy.py,
-        the group `transit_peerings`) are what limits it to the default route in and the public space out. Without
-        one, a direction would be open, so refuse instead of rendering it.
-        """
+        """Raise when an upstream transit session names no routing policy in a direction."""
         open_ends = [
             f"{session.get('name')} ({direction})"
             for bgp in config.get("bgp") or []
@@ -319,19 +235,7 @@ class BaseDeviceTransform(InfrahubTransform):
             )
 
     def _refuse_unfiltered_external_sessions(self, platform_name: str, config: dict, device_kind: str | None) -> None:
-        """Raise when an external BGP session would render with no owner prefix filter.
-
-        An external session (session["external"]: a regular peer outside our administration in a tenant VRF)
-        must be limited to its owners' prefixes in both directions. Only the templates of
-        ``external_policy_platforms`` define those route-maps; on any other platform or role the session
-        would be an open one, so refuse instead, like the unrendered cisco_xe features.
-
-        A provider-hosted ``CloudNetworkAppliance`` (``device_kind``) must still get its artifact: on a
-        ``UNFILTERED_BANNER_PLATFORMS`` platform each external session is marked with
-        ``session["unfiltered_banner"]`` (the template renders it as a comment above the neighbour) and
-        logged as a WARNING instead (never an error: the SDK would fail the artifact). An unknown kind
-        refuses, fail-closed.
-        """
+        """Raise when an external BGP session would render with no owner prefix filter."""
         if platform_name in self.external_policy_platforms:
             return
         external = [
@@ -369,13 +273,7 @@ class BaseDeviceTransform(InfrahubTransform):
     _CISCO_XE_FABRIC_ROLES = frozenset({"leaf", "tor", "access-leaf", "border-leaf"}) | OFFICE_LISP_ROLES
 
     def _refuse_cisco_xe_unrendered(self, platform_name: str, config: dict) -> None:
-        """Raise when a Catalyst 9000 (cisco_xe) fabric device needs what its EVPN-VXLAN templates do not render.
-
-        Those templates render the overlay (EVPN-VXLAN or LISP), BGP, OSPF, the gateway SVIs, the segment ACLs and
-        the inter-VRF exchange statics. Dropping PBR, MLAG or Multi-Site would ship an unprotected or incomplete
-        config, so refuse instead, like SONiC. What the ACLs and statics themselves cannot express is
-        refused by ``_cisco_xe_context``.
-        """
+        """Raise when a Catalyst 9000 (cisco_xe) fabric device needs what its EVPN-VXLAN templates do not render."""
         if platform_name != "cisco_xe":
             return
         if self.device_role == "border-spine":
@@ -391,9 +289,7 @@ class BaseDeviceTransform(InfrahubTransform):
             unsupported.append("VXLAN without an EVPN BGP process")
         lisp = config.get(OVERLAY_CONFIG_KEYS["lisp"])
         if lisp:
-            # The LISP template defines the VRFs of its L3 instances; a BGP session (an office's WAN exit) in any
-            # other VRF (an instance that is VRF-lite, or has no L3 instance-id) would render under a VRF the
-            # template does not define.
+            # The LISP template defines the VRFs of its L3 instances.
             session_vrfs = {vrf for bgp in config.get("bgp") or [] for vrf in bgp.get("vrf_sessions") or {}}
             undefined = sorted(session_vrfs - set(l3_vrf_names(lisp, None)))
             if undefined:
@@ -406,11 +302,7 @@ class BaseDeviceTransform(InfrahubTransform):
             )
 
     def _cisco_xe_context(self, platform_name: str, config: dict) -> dict[str, Any]:
-        """The IOS-XE form of the segment ACLs and the VRF statics (``xe_acls``, ``xe_vrf_routes``).
-
-        Empty for anything but a cisco_xe fabric role, so no other device's context changes. Raises ValueError
-        for an ACL or static IOS-XE cannot express (see transforms/helpers/cisco_xe.py).
-        """
+        """The IOS-XE form of the segment ACLs and the VRF statics (``xe_acls``, ``xe_vrf_routes``)."""
         if platform_name != "cisco_xe" or self.device_role not in self._CISCO_XE_FABRIC_ROLES:
             return {}
         lisp = config.get(OVERLAY_CONFIG_KEYS["lisp"])
@@ -423,13 +315,7 @@ class BaseDeviceTransform(InfrahubTransform):
         }
 
     def _template_context(self, device_data: dict, platform_name: str, extra_roots: dict) -> dict:
-        """The template context: the device-specific part (``_extra_config``), then the base part.
-
-        The device-specific part goes first because the host ports of its group policy decide how the
-        base part builds the interfaces (``_gpo_host_vlans``), which then run once. Neither part
-        modifies ``device_data``, so the order does not change what either reads. ``_extra_config``
-        wins on a key both set.
-        """
+        """The template context: the device-specific part (``_extra_config``), then the base part."""
         extra = self._extra_config(device_data, platform_name, extra_roots=extra_roots)
         config = self._build_config(device_data, platform_name, host_vlans=_gpo_host_vlans(extra.get("group_policy")))
         config.update(extra)
@@ -438,10 +324,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
     @staticmethod
     def _device_and_platform(data: Any) -> tuple[dict, dict, str | None]:
-        """Clean `data` and return (device, the other query roots, platform name).
-
-        The device node is always the first query root.
-        """
+        """Clean `data` and return (device, the other query roots, platform name)."""
         cleaned = clean_data(data)
         if not isinstance(cleaned, dict) or not cleaned:
             raise ValueError("clean_data() did not return a non-empty dictionary")
@@ -462,10 +345,7 @@ class BaseDeviceTransform(InfrahubTransform):
         return self._load_template(platform_name).render(**config)
 
     def _build_config(self, data: dict, platform_name: str, host_vlans: dict[str, int] | None = None) -> dict:
-        """Build the base template context shared by all device transforms.
-
-        ``host_vlans``: the NX-OS GPO host ports (``_gpo_host_vlans``), None on any other device.
-        """
+        """Build the base template context shared by all device transforms."""
         interfaces = data.get("interfaces") or []
         device_capabilities = data.get("capabilities") or []
         device_name = data.get("name", "")
@@ -498,10 +378,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
     @staticmethod
     def _template_interfaces(data: dict, *, host_vlans: dict[str, int] | None = None) -> list[dict[str, Any]]:
-        """The interfaces the templates render (get_interfaces), ``host_vlans`` being the NX-OS GPO host ports.
-
-        Not the roles of ``_NON_TEMPLATE_INTERFACE_ROLES`` (the MLAG control SVI, the segment SVIs).
-        """
+        """The interfaces the templates render (get_interfaces), ``host_vlans`` being the NX-OS GPO host ports."""
         activations = (data.get("segment_deployments") or []) + (data.get("exchange_transits") or []) or None
         return get_interfaces(
             [iface for iface in data.get("interfaces") or [] if iface.get("role") not in _NON_TEMPLATE_INTERFACE_ROLES],
@@ -512,38 +389,22 @@ class BaseDeviceTransform(InfrahubTransform):
         )
 
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:
-        """Return device-specific template variables.
-
-        Default implementation adds VLANs, VXLAN config, ACLs, PBR rules and
-        inter-VRF exchange routes when device_role is set.
-        Override in subclasses for different behavior.
-        """
+        """Return device-specific template variables."""
         if not self.device_role:
             return {}
         activations = data.get("segment_deployments")
         # PBR and the zero-trust ACLs hang off the segment's SVI; a segment a firewall context terminates has none.
         routed = routed_activations(activations)
-        # A border gateway's stitched segments are hostless (no customer-facing port),
-        # so its anycast SVI carries no tenant traffic: hosts are served by the leaf
-        # that hosts them, where ACL + PBR apply. They stay in `activations` (VLAN, VNI,
-        # VRF/L3VNI and the SVI are rendered) but are no input to the policy below.
+        # A border gateway's stitched segments are hostless (no customer-facing port), so its anycast SVI carries no
+        # tenant traffic: hosts are served by the leaf that hosts them, where ACL + PBR apply.
         if self.device_role in BORDER_ROLES:
             routed = [act for act in routed if not act.get("border_gateway")]
 
-        # Customer PBR: default-redirect to the firewall context serving this
-        # segment's owner; a SecurityPolicyRule permit is the only bypass.
-        # ManagedFirewallContext is reached via a device-scoped traversal —
-        # this device's own `deployment` (queries/fragments/firewall_contexts.gql's
-        # SwitchDeploymentFields), not a global query root — no
-        # leaf ever owns a FirewallContext interface itself, only the
-        # firewall/border-leaf do. Computed before the VLANs: a leaf's PBR next
-        # hops decide which transit legs it holds locally.
+        # Customer PBR: default-redirect to the firewall context serving this segment's owner.
         leaf_pbr_rules, leaf_transits = self._firewall_pbr(data, routed)
 
-        # Exchange transits (see transform()) and the leaf's local transit legs: they
-        # only add VLANs, VNIs, VRFs and the anycast gateway; policy (ACL, PBR) stays
-        # on real segments. They are not bound to any host port (get_interfaces only
-        # binds a transit VLAN to a port carrying the context).
+        # Exchange transits (see transform()) and the leaf's local transit legs: they only add VLANs, VNIs, VRFs and the
+        # anycast gateway.
         transits = (data.get("exchange_transits") or []) + leaf_transits
         vlans = get_vlans(activations=(activations or []) + transits, svi_vrfs=svi_vrfs(data.get("interfaces")))
 
@@ -603,9 +464,8 @@ class BaseDeviceTransform(InfrahubTransform):
         }
         if lisp is not None:
             config[OVERLAY_CONFIG_KEYS["lisp"]] = lisp
-        # Group policy of a VTEP in a reference fabric, from the fleet roots of the device query:
-        # NX-OS VXLAN GPO as `group_policy`, EOS MSS-G as `segment_security`. Absent for every other
-        # device, so its templates render exactly as before.
+        # Group policy of a VTEP in a reference fabric, from the fleet roots of the device query: NX-OS VXLAN GPO as
+        # `group_policy`, EOS MSS-G as `segment_security`.
         found = group_policy_device_view(
             extra_roots or {},
             device_name=data.get("name") or "",
@@ -625,11 +485,7 @@ class BaseDeviceTransform(InfrahubTransform):
     def _firewall_pbr(
         self, data: dict, routed: list[dict[str, Any]]
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """Firewall PBR rules for the routed activations, plus the leaf's local transit legs.
-
-        Only a leaf role holds transit legs (get_leaf_firewall_transits raises when a
-        next hop has none); every other role gets no leaf transits.
-        """
+        """Firewall PBR rules for the routed activations, plus the leaf's local transit legs."""
         firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
         # A device steers only when it has the capability (a ManagedPBR among its capabilities); the SVIs it steers
         # and for which footprint are derived (pbr_bindings).
@@ -648,8 +504,7 @@ class BaseDeviceTransform(InfrahubTransform):
         return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))
 
     # The platforms whose border leaf template renders the PBR of the overlay ingress (the L3 VNI SVI): NX-OS only,
-    # documented and not yet lab-verified on a switch. Any other platform refuses it (a missing PBR would leave the
-    # direction the segment's PBR does not cover unprotected).
+    # documented and not yet lab-verified on a switch.
     _OVERLAY_PBR_PLATFORMS: ClassVar[frozenset[str]] = frozenset({"cisco_nxos"})
 
     def _overlay_pbr(self, data: dict, platform_name: str) -> list[dict[str, Any]]:
@@ -673,14 +528,7 @@ class BaseDeviceTransform(InfrahubTransform):
     def _refuse_unprotected_tenant_svis(
         role: str, platform_name: str, acls: list[dict[str, Any]], leaf_pbr_rules: list[dict[str, Any]]
     ) -> None:
-        """Raise when a border leaf or border spine (``role``) hosts a routed tenant SVI it cannot protect.
-
-        No border_leafs/* template renders PBR or the SVI ACL definitions (the NX-OS and
-        EOS ones would even bind a name nobody defines), so the segments' policy would
-        silently vanish and leave an any-to-any SVI inside the shared tenant VRF. Only
-        host-capable activations reach here: a border gateway's hostless stitched
-        segments are kept out of the policy inputs (see _extra_config).
-        """
+        """Raise when a border leaf or border spine (``role``) hosts a routed tenant SVI it cannot protect."""
         if leaf_pbr_rules:
             raise ValueError(
                 f"{platform_name} {role} cannot render PBR policy for VLANs "
@@ -694,11 +542,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
     @staticmethod
     def _own_vlan_row(deployments: list[dict], device_id: str | None) -> tuple[dict, dict] | None:
-        """(row, segment deployment) of the segment's row of this device.
-
-        A row points straight at its device (a paired device has its own row, a peer's row is
-        ignored). The row is a child of the deployment it sits in, so its VLAN ID and the
-        deployment's VNI come from one record."""
+        """(row, segment deployment) of the segment's row of this device."""
         for deployment in deployments:
             for row in deployment.get("vlans") or []:
                 if device_id and (row.get("device") or {}).get("id") == device_id:
@@ -711,21 +555,7 @@ class BaseDeviceTransform(InfrahubTransform):
         *,
         device_id: str | None = None,
     ) -> list[dict]:
-        """Collect unique segment activations from the interfaces' segments (interface_segments).
-
-        VxlanSegment.segment_deployments
-        is cardinality:many (multi-site stretch — clean_data unwraps it to a
-        list, already filtered to active/provisioning by the query) and
-        carries the vni and, under it, the vlans rows — the LOCAL
-        vlan_id for a VxlanSegment is the row of THIS device (``row.device.id``;
-        a paired device uses its own row, never its peer's)
-        and the vni is its deployment's, one record for both. A VxlanSegment
-        with no row for this device yet (allocation not
-        converged) is skipped.
-        Without ``resolve_vlan_row`` (a firewall has no VLAN rows)
-        a VxlanSegment takes the first segment_deployments entry as is.
-        We deduplicate by segment id so each segment appears once.
-        """
+        """Collect unique segment activations from the interfaces' segments (interface_segments)."""
         seen: set[str] = set()
         activations: list[dict] = []
         for iface in interfaces:
@@ -760,18 +590,7 @@ class BaseDeviceTransform(InfrahubTransform):
         device_id: str | None,
         seen: set[str | None],
     ) -> list[dict[str, Any]]:
-        """Activations for every stretched VXLAN segment of an EVPN Multi-Site BGW's site.
-
-        A border gateway stitches each stretched segment between its fabric and
-        the DCI without any customer-facing port carrying it, so
-        capabilities never surface those segments. They come from the
-        site's own TopologySegmentHosting.segment_deployments instead (queries/
-        fragments/network_segment.gql SegmentDeploymentsOnDeploymentFields),
-        keeping only stretch_scope != local. The local VLAN still has to be the
-        BGW's own row (generators/topology/segment.py assigns one
-        to border-leaf/edge devices for stretched segments); a segment without
-        one has not converged yet and is skipped, same as on a leaf.
-        """
+        """Activations for every stretched VXLAN segment of an EVPN Multi-Site BGW's site."""
         activations: list[dict[str, Any]] = []
         for dep in (deployment or {}).get("segment_deployments") or []:
             seg = dep.get("segment") or {}

@@ -1,9 +1,4 @@
-"""IPv6 segments on the fabric switches: the family-aware helpers and what the templates write for them.
-
-A segment has ONE gateway of ONE family (``ip_version``); a switch that carries one renders it in IPv6 form: the
-anycast flag, the VRF's IPv6 address family with its route-targets, the IPv6 ACL with its internet band, the
-routing-identity origination. A device may carry both families at once (the ``leaf_cisco_nxos_dual_stack`` golden).
-"""
+"""IPv6 segments on the fabric switches:"""
 
 from __future__ import annotations
 
@@ -217,8 +212,7 @@ class TestRouteProtectionCarriesTheIpv6Prefix:
     """The BGP route protection derives from the model: an IPv6 segment's prefix reaches the IPv6 lists."""
 
     def test_the_environment_prefix_of_an_ipv6_segment_becomes_an_ipv6_type5_entry(self) -> None:
-        """transforms/helpers/bgp_facts.py reads the zone's segments' gateway prefixes whatever the family; the EVPN
-        expectation turns them into exact entries of family ipv6 (the templates write `ipv6 prefix-list` for those)."""
+        """transforms/helpers/bgp_facts.py reads the zone's segments' gateway prefixes whatever the family;"""
         from transforms.helpers.bgp_facts import environment_prefixes
         from utils.bgp_expectation import Fabric, _type5
 

@@ -1,8 +1,4 @@
-"""Guard on the YAML input: a transport must not ride on itself.
-
-The server accepts ``rides_on`` pointing at the object itself and silently drops the edge (measured on 1.11.9), so
-check R3 never sees it. The only input of this repository is YAML, so this is the one place that can refuse it.
-"""
+"""Guard on the YAML input: a transport must not ride on itself."""
 
 from __future__ import annotations
 

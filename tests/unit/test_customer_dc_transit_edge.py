@@ -1,6 +1,4 @@
-"""The Internet edge in the DC customer flow: the contexts of a DC with an external-firewall pair keep no INTERNET leg,
-and the footprint lists the edge context next to its internal one (generators/firewall_context.py,
-firewall_context_spec.py)."""
+"""The Internet edge in the DC customer flow."""
 
 from __future__ import annotations
 

@@ -1,26 +1,5 @@
-"""Routing planner for BGP/OSPF configuration.
-
-Pure helper — no database/client access. Plans routing objects as flat dicts
-with HFID names for upsert-based creation.
-
-All objects (except AS) use deterministic HFID names and are saved with
-allow_upsert=True, eliminating the need for new/existing tracking.
-
-AS objects are special: new devices get from_pool allocation, existing
-devices get their known AS ID for re-save.
-
-Save order: AS -> BGP + OSPF -> Peerings + OSPF Interfaces.
-
-Underlay/overlay peerings and OSPF interfaces optionally reference a shared
-RoutingPassword auth key (underlay_password_id / overlay_password_id on
-RoutingPlanInput), created once by the DC generator and resolved by
-RoutingMixin.create_routing — same conditional-add pattern as evpn_af_id.
-
-Strategies:
-    - ebgp-ebgp: eBGP underlay + eBGP overlay (per-device ASN)
-    - ebgp-ibgp: eBGP underlay + iBGP overlay (shared ASN)
-    - ospf-ibgp: OSPF underlay + iBGP overlay (shared ASN)
-"""
+"""Routing planner for BGP/OSPF configuration (pure, no database access): flat dicts saved with allow_upsert=True.
+Save order: AS -> BGP + OSPF -> peerings + OSPF interfaces. Strategies: ebgp-ebgp, ebgp-ibgp, ospf-ibgp."""
 
 from __future__ import annotations
 
@@ -38,30 +17,8 @@ _SPINE_ROLES = frozenset({"spine", "border-spine"})
 
 
 class RoutingPlanInput(BaseModel):
-    """Input for routing plan builder.
-
-    All objects come pre-queried by the generator as SDK objects:
-      - bottom_devices / top_devices: device name strings
-      - bottom_role / top_role: the caller's known role for every name in the
-        respective list (e.g. "leaf"/"spine", "border-leaf"/"spine",
-        "spine"/"super-spine") — every caller of create_routing() creates or
-        selects these devices for exactly one role, so this is always known
-        statically. Used as the authoritative role source in _build_device_map
-        instead of the queried DcimDevice.role, which has been observed to
-        intermittently resolve to None when queried from a different worker
-        process than the one that wrote it (a client/server consistency gap,
-        not a data bug — the role is correctly set in the database).
-      - underlay: ManagedBGP underlay processes (SDK objects with device + local_as)
-      - overlay: ManagedBGP overlay or ManagedOSPF (existing) SDK objects
-      - interfaces: DcimPhysicalInterface fabric-p2p SDK objects (device, cable, name)
-      - loopback_interfaces: DcimVirtualInterface loopback SDK objects (device + ip_address)
-      - options: RoutingOptions dict (design, asn_pool, overlay_as_id, ospf_area_id; ``no_overlay`` plans the
-        underlay only: the strategy's overlay half is treated as "none", so no overlay BGP processes and no
-        overlay peerings)
-      - mlag_pairs: device name -> MLAG domain name, for devices that ARE
-        MLAG-paired (leaf/tor/l2-leaf/access-leaf; border-leaf is never
-        MLAG-paired in this project). Both devices in a pair get the SAME
-        underlay ASN — see ``_plan_ebgp_underlay``.
+    """Input for the routing plan builder; all objects are pre-queried SDK objects. ``bottom_role``/``top_role`` are
+    authoritative over the queried role; ``mlag_pairs`` maps device -> MLAG domain (one underlay ASN per pair).
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -83,12 +40,8 @@ class RoutingPlanInput(BaseModel):
 
 
 class PendingASRef(BaseModel):
-    """Placeholder for a BGP process's ``local_as`` before its AS is created.
-
-    The AS for ``device`` is allocated from a pool as part of the same plan,
-    so its id isn't known until after ``autonomous_systems`` is saved. The
-    generator swaps this for a real ``{"id": ...}`` ref once that happens —
-    see ``RoutingMixin.create_routing``.
+    """Placeholder for a BGP process's ``local_as`` before its AS is created; the generator swaps in a real ``{"id":
+    ...}`` (``RoutingMixin.create_routing``).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -97,20 +50,9 @@ class PendingASRef(BaseModel):
 
 
 class RoutingPlan(BaseModel):
-    """Flat routing plan — all dicts, saved with allow_upsert=True.
-
-    Save order: autonomous_systems -> bgp_processes + ospf_processes
-                -> bgp_peerings + ospf_interfaces -> ospf_peerings (references
-                the just-created ospf_interfaces, so it saves last).
-
-    AS dicts have either:
-        - "_existing_id": known AS ID (re-save for group tracking)
-        - "asn": {"from_pool": ...} (new allocation)
-    Both carry "_for_device": device_name for generator resolution.
-
-    BGP dicts have "local_as" as either:
-        - {"id": "known-id"} (existing AS)
-        - PendingASRef(device="device-name") (resolved after AS creation)
+    """Flat routing plan: all dicts, saved with allow_upsert=True. Save order: autonomous_systems -> bgp_processes +
+    ospf_processes -> bgp_peerings + ospf_interfaces -> ospf_peerings. AS dicts carry "_existing_id" (re-save) or "asn":
+    {"from_pool": ...}, plus "_for_device"; BGP "local_as" is {"id": ...} or PendingASRef(device=...).
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -138,16 +80,8 @@ class RoutingStrategy(str, Enum):
 
 
 def underlay_pool_is_ipv6(underlay_protocol: str, pool: str) -> bool:
-    """Whether a fabric's ``pool`` ("management", "technical" or "loopback") is IPv6 space.
-
-    The single source of the address family per pool, read by the pool
-    allocator (which parent pool each is sliced from) and by every prefix
-    length drawn from those pools, so the two can never disagree:
-
-    * ``ipv4``: all three IPv4.
-    * ``ipv6``: technical (P2P) and loopback IPv6.
-    * ``dual_stack``: technical IPv6, loopback IPv4.
-
+    """Whether a fabric's ``pool`` ("management", "technical" or "loopback") is IPv6 space; the single source of the
+    family per pool. ipv4: all IPv4; ipv6: technical and loopback IPv6; dual_stack: technical IPv6, loopback IPv4.
     Management is always IPv4.
     """
     if pool == "management":
@@ -168,17 +102,8 @@ def loopback_prefix_length(underlay_protocol: str) -> int:
 
 
 def _safe_device_name(bgp: Any) -> str | None:
-    """Extract device name from a ManagedBGP/ManagedOSPF object via its
-    `capabilities` relationship (the device this process is attached to).
-    Requires the caller to have queried with include=["capabilities"],
-    prefetch_relationships=True.
-
-    Exactly one device by construction (every process created by
-    `_make_bgp_proc`/`_plan_ospf_underlay` in this module attaches one), but a
-    many relationship cannot be capped at 1 in the schema, so anything other
-    than exactly one peer is treated as unresolved (None) rather than guessing
-    which device it belongs to.
-    """
+    """Device name of a ManagedBGP/ManagedOSPF object via its `capabilities` (queried with include=["capabilities"]).
+    A many relationship cannot be capped at 1, so anything other than exactly one peer is unresolved (None)."""
     try:
         peers = bgp.capabilities.peers
     except AttributeError:
@@ -189,17 +114,13 @@ def _safe_device_name(bgp: Any) -> str | None:
 
 
 def _safe_as_id(bgp: Any) -> str | None:
-    """Extract AS ID from a ManagedBGP object's local_as relationship."""
+    """AS ID from a ManagedBGP object's local_as relationship."""
     return bgp.local_as.id or None
 
 
 def _bgp_process_ref(bgp_process: dict) -> dict:
     """Reference a planned BGP process by direct id when known, else by HFID.
-
-    A direct id (set when the process was found already existing — see
-    ``build_routing_plan``'s "existing overlay BGP" block) avoids a search-index
-    lookup that can race a concurrent generator call's write to the same process.
-    """
+    A direct id avoids a search-index lookup racing a concurrent write to the same process."""
     process_id = bgp_process.get("id")
     return {"id": process_id} if process_id else {"hfid": bgp_process["name"]}
 
@@ -229,14 +150,8 @@ def _make_bgp_proc(
 
 
 class RoutingPlanner:
-    """Plans routing configuration from pre-queried SDK objects.
-
-    The planner builds a device_map from loopback interfaces, then uses it
-    across all planning methods. The device_map is keyed by device name:
-
-        {"spine-1": {"id": "uuid", "role": "spine",
-                      "router_id": {"id": "ip-uuid"},
-                      "loopback_ip": "10.0.0.1"}, ...}
+    """Plans routing configuration from pre-queried SDK objects. Builds a device_map keyed by device name ({"spine-1":
+    {"id", "role", "router_id": {"id"}, "loopback_ip"}}) used by all planning methods.
     """
 
     def __init__(self, deployment_id: str, logger: Any = None, strict: bool = False):
@@ -244,9 +159,7 @@ class RoutingPlanner:
         self.logger = logger
         self.strict = strict
 
-    # ================================================================
-    # Main Entry Point
-    # ================================================================
+    # Main entry point
 
     def build_routing_plan(self, inp: RoutingPlanInput) -> RoutingPlan:
         """Build complete routing plan from pre-queried SDK objects."""
@@ -261,9 +174,7 @@ class RoutingPlanner:
                 self.logger.warning("No routing devices provided")
             return plan
 
-        # Build device map from loopback interfaces. Known roles for
-        # bottom_devices/top_devices override the queried role (see
-        # RoutingPlanInput.bottom_role/top_role docstring).
+        # Known roles for bottom/top devices override the queried role (RoutingPlanInput)
         known_roles: dict[str, str] = {}
         if inp.bottom_role:
             known_roles.update({name: inp.bottom_role for name in inp.bottom_devices})
@@ -271,13 +182,8 @@ class RoutingPlanner:
             known_roles.update({name: inp.top_role for name in inp.top_devices})
         device_map = self._build_device_map(inp.loopback_interfaces, known_roles=known_roles)
 
-        # Extract existing AS IDs from underlay BGP so existing devices reuse their
-        # ASN instead of drawing a new one from the pool (Number-pool allocation is
-        # not idempotent across create()). BGP processes themselves are always
-        # re-saved with allow_upsert=True — local_as is cardinality-one and upserts
-        # cleanly (verified on Infrahub 1.9.6), so no new/existing split is needed.
-        # Only applies to eBGP underlay — inp.underlay holds ManagedOSPF objects
-        # (no local_as) when underlay_type == "ospf".
+        # Reuse existing AS IDs from the underlay BGP instead of drawing from the pool (pool allocation is not
+        # idempotent across create()); processes are always re-saved (local_as upserts cleanly). eBGP underlay only
         existing_as_by_device: dict[str, str] = {}
         if underlay_type == "ebgp":
             for bgp in inp.underlay:
@@ -292,7 +198,7 @@ class RoutingPlanner:
         existing_ospf_area = inp.options.get("ospf_area_id")
         shared_underlay_as_id = inp.options.get("shared_underlay_as_id")
 
-        # ---- Underlay ----
+        # Underlay
         if not inp.options.get("skip_underlay"):
             if underlay_type == "ebgp":
                 self._plan_ebgp_underlay(
@@ -322,7 +228,7 @@ class RoutingPlanner:
             else:
                 raise ValueError(f"Unknown underlay: {underlay_type}")
 
-        # ---- Overlay BGP processes ----
+        # Overlay BGP processes
         if overlay_type == "ibgp" and not overlay_as_id:
             raise ValueError(
                 "overlay_as_id is required for iBGP overlay. The DC generator must create the shared overlay AS first."
@@ -336,16 +242,13 @@ class RoutingPlanner:
                 mlag_pairs=inp.mlag_pairs,
             )
 
-        # ---- Overlay peerings ----
+        # Overlay peerings
         if design and overlay_type != "none":
             overlay_bgp = [b for b in plan.bgp_processes if b.get("process_role") == "overlay"]
             planned_device_ids = {b["capabilities"][0]["id"] for b in overlay_bgp}
 
-            # Include remote devices with existing overlay BGP not yet in plan.
-            # Carry the process's real id (obj.id) rather than only its name — the
-            # process was saved by a different, possibly concurrent generator call
-            # (e.g. a sibling rack), so an HFID-only ref risks NODE_NOT_FOUND if the
-            # search index hasn't caught up yet with that other call's write.
+            # Include remote devices with existing overlay BGP not yet in plan, carrying the real id: an HFID-only ref
+            # can hit NODE_NOT_FOUND if a concurrent call's write is not indexed yet
             existing_overlay_id_by_name: dict[str, str] = {}
             for obj in inp.overlay:
                 dev_name = _safe_device_name(obj)
@@ -379,38 +282,20 @@ class RoutingPlanner:
 
         return plan
 
-    # ================================================================
-    # Device Map Builder
-    # ================================================================
+    # Device map builder
 
     @staticmethod
     def _build_device_map(
         loopback_interfaces: list[Any], known_roles: dict[str, str] | None = None
     ) -> dict[str, dict[str, Any]]:
-        """Build device info from loopback interfaces.
-
-        Returns dict keyed by device name::
-
-            {"spine-1": {"id": "uuid", "role": "spine",
-                         "router_id": {"id": "ip-uuid"},
-                         "loopback_ip": "10.0.0.1"}}
-
-        Loopback interfaces must be queried with:
-            include=["device", "ip_address"], prefetch_relationships=True
-
-        ``known_roles`` (device name -> role), when provided, takes priority
-        over the queried ``DcimDevice.role`` — the role has been observed to
-        intermittently resolve to None when queried from a worker process
-        other than the one that wrote it, even though it's correctly set in
-        the database (a client/server consistency gap). Callers that already
-        know a device's role statically (every create_routing() caller does)
-        should pass it here instead of trusting the query.
+        """Device info from loopback interfaces, keyed by device name ({"id", "role", "router_id", "loopback_ip"}).
+        Loopbacks must be queried with include=["device", "ip_address"], prefetch_relationships=True. ``known_roles``
+        (name -> role) takes priority over the queried role, which can intermittently resolve to None.
         """
         device_map: dict[str, dict[str, Any]] = {}
         known_roles = known_roles or {}
 
-        # Sort by interface id so router_id selection is deterministic regardless of
-        # query-return order: the lowest-id loopback with a valid IP wins per device.
+        # Sort by interface id so router_id is deterministic: the lowest-id loopback with a valid IP wins per device
         for lb in sorted(loopback_interfaces, key=lambda lb: lb.id):
             dev = lb.device.peer
             name = dev.name.value
@@ -420,20 +305,17 @@ class RoutingPlanner:
             if name not in device_map:
                 device_map[name] = {"id": dev_id, "role": role}
 
-            # First loopback (by sorted id) with a valid IP wins for router_id
             if "router_id" not in device_map[name]:
                 ip_id = lb.ip_address.id
                 if ip_id:
                     device_map[name]["router_id"] = {"id": ip_id}
-                    # display_label is "10.0.0.1/32" — strip prefix
+                    # display_label is "10.0.0.1/32": strip the prefix
                     device_map[name]["loopback_ip"] = str(lb.ip_address.display_label).split("/")[0]
                     device_map[name]["loopback_interface_id"] = lb.id
 
         return device_map
 
-    # ================================================================
-    # eBGP Underlay (interface-driven)
-    # ================================================================
+    # eBGP underlay (interface-driven)
 
     def _plan_ebgp_underlay(
         self,
@@ -447,28 +329,8 @@ class RoutingPlanner:
         mlag_pairs: dict[str, str] | None = None,
         shared_as_id: str | None = None,
     ) -> None:
-        """Build eBGP underlay by iterating cable pairs.
-
-        For each cable pair: ensure AS + BGP process for bottom devices only,
-        then create the eBGP peering. Top devices (spines when called from rack)
-        already have their BGP processes created by the pod generator — skip
-        AS/BGP creation for them but still create peerings via HFID reference.
-        Deduplicates by device name (AS/BGP) and by device pair (peerings).
-
-        Every BGP process is emitted for upsert; existing processes re-save
-        cleanly (local_as is cardinality-one), so no new/existing tracking.
-
-        ASN is allocated per GROUP, not per device (.dev/bgp.txt): an
-        MLAG-paired device (present in ``mlag_pairs``, keyed by its MLAG
-        domain name) shares ONE ASN with its pair partner — both devices'
-        BGP processes point ``local_as`` at the SAME AS object, exactly one
-        ``autonomous_systems`` entry is emitted per domain, not per device.
-        A standalone (non-MLAG) device keeps today's behavior: its own name
-        is its own group, one ASN each. ``shared_as_id``, when given,
-        bypasses grouping AND the pool entirely — every bottom device reuses
-        that single pre-resolved AS id directly (pod-shared spine ASN /
-        fabric-wide super-spine ASN; those devices are never MLAG-paired in
-        this project, so the two mechanisms never overlap).
+        """Build the eBGP underlay by iterating cable pairs; top devices already have AS + BGP, so only their peerings
+        are created. ASN is per group (an MLAG pair shares one); ``shared_as_id`` bypasses grouping and the pool.
         """
         id_to_name = {info["id"]: name for name, info in device_map.items()}
         _top = top_device_names or set()
@@ -477,11 +339,7 @@ class RoutingPlanner:
         def _group_key(name: str) -> str:
             return _mlag_pairs.get(name, name)
 
-        # Reconcile existing AS ids per group: an MLAG pair whose two devices
-        # already have DIFFERENT existing underlay AS ids (the bug this
-        # grouping fixes, on a fabric that ran once before) converges onto
-        # one canonical id (lowest-sorted) — both devices' BGP processes
-        # re-point at it below, self-healing with no migration script.
+        # An MLAG pair with different existing underlay AS ids converges onto the lowest-sorted one (self-healing)
         existing_as_by_group: dict[str, str] = {}
         for name, as_id in existing_as_by_device.items():
             group = _group_key(name)
@@ -491,9 +349,7 @@ class RoutingPlanner:
 
         bottom_names = [name for name in sorted(device_map.keys()) if name not in _top]
 
-        # Phase 0: resolve one local_as value per distinct group among
-        # bottom devices, emitting at most one autonomous_systems entry
-        # per group (decoupled from the per-device BGP-process loop below).
+        # Phase 0: one local_as per group, at most one autonomous_systems entry per group
         local_as_by_group: dict[str, dict | PendingASRef] = {}
         if shared_as_id is not None:
             shared_ref = {"id": shared_as_id}
@@ -501,12 +357,8 @@ class RoutingPlanner:
             for name in bottom_names:
                 group = _group_key(name)
                 local_as_by_group[group] = shared_ref
-                # _plan_overlay_processes (eBGP overlay) sources its per-device AS
-                # refs from plan.autonomous_systems, not from local_as_by_group —
-                # without this, a shared underlay AS (pod-shared spine ASN /
-                # fabric-wide super-spine ASN) is invisible to overlay planning,
-                # so eBGP overlay BGP processes silently never get created for
-                # these devices even though their underlay BGP does.
+                # _plan_overlay_processes (eBGP overlay) reads AS refs from plan.autonomous_systems, so a shared
+                # underlay AS must be recorded there or the overlay BGP is silently never created
                 if group not in seen_shared_groups:
                     seen_shared_groups.add(group)
                     plan.autonomous_systems.append({"_existing_id": shared_as_id, "_for_device": group})
@@ -530,15 +382,11 @@ class RoutingPlanner:
                     )
                     local_as_by_group[group] = PendingASRef(device=group)
                 elif self.logger:
-                    # Neither a pool nor an existing AS means no local_as, which
-                    # means no BGP process for any device in the group below —
-                    # an error, not a note: the caller finishes and reports
-                    # success, leaving silently unrouted devices behind.
+                    # No pool and no existing AS means no local_as and no BGP process for the group: an error, not a
+                    # note
                     self.logger.error(f"No ASN pool for {group} — its device(s) will have no BGP process")
 
-        # Phase 1: BGP process for every bottom device (device_map, not
-        # cable-driven — decoupled from cables so processes exist even
-        # before cabling is complete).
+        # Phase 1: BGP process for every bottom device (device_map, not cable-driven)
         bgp_planned: set[str] = set()
         for name in bottom_names:
             if name in bgp_planned:
@@ -547,7 +395,7 @@ class RoutingPlanner:
             info = device_map[name]
             local_as = local_as_by_group.get(_group_key(name))
             if local_as is None:
-                continue  # already warned above (no pool, no existing AS)
+                continue
 
             router_id = self._router_id_or_skip(name, info, "BGP")
             if not router_id:
@@ -566,7 +414,7 @@ class RoutingPlanner:
             plan.bgp_processes.append(proc)
             bgp_planned.add(name)
 
-        # Phase 2: Peerings — cable-driven, requires both ends to have BGP.
+        # Phase 2: peerings, cable-driven; both ends need BGP
         for a, b, a_name, b_name in self._cable_pairs(interfaces, id_to_name):
             if (a_name not in bgp_planned and a_name not in _top) or (b_name not in bgp_planned and b_name not in _top):
                 continue
@@ -605,12 +453,8 @@ class RoutingPlanner:
         return router_id
 
     def _cable_pairs(self, interfaces: list[Any], id_to_name: dict[str, str]) -> list[tuple[Any, Any, str, str]]:
-        """One (a, b, a_name, b_name) per cabled device pair, a_name < b_name, sorted by names.
-
-        Drops cables not joining two known devices, and self-loops (both ends on
-        one device, from a race between parallel rack generators tagging a spine
-        interface twice before the TOR side is committed). Parallel cables between
-        the same two devices keep only the first.
+        """One (a, b, a_name, b_name) per cabled device pair, a_name < b_name, sorted by names. Drops cables not joining
+        two known devices and self-loops (a race between parallel rack generators); parallel cables keep only the first.
         """
         cable_map: dict[str, list] = defaultdict(list)
         for iface in interfaces:
@@ -644,9 +488,7 @@ class RoutingPlanner:
             first_by_names.setdefault((pair[2], pair[3]), pair)
         return list(first_by_names.values())
 
-    # ================================================================
-    # Overlay BGP Processes
-    # ================================================================
+    # Overlay BGP processes
 
     def _plan_overlay_processes(
         self,
@@ -656,21 +498,10 @@ class RoutingPlanner:
         top_device_names: set[str] | None = None,
         mlag_pairs: dict[str, str] | None = None,
     ) -> None:
-        """Build overlay BGP processes. If overlay_as_id is set → iBGP (shared ASN); otherwise → eBGP (per-device ASN).
-
-        Devices in top_device_names are skipped — they already have overlay BGP created by
-        an upper generator layer. They will be picked up via existing_overlay_names fallback
-        in build_routing_plan so peerings are still generated correctly.
-
-        ``mlag_pairs`` must be the SAME mapping given to ``_plan_ebgp_underlay``.
-        Under an eBGP overlay the local_as is sourced from the underlay's
-        ``plan.autonomous_systems``, whose entries are keyed by GROUP — the MLAG
-        domain name for a paired device, its own name otherwise. Looking those up
-        by raw device name misses every MLAG-paired leaf, and the miss is silent:
-        the device gets underlay BGP, no overlay BGP, and therefore no EVPN
-        session at all while the fabric looks healthy.
-
-        Every process is emitted for upsert; existing ones re-save cleanly.
+        """Build overlay BGP processes: iBGP (shared ASN) if overlay_as_id is set, else eBGP (per-device ASN). Devices
+        in top_device_names are skipped (an upper layer created them; existing_overlay_names picks them up for
+        peerings). ``mlag_pairs`` must be the SAME mapping given to ``_plan_ebgp_underlay``: under eBGP overlay local_as
+        is keyed by GROUP, and a miss by device name silently leaves a leaf with no overlay BGP.
         """
         is_ibgp = bool(overlay_as_id)
         desc_prefix = "iBGP process for" if is_ibgp else "eBGP process for"
@@ -684,9 +515,7 @@ class RoutingPlanner:
                 if "_existing_id" in as_dict:
                     group_as_refs[group] = {"id": as_dict["_existing_id"]}
                 else:
-                    # PendingASRef is resolved by the generator against the same
-                    # group key the underlay allocated under, so keep the group
-                    # name here rather than substituting the device name.
+                    # PendingASRef resolves against the group key the underlay allocated under, so keep the group name
                     group_as_refs[group] = PendingASRef(device=group)
 
         for name in sorted(device_map.keys()):
@@ -720,9 +549,7 @@ class RoutingPlanner:
             )
             plan.bgp_processes.append(proc)
 
-    # ================================================================
-    # OSPF Underlay
-    # ================================================================
+    # OSPF underlay
 
     def _plan_ospf_underlay(
         self,
@@ -732,15 +559,8 @@ class RoutingPlanner:
         existing_area_id: str,
         password_id: str = "",
     ) -> None:
-        """Build OSPF underlay: processes, per-interface configs, and cable-paired peerings.
-
-        Mirrors ``_plan_ebgp_underlay``'s shape: one OSPF process per device
-        (decoupled from cabling), one RoutingOSPFInterface per device-interface
-        (interface-level settings — mode/metric/auth/password — are genuinely
-        per-device, so this stays 1:1), and ONE ManagedOSPFPeering
-        per cable pair, referencing BOTH devices' process + interface-config — the same
-        "one peering object models the session, not just one side of it" shape as
-        BGPPeering. The peering reaches its interfaces through ``ospf_interface``.
+        """Build the OSPF underlay: one process per device, one RoutingOSPFInterface per device-interface, and ONE
+        ManagedOSPFPeering per cable pair referencing both devices' process + interface config.
         """
         area_ref: dict[str, Any] = {"id": existing_area_id}
         id_to_name = {info["id"]: name for name, info in device_map.items()}
@@ -765,7 +585,7 @@ class RoutingPlanner:
                 }
             )
 
-        # Interface configs — decoupled from pairing, one per device-interface.
+        # Interface configs, one per device-interface
         for iface in interfaces:
             dev_name = id_to_name.get(iface.device.id)
             if not dev_name or not (iface.cable and iface.cable.id):
@@ -782,7 +602,7 @@ class RoutingPlanner:
                 }
             )
 
-        # Peerings — cable-driven, one ManagedOSPFPeering per physical link.
+        # Peerings, one ManagedOSPFPeering per physical link
         for a, b, a_name, b_name in self._cable_pairs(interfaces, id_to_name):
             ia = a.name.value
             ib = b.name.value
@@ -806,9 +626,7 @@ class RoutingPlanner:
                 }
             )
 
-    # ================================================================
-    # Overlay Peerings (loopback-based)
-    # ================================================================
+    # Overlay peerings (loopback-based)
 
     def _plan_overlay_peerings(
         self,
@@ -881,10 +699,8 @@ class RoutingPlanner:
             d1_role = device_map.get(d1_name, {}).get("role", "")
             d2_role = device_map.get(d2_name, {}).get("role", "")
 
-            # An RR-client session exists when there is a genuine client→RR relationship:
-            # - leaf/border-leaf/tor are clients of spines
-            # - spines are clients of super-spines
-            # - super-spines are clients of hyper-spines
+            # An RR-client session needs a genuine client->RR relationship: leaf/border-leaf/tor under spines, spines
+            # under super-spines, super-spines under hyper-spines
             rr_client_session = stype == "ibgp" and (
                 (d1_role in RR_CLIENT_ROLES and (d2_role in _SPINE_ROLES or d2_role == "super-spine"))
                 or ((d1_role in _SPINE_ROLES or d1_role == "super-spine") and d2_role in RR_CLIENT_ROLES)
@@ -894,7 +710,6 @@ class RoutingPlanner:
                 or (d1_role == "hyper-spine" and d2_role == "super-spine")
             )
 
-            # Overlay peers via loopback interfaces
             peering_interfaces = []
             for dname in [d1_name, d2_name]:
                 lb_id = device_map.get(dname, {}).get("loopback_interface_id")
@@ -921,9 +736,7 @@ class RoutingPlanner:
             plan.bgp_peerings.append(peering)
 
 
-# ================================================================
-# BGP Session Planner (internal)
-# ================================================================
+# BGP session planner (internal)
 
 
 class _BGPSessionPlanner:
@@ -933,27 +746,17 @@ class _BGPSessionPlanner:
         self.devices = devices
 
     def build_session_plan(self, session_type: str) -> list[tuple[str, str, str, str, str]]:
-        """Route-reflector session plan, one (dev1_name, dev1_id, dev2_name, dev2_id,
-        session_type) per session: spines + super-spines + hyper-spines as RR,
-        leafs/border-leafs/tors/access-leafs as clients.
-
-        l2-leaf is L2-only and never appears here. access-leaf has no physical link to
-        spines (it cables to leafs) but still peers overlay EVPN with them as an RR client,
-        same as leaf/tor.
-
-        Special cases:
-        - Super-spines only (no clients): full mesh between super-spines (DC-level seeding)
-        - Hyper-spines only (no clients): full mesh between hyper-spines (DC-level seeding,
-          same reasoning as super-spines — a hyper-spine tier's own RRs mesh each other)
-        - Spines only (no clients, no super-spines): full mesh between spines
-          (back-to-back design: spines from different pods peer as equals)
+        """Route-reflector session plan, one (dev1_name, dev1_id, dev2_name, dev2_id, session_type) per session: spines,
+        super-spines and hyper-spines as RR, leafs/border-leafs/tors/access-leafs as clients (access-leaf peers EVPN
+        with spines though it cables to leafs; l2-leaf never appears). With no clients: super-spines, hyper-spines or
+        (back-to-back) spines full-mesh among themselves.
         """
         roles = {d.role for d in self.devices}
         rrs = [d for d in self.devices if d.role in RR_ROLES]
         clients = [d for d in self.devices if d.role in RR_CLIENT_ROLES]
         has_super_spine = "super-spine" in roles
         has_hyper_spine = "hyper-spine" in roles
-        # back-to-back: spines (or border-spines, in micro-fabric mode) peer as equals
+        # Back-to-back: spines (or border-spines) peer as equals
         has_only_spines = roles in ({"spine"}, {"border-spine"})
         if rrs and not clients and (has_super_spine or has_hyper_spine or has_only_spines):
             return [

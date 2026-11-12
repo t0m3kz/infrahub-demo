@@ -1,10 +1,5 @@
-"""EVPN Multi-Site for a colocation zone or virtual colocation: the border-gateway processes and the edge pair.
-
-The two steps of ColocationFabricGenerator (colocation_fabric.py) that follow the device pass: ``_ensure_evpn``
-makes the node's edges border gateways of the metro's one Multi-Site site (its ASN, an IPv6 VTEP loopback and an
-overlay ManagedBGP per edge) and ``_ensure_edge_pair`` links a zone's two physical edges and peers them (iBGP
-FABRIC). A mixin so the generator file keeps the pools, the validation and the devices.
-"""
+"""EVPN Multi-Site for a colocation zone or virtual colocation: border-gateway processes and the edge pair.
+ColocationFabricGenerator steps after the device pass: ``_ensure_evpn`` and ``_ensure_edge_pair`` (iBGP FABRIC)."""
 
 from __future__ import annotations
 
@@ -27,31 +22,22 @@ if TYPE_CHECKING:
     from ..routing import RoutingMixin
     from ..shared_routing import SharedRoutingObjectsMixin
 
-# EVPN Multi-Site border gateway (see _ensure_evpn). Every DC fabric this
-# demo builds runs an IPv6 underlay, and a Multi-Site tunnel only forms between
-# VTEPs of one address family, so the edge's VTEP is a dedicated IPv6
-# loopback rather than its IPv4 Loopback0 (which stays the BGP router-id: a
-# router-id is 32-bit and cannot be an IPv6 address). The slice that holds the
-# VTEPs is the loopback-ipv6 slot below.
+# EVPN Multi-Site border gateway: a tunnel forms only between VTEPs of one address family and the fabrics run an IPv6
+# underlay, so the VTEP is a dedicated IPv6 loopback (the IPv4 Loopback0 stays the 32-bit router-id).
 _COLO_VTEP_LOOPBACK_INDEX = 1
-# The two edges of a zone share no fabric: one direct link between them (port
-# role `interlink`, N9K-C9316D-GX_EDGE's Ethernet1/8) carries a /127 and the
-# iBGP FABRIC session (see _ensure_edge_pair). The technical-ipv6 slot holds eight
-# /127s, far more than the one link needs.
+# The two edges of a zone share no fabric: one direct link (role `interlink`) carries a /127 and the iBGP FABRIC
+# session.
 _COLO_INTERLINK_ROLE = "interlink"
 _COLO_P2P_IPV6_PREFIX_LENGTH = p2p_prefix_length("ipv6")
 _COLO_FABRIC_UNICAST_AF = ("ipv6", "unicast")
 
 
 class ColocationEvpnMixin:
-    """The EVPN Multi-Site and edge-pair steps of ColocationFabricGenerator.
-
-    Expects the host class to provide what is declared below: its own state and ``_slice_pool``, and the
-    methods of PoolMixin, CablingMixin, RoutingMixin and CommonGenerator it is mixed into.
+    """The EVPN Multi-Site and edge-pair steps of ColocationFabricGenerator; needs ``_slice_pool`` and the mixed-in
+    bases.
     """
 
-    # Annotations, and aliases of the real members of the host's other bases under TYPE_CHECKING: nothing is
-    # defined at runtime, so nothing shadows them in the MRO.
+    # Annotations and TYPE_CHECKING aliases of the host's other bases; nothing is defined at runtime
     client: Any
     logger: Any
     data: ColocationFabricData
@@ -72,17 +58,12 @@ class ColocationEvpnMixin:
         wait_for_parent_generators = CommonGenerator.wait_for_parent_generators
 
     if TYPE_CHECKING:
-        # The generator's own method (it knows the metro's pools); a stub seen only by the type checker.
+        # The generator's own method; a stub for the type checker
         async def _slice_pool(self, slot: ColoPoolSlot) -> Any: ...
 
     async def _metro_asn_pool_id(self) -> str:
-        """The id of the parent metro's ASN pool, which the metro's one site AS is drawn from.
-
-        The metro's own generator (add_colocation_metro) creates and attaches
-        the pool, and a zone's created-trigger can fire before that task has
-        finished. So the query's `parent.fabric_asn_pool` may still be empty:
-        wait for the metro's generator, then look the pool up by name with the
-        same bounded retry the DC-pool lookups use.
+        """The id of the parent metro's ASN pool; waits for add_colocation_metro, then looks it up by name with bounded
+        retry.
         """
         metro = self.data.get("parent") or {}
         pool = metro.get("fabric_asn_pool") or {}
@@ -102,39 +83,9 @@ class ColocationEvpnMixin:
         return found.id
 
     async def _ensure_evpn(self) -> dict[str, str]:
-        """Make this node's edges EVPN Multi-Site border gateways for the metro's site.
-
-        A stretched segment reaches a colocation through the edge pair, which
-        re-originates the DC's EVPN routes into the metro (and back) — the
-        border-gateway role, with the METRO as the Multi-Site site: one site AS
-        however many zones and virtual colocations carry edges. That needs three
-        things the generic device pass does not create:
-
-        * the metro's site ASN, attached to the metro as ``evpn_rt_as`` — the
-          site-id and the admin field of its local route-targets, same role as a
-          DC's fabric AS (PoolMixin.attach_refs, the same evpn_rt_as link a DC
-          gets). Whichever zone or virtual colocation runs first draws it; the
-          others find it by its description;
-        * an overlay ManagedBGP per edge in that ASN, so the DCI peerings
-          (add_virtual_circuit, for a TopologySessionCircuit of type dci) have a
-          process to attach to;
-        * an IPv6 VTEP loopback per edge (LOOPBACK_IPV6_SLOT).
-
-        The DCI sessions (add_virtual_circuit, generators/topology/virtual_circuit.py) and the
-        shared Multi-Site VIP (data/demos/30_all/08_interconnects/
-        01_colo_onramp/) are not built here: both need the DC end of the dark
-        fibre, which this generator cannot see.
-
-        Idempotent: the AS is found by its deterministic description before a
-        new one is drawn from the metro's ASN pool (a from_pool on a new node
-        would allocate a fresh ASN every run). ensure_shared_as does the
-        find-or-create under a lock keyed by that description, which is the
-        metro's name, so zones of one metro running concurrently never draw two.
-        Every other object upserts by HFID.
-
-        Returns the overlay process id of each edge it saved (edge name -> id),
-        so _ensure_edge_pair references them directly instead of re-querying
-        by name (search-index lag on objects created earlier in this run).
+        """Make this node's edges EVPN Multi-Site border gateways: the metro's site ASN, an overlay ManagedBGP and an
+        IPv6 VTEP loopback per edge. DCI sessions and the Multi-Site VIP are not built here. Returns edge name ->
+        overlay process id (avoids a by-name re-query).
         """
         name = self.fabric_name
         process_ids: dict[str, str] = {}
@@ -142,15 +93,13 @@ class ColocationEvpnMixin:
         if not edge_devices:
             return process_ids
         metro = self.data["parent"]
-        # Untracked (track=False): every zone and virtual colocation of the metro finds this one AS, so none of
-        # their tracking groups may own it; one that stopped declaring edges would otherwise delete an AS its
-        # sibling's overlay processes still use as local_as.
+        # Untracked: every zone of the metro shares this AS, so no tracking group may own it
         site_as_id = await self.ensure_shared_as(
             description=f"{metro['name'].lower()} EVPN site ASN",
             asn_pool_id=await self._metro_asn_pool_id(),
             track=False,
         )
-        # The query read the metro's current site AS: a re-run with the AS already attached costs no get and no save.
+        # The query read the metro's site AS: a re-run with it attached costs no get and no save
         await self.attach_refs(
             kind="TopologySegmentHosting",
             node_id=metro["id"],
@@ -217,26 +166,8 @@ class ColocationEvpnMixin:
         return process_ids
 
     async def _ensure_edge_pair(self, *, physical_edge_names: list[str], overlay_process_ids: dict[str, str]) -> None:
-        """Link a zone's two physical edges and peer them over that link (iBGP FABRIC).
-
-        The edges are single-box sites with no fabric between them, yet they
-        share one Multi-Site site (same AS, same VIP): they need a direct
-        link plus a directly connected iBGP session carrying IPv6 unicast
-        (VTEP /128 reachability) and l2vpn evpn. A loopback EVPN session is
-        impossible — the edges run no IGP.
-
-        Only when EXACTLY two PHYSICAL edges exist in this zone: virtual edges
-        (an MCR, a Network Edge) have no port to cable, and a zone with 0 or 1
-        physical edge has nothing to pair (info log, no pair). More than two is
-        not a pair either. The pair stays inside one zone: edges of two zones
-        are joined by circuits, not by this link.
-
-        Everything it writes is owned by this zone and keyed
-        deterministically: the technical IPv6 slice, the P2P prefix (keyed by
-        the link), the cable, the FABRIC-<a>-<b> peering and the zone's own
-        routing key. One lock for the whole step, so overlapping runs of one
-        zone never both create any of them.
-        """
+        """Link a zone's two physical edges and peer them over that link (iBGP FABRIC: IPv6 unicast and l2vpn evpn).
+        Only for exactly two physical edges; everything is zone-owned and keyed deterministically, under one lock."""
         name = self.fabric_name
         if len(physical_edge_names) != 2:
             self.logger.info(

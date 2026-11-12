@@ -1,11 +1,4 @@
-"""Unit tests for how SegmentVlanMixin chooses a segment's local VLAN ID per device (generators/segment_vlan.py).
-
-No pool: the id is the lowest one free on every device the segment lands on, the segment's existing id wins when it
-is free on a new device, a device that cannot take it falls back to its own lowest free id (WARNING), and a device
-with no free id fails. An MLAG pair shares one id (tests/unit/test_segment_vlan_pairs.py). Devices are locked in sorted
-order around the one batched read of the ids in use and the writes. Runs against an in-memory server
-(tests/unit/segment_vlan_helpers.py) shared by the segments of a test.
-"""
+"""Unit tests for how SegmentVlanMixin chooses a segment's local VLAN ID per device (generators/segment_vlan.py)."""
 
 from __future__ import annotations
 

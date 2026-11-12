@@ -1,4 +1,4 @@
-"""Which data centers are a reference fabric, and every segment that needs group policy sits on one."""
+"""Report which data centers are a reference fabric, and check that every segment needing group policy sits on one."""
 
 from __future__ import annotations
 
@@ -25,31 +25,7 @@ NOT_A_DATA_CENTER = "not a data center"
 
 
 class CheckReferenceFabric(WarningCheck):
-    """Report each data center against the reference fabric profile, and fail the segments that need it.
-
-    Targetless: the profile rows, a segment's sites and a site's VTEPs span the fleet.
-
-    Profile rows (error): a platform without exactly one usable
-    DcimGroupPolicyProfile row has no reference fabric (utils/group_policy.profiles_by_platform).
-
-    Data centers (info, never blocking): ``DC10 is a reference fabric (vxlan_gpo, N VTEPs)``
-    or ``DC11 is not a reference fabric: <reason>`` (utils/group_policy.site_reason).
-    A site that is not one keeps L0 only (SVI ACL, PBR).
-
-    Segments:
-
-    - a routed tenant segment (utils/exchange_transit.is_routed_tenant_segment)
-      active on a reference fabric without its group tag (error): its hosts
-      would be unclassified, outside every contract;
-    - one that needs component group policy (utils/group_policy.gbp_required)
-      and is not a VXLAN segment cannot carry a group tag: host-enforced (warning);
-    - one that needs component group policy is active in a single site
-      (error), and that site is a reference fabric (error: its intra-segment
-      flows would have no enforcement point);
-    - any other tagged segment (segment or component tags) stretched between a
-      reference and a non-reference site is enforced on the reference side
-      only (warning): the other side arrives as the policy-unaware group.
-    """
+    """Report each data center against the reference fabric profile, and fail the segments that need group policy."""
 
     query = "reference_fabric"
 
@@ -72,10 +48,7 @@ class CheckReferenceFabric(WarningCheck):
                 self._validate_stretch(segment, sites, reasons)
 
     def _site_reasons(self, cleaned: dict[str, Any], profiles: dict[str, dict[str, Any]]) -> dict[str, str | None]:
-        """Site id -> site_reason (None: reference fabric), one info per data center by name.
-
-        A pod's VTEPs belong to the pod's data center.
-        """
+        """Site id -> site_reason (None: reference fabric); a pod's VTEPs belong to its data center."""
         vteps_of = vteps_by_data_center(cleaned.get("TopologyDataCenter") or [], cleaned.get("TopologyPod") or [])
         reasons: dict[str, str | None] = {}
         for data_center in sorted(cleaned.get("TopologyDataCenter") or [], key=lambda item: str(item.get("name"))):
@@ -92,10 +65,7 @@ class CheckReferenceFabric(WarningCheck):
 
     @staticmethod
     def _sites(segment: dict[str, Any], names: dict[str, str]) -> list[tuple[str, str]]:
-        """(id, name) of every site the segment is active in (utils/group_policy.segment_sites), sorted by name.
-
-        A data center is named by the query; another site by its deployment, else by its id.
-        """
+        """(id, name) of every site the segment is active in, sorted by name."""
         for activation in segment.get("segment_deployments") or []:
             deployment = activation.get("deployment") or {}
             if deployment.get("id"):

@@ -148,9 +148,7 @@ class _World:
         self.vrf_edges: list[tuple[str, str, list[str]]] = []
 
     async def execute_graphql(self, *, query: str, variables: dict[str, Any]) -> dict[str, Any]:
-        """Return the current border-device graph, including scoped memberships and context legs; a RelationshipAdd
-        or RelationshipRemove on a sub-interface's ``capabilities`` (generators/helpers/interface_vrf.py: the edges
-        are written one by one, never as a saved list) changes that sub-interface's peers."""
+        """Return the current border-device graph, including scoped memberships and context legs."""
         if "RelationshipAdd" in query or "RelationshipRemove" in query:
             data = variables["data"]
             assert data["name"] == "capabilities"
@@ -603,8 +601,7 @@ class _World:
         return [sub.id for sub in self.sub_interfaces.values() if self.vrf_of(sub) == vrf_id]
 
     def _joined(self, key: tuple[str, str], peer_id: str) -> str | None:
-        """A capability added to a sub-interface (its RelationshipAdd): a VRF instance is the leg joining it, while the
-        border devices' VRF locks and the context's lock are held."""
+        """A capability added to a sub-interface (its RelationshipAdd): a VRF instance is the leg joining it."""
         vrf = self.routing.store.vrfs.get(peer_id)
         if vrf is None:
             return None

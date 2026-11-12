@@ -1,41 +1,7 @@
-"""Reconciles a VXLAN segment's VLAN rows, then the switch ports tagged with them.
-
-The ports are derived from two places: the instances of every AppComponent on the segment
-(queries/topology/add/segment_components.gql): the interfaces each instance's
-physical host is cabled to (the port-channel for a bonded one); and, for a segment a firewall context terminates
-(``firewall_gateway``), the border service ports tagged with its footprint's internal context, the ones facing its HA pair. The segment owns
-them, so the same reconcile runs from both directions that change the answer:
-
-  - add_app_component_segment, when a component's instances or segment change;
-  - add_vxlan_segment, when the segment itself is written — creation and its footprints.
-
-A person asks for a port by assigning it to the segment's deployment (the deployment's interface ``capabilities``):
-the intent, which the reconcile reads and never writes. The desired ports are the derived ones plus the assigned
-physical ports and LAGs (checks/interface_layers.py reports another kind).
-
-A port carries the segment as a member of its switch's VLAN ROW: the ``ManagedSegmentVlan`` of the port's device among
-the port's interface ``capabilities``. The rows come FIRST (generators/segment_vlan.py): one per device of a desired
-port, the MLAG peers and, for a stretched segment, the VTEPs; then each desired port is joined to its device's row. A
-desired port whose device got no row (it sits in no deployment of the segment), and a requested port whose switch's
-row is under another deployment than the one requesting it, are reported and skipped (the next run, once the
-deployment exists, converges). Only this reconcile writes a port -> row edge: it adds the missing ones and removes the
-edge of a port that is no longer desired (an instance moved, a component left, a request withdrawn).
-
-Writes RelationshipAdd/RelationshipRemove on the port's ``capabilities``, edge by edge, untracked: a tagged port belongs
-to the device's generator, not to a run.
-
-The rows (one per device, the MLAG peers of a tagged device included even with no port of the segment, so a dual-homed
-port-channel is tagged on both) decide which switches route the segment, so the same reconcile
-ends with the VRF instances and SVIs of every device the segment's rows were on before or are on after (a switch that
-lost its row included): generators/helpers/vrf.py, inside the segment lock (lock order: segment, then the device locks).
-
-A deleted segment is not reconciled (nothing to read its rows from, and no trigger runs on a delete). Its rows and
-SVIs go by the schema's cascade, not by this code: ``SegmentDeployment.vlans`` is ``on_delete: cascade``
-and so is the row's ``svi``; whether the server also removes the deployment with the segment is not proven (its
-``segment`` is a mandatory attribute-kind relationship with no cascade of its own). What can linger converges later:
-the next ``reconcile_vrfs`` of each switch (any segment, circuit or context run that touches it) deletes an SVI whose
-row is no longer routed (role ``svi`` and not desired) and then the instance with no demand left, in the same pass;
-until then checks/vrf_instances.py reports the instance as a WARNING.
+"""Reconciles a VXLAN segment's VLAN rows, then the switch ports tagged with them (see AGENTS.md VLAN rows). Desired
+ports: instance-cabled ports, border service ports of a terminating firewall context, and ports assigned to the
+deployment. Edges are untracked; stale ones removed. Ends with the VRF instances and SVIs of every touched device,
+inside the segment lock. A deleted segment is left to the next ``reconcile_vrfs``.
 """
 
 from __future__ import annotations
@@ -70,17 +36,11 @@ _SEGMENT_COMPONENTS_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/
 
 
 class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
-    """Mixin providing the segment's port tags and, for a VXLAN segment, its VLAN rows and what routes on them.
-
-    Expects the host class to provide what SegmentVlanMixin does.
-    """
+    """Mixin providing the segment's port tags and, for a VXLAN segment, its VLAN rows and what routes on them."""
 
     async def reconcile_vxlan_segment(self, segment_id: str, segment_name: str) -> tuple[int, int] | None:
-        """Reconcile the segment's VLAN rows for its desired ports (derived and requested), then join the ports to
-        them, then the VRFs and SVIs of the switches the rows touch, under the segment lock.
-
-        Returns (ports tagged, ports untagged); None when the segment is gone or is no VXLAN segment.
-        """
+        """Reconcile the segment's VLAN rows, join the ports to them, then the VRFs and SVIs, under the segment lock.
+        Returns (ports tagged, ports untagged); None when the segment is gone or is no VXLAN segment."""
         async with self.resource_lock(segment_lock_key(segment_id)):
             state = await self._fetch_segment_vlan_state(segment_id)
             if state is None:
@@ -109,11 +69,8 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
 
     @staticmethod
     def _terminated_service_port_ids(segment: dict[str, Any]) -> set[str]:
-        """The border service ports of the internal firewall context of the footprint of a segment with ``firewall_gateway`` (empty when it has none).
-
-        The ports with the firewall service role that the context's members' uplinks are cabled to: the border leaf
-        ports facing the HA pair (utils/service_contexts.py ``member_border_ports``: a context has no interface edge).
-        ``segment`` is the cleaned state segment (queries/topology/add/segment_vlans.gql).
+        """The border service ports of the footprint's internal firewall context for a ``firewall_gateway`` segment
+        (empty if none).
         """
         if not segment.get("firewall_gateway"):
             return set()
@@ -139,8 +96,7 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
 
     @staticmethod
     def _rows_by_device(state: dict[str, Any]) -> dict[str, tuple[str, str]]:
-        """{device id: (id of the segment's row on it, id of the deployment the row is under)} (a device has at most
-        one row of a segment)."""
+        """{device id: (id of the segment's row on it, id of the deployment the row is under)}."""
         return {
             device_id: (row["id"], item["id"])
             for item in state.get("deployments", [])
@@ -155,9 +111,9 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
         return clean_data(result).get("AppComponent") or []
 
     async def _derived_segment_port_ids(self, segment_id: str, segment_name: str, segment: dict[str, Any]) -> set[str]:
-        """The ids of every port the segment's components derive: the customer-facing targets of the instances of
-        EVERY component on the segment plus the border service ports of the firewall context terminating it
-        (``segment`` is the cleaned state segment). Read-only."""
+        """The ids of every port the segment's components derive, plus the border service ports of a terminating
+        context. Read-only.
+        """
         components = await self._segment_components(segment_id)
         # Several components/virtual instances can resolve to the same host.
         device_ids = list(
@@ -196,16 +152,9 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
         requested: dict[str, str],
         rows_by_device: dict[str, tuple[str, str]],
     ) -> tuple[int, int]:
-        """Make the segment's (port, row) edges exactly the desired ports (``port_devices``: {port id: device id}),
-        each joined to its device's row of the segment (``rows_by_device``, after the row pass).
-
-        ``requested`` is {port id: id of the deployment requesting it} for a port only a person asked for: its
-        switch's row must be under that deployment. ``ports`` are the segment's port edges today, ``{"id",
-        "device_id", "row_id"}`` (SegmentVlanMixin._segment_ports). A desired port whose device has no row, or a
-        requested one whose row is under another deployment, is reported and skipped. RelationshipAdd/
-        RelationshipRemove on the port's ``capabilities``, one edge each, never in this run's tracking group.
-
-        Returns (edges added, edges removed).
+        """Make the segment's (port, row) edges exactly the desired ports (``port_devices``: {port id: device id});
+        returns (added, removed). ``requested`` is {port id: deployment id}; a port with no row, or a row under another
+        deployment, is reported and skipped.
         """
         desired: set[tuple[str, str]] = set()
         for port_id, device_id in sorted(port_devices.items()):
@@ -233,22 +182,16 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
 
     @staticmethod
     def _resolve_physical_device_id(instance: dict[str, Any]) -> str | None:
-        """The physical device id an AppInstance is actually cabled through.
-
-        A bare physical device/controller is used directly. A virtual
-        instance walks its hosting_device. Anything else (e.g. a cloud
-        instance) has no on-prem device to resolve. The resolution itself
-        (utils.app_instances.physical_host) is shared with the NX-OS GPO
-        transform that classifies the same ports."""
+        """The physical device id an AppInstance is actually cabled through (a virtual instance walks its
+        hosting_device).
+        """
         host = physical_host(instance)
         return host.get("id") if host else None
 
     async def _customer_facing_target_ids(self, device_ids: list[str]) -> set[str]:
-        """The ids of every switch interface the devices are cabled to: the far
-        end of a role=uplink NIC directly, a role=lag NIC's switch-side
-        port-channel. Several bond members resolving to the SAME port-channel
-        dedup to one id. Read-only: one query for the NICs of all the devices,
-        two for the far ends of all their cables."""
+        """The ids of every switch interface the devices are cabled to: the uplink far end, or a lag NIC's switch-side
+        port-channel. Read-only.
+        """
         if not device_ids:
             return set()
         nics = await self.client.filters(
@@ -273,11 +216,9 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
         return target_ids
 
     def _customer_facing_target_id(self, far_end: Any) -> str | None:
-        """The id of the interface to tag for a NIC whose cable ends on `far_end`:
-        the far-end port itself for a plain uplink, or its own switch-side
-        port-channel when the far end is a role=lag member — the aggregate is
-        what carries the VLAN, not the raw member port. None if a lag far end
-        has no port-channel yet."""
+        """The interface to tag for a NIC cabled to `far_end`: the far-end port, or its port-channel when it is a lag
+        member (None if none yet).
+        """
         if far_end.role.value != "lag":
             return far_end.id
 

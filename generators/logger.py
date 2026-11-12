@@ -7,11 +7,11 @@ from typing import Any
 
 
 class GeneratorError(Exception):
-    """Raised when a generator logs an error — causes the Infrahub task to fail."""
+    """Raised when a generator logs an error, which fails the Infrahub task."""
 
 
 class FailOnErrorLogger(logging.Logger):
-    """Logger subclass that raises GeneratorError when .error() is called."""
+    """Logger subclass that raises GeneratorError on .error()."""
 
     def error(
         self,
@@ -32,11 +32,7 @@ class FailOnErrorLogger(logging.Logger):
 
 
 class FailOnErrorLoggerMixin:
-    """Mixin that replaces self.logger with FailOnErrorLogger on init.
-
-    Any self.logger.error() call in a generator will raise GeneratorError,
-    causing the Infrahub task to show as failed rather than silently green.
-    """
+    """Mixin that swaps self.logger for FailOnErrorLogger, so an error log fails the task."""
 
     logger: logging.Logger
 

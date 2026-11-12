@@ -1,9 +1,4 @@
-"""The route-protection filters rendered on an internal VRF session (NX-OS edge), staged and enforced.
-
-The smoke goldens cover the global sessions of every platform (tests/smoke/configs/*_routing_protection_*); this file
-covers what they cannot cheaply: an internal VRF session, whose far end is one of our own devices, derives its
-prefixes from the namespace and attaches the filter inside its VRF (cisco_nxos_bgp.j2).
-"""
+"""The route-protection filters rendered on an internal VRF session (NX-OS edge), staged and enforced."""
 
 from __future__ import annotations
 
@@ -59,13 +54,11 @@ def test_a_staged_deployment_renders_the_objects_and_a_comment_not_the_attachmen
     assert "route-map RM-VRF-PROD-IPV4-IN permit 10" in output
 
 
-# ---------------------------------------------------------------------------
 # EOS and IOS XE: the VRF neighbour and the EVPN refusal, through a hand-built BGP profile
-# ---------------------------------------------------------------------------
 
 
 def _profile(*, enforce: bool) -> list[dict[str, Any]]:
-    """A BGP profile with an underlay, an EVPN overlay and an internal PROD VRF session, policy composed as the transform does."""
+    """A BGP profile with an underlay, an EVPN overlay and an internal PROD VRF session."""
     from jinja2 import Environment  # noqa: F401  (rendered by the callers)
 
     from transforms.helpers.bgp import add_template_fields

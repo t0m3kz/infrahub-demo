@@ -8,12 +8,9 @@ import pytest
 from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from transforms.helpers.vxlan import get_interfaces
 
-# ===========================================================================
 # Arista EOS leaf template — isolation_mode rendering smoke tests
-# ===========================================================================
 
-# The template uses includes like 'common/arista_eos_mlag.j2' so the loader
-# root must be templates/configs/ (one level above both 'leafs/' and 'common/').
+# The templates include 'common/...', so the loader root is templates/configs/.
 _TEMPLATES_CONFIGS_DIR = Path(__file__).parent.parent.parent / "templates" / "configs"
 _LEAF_TEMPLATE_NAME = "leafs/arista_eos.j2"
 
@@ -109,9 +106,7 @@ class TestAristaLeafTemplateIsolationMode:
         assert "ISOLATED" in rendered
 
 
-# ---------------------------------------------------------------------------
 # get_interfaces() — OSPF interface authentication (password relationship)
-# ---------------------------------------------------------------------------
 
 
 def _return_leg_acl() -> dict:
@@ -191,9 +186,9 @@ def _make_ospf_interface(
 
 
 class TestGetInterfacesOspfAuthentication:
-    """get_interfaces() must thread OSPF authentication_mode/password through
-    the RoutingPassword relationship into interface.ospf, mirroring how BGP
-    resolves its own password relationship in _build_session_from_peering()."""
+    """get_interfaces() must thread OSPF authentication_mode/password through the RoutingPassword relationship into
+    interface.ospf, mirroring how BGP resolves its own password relationship in _build_session_from_peering().
+    """
 
     def test_password_and_mode_pass_through(self):
         iface = {
@@ -217,9 +212,7 @@ class TestGetInterfacesOspfAuthentication:
 
 
 class TestBorderLeafTemplateFirewallContextDot1q:
-    """FirewallContext sub-interface (role='service') must render its own
-    802.1Q encapsulation on border-leaf — the IP address alone isn't enough
-    to scope it to the right VLAN on real hardware."""
+    """FirewallContext sub-interface (role='service') must render its own 802.1Q encapsulation on border-leaf"""
 
     def _ctx_with_context_subinterface(self) -> dict:
         return _minimal_ctx(
@@ -276,11 +269,7 @@ class TestBorderLeafTemplateFirewallContextDot1q:
 
 
 class TestGetInterfacesFirewallContextDot1q:
-    """get_interfaces() must expose the FirewallContext sub-interface's own
-    vlan_id as a scalar `dot1q_vlan` (border-leaf/firewall PBR leg) — distinct
-    from `vlans` (customer segment trunk/access VLANs), since a context
-    sub-interface's VLAN comes from the FW-context VLAN pool, not any
-    customer segment."""
+    """get_interfaces() must expose the FirewallContext sub-interface's own vlan_id as a scalar `dot1q_vlan`"""
 
     def test_firewall_context_sets_dot1q_vlan(self):
         iface = {

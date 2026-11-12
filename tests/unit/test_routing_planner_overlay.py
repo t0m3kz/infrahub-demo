@@ -1,13 +1,4 @@
-"""Unit tests for overlay peering planning.
-
-Tests verify correct overlay BGP peering creation through
-RoutingPlanner._plan_overlay_peerings() for:
-- iBGP overlay (route_reflector, hierarchical_route_reflector)
-- eBGP overlay (spine_leaf)
-- Scoped filtering (bottom/top device names)
-- Missing prerequisites (loopback, BGP process)
-- Integration via build_routing_plan()
-"""
+"""Unit tests for overlay peering planning."""
 
 from typing import Any
 from unittest.mock import MagicMock
@@ -18,9 +9,7 @@ from generators.helpers.routing import RoutingPlan, RoutingPlanInput, RoutingPla
 from generators.types import RoutingOptions
 from tests.unit.routing_helpers import make_loopback, make_p2p_interface
 
-# ================================================================
 # Test Data Helpers
-# ================================================================
 
 
 def _device_map_entry(
@@ -44,9 +33,7 @@ def _design() -> MagicMock:
     return d
 
 
-# ================================================================
 # Standard spine-leaf data
-# ================================================================
 
 _SPINE_LEAF_DEVICE_MAP: dict[str, dict[str, Any]] = dict(
     [
@@ -67,9 +54,7 @@ def _spine_leaf_bgp_processes(suffix: str = "overlay") -> list[dict]:
     ]
 
 
-# ================================================================
 # Helper to call _plan_overlay_peerings with plain device_map
-# ================================================================
 
 
 def _call_plan_overlay(
@@ -93,9 +78,7 @@ def _call_plan_overlay(
     return plan.bgp_peerings
 
 
-# ================================================================
 # iBGP Overlay Tests
-# ================================================================
 
 
 class TestIBGPOverlayPeerings:
@@ -175,16 +158,7 @@ class TestIBGPOverlayPeerings:
         assert len(peerings) == 8
 
     def test_spine_to_super_spine_is_rr_client(self) -> None:
-        """In a spines+super-spines-only setup the planner builds a full mesh.
-
-        With no leaf clients the session planner enters the all-RR full-mesh path,
-        generating sessions between every pair: spine↔super-spine, spine↔spine, and
-        super-spine↔super-spine.  The two-tier RR flag logic must label each correctly:
-
-        - spine  ↔ super-spine  → route_reflector_client = True  (spine is client)
-        - super-spine ↔ super-spine → route_reflector_client = False (peer RRs)
-        - spine  ↔ spine        → route_reflector_client = False (peer RRs)
-        """
+        """In a spines+super-spines-only setup the planner builds a full mesh."""
         device_map = dict(
             [
                 _device_map_entry("super-spine-1", "ss1", "super-spine", "10.0.0.100"),
@@ -348,9 +322,7 @@ class TestIBGPOverlayPeerings:
             assert p["route_reflector_client"] is True
 
 
-# ================================================================
 # eBGP Overlay Tests
-# ================================================================
 
 
 class TestEBGPOverlayPeerings:
@@ -394,9 +366,7 @@ class TestEBGPOverlayPeerings:
         assert len(peerings) == 8
 
 
-# ================================================================
 # Scoped Filtering Tests
-# ================================================================
 
 
 class TestOverlayScopeFiltering:
@@ -465,9 +435,7 @@ class TestOverlayScopeFiltering:
             assert "leaf-1" in p["description"]
 
 
-# ================================================================
 # Missing Prerequisites Tests
-# ================================================================
 
 
 class TestOverlayMissingPrerequisites:
@@ -560,9 +528,7 @@ class TestOverlayMissingPrerequisites:
         assert len(peerings) == 0
 
 
-# ================================================================
 # Integration via build_routing_plan
-# ================================================================
 
 
 class TestOverlayIntegration:
@@ -702,9 +668,7 @@ class TestOverlayIntegration:
             assert "leaf-1" in p["description"]
 
 
-# ================================================================
 # options.no_overlay (an office fabric): OSPF underlay only, no overlay BGP
-# ================================================================
 
 
 def _ospf_ibgp_plan(*, no_overlay: bool, overlay_as_id: str | None, existing_overlay: list | None = None):
@@ -743,8 +707,7 @@ class TestNoOverlayPlan:
 
         assert sorted(p["name"] for p in plan.ospf_processes) == ["leaf-1-ospf-underlay", "spine-1-ospf-underlay"]
         assert len(plan.ospf_peerings) == 1
-        # The peering is off the interface edge: its interfaces are those of its ospf_interface settings, each on the
-        # standard interface edge and with no device field of its own.
+        # The peering is off the interface edge: its interfaces are those of its ospf_interface settings.
         assert "capabilities" not in plan.ospf_peerings[0]
         assert len(plan.ospf_peerings[0]["ospf_interface"]) == 2
         assert sorted(s["capabilities"][0]["id"] for s in plan.ospf_interfaces) == ["if1", "if2"]

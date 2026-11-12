@@ -1,11 +1,4 @@
-"""Fabric designs for unit tests, shaped as the generator queries deliver them.
-
-The real designs are the rows of data/bootstrap/14b_fabric_templates.yml
-(TopologyTemplatePod / TopologyTemplateDC); a DC design carries its
-``pod_templates`` as a list of pod design dicts, like ``design { node { ...
-pod_templates { edges { node { ... } } } } }`` after clean_data(). The pod
-designs carry an ``id`` (the DC generator matches a pod's design by id).
-"""
+"""Fabric designs for unit tests, shaped as the generator queries deliver them."""
 
 from __future__ import annotations
 
@@ -75,9 +68,7 @@ def custom_dc_design(
     }
 
 
-# ---------------------------------------------------------------------------
 # Colocation designs (data/bootstrap/14c_colocation_templates.yml)
-# ---------------------------------------------------------------------------
 
 _COLO_ZONE_DESIGNS = {
     name: {"id": f"colo-zone-design-{name}", **row} for name, row in _rows("TopologyTemplateColocationZone").items()

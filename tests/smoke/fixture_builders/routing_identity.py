@@ -1,8 +1,4 @@
-"""Routing-identity fixtures: tagged segments originated by a leaf and a border leaf, owner tags on an external edge.
-
-Each fixture is a NEW directory next to the untagged ones, whose goldens stay byte-identical: a tag in the model is
-the only thing that makes a template render a community (transforms/helpers/origination.py, utils/routing_identity.py).
-"""
+"""Routing-identity fixtures: tagged segments originated by a leaf and a border leaf, owner tags on an external edge."""
 
 from __future__ import annotations
 
@@ -17,8 +13,7 @@ from transforms.config.leaf import Leaf
 LEAF_PLATFORMS = ("cisco_nxos", "arista_eos", "sonic")
 BORDER_LEAF_PLATFORMS = ("cisco_nxos", "arista_eos")
 
-# Customers of the external-peers edge fixture and their routing tags. C001 (the tunnel owner) has none: its
-# accepted prefix is still stripped of our communities, with no customer community added.
+# Customers of the external-peers edge fixture and their routing tags.
 CUSTOMER_TAGS: dict[str, int | None] = {"C001": None, "C002": 2, "C003": 3, "C005": 5, "C015": 15, "C009": None}
 
 

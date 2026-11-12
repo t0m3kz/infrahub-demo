@@ -1,9 +1,4 @@
-"""Guard the segment's firewall gateway flag (``ManagedVxlanSegment.firewall_gateway``) and the removed edge.
-
-The firewall pair of the segment's one DC footprint owns the gateway when the flag is set; the context is derived from
-the footprint (``serving_firewall_contexts``), so the old ``terminated_on`` edge and its ``terminated_segments``
-reverse no longer exist anywhere. A field nothing reads is dead (AGENTS.md, Simplicity Rules).
-"""
+"""Guard the segment's firewall gateway flag (``ManagedVxlanSegment.firewall_gateway``) and the removed edge."""
 
 from __future__ import annotations
 

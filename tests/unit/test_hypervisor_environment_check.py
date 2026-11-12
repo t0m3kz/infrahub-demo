@@ -1,7 +1,4 @@
-"""Unit tests for CheckHypervisorEnvironment, fed canned hypervisor_environment query responses.
-
-Two rules: prod and nonprod VMs never share a hypervisor, and a VM runs in the DC (or metro) of its footprint.
-"""
+"""Unit tests for CheckHypervisorEnvironment, fed canned hypervisor_environment query responses."""
 
 from __future__ import annotations
 
@@ -34,11 +31,7 @@ def _vm(
     host_dc: str | None = "DC1",
     host_kind: str = "TopologyPod",
 ) -> dict[str, Any]:
-    """One DcimVirtualDevice edge in the raw query shape.
-
-    ``footprint_dc`` is the footprint's parent (DC or metro), ``host_dc`` the parent of the host's deployment
-    (a pod's DC, a zone's metro); None leaves either out (no parent selected / host not in a deployment).
-    """
+    """One DcimVirtualDevice edge in the raw query shape."""
     deployment_node: dict[str, Any] | None = None
     if deployment:
         deployment_node = {"id": deployment, "__typename": kind, "name": _v(deployment)}
@@ -241,11 +234,7 @@ def test_query_is_registered_and_selects_what_the_check_reads() -> None:
 
 
 def _all_demo_vms() -> list[dict[str, Any]]:
-    """The 30_all VMs in the query shape: environment and parent from the footprint, host DC from its declaration.
-
-    A DC host is declared under data/demos/30_all/03_dc/<dc>/ (add_endpoint puts it in a pod of that DC); a
-    colocation cage host declares its zone, whose parent is the metro it is nested under.
-    """
+    """The 30_all VMs in the query shape:"""
     footprints = {
         name(footprint): footprint.item
         for kind in ("TopologyCustomerDC", "TopologyCustomerColocation", "TopologyCustomerCloud")

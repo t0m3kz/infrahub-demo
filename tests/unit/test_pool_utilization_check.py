@@ -1,8 +1,4 @@
-"""Unit tests for CheckPoolUtilization (checks/pool_utilization.py).
-
-Payloads are raw pool_utilization query responses (edges/node/value), shaped like the live stack's DC10:
-an IPv6 fabric with two pods, the pod technical pool fd00:2100::40/122 holding 22 /127 links.
-"""
+"""Unit tests for CheckPoolUtilization (checks/pool_utilization.py)."""
 
 from __future__ import annotations
 

@@ -1,12 +1,4 @@
-"""Unit tests for shared iBGP overlay ASN across generators.
-
-Tests verify that for ebgp-ibgp and ospf-ibgp routing strategies,
-the overlay ASN is shared across all switches regardless of which
-generator (pod, rack) creates the BGP processes.
-
-The key invariant: all overlay BGP processes must reference the same ASN.
-dc.py creates the shared AS; pod/rack generators look it up — no fallbacks.
-"""
+"""Unit tests for shared iBGP overlay ASN across generators."""
 
 from unittest.mock import MagicMock
 

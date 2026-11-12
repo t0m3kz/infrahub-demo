@@ -1,10 +1,4 @@
-"""Routing identity in the rendered configs: origination on the leaf, the owner community on an external session.
-
-Inputs are the raw GraphQL responses of tests/smoke/fixture_builders (before ``clean_data``), run through the real
-transforms and templates. A tag renders a community (a route-map sequence per tagged segment on NX-OS, EOS and
-SONiC/FRR; per owner on the NX-OS edge's external sessions); a model without tags renders as before. The community is
-a tag for visibility: the prefix-lists stay the gate, so every sequence still matches a model-derived prefix-list.
-"""
+"""Routing identity in the rendered configs"""
 
 from __future__ import annotations
 
@@ -50,9 +44,7 @@ def _lines(config: str, start: str) -> list[str]:
     return [line for line in config.splitlines() if line.startswith(start)]
 
 
-# ---------------------------------------------------------------------------
 # Origination on the leaf
-# ---------------------------------------------------------------------------
 
 
 class TestNxosOrigination:
@@ -198,9 +190,7 @@ class TestSonicOrigination:
         assert "route_map_redistribute_connected" not in db["BGP_GLOBALS_AF"]["PROD|ipv4_unicast"]
 
 
-# ---------------------------------------------------------------------------
 # The edge's external sessions
-# ---------------------------------------------------------------------------
 
 
 def _edge(data: dict[str, Any]) -> str:

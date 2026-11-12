@@ -1,16 +1,6 @@
 """Segment port, VLAN row and MLAG pair helpers shared by generators, transforms and checks.
 
-A switch port (physical, LAG) carries a segment as a member of its switch's VLAN ROW: the ``ManagedSegmentVlan``
-among the port's interface ``capabilities`` (``port_rows``), the realization the segment reconcile writes. The row holds
-the port's VLAN (``vlan_id``); its ``segment_deployment`` holds the VNI and the segment (``port_deployments``,
-``port_segments``). A port may also be ASSIGNED to the segment's deployment (the deployment among its
-``capabilities``): a person's request, which every reader of what a port carries ignores (it reads the row).
-
-There is no VLAN domain object: a segment's VLAN ID is a row on ONE device (``ManagedSegmentVlan.device``,
-unique on [device, vlan_id]). The two peers of an MLAG pair must carry the same VLAN ID for a segment (a dual-homed
-port-channel is one L2 broadcast domain): the allocator (generators/segment_vlan.py) gives them one id and
-checks/mlag_domains.py reports a pair whose rows differ. The generator reads the capabilities as SDK peers and the
-checks as cleaned query data; both pass ``(typename, id)`` pairs here.
+A port carries a segment as a member of its switch's ``ManagedSegmentVlan`` row; see AGENTS.md "VLAN rows".
 """
 
 from __future__ import annotations
@@ -32,13 +22,7 @@ def port_rows(port: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def svi_rows(svi: dict[str, Any]) -> list[dict[str, Any]]:
-    """The VLAN rows a cleaned segment SVI (a role-``svi`` interface) is a member of: the one row it realizes.
-
-    The SVI is a member of its row through the same interface edge a port is (``ManagedSegmentVlan.capabilities``), so
-    its VLAN, segment and VNI are its row's, never read off its name ``Vlan<vlan_id>``. The row is found in either
-    capability key a query may select it under (``INTERFACE_CAPABILITY_KEYS``, deduplicated by id): a transform
-    query reads it from the routing selection, a check from its own plain one.
-    """
+    """The VLAN rows a cleaned role-``svi`` interface is a member of, found under either capability key, by id."""
     rows = {
         str(cap.get("id") or id(cap)): cap
         for key in INTERFACE_CAPABILITY_KEYS
@@ -49,41 +33,30 @@ def svi_rows(svi: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def port_deployments(port: dict[str, Any]) -> list[dict[str, Any]]:
-    """The segment deployments a cleaned port carries: the ``segment_deployment`` of each of its rows (a query that
-    selects it)."""
+    """The segment deployments a cleaned port carries: the ``segment_deployment`` of each of its rows."""
     return [dep for row in port_rows(port) if (dep := row.get("segment_deployment"))]
 
 
 def port_segments(port: dict[str, Any]) -> list[dict[str, Any]]:
-    """The segments a cleaned port carries: the ``segment`` of each of its rows' deployments (a query that selects it)."""
+    """The segments a cleaned port carries: the ``segment`` of each row's deployment."""
     return [segment for dep in port_deployments(port) if (segment := dep.get("segment"))]
 
 
 def mlag_id(capabilities: Iterable[tuple[str | None, str | None]]) -> str | None:
-    """The id of the MLAG a device is a member of (its ``(typename, id)`` capabilities), None without one.
-
-    An MLAG without an id (a query that did not select it) is ignored.
-    """
+    """The id of the MLAG a device is a member of (from ``(typename, id)`` capabilities), None without one."""
     return next(
         (capability_id for typename, capability_id in capabilities if typename == MLAG_KIND and capability_id), None
     )
 
 
 def mlag_peer_devices(names: Iterable[str]) -> str:
-    """The value of ``ManagedMLAG.peer_devices``: the member device names, sorted and joined with a comma.
-
-    The attribute mirrors the many ``capabilities`` edge into one unique Text, because a uniqueness constraint cannot
-    use a many relationship. The generator writes it and ``checks/mlag_domains.py`` compares against it.
-    """
+    """The value of ``ManagedMLAG.peer_devices``: the sorted member names joined with a comma (unique Text mirror)."""
     return ",".join(sorted(names))
 
 
 def shared_vlan_id(vni: int | None) -> int | None:
-    """The VLAN id a SHARED segment (vlan_scope shared) has on every switch, derived from its VNI.
-
-    VLAN = SHARED_VLAN_ID_MIN + (VNI - GLOBAL_L2_VNI_START): the segment's one VNI from the global pool maps onto the
-    shared band, and only when it falls in the first SHARED_VLAN_COUNT numbers of that pool; None for any other VNI (or
-    none), which the generator and the check report. One rule for both, so they cannot drift.
+    """The VLAN id of a SHARED segment, SHARED_VLAN_ID_MIN + (VNI - GLOBAL_L2_VNI_START); None for a VNI outside the
+    band.
     """
     if vni is None or not 0 <= vni - GLOBAL_L2_VNI_START < SHARED_VLAN_COUNT:
         return None

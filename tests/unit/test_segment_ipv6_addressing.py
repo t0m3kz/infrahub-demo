@@ -1,10 +1,4 @@
-"""An IPv6 segment's addressing (generators/topology/segment_addressing.py).
-
-A segment of ``ip_version`` ipv6 gets its subnet from the customer's IPv6 pool (``{org_id}-{env}-{dc|colocation}-ipv6``,
-carved from ``Tenant-<ZONE>-IPv6`` at boarding), of the design's ``ipv6_segment_prefix_length`` (a /64), with the anycast
-gateway on the first address; a ``host_count`` sizes nothing there. The same locks, growth and idempotency as IPv4. The
-server-side behaviour (pool, resource edge, allocation) is mocked; what is held is which calls are made.
-"""
+"""An IPv6 segment's addressing (generators/topology/segment_addressing.py)."""
 
 from __future__ import annotations
 

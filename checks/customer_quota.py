@@ -1,11 +1,4 @@
-"""Meter each customer footprint (data center, colocation, cloud) against its design.
-
-A footprint's `design` (TopologyCustomerTemplateDC, ...Colocation or ...Cloud, data/bootstrap/21_customer_templates.yml)
-is its service tier and every footprint has one (the relationship is required). Besides the dedicated firewall/load
-balancer flags that generators/firewall_context.py reads and the address block that
-generators/topology/segment_addressing.py carves for the customer's prefix pool, it carries what the customer is
-entitled to, and this check holds the footprint to it.
-"""
+"""Meter each customer footprint (data center, colocation, cloud) against the entitlements of its design."""
 
 from __future__ import annotations
 
@@ -33,42 +26,7 @@ SWITCHED_KINDS = ("DcimPhysicalInterface", "DcimLAGInterface")
 
 
 class CheckCustomerQuota(WarningCheck):
-    """A footprint stays within the numbers of its design, and the design holds its tier (ERRORs, one WARNING).
-
-    What is counted, for every footprint (data center, colocation, cloud):
-
-    - segments: for a data center or colocation footprint the ManagedVxlanSegments (customer_deployments) that name it,
-      for a cloud footprint its CloudNetworkSegments, against ``max_segments``. A segment stretched over two DCs counts
-      for each footprint it names. Exchange-zone segments (INTERNET/MANAGEMENT, the DC-local infra services) are the
-      operator's, not the customer's: they count for neither.
-    - host-facing ports (data center only): the switch ports tagged with those segments (a deployment of the segment
-      among the port's `capabilities`, read from the port: add_app_component_segment
-      tags the far end of the uplink NICs of every AppComponent instance's physical host, a role=lag NIC's far end
-      through its port-channel), grouped by speed, against ``ports_<speed>g``. A port counts once per footprint
-      however many of its segments tag it, and once for each footprint that has a segment on it (a host serving
-      two customers). A port-channel counts its member ports (one per NIC, the speed of the member's
-      interface_type). Not counted: the border-leaf firewall/load-balancer ports (the service ports a terminated
-      segment is tagged on, not host-facing), interfaces that are neither physical ports nor port-channels, and a
-      port in another DC than the footprint's (a stretched segment is tagged in every DC it spans).
-    - virtual networks (cloud only): the CloudVirtualNetworks of the footprint's account in the footprint's region,
-      against ``max_virtual_networks``.
-
-    Zero means none allowed. A speed without a `ports_<speed>g` attribute (only 25G and 100G host ports exist in
-    the model: the server device types carry no other NIC) is not metered.
-
-    Besides the quota, the tier itself. A cloud template: its ``address_prefix_length`` block holds
-    ``max_virtual_networks`` routed ranges of ``CLOUD_RANGE_PREFIX_LENGTH`` (/29), one per virtual network (ERROR naming
-    the tier), and a WARNING for an attachment to a virtual network of a footprint with no ``allowed_prefixes`` (neither
-    authored nor the routed range add_cloud_attachment_range writes: the BGP prefix list falls back to the network's CIDR
-    blocks). A data center or colocation template (a cloud template has none of these other numbers): its IPv4 block holds ``max_segments`` segments of ``segment_prefix_length`` and its IPv6 block
-    ``max_segments`` segments of ``ipv6_segment_prefix_length``, and a segment is never larger than its block (ERRORs
-    naming the tier). A cloud segment with a ``host_count`` and a ``cidr_block`` has a block at least as large as the
-    host count needs (the same sizing as the VXLAN allocator, ``utils/segment_addressing.py``), and is IPv4 (ERROR: it
-    carries a provider ``cidr_block``). A VXLAN segment's gateway prefix is of its ``ip_version`` (ERROR), and a
-    ``host_count`` on an IPv6 segment is a WARNING (it sizes nothing there). And a WARNING for a VXLAN segment whose
-    footprints are of different kinds (the customer pool that addresses it is the one of the first kind, data center
-    before colocation).
-    """
+    """A footprint stays within its design: segments, ports, virtual networks and the tier's address blocks."""
 
     query = "customer_quota"
 
@@ -318,11 +276,7 @@ class CheckCustomerQuota(WarningCheck):
 
 
 def _host_facing_ports(interface: dict[str, Any]) -> list[tuple[str, int, set[str]]]:
-    """(port id, speed in Gbps, ids of the port's device deployment and its parent) of one switched interface.
-
-    A physical port is itself; a port-channel is its member ports. Anything that is not a host-facing port,
-    or whose speed its interface_type does not state or is below 1G (no ``ports_<speed>g`` meters it), yields nothing.
-    """
+    """(port id, speed in Gbps, device deployment ids) of one switched interface; a port-channel is its member ports."""
     if interface.get("role") in SERVICE_CONTEXT_ROLES.values():
         return []
     scope = deployment_scope_ids((interface.get("device") or {}).get("deployment"))

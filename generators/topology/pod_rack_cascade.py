@@ -1,26 +1,5 @@
-"""Cascade generator: runs the full add_pod bootstrap, then fans out to the
-racks a pod is directly responsible for starting.
-
-Subclasses PodTopologyGenerator and reuses its entire generate() via super() —
-this is a superset of add_pod's own work, so every trigger that needs racks to
-reconcile against a pod-level change fires ONLY this generator, never add_pod
-alongside it (see data/events/99_actions.yml's trigger-pod-update-* rules —
-add_pod keeps its own group trigger only, for a standalone/bulk-loaded pod
-that isn't reconciling anything yet, and is also fanned out to by
-dc_pod_cascade).
-
-This avoids the deadlock a naive "add_pod waits on add_rack" would cause:
-add_rack's own self-nested fan-out to row-dependent racks already keeps its
-task RUNNING while waiting on its fan-out target, so nothing here needs to
-wait for add_pod's bootstrap to "complete elsewhere" — it just ran, in this
-same call. This generator itself never needs to wait on anything: it IS the
-pod-level write, not a consumer of one. The consumer-side wait (a plain add_pod
-bootstrap possibly still running independently for the same pod) belongs to
-add_rack, which actually reads pod-level data — see rack.py's generate().
-
-add_rack's own self-nesting fan-out to row-dependent (tor/compute) racks in a
-mixed deployment (RackGenerator._fan_out_to_row_dependent_racks) is NOT split
-out this way — it stays inside add_rack.generate() unconditionally, as today.
+"""Cascade generator: runs the full add_pod bootstrap, then fans out to the racks the pod starts. Triggers needing racks
+reconciled fire only this generator (data/events/99_actions.yml); add_rack's row fan-out stays in add_rack.
 """
 
 from __future__ import annotations
@@ -33,20 +12,8 @@ from .pod import PodTopologyGenerator
 
 
 class PodRackCascadeGenerator(PodTopologyGenerator):
-    """Run add_pod's bootstrap, then fan out to the racks it's responsible for.
-
-    - middle_rack/tor: fan out to every rack (all have their own fabric_templates
-      and cable straight to the pod's spines — middle_rack's "network" racks
-      create their own local leaf + l2-leaf/access-leaf pair in one generate()
-      call; there's no separate row-dependent rack to wait for).
-    - mixed: fan out to "network" racks only. Each network rack cables its own
-      leafs, then — once its own generate() has finished — fans out to the
-      "tor"/"compute" racks in its own row itself (see RackGenerator.generate()),
-      since those need the network rack's leafs to already exist.
-
-    Racks are data, never this run's output: they are read, not tracked
-    (tracked, a rack moved to another pod would be deleted by this pod's next
-    run).
+    """Run add_pod's bootstrap, then fan out to racks (middle_rack/tor: every rack; mixed: network racks only); racks
+    are read, not tracked.
     """
 
     async def generate(self, data: dict[str, Any]) -> None:

@@ -1,10 +1,4 @@
-"""Unit tests for the NX-OS VXLAN GPO device view (transforms/helpers/group_policy/ _vxlan_gpo_build).
-
-The fleet is the smoke fixture's (tests/smoke/fixture_builders/group_policy.py ``_gpo_fleet_roots``): DC10 with a
-leaf, an access leaf and a border leaf in the NX-OS row, a legacy DC12, NONPROD (fully classifiable by VLAN,
-db-np stretched to DC12) and PROD (a microsegmented segment whose contracts name component groups: the web
-component sits on the leaf's trunk port Ethernet10, the db component, a VM, on its access port Ethernet11).
-"""
+"""Unit tests for the NX-OS VXLAN GPO device view (transforms/helpers/group_policy/ _vxlan_gpo_build)."""
 
 from __future__ import annotations
 
@@ -348,10 +342,7 @@ class TestRefusals:
             _view(roots)
 
     def test_an_enforced_vrf_without_an_unclassified_group_id_is_refused(self) -> None:
-        """`security enforce tag <unclassified id>` needs the id even when no contract row names UNCLASSIFIED.
-
-        With no rule at all, NONPROD's only rows are the stretched db-np's unaware halves.
-        """
+        """`security enforce tag <unclassified id>` needs the id even when no contract row names UNCLASSIFIED."""
         roots = _roots()
         for segment in roots["ManagedNetworkSegment"]:
             segment["security_policy"]["rules"] = []

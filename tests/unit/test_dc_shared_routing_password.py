@@ -1,10 +1,4 @@
-"""Unit tests for DCTopologyGenerator._ensure_routing_password().
-
-Covers the find-or-create idempotency guarantee: an existing RoutingPassword's
-secret value must never be regenerated/touched on re-run, since
-secrets.token_urlsafe() is non-deterministic — only a brand-new object gets a
-freshly generated value.
-"""
+"""Unit tests for DCTopologyGenerator._ensure_routing_password()."""
 
 from __future__ import annotations
 
@@ -66,9 +60,7 @@ class TestEnsureRoutingPassword:
 
     @pytest.mark.asyncio
     async def test_query_exception_does_not_create_a_new_password(self) -> None:
-        """If the existence check itself fails, do NOT fall through to create() —
-        that could produce a second RoutingPassword object with a different
-        secret when one already exists but the lookup transiently failed."""
+        """If the existence check itself fails, do NOT fall through to create()."""
         g = _make_generator()
         g.client.get = AsyncMock(side_effect=Exception("db error"))
         g.client.create = AsyncMock()

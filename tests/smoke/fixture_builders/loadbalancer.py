@@ -80,8 +80,8 @@ def _lb_vip(
 
 
 def build_lb_context_data(*, device_name: str, platform: str) -> dict:
-    """Shared load-balancer pair (device = primary member) hosting a shared PROD and a shared
-    NONPROD context, one VIP each, next to a management port and the uplink trunk."""
+    """Shared load-balancer pair (device = primary member) hosting a shared PROD and a shared NONPROD context, one VIP
+    each, next to a management port and the uplink trunk."""
     peer_name = device_name.replace("01", "02")
     cluster = f"{device_name}-{peer_name}-ha"
     # (namespace, context VLAN, leg /29 base, VIP /26, VIP)

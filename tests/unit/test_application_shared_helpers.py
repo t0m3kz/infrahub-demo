@@ -1,5 +1,4 @@
-"""Unit tests for the rule-planning and port helpers shared by the
-application security generators (generators/helpers/rules.py, utils/ports.py)."""
+"""Unit tests for the rule-planning and port helpers shared by the application security generators."""
 
 from __future__ import annotations
 
@@ -67,8 +66,7 @@ class TestRulesPlannerNamingAndPayload:
 
 
 class TestParsePortSpec:
-    """protocol/port or protocol/start-end; anything else raises, so a typo
-    never widens into an any-port rule."""
+    """protocol/port or protocol/start-end; anything else raises, so a typo never widens into an any-port rule."""
 
     @pytest.mark.parametrize(
         ("spec", "expected"),

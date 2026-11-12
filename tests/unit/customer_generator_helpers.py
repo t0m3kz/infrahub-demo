@@ -19,8 +19,8 @@ def make_generator(cls: type[_T]) -> Any:
     gen.client.get = AsyncMock()
     gen.client.create = AsyncMock()
     gen.client.execute_graphql = AsyncMock()
-    # generate() waits for an in-flight generator of the parent (the DC, or the colocation zone serving the
-    # footprint) before reading its devices: none in flight in these unit tests, so no-op.
+    # generate() waits for an in-flight generator of the parent (the DC, or the colocation zone serving the footprint)
+    # before reading its devices: none in flight in these unit tests, so no-op.
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     # _resolve_parent_cluster waits for the parent's generators when the cluster is missing, without a re-collect.
     gen.wait_for_parent_generators = AsyncMock(return_value=False)

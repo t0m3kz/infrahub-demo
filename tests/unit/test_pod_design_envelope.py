@@ -1,12 +1,4 @@
-"""add_pod against its DC's fabric design: the envelope is enforced before any write, and the pod pools are sized from it.
-
-- the pod's design must be one of the DC design's pod_templates;
-- the DC holds at most max_pods pods (this pod counted once, so its own re-run is not refused);
-- the pod technical/loopback pools come from generators/fabric_sizing.py for (pod design, DC design),
-  converted to the address family of the DC pool each is sliced from;
-- the super-spine port stride is the widest pod design the DC may host;
-- a back-to-back pod refuses a lower-index sibling whose design has another spine width.
-"""
+"""add_pod against its DC's fabric design"""
 
 from __future__ import annotations
 
@@ -36,10 +28,7 @@ def _payload(
     underlay_protocol: str = "ipv6",
     pods_of_the_dc: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """A back-to-back DC (no super-spines) with one pod, ready for pool allocation.
-
-    ``pods_of_the_dc`` are the other pods the DC's children list; its customer footprints come back as empty dicts.
-    """
+    """A back-to-back DC (no super-spines) with one pod, ready for pool allocation."""
     return {
         "TopologyPod": [
             {

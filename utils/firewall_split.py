@@ -1,23 +1,7 @@
 """Which of a customer footprint's firewall contexts holds which of its rules (pure, no I/O).
 
-A footprint lists every firewall context that enforces its policy (``serving_firewall_contexts``, the reverse of the
-context's ``served_deployments``): its internal one(s) and, when it has an Internet edge, the edge context. The role
-of a context is the role of its member firewalls (``shared_devices``, utils/fabric_roles.py). The split is decided PER
-FOOTPRINT, never per context (one shared internal context serves footprints with and without an edge):
-
-| The footprint lists   | its rules on an internal context | its rules on an external context |
-| --------------------- | -------------------------------- | -------------------------------- |
-| internal + external   | all except the internet rules    | only the internet rules          |
-| internal only         | all                              | -                                |
-| external only         | -                                | all                              |
-
-An internet rule is one that crosses the internet edge in either direction (transforms/helpers/policy.py
-``is_internet_rule``). The transform (transforms/helpers/firewall_contexts.py), the internet egress check
-(checks/internet_egress.py) and the leaf PBR (transforms/helpers/firewall_contexts.py
-``_flatten_deployment_firewall_contexts``) read the split from here.
-
-The input is cleaned query data: a context with ``shared_devices`` (each a device with its ``role``), a footprint with
-``serving_firewall_contexts`` (such contexts).
+Decided per footprint: internal + external, the external holds the internet rules and the internal the rest; one kind
+holds all.
 """
 
 from __future__ import annotations
@@ -57,8 +41,7 @@ def footprint_contexts(footprint: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def rule_share(external: bool, contexts: Iterable[dict[str, Any]]) -> RuleShare:
-    """The share of a footprint's rules a context holds: ``external`` is the context's role, ``contexts`` the
-    footprint's list (the table in the module docstring)."""
+    """The share of a footprint's rules a context holds (``external``: its role; ``contexts``: the footprint's list)."""
     roles = {is_external(context) for context in contexts}
     if external and False in roles:
         return RuleShare.INTERNET
@@ -74,7 +57,6 @@ def internet_contexts(contexts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def steering_contexts(contexts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The contexts a footprint's segments are steered to (PBR): the internal ones, else the external ones (then the
-    footprint's only firewall)."""
+    """The contexts a footprint's segments are steered to (PBR): the internal ones, else the external ones."""
     internal = [context for context in contexts if not is_external(context)]
     return internal or contexts

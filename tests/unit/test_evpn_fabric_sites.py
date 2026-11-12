@@ -96,8 +96,7 @@ def _device(
     process: bool = True,
     service_ports: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
-    """A cleaned DcimDevice node of queries/validation/evpn_fabric.gql; ``process`` False has no overlay BGP process
-    (``router_id`` None with a process is a process without a router_id)."""
+    """A cleaned DcimDevice node of queries/validation/evpn_fabric.gql;"""
     capabilities = [_overlay(router_id)] if process else []
     return clean_data(
         {

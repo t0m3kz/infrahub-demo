@@ -1,8 +1,4 @@
-"""Consolidated tests for data cleaning utilities.
-
-This module tests the clean_data and get_data functions with real-world GraphQL responses
-and edge cases. Trivial Python behavior tests have been removed.
-"""
+"""Consolidated tests for data cleaning utilities."""
 
 import pytest
 

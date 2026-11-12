@@ -109,8 +109,7 @@ def _office(
     owner: tuple[str, str, str] | None = _CUSTOMER,
     segments: int = 0,
 ) -> dict[str, Any]:
-    """A TopologyCustomerOffice footprint with its owner (a customer unless told otherwise), LAN prefixes and hosted
-    segments (an office has no environment)."""
+    """A TopologyCustomerOffice footprint with its owner (a customer unless told otherwise)."""
     return {
         "id": f"office-{name}",
         "name": _v(name),

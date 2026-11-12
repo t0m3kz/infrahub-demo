@@ -18,10 +18,7 @@ from tests.smoke.fixture_builders.vrf import routing_zone
 from transforms.config.access_switch import AccessSwitch
 from transforms.config.distribution_switch import DistributionSwitch
 
-# Office LISP site (add_office_fabric, SD-Access style): an access-switch edge and a distribution-switch border-and-
-# map-server pair on one office footprint. The cisco_xe ospf_ibgp inputs without the BGP capability, the uplinks re-wired
-# to the pair, and the office's own deployment (queries/config/access_switch.gql): its name is the LISP site, its
-# site key and the two distribution-switch map-servers (listed out of name order: the transform sorts them).
+# Office LISP site (add_office_fabric, SD-Access style)
 OFFICE_NAME = "C005-OFFICE"
 OFFICE_MAP_SERVERS = (("ds-c005-office02", "10.250.5.2/32"), ("ds-c005-office01", "10.250.5.1/32"))
 OFFICE_SITE_KEY = "0ff1c3-k3y"
@@ -78,11 +75,7 @@ def build_office_lisp_device_data(
 
 
 def write_office_lisp_fixtures() -> tuple[int, int]:
-    """Write the office access-switch and distribution-switch LISP fixtures (OSPF underlay, no BGP).
-
-    Plus a hostless access-switch (an edge that hosts no segment yet still carries the edge LISP config) and one
-    whose tenant SVIs carry the zero-trust segment ACLs.
-    """
+    """Write the office access-switch and distribution-switch LISP fixtures (OSPF underlay, no BGP)."""
     generated = errors = 0
     acl_data = build_office_lisp_device_data(device_name="as-c005-office01", role="access-switch", include_acls=True)
     _add_cisco_xe_acl_rules(_interface_segments(acl_data))
@@ -108,11 +101,7 @@ def write_office_lisp_fixtures() -> tuple[int, int]:
     return generated, errors
 
 
-# The office's WAN exit (add_office_fabric): the office has its SD-WAN edge, so the distribution-switch is the exit (a
-# routed port with a dot1q sub-interface in the tenant VRF, an eBGP session to the edge, proxy-ETR/ITR) and the
-# access-switch uses it (use-petr). Same inputs as the two fixtures above plus what the generator writes: the edge on the
-# deployment, and on the border the port, its sub-interface and the BGP process with its peering. The tenant VRF is the
-# fixture's own (PROD, L3 instance-id 60000), the one its segment is in.
+# The office's WAN exit (add_office_fabric): the office has its SD-WAN edge
 OFFICE_EDGE_NAME = "C005-OFFICE-EDGE1"
 OFFICE_EXIT_PORT = "GigabitEthernet1/0/26"
 OFFICE_EXIT_VLAN = 3800

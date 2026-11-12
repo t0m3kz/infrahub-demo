@@ -1,10 +1,4 @@
-"""Unit tests for CheckLispFabric (the LISP site of an office with a fabric).
-
-The payloads are in post-``clean_data`` shape (``validate`` re-runs ``clean_data``,
-which is idempotent on already-flat data): a presence-only relationship such as
-``lisp_site_key { node { id } }`` or ``gateway { node { id } }`` arrives as the
-bare id string, a platform as ``{"name": ...}``.
-"""
+"""Unit tests for CheckLispFabric (the LISP site of an office with a fabric)."""
 
 from __future__ import annotations
 
@@ -47,11 +41,7 @@ def _segment(name: str, vrf: str | None = "VRF_A", l3_vni: int | None = 50001) -
 
 
 def _office(**overrides: Any) -> dict[str, Any]:
-    """A clean LISP office: fabric_templates, one building, two cisco_xe distribution-switches, an access-switch, a key.
-
-    The office also holds its SD-WAN edge, which is not part of the LISP site and may be on any platform; with the
-    BGP process of its WAN exit (add_office_fabric), as a settled office has it.
-    """
+    """A clean LISP office:"""
     office: dict[str, Any] = {
         "id": "office-1",
         "name": "C005-OFFICE",

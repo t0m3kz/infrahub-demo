@@ -95,9 +95,8 @@ def test_the_query_selects_memberships_hosting_and_the_vrf_root() -> None:
     assert "IpamNamespace" not in tree
     interface = device["interfaces"]["edges"]["node"]
     assert "security_zone" not in interface
-    # The VRF and the circuits are read under the alias `zone_capabilities` (queries/fragments/routing_zone.gql): the
-    # interface's own `capabilities` selection must stay the only one of that field. The tree merges the inline
-    # fragments: the ManagedVRF's own zone and the circuit's VRF.
+    # The VRF and circuits are read under the alias `zone_capabilities`; the interface's own `capabilities` stays the
+    # only one.
     zone_capabilities = interface["zone_capabilities"]["edges"]["node"]
     assert set(zone_capabilities["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
     assert set(zone_capabilities["vrf"]["node"]["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}

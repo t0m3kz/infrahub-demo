@@ -1,21 +1,4 @@
-"""Unit tests for the parent-to-child generator fan-out mechanism.
-
-Covers:
-- CommonGenerator.run_generator() — resolves the generator definition, calls
-  CoreGeneratorDefinitionRun with wait_until_completion true/false depending on
-  the wait= kwarg (default True), no-ops on empty input
-- CommonGenerator.wait_for_parent_generator_and_refetch() — waits on an in-flight
-  parent bootstrap task and re-collects data, or no-ops when nothing is in flight
-- CommonGenerator._get_parent_pool_with_retry() — retries a CoreIPPrefixPool
-  lookup that races the parent generator's own pool creation (e.g. add_pod
-  reading add_dc's DC-level technical pool before it's committed)
-- DCPodCascadeGenerator: subclasses DCTopologyGenerator's generate() and, after
-  it runs (mocked here), fans out (fire-and-forget) to pod_rack_cascade for
-  every existing pod
-- PodRackCascadeGenerator: subclasses PodTopologyGenerator's generate() and,
-  after it runs (mocked here), fans out (fire-and-forget) to add_rack for the
-  racks a pod is directly responsible for (network-only under mixed)
-"""
+"""Unit tests for the parent-to-child generator fan-out mechanism."""
 
 from __future__ import annotations
 
@@ -253,8 +236,7 @@ class TestGetParentPoolWithRetry:
 
     @pytest.mark.asyncio
     async def test_pool_appears_after_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """add_dc's own allocate_resource_pools() call hasn't committed the DC-level
-        pool yet on the first lookup — retries until it has."""
+        """The DC-level pool may not be committed on the first lookup; retry until it is."""
         gen = _build_common_gen()
         pool = MagicMock()
         gen.client.get = AsyncMock(
@@ -344,10 +326,7 @@ def _pod(name: str) -> dict[str, Any]:
 
 
 def _build_dc_cascade_gen() -> Any:
-    """Return a DCPodCascadeGenerator with its inherited bootstrap generate()
-    replaced by a stub that just sets self.data, isolating the cascade logic
-    added in DCPodCascadeGenerator.generate() from DCTopologyGenerator's own
-    (extensively covered elsewhere) pool/device/routing work."""
+    """Return a DCPodCascadeGenerator whose bootstrap generate() is stubbed to isolate the cascade."""
     gen = cast(Any, DCPodCascadeGenerator.__new__(DCPodCascadeGenerator))
     gen.logger = MagicMock()
     gen.client = MagicMock()
@@ -361,8 +340,7 @@ def _build_dc_cascade_gen() -> Any:
             gen.logger.error("No TopologyDeployment data found in GraphQL response")
             return
         gen.data = deployment_list[0]
-        # Mirrors DCTopologyGenerator.generate(): the DC's pods ride its own query
-        # (read, never saved); keep them for the cascade.
+        # Mirrors DCTopologyGenerator.generate(): pods ride its query, kept for the cascade.
         gen._existing_pods = DCTopologyGenerator.pods_of(gen.data)
 
     gen._bootstrap_generate = _fake_bootstrap
@@ -404,8 +382,7 @@ class TestDCPodCascadeGenerator:
 
     @pytest.mark.asyncio
     async def test_bootstrap_failure_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """If the inherited bootstrap bails out early (e.g. bad data), self.data
-        never gets set — the cascade must not fan out on incomplete state."""
+        """If the inherited bootstrap bails out early, self.data stays unset and nothing fans out."""
         gen = _build_dc_cascade_gen()
         monkeypatch.setattr(
             "generators.topology.dc.DCTopologyGenerator.generate",
@@ -427,8 +404,7 @@ def _mock_rack(name: str, rack_type: str) -> MagicMock:
 
 
 def _pod_data(*, deployment_type: str) -> dict[str, Any]:
-    """deployment_type picks the real pod design the generator derives it from
-    (max_leafs_per_network_rack=0 for tor, max_tors_per_compute_rack=0 for middle_rack)."""
+    """deployment_type picks the real pod design the generator derives it from."""
     return {
         "TopologyPod": [
             {
@@ -451,10 +427,7 @@ def _pod_data(*, deployment_type: str) -> dict[str, Any]:
 
 
 def _build_pod_rack_cascade_gen() -> Any:
-    """Return a PodRackCascadeGenerator with its inherited bootstrap generate()
-    replaced by a stub that just sets self.data, isolating the cascade logic
-    added in PodRackCascadeGenerator.generate() from PodTopologyGenerator's own
-    (extensively covered elsewhere) pool/device/routing work."""
+    """Return a PodRackCascadeGenerator whose bootstrap generate() is stubbed to isolate the cascade."""
     gen = cast(Any, PodRackCascadeGenerator.__new__(PodRackCascadeGenerator))
     gen.logger = MagicMock()
     gen.client = MagicMock()
@@ -476,9 +449,7 @@ def _build_pod_rack_cascade_gen() -> Any:
 
 
 class TestPodRackCascadeGenerator:
-    """PodRackCascadeGenerator.generate(): read the pod's racks (data, never
-    tracked), then fan out to add_rack only for the racks this pod is directly
-    responsible for starting."""
+    """PodRackCascadeGenerator.generate():"""
 
     @pytest.mark.asyncio
     async def test_middle_rack_fans_out_to_every_rack(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -493,8 +464,7 @@ class TestPodRackCascadeGenerator:
         await gen.generate(_pod_data(deployment_type="middle_rack"))
 
         gen.run_generator.assert_awaited_once_with("add_rack", [network_rack.id], wait=False)
-        # Racks are data: tracked, a rack moved to another pod would be
-        # deleted by this pod's next run.
+        # Racks are tracked data: a rack moved to another pod would be deleted.
         assert gen.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
@@ -513,9 +483,7 @@ class TestPodRackCascadeGenerator:
 
     @pytest.mark.asyncio
     async def test_mixed_fans_out_to_network_racks_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """mixed's tor/compute racks are started by their network rack's own
-        _fan_out_to_row_dependent_racks(), not by this cascade directly. No
-        rack is tracked by this run."""
+        """mixed's tor/compute racks are started by their network rack's own _fan_out_to_row_dependent_racks()."""
         gen = _build_pod_rack_cascade_gen()
         monkeypatch.setattr(
             "generators.topology.pod.PodTopologyGenerator.generate",
@@ -546,8 +514,7 @@ class TestPodRackCascadeGenerator:
 
     @pytest.mark.asyncio
     async def test_bootstrap_failure_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """If the inherited bootstrap bails out early (e.g. bad data), self.data
-        never gets set — the cascade must not fan out on incomplete state."""
+        """If the inherited bootstrap bails out early, self.data stays unset and nothing fans out."""
         gen = _build_pod_rack_cascade_gen()
         monkeypatch.setattr(
             "generators.topology.pod.PodTopologyGenerator.generate",

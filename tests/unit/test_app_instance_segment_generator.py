@@ -1,19 +1,4 @@
-"""Unit tests for AppInstanceSegmentGenerator (generators/topology/app_instance_segment.py).
-
-Covers generate() guard clauses and its per-segment reconcile under the
-segment lock (a VXLAN segment's tags then VLAN domains, nothing for a cloud
-segment), _resolve_physical_device_id (physical vs virtual vs
-unresolvable AppInstance kinds), _derived_segment_port_ids (union over every
-component on the segment) and _port_devices, _reconcile_segment_port_rows
-(each desired port, derived or requested, joined to its switch's VLAN row; add and remove via
-relationship mutations, never a tracked save), _customer_facing_target_ids (uplink vs
-bonded/lag far ends, dedup, one batch for all the devices) and
-_customer_facing_target_id.
-
-The VLAN domain activation reconcile this generator shares with
-VxlanSegmentGenerator (SegmentVlanMixin) is covered by
-tests/unit/test_segment_vlan_reconcile.py — only stubbed here.
-"""
+"""Unit tests for AppInstanceSegmentGenerator (generators/topology/app_instance_segment.py)."""
 
 from __future__ import annotations
 
@@ -25,9 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from generators.topology.app_instance_segment import AppInstanceSegmentGenerator
 
-# ---------------------------------------------------------------------------
 # Harness helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_gen() -> Any:
@@ -76,9 +59,7 @@ def _iface(name: str, *, role: str = "uplink", cabled: bool = True, iface_id: st
     return intf
 
 
-# ===========================================================================
 # generate() — guard clauses and dispatch
-# ===========================================================================
 
 
 def _gen_with_lock() -> Any:
@@ -96,8 +77,7 @@ def _gen_with_lock() -> Any:
 
 
 class TestGenerate:
-    """generate() reconciles the component's SEGMENT under the segment lock:
-    the VLAN rows first, then the port tags on them; it saves nothing tracked."""
+    """generate() reconciles the component's SEGMENT under the segment lock: the VLAN rows first."""
 
     @staticmethod
     def _ready(*, added: int = 0, removed: int = 0, rows_changed: bool = False) -> Any:
@@ -214,9 +194,7 @@ class TestGenerate:
         gen.client.get.assert_not_called()
 
 
-# ===========================================================================
 # _resolve_physical_device_id
-# ===========================================================================
 
 
 class TestResolvePhysicalDeviceId:
@@ -248,9 +226,7 @@ class TestResolvePhysicalDeviceId:
         assert AppInstanceSegmentGenerator._resolve_physical_device_id({"id": "x", "typename": "Something"}) is None
 
 
-# ===========================================================================
 # _derived_segment_ports / _port_devices / _reconcile_segment_port_rows
-# ===========================================================================
 
 
 def _components(*instance_lists: list[dict[str, Any]]) -> dict[str, Any]:
@@ -349,8 +325,7 @@ class TestReconcileSegmentPortRows:
         rows: dict[str, tuple[str, str]] | None = None,
         requested: dict[str, str] | None = None,
     ) -> tuple[int, int]:
-        """Reconcile with ``current`` port edges ``{port id: row id}`` and the rows ``{device id: (row id,
-        deployment id)}`` (default: sw-1 -> row-1, sw-2 -> row-2, both under sd-1)."""
+        """Reconcile with ``current`` port edges ``{port id: row id}`` and the rows ``{device id: (row id."""
         ports = [{"id": port_id, "device_id": "sw-1", "row_id": row_id} for port_id, row_id in current.items()]
         return asyncio.run(
             gen._reconcile_segment_port_rows(
@@ -511,9 +486,7 @@ class TestCustomerFacingTargets:
         assert asyncio.run(gen._customer_facing_target_ids(["dev-1"])) == set()
 
 
-# ===========================================================================
 # _customer_facing_target_id
-# ===========================================================================
 
 
 class TestCustomerFacingTargetId:

@@ -1,19 +1,4 @@
-"""The VRF instances (ManagedVRF) of a device as the config transforms see them, and the one refusal about them.
-
-A device's VRF SET is its ManagedVRF instances and nothing else (utils/vrf_demand.py). This module is the transform
-side of that model:
-
-- ``device_vrfs``: the namespace of each instance, read from the cleaned ``shared_capabilities`` of kind ManagedVRF (the device's memberships;
-  the one read, ``utils.vrf_demand.device_memberships``; the overlay,
-  VXLAN and LISP renderers and the cisco_xe refusals all start from it).
-- ``l3_vrf_names``: the VRFs the rendered overlay carries as L3 instances (LISP instances, else the VXLAN L3 VNIs).
-- ``plain_vrf_names``: the instances without an L3 VNI, rendered as a plain ``vrf context``.
-- ``svi_vrfs``: the VRF of each role-``svi`` interface of the device, by VLAN (the ``vrf member`` of a segment SVI).
-- ``vrf_requirements`` / ``unrealized_vrfs``: what the device's config demands (a routed segment, an SVI, an address
-  or a transit leg in a namespace) against what it has. ``BaseDeviceTransform.transform`` raises
-  ``VrfRealizationError`` once, listing everything missing, before any template context is built. The demand is
-  built from the same ``VrfDemandInputs`` the generators and ``checks/vrf_instances.py`` use, from config data.
-"""
+"""The VRF instances (ManagedVRF) of a device as the config transforms see them, and the one refusal about them."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -37,15 +22,12 @@ from utils.vrf_demand import (
 
 
 class VrfRealizationError(ValueError):
-    """A device's config uses a VRF (or an SVI) the device has no instance of: the VRF generator has not converged."""
+    """A device's config uses a VRF (or an SVI) the device has no instance of."""
 
 
 @dataclass(frozen=True)
 class VrfRequirements:
-    """What the config of one device demands: the namespace names and its routed SVIs.
-
-    ``svis``: VLAN of each routed segment activation -> the namespace its SVI must be in (None: the default one).
-    """
+    """What the config of one device demands: the namespace names and its routed SVIs."""
 
     namespaces: frozenset[str] = frozenset()
     svis: Mapping[int, str | None] = field(default_factory=dict)
@@ -64,7 +46,7 @@ def l3_vrf_names(lisp: dict[str, Any] | None, vxlan: dict[str, Any] | None) -> l
 
 
 def plain_vrf_names(data: dict[str, Any], bgp: list[dict[str, Any]] | None, vxlan: dict[str, Any] | None) -> list[str]:
-    """The device's VRF instances without an L3 VNI (VRF-lite): the BGP sessions' VRFs first, then the rest by name."""
+    """The device's VRF instances without an L3 VNI (VRF-lite)."""
     realized = set(l3_vrf_names(None, vxlan))
     names = sorted({ns["name"] for ns in device_vrfs(data)} - realized)
     in_session_order = list(
@@ -77,10 +59,7 @@ def plain_vrf_names(data: dict[str, Any], bgp: list[dict[str, Any]] | None, vxla
 
 
 def svi_vrfs(interfaces: list[dict[str, Any]] | None) -> dict[int, str | None]:
-    """VLAN -> the VRF namespace name of each role-``svi`` interface (None: no VRF, the default table).
-
-    The VLAN of an SVI is the ``vlan_id`` of the row it is a member of (``utils.segment_vlan.svi_rows``), not the
-    number in its name; an SVI that is a member of no row realizes no VLAN and is not listed."""
+    """VLAN -> the VRF namespace name of each role-``svi`` interface (None: no VRF, the default table)."""
     found: dict[int, str | None] = {}
     for iface in interfaces or []:
         if iface.get("role") != SVI_ROLE:
@@ -92,13 +71,7 @@ def svi_vrfs(interfaces: list[dict[str, Any]] | None) -> dict[int, str | None]:
 
 
 def vrf_requirements(data: dict[str, Any]) -> VrfRequirements:
-    """What the config of one device demands, empty for a device that never carries VRFs.
-
-    ``data`` is the cleaned device with its ``segment_deployments`` (segment activations) set, as
-    ``BaseDeviceTransform.prepared_device`` leaves it. The demand is ``utils.vrf_demand.vrf_demand`` over the same
-    inputs the generators read (``address_namespaces``, ``leg_namespaces`` of the contexts behind its service ports); the
-    rows are its routed segment activations, the config's view of the routed rows of the device.
-    """
+    """What the config of one device demands, empty for a device that never carries VRFs."""
     deployment = data.get("deployment") if isinstance(data.get("deployment"), dict) else {}
     interfaces = data.get("interfaces") or []
     activations = [act for act in data.get("segment_deployments") or [] if act.get("vlan_id")]

@@ -151,8 +151,7 @@ def _loadbalancer(*, vip_prefix: str | None = "100.68.0.0/26") -> dict:
 
 
 def test_the_generator_has_the_lock_and_the_failure_helper_it_calls() -> None:
-    """A real class, not a mock: resource_lock comes from PoolMixin and fail from CommonGenerator (a run on the
-    server failed with no resource_lock while every test used a mocked one)."""
+    """A real class, not a mock:"""
     for attribute in ("resource_lock", "fail", "reconcile_vrfs", "write_routes"):
         assert callable(getattr(ContextRoutesGenerator, attribute)), attribute
 

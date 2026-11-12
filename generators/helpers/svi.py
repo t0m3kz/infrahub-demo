@@ -1,28 +1,6 @@
-"""The segment SVIs of a device: one ``DcimVirtualInterface`` (role ``svi``) per routed row of the device.
-
-The SVI carries the segment's anycast gateway as its ``ip_address`` (THE ``segment.gateway`` object, the same address on
-the SVI of every switch with a routed row of the segment: ``ip_address`` is a plain edge with no cascade) and is an
-interface of the VRF the switch routes it in (the ``ManagedVRF`` among its ``capabilities``). It is a MEMBER of the
-VLAN row it realizes, through the row's interface edge (``ManagedSegmentVlan.capabilities``, the edge a switch port is a
-member of its row through): the row is read from the membership, never from the name ``Vlan<vlan id>``. It is a plain
-generic edge, not a Component of the row (a Component under a row whose ``device`` is its Parent broke the server's
-object-template walk, measured on 1.11.9). An SVI's only capabilities are its VRF and its row (checks/vrf_instances.py
-S4). The save of the SVI writes its ``capabilities`` as the one-instance VRF list (generators/helpers/interface_vrf.py
-``vrf_capability``): one write, which is safe even right after the instance was created in the same pass, where a
-RelationshipAdd on the new node can reach the other replica first. A list save replaces the edge set, so the row is
-added edge by edge AFTER every save (``join_capabilities``, one RelationshipAdd, a no-op when the edge exists), and an
-extra row is removed edge by edge. What a device needs is derived by ``utils.vrf_demand.device_vrf_facts`` (a border leaf has none
-for a stretched segment: it carries it L2 only, utils/segment_addressing.py ``l2_only_on``); this module only turns
-the difference with what exists into writes.
-
-Identity: an existing SVI is the member of a routed row of its device (the row it realizes); a new one is created as
-``Vlan<vlan id>``, the interface's own name (unique on its device). Nothing deletes an SVI with its row: this pass
-deletes every role-svi interface of the device that is a member of no routed row of it (the row is gone, it became L2
-only, its segment lost its gateway, or the device carries no VRF any more), and one that is a member of no row at
-all and bears the name a new SVI needs is deleted first; a deleted device takes its interfaces, a deleted row
-its edges.
-
-Written untracked (``update_group_context=False``), like the rows: an SVI belongs to no single run.
+"""The segment SVIs of a device: one ``DcimVirtualInterface`` (role ``svi``) per routed row, written untracked. The SVI
+carries the anycast gateway, sits in the switch's VRF and is added to its VLAN row edge by edge after every save; demand
+comes from utils.vrf_demand.
 """
 
 from __future__ import annotations
@@ -56,10 +34,8 @@ class SviWrite:
 
 @dataclass(frozen=True)
 class SviPlan:
-    """What to do to a device's SVIs; ``recreate_ids`` are deleted before the writes, ``stale_ids`` after them.
-
-    ``leave`` are the (SVI id, row id) memberships removed edge by edge: an SVI that is a member of a row besides the
-    one it realizes."""
+    """What to do to a device's SVIs: ``recreate_ids`` are deleted before the writes, ``stale_ids`` after them,
+    ``leave`` are (SVI id, row id) memberships removed edge by edge."""
 
     writes: tuple[SviWrite, ...] = ()
     recreate_ids: tuple[str, ...] = ()
@@ -71,20 +47,17 @@ class SviPlan:
 
 
 def desired_vrf_id(row: RoutedRow, instance_ids: Mapping[str, str]) -> str | None:
-    """The instance an SVI of the row routes in: None for a ``default`` gateway (the global table)."""
+    """The instance an SVI of the row routes in: None for a ``default`` gateway."""
     return None if row.namespace == DEFAULT_NAMESPACE else instance_ids[row.namespace]
 
 
 def plan_svis(facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> SviPlan:
-    """The writes that make the device's role-svi interfaces exactly its desired ones.
-
-    ``instance_ids`` maps a namespace name to the id of the instance of it in the device's hosting deployment (every
-    non-default namespace of a desired SVI must be in it). An SVI whose address (the segment's gateway moved) or VRF
-    changes to another one is updated in place. One that would have to lose its VRF or its address is deleted and
-    created again, because a relationship cannot be cleared through a save of a node read without it.
+    """The writes that make the device's role-svi interfaces exactly its desired ones. ``instance_ids`` maps a namespace
+    name to its instance id. A changed address or VRF updates in place; losing a VRF or address means delete and
+    recreate.
     """
     desired = facts.desired_svis()
-    # Each SVI realizes the first desired row it is a member of; a row has one SVI (a second is stale).
+    # Each SVI realizes the first desired row it is a member of; a row has one SVI (a second is stale)
     matched: dict[str, SviFacts] = {}
     leave: list[tuple[str, str]] = []
     unmatched: list[SviFacts] = []
@@ -109,8 +82,7 @@ def plan_svis(facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> SviPlan
             writes.append(SviWrite(name, row.id, row.gateway_id, vrf_id))
         else:
             writes.append(SviWrite(name, row.id, row.gateway_id, vrf_id, existing_id=current.id))
-    # An SVI of no wanted row goes after the writes, unless it bears a name an SVI is written with: the name is
-    # unique on the device, so it goes first.
+    # An SVI of no wanted row goes after the writes, unless its name is needed by a written SVI: then it goes first
     created = {write.name for write in writes}
     recreate.extend(svi.id for svi in unmatched if svi.name in created)
     stale = sorted(svi.id for svi in unmatched if svi.name not in created)
@@ -119,7 +91,7 @@ def plan_svis(facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> SviPlan
 
 @dataclass(frozen=True)
 class L3vniWrite:
-    """One L3 VNI SVI to write: ``existing_id`` is set for an in-place update (a VRF instance that moved)."""
+    """One L3 VNI SVI to write: ``existing_id`` is set for an in-place update."""
 
     name: str
     vrf_id: str
@@ -140,11 +112,9 @@ class L3vniPlan:
 def plan_l3vni_svis(
     facts: DeviceVrfFacts, namespaces: Mapping[str, Mapping[str, Any]], instance_ids: Mapping[str, str]
 ) -> L3vniPlan:
-    """The writes that make the device's role-l3vni interfaces exactly the VRFs it terminates.
-
-    ``instance_ids`` maps a namespace name to the id of its instance in the device's hosting deployment. An SVI
-    that is on the right instance is left alone, one on another instance is moved, one for a VRF the device no longer
-    terminates is deleted."""
+    """The writes that make the device's role-l3vni interfaces exactly the VRFs it terminates (moved, deleted or left
+    alone).
+    """
     desired = facts.desired_l3vni_svis(namespaces)
     existing = {svi.name: svi for svi in facts.l3vni_svis}
     writes: list[L3vniWrite] = []
@@ -162,13 +132,12 @@ def plan_l3vni_svis(
 
 
 def taken_svi_names(facts: DeviceVrfFacts) -> dict[str, str | None]:
-    """The desired SVI names an interface of another role already has (the MLAG control ``Vlan4094``, a hand-made
-    ``VlanN``) -> that role. Creating the SVI by name would overwrite that interface."""
+    """Desired SVI names that an interface of another role already has (e.g. MLAG ``Vlan4094``) -> that role."""
     return {name: facts.other_interfaces[name] for name in facts.desired_svis() if name in facts.other_interfaces}
 
 
 class SviMixin:
-    """Writes the SVIs of one device. Expects the host to provide ``client`` and ``logger``."""
+    """Writes the SVIs of one device; the host provides ``client`` and ``logger``."""
 
     client: Any
     logger: logging.Logger
@@ -176,10 +145,9 @@ class SviMixin:
     async def sync_l3vni_svis(
         self, facts: DeviceVrfFacts, namespaces: Mapping[str, Mapping[str, Any]], instance_ids: Mapping[str, str]
     ) -> None:
-        """Create, move and delete the device's L3 VNI SVIs (nothing when they already match).
-
-        The caller holds the device's VRF lock and has created the instances. The SVI has no address and no row: it is
-        the realization of the VRF on the device (symmetric IRB), not of a segment. Written untracked, like the SVIs."""
+        """Create, move and delete the device's L3 VNI SVIs. The caller holds the device's VRF lock and has created the
+        instances. The SVI has no address and no row. Untracked.
+        """
         plan = plan_l3vni_svis(facts, namespaces, instance_ids)
         taken = {w.name for w in plan.writes if w.name in facts.other_interfaces}
         for name in sorted(taken):
@@ -207,14 +175,11 @@ class SviMixin:
 
     async def sync_svis(self, facts: DeviceVrfFacts, instance_ids: Mapping[str, str]) -> None:
         """Create, move and delete the device's SVIs (nothing when they already match).
-
-        The caller holds the device's VRF lock and has created the instances ``instance_ids`` names.
-        """
+        The caller holds the device's VRF lock and has created the instances."""
         plan = plan_svis(facts, instance_ids)
         taken = taken_svi_names(facts)
         for name, role in taken.items():
-            # Skipped with a warning, not failed: the generator logger's error() raises, and the device's other SVIs
-            # must still converge. The check reports the missing SVI.
+            # Warn, don't fail: the logger's error() raises and the other SVIs must converge; the check reports it
             self.logger.warning(
                 f"  {facts.name}: cannot create SVI {name}: an interface of that name (role {role}) exists - skipped"
             )
@@ -235,7 +200,7 @@ class SviMixin:
                 data["id"] = write.existing_id
             svi = await self.client.create(kind=DcimVirtualInterface, data=data)
             await svi.save(allow_upsert=True, update_group_context=False)
-            # After the save, which replaces the edge set: the row (created by the segment reconcile before this pass).
+            # After the save, which replaces the edge set: the row exists from the segment reconcile
             await join_capabilities(self.client, self.logger, svi.id, [write.row_id])
         for svi_id, row_id in plan.leave:
             await remove_edge(self.client, node_id=svi_id, relation=_ROW_RELATION, peer_id=row_id)

@@ -1,10 +1,4 @@
-"""A cable that should exist but cannot be planned fails the generator run.
-
-Regression tests for the paths that used to log a warning (or an error on a
-plain logger) and carry on, leaving devices uncabled while the run reported
-success: create_cabling's empty plan, a strategy error swallowed inside the
-speed-aware planner, and the back-to-back inter-pod mesh skipping a pair.
-"""
+"""A cable that should exist but cannot be planned fails the generator run."""
 
 from __future__ import annotations
 
@@ -53,8 +47,7 @@ def _make_cabling_gen(src: list[Any], dst: list[Any]) -> Any:
 class TestCreateCabling:
     @pytest.mark.asyncio
     async def test_strategy_error_propagates_and_creates_no_cable(self) -> None:
-        """Offset 1 on a 1-port spine: the rack strategy's OFFSET OVERFLOW used to be
-        caught in build_cabling_plan, so create_cabling returned [] on a green run."""
+        """Offset 1 on a 1-port spine: the rack strategy's OFFSET OVERFLOW used to be caught in build_cabling_plan."""
         gen = _make_cabling_gen(
             src=[_iface("Ethernet1/49", device="leaf-01")],
             dst=[_iface("Ethernet1/1", device="spine-01")],

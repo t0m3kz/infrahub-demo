@@ -1,9 +1,4 @@
-"""The hierarchy of the topology kinds: a parent that lists its children must not hide a kind that names it as parent.
-
-``children: ""`` on a hierarchical node means "any node that names this one as its parent"; a named kind narrows the
-children to that kind, so a sibling kind with the same ``parent`` is invisible on the parent (a cloud region showed its
-zones but not the customer footprint in it). The server only shows the narrowed list, so the YAML is the only guard.
-"""
+"""The hierarchy of the topology kinds"""
 
 from __future__ import annotations
 

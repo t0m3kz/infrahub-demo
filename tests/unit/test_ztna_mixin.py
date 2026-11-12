@@ -1,12 +1,4 @@
-"""Unit tests for ZtnaMixin (generators/ztna.py).
-
-Covers:
-  - _reconcile_proxy_rule()                — target_fqdn egress through the
-                                             owner's egress_service
-  - private_access_grants()                — which dependents admit users
-  - _reconcile_private_access_components() — ZTNA broker publish of
-                                             access-profile grants
-"""
+"""Unit tests for ZtnaMixin (generators/ztna.py)."""
 
 from __future__ import annotations
 
@@ -57,9 +49,7 @@ def _egress_dep(
     }
 
 
-# ===========================================================================
 # TestReconcileProxyRule
-# ===========================================================================
 
 
 class TestReconcileProxyRule:
@@ -277,9 +267,7 @@ class TestReconcileProxyRule:
         gen.logger.error.assert_called_once()
 
 
-# ===========================================================================
 # TestReconcilePrivateAccessComponents
-# ===========================================================================
 
 
 def _grant(
@@ -338,9 +326,7 @@ class TestPrivateAccessGrants:
 
 
 class TestReconcilePrivateAccessComponents:
-    """A component is published through the owner's ZTNA broker when an access
-    profile is granted to it: an AppDependency whose source_profile is set,
-    found in the component's dependents."""
+    """A component is published through the owner's ZTNA broker when an access profile is granted to it"""
 
     def test_publishes_a_granted_component(self) -> None:
         """A granted component becomes an fqdn rule under the owner's private-access policy."""

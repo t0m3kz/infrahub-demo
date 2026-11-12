@@ -1,10 +1,4 @@
-"""Unit tests for RoutingMixin helper methods.
-
-Covers:
-- _resolve_shared_objects()     – description-based overlay AS lookup and name-based OSPF area lookup
-- _save_autonomous_systems()    – existing path (_existing_id) vs new path (from_pool)
-- group_context protection      – overlay_as_id and ospf_area_id added to related_node_ids
-"""
+"""Unit tests for RoutingMixin helper methods."""
 
 from __future__ import annotations
 
@@ -19,9 +13,7 @@ import pytest
 
 from generators.routing import RoutingMixin
 
-# ---------------------------------------------------------------------------
 # Minimal RoutingMixin instance
-# ---------------------------------------------------------------------------
 
 
 def _make_mixin(fabric_name: str = "dc1") -> Any:
@@ -51,9 +43,7 @@ def _mock_as_obj(asn: int = 65000, obj_id: str = "as-1") -> MagicMock:
     return obj
 
 
-# ---------------------------------------------------------------------------
 # _resolve_shared_objects — overlay AS lookup
-# ---------------------------------------------------------------------------
 
 
 class TestFindExistingOverlayAs:
@@ -101,9 +91,7 @@ class TestFindExistingOverlayAs:
         assert "berlin-dc" in call_kwargs["description__value"]
 
 
-# ---------------------------------------------------------------------------
 # _resolve_shared_objects — OSPF area lookup
-# ---------------------------------------------------------------------------
 
 
 class TestFindExistingOspfArea:
@@ -202,9 +190,7 @@ class TestResolveSharedObjectsRunsBothLookupsTogether:
         m.client.get.assert_not_awaited()
 
 
-# ---------------------------------------------------------------------------
 # ensure_shared_as — find-or-allocate an AS by deterministic description
-# ---------------------------------------------------------------------------
 
 
 class TestEnsureSharedAs:
@@ -290,9 +276,7 @@ class TestEnsureSharedAs:
         m.client.create.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # bgp_processes_ready — per-device ManagedBGP readiness by process role
-# ---------------------------------------------------------------------------
 
 
 def _mock_bgp(device: str, role: str) -> MagicMock:
@@ -320,9 +304,7 @@ class TestBgpProcessesReady:
         assert not await m.bgp_processes_ready(["sp1", "sp2"], "underlay")
 
 
-# ---------------------------------------------------------------------------
 # _resolve_shared_passwords — underlay/overlay RoutingPassword lookup
-# ---------------------------------------------------------------------------
 
 
 def _mock_password_obj(obj_id: str, name: str = "") -> MagicMock:
@@ -418,9 +400,7 @@ class TestResolveSharedPasswords:
 
     @pytest.mark.asyncio
     async def test_does_not_regenerate_or_touch_existing_password_value(self) -> None:
-        """Resolution is pure lookup — it must never call create()/save() on a
-        RoutingPassword, since that would risk rotating an already-deployed
-        BGP/OSPF auth key (secrets.token_urlsafe() is non-deterministic)."""
+        """Resolution is pure lookup — it must never call create()/save() on a RoutingPassword"""
         m = _make_mixin()
         m.client.filters = AsyncMock(return_value=[_mock_password_obj("pw-1", "dc1-underlay-key")])
         m.client.create = AsyncMock()
@@ -430,9 +410,7 @@ class TestResolveSharedPasswords:
         m.client.create.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # _save_autonomous_systems
-# ---------------------------------------------------------------------------
 
 
 class TestSaveAutonomousSystems:
@@ -498,9 +476,7 @@ class TestSaveAutonomousSystems:
         assert "as-ex-1" in m.client.group_context.related_node_ids
 
 
-# ---------------------------------------------------------------------------
 # group_context protection for shared objects in create_routing
-# ---------------------------------------------------------------------------
 
 
 class TestGroupContextProtection:
@@ -564,9 +540,7 @@ class TestGroupContextProtection:
 
     @pytest.mark.asyncio
     async def test_resolved_overlay_as_is_used_but_not_tracked(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A resolved overlay_as_id is used, never tracked: add_dc owns the
-        shared AS. Tracked by a pod/rack run too, that run's cleanup would
-        delete it the run it stopped reaching it."""
+        """A resolved overlay_as_id is used, never tracked"""
         from generators.helpers.routing import RoutingStrategy
         from generators.types import RoutingOptions
 
@@ -599,15 +573,7 @@ class TestGroupContextProtection:
 
     @pytest.mark.asyncio
     async def test_planner_is_constructed_in_strict_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """create_routing must opt into strict mode, or none of it ever runs.
-
-        RoutingPlanner's strict branches (no router-id, no loopback IP) were
-        implemented and unit-tested in tests/unit/test_routing_strict_mode.py
-        while this caller constructed the planner without the flag — so every
-        real generator run took the tolerant path, warning and skipping instead
-        of failing, and could leave a device created, cabled and addressed with
-        no BGP or OSPF process while reporting success.
-        """
+        """create_routing must opt into strict mode, or none of it ever runs."""
         from generators.helpers.routing import RoutingStrategy
         from generators.types import RoutingOptions
 

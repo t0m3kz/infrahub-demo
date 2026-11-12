@@ -18,15 +18,7 @@ def _build_generator(
     rack_index: int = 1,
     row_index: int = 1,
 ) -> RackGenerator:
-    """Create a RackGenerator instance with minimal data for offset calculation.
-
-    RackGenerator.calculate_cabling_offsets is now derived entirely from live
-    rack position (row_index/index) and the caller-supplied device_count /
-    racks_in_previous_rows — it no longer reads any design capacity
-    numbers (max_rows, max_compute_racks_per_row, max_tors_per_compute_rack, etc);
-    the pod's deployment type is the only thing that matters, and it is derived
-    from the design (one real design per type).
-    """
+    """Create a RackGenerator instance with minimal data for offset calculation."""
 
     parent = {
         "id": "parent-1",
@@ -94,10 +86,7 @@ def test_mixed_leaf_offset_scales_with_row(row_index: int, leafs_per_rack: int, 
 def test_tor_deployment_offset_accumulates_rows_and_racks(
     row_index: int, rack_index: int, tors_per_rack: int, racks_in_previous_rows: int, expected: int
 ) -> None:
-    """ToR offsets in tor deployment account for previous rows and racks across scenarios.
-
-    racks_in_previous_rows is now always an explicit, caller-supplied live
-    count (no more implicit fallback to a design's declared per-row capacity)."""
+    """ToR offsets in tor deployment account for previous rows and racks across scenarios."""
 
     generator = _build_generator(
         deployment_type="tor",
@@ -120,12 +109,7 @@ def test_unhandled_combination_defaults_to_zero_offset() -> None:
     assert offset == 0
 
 
-# ============================================================================
-# DC1 Pod 3 exact data: small_tor_rack design
-#   compute_racks_per_row=10, max_tors_per_compute_rack=2
-#   Actual deployment: 2 rows × 6 racks (indexes 1-6), 2 tors per rack
-#   Spine template: N9K_C9336C_FX2_SPINE with 30 downlink interfaces
-# ============================================================================
+# DC1 Pod 3 data: small_tor_rack design, 2 rows x 6 racks, 2 tors per rack, 30 spine downlinks
 
 SPINE_DOWNLINKS = 30
 
@@ -170,8 +154,7 @@ def test_dc1_pod3_tor_offset_with_actual_rack_count(
 @pytest.mark.parametrize(
     "row_index, rack_index, racks_in_previous_rows, device_count, expected",
     [
-        # racks_in_previous_rows is an explicit, caller-supplied count; every
-        # mixed ToR offset starts past S_MIXED's leafs (4) and border-leaf (1).
+        # Every mixed ToR offset starts past S_MIXED's leafs (4) and border-leaf (1).
         (1, 1, 0, 2, 5),  # first rack, first row → 5
         (1, 2, 0, 2, 7),  # second rack, first row → 5 + 2
         (1, 9, 0, 2, 21),  # last rack position in row 1 (mixed: network=1 + compute=8) → 5 + 8*2
@@ -204,12 +187,7 @@ def test_mixed_tor_offset_row_and_rack(
 
 
 def test_no_collision_mixed_two_rows() -> None:
-    """Verify leaf port ranges are disjoint across rows in a 2-row mixed pod.
-
-    Border-leaf no longer lives at rack level (moved to TopologyDataCenter's
-    fabric_templates, placed/cabled by dc.py) — this test now only covers the
-    leaf-vs-leaf disjointness that calculate_cabling_offsets still owns.
-    """
+    """Verify leaf port ranges are disjoint across rows in a 2-row mixed pod."""
 
     # S_MIXED: 2 rows, 1 network rack/row with 2 leafs
     leafs_per_rack = 2
@@ -231,12 +209,7 @@ def test_no_collision_mixed_two_rows() -> None:
 
 @pytest.mark.parametrize("name", POD_DESIGN_NAMES)
 def test_every_envelope_position_gets_its_own_spine_downlink(name: str) -> None:
-    """Cable every device the design allows, with the generators' own offsets — leafs and ToRs
-    as add_rack places them, border-leafs at pod.py's spine_downlink_layout offset — and count
-    the spine downlink ports used: no port twice, and exactly spine_downlink_layout's total.
-
-    A mixed pod's ToRs used to start at port 0 (on its leafs) and its border-leaf at the
-    leafs' end (on its ToRs); the row stride ignored the network rack's position."""
+    """Cable every device the design allows, with the generators' own offsets"""
     design = pod_design(name)
     layout = spine_downlink_layout(design)
     used: list[tuple[str, int]] = []

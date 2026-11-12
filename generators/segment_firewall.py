@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from .common import CommonGenerator
 
-# Starting rule index - leaves room below 100 for manually-crafted high-priority rules
+# Starting rule index; leaves room below 100 for hand-written high-priority rules
 RULE_INDEX_START = 100
 RULE_INDEX_STEP = 10
 RULE_DEFAULT_VALIDITY_DAYS = 180
@@ -59,27 +59,15 @@ def _next_free_rule_index(used: set[int]) -> int:
 
 
 class SegmentPolicyMixin(GetOrCreateByNameMixin):
-    """The one default-deny SecurityPolicy of a segment.
-
-    Shared by the segment generator, which creates it with the segment, and by the application rule path
-    (SegmentFirewallMixin), which writes its rules into it. Expects the host class to provide ``client`` and ``logger``.
-    """
+    """The one default-deny SecurityPolicy of a segment; needs ``client`` and ``logger`` on the host."""
 
     client: Any
     logger: logging.Logger
 
     async def _segment_policy(self, segment: dict[str, Any], policy_name: str) -> Any | None:
-        """The source segment's one SecurityPolicy: the one it already has
-        (from this generator or a hand-written data file), else its
-        deterministic seg-<segment>-egress, created with the segment set.
-        Untracked: every application with a component on that segment writes
-        its rules into this one policy, and hand-written rules live there too,
-        so no application's run owns it (its rules stay owned by the
-        application that produced them).
-
-        The one it already has is known from the application query (the
-        segment's security_policy), and callers read only its id: a holder of
-        that id, not a read of the policy."""
+        """The source segment's SecurityPolicy: its existing one, else the deterministic seg-<segment>-egress; untracked
+        (shared by every application).
+        """
         existing_id = (segment.get("security_policy") or {}).get("id")
         if existing_id:
             return SimpleNamespace(id=existing_id)
@@ -104,15 +92,8 @@ class SegmentPolicyMixin(GetOrCreateByNameMixin):
 
 
 class SegmentFirewallMixin(SegmentPolicyMixin):
-    """Segment-to-segment dependency rules — the SecurityPolicy/
-    SecurityPolicyRule path dispatched from _reconcile_application_rules for
-    every AppDependency edge to a segment (on-prem or cloud endpoint), as
-    opposed to an external one (target_fqdn, ZtnaMixin's egress path). Also owns
-    threat-profile lookups. The return leg of a rule is not a rule of its
-    own: the destination segment's leaf ACL builds it from inbound_rules
-    (transforms/helpers/acl.py).
-
-    Expects the host class to provide: ``client``, ``logger``, ``_safe_rel_add``.
+    """Segment-to-segment dependency rules (SecurityPolicy/SecurityPolicyRule) and threat-profile lookups. The return
+    leg is built by the destination leaf ACL. Needs ``client``, ``logger`` and ``_safe_rel_add`` on the host.
     """
 
     client: Any
@@ -120,9 +101,7 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
     if TYPE_CHECKING:
         _safe_rel_add = staticmethod(CommonGenerator._safe_rel_add)
 
-    # policy id -> {rule name: rule}, as _read_policy_rules last read it (the selectors included). Valid only
-    # while the policy is in the caller's rule_indexes: whoever drops it from there (lb_vip re-reads under its
-    # lock) makes the next lookup read the policy again.
+    # policy id -> {rule name: rule} as last read; valid only while the policy is in the caller's rule_indexes.
     _rules_by_policy: dict[str, dict[str, Any]] | None = None
 
     async def _reconcile_segment_rule(
@@ -141,17 +120,8 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
         port: PortSpec,
         vip: tuple[str, str] | None = None,
     ) -> tuple[bool, bool]:
-        """Segment-to-segment dependency rule for one edge and port.
-
-        ``segment_policies`` (source segment id -> policy) and ``rule_indexes``
-        (policy id -> used rule indexes) are the caller's per-run caches.
-        ``vip`` (context name, VIP address id: one VIP of a load-balanced
-        target on this port) makes it R_client, which replaces the rule into
-        the target's segment; a target with VIPs on two contexts gets two.
-        Returns (created, skipped) for the caller to fold into its running
-        counters — a missing network_segment contributes to neither (matches
-        the pre-extraction behaviour of silently `continue`-ing).
-        """
+        """Segment-to-segment dependency rule for one edge and port; returns (created, skipped).
+        ``segment_policies`` and ``rule_indexes`` are per-run caches; ``vip`` makes it R_client."""
         src_seg_id = src_seg.get("id")
         dst_seg_id = dst_seg.get("id")
         src_seg_name = str(src_seg.get("name") or src_seg_id or "")
@@ -174,9 +144,7 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
         policy_id = policy.id
         rule_name = planner.rule_name(app_name, src_comp, dst_comp, dep, port)
         if vip:
-            # Its own name per VIP: a dependency whose target turns
-            # load-balanced (or back) gets new rules, and the run's tracking
-            # deletes the others.
+            # Own name per VIP, so a target turning load-balanced gets new rules and tracking deletes the old
             rule_name = f"{rule_name}-vip-{planner.name_part(vip[0])}"
         protocol, port_start, port_end = port
 
@@ -240,23 +208,15 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
         rule_indexes: dict[str, set[int]],
         keep_profile: bool = False,
     ) -> int | None:
-        """Create the rule at the policy's next free index, or bring the existing
-        one of that name to ``rule_data``; the new rule's index, None when it existed.
-
-        Shared by the dependency rules and a load balancer context's R_server.
-
-        The rule of that name is looked up in the policy's rules as read once for the run
-        (_find_policy_rule). A rule another run adds to the policy after that read is not seen
-        here: if it has this name, the create below upserts onto it by (policy, name), and if it
-        only takes the index, the collision re-read in _create_or_update_policy_rule catches it.
+        """Create the rule at the next free index, or update the existing one; returns the new index, None if it
+        existed. Shared by dependency rules and a load balancer context's R_server; a racing add is caught by the upsert
+        or the index-collision re-read.
         """
         existing_rule = await self._find_policy_rule(policy_id, rule_name, rule_indexes)
         if existing_rule is not None:
             existing_index = existing_rule.index.value
             if existing_index is not None and int(existing_index) < RULE_INDEX_START:
-                # A hand-written rule of the policy (index < 100) with this
-                # name: never adopt it into this application's group, whose
-                # cleanup would then delete it.
+                # A hand-written rule (index < 100) of this name is never adopted into the application's group
                 self.logger.error(
                     "  Rule '%s' is a hand-written rule (index %s) of policy %s — rename one of them",
                     rule_name,
@@ -271,9 +231,7 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
             if _is_expired(existing_rule.expires_at.value) and not existing_rule.disabled.value:
                 existing_rule.disabled.value = True
                 self.logger.info("  Rule '%s' expired — disabling it", rule_name)
-            # Saved every run to keep the rule in this application's group; the
-            # fields above only change when they differ, so a second pass
-            # leaves the data untouched.
+            # Saved every run to keep the rule in this application's group
             await existing_rule.save(allow_upsert=True)
             return None
 
@@ -288,19 +246,8 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
 
     @staticmethod
     def _reconcile_rule_payload(rule: Any, rule_data: dict[str, Any], *, keep_profile: bool) -> list[str]:
-        """Set the derived fields (log, apply_on_switch, the destination segment,
-        security_profile, the tags and the address/prefix selectors) of an
-        existing rule to what the planner now derives; return the names that
-        changed.
-
-        The destination segment follows a target that moved; a rule without
-        one (R_client) has it cleared. The component group tags of an
-        intra-segment rule are relationships of the same kind. A selector
-        (the VIPs of R_client, the leg of R_server) is reconciled only when the
-        payload has it: the rule was read with it (_upsert_policy_rule).
-        Compares before assigning, so a rule already in the desired state is
-        not modified.
-        """
+        """Set the derived fields of an existing rule to what the planner derives; return the changed names.
+        A selector is reconciled only when the payload has it."""
         changed: list[str] = []
         for field in ("log", "apply_on_switch"):
             attribute = getattr(rule, field)
@@ -315,7 +262,7 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
             if current != wanted:
                 setattr(rule, field, {"id": wanted} if wanted else None)
                 changed.append(field)
-        # The zone of a selector side is written by HFID (generators/helpers/rules.py zone_ref), so it is compared by HFID.
+        # Zone selectors are written by HFID (rules.py zone_ref), so compare by HFID.
         for field in _ZONE_FIELDS:
             wanted_hfid = (rule_data.get(field) or {}).get("hfid")
             peer = getattr(rule, field)
@@ -337,8 +284,9 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
         return changed
 
     async def _read_policy_rules(self, policy_id: str, rule_indexes: dict[str, set[int]]) -> list[Any]:
-        """List the policy's rules from the server, with their selectors; record their indexes in
-        ``rule_indexes`` and their names for _find_policy_rule."""
+        """List the policy's rules with selectors; record their indexes in ``rule_indexes`` and names for
+        _find_policy_rule.
+        """
         rules = await self.client.filters(
             kind=SecurityPolicyRule, policy__ids=[policy_id], include=list(_SELECTOR_FIELDS)
         )
@@ -349,11 +297,7 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
         return rules
 
     async def _find_policy_rule(self, policy_id: str, rule_name: str, rule_indexes: dict[str, set[int]]) -> Any | None:
-        """The policy's rule named ``rule_name``, or None.
-
-        One read of the policy's rules per run (a policy not yet in ``rule_indexes``, or dropped from
-        it, is read again), shared with the index bookkeeping, instead of one lookup per rule.
-        """
+        """The policy's rule named ``rule_name``, or None (one read of the rules per run)."""
         if policy_id not in rule_indexes or policy_id not in (self._rules_by_policy or {}):
             await self._read_policy_rules(policy_id, rule_indexes)
         return (self._rules_by_policy or {}).get(policy_id, {}).get(rule_name)
@@ -365,13 +309,7 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
         rule_data: dict[str, Any],
         rule_indexes: dict[str, set[int]],
     ) -> tuple[Any, int]:
-        """Save a rule at the policy's lowest free index, retrying on an index collision.
-
-        ``rule_indexes`` holds each policy's used indexes for the run, read
-        from the server on first use. A collision means another run took the
-        index: the policy is re-read, and a rule of this name that run made
-        meanwhile is updated in place, keeping its index, expiry and disabled flag.
-        """
+        """Save a rule at the lowest free index, retrying on collision (re-read; a same-named rule is updated in place)."""
         if policy_id not in rule_indexes:
             await self._read_policy_rules(policy_id, rule_indexes)
         payload = dict(rule_data)
@@ -414,11 +352,7 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
             return rule, index
 
     async def _get_profile(self, profile_name: str) -> Any | None:
-        """The SecuritySecurityProfile named ``profile_name``, cached per run.
-
-        Read-only — never creates on a miss (unlike _get_or_create_by_name);
-        a missing or unreadable profile is cached as None.
-        """
+        """The SecuritySecurityProfile named ``profile_name``, cached per run; never created, a miss is cached as None."""
         cache: dict[str, Any] = getattr(self, "_profile_cache", {})
         if profile_name not in cache:
             try:
@@ -430,13 +364,8 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
         return cache[profile_name]
 
     async def _ensure_segment_isolation_mode(self, segment: dict[str, Any], app_security_profile: str) -> None:
-        """Derive and set a segment's isolation_mode from its application's
-        security_profile, unless the author already set something other than
-        the schema default ("normal") — isolated/microsegmented are never a
-        silent default, so either one signals a deliberate explicit choice to
-        respect. Cloud segments are skipped on purpose: they carry the field
-        (they inherit ManagedNetworkSegment) but their isolation is the cloud
-        security group, which nothing here renders from isolation_mode.
+        """Derive a segment's isolation_mode from its application's security_profile; an author-set non-default is kept,
+        cloud segments skipped.
         """
         seg_id = segment.get("id")
         seg_typename = segment.get("typename")
@@ -457,6 +386,5 @@ class SegmentFirewallMixin(SegmentPolicyMixin):
         except Exception as exc:
             self.logger.warning("  Could not set isolation_mode on segment %s: %s", segment.get("name", seg_id), exc)
             return
-        # Recorded in the dict: the component tags and rules of this same run
-        # are planned against the mode just written, not the one read.
+        # Recorded in the dict so this run's tags and rules use the mode just written
         segment["isolation_mode"] = derived

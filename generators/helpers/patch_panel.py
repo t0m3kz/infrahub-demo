@@ -1,15 +1,5 @@
-"""What a patch panel of a type holds, and how its ports differ from it (pure).
-
-A panel names its type (`DcimPatchPanel.panel_type`, a Dropdown whose choices are the keys of PANEL_TYPES). The type
-is the whole layout: how many rear ports of which connector, and how many front ports ride on each. add_patch_panel
-(generators/topology/patch_panel.py) builds the ports the type asks for, each front port on its rear port, and
-checks/patch_panel_pairing.py reports what still differs. Both read audit().
-
-- jack (one front port per rear port): front N rides on rear N.
-- cassette (F front ports per MPO rear port): rear k takes the front ports (k-1)*F+1 .. k*F.
-
-Ports are dicts of cleaned query data: ``id``, ``name``, ``connector`` and, on a front port, ``rear_port`` (the rear
-port it names: ``{"id": ...}`` or an id, None when unpaired). Port names are their numbers, from 1.
+"""What a patch panel of a type holds, and how its ports differ from it (pure); the type is the whole layout. Jack:
+front N on rear N. Cassette (F fronts per rear): rear k takes fronts (k-1)*F+1 .. k*F. Ports are cleaned query dicts.
 """
 
 from __future__ import annotations
@@ -23,7 +13,7 @@ LAYOUT_CASSETTE = "cassette"
 
 @dataclass(frozen=True)
 class PanelType:
-    """The ports of one panel type: ``rears`` rear ports, each carrying ``fronts_per_rear`` front ports."""
+    """The ports of one panel type: ``rears`` rear ports, each with ``fronts_per_rear`` front ports."""
 
     rears: int
     rear_connector: str
@@ -39,12 +29,11 @@ class PanelType:
         return LAYOUT_JACK if self.fronts_per_rear == 1 else LAYOUT_CASSETTE
 
     def rear_of(self, front: int) -> int:
-        """The number of the rear port front port ``front`` rides on."""
+        """The number of the rear port that front port ``front`` rides on."""
         return (front - 1) // self.fronts_per_rear + 1
 
 
-# The choices of DcimPatchPanel.panel_type (schemas/extensions/dcim/patch_panel.yml; tests/unit/test_patch_panel_schema.py
-# holds the two equal).
+# Choices of DcimPatchPanel.panel_type (tests/unit/test_patch_panel_schema.py holds them equal).
 PANEL_TYPES: dict[str, PanelType] = {
     "lc-24": PanelType(24, "lc-upc", 1, "lc-upc"),
     "lc-48": PanelType(48, "lc-upc", 1, "lc-upc"),
@@ -60,12 +49,9 @@ PANEL_TYPES: dict[str, PanelType] = {
 
 @dataclass
 class PanelAudit:
-    """How the ports of one panel differ from its type.
-
-    ``missing_rears`` / ``missing_fronts`` hold the port numbers to create; ``to_pair`` an unpaired front port id ->
-    the number of its rear port; ``misplaced`` front port names on another rear port; ``extra`` port names the type
-    does not have ("rear 25", "front 25"); ``wrong_connector`` the same for a connector that differs. ``problem`` is
-    set when there is no type to compare with (unknown type, a port name that is no number, a repeated number).
+    """How the ports of one panel differ from its type. ``missing_*`` hold numbers to create, ``to_pair`` front id ->
+    rear number, ``misplaced``, ``extra`` and ``wrong_connector`` port names; ``problem`` is set when there is no type
+    to compare with.
     """
 
     panel_type: PanelType | None = None
@@ -79,7 +65,7 @@ class PanelAudit:
 
 
 def _by_number(ports: list[dict[str, Any]], side: str) -> tuple[dict[int, dict[str, Any]], str | None]:
-    """The ports by their integer name, or the reason they cannot be keyed so."""
+    """The ports by integer name, or the reason they cannot be keyed."""
     numbered: dict[int, dict[str, Any]] = {}
     for port in ports:
         name = str(port.get("name"))
@@ -92,7 +78,7 @@ def _by_number(ports: list[dict[str, Any]], side: str) -> tuple[dict[int, dict[s
 
 
 def rear_port_id(front: dict[str, Any]) -> str | None:
-    """The id of the rear port a front port names (cleaned query data holds ``{"id": ...}``), or None."""
+    """The id of the rear port a front port names, or None."""
     current = front.get("rear_port")
     return current.get("id") if isinstance(current, dict) else current
 

@@ -1,16 +1,6 @@
-"""Design ranges and limits, setup-data names, vendor limits and the retry policy, defined once.
+"""Design ranges, limits, setup-data names, vendor limits and the retry policy, defined once.
 
-The schema (``min_value``/``max_value``) and the bootstrap data (``data/bootstrap``) stay the source of truth for what
-Infrahub stores; a constant here is a MIRROR that code needs at design time (sizing, validation, rendering), and
-``tests/unit/test_limits_consistency.py`` checks that every mirror equals what the schema and the bootstrap data say.
-Change a value in the data or the schema and that test names the constant to change here.
-
-Sections (generators, transforms and checks import from here; a value used by one module only stays next to its code):
-
-1. Design ranges and limits (VLAN, VNI, ASN, routing tag, MTU, prefix lengths)
-2. Vendor and platform limits (name lengths, segment counts)
-3. Setup data: the pool and group names the bootstrap data must define
-4. Retry and polling policy
+A constant here mirrors the schema or ``data/bootstrap`` (``tests/unit/test_limits_consistency.py``).
 """
 
 from __future__ import annotations
@@ -24,28 +14,13 @@ FIREWALL_HA_GROUP_MAX = 63
 
 # --- 1. Design ranges and limits -------------------------------------------------------------------------------
 
-# VLAN bands of a border leaf's VLAN table (get_vlans de-duplicates by VLAN ID, so no two bands may overlap):
-#
-#   100-2999    customer VLANs: 100-2499 local ids drawn per switch, 2500-2999 shared ids derived from a VNI (below;
-#               generators/segment_vlan.py). 3968-4094 is NX-OS's default
-#               internally reserved band (4094 the conventional vPC peer-keepalive VLAN), so the space above 2999
-#               is not customer space.
-#   3000-3099   FirewallContext VLANs (one context = one VLAN on the firewall uplink and the border-leaf service port)
-#   3100-3199   LoadbalancerContext VLANs; the other half of the context band, so the two kinds' legs never share a tag
-#   3000-3799   the per-VRF transit VLANs: a context VLAN + TRANSIT_VLAN_BAND per namespace slot
-#   3800-3803   the WAN exit tags of an office (utils/exchange_transit.py WAN_EXIT_VLAN_BASE)
-#   3900-3967   the local VLAN of the per-VRF L3 VNI SVI NX-OS needs for symmetric IRB: L3VNI_SVI_VLAN_BASE + the
-#               namespace type's slot, 3900-3903 (utils/exchange_transit.py l3vni_svi_vlan, transforms/helpers/overlay.py);
-#               above all of the above and below NX-OS's reserved 3968-4094
+# VLAN bands (must not overlap): 100-2999 customer (100-2499 local, 2500-2999 shared), 3000-3099 firewall contexts,
+# 3100-3199 LB contexts, 3000-3799 per-VRF transit, 3800-3803 office WAN exit, 3900-3967 L3 VNI SVI (below NX-OS
+# reserved 3968-4094).
 CUSTOMER_VLAN_ID_MIN = 100
 CUSTOMER_VLAN_ID_MAX = 2999
-# The customer band is split: the generator draws a LOCAL id of a segment (vlan_scope local) from 100-2499; a SHARED
-# segment (vlan_scope shared: one id on every switch, for L2 that is trunked between switches that cannot do VXLAN) has
-# the id derived from its VNI, VLAN = SHARED_VLAN_ID_MIN + (VNI - GLOBAL_L2_VNI_START), in 2500-2999. The VNI is the ONE
-# a stretched segment draws from the GLOBAL-L2VNI pool (data/bootstrap/18_vni_pools.yml, which starts at
-# GLOBAL_L2_VNI_START and is handed out in order), so the first SHARED_VLAN_COUNT such segments can be shared and a shared
-# VNI never collides with a site pool (10001-39999). The bands never overlap, so a shared id is never taken by a local
-# allocation.
+# Local ids (vlan_scope local) are drawn from 100-2499; a shared segment's id is SHARED_VLAN_ID_MIN + (VNI -
+# GLOBAL_L2_VNI_START), in 2500-2999, so the first SHARED_VLAN_COUNT stretched segments can be shared.
 LOCAL_VLAN_ID_MAX = 2499
 SHARED_VLAN_ID_MIN = LOCAL_VLAN_ID_MAX + 1
 SHARED_VLAN_ID_MAX = CUSTOMER_VLAN_ID_MAX
@@ -59,170 +34,130 @@ TRANSIT_VLAN_BAND = 200
 L3VNI_SVI_VLAN_BASE = 3900
 L3VNI_SVI_VLAN_MAX = 3967
 
-# VNI bands (a VNI is one flat 24-bit field on the wire with no L2/L3 discriminator, so bands must not overlap):
-#
-#   10001-39999   L2 VNI of every site's own ``{site}-vni-pool`` (a DC's, a colocation metro's, an office's)
-#   40000-49999   L2 VNI GLOBAL-L2VNI, stretched segments (data/bootstrap/18_vni_pools.yml, not mirrored: used by name)
-#   60000-60003   the fixed L3 VNIs of the four namespaces (data/bootstrap/22_namespaces.yml)
-#   64000-64799   the exchange transit VNIs, TRANSIT_VNI_BASE + the transit VLAN (utils/exchange_transit.py)
-#
-# A route-distinguisher or route-target built from a 4-byte private ASN leaves 16 bits for the VNI.
+# VNI bands (must not overlap): 10001-39999 site pools, 40000-49999 GLOBAL-L2VNI, 60000-60003 L3 VNIs, 64000-64799
+# transit VNIs. An RD or RT built from a 4-byte private ASN leaves 16 bits for the VNI.
 SITE_VNI_START = 10001
 SITE_VNI_END = 39999
 TRANSIT_VNI_BASE = 61000
 MAX_ENCODABLE_VNI = 65535
 
-# The private 32-bit ASN space (RFC 6996) of the PRIVATE-ASN32 pool (data/bootstrap/16_asn_pools.yml); 4294967295 is
-# reserved (RFC 7300). Fabric ASN ranges are placed in it by generators/helpers/pools.py.
+# The private 32-bit ASN space (RFC 6996) of the PRIVATE-ASN32 pool; 4294967295 is reserved (RFC 7300).
 PRIVATE_ASN32_START = 4200000000
 PRIVATE_ASN32_END = 4294967294
 
-# The routing tag is the 16-bit value behind a standard community; 65535 is reserved, so a tag is 1..65534. Schema
-# parameters of OrganizationCustomer.routing_tag and ManagedNetworkSegment.routing_tag and the Customer-Routing-Tag /
-# Segment-Routing-Tag pools (data/bootstrap/19c_routing_tag_pools.yml) say the same.
+# The routing tag is a 16-bit community value; 65535 is reserved, so a tag is 1..65534 (as in the schema and pools).
 ROUTING_TAG_MIN = 1
 ROUTING_TAG_MAX = 65534
 
-# One MTU every platform accepts on a routed underlay port: Arista EOS caps a routed port at 9214, NX-OS allows 9216,
-# so the vendor-neutral model uses 9214. The DCI ports and sessions (generators/topology/virtual_circuit.py) and the
-# NX-OS L3 VNI SVI (rendered from the transform context ``underlay_mtu``) use it.
+# One MTU every platform accepts on a routed underlay port (EOS caps at 9214, NX-OS allows 9216).
 UNDERLAY_MTU = 9214
 
-# Prefix lengths of the pools the bootstrap data defines (``default_prefix_length`` of the pool): a firewall transit
-# or load-balancer leg /29 (23_transit_pools.yml), a load-balancer context's routed VIP range /26 (the same file),
-# a context's SNAT address /32 (FW-SNAT-INTERNET-IPv4).
+# Default prefix lengths of the bootstrap pools: transit and LB leg /29, LB VIP range /26, context SNAT /32.
 TRANSIT_PREFIXLEN = 29
 LB_VIP_PREFIXLEN = 26
 SNAT_PREFIX_LENGTH = 32
 
-# The prefix of a tenant segment (utils/segment_addressing.py ``segment_prefix_length``): a segment with no host_count
-# is sized by the ``segment_prefix_length`` of its footprint's design (data/bootstrap/21_customer_templates.yml; an
-# IPv6 segment by ``ipv6_segment_prefix_length``), one with a host_count gets the smallest prefix that holds its hosts
-# plus the network, broadcast and gateway addresses, never smaller than a /29 and never larger than a /22.
-# ``SEGMENT_HOST_COUNT_MAX`` mirrors the schema ``max_value`` of ManagedNetworkSegment.host_count (a /22 minus those
-# three addresses).
+# Tenant segment prefix (utils/segment_addressing.py): with no host_count the design's length, else the smallest prefix
+# that holds the hosts plus network, broadcast and gateway, between /29 and /22. SEGMENT_HOST_COUNT_MAX mirrors the
+# schema max of ManagedNetworkSegment.host_count.
 SEGMENT_PREFIX_LENGTH_MAX = 29
 SEGMENT_PREFIX_LENGTH_MIN = 22
 SEGMENT_RESERVED_ADDRESSES = 3
 SEGMENT_HOST_COUNT_MAX = 2 ** (32 - SEGMENT_PREFIX_LENGTH_MIN) - SEGMENT_RESERVED_ADDRESSES
 
-# The routed range of one cloud virtual network (generators/topology/cloud_range.py): a slice of this length from the
-# cloud footprint's pool (``address_prefix_length`` of its tier, S /28 to XL /25), so a tier's block holds
-# ``max_virtual_networks`` slices (checks/customer_quota.py, tests/unit/test_customer_template_data.py).
+# Routed range of one cloud virtual network (generators/topology/cloud_range.py): a slice of the footprint pool.
 CLOUD_RANGE_PREFIX_LENGTH = 29
 
-# The host offsets inside a transit /29 (utils/exchange_transit.py, generators/firewall_transit.py,
-# transforms/helpers/ha.py, checks/common.py) and the tenant segment's anycast gateway: .1 the border-leaf / edge
-# anycast gateway, .2/.3 reserved, .4 the firewall or load-balancer VIP, .5/.6 the HA members. The largest offset
-# must be a host of TRANSIT_PREFIXLEN.
+# Host offsets inside a transit /29 and the segment anycast gateway: .1 anycast gateway, .2/.3 reserved, .4 VIP, .5/.6
+# HA members. The largest offset must be a host of TRANSIT_PREFIXLEN.
 OFFSET_ANYCAST = 1
 OFFSET_VIP = 4
 OFFSET_MEMBER_A = 5
 OFFSET_MEMBER_B = 6
 
-# Sequence numbers of a segment's leaf ACL (transforms/helpers/acl.py, transforms/helpers/firewall.py): its own rules
-# are numbered by rule index (generators/segment_firewall.py: 100, 110, ... below 4000), the return legs of the
-# permits into the segment start at ACL_RETURN_LEG_SEQ_START, the "outside" band of a permit to the internet
-# zone (`destination_zone`) follows at ACL_INTERNET_BAND_SEQ_START, and the closing rule never sits below
-# ACL_CLOSING_SEQ.
+# Leaf ACL sequence numbers: own rules by index (100, 110, ... below 4000), return legs from ACL_RETURN_LEG_SEQ_START,
+# the internet-zone "outside" band from ACL_INTERNET_BAND_SEQ_START, the closing rule at ACL_CLOSING_SEQ or above.
 ACL_RETURN_LEG_SEQ_START = 5000
 ACL_INTERNET_BAND_SEQ_START = 6000
 ACL_CLOSING_SEQ = 9990
 
-# A circuit has two ends (two ports, at most two facilities): checks/circuit_placement.py and
-# checks/carrier_circuit_ports.py.
+# A circuit has two ends (two ports, at most two facilities).
 CIRCUIT_ENDS = 2
 
 # --- 2. Vendor and platform limits -----------------------------------------------------------------------------
 
-# The longest VLAN name NX-OS (and IOS XE, EOS) accepts; a longer one is cut with a digest (transforms/helpers/firewall.py).
+# The longest VLAN name NX-OS (and IOS XE, EOS) accepts; a longer one is cut with a digest.
 VLAN_NAME_MAX = 32
-# The shortest provider limit on a load balancer name (AWS ALB/NLB: 32); a longer one is cut with a digest
-# (generators/helpers/lb_vip.py).
+# The shortest provider limit on a load balancer name (AWS ALB/NLB); a longer one is cut with a digest.
 CLOUD_LB_NAME_MAX = 32
 # An IOS XE ACL `remark` holds at most 100 characters (transforms/helpers/cisco_xe.py).
 XE_REMARK_MAX = 100
-# The segments one Arista EOS device can define across all VRFs (spec 1.4, D: the manual's limit;
-# transforms/helpers/group_policy/eos.py).
+# The segments one Arista EOS device can define across all VRFs.
 EOS_MSSG_MAX_SEGMENTS = 60
 
-# BGP maximum-prefix (utils/bgp_expectation.py). Every limit is derived from the model (a pool's capacity, the size of
-# an allowed set); the slack is the spares added to a SET-sized limit (a partner, a transit, a border-gateway pair) so a
-# prefix added to the model before the next generator run does not drop the session. A pool-sized limit already has
-# the headroom generators/fabric_sizing.py gave the pool. The ceiling is the 32-bit counter a limit has to fit (U: no
-# vendor guide was read for a smaller cap); a derived limit above it is not rendered.
+# BGP maximum-prefix (utils/bgp_expectation.py): limits are derived from the model; the slack is added to a set-sized
+# limit; the ceiling is the 32-bit counter (U: no vendor guide), a derived limit above it is not rendered.
 BGP_PREFIX_SLACK = 2
 BGP_MAX_PREFIX_CEILING = 2**32 - 1
 
 # --- 3. Setup data: pool and group names -----------------------------------------------------------------------
 
-# The pools and groups below are loaded by data/bootstrap and found by name; ``tests/unit/test_limits_consistency.py``
-# checks that every name exists there. A pool name that carries a VRF namespace is a TEMPLATE (``{namespace}`` is the
-# namespace name: PROD, NON-PROD, INTERNET, MANAGEMENT); the builders (``utils/exchange_transit.py``
-# ``transit_pool_name``/``lb_leg_pool_name``/``lb_vip_pool_name``, ``generators/topology/segment.py``
-# ``tenant_pool_name``, ``generators/topology/virtual_circuit.py`` ``handoff_pool_name``) fill it in.
+# Pools and groups loaded by data/bootstrap and found by name. A name with ``{namespace}`` is a template (PROD,
+# NON-PROD, INTERNET, MANAGEMENT) filled in by the builders.
 
-# The underlay namespace (Infrahub's built-in IP namespace): the global routing table, never a VRF instance
-# (utils/vrf_demand.py), never a transit leg, never an L3 instance.
+# The underlay namespace (Infrahub's built-in): the global routing table, never a VRF instance or transit leg.
 DEFAULT_NAMESPACE = "default"
 
-# Prefix pools (17_ip_prefix_pools.yml): the supernets every DC, colocation and office slices its own pools from.
+# Prefix pools (17_ip_prefix_pools.yml) every DC, colocation and office slices its own pools from.
 TECHNICAL_IPV4_POOL = "Technical-IPv4"
 LOOPBACK_IPV4_POOL = "Loopback-IPv4"
 MANAGEMENT_IPV4_POOL = "Management-IPv4"
 LOOPBACK_IPV6_POOL = "Loopback-IPv6"
 TECHNICAL_IPV6_POOL = "Technical-IPv6"
-# The MLAG control session of a domain (17_ip_prefix_pools.yml), by address family in generators/mlag.py.
+# The MLAG control session of a domain (17_ip_prefix_pools.yml).
 MLAG_CONTROL_IPV4_POOL = "MLAG-Control-IPv4"
 MLAG_CONTROL_IPV6_POOL = "MLAG-Control-IPv6"
-# The DCI point-to-point links (20_dci_pools.yml), by address family in generators/topology/virtual_circuit.py.
+# The DCI point-to-point links (20_dci_pools.yml).
 DCI_TECHNICAL_IPV4_POOL = "DCI-Technical-IPv4"
 DCI_TECHNICAL_IPV6_POOL = "DCI-Technical-IPv6"
-# Per VRF namespace: the firewall transit /29 legs, the load-balancer /29 legs and /26 VIP ranges (23_transit_pools.yml),
-# the tenant pools, IPv4 and IPv6 (23b_tenant_pools.yml) and the handoff /31 links (26_handoff_pools.yml). Transit and handoff
-# exist for all four namespaces, the load-balancer and tenant pools for the two tenant ones (PROD, NON-PROD).
+# Per VRF namespace: firewall transit and LB leg /29s, LB VIP /26s, tenant pools (IPv4, IPv6) and handoff /31s. Transit
+# and handoff exist for all four namespaces, LB and tenant pools for PROD and NON-PROD.
 FW_TRANSIT_POOL_TEMPLATE = "FW-Transit-{namespace}-IPv4"
 LB_LEG_POOL_TEMPLATE = "LB-Leg-{namespace}-IPv4"
 LB_VIP_POOL_TEMPLATE = "LB-VIP-{namespace}-IPv4"
 TENANT_POOL_TEMPLATE = "Tenant-{namespace}-IPv4"
 TENANT_POOL_TEMPLATE_IPV6 = "Tenant-{namespace}-IPv6"
-# A customer's own prefix pool, created when its footprint is boarded (generators/topology/segment_addressing.py): the
-# owner's org_id, the footprint's environment (p, n, s, d, t), the facility word (dc, colocation, cloud) and the
-# address family (ipv4, ipv6), all lowercase. It is not bootstrap data, so no test looks for it there.
+# A customer's own pool, created when its footprint is boarded (not bootstrap data): lowercase owner org_id,
+# environment, facility, family.
 CUSTOMER_POOL_NAME_FORMAT = "{owner}-{environment}-{facility}-{family}"
 HANDOFF_POOL_TEMPLATE = "Handoff-{namespace}-IPv4"
-# The public SNAT address of a firewall context (23_transit_pools.yml, an address pool in the INTERNET namespace).
+# The public SNAT address of a firewall context (an address pool in the INTERNET namespace).
 FW_SNAT_POOL = "FW-SNAT-INTERNET-IPv4"
 
-# Number pools: the VNI every stretched segment shares (18_vni_pools.yml), the private 32-bit ASNs (16_asn_pools.yml)
-# and the customer and segment routing tags (19c_routing_tag_pools.yml).
+# Number pools: the stretched-segment VNI, the private 32-bit ASNs and the routing tags.
 STRETCHED_VNI_POOL = "GLOBAL-L2VNI"
 PRIVATE_ASN32_POOL = "PRIVATE-ASN32"
 CUSTOMER_ROUTING_TAG_POOL = "Customer-Routing-Tag"
 SEGMENT_ROUTING_TAG_POOL = "Segment-Routing-Tag"
 
-# Standard groups (00_groups.yml) the generators put objects into or read membership of.
+# Standard groups (00_groups.yml) generators put objects into or read.
 GROUP_HA_DOMAINS = "ha_domains"
 GROUP_MLAG_DOMAINS = "mlag_domains"
 GROUP_APP_COMPONENTS = "app_components"
 GROUP_CARRIER_CIRCUITS = "carrier_circuits"
-# Every session circuit (dci, handoff and tunnel): the target group of add_virtual_circuit, whose group trigger needs it.
+# Every session circuit: the target group of add_virtual_circuit.
 GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
-# Devices that are never a border gateway of a VLAN domain: the SD-WAN hubs and the provider stub routers.
+# Devices that are never a border gateway of a VLAN domain.
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"
 GROUP_PROVIDER_STUBS = "provider_stubs"
-# Every DcimPatchPanel: the target group of add_patch_panel, whose group trigger builds the ports (each panel declares it).
+# Every DcimPatchPanel: the target group of add_patch_panel.
 GROUP_PATCH_PANELS = "patch_panels"
-# Every firewall and load-balancer context: the target group of add_context_routes. The context generators add each
-# context they build; the group trigger starts the route generator.
+# Every firewall and load-balancer context: the target group of add_context_routes.
 GROUP_SERVICE_CONTEXTS = "service_contexts"
-# Every segment deployment add_vxlan_segment builds: the target group of add_segment_deployment_ports, which an
-# `updated` rule on the deployment's assigned ports (its `capabilities`) starts. No group trigger: joining runs nothing.
+# Every segment deployment add_vxlan_segment builds: the target group of add_segment_deployment_ports.
 GROUP_SEGMENT_DEPLOYMENTS = "segment_deployments"
 
-# device_role -> the group its devices join, for roles whose group does not follow the f"{device_role}s" convention.
-# One map for every create_devices() caller: a group created on a branch because a caller missed it collides with
-# every other branch that creates it when both merge.
+# device_role -> group, for roles whose group is not f"{device_role}s" (one map for every create_devices() caller).
 ROLE_GROUP_NAMES: dict[str, str] = {
     "internal-firewall": "firewalls",
     "external-firewall": "firewalls",
@@ -231,8 +166,7 @@ ROLE_GROUP_NAMES: dict[str, str] = {
     "distribution-switch": "distribution-switches",
 }
 
-# infrastructure_orchestrator / application_orchestrator -> the group the artifact definitions of that orchestrator
-# target (generators/topology/orchestrator_routing.py). A customer footprint and an application each have their own set.
+# orchestrator -> the group its artifact definitions target (generators/topology/orchestrator_routing.py).
 TOPOLOGY_ORCHESTRATOR_GROUPS: dict[str, str] = {
     "ansible_automation_platform": "topology_ansible",
     "github_actions": "topology_github_actions",
@@ -249,11 +183,7 @@ APPLICATION_ORCHESTRATOR_GROUPS: dict[str, str] = {
 
 @dataclass(frozen=True)
 class RetryPolicy:
-    """``attempts`` tries in total; ``delay`` is the base of the wait between two of them, in seconds.
-
-    The generators wait ``generators.helpers.common.retry_delay(delay, attempt)`` (jittered exponential backoff
-    from ``delay``, capped); ``LB_VIP_REREAD`` is the one fixed-interval poll.
-    """
+    """``attempts`` tries; ``delay`` is the base wait between two of them, in seconds (see ``retry_delay``)."""
 
     attempts: int
     delay: float
@@ -274,30 +204,27 @@ class ResourceLockPolicy(RetryPolicy):
     stale_after: int
 
 
-# Wait for data that another generator of the same load is still writing (an interface, a pool, a device, a
-# shared routing object): ten tries from 3 s.
+# Wait for data another generator of the same load is still writing: ten tries from 3 s.
 WAIT_FOR_PEER_GENERATOR = RetryPolicy(attempts=10, delay=3.0)
 
-# Wait for a generator run in flight to finish (Infrahub task poll): every 3 s, for at most 30 min.
+# Wait for a generator run in flight (Infrahub task poll): every 3 s, at most 30 min.
 PARENT_GENERATOR_WAIT = PollPolicy(interval=3, timeout=1800)
 
-# The resource lock node of the cabling and IP allocation; stale after longer than any single realistic cabling run.
-# A waiter backs off to 10 s (generators/pools.py), so it must keep trying for longer than stale_after: a lock whose
-# release failed is only reclaimed once it is that old, and waiters that gave up sooner would all fail on it.
+# Resource lock of cabling and IP allocation. Waiters must keep trying longer than stale_after, or a failed release
+# blocks them.
 RESOURCE_LOCK = ResourceLockPolicy(attempts=40, delay=2.0, stale_after=300)
 
-# A save that races a write onto the same shared node (NODE_NOT_FOUND) is retried.
+# A save that races onto the same shared node (NODE_NOT_FOUND) is retried.
 NODE_SAVE_RETRY = RetryPolicy(attempts=5, delay=2.0)
 
-# Re-read of load balancer inputs another generator may still be writing: fixed interval, not backoff.
+# Re-read of load balancer inputs another generator may still write: fixed interval.
 LB_VIP_REREAD = RetryPolicy(attempts=12, delay=5.0)
 
-# add_sdwan_edge runs beside the office fabric generator: wait for the edge it creates (an office with an
-# sdwan_gateway only).
+# add_sdwan_edge runs beside the office fabric generator: wait for the edge it creates.
 OFFICE_EDGE_WAIT = RetryPolicy(attempts=8, delay=3.0)
 
-# Short on purpose: most pods host no border-leaf, so this fires on every pod's bootstrap.
+# Short on purpose: most pods host no border-leaf, so this fires on every pod bootstrap.
 BORDER_LEAF_WAIT = RetryPolicy(attempts=3, delay=2.0)
 
-# Tries to save a security policy rule whose generated index collided; each retry re-reads the index at once.
+# Retries of a security policy rule save whose generated index collided.
 RULE_SAVE_ATTEMPTS = 5

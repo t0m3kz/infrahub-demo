@@ -31,8 +31,7 @@ class LoadBalancer(BaseDeviceTransform):
     template_subdir = "loadbalancers"
 
     def _device_and_platform(self, data: Any) -> tuple[dict, dict, str | None]:
-        """The device is the first non-empty root: a physical member of a shared
-        cluster (DcimPhysicalDevice), else a dedicated virtual instance (DcimVirtualDevice)."""
+        """The device is the first non-empty root."""
         roots = {key: value for key, value in (data or {}).items() if isinstance(value, dict) and value.get("edges")}
         return super()._device_and_platform(roots or data)
 

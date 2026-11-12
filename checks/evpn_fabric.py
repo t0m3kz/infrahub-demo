@@ -1,35 +1,6 @@
-"""Validate the fabric-wide EVPN invariants that nothing else can catch.
+"""Validate fabric-wide EVPN invariants invisible in per-device configs.
 
-The failures modelled here are invisible in rendered config: every device's
-configuration is syntactically valid and accepted, sessions come up, routes are
-advertised — and traffic still does not forward. They cannot be caught by a
-per-device check either, because each device on its own looks correct. They are
-properties of the fabric as a whole, which is why they live in one check that
-reads every fabric at once.
-
-1. Route-target agreement. A route-target is <admin>:<vni>, and a VTEP imports a
-   route only when the RT matches exactly. transforms/helpers/vxlan.py derives the
-   admin field from TopologySegmentHosting.evpn_rt_as, falling back to the
-   device's own local ASN. Under ebgp-ibgp and ospf-ibgp that fallback is safe —
-   the overlay ASN is fabric-wide. Under ebgp-ebgp every VTEP runs its own ASN, so
-   the fallback gives every VTEP a DIFFERENT route-target for the same VNI and no
-   VTEP ever imports another's routes.
-
-2. VNI uniqueness. A VNI on the wire is one 24-bit field with no L2/L3
-   discriminator, so the L2 and L3 VNI spaces are the same space. Two segments
-   sharing a VNI silently bridge two tenants together; an L2 VNI colliding with an
-   L3 VNI mixes bridged and routed traffic in one VNI.
-
-Also checks VNI encodability, which is the same class of problem: every ASN in
-this project is 4-byte, and a 4-byte-admin route-target leaves only 16 bits for
-the assigned field, so a VNI above 65535 cannot be expressed in the RT at all.
-
-3. Site identity. ``evpn_rt_as`` is the Multi-Site site id and keeps the MANAGEMENT route-target DC-local, so
-   two data centers or colocation metros sharing one ASN merge their sites. A stretched segment in the MANAGEMENT
-   namespace would break the same DC-local rule.
-
-4. Router-id uniqueness. The RD is ``<router_id>:<l3_vni>``: every VTEP with an instance realized as an L3 VNI
-   needs an overlay router_id and no two of them may share it, or their routes overwrite each other.
+1 route-target agreement; 2 VNI uniqueness and encodability; 3 site identity (``evpn_rt_as``); 4 router-id uniqueness.
 """
 
 from __future__ import annotations
@@ -50,21 +21,16 @@ from utils.segment_addressing import segment_namespace
 from utils.service_contexts import border_contexts
 from utils.vrf_demand import SVI_ROLE, internet_exits, leg_namespaces, realized_l3
 
-# A type-2 route-target (4-byte admin ASN + 2-byte assigned number) and a type-1
-# route-distinguisher (4-byte IP + 2-byte assigned number) both leave 16 bits for
-# the VNI. Every ASN this project allocates is from the 4-byte private range, so
-# there is no 2-byte-admin variant available to widen it.
+# Route-targets and route-distinguishers leave 16 bits for the VNI (4-byte ASNs only), so a VNI above 65535 does not
+# fit.
 
-# Strategies whose OVERLAY ASN is per-device rather than fabric-wide. Only for
-# these does a missing evpn_rt_as actually break forwarding.
+# Strategies with a per-device overlay ASN: only there a missing evpn_rt_as breaks forwarding.
 _PER_DEVICE_OVERLAY_ASN_STRATEGIES = frozenset({"ebgp-ebgp"})
 
 _NO_OVERLAY_PROCESS_ROLES = frozenset({"access-leaf"})
-"""VTEP roles that may legitimately have no BGP process. The overlay templates render an RD only when the transform
-found an overlay process (transforms/helpers/vxlan.py ``build_evpn_inputs``: ``evpn_enabled = bool(process)``, read by
-templates/configs/common/sonic_vxlan.j2). generators/helpers/routing.py plans the processes of a DC fabric only, so an
-access-leaf outside one (the hand-placed dell_sonic cage switches CS-NY1-SW1, CS-VA1-SW1, MCR-AMS1-SW1) is a routed-SVI
-switch with no BGP. Every other VTEP role gets its process from a generator: a missing one is a lost process."""
+"""VTEP roles that may have no BGP process: an access-leaf outside a DC fabric is a routed-SVI switch; any other role
+lost its process.
+"""
 
 _LOCAL_SCOPE = "local"
 _MULTISITE_ROLE = "multisite-vip"
@@ -118,12 +84,7 @@ def _site_rt_asn(device: dict[str, Any]) -> int | None:
 
 
 def _has_l3_instance(device: dict[str, Any]) -> bool:
-    """Whether one of the device's VRF instances is realized as an L3 VNI (utils/vrf_demand.py ``realized_l3``).
-
-    The same inputs as the overlay transform: it routed in an instance's namespace when it has an anycast SVI there
-    (a segment SVI or a transit leg), and it is an EVPN Multi-Site border gateway (``multisite-vip`` interface and a
-    site ``evpn_rt_as``, transforms/helpers/vxlan.py ``_is_bgw``) for the internet-type exits.
-    """
+    """Whether one of the device's VRF instances is realized as an L3 VNI (utils/vrf_demand.py ``realized_l3``)."""
     interfaces = device.get("interfaces") or []
     namespaces = device_vrfs(device)
     routed = {
@@ -137,12 +98,7 @@ def _has_l3_instance(device: dict[str, Any]) -> bool:
 
 
 def vtep_router_id_errors(devices: list[dict[str, Any]]) -> list[str]:
-    """Every VTEP that renders an RD for an L3 VNI instance has an overlay router_id, unique among such VTEPs.
-
-    A VRF-lite instance (a session or address only, no anycast SVI and no default exit) has no RD, so a VRF-lite edge
-    needs none; neither does a device with no overlay BGP process (a routed-SVI access leaf without BGP renders no
-    RD), so an ``access-leaf`` is skipped. Any other VTEP role without a process is an error.
-    """
+    """Every VTEP that renders an RD for an L3 VNI instance has an overlay router_id, unique among such VTEPs."""
     errors = []
     holders: dict[str, list[str]] = defaultdict(list)
     for device in sorted(devices, key=lambda item: str(item.get("name"))):
@@ -200,9 +156,7 @@ class CheckEvpnFabric(InfrahubCheck):
             namespaces=cleaned.get("SecurityZone") or [],
         )
 
-    # ------------------------------------------------------------------
     # 1. Route-target agreement
-    # ------------------------------------------------------------------
 
     def _validate_route_target_asn(
         self,
@@ -215,8 +169,7 @@ class CheckEvpnFabric(InfrahubCheck):
             if self._rt_asn(dc) is not None:
                 continue
             if strategy not in _PER_DEVICE_OVERLAY_ASN_STRATEGIES:
-                # iBGP overlay: the shared overlay ASN is itself the fabric-wide
-                # constant, so the fallback lands on the same value everywhere.
+                # iBGP overlay: the shared overlay ASN is the same everywhere.
                 continue
             self.log_error(
                 message=(
@@ -233,10 +186,7 @@ class CheckEvpnFabric(InfrahubCheck):
         for metro in metros:
             name = metro.get("name", "<unnamed-colocation-metro>")
             if self._rt_asn(metro) is None:
-                # No routing_strategy attribute exists on TopologyColocationMetro
-                # yet, so the strategy cannot be inspected the way it can for a DC.
-                # Warn rather than error: a metro with no VXLAN segments at all is
-                # a perfectly valid configuration today.
+                # No routing_strategy on a metro: warn, not error (a metro with no VXLAN segments is valid).
                 self.log_info(
                     message=(
                         f"Colocation metro '{name}' has no evpn_rt_as set. That is fine while it "
@@ -252,24 +202,21 @@ class CheckEvpnFabric(InfrahubCheck):
         asn = (fabric.get("evpn_rt_as") or {}).get("asn")
         return asn if isinstance(asn, int) else None
 
-    # ------------------------------------------------------------------
     # 2. VNI uniqueness and encodability
-    # ------------------------------------------------------------------
 
     def _validate_vni_uniqueness(
         self,
         segments: list[dict[str, Any]],
         namespaces: list[dict[str, Any]],
     ) -> None:
-        # deployment name -> vni -> segment names holding it
+        # deployment -> vni -> segment names
         l2_by_deployment: dict[str, dict[int, list[str]]] = {}
         for segment in segments:
             seg_name = segment.get("name", "<unnamed-vxlan-segment>")
             for activation in segment.get("segment_deployments") or []:
                 vni = activation.get("vni")
                 if not isinstance(vni, int):
-                    # Unallocated VNI: the generator allocates from the pool on the
-                    # next run. Not this check's concern.
+                    # Unallocated VNI: the next generator run allocates it.
                     continue
                 deployment = activation.get("deployment")
                 dep_name = deployment.get("name", "<unknown>") if isinstance(deployment, dict) else "<unknown>"
@@ -289,14 +236,13 @@ class CheckEvpnFabric(InfrahubCheck):
                         )
                     )
 
-        # L3 VNIs are fixed per namespace (data/bootstrap/22_namespaces.yml), so they
-        # are global, not scoped to a deployment.
+        # L3 VNIs are fixed per namespace, so global.
         l3_by_vni: dict[int, list[str]] = {}
         for namespace in namespaces:
             ns_name = namespace.get("name", "<unnamed-namespace>")
             l3_vni = namespace.get("l3_vni")
             if not isinstance(l3_vni, int):
-                # The default/underlay namespace has no l3_vni, by design.
+                # The default/underlay namespace has no l3_vni.
                 continue
             l3_by_vni.setdefault(l3_vni, []).append(ns_name)
             self._check_encodable(l3_vni, f"L3 VNI for namespace '{ns_name}'")
@@ -312,8 +258,7 @@ class CheckEvpnFabric(InfrahubCheck):
                     )
                 )
 
-        # Exchange transit VNIs (utils/exchange_transit.py) are derived, not
-        # pooled, so a pool-allocated VNI landing in their band would collide.
+        # Derived exchange transit VNIs are not pooled, so a pool VNI in their band collides.
         for dep_name, by_vni in sorted(l2_by_deployment.items()):
             for vni in sorted(v for v in by_vni if TRANSIT_VNI_MIN <= v <= TRANSIT_VNI_MAX):
                 self.log_error(
@@ -333,9 +278,7 @@ class CheckEvpnFabric(InfrahubCheck):
                     )
                 )
 
-        # The crossover case: same 24-bit space, so an L2/L3 collision is just as
-        # real as an L2/L2 one. L3 VNIs are fixed per namespace while L2 VNIs come
-        # from the per-site pools, so a pool range can grow over a namespace value.
+        # Same 24-bit space: an L3 VNI fixed per namespace can fall in a per-site L2 pool range.
         for dep_name, by_vni in sorted(l2_by_deployment.items()):
             for vni in sorted(set(by_vni) & set(l3_by_vni)):
                 self.log_error(

@@ -1,0 +1,17 @@
+Revoking the approval rolls every device back automatically.
+{% for d in rollout %}
+{% for a in d.artifacts %}
+{% if a.checksum_previous %}
+{{ d.name }} {{ a.definition }}: back to {{ a.checksum_previous }} (storage {{ a.storage_previous or "?" }})
+{% else %}
+{{ d.name }} {{ a.definition }}: new device: config removed
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% if any_removed %}
+WARNING: the change removes objects; a configuration rollback does not restore their allocations (addresses, prefixes, numbers): re-create them on a new branch.
+{% if removed %}
+Removed: {{ removed | join(", ") }}{% if removed_more %} (+{{ removed_more }} more){% endif %}
+
+{% endif %}
+{% endif %}

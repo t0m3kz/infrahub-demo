@@ -556,6 +556,4 @@ def test_the_query_selects_what_rule_seven_reads() -> None:
     assert "owner" not in relationship_names("TopologySessionCircuit")
 
 
-# ---------------------------------------------------------------------------
 # 8. One owner and one attachment point per registered prefix
-# ---------------------------------------------------------------------------

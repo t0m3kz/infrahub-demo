@@ -35,11 +35,8 @@ from .types import CablingOptions, ChainHop
 
 
 def tracked_save_kwargs(track: bool) -> dict[str, Any]:
-    """save() kwargs for a write the run does (track) or does not (not track) own.
-
-    track=False adds update_group_context=False so the node is written but not
-    added to the run's tracking group, so delete_unused_nodes can never reclaim
-    it. track=True keeps the plain upsert (the run claims the node).
+    """save() kwargs for a write the run owns (track) or does not (not track). track=False adds
+    update_group_context=False so delete_unused_nodes never reclaims the node; track=True is the plain upsert.
     """
     return {"allow_upsert": True} if track else {"allow_upsert": True, "update_group_context": False}
 
@@ -56,11 +53,8 @@ def _address_key(address: str) -> str:
 
 @dataclass
 class _LayoutCache:
-    """What one generator run has already read for cable lengths.
-
-    Racks and suites are data, never generated, and no generator moves a device between racks, so a
-    device's position, a rack and a suite are read once per run, however many cabling plans, HA pairs
-    and MLAG pairs ask for them.
+    """What one run has already read for cable lengths: device positions, racks and suites (data, never moved by a
+    generator), read once per run.
     """
 
     positions: dict[str, RackPosition | None] = field(default_factory=dict)
@@ -69,21 +63,18 @@ class _LayoutCache:
 
 
 class CablingMixin:
-    """Mixin providing device-to-device cabling methods for CommonGenerator.
+    """Device-to-device cabling methods for CommonGenerator.
+    The host provides ``client``, ``logger``, ``deployment_id``, ``_resolve_pool`` and ``_retry_delay``."""
 
-    Expects the host class to provide: ``client``, ``logger``, ``deployment_id``,
-    ``_resolve_pool``, and ``_retry_delay`` (all present on ``CommonGenerator``).
-    """
-
-    # Attribute declarations for the type checker — provided by CommonGenerator / InfrahubGenerator
+    # Attribute declarations for the type checker, provided by CommonGenerator / InfrahubGenerator
     client: Any
     logger: logging.Logger
     deployment_id: str
-    # CommonGenerator._resolve_pool / _retry_delay — annotation only.
+    # CommonGenerator._resolve_pool / _retry_delay, annotation only
     _resolve_pool: Any
     if TYPE_CHECKING:
         _retry_delay = staticmethod(CommonGenerator._retry_delay)
-    # Set on first use by _cable_layouts, one per generator instance (= per run).
+    # Set on first use by _cable_layouts, one per run
     _layout_cache: _LayoutCache | None
 
     async def create_cabling(
@@ -103,11 +94,9 @@ class CablingMixin:
         bottom_sorting: Literal["top_down", "bottom_up"] = "bottom_up",
         top_sorting: Literal["top_down", "bottom_up"] = "bottom_up",
     ) -> list[tuple[Any, Any]]:
-        """Create cabling connections between device layers.
-
-        Simple approach: query interfaces → build plan → for each connection:
-        create cable, fetch interfaces, allocate IPs, save interfaces.
-        All saves use allow_upsert=True for idempotency and generator tracking.
+        """Create cabling connections between device layers: query interfaces, build the plan, then per connection
+        create the cable, allocate IPs and save the interfaces. All saves use allow_upsert=True for idempotency and
+        tracking.
         """
         if options is None:
             options = CablingOptions()
@@ -117,8 +106,7 @@ class CablingMixin:
             f"[strategy={strategy}, offset={cabling_offset}, speed-matched]"
         )
 
-        # Retry querying interfaces until template instantiation completes.
-        # Templates are applied asynchronously; a fixed sleep is fragile under load.
+        # Retry until template instantiation completes (templates apply asynchronously)
         src_interfaces: list = []
         dst_interfaces: list = []
         for _attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
@@ -151,10 +139,8 @@ class CablingMixin:
             )
             return []
 
-        # Build lookup map for O(1) access after cabling plan is built
         iface_map: dict[str, Any] = {iface.id: iface for iface in src_interfaces + dst_interfaces}
 
-        # Build cabling plan
         planner = CablingPlanner(
             bottom_interfaces=src_interfaces,
             top_interfaces=dst_interfaces,
@@ -164,15 +150,13 @@ class CablingMixin:
         cabling_plan = planner.build_cabling_plan(scenario=strategy, cabling_offset=cabling_offset)
 
         if not cabling_plan:
-            # Both sides have interfaces (checked above), so an empty plan means
-            # devices that were asked to be cabled won't be — that's a failure.
+            # An empty plan with interfaces on both sides means devices asked to be cabled won't be: a failure
             self.logger.error(
                 f"No cabling connections planned for {sorted(bottom_devices)} -> {sorted(top_devices)} "
                 f"(strategy={strategy}, offset={cabling_offset})"
             )
             return []
 
-        # Resolve technical pool for P2P address allocation
         technical_pool = await self._resolve_pool(
             provided=options.get("pool"),
             kind=CoreIPPrefixPool,
@@ -182,16 +166,9 @@ class CablingMixin:
         return await self._execute_cabling_plan(cabling_plan, iface_map, options, technical_pool)
 
     async def _cable_layouts(self, device_ids: Iterable[str]) -> dict[str, RackPosition | None]:
-        """Rack position of each device, for the length of the cables between them.
-
-        THE lookup behind every cable's ``length_cm`` (this mixin's cabling, the HA sync cable, the MLAG
-        peer-link cables). A device missing from the result, or mapped to None, has no derivable position:
-        a virtual device, a device with no rack, a rack with no suite.
-
-        Memoised per run (_LayoutCache): only the devices, racks and suites not read yet are read, in at most
-        three batched reads (devices -> racks -> suites), none when everything asked for is known or no
-        device has a rack. A device the read does not return, or whose rack or suite is not visible yet, is
-        not memoised, so the next call looks again.
+        """Rack position of each device, for cable lengths (cabling, HA sync cable, MLAG peer-link cables). A missing or
+        None entry has no derivable position (virtual device, no rack, rack with no suite). Memoised per run in at most
+        three batched reads (devices, racks, suites); anything not visible yet is not memoised.
         """
         ids = sorted(set(device_ids))
         cache: _LayoutCache | None = getattr(self, "_layout_cache", None)
@@ -203,7 +180,7 @@ class CablingMixin:
         return {device_id: cache.positions.get(device_id) for device_id in ids}
 
     async def _read_layouts(self, device_ids: list[str], cache: _LayoutCache) -> None:
-        """Read the devices, then the racks and suites they need that the cache lacks, and memoise the positions."""
+        """Read the devices, then the racks and suites the cache lacks, and memoise the positions."""
         devices = await self.client.filters(kind=DcimPhysicalDevice, ids=device_ids, include=["rack"])
         rack_id_by_device = {device.id: _peer_id(getattr(device, "rack", None)) for device in devices}
         rack_ids = sorted({rack_id for rack_id in rack_id_by_device.values() if rack_id and rack_id not in cache.racks})
@@ -253,9 +230,8 @@ class CablingMixin:
         options: CablingOptions,
         technical_pool: Any,
     ) -> list[tuple[Any, Any]]:
-        """Execute an already-built cabling plan: create each cable, allocate
-        P2P IPs if a pool is given, save both interfaces. Shared tail for
-        create_cabling() and create_chain_cabling()."""
+        """Execute a built cabling plan: create each cable, allocate P2P IPs if a pool is given, save both interfaces.
+        Shared tail of create_cabling() and create_chain_cabling()."""
         cabled_pairs: list[tuple[Any, Any]] = []
         layouts = await self._cable_layouts(interface.device.id for pair in cabling_plan for interface in pair)
         for src_interface, dst_interface in cabling_plan:
@@ -272,14 +248,12 @@ class CablingMixin:
                 src_interface.interface_type.value, dst_interface.interface_type.value
             )
 
-            # Use the already-fetched interface objects. Their `cable` relationship
-            # was loaded with include=["cable"], so re-saving them below preserves
-            # whatever cable they already point at instead of sending null.
+            # These interfaces were loaded with include=["cable"], so re-saving them preserves their cable instead of
+            # sending null
             updated_src = iface_map[src_interface.id]
             updated_dst = iface_map[dst_interface.id]
 
-            # Allocate P2P addresses if pool provided
-            # prefix_length: 127 for IPv6 (RFC 6164, default), 31 for IPv4 (RFC 3021, exception)
+            # Allocate P2P addresses if a pool is given (prefix length 127 for IPv6, 31 for IPv4)
             p2p_prefix_length: int = options.get("p2p_prefix_length", 31)
             if technical_pool:
                 p2p_prefix = await self.client.allocate_next_ip_prefix(
@@ -295,12 +269,8 @@ class CablingMixin:
                 updated_src.ip_address = src_ip.id
                 updated_dst.ip_address = dst_ip.id
 
-            # update_group_context=False: physical interfaces come from the device's
-            # object_template, not from this generator run — they must never be
-            # candidates for the tracking group's delete_unused_nodes cleanup (e.g.
-            # a port dropped from this run's cabling plan because amount_of_spines
-            # shrank would otherwise be deleted as "unused" even though it's a real,
-            # still-existing hardware interface).
+            # update_group_context=False: physical interfaces come from the object_template and must never be
+            # delete_unused_nodes candidates
             updated_src.description.value = cable_name
             updated_src.status.value = "active"
             await updated_src.save(allow_upsert=True, update_group_context=False)
@@ -309,17 +279,8 @@ class CablingMixin:
             updated_dst.status.value = "active"
             await updated_dst.save(allow_upsert=True, update_group_context=False)
 
-            # Create the cable LAST, and let it establish the link from its own
-            # side via `endpoints` — the reverse of the interface's `cable`.
-            #
-            # Never the other way round: writing the freshly created cable's id
-            # back onto an interface reads a node the server may not have made
-            # visible yet, which fails as
-            #   "Unable to find the node <uuid> / DcimCable in the database"
-            #   (NODE_NOT_FOUND, 404)
-            # intermittently under concurrent generator runs. The cable's
-            # endpoints reference interfaces that came from the device's
-            # object_template, so they are always already visible.
+            # Create the cable LAST and let it set the link from its own side via `endpoints`: writing a fresh cable's
+            # id onto an interface can hit NODE_NOT_FOUND under concurrent runs
             cable = await self.client.create(
                 kind=DcimCable,
                 data={
@@ -337,11 +298,8 @@ class CablingMixin:
             )
             await cable.save(allow_upsert=True)
 
-            # In-memory only, after the last save of either interface: create_routing()
-            # builds the underlay peerings from the cables of the interface objects
-            # returned here (cable_map in generators/helpers/routing.py), so they have
-            # to carry it. Nothing saves these interfaces again, so the cable id this
-            # assignment holds is never sent back to a server that cannot yet see it.
+            # In-memory only, after the last save: create_routing() reads the cable from these returned interface
+            # objects (cable_map in helpers/routing.py) and nothing saves them again
             updated_src.cable = cable
             updated_dst.cable = cable
 
@@ -358,11 +316,7 @@ class CablingMixin:
         description: str | None = None,
         track: bool = True,
     ) -> list[Any]:
-        """Upsert both addresses of a /31 (RFC 3021) or /127 (RFC 6164) P2P prefix.
-
-        The two-address case of upsert_prefix_addresses(): offsets 0 and 1,
-        returned in that order.
-        """
+        """Upsert both addresses of a /31 or /127 P2P prefix (offsets 0 and 1, returned in that order)."""
         by_offset = await self.upsert_prefix_addresses(
             prefix, offsets=(0, 1), address_length=address_length, description=description, track=track
         )
@@ -377,28 +331,13 @@ class CablingMixin:
         description: str | None = None,
         track: bool = True,
     ) -> dict[int, Any]:
-        """Upsert the addresses at the given host offsets of an allocated prefix; returns offset -> address node.
-
-        Queried before created: allocate_next_ip_prefix() is idempotent per
-        identifier, but IpamIPAddress's (address, ip_namespace) uniqueness is
-        only enforced by an async validator, so two overlapping runs for the
-        same link would otherwise both blind-create the same address (seen on
-        DC4's hyper-spine mesh as a "Process schema integrity" merge failure).
-        Saved even when found: the run tracks only what it saves, so a reused
-        but unsaved address is one delete_unused_nodes removes.
-
-        address_length defaults to the prefix's own length. description, when
-        given, is (re)written on every run.
-
-        track=False saves the addresses with update_group_context=False, for
-        a caller addressing a link it does not own (e.g. a shared
-        FirewallContext reached by every customer on the cluster): the
-        addresses are written but never claimed by this run's tracking group,
-        so no run's cleanup can delete them.
+        """Upsert addresses at the given host offsets of an allocated prefix; returns offset -> address node. Queried
+        before created (uniqueness is an async validator) and saved even when found so the run tracks it;
+        ``track=False`` skips tracking.
         """
         network = ipaddress.ip_network(prefix.prefix.value, strict=False)
         length = network.prefixlen if address_length is None else address_length
-        # network[offset], not .hosts(): .hosts() yields one address for /31 and /127.
+        # network[offset], not .hosts(): .hosts() yields one address for /31 and /127
         addresses = {offset: f"{network[offset]}/{length}" for offset in offsets}
         found = await self._find_addresses(list(addresses.values()), prefix.ip_namespace.id)
         return {
@@ -413,10 +352,8 @@ class CablingMixin:
         }
 
     async def _find_addresses(self, addresses: Sequence[str], namespace_id: str) -> dict[str, Any]:
-        """The IpamIPAddress nodes that already exist among ``addresses`` in the namespace, by canonical address.
-
-        THE find-before-create read (the race guard of upsert_prefix_addresses()): one filtered read for all the
-        addresses, however many.
+        """The IpamIPAddress nodes that already exist among ``addresses`` in the namespace, by canonical address, in one
+        filtered read (the find-before-create guard).
         """
         nodes = await self.client.filters(
             kind=IpamIPAddress, address__values=list(addresses), ip_namespace__ids=[namespace_id]
@@ -426,10 +363,8 @@ class CablingMixin:
     async def _save_address(
         self, *, address: str, ip_namespace: Any, existing: Any | None, description: str | None, track: bool
     ) -> Any:
-        """Save one address, creating it when ``existing`` (what _find_addresses found) is None.
-
-        Saved even when found: the run tracks only what it saves. An existing address is re-created from
-        its id only to (re)write a description.
+        """Save one address, creating it when ``existing`` is None. Saved even when found, since the run tracks only
+        what it saves; an existing address is re-created from its id to rewrite the description.
         """
         ip = existing
         if not ip or description is not None:
@@ -448,20 +383,9 @@ class CablingMixin:
     async def create_chain_cabling(
         self, hops: list[ChainHop], options: CablingOptions | None = None
     ) -> list[list[tuple[Any, Any]]]:
-        """Cable an ordered chain of device groups end to end — e.g.
-        border-leaf<->firewall<->load-balancer<->border-leaf — one leg per
-        consecutive pair of hops, index-paired ("chain" strategy): device i
-        on one side cables ONLY to device i on the other, forming N
-        independent redundant paths rather than an any-to-any mesh. Fewer
-        devices on one side are reused round-robin.
-
-        Each hop's ``down_role`` interfaces cable to the next hop's
-        ``up_role`` interfaces. An empty ``devices`` list, or zero matching
-        ports on either side, skips that leg (logged as an error if ports
-        are missing on a non-empty device list).
-
-        Returns one list of cabled (src, dst) pairs per leg, in chain order.
-        A skipped leg contributes an empty list.
+        """Cable an ordered chain of device groups end to end, index-paired; fewer devices on a side are reused
+        round-robin. Each hop's ``down_role`` ports cable to the next hop's ``up_role`` ports; returns one list of (src,
+        dst) pairs per leg.
         """
         if options is None:
             options = CablingOptions()
@@ -512,8 +436,8 @@ class CablingMixin:
             planner = CablingPlanner(bottom_interfaces=bottom_interfaces, top_interfaces=top_interfaces)
             leg_plan = planner.build_cabling_plan(scenario="chain", cabling_offset=cabling_offset)
             if not leg_plan:
-                # A speed mismatch or a port shortfall already raised CablingPlanError
-                # inside build_cabling_plan; this guards any other empty plan.
+                # build_cabling_plan raises CablingPlanError on a speed mismatch or port shortfall; this guards any
+                # other empty plan
                 self.logger.error(
                     f"create_chain_cabling: {sorted(top_devices)}<->{sorted(bottom_devices)} cabling produced "
                     f"no connections between {top_role}-role and {bottom_role}-role ports."
@@ -537,20 +461,11 @@ class CablingMixin:
         track: bool = True,
         role: str = "service",
     ) -> Any | None:
-        """Upsert a VLAN-tagged DcimVirtualInterface on trunk_iface, named
-        <trunk>.<vlan_id> by convention, riding on the trunk with the tag in its ``ManagedInterfaceEncapsulation`` (saved
-        with the interface, so it is reclaimed with it), and put in the VRF instance ``vrf_id``
-        (generators/helpers/interface_vrf.py: it leaves another instance). Nothing else is linked to it: the context
-        and the exchanges a firewall-context leg belongs to are derived from the member's uplink and the leg's VRF
-        (utils/service_contexts.py). Trunk-interface resolution stays with the caller since the fallback behavior
-        differs. An office's WAN exit, which the BGP peering names as its interface, has its own ``role``.
-
-        track=False makes the sub-interface save use update_group_context=False, for a
-        sub-interface reached by more than one target (e.g. a shared
-        FirewallContext's per-firewall leg): written, never claimed by this
-        run's group. This helper saves no
-        IP itself — ip_address_id must already exist; untracked addressing is
-        upsert_p2p_addresses(track=False).
+        """Upsert a VLAN-tagged DcimVirtualInterface on trunk_iface, named <trunk>.<vlan_id>, riding on the trunk
+        through its ``ManagedInterfaceEncapsulation`` (saved with the interface) and put in the VRF instance ``vrf_id``
+        (generators/helpers/interface_vrf.py). The caller resolves the trunk interface. ``track=False`` saves with
+        update_group_context=False for a sub-interface reached by more than one target. ``ip_address_id`` must already
+        exist.
         """
         sub_iface_name = f"{trunk_iface.name.value}.{vlan_id_value}"
         sub_iface_data: dict[str, Any] = {
@@ -575,10 +490,8 @@ class CablingMixin:
             )
             await encapsulation.save(**tracked_save_kwargs(track))
             if vrf_id:
-                # A node built from create(data) does not know the capabilities the server already holds: one get with
-                # the relationship included (only the peer ids are read). The edges are written one by one, never as a
-                # saved list (generators/helpers/interface_vrf.py), retried on NODE_NOT_FOUND: the VRF may be an
-                # instance this pass created.
+                # A node built from create(data) does not know the capabilities the server holds: one get with the
+                # relationship included; edges are written one by one with NODE_NOT_FOUND retry (the VRF may be new)
                 stored = await self.client.get(kind=DcimVirtualInterface, id=sub_iface.id, include=["capabilities"])
                 peers = getattr(stored, "capabilities").peers
                 stale_vrfs = [old for old in vrf_ids(peers) if old != vrf_id]
@@ -600,15 +513,10 @@ class CablingMixin:
         namespace_id: str | None = None,
         track: bool = True,
     ) -> Any | None:
-        """Wrap an EXISTING prefix in a CoreIPAddressPool named (and identified
-        by) pool_name, so allocate_next_ip_address can hand out its addresses —
-        IpamPrefix itself is not a CoreResourcePool, and the SDK only allocates
-        from a real CoreIPAddressPool. Upserted by name on every run, so a moved
-        prefix re-points the pool's resources. track=True: the caller's run owns
-        it; track=False for a pool several targets allocate from (a load
-        balancer context's VIP range), which no single run may delete.
-        Addresses that already exist in the prefix (a gateway, another pool's
-        reservation) are never handed out again. None on error."""
+        """Wrap an EXISTING prefix in a CoreIPAddressPool named pool_name so allocate_next_ip_address can hand out its
+        addresses. Upserted by name each run, so a moved prefix re-points the pool. track=False for a pool several
+        targets share; existing addresses are never handed out again. None on error.
+        """
         try:
             pool = await self.client.create(
                 kind=CoreIPAddressPool,
@@ -631,8 +539,7 @@ class CablingMixin:
     async def allocate_prefix_address(
         self, *, pool: Any, identifier: str, prefix_length: int, description: str
     ) -> str | None:
-        """The id of the address ``identifier`` reserves in ``pool`` — the same
-        address on every run with the same identifier. None on error."""
+        """The id of the address ``identifier`` reserves in ``pool``: the same address on every run. None on error."""
         try:
             ip_obj = await self.client.allocate_next_ip_address(
                 resource_pool=pool,
@@ -655,18 +562,10 @@ class CablingMixin:
         firewall_names: list[str],
         load_balancer_names: list[str],
     ) -> None:
-        """Cable border-leaf/border-spine<->firewall<->load-balancer per
-        connectivity_mode. Index-paired (border[0]<->fw[0], border[1]<->fw[1],
-        ...), never any-to-any — each border/firewall/load-balancer triple is
-        one independent redundant path. Fewer devices on one side are reused
-        round-robin.
-        - pbr: two independent legs, each on the service device's "uplink" ports.
-        - inline: one chain — border<->firewall<->load-balancer<->border.
-          Every device has an "uplink" (toward the previous hop) and "downlink"
-          (toward the next), distinct from load-balancer's own "customer"-role
-          VIP ports (untouched here).
-        No-ops for any leg with nothing to cable (create_chain_cabling's own
-        empty-devices handling).
+        """Cable border-leaf/border-spine<->firewall<->load-balancer per connectivity_mode, index-paired
+        (border[0]<->fw[0], ...). pbr: two independent legs on the service device's "uplink" ports. inline: one chain
+        border<->firewall<->load-balancer<->border using "uplink" and "downlink" ports. No-ops for any leg with nothing
+        to cable.
         """
         border_to_firewall = ChainHop(devices=border_names, down_role=border_role_for["internal-firewall"])
         firewall_hop = ChainHop(devices=firewall_names, up_role="uplink")

@@ -1,17 +1,11 @@
-"""The extra query roots the route protection reads (queries/config/*.gql), as raw GraphQL for the smoke fixtures.
-
-``transforms/helpers/bgp_facts.py`` derives the EVPN filters from the prefixes of the environment namespaces, the VRF
-instances (a border gateway in the INTERNET one is the default exit) and the number of L2 VNIs. A fixture that wants
-the EVPN filters adds these roots next to its device root.
-"""
+"""The extra query roots the route protection reads (queries/config/*.gql), as raw GraphQL for the smoke fixtures."""
 
 from __future__ import annotations
 
 from tests.smoke.fixture_builders.common import _edges, _node, _v
 from tests.smoke.fixture_builders.vrf import routing_vrf, routing_zone
 
-# The routed space of the fixtures: the segment 10.100.0.0/24 in PROD, one more
-# prefix registered there, and the public aggregate in INTERNET.
+# The routed space of the fixtures: the segment 10.100.0.0/24 in PROD
 TENANT_NAMESPACE = "PROD"
 TENANT_PREFIXES = ("10.100.0.0/24", "10.100.8.0/24")
 INTERNET_PREFIXES = ("203.0.113.0/24",)
@@ -33,11 +27,7 @@ def _members(names: list[str], roles: dict[str, str]) -> dict:
 def add_environment_roots(
     data: dict, *, tenant_members: list[str], internet_members: list[str], roles: dict[str, str] | None = None
 ) -> None:
-    """Add the environment prefixes, the VRF instances and the segments to a device query response.
-
-    ``tenant_members`` / ``internet_members`` are the devices in the tenant and in the INTERNET VRF instance, ``roles``
-    their roles by name (a device not named is a leaf).
-    """
+    """Add the environment prefixes, the VRF instances and the segments to a device query response."""
     roles = roles or {}
     data["environment_zones"] = _edges(
         [

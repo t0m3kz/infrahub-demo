@@ -1,14 +1,5 @@
-"""Shared ``generate()`` of the customer boarding generators that provision
-service contexts on their parent facility's firewall and load-balancer pairs.
-
-customer_dc.py (TopologyCustomerDC on a DataCenter) and customer_colocation.py
-(TopologyCustomerColocation on every ColocationZone of its metro) differ only in
-the customer kind, the hosting facilities (``_hosting_parents``: the DC, or the
-zones of the metro), whether a facility is required, the parent generators to
-wait for and the context kinds they provision — class attributes the host sets
-(see FirewallContextMixin). The provisioning itself is
-generators/firewall_context.py's FirewallContextMixin, one run per ContextSpec
-and per hosting facility.
+"""Shared ``generate()`` of the customer boarding generators that provision service contexts on a facility.
+customer_dc.py and customer_colocation.py differ only in class attributes; the provisioning is FirewallContextMixin's.
 """
 
 from __future__ import annotations
@@ -27,40 +18,25 @@ if TYPE_CHECKING:
 
 
 class CustomerFacilityMixin(FirewallContextMixin, VrfMixin, SegmentAddressingMixin):
-    """``generate()`` for a customer boarding generator on a facility with service pairs.
-
-    It first boards the footprint's customer pools (``SegmentAddressingMixin.ensure_customer_pools``), so they exist
-    before the first segment asks for a prefix. The host class also mixes in PoolMixin, DeviceMixin and CablingMixin
-    (see FirewallContextMixin) and CommonGenerator, and sets ``_customer_kind``,
-    ``_parent_label``, ``_parent_generators`` and ``_context_specs``.
+    """``generate()`` for a customer boarding generator on a facility with service pairs; boards the customer pools
+    first. The host sets ``_customer_kind``, ``_parent_label``, ``_parent_generators`` and ``_context_specs``.
     """
 
-    # A footprint with no hosting facility (a colocation metro without a zone) simply has no
-    # contexts: an info log. A required one (a DC footprint's DC) that is missing is an error.
+    # False: a footprint with no hosting facility (a metro without a zone) just has no contexts.
     _parent_required: bool = True
-    # Whether the footprint's segments terminated on a firewall context follow its internal context when it moves
-    # (a DC footprint: checks/segment_placement.py holds terminations to DC footprints only).
 
     # Provided by DeviceMixin.
     if TYPE_CHECKING:
         set_controllers_from = DeviceMixin.set_controllers_from
 
     def _hosting_parents(self, customer: dict[str, Any]) -> list[dict[str, Any]]:
-        """The facilities whose firewall and load-balancer pairs host this footprint's contexts: its parent.
-
-        A host whose parent owns no devices (a colocation metro: its zones do) overrides it.
-        """
+        """The facilities whose pairs host this footprint's contexts: its parent (a metro overrides it)."""
         parent = customer.get("parent")
         return [parent] if isinstance(parent, dict) and parent.get("id") else []
 
     async def _reconcile_border_vrfs(self, target: _ContextTarget, label: str) -> None:
-        """Converge the VRF instances of the border devices whose service ports face the context's members.
-
-        A leg puts an address on the firewall or load balancer, never on the border leaf or edge: the border's demand
-        is the leg's namespace, read through the members behind its service port (utils/service_contexts.py: a context
-        has no interface edge, its border ports are the ones cabled to its members' uplinks). The leg writes run under
-        the context's lock (``fw-context-*``/``lb-context-*``), which ``_ensure_transit_legs`` has released by now, and
-        a VRF lock is never taken under it; so the instance follows the leg, it does not precede it.
+        """Converge the VRF instances of the border devices facing the context's members, after the leg writes and
+        outside the context's lock.
         """
         members = await self._resolve_transit_members(target.spec, target.devices, context_name=label)
         await self.reconcile_vrfs({member.bl_port.device.id for member in members})
@@ -90,14 +66,7 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin, SegmentAddressingMix
             footprint_name=customer.get("name", customer_id),
         )
 
-        # This reads facility-level data (firewall_devices, loadbalancer_devices)
-        # written by the facility's own generator (the only owner of its HA
-        # pairs). A customer can board concurrently with (or immediately
-        # after) its facility's creation — e.g. a bulk load — so wait for each
-        # in-flight facility generator and re-parse rather than risk provisioning
-        # against a facility that has no firewall/LB devices yet (see pod.py's
-        # identical wait for the same reason). Every hosting facility is waited
-        # for, one with no firewall yet included: it may be about to get them.
+        # Wait for each in-flight facility generator: it writes the firewall/LB devices read below.
         for facility in self._hosting_parents(customer):
             refreshed = await self.wait_for_parent_generator_and_refetch(self._parent_generators, facility["id"])
             if refreshed is not None:
@@ -107,10 +76,7 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin, SegmentAddressingMix
                     return
                 customer = entries[0]
 
-        # Read synchronously by create_devices() — see
-        # generators/devices.py's _resolve_role_controller. A parent without
-        # controller aliases in its query (a colocation metro declares none)
-        # contributes nothing, leaving the list empty.
+        # Read synchronously by create_devices() (devices.py _resolve_role_controller).
         parent = customer.get("parent")
         self.set_controllers_from(parent if isinstance(parent, dict) else {})
         facilities = self._hosting_parents(customer)
@@ -124,9 +90,7 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin, SegmentAddressingMix
                 return
             self.logger.info(message)
 
-        # One run per context kind and hosting facility, independent of each other: a facility with
-        # load balancers and no firewalls (or the reverse) still gets the one, and a metro with two firewall
-        # zones gets a context on each. The contexts' locks are per context, so the runs are sequential.
+        # One run per context kind and facility; locks are per context, so the runs are sequential.
         for spec in self._context_specs:
             served: list[str] = []
             complete = True
@@ -140,10 +104,7 @@ class CustomerFacilityMixin(FirewallContextMixin, VrfMixin, SegmentAddressingMix
                 else:
                     served.append(context_id)
                     await self._reconcile_border_vrfs(target, context_id)
-            # A single serving link is replaced by link_serving_context; a many one is converged here, per spec: the
-            # firewall list holds the internal and the Internet edge contexts, each spec drops only links of its
-            # own role (serving_context_ids). Only a run that built every context it set out to may drop a link (a
-            # failed one raises under the generator logger before this point).
+            # A many link is converged per spec (each drops only links of its own role); only a complete run may drop.
             if spec.serving_many and complete:
                 await self.unlink_stale_serving_contexts(
                     spec,

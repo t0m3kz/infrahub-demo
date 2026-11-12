@@ -1,23 +1,5 @@
-"""Decommission a pod's devices without deleting them.
-
-Sets the pod's fabric devices (the ones add_pod/add_rack create) to status
-"decommissioned". Idempotent: re-running on the same pod simply reaffirms the
-status.
-
-Owns nothing, so every write is untracked: the devices and interfaces belong
-to add_pod/add_rack. Tracked, the next run (which finds the devices already
-decommissioned and saves nothing) would delete them in its cleanup.
-
-A border-spine pod's border-spines are deployed to the DC, not the pod, so
-they are picked out of the DC's border-spines by name. The far end of every
-removed fabric cable (a super-spine, another pod's spine, a border-leaf) is
-freed with it. Last, the pod's two pools and the prefixes they were sliced
-from the DC pools are deleted (add_pod's, released for the DC's next pod),
-but only a slice that nothing is left in.
-
-Endpoints (servers) are left alone even though add_endpoint points their
-deployment at the pod: they are data-loaded, not built by the pod. Their
-cables into the pod's switches are still removed, from the switch side.
+"""Decommission a pod's devices without deleting them (status "decommissioned"); idempotent. Every write is untracked.
+Frees the far end of each removed fabric cable, then deletes the pod's pools and DC-pool slices if empty.
 """
 
 from typing import Any
@@ -44,21 +26,19 @@ from ..protocols import (
     ManagedInterfaceEncapsulation,
 )
 
-# Device roles add_pod/add_rack create under a pod's deployment (spine, the
-# rack switch tiers, and a border-spine pod's own firewall/load-balancer).
+# Device roles add_pod/add_rack create under a pod's deployment
 _POD_FABRIC_ROLES = frozenset({"spine", "leaf", "tor", "l2-leaf", "access-leaf", "internal-firewall", "load-balancer"})
-# Roles at the far end of a pod device's fabric cable that are not the pod's own
-# devices: its spines' super-spines, another pod's spines (back-to-back mesh) and
-# the border-leafs cabled to its spines. Never an endpoint (left alone, see above).
+# Roles at the far end of a pod device's fabric cable that are not the pod's own devices; never an endpoint
 _FAR_END_FABRIC_ROLES = frozenset({"super-spine", "spine", "border-spine", "border-leaf"})
-# The pod's pools (TopologyPod field) and their kinds.
+# The pod's pools (TopologyPod field) and their kinds
 _POD_POOLS = (("loopback_pool", CoreIPAddressPool), ("prefix_pool", CoreIPPrefixPool))
 
 
 class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
     async def _filter_by_ids(self, kind: Any, ids: list[str], **kwargs: Any) -> list[Any]:
-        """client.filters(ids=...), or [] for no ids: the SDK forwards an
-        empty id list, which does not narrow the query at all."""
+        """client.filters(ids=...), or [] for no ids (the SDK forwards an empty id list, which does not narrow the
+        query).
+        """
         unique_ids = sorted(set(ids))
         if not unique_ids:
             return []
@@ -73,14 +53,8 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
         return [device for device in dc_border_spines if device.get("name") in names]
 
     async def _release_pod_pools(self) -> None:
-        """Delete the pod's pools and the slices they hold, each only once nothing is left in it.
-
-        A slice is empty once this run removed the pod devices' addresses and
-        P2P prefixes; one that still holds an address or a prefix is kept
-        (warning), so the DC pool can never hand its range to another pod
-        while something still sits in it. The pool goes first, then its slice
-        (freed in the DC pool it was allocated from). A re-run finds no pool
-        and does nothing.
+        """Delete the pod's pools and the slices they hold, each only once nothing is left in it. A slice that still
+        holds an address or prefix is kept (warning). The pool goes first, then its slice; a re-run does nothing.
         """
         for field, pool_kind in _POD_POOLS:
             pool = self.data.get(field)
@@ -111,13 +85,12 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
                 self.logger.error("No Pod data found in GraphQL response")
                 return
 
-            # Keep raw pod dict; only id/name are required for decommission workflow.
+            # Only id/name are required for decommission
             self.data = deployment_list[0]
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error("Generation failed due to %s", exc)
             return
 
-        # Only the pod's own fabric devices — see the module docstring.
         pod_devices = [
             device for device in self.data.get("devices", []) or [] if device.get("role") in _POD_FABRIC_ROLES
         ] + self._border_spines()
@@ -147,7 +120,7 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
             for interface in device.get("interfaces", []) or []
             if interface.get("status") == "active"
             and interface.get("typename") == "DcimVirtualInterface"
-            # An SVI goes through the VRF reconcile below, which deletes it under the device locks.
+            # An SVI is deleted by the VRF reconcile below, under the device locks
             and interface.get("role") != SVI_ROLE
         ]
 
@@ -176,8 +149,7 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
             for device in self.data.get("devices", []) or []
             for interface in device.get("interfaces", []) or []
             if interface.get("typename") == "DcimVirtualInterface"
-            # A segment SVI carries the segment's anycast gateway, the one address every SVI of the segment shares:
-            # it is the segment's, never the device's, so it outlives the pod.
+            # A segment SVI carries the segment's anycast gateway, which outlives the pod
             and interface.get("role") != SVI_ROLE
             for id in [(interface.get("ip_address") or {}).get("id")]
             if isinstance(id, str)
@@ -198,8 +170,7 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
             if isinstance(cable_id, str)
         ]
 
-        # By id, not by prefix value: the same prefix can exist in several IP
-        # namespaces, and a value filter would delete every one of them.
+        # By id, not prefix value: the same prefix can exist in several namespaces
         p2p_prefix_ids: list[str] = [
             prefix_id
             for device in self.data.get("devices", []) or []
@@ -220,7 +191,6 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
         async for _node, _ in execute_batch.execute():
             self.logger.info(f"Decommissioned {_node.name.value}")
 
-        # Set all physical interfaces to free and remove descriptions
         execute_batch: InfrahubBatch = await self.client.create_batch()
 
         interface_objs: list[DcimPhysicalInterface] = await self._filter_by_ids(
@@ -239,9 +209,8 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
                 f"Cleaned interface {_node.device.display_label} - {_node.name.value} status and description"
             )
 
-        # Remove all virtual interfaces
         interface_objs: list[DcimVirtualInterface] = await self._filter_by_ids(DcimVirtualInterface, virtual_interfaces)
-        # An interface does not take its encapsulation (the parent it rides on) with it: delete those first.
+        # An interface does not take its encapsulation with it: delete those first
         encapsulations = (
             await self.client.filters(
                 kind=ManagedInterfaceEncapsulation,
@@ -258,7 +227,6 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
             await interface_obj.delete()
             self.logger.info(f"deleted virtual interface {interface_obj.hfid}")
 
-        # Remove all ip addresses
         address_objs: list[IpamIPAddress] = await self._filter_by_ids(
             IpamIPAddress,
             p2p_addresses + far_end_p2p_addresses + virtual_interface_addresses + device_primary_addresses,
@@ -267,25 +235,22 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
             await address_obj.delete()
             self.logger.info(f"deleted address {address_obj.address.value}")
 
-        # Remove all cables attached to pod interfaces (after cleaning interfaces/IPs)
         cable_objs: list[DcimCable] = await self._filter_by_ids(DcimCable, cables)
         for cable_obj in cable_objs:
             await cable_obj.delete()
             self.logger.info(f"deleted cable {cable_obj.name.value}")
 
-        # Remove all p2p prefixes from pools
         prefix_objs: list[IpamPrefix] = await self._filter_by_ids(IpamPrefix, p2p_prefix_ids)
         for prefix_obj in prefix_objs:
             await prefix_obj.delete()
             self.logger.info(f"deleted prefix {prefix_obj.prefix.value}")
 
-        # The devices are decommissioned, so they carry no VRF: the reconcile (device locks held) deletes their SVIs,
-        # drops their memberships and the instances that leave empty. It runs for every pod device, also on a re-run
-        # that finds them already decommissioned.
+        # Decommissioned devices carry no VRF: the reconcile (locks held) deletes their SVIs, memberships and empty
+        # instances, also on a re-run
         await self.reconcile_vrfs([device["id"] for device in pod_devices if device.get("id")])
 
         await self._release_pod_pools()
 
-        # Last: sweep what is left empty in the DC (an instance no pod device of this run belonged to).
+        # Last: sweep what is left empty in the DC
         if dc_id := (self.data.get("parent") or {}).get("id"):
             await self.prune_empty_vrfs([dc_id])

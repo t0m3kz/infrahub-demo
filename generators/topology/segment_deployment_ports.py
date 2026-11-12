@@ -1,12 +1,6 @@
 """Generator re-running a segment's reconcile when a port is assigned to, or withdrawn from, one of its deployments.
-
-A person asks for a port by assigning it to the segment's deployment (``ManagedSegmentDeployment.capabilities``, the
-request); the segment reconcile (SegmentPortTagMixin.reconcile_vxlan_segment, shared with add_vxlan_segment and
-add_app_component_segment) realizes it as the port's membership of its switch's VLAN row. The `updated` rule on the
-deployment's ``capabilities`` (data/events/99_actions.yml) starts this generator on the deployment, a member of
-``segment_deployments`` (add_vxlan_segment adds each deployment it builds), and the reconcile runs for the deployment's
-segment under the segment lock. It writes the port -> row edges and the rows, never the deployment's assigned ports, so
-its run raises no event of that rule.
+Started by the `updated` rule on the deployment's ``capabilities``; it writes only port -> row edges and rows, so it
+raises no event of that rule.
 """
 
 from __future__ import annotations
@@ -23,11 +17,7 @@ from .segment_ports import SegmentPortTagMixin
 
 
 class SegmentDeploymentPortsGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, CommonGenerator):
-    """Reconciles the segment of a deployment whose assigned ports changed (rows, then port memberships).
-
-    Saves nothing into its own tracking group: the rows and the port edges are shared desired state of the segment,
-    written untracked by the reconcile.
-    """
+    """Reconciles the segment of a deployment whose assigned ports changed; writes untracked."""
 
     graphql_root_key = "ManagedSegmentDeployment"
 

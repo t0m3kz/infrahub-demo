@@ -1,18 +1,6 @@
-"""Validate the routing policy objects (rules RP1 to RP6).
+"""Validate the routing policy objects (RP1-RP6), which the schema cannot.
 
-The schema accepts any text in a list and any prefix in an entry; these rules hold what it cannot.
-
-RP1  a community of a community list is a community of the list's type (standard: ASN:value or a well-known one;
-     large: ASN:value:value)
-RP2  a prefix list entry is a prefix of the family of its list, and its length range lies between its own length and the
-     size of the address, minimum not above maximum
-RP3  a community a policy term adds is a standard, well-known or large community
-RP4  a term after a term that matches every route is never reached (an ERROR: the policy does not do what it reads)
-RP5  a policy that no peering imports or exports applies to nothing (WARNING)
-RP6  a prefix list or community list that no term names is not used (WARNING)
-
-The guard derived from the model is not a rule here: it is added to every user map by the transform, enforced or not
-(`transforms/helpers/routing_policy.py`), so a policy cannot lack it.
+RP1-RP3 community and prefix list syntax; RP4 unreachable term; RP5 unused policy; RP6 unused list.
 """
 
 from __future__ import annotations
@@ -25,7 +13,7 @@ from utils.routing_policy import any_community_error, community_error, prefix_en
 
 
 def routing_policy_errors(cleaned: dict[str, Any]) -> list[tuple[str, str, str]]:
-    """(message, object id, kind) for each broken object of one cleaned answer of ``routing_policy.gql``."""
+    """(message, object id, kind) for each broken object."""
     errors: list[tuple[str, str, str]] = []
     for plist in cleaned.get("RoutingPrefixList") or []:
         for entry in plist.get("entries") or []:
@@ -72,7 +60,7 @@ def routing_policy_errors(cleaned: dict[str, Any]) -> list[tuple[str, str, str]]
 
 
 def routing_policy_warnings(cleaned: dict[str, Any]) -> list[str]:
-    """The unused policies (RP5) and lists (RP6) of one cleaned answer of ``routing_policy.gql``."""
+    """The unused policies (RP5) and lists (RP6)."""
     warnings: list[str] = []
     used_prefix: set[str] = set()
     used_community: set[str] = set()

@@ -18,12 +18,8 @@ if TYPE_CHECKING:
 
 
 class ZtnaMixin(GetOrCreateByNameMixin):
-    """Owner-scoped ProxyPolicy/ProxyPolicyRule handling: target_fqdn
-    dependencies (egress through the owner's egress_service) and components
-    granted to an access profile (published through the owner's
-    private_access_service, e.g. Zscaler ZPA).
-
-    Expects the host class to provide: ``client``, ``logger``, ``_safe_rel_add``.
+    """Owner-scoped ProxyPolicy/ProxyPolicyRule handling: egress for target_fqdn dependencies and private-access
+    publishing.
     """
 
     client: Any
@@ -43,8 +39,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         dep_ref = dep.get("name", dep.get("id", "?"))
         src_label = src_comp.get("fqdn") or src_comp.get("name") or "?"
 
-        # checks/app_dependency.py reports both of these as errors; the
-        # generator only refuses to write a rule it cannot place.
+        # checks/app_dependency.py reports both as errors; the generator only refuses to write a rule it cannot place.
         owner = (src_comp.get("parent") or {}).get("owner") or {}
         proxy_service = owner.get("egress_service") or {}
         if not proxy_service.get("id"):
@@ -68,8 +63,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
             self.logger.warning("  Dependency '%s' targets %s without ports - skipping", dep_ref, external_fqdn)
             return False
 
-        # A proxy rule matches a host on a list of ports, so one dependency
-        # stays one rule however many ports it opens.
+        # A proxy rule matches a host on a list of ports: one dependency, one rule.
         return await self._upsert_owner_proxy_rule(
             owner=owner,
             service=proxy_service,
@@ -96,14 +90,8 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         subject: str,
         rule_data: dict[str, Any],
     ) -> bool:
-        """Upsert ``rule_data`` into the owner's ``purpose`` ProxyPolicy on ``service``.
-
-        The policy is resolved once per owner/service, then its id is cached in
-        ``policies``: the id off the owner's ``proxy_policies`` in the query
-        payload when the policy is already attached (no lookup, no attach),
-        else the policy is fetched or created and attached to the owner. An
-        existing rule of the same name is updated in place. False when the
-        owner has no id, the policy cannot be made, or the save fails.
+        """Upsert ``rule_data`` into the owner's ``purpose`` ProxyPolicy on ``service``; False when the owner has no id,
+        the policy cannot be made, or the save fails.
         """
         owner_org_id = str(owner.get("org_id") or owner.get("id") or "")
         owner_node_id = str(owner.get("id") or "")
@@ -142,9 +130,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         return True
 
     async def _get_or_create_proxy_policy(self, policy_name: str) -> Any | None:
-        """The owner's per-service, per-purpose ProxyPolicy, untracked: every
-        application of that owner writes its rules into it, so no single
-        application's run owns it (its rules stay owned by their application)."""
+        """The owner's per-service, per-purpose ProxyPolicy, untracked: shared by all the owner's applications."""
         description_subject = policy_name.removesuffix("-egress").removesuffix("-private-access")
         return await self._get_or_create_by_name(
             kind=ProxyPolicy,
@@ -172,11 +158,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
 
     @staticmethod
     def private_access_grants(component: dict[str, Any]) -> list[dict[str, Any]]:
-        """Dependencies that admit an access profile's users to this component.
-
-        A denied grant admits nobody. A component-sourced dependency is an
-        ordinary call, not a ZTNA grant.
-        """
+        """Dependencies that admit an access profile's users to this component (a denied grant admits nobody)."""
         return [
             dep
             for dep in component.get("dependents") or []
@@ -188,13 +170,8 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         app_name: str,
         components: list[dict[str, Any]],
     ) -> tuple[int, int]:
-        """Publish every component an access profile is granted to, via its
-        owning customer's private_access_service (ZTNA broker: e.g. Zscaler ZPA).
-
-        The grant is an AppDependency whose source_profile is a
-        SecurityAccessProfile: it says which user groups (allowed_groups)
-        reach the component, and on which of its ports.
-        A component nobody is granted to stays unpublished.
+        """Publish every component an access profile is granted to, via its customer's private_access_service (e.g.
+        Zscaler ZPA).
         """
         created = 0
         skipped = 0

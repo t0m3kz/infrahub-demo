@@ -1,14 +1,4 @@
-"""Unit tests for transforms/helpers/proxy.py.
-
-Covers:
-- merge_policies()             — dedupe across shared + customer-owned lists
-- get_proxy_policies()         — ProxyPolicy/ProxyPolicyRule -> render-ready shape,
-                                  disabled/enabled filtering
-- flatten_proxy_rules()        — global ordering + unique acl_name assignment
-- proxy_rules()                — per-renderer verdicts; refusal of what a renderer cannot express
-- _render_ports()              — protocol/port specs -> render-ready port dicts
-- get_private_access_segments() — granted components -> ZTNA segments
-"""
+"""Unit tests for transforms/helpers/proxy.py."""
 
 from __future__ import annotations
 

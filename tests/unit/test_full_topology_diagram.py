@@ -1,10 +1,4 @@
-"""The topology diagram of data/demos/00_full_topology/README.md is the circuits of the data, drawn between topologies.
-
-One node per location a circuit lists (a DC, a cage, the office, THE INTERNET, a cloud or SaaS region), one
-edge per pair of locations: the count of each circuit type between them, solid when a carrier joins them, dashed when
-only session circuits do. No device is drawn. Print the block to paste with
-``uv run python -m tests.unit.test_full_topology_diagram``.
-"""
+"""The topology diagram of data/demos/00_full_topology/README.md is the circuits of the data."""
 
 from __future__ import annotations
 

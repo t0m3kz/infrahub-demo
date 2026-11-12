@@ -1,19 +1,7 @@
-"""Validate the clusters: an on-prem hypervisor cluster and managed Kubernetes (rules CL1 to CL7).
+"""Validate on-prem hypervisor and managed Kubernetes clusters (CL1-CL7).
 
-A VM has no cluster of its own: it stands on a host (``DcimVirtualDevice.hosting_device``) and the host is in a cluster
-(``ManagedHypervisorCluster.hosts``), so the cluster is derived and never stated twice
-(schemas/extensions/service/cluster.yml). What the schema cannot hold:
-
-CL1  a server is a host of at most one cluster
-CL2  the hosts of a cluster stand in the cluster's own deployment
-CL3  a managed Kubernetes cluster's node subnets are subnets of its own virtual network, and that network is in its own account
-CL4  the ranges of a cluster's SDN are valid networks that overlap neither each other nor an address block of the cluster's
-     virtual network
-CL5  anti-affinity: the instances of one application component that stand in one cluster of two or more hosts are not
-     all on one host
-CL6  the control plane of an on-prem Kubernetes cluster keeps its quorum: with three or more nodes no single host runs more
-     than half of them
-CL7  the gateway nodes of a hypervisor cluster's SDN (the NSX Edge VMs) stand on hosts of that cluster
+CL1 one cluster per server; CL2 hosts in the deployment; CL3 subnets; CL4 SDN ranges; CL5 anti-affinity; CL6 quorum; CL7
+gateway nodes.
 """
 
 from __future__ import annotations

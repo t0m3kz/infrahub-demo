@@ -2,9 +2,9 @@
 # One C001 application with a single component on the DC6 "web-app" local
 # segment (../20_segments/02_segments.yml), instanced on a server that
 # data/demos/06_servers puts in DC6 POD-1 and add_endpoint cables to the
-# POD-1 leafs. test_20 runs add_app_component_segment over the component and
-# asserts the segment's local VLAN ID is realized on that switch's VLAN
-# domain and the server-facing switch port-channels carry the segment.
+# POD-1 l2-leafs. The `application` stage of tests/integration/kicks/dc6.yml
+# runs add_app_component_segment over the component and asserts the segment's
+# local VLAN row on that switch.
 # Memberships: joining app_applications dispatches add_app_application
 # (its group trigger), a non-member starts nothing;
 # add_app_component_segment targets app_components.

@@ -1,10 +1,6 @@
 """One relationship edge at a time: RelationshipAdd and RelationshipRemove of single peers.
-
-A list save of a many relationship replaces its edge set, so a writer that shares an edge with other writers (an
-interface's ``capabilities`` hold its VRF, its circuits, its VLAN rows) adds and removes single peers. Measured on
-Infrahub 1.11.10: adding a peer that is already on the edge is a no-op, and ``RelationshipRemove`` of one peer keeps
-the others. Every function raises on a failed write (a layer below the generator, which decides what the run does).
-"""
+A list save replaces the edge set, so a writer sharing an edge with others adds and removes single peers.
+Every function raises on a failed write."""
 
 from __future__ import annotations
 
@@ -16,7 +12,7 @@ _REMOVE_MUTATION = "mutation EdgeRemove($data: RelationshipNodesInput!) { Relati
 
 
 async def add_edges(client: Any, *, node_id: str, relation: str, peer_ids: Iterable[str]) -> None:
-    """Add ``peer_ids`` to ``relation`` of ``node_id`` (one RelationshipAdd); the other peers stay."""
+    """Add ``peer_ids`` to ``relation`` of ``node_id``; the other peers stay."""
     await client.execute_graphql(
         query=_ADD_MUTATION,
         variables={"data": {"id": node_id, "name": relation, "nodes": [{"id": peer_id} for peer_id in peer_ids]}},
@@ -24,7 +20,7 @@ async def add_edges(client: Any, *, node_id: str, relation: str, peer_ids: Itera
 
 
 async def remove_edge(client: Any, *, node_id: str, relation: str, peer_id: str) -> None:
-    """Remove ``peer_id`` from ``relation`` of ``node_id`` (one RelationshipRemove); the other peers stay."""
+    """Remove ``peer_id`` from ``relation`` of ``node_id``; the other peers stay."""
     await client.execute_graphql(
         query=_REMOVE_MUTATION,
         variables={"data": {"id": node_id, "name": relation, "nodes": [{"id": peer_id}]}},

@@ -1,17 +1,4 @@
-"""Unit tests for DeviceMixin._ensure_mlag_pairs().
-
-Covers:
-- "back-to-back" — requires an mlag-peer interface on the template, skips with
-  a warning otherwise
-- "virtual" — no interface requirement, always creates when there's a pair
-- "virtual" + supports_virtual=False (L2-only role, e.g. l2-leaf) — falls back
-  to back-to-back rather than erroring out, since mlag_create is one pod-wide
-  setting shared by every role
-- deterministic pairing (sorted device names, two-at-a-time), odd device unpaired
-- idempotency — an existing ManagedMLAG with the same name is always
-  create()+save()'d again with its existing id (upsert), never skipped —
-  mirrors create_devices()'s own always-upsert device/loopback pattern
-"""
+"""Unit tests for DeviceMixin._ensure_mlag_pairs()."""
 
 from __future__ import annotations
 
@@ -44,9 +31,7 @@ def _build_gen() -> Any:
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()
     gen.client.group_context.related_node_ids = []
-    # MLAGWiringMixin.ensure_mlag_wiring — peer-link wiring is covered by
-    # tests/unit/test_mlag_wiring_helper.py; here we only assert it's called
-    # with the right args.
+    # Peer-link wiring is covered by tests/unit/test_mlag_wiring_helper.py; here only the call args.
     gen.ensure_mlag_wiring = AsyncMock()
     return gen
 
@@ -79,10 +64,7 @@ class TestEnsureMlagPairs:
 
     @pytest.mark.asyncio
     async def test_virtual_falls_back_to_back_to_back_when_supports_virtual_false(self) -> None:
-        """mlag_create="virtual" but the role is L2-only (no loopback) —
-        mlag_create is one pod-wide setting shared by every role, so a pod with
-        both leaf (L3) and l2-leaf (L2-only) roles must fall back to
-        back-to-back for the L2-only ones regardless of what's configured."""
+        """mlag_create="virtual" on an L2-only role (no loopback) falls back to back-to-back."""
         gen = _build_gen()
         gen.client.filters = AsyncMock(return_value=[])  # no existing MLAG domain
         gen.client.get = AsyncMock(return_value=_mock_group())
@@ -109,9 +91,7 @@ class TestEnsureMlagPairs:
 
     @pytest.mark.asyncio
     async def test_virtual_fallback_still_requires_mlag_peer_interface(self) -> None:
-        """Falling back from virtual to back-to-back for an L2-only role still
-        needs a role=mlag-peer interface on the template — same requirement as
-        an explicitly-configured back-to-back pod."""
+        """Falling back to back-to-back for an L2-only role still needs a role=mlag-peer template interface."""
         gen = _build_gen()
         gen.client.create = AsyncMock()
         template = {"id": "tmpl", "interfaces": [{"name": "Eth1/1", "role": "uplink"}]}
@@ -300,10 +280,7 @@ class TestEnsureMlagPairs:
 
     @pytest.mark.asyncio
     async def test_existing_domain_flag_updated_when_mlag_create_changed(self) -> None:
-        """mlag_create switched (e.g. back-to-back -> virtual) since this
-        domain was created — the resent virtual_peer_link always reflects the
-        CURRENT setting, not the one from creation time (no "if changed"
-        gate — every field is always resent, same as create_devices())."""
+        """A domain created under another mlag_create mode is updated in place."""
         gen = _build_gen()
         existing = MagicMock()
         existing.id = "existing-mlag-1"
@@ -332,9 +309,7 @@ class TestEnsureMlagPairs:
 class TestEnsureMlagPairsLock:
     @pytest.mark.asyncio
     async def test_lookup_and_create_run_inside_the_per_domain_lock(self) -> None:
-        """Two overlapping runs (a rack's inline run and its trigger) would each find
-        no domain and each create one; the wiring lock is taken only after the
-        domain lock is released, so the two are never nested."""
+        """Two overlapping runs must not each create a domain."""
         gen = _build_gen()
         events = gen.events
 

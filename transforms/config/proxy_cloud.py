@@ -1,25 +1,4 @@
-"""JSON policy payload for ManagedCloudProxy — one Jinja2 template per vendor.
-
-Same "one template per platform" pattern as BaseDeviceTransform._load_template (leaf/spine/tor/
-proxy CLI configs), just keyed on `provider` instead of the device platform: each vendor gets its
-own template shaped like that vendor's actual Terraform module/API would expect. The underlying
-data (proxy_rules for egress; get_private_access_segments for private
-access) is vendor-independent and shared by every template — only the rendering differs per
-vendor.
-
-`service_type` picks WHICH data/template family applies, since several vendors (Zscaler,
-Netskope, Palo Alto Prisma Access) sell both a web-gateway product and an unrelated
-private-access/ZTNA product under the same brand:
-  - web_gateway: ProxyPolicy/ProxyPolicyRule (egress URL filtering) -> templates/configs/
-    proxies_cloud/{zscaler_zia,cloudflare_gateway,netskope,generic}.j2
-    - private_access: customer private_access_service and components granted to access profiles
-    (published application segments) -> templates/configs/proxies_cloud/
-    {zscaler_zpa,netskope_npa,generic_ztna}.j2
-See schemas/extensions/capabilities/ha.yml's CloudProxy.service_type for the full rationale.
-
-These are representative payloads, not literal vendor API/provider schemas — field names should
-be verified against each vendor's actual API/Terraform provider docs before real use.
-"""
+"""JSON policy payload for ManagedCloudProxy — one Jinja2 template per vendor."""
 
 from __future__ import annotations
 
@@ -40,10 +19,7 @@ _PROVIDER_TEMPLATES = {
 }
 _DEFAULT_TEMPLATE = "generic"
 
-# Private-access (ZTNA) providers with their own template. cloudflare_gateway/palo_prisma are
-# intentionally absent here — those `provider` choices are currently named after their SWG
-# product only, so there's no clean dedicated ZTNA template to select yet (falls back to
-# _DEFAULT_ZTNA_TEMPLATE); revisit once the provider dropdown gets ZTNA-specific choices.
+# Private-access (ZTNA) providers with their own template.
 _ZTNA_PROVIDER_TEMPLATES = {
     "zscaler_zpa": "zscaler_zpa",
     "netskope": "netskope_npa",

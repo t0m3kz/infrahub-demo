@@ -1,15 +1,4 @@
-"""Unit tests for the VRF instances in the config transforms (transforms/helpers/vrf.py and the common stage).
-
-Covers:
-  - the refusal           — VrfRealizationError for a session, an address, a routed VLAN with no SVI object, an SVI in
-                            the wrong VRF and a transit leg in a VRF the device has no instance of; one raise lists all
-  - the hosted appliance  — a CloudNetworkAppliance on cisco_xe renders a comment banner and logs a WARNING instead
-  - what is not demanded  — a device that never carries VRFs, ``default``, a gateway-less segment
-  - the realization rule  — an instance is an L3 instance only with a routed activation (or an exit)
-  - the readers           — device_vrfs, svi_vrfs, l3_vrf_names
-The inputs are the committed smoke inputs (which already carry the instances and SVIs the fixture hook adds) with a
-node taken out, rendered through the real transforms WITHOUT the hook.
-"""
+"""Unit tests for the VRF instances in the config transforms (transforms/helpers/vrf.py and the common stage)."""
 
 from __future__ import annotations
 

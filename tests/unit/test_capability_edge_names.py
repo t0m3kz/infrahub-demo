@@ -1,18 +1,4 @@
-"""Guard the capability edge naming (step 4 of the capabilities cleanup).
-
-Both ends of the interface edge are called ``capabilities``; only the relationship IDENTIFIER keeps the old
-name ``interface_capabilities`` (an identifier is a pairing key, not a field name).  Three things must stay true:
-
-* no relationship is NAMED the old name, and the two ends sharing the old identifier are both ``capabilities``;
-* no node can inherit both ends of the device edge and the interface edge (both are called ``capabilities``,
-  so the node would get two relationships with the same name);
-* the old name appears nowhere in the tracked files except on its ``identifier:`` lines.
-
-The device edge has two branches: the individual one (``ManagedGenericDevice``, ``DcimDeviceManaged.capabilities``,
-cascades with the device) and the shared one (``ManagedGenericSharedDevice``, ``DcimDeviceManaged.shared_capabilities``,
-never cascades; members are ``shared_devices``). A kind inherits exactly one of them, only the individual edge
-cascades, and ``ManagedVRF`` is a shared kind (no ``devices`` of its own, no ``DcimDevice.vrfs``).
-"""
+"""Guard the capability edge naming (step 4 of the capabilities cleanup)."""
 
 from __future__ import annotations
 
@@ -112,10 +98,7 @@ def test_no_kind_inherits_both_the_device_edge_and_the_interface_edge(schema: Sc
 
 
 def test_no_kind_inherits_both_device_edges(schema: SchemaModel) -> None:
-    """A device-edge generic per kind: a node is individual (cascades with its device) or shared, never both.
-
-    The shared + interface combination is name-safe (``shared_devices`` against ``capabilities``), so it is allowed.
-    """
+    """A device-edge generic per kind: a node is individual (cascades with its device) or shared, never both."""
     clashing = sorted(
         kind for kind in schema.parents if {DEVICE_EDGE_GENERIC, SHARED_EDGE_GENERIC} <= schema.ancestors(kind) | {kind}
     )
@@ -165,10 +148,7 @@ def test_managed_vrf_is_a_shared_kind(schema: SchemaModel) -> None:
 
 
 def test_no_kind_ends_up_with_one_relationship_name_pointing_at_two_peers(schema: SchemaModel) -> None:
-    """After resolving inheritance a relationship name means one peer per kind (catches the rename colliding).
-
-    Re-declaring the same name with the same peer (ManagedBGP re-declares ``capabilities``) is tolerated.
-    """
+    """After resolving inheritance a relationship name means one peer per kind (catches the rename colliding)."""
     clashes: dict[str, dict[str, set[str]]] = {}
     for kind in schema.parents:
         peers: dict[str, set[str]] = {}
@@ -207,10 +187,7 @@ def test_old_name_only_remains_on_identifier_lines(root_dir: Path) -> None:
 
 
 def test_a_port_is_in_a_vlan_row_not_in_a_segment(schema: SchemaModel) -> None:
-    """The port's segment is its switch's VLAN ROW (ManagedSegmentVlan inherits the interface edge, the port's
-    `capabilities`, the realization); the deployment inherits it too (the ports a person asks for); the segment itself
-    is not on the interface edge, and the port-side `segments` edge is gone.
-    """
+    """The port's segment is its switch's VLAN ROW (ManagedSegmentVlan inherits the interface edge."""
     segment = "ManagedVxlanSegment"
     lineage = schema.ancestors(segment) | {segment}
     assert INTERFACE_EDGE_GENERIC not in lineage
@@ -246,11 +223,7 @@ DEVICE_ONLY_GENERICS = {
 
 @pytest.mark.parametrize("kind", PANEL_KINDS)
 def test_a_patch_panel_kind_has_no_capability_edge(schema: SchemaModel, kind: str) -> None:
-    """A passive panel and its ports carry neither ``capabilities`` nor ``shared_capabilities``, by construction.
-
-    Both edges reach a kind only through DcimDeviceManaged (device edges) or DcimInterface (interface edge); the
-    panel kinds inherit neither, so no extension on either can reach them.
-    """
+    """A passive panel and its ports carry neither ``capabilities`` nor ``shared_capabilities``, by construction."""
     assert schema.is_generic.get(kind) is False
     assert schema.ancestors(kind).isdisjoint(DEVICE_ONLY_GENERICS | {"DcimInterface"}), kind
     assert schema.resolved_relationship_names(kind).isdisjoint({NEW_NAME, "shared_capabilities", "shared_devices"})

@@ -1,33 +1,34 @@
-# DC1 - The Textbook: Classic 3-Tier, Small Size
+# DC1 - Classic 3-Tier (Small Size)
+
+The fabric your auditor dreams about, and the one your architect calls "a bit boring" in every meeting.
 
 ## Overview
 
-**Location:** Munich 🇩🇪 (home to Oktoberfest and BMW, where beer gardens meet precision engineering and nobody is allowed to be late)
+**Location:** Munich, Germany
 
-**Platform:** Cisco Nexus 9K - The networking equivalent of driving a tank to the grocery store, but at least it's a *predictable* tank (and the invoice is, as always, not).
+**Platform:** Cisco Nexus 9K
 
 **Fabric Design:** `L` (small instance) + `ebgp-ebgp` routing — pure eBGP underlay + eBGP overlay (RFC 7938), IPv6 P2P links.
 This is the reference fabric: leaf → spine → super-spine, DC-level border-leaf fronted by a
-firewall/load-balancer pair. No back-to-back tricks, no collapsed roles, no mixed vendors —
-just the textbook 3-tier Clos every other DC in this fleet is a variation on (the rest of them are the teenagers, this one is the parent who actually reads the manual).
+firewall/load-balancer pair. It uses no back-to-back links, no collapsed roles and no mixed vendors:
+it is the standard 3-tier Clos that the other DCs in this fleet are variations on.
 
-**Use Case:** When someone asks "what does a normal DC actually look like?" — point them here, then step back before they ask for something exciting.
-Small (2 pods), boring, correct. The control group of the experiment, and the only one that behaves.
+**Use Case:** Reference design of a standard small data center (2 pods) and the baseline for the other DC scenarios.
 
 ---
 
-## Architecture (Textbook Edition)
+## Architecture
 
 ### Fabric Scale
 
-- **Super-Spines:** 2 (Cisco N9K-C9336C-FX2) — the top of this fabric, nothing above them (it is lonely up there, but the cooling is excellent)
+- **Super-Spines:** 2 (Cisco N9K-C9336C-FX2)
 - **Border-Leaf:** 2 (Cisco N9K-C9336C-FX2), with its own firewall + load-balancer pair
 - **Pods:** 2 | **Spines:** 4 (2+2) | **Racks:** 4
 
-| Pod | Spines | Design   | Deployment  | Personality         |
-| --- | ------ | -------- | ----------- | ------------------- |
-| 1   | 2      | S_MIDDLE | middle_rack | The Responsible One |
-| 2   | 2      | S_MIDDLE | middle_rack | The Backup Plan     |
+| Pod | Spines | Design   | Deployment  |
+| --- | ------ | -------- | ----------- |
+| 1   | 2      | S_MIDDLE | middle_rack |
+| 2   | 2      | S_MIDDLE | middle_rack |
 
 ### Tier Summary
 
@@ -43,35 +44,25 @@ Leaf → Spine → Super-Spine
 # See Deployment Steps below for the current load and generator commands.
 ```
 
-**Warning:** May cause a feeling of "wait, that's it?" — yes, that's the point. Correct networks are supposed to be dull; excitement is what pagers are for.
-
 ## Deployment Steps
 
 ```bash
-# really quick
+# Quick path
 # See the manual commands below, or use the automatic created-object trigger.
 
-# I'm the control nerd
+# Manual path
 uv run infrahubctl branch create you_branch
 
-# Load topology (this is the point of no return)
+# Load topology
 uv run infrahubctl object load data/demos/01_data_center/dc1/ --branch you_branch
 
-# Generate fabric (grab coffee, this might take a while)
+# Generate fabric (this might take a while)
 uv run infrahubctl generator add_dc name=DC1 --branch you_branch
 ```
 
-Prefer clicking? Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC1.
+Alternatively, trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC1.
 
 ## Validation
 
-Run the focused automatic DC/POD/rack routing regression with `uv run invoke test-integration-routing`.
-Use `uv run invoke test-integration` for the complete DC matrix. The harness waits for cascading tasks and names any branch that refuses to settle (it will happily point a finger, so at least the blame is automated).
-
-## Fun Fact
-
-The author lives in Munich and has spent years trying to understand the rules of Schafkopf as explained in Bavarian—proof that some network topologies are easier to decipher than local card games, and that a spanning-tree loop is, at least, documented.
-
-If you ever win a round, you're officially more Bavarian than a pretzel at Oktoberfest. Do not ask anyone to confirm the rules afterwards.
-
-Munich Fact: The city's official symbol is the Münchner Kindl—a child in a monk's robe, which is still less mysterious than Bavarian pronunciation (especially after your second Maß of beer, when it becomes completely unintelligible, and you will swear it makes sense).
+Deploy it as a validated, merged change with `uv run invoke kick dc1` (all seven DCs: `uv run invoke kick dc-deployments`).
+The kick waits for the cascading tasks, fails on any failed task and names the stage to resume from (`--from-stage`).

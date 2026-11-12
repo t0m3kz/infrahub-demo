@@ -1,7 +1,4 @@
-"""The EVPN Multi-Site objects and the metro ASN pool of ColocationFabricGenerator.
-
-The generator lives in generators/topology/colocation_fabric.py.
-"""
+"""The EVPN Multi-Site objects and the metro ASN pool of ColocationFabricGenerator."""
 
 from __future__ import annotations
 
@@ -28,9 +25,7 @@ def _loopback(device: str, role: str, *, addressed: bool = True, iface_id: str |
 
 
 def _evpn_generator(*, existing_as: bool = True, loopbacks: list | None = None, virtual: bool = False) -> Any:
-    """A generator whose EVPN step runs for real; only the SDK edges are mocked.
-
-    client.filters is called twice: the shared-AS lookup by description, then the edges' loopbacks."""
+    """A generator whose EVPN step runs for real; only the SDK edges are mocked."""
     if virtual:
         gen = _made_virtual()
         gen._edge_devices = {"eg-am-ne01": "cisco_iosxe"}
@@ -130,8 +125,7 @@ class TestEvpn:
 
     @pytest.mark.asyncio
     async def test_site_as_is_never_tracked_by_a_zone_run(self) -> None:
-        """Every zone and virtual colocation of the metro finds the same AS, so none of their tracking groups may
-        own it: a zone that stopped declaring edges would otherwise delete an AS its sibling's overlay BGP uses."""
+        """Every zone and virtual colocation of the metro finds the same AS."""
         for existing_as in (True, False):
             gen = _evpn_generator(existing_as=existing_as)
 

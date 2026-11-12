@@ -1,24 +1,7 @@
-"""THE INTERNET as a place every internet attachment meets at: the rules of the carriers that end on it (pure).
+"""Rules of the carriers that end on THE INTERNET's one interface (pure; see AGENTS.md "Circuit placement").
 
-THE INTERNET is one passive object (``TopologyInternet``: a slim device and a facility) with ONE interface, a
-``TopologyInternetInterface``. Every attachment (the uplink port of an ISP router, the port of the transport that
-stands for the public side of a cloud or SaaS region) is a carrier circuit of its own with two ends: that port and the
-shared interface. The interface's KIND is what lets many carriers end on it (``checks/carrier_circuit_ports.py``), the
-carriers are who is attached, and from any ISP router L1 reaches any public side through it. The schema cannot say what
-those carriers must look like; this module does, on the cleaned carrier dicts of
-``queries/validation/circuit_placement.gql``:
-
-I1  there is one INTERNET object, with exactly one interface and it is the internet interface
-I2  an attachment (a carrier with an end of the internet interface kind) is an ``internet`` circuit, the interface is
-    on the INTERNET object, and its other end is an ISP router (a device owned by a provider, with no deployment),
-    the port of a cloud or SaaS transport (``region`` or ``saas_region``) or a port of the provider's connect device
-    (``TopologyProviderConnect``: an Internet Access service on the Fabric port the cage edge is cabled to, the public
-    side of a region): never a DC or a cage of ours (an edge reaches the internet through an access of its own), never
-    the internet interface again
-I3  once the INTERNET is modelled, an ISP router (a device owned by a provider, with no deployment) that serves an
-    internet access carrier has an attachment, else the access reaches no public side. An access between two ISP
-    routers (a partner's border router buying access from an ISP) is judged as one: it is fine when either end is
-    attached. With no INTERNET object in the data nothing is judged
+I1 one INTERNET object with one bus interface; I2 an attachment joins it to an ISP router or cloud transport; I3 an ISP
+access has an attachment.
 """
 
 from __future__ import annotations
@@ -28,9 +11,7 @@ from typing import Any
 from utils.circuit_underlay import DECOMMISSIONED, INTERNET_INTERFACE_KIND, INTERNET_KIND, is_provider_device
 
 ATTACHMENT_CARRIER_TYPE = "internet"
-# The facility of the far end of an attachment: the region a public side transport sits in. An ISP router has none (a
-# provider's device, see ``is_provider_device``), and the provider's connect device is accepted by its kind (its
-# location may be a cage: the cage is the provider's port, not our edge).
+# Regions a public side transport may sit in; an ISP router has none, a provider connect is accepted by kind.
 FAR_END_FACILITY_KINDS = ("TopologyCloudRegion", "TopologySaasRegion")
 PROVIDER_CONNECT_KIND = "TopologyProviderConnect"
 Finding = tuple[dict[str, Any], str]

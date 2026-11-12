@@ -1,34 +1,33 @@
-# DC6 - Mixed Vendors: Silesian Buffet, Vendor Bingo, Debug & Dine
+# DC6 - Mixed Vendors and Deployment Types
+
+One kitchen, four vendors, and a second helping of support contracts nobody ordered.
 
 ## Overview
 
-**Location:** Katowice 🇵🇱 (Poland's and Silesian industrial powerhouse turned tech hub, where the only thing faster than the fiber is the coffee. Half the cost of Western Europe, double the sarcasm, and the rolada-modro-kapusta-gumiklyjzy-to-latency ratio is unbeatable, as the committee of one that measured it will confirm.)
+**Location:** Katowice, Poland
 
-**Platform:** Multi-Vendor (Cisco, Arista, Dell SONiC, Edgecore SONiC) — one vendor's bugs were apparently not enough variety, so here you get the full tasting menu.
+**Platform:** Multi-Vendor (Cisco, Arista, Dell SONiC, Edgecore SONiC)
 
 **Fabric Design:** `L` (small instance) + `ebgp-ibgp` routing — eBGP underlay + iBGP overlay, IPv6 P2P links. 3 pods.
-It is the committee compromise: eBGP underlay because multi-vendor fabrics need per-pod ASNs and nobody
-trusts OSPF to behave the same on Cisco and Edgecore at 3am. iBGP overlay because the super-spines
-are already there and might as well do something useful as route reflectors (idle hardware makes finance nervous). IPv6 underlay because
-Katowice didn't wait 20 years to adopt it, unlike certain Parisian data centers we could mention.
-The best of both worlds, or the worst of two support contracts. Depends who you ask, and who is holding the pager.
+The eBGP underlay supports per-pod ASNs, which a multi-vendor fabric needs, and avoids relying on an IGP
+behaving identically across vendors. The iBGP overlay uses the existing super-spines as route reflectors.
+The underlay is IPv6.
 
 **Use Case:**
-Medium-sized multi-vendor data center with middle_rack deployment. It is the perfect playground for engineers who like living dangerously, managers who love vendor bingo, and auditors who enjoy existential dread. It demonstrates vendor interoperability at a scale just big enough to break things, but small enough to blame the intern. A cost-effective multi-vendor approach for medium enterprises, because why settle for one vendor's support hotline when you can sit on hold with four? If you've ever wanted to see a Cisco, Arista, Dell, and Edgecore device argue about spanning tree, BGP, and whose logo is the ugliest, this is your chance.
-
-**Motto:** "Why settle for one vendor's bugs when you can have them all?"
+Medium-sized multi-vendor data center with middle_rack, tor and mixed deployment types. It demonstrates
+vendor interoperability (Cisco, Arista, Dell and Edgecore) at a scale suited to medium enterprises.
 
 ## Architecture
 
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2)
 - **Pods:** 3 | **Spines:** 6 (2+2+2) | **Racks:** 12
-- **Deployment:** `middle_rack`, `tor`, `mixed` — one of each, because Silesian variety is non-negotiable (and nobody dared to argue)
+- **Deployment:** `middle_rack`, `tor`, `mixed` — one of each
 
-| Pod | Spines | Design   | Deployment  | Spine Vendor | Site Layout | Personality                 |
-| --- | ------ | -------- | ----------- | ------------ | ----------- | --------------------------- |
-| 1   | 2      | M_MIDDLE | middle_rack | Cisco        | small-dc    | The Traditionalist          |
-| 2   | 2      | S_TOR    | tor         | Cisco        | small-dc    | The Impatient One           |
-| 3   | 2      | M_MIXED  | mixed       | Cisco        | small-dc    | The Compromise (as always)  |
+| Pod | Spines | Design   | Deployment  | Spine Vendor | Site Layout |
+| --- | ------ | -------- | ----------- | ------------ | ----------- |
+| 1   | 2      | M_MIDDLE | middle_rack | Cisco        | small-dc    |
+| 2   | 2      | S_TOR    | tor         | Cisco        | small-dc    |
+| 3   | 2      | M_MIXED  | mixed       | Cisco        | small-dc    |
 
 ## Quick Start
 
@@ -36,39 +35,27 @@ Medium-sized multi-vendor data center with middle_rack deployment. It is the per
 # See Deployment Steps below for the current load and generator commands.
 ```
 
-**Warning:** Vendor interop at scale. May cause spontaneous VLAN migrations and philosophical debates, usually at the same time and usually on a Friday.
-
-**Silesian Fact:** The rolada-to-latency ratio here is unbeatable. Also, we have 3 pods with 3 different deployment strategies because Silesians don't do half-measures, only full plates.
-
 ---
 
 ## Alternative Quick Start
 
 ```bash
-# really quick
+# Quick path
 # See the manual commands below, or use the automatic created-object trigger.
 
-# I'm the control nerd
+# Manual path
 uv run infrahubctl branch create you_branch
 
-# Load topology (this is the point of no return)
+# Load topology
 uv run infrahubctl object load data/demos/01_data_center/dc6/ --branch you_branch
 
-# Generate fabric (grab coffee, this might take a while)
+# Generate fabric (this might take a while)
 uv run infrahubctl generator add_dc name=DC6 --branch you_branch
 
 ```
 
-Or trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC6, if you prefer your point of no return with a mouse.
+Alternatively, trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC6.
 
 ## Validation
 
-Run `uv run invoke test-integration` to validate the mixed-vendor topology and routing sessions (four vendors, so budget time for the sessions to disagree). Use `uv run invoke test-integration-routing` for the focused automatic cascade regression.
-
-## Fun Fact
-
-The author of this repo is both Polish and Silesian, which means he can debug BGP while making rolada, modro kapusta, and gumiklyjzy, all before the kettle boils. The BGP is the easy part.
-
-If you have no idea what rolada-modro-kapusta-gumiklyjzy is, visit Upper Silesia and prepare to fall in love (and possibly into a food coma).
-
-Warning: After one bite, you may start speaking Silesian and dreaming of working in a coal mine.
+Run `uv run invoke kick dc6` to deploy the mixed-vendor topology as a validated, merged change; `dc6-growth` and `dc6-customers` build on it. The integration suite's `dc6-suite` kick (`tests/integration/kicks/dc6.yml`, run by `test_04_kicks.py`) runs the same kick with assertions per stage.

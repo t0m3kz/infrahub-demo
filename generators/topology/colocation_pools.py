@@ -1,8 +1,6 @@
-"""The address blocks of the colocation hierarchy: one table of names and sizes, read by both tiers.
-
-``ColoPoolSlot`` is the table row. The metro (colocation.py) cuts a supernet per slot out of the bootstrap
-pools and each zone or virtual colocation (colocation_fabric.py) cuts its own slice out of it. Lives apart from
-the generator so the metro's generator reads the table without importing the zone's generator stack.
+"""The address blocks of the colocation hierarchy: one table of names and sizes, read by both tiers. ``ColoPoolSlot`` is
+the row: the metro cuts a supernet per slot and each zone a slice. Kept apart so the metro generator avoids the zone's
+imports.
 """
 
 from __future__ import annotations
@@ -35,10 +33,8 @@ from ..fabric_sizing import (
     host_bits_to_prefix_length,
 )
 
-# The prefix lengths a zone or virtual colocation WITHOUT a design slices from the
-# bootstrap pools (Loopback-IPv4 etc.): fixed, because there is no envelope to
-# derive them from. With a design every size comes from generators/fabric_sizing.py
-# instead (ColoPoolSlot.zone_length), exactly like a DC's.
+# Prefix lengths a zone WITHOUT a design slices from the bootstrap pools; with a design they come from
+# generators/fabric_sizing.py (ColoPoolSlot.zone_length).
 _COLO_LOOPBACK_PREFIX_LENGTH = 28
 _COLO_TECHNICAL_PREFIX_LENGTH = 26
 _COLO_MANAGEMENT_PREFIX_LENGTH = 28
@@ -50,19 +46,9 @@ MetroBits = Callable[[Mapping[str, Any]], int]
 
 @dataclass(frozen=True)
 class ColoPoolSlot:
-    """One address block of the colocation hierarchy, in both of its tiers.
-
-    The metro holds a SUPERNET per slot (a prefix pool named ``{metro}-{suffix}``,
-    sized by ``metro_bits`` for max_zones zones of the largest zone design) and each
-    zone or virtual colocation holds a SLICE (a pool named ``{zone}-{suffix}``,
-    sized by ``zone_bits`` from its own design) cut out of that supernet, the way
-    a pod slices its DC's pools. A zone or virtual colocation that is not under a
-    metro with a design slices from the bootstrap pool ``bootstrap_pool``
-    instead, with the design-derived size or, with no design either, ``fallback_length``.
-
-    ``attribute`` is the relationship the pool is attached to on the owner (the
-    metro and the zone use the same three names); the IPv6 slots have none, they are
-    found by name.
+    """One address block of the colocation hierarchy: a metro supernet ``{metro}-{suffix}`` (``metro_bits``) and a zone
+    slice (``zone_bits``). Without a metro design a zone slices ``bootstrap_pool`` (design size or ``fallback_length``);
+    ``attribute`` is the owner relationship (none for IPv6, found by name).
     """
 
     suffix: str
@@ -131,8 +117,7 @@ TECHNICAL_SLOT = ColoPoolSlot(
     metro_bits=colo_metro_technical_bits,
     attribute="technical_pool",
 )
-# The IPv6 slots are sized by what they hold (one VTEP /128 per edge, one /127 for the
-# interlink), not by the design, so the zone's size is the same with or without one.
+# IPv6 slots are sized by what they hold (a VTEP /128 per edge, one /127 interlink), not by the design
 LOOPBACK_IPV6_SLOT = ColoPoolSlot(
     suffix="loopback-ipv6-pool",
     bootstrap_pool=LOOPBACK_IPV6_POOL,
@@ -154,7 +139,7 @@ TECHNICAL_IPV6_SLOT = ColoPoolSlot(
     metro_bits=colo_metro_technical_ipv6_bits,
 )
 COLO_POOL_SLOTS = (LOOPBACK_SLOT, MANAGEMENT_SLOT, TECHNICAL_SLOT, LOOPBACK_IPV6_SLOT, TECHNICAL_IPV6_SLOT)
-# The slots attached to the owner (zone, virtual colocation or metro) as a pool reference.
+# Slots attached to the owner as a pool reference
 ATTACHED_SLOTS = (LOOPBACK_SLOT, MANAGEMENT_SLOT, TECHNICAL_SLOT)
 
 

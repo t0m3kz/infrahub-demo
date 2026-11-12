@@ -1,9 +1,4 @@
-"""MLAG pairs in the per-device VLAN rows (generators/segment_vlan.py).
-
-A device that needs a segment brings its MLAG peer with it (a dual-homed port-channel is tagged on both peers, so a
-peer with no port of the segment still gets a row), and a pair shares ONE vlan_id. A late pairing whose existing rows
-differ is reported and never renumbered (checks/mlag_domains.py reports it too).
-"""
+"""MLAG pairs in the per-device VLAN rows (generators/segment_vlan.py)."""
 
 from __future__ import annotations
 

@@ -1,17 +1,4 @@
-"""Structural lint of the rendered NX-OS and Arista EOS goldens, plus tests of the lint itself.
-
-Every ``tests/smoke/configs/<name>/output.txt`` whose directory name contains ``cisco_nxos`` or ``arista_eos`` is
-checked by every rule of its platform, one test per (rule, golden directory), so a failure names both. The rules live
-in ``golden_lint.py`` (documented in its module docstring) and come from the documented (D) items of
-``.claude/skills/infrahub-network-design/reference.md``. Nothing is allowlisted: a platform template that renders a
-config breaking a rule fails here until the template is fixed.
-
-The second half tests the lint: for each rule a violating and a clean inline config.
-
-Usage:
-    uv run pytest tests/smoke/test_golden_structure.py -v
-    uv run pytest tests/smoke/test_golden_structure.py -k nxos_no_switchport
-"""
+"""Structural lint of the rendered NX-OS and Arista EOS goldens, plus tests of the lint itself."""
 
 from __future__ import annotations
 

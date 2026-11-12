@@ -1,11 +1,4 @@
-"""Unit tests for the INTERNET upstream handoff (ISP -> BGW edge -> EVPN type-5).
-
-Covers:
-  - _build_session_from_peering()  — ``transit`` flag on a vrf_type internet VRF session
-  - get_vxlan_config()             — INTERNET L3 VNI on a BGW edge, one global route-target
-  - get_exchange_transits()        — border-leaf INTERNET mapping carries vrf_type
-  - edges/cisco_nxos.j2            — transit filters and the shared VXLAN VRF stanza
-"""
+"""Unit tests for the INTERNET upstream handoff (ISP -> BGW edge -> EVPN type-5)."""
 
 from __future__ import annotations
 
@@ -211,8 +204,7 @@ class TestEdgeTemplate:
         assert "member vni 60002 associate-vrf" in rendered
 
     def test_transit_session_has_no_fixed_maps(self, env: jinja2.Environment) -> None:
-        """The maps of a transit session are its routing policies (generated, utils/transit_policy.py), never a
-        template's own: the golden edge_cisco_nxos_internet_bgw renders them, the transform refuses a session without."""
+        """The maps of a transit session are its routing policies."""
         rendered = self._render(env, _INTERNET_NS, self._vxlan())
         assert "RM-TRANSIT-IN" not in rendered and "RM-TRANSIT-OUT" not in rendered
         assert "PL-TRANSIT" not in rendered

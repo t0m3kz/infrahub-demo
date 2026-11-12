@@ -139,8 +139,7 @@ def test_virtual_network_peers_are_symmetric_on_one_identifier() -> None:
 
 
 def test_the_service_endpoint_names_its_network_and_a_public_range() -> None:
-    """A plain optional edge to the network (a Parent cannot be optional and a public SaaS service has no network), a
-    name-only HFID, the reverse that cascades, and a public access with its prefix."""
+    """A plain optional edge to the network (a Parent cannot be optional and a public SaaS service has no network)."""
     endpoint = _nodes()["CloudServiceEndpoint"]
     network = _field(endpoint, "relationships", "virtual_network")
     reverse = _field(_extension("CloudVirtualNetwork"), "relationships", "service_endpoints")
@@ -194,8 +193,7 @@ def test_no_description_exceeds_128_characters() -> None:
 
 
 def test_regions_list_the_transports_that_land_in_them() -> None:
-    """A cloud region and a SaaS region list their transports: the reverse of the transport's own `region` and
-    `saas_region` edges, on the same identifier, so a walk from a region reaches what ends in it."""
+    """A cloud region and a SaaS region list their transports."""
     schema = yaml.safe_load((_TOPOLOGY / "topology_cloud_network.yml").read_text())
     generic = next(g for g in schema["generics"] if g["name"] == "Transport")
     own = {r["name"]: r["identifier"] for r in generic["relationships"] if r["name"] in ("region", "saas_region")}

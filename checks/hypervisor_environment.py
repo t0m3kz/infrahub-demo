@@ -19,11 +19,7 @@ HOSTING_FOOTPRINT_KINDS = frozenset({"TopologyCustomerDC", "TopologyCustomerColo
 
 
 def _environment_class(deployment: dict[str, Any]) -> str | None:
-    """Namespace type of the footprint a VM is deployed for, or None when it has no environment class.
-
-    A DC or Colocation footprint states an environment, an office is always PROD; any other deployment (a cloud
-    footprint, a pod) has none.
-    """
+    """Namespace type of the footprint a VM is deployed for, or None (an office is PROD; a cloud footprint has none)."""
     if deployment.get("typename") == OFFICE_KIND:
         return PROD_TYPE
     environment = deployment.get("environment")
@@ -31,25 +27,7 @@ def _environment_class(deployment: dict[str, Any]) -> str | None:
 
 
 class CheckHypervisorEnvironment(InfrahubCheck):
-    """A VM sits on a host of its own environment class, in its footprint's DC.
-
-    Environment class: every VM on one hypervisor is of one class. The class
-    is the namespace type of the environment of the customer footprint a VM is
-    deployed for (``p`` -> prod, every other value -> non_prod, an office ->
-    prod), the same rule that puts its segments in PROD or NON-PROD. A host
-    running both is a shared failure and trust domain between prod and
-    non-prod, which the network keeps apart everywhere else.
-
-    Placement: the host's DC (a pod's parent, or the deployment itself) or
-    metro (a zone's parent) must be the parent of the VM's DC or Colocation
-    footprint. A VM running on a host of another DC than the one its customer
-    was boarded in is served by another fabric than the footprint's segments.
-
-    VM placement is data (hosting_device), so this check is what holds the
-    rules. A VM with no host, or whose deployment is no customer footprint, has
-    no class to compare and is skipped; a host not yet in a deployment
-    (add_endpoint sets it when it cables the host) has no DC to compare.
-    """
+    """A VM sits on a host of its own environment class (prod or non_prod), in its footprint's DC."""
 
     query = "hypervisor_environment"
 

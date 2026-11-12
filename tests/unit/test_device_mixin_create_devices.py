@@ -27,8 +27,7 @@ from tests.unit.device_mixin_helpers import (
 class TestDeviceMixinCreateDevices:
     @pytest.mark.asyncio
     async def test_role_index_start_continues_the_numbering(self) -> None:
-        """A role split over several fabric_templates entries: the second entry's devices
-        continue at role_index_start instead of re-creating the first entry's names."""
+        """A role split over several fabric_templates entries:"""
         gen = _make_generator()
         gen.client.create = AsyncMock(
             side_effect=lambda **kw: _mock_created_device(kw["kind"].__name__, kw["data"]["name"])
@@ -160,10 +159,7 @@ class TestDeviceMixinCreateDevices:
 
     @pytest.mark.asyncio
     async def test_logs_updated_not_created_for_pre_existing_device(self) -> None:
-        """A device already present in existing_devices_map (upsert-by-id path)
-        must log "Updated", not "Created" — re-running create_devices() is
-        idempotent at the data level, and the log should say so instead of
-        always claiming a fresh creation."""
+        """A device already present in existing_devices_map."""
         gen = _make_generator()
         existing_device = MagicMock(member_of_groups=MagicMock(peers=[]))
         existing_device.name.value = "dc1-fw-01"
@@ -199,11 +195,7 @@ class TestDeviceMixinCreateDevices:
 
 
 class TestCreateDevicesPairingDispatch:
-    """create_devices() pairs devices itself when the role/options call for it —
-    firewall/load-balancer via DeviceOptions.ha_kind, leaf/tor/l2-leaf/access-leaf
-    via DeviceOptions.mlag_create. Any quantity (not just 2) is paired two-at-a-
-    time — see test_rack_mlag_pairs.py for the pairing algorithm itself; this
-    covers create_devices()'s dispatch into it."""
+    """create_devices() pairs devices itself when the role/options call for it."""
 
     @pytest.mark.asyncio
     async def test_an_edge_is_never_paired_into_an_ha_domain(self) -> None:
@@ -259,9 +251,7 @@ class TestCreateDevicesPairingDispatch:
     @pytest.mark.asyncio
     async def test_firewall_with_ha_kind_pairs_after_creation(self) -> None:
         gen = _make_generator()
-        # HA sync interface/cable creation is covered by TestEnsureHaInterfaces
-        # in test_device_mixin_ha.py — stub it here, this test only checks that
-        # create_devices() dispatches into HA domain creation at all.
+        # HA interface/cable creation is covered in test_device_mixin_ha.py; stubbed here.
         gen._ensure_ha_interfaces = AsyncMock()
         created = [_mock_created_device(DcimPhysicalDevice.__name__, n) for n in ("dc1-firewall-01", "dc1-firewall-02")]
         gen.client.create = AsyncMock(side_effect=[*created, MagicMock(id="ha-1", save=AsyncMock())])
@@ -304,8 +294,7 @@ class TestCreateDevicesPairingDispatch:
     @pytest.mark.asyncio
     async def test_leaf_with_mlag_create_pairs_after_creation(self) -> None:
         gen = _make_generator()
-        # naming_convention="flat" (the default) for fabric_name="dc1"/role="leaf" —
-        # devices_by_name (built from these very objects) is keyed by these exact names.
+        # devices_by_name is keyed by these flat-convention names.
         generated_names = ("dc1lf01", "dc1lf02")
         created = [_mock_created_device(DcimPhysicalDevice.__name__, n) for n in generated_names]
         for node, name in zip(created, generated_names):
@@ -313,8 +302,7 @@ class TestCreateDevicesPairingDispatch:
         gen.client.create = AsyncMock(side_effect=[*created, MagicMock(id="mlag-1", save=AsyncMock())])
         gen.client.filters = AsyncMock(return_value=[])  # no existing devices, no existing MLAG domain
         gen.client.get = AsyncMock(side_effect=[_mock_group(), _mock_group()])
-        # MLAGWiringMixin.ensure_mlag_wiring — peer-link wiring is covered by
-        # tests/unit/test_mlag_wiring_helper.py; not under test here.
+        # Peer-link wiring is covered by test_mlag_wiring_helper.py.
         gen.ensure_mlag_wiring = AsyncMock()
 
         await gen.create_devices(

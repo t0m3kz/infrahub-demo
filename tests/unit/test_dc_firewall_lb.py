@@ -1,27 +1,4 @@
-"""Unit tests for DCTopologyGenerator's DC-scoped border-leaf/firewall/load-balancer
-device provisioning and cabling.
-
-Border-leaf: created per-pod (deployment_id=pod.id), distributed by walking pods
-in index order and giving each pod up to its OWN design's max_border_leafs_per_pod
-(a pod capped at 0 is skipped entirely — this is how a specific subset of pods,
-e.g. pod 1 and pod 3 but not pod 2, can be chosen to host border-leafs). dc.py
-does NOT cable border-leaf to spines — that's pod.py's job (see
-test_pod_generator.py-style coverage in generators/topology/pod.py), since pod.py
-already owns spine context.
-
-Firewall/load-balancer: created DC-wide (deployment_id=dc.id) via
-ServiceDevicesMixin.create_firewall_and_load_balancer_devices (shared with
-PodTopologyGenerator's pod-scoped provisioning — see
-test_pod_border_services.py), which sets DeviceOptions.ha_kind so
-create_devices() itself pairs the created devices two-at-a-time into HA
-domains (see test_device_mixin_create_devices.py for that pairing logic — any quantity,
-not just 2).
-
-BLF<->FW<->LB cabling: CablingMixin._cable_border_services (shared via
-CommonGenerator) with connectivity_mode="pbr" cables two independent legs
-(border-leaf<->firewall, border-leaf<->load-balancer); "inline" chains
-border-leaf<->firewall<->load-balancer<->border-leaf.
-"""
+"""Unit tests for DCTopologyGenerator's DC-scoped border-leaf/firewall/load-balancer device provisioning and cabling."""
 
 from __future__ import annotations
 
@@ -51,10 +28,8 @@ def _make_generator() -> Any:
     gen.create_devices = AsyncMock(return_value=[])
     gen.create_cabling = AsyncMock(return_value=[])
     gen.create_routing = AsyncMock()
-    # ensure_context_vlan_pool()/allocate_resource_pools() serialize
-    # concurrent callers via acquire_resource_lock/release_resource_lock — not
-    # under test here, and the lock's own client.delete() call has no mock set
-    # up on this plain MagicMock client.
+    # ensure_context_vlan_pool()/allocate_resource_pools() serialize concurrent callers via
+    # acquire_resource_lock/release_resource_lock — not under test here.
     gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
     gen.release_resource_lock = AsyncMock()
 
@@ -75,9 +50,7 @@ def _mock_pod(*, id: str, index: int, name: str = "pod-1", design_id: str = "pod
 
 
 def _pods_with_caps(gen: Any, caps: list[int], *, max_border_leafs_per_fabric: int = 10) -> list[dict[str, Any]]:
-    """One pod per cap, index 1.., each on its own pod design (max_border_leafs_per_pod=cap)
-    that the DC design hosts — the pod's design comes back from the DC query as its bare id,
-    matched against the DC design's pod_templates."""
+    """One pod per cap, index 1.., each on its own pod design."""
     templates = [custom_pod_design(f"P{index}", max_border_leafs_per_pod=cap) for index, cap in enumerate(caps, 1)]
     gen.data["design"] = custom_dc_design(
         max_border_leafs_per_fabric=max_border_leafs_per_fabric, pod_templates=templates
@@ -103,9 +76,9 @@ _LB_TEMPLATE = {
 
 
 def _entry(role: str, quantity: int, template: dict[str, Any]) -> dict[str, Any]:
-    """Build a fabric_templates row — the plain-dict shape dc.py reads from
-    self.data["fabric_templates"] after clean_data(), replacing the old
-    DeviceRole(role=..., quantity=..., template=...) Pydantic construction."""
+    """Build a fabric_templates row — the plain-dict shape dc.py reads from self.data["fabric_templates"] after
+    clean_data(), replacing the old DeviceRole(role=..., quantity=..., template=...) Pydantic construction.
+    """
     return {"role": role, "quantity": quantity, "template": template}
 
 
@@ -163,9 +136,8 @@ class TestCreateBorderLeafDevices:
         assert names == ["bl-a-01", "bl-b-01", "bl-b-02"]
         assert gen.create_devices.await_count == 2
         first_call, second_call = gen.create_devices.call_args_list
-        # border-leaf is a DC-level fabric tier (like super-spine/hyper-spine) —
-        # deployment_id is always the DC's own id, never the pod's, regardless
-        # of which pod's capacity share this call is filling.
+        # border-leaf is a DC-level fabric tier (like super-spine/hyper-spine) — deployment_id is always the DC's own
+        # id, never the pod's, regardless of which pod's capacity share this call is filling.
         assert first_call.kwargs["deployment_id"] == gen.data["id"]
         assert first_call.kwargs["quantity"] == 1
         assert second_call.kwargs["deployment_id"] == gen.data["id"]
@@ -183,8 +155,7 @@ class TestCreateBorderLeafDevices:
 
         assert names == ["bl-c-01", "bl-c-02"]
         gen.create_devices.assert_awaited_once()
-        # border-leaf is a DC-level fabric tier — deployment_id is the DC's own
-        # id even though the share went to pod-c.
+        # border-leaf is a DC-level fabric tier — deployment_id is the DC's own id even though the share went to pod-c.
         assert gen.create_devices.call_args.kwargs["deployment_id"] == gen.data["id"]
 
     @pytest.mark.asyncio
@@ -213,9 +184,7 @@ class TestCreateBorderLeafDevices:
 
 
 class TestCreateFirewallAndLoadBalancerDevices:
-    """ServiceDevicesMixin.create_firewall_and_load_balancer_devices as dc.py calls
-    it (DC-wide, deployment_id=dc.id) — pod.py calls the same method for pod-scoped
-    provisioning (deployment_id=pod.id), see test_pod_border_services.py."""
+    """ServiceDevicesMixin.create_firewall_and_load_balancer_devices as dc.py calls it (DC-wide."""
 
     @staticmethod
     async def _create(gen: Any, entries: list[dict[str, Any]]) -> tuple[list[str], list[str]]:
@@ -241,8 +210,7 @@ class TestCreateFirewallAndLoadBalancerDevices:
 
     @pytest.mark.asyncio
     async def test_firewall_passes_ha_kind_through_options(self) -> None:
-        """HA pairing itself is create_devices()'s job (DeviceOptions.ha_kind) —
-        the mixin only needs to set the right kind per role."""
+        """HA pairing itself is create_devices()'s job (DeviceOptions.ha_kind)."""
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
         entries = [_entry("internal-firewall", 2, _FW_TEMPLATE)]
@@ -272,8 +240,7 @@ _BL_ROLE_FOR = {
 
 
 class TestCableBorderServices:
-    """CommonGenerator._cable_border_services — shared by dc.py (border-leaf)
-    and pod.py (border-spine); role names passed in via border_role_for."""
+    """CommonGenerator._cable_border_services — shared by dc.py (border-leaf) and pod.py (border-spine)."""
 
     @pytest.mark.asyncio
     async def test_pbr_cables_two_independent_legs(self) -> None:
@@ -316,8 +283,7 @@ class TestCableBorderServices:
             load_balancer_names=["lb-01"],
         )
 
-        # Three legs: border-leaf<->firewall, firewall<->load-balancer (middle),
-        # load-balancer<->border-leaf (return).
+        # Three legs: border-leaf<->firewall, firewall<->load-balancer (middle), load-balancer<->border-leaf (return).
         assert gen.create_chain_cabling.await_count == 3
         calls = gen.create_chain_cabling.call_args_list
 
@@ -333,9 +299,8 @@ class TestCableBorderServices:
         assert middle_hops[1]["devices"] == ["lb-01"]
         assert middle_hops[1]["up_role"] == "uplink"
 
-        # The load-balancer's return leg to border-leaf must use "downlink" ports,
-        # not "uplink" — "uplink" is already claimed by the middle leg above, and
-        # cabling the same ports twice raises a real "2 peers for dcimcable" error.
+        # The load-balancer's return leg to border-leaf must use "downlink" ports, not "uplink" — "uplink" is already
+        # claimed by the middle leg above, and cabling the same ports twice raises a real "2 peers for dcimcable" error.
         return_hops = calls[2].args[0]
         assert return_hops[0]["devices"] == ["bl-01", "bl-02"]
         assert return_hops[0]["down_role"] == "load-balancer"
@@ -344,9 +309,7 @@ class TestCableBorderServices:
 
     @pytest.mark.asyncio
     async def test_inline_still_calls_middle_leg_when_one_side_missing(self) -> None:
-        """create_chain_cabling itself no-ops when a hop's devices list is empty — this
-        just confirms _cable_border_services always issues all three legs and
-        lets create_chain_cabling decide what's actually cable-able."""
+        """create_chain_cabling itself no-ops when a hop's devices list is empty."""
         gen = _make_generator()
         gen.create_chain_cabling = AsyncMock(return_value=[[]])
 
@@ -421,9 +384,7 @@ class TestContextPoolsFollowTheServiceDevices:
 
 
 class TestEnsureFirewallContextPools:
-    """A DC creates only its FirewallContext VLAN pool: the contexts' transit
-    /29s come from the per-VRF FW-Transit-* bootstrap pools, so there is no
-    per-DC P2P slice any more (colocation keeps its own, see test_colocation_generator)."""
+    """A DC creates only its FirewallContext VLAN pool."""
 
     def _make_gen(self, *, underlay_protocol: str = "ipv6") -> Any:
         gen = _make_generator()
@@ -448,9 +409,7 @@ class TestEnsureFirewallContextPools:
 
     @pytest.mark.asyncio
     async def test_serializes_on_a_lock_scoped_to_this_dc(self) -> None:
-        """Two overlapping calls for the SAME dc_name must not both create the
-        pool — see PoolMixin.ensure_context_vlan_pool for the reproduced
-        collision this guards against."""
+        """Two overlapping calls for the SAME dc_name must not both create the pool."""
         gen = self._make_gen()
         calls: list[str] = []
         gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(f"acquire:{key}") or "lock-id")

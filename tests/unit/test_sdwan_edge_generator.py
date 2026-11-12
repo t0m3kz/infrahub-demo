@@ -1,10 +1,4 @@
-"""Unit tests for SdwanEdgeGenerator (generators/topology/sdwan_edge.py).
-
-Payloads are written in the already-clean shape generate() sees after its own
-clean_data() call — clean_data() is a no-op on input that already lacks
-GraphQL {"value": ...}/{"edges": [{"node": ...}]} envelopes, the same
-convention test_customer_colocation.py/test_customer_dc.py use.
-"""
+"""Unit tests for SdwanEdgeGenerator (generators/topology/sdwan_edge.py)."""
 
 from __future__ import annotations
 
@@ -58,10 +52,7 @@ def _gateway(
     public_role: str | None = "customer",
     extra_interfaces: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """The Gateway as generate() sees it: its trunk eth0 (role uplink, unused here) and its public port eth1.
-
-    extra_interfaces are listed BEFORE the public port; ``public_role=None`` leaves it out.
-    """
+    """The Gateway as generate() sees it"""
     trunk = {"typename": "DcimPhysicalInterface", "id": "trunk-1", "name": "eth0", "role": "uplink"}
     public = {"typename": "DcimPhysicalInterface", "id": "public-1", "name": "eth1", "role": public_role}
     interfaces = [trunk, *(extra_interfaces or []), *([public] if public_role else [])]
@@ -85,11 +76,7 @@ def _office_payload(
     """The query payload; the office already has a LAN unless ``lan_prefix_ids`` is empty."""
     if gateway == _USE_DEFAULT_GATEWAY:
         gateway = _gateway()
-    # clean_data() collapses a single-key {"id": x} dict to the bare string x
-    # (utils/data_cleaning.py's _EXTRACTION_RULES) — generate() always runs
-    # clean_data() on whatever is passed in, so "owner" needs a second key
-    # (matching what customer_office_sdwan.gql actually fetches: id + name)
-    # or it silently stops being a dict.
+    # clean_data() collapses a single-key {"id": x} dict to a string, so "owner" needs a second key.
     owner = {"id": owner_id, "name": "SwiftGo GmbH"} if owner_id else None
 
     def relationship(ids: tuple[str, ...]) -> dict[str, Any]:
@@ -246,12 +233,8 @@ class TestGenerateHappyPath:
         orchestrator.managed_devices = managed_devices
         orchestrator.save = AsyncMock()
         orchestrator.add_relationships = AsyncMock()
-        # Call order: (1) provider org lookup (ISP + overlay operator, one
-        # query); (2) existing-edge-by-name lookup -> none, so the edge is new
-        # and the template gets resolved; (3) VCE-610_EDGE template lookup;
-        # (4) edge uplink interface lookup; (5-7) ISP topology, INET-<office>
-        # by name, the access PE's customer ports; (8) orchestrator lookup
-        # (managed_devices included).
+        # Call order: provider orgs, existing edge (none), template, uplink, ISP topology / INET / access PE ports,
+        # orchestrator.
         gen.client.filters = AsyncMock(
             side_effect=[
                 _providers(),
@@ -309,10 +292,7 @@ class TestGenerateHappyPath:
 
     @pytest.mark.asyncio
     async def test_existing_edge_upserts_by_id_without_resending_template(self) -> None:
-        """Resending object_template on an existing device triggers a
-        server-side re-instantiation error (generators/devices.py's own
-        create_devices() avoids this the same way) — an existing edge must
-        be upserted by id instead, with no template lookup at all."""
+        """Resending object_template on an existing device triggers a server-side re-instantiation error"""
         gen = _make_gen()
         gen.client.create = AsyncMock(side_effect=[_node("edge-1"), _node("inet-1"), _node("tunnel-1")])
 
@@ -344,11 +324,7 @@ class TestGenerateHappyPath:
 
     @pytest.mark.asyncio
     async def test_circuits_use_real_ids_for_locations_not_names(self) -> None:
-        """locations peers TopologyConnectableLocation — it must be given
-        real resolved ids (office_id, gateway_zone_id), never
-        a *name* string wrapped in {"id": ...}, which would silently fail to
-        resolve against a real backend. The underlay sits in the office
-        alone (the ISP's router has no place); the tunnel the office and the gateway's zone."""
+        """locations peers TopologyConnectableLocation"""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload(office_id="office-1"))
@@ -441,12 +417,7 @@ class TestGenerateHappyPath:
 
     @pytest.mark.asyncio
     async def test_edge_attached_to_orchestrator_managed_devices(self) -> None:
-        """The new edge joins the gateway's orchestrator by a RelationshipAdd of that one edge.
-
-        Never a save of the whole peer list: the offices' runs attach to the same
-        orchestrator concurrently and would overwrite each other's edge, and a
-        tracked save would claim the hand-authored orchestrator for this run's group.
-        """
+        """The new edge joins the gateway's orchestrator by a RelationshipAdd of that one edge."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload())
@@ -665,8 +636,7 @@ class TestGenerateFailurePaths:
         gen = _make_gen()
         gen.client.create = AsyncMock(return_value=_node("edge-1"))
         edge_template = MagicMock(id="template-1")
-        # Call order: provider lookup, existing-edge lookup (none), template
-        # lookup (found), edge uplink lookup (none) — stops here.
+        # Call order: provider, existing edge (none), template (found), uplink (none), then it stops.
         gen.client.filters = AsyncMock(side_effect=[_providers(), [], [edge_template], []])
 
         with pytest.raises(GeneratorError, match="no role=uplink interface"):
@@ -715,11 +685,7 @@ class TestGenerateFailurePaths:
 def _wire_office_lan_run(
     *, pools: list[Any] | None = None, prefix_value: str | None = "10.176.0.0/24"
 ) -> tuple[SdwanEdgeGenerator, Any]:
-    """A generator wired for a full first run whose last lookup is the tenant pool, and its allocation.
-
-    No orchestrator manages the gateway, so the lookups after the edge are the ISP's, then the pool's. Returns the
-    generator and the office node the LAN is attached through (the fourth create).
-    """
+    """A generator wired for a full first run whose last lookup is the tenant pool, and its allocation."""
     gen = _make_gen()
     office_node = _node("office-1")
     gen.client.create = AsyncMock(side_effect=[_node("edge-1"), _node("inet-1"), _node("tunnel-1"), office_node])

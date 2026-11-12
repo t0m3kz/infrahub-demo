@@ -1,11 +1,4 @@
-"""The session circuit query selects every field the generator reads.
-
-Unit tests feed canned payloads, so a field the code reads but the query does not select passes there and fails only
-on a real stack. These tests parse ``queries/topology/add/virtual_circuit.gql`` with graphql-core, flatten it to the
-field paths the cleaned data carries (``edges``/``node``/``value`` wrappers dropped, inline fragments and fragment
-spreads merged) and compare them with what the session generator uses. The helpers are shared with
-``test_circuit_check_query_shapes.py``, which does the same for the placement check's query.
-"""
+"""The session circuit query selects every field the generator reads."""
 
 from __future__ import annotations
 
@@ -40,12 +33,7 @@ ENCAPSULATION = "capabilities.encapsulation_capabilities"
 
 
 def _selected_paths(path: Path, root: str, by_alias: bool = False) -> set[str]:
-    """Dotted paths of every field selected under the top-level ``root`` field of the query in ``path``.
-
-    A field selecting only ``value`` is a leaf (``status { value }`` is ``status``); ``edges``/``node`` are dropped.
-    ``by_alias`` keys an aliased selection by its alias like the response does (the circuit queries select the
-    encapsulation as ``encapsulation_capabilities: capabilities``); the default keys it by the field name.
-    """
+    """Dotted paths of every field selected under the top-level ``root`` field of the query in ``path``."""
     document = parse(load_query(path))
     fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
     operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
@@ -110,7 +98,7 @@ def generator_paths() -> set[str]:
 
 
 # What generators/topology/virtual_circuit.py reads from the cleaned virtual circuit, for every kind
-# (utils/circuit_underlay.py included). `__typename` is `typename` once cleaned.
+# (utils/circuit_underlay.py included).
 _GENERATOR_READS = [
     "id",
     "__typename",

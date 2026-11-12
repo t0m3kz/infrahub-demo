@@ -16,20 +16,12 @@ from utils.routing_domain import interface_security_zone
 
 _log = logging.getLogger(__name__)
 
-# The overlay route reflectors (utils/fabric_roles.py RR_ROLES) relay EVPN
-# routes between VTEPs rather than only originating their own. `border-spine`
-# is among them even though it is itself a VTEP (a collapsed spine +
-# border-leaf for micro-fabrics): it relays other VTEPs' routes too, and both
-# knobs gated on this set only affect re-advertised routes, never the device's
-# own originated ones.
+# The overlay route reflectors (utils/fabric_roles.py RR_ROLES) relay EVPN routes between VTEPs rather than only
+# originating their own.
 
 
 def _sort_key_ip(ip_obj: Any) -> tuple:
-    """Return a sort key for an IP address object (dict or string).
-
-    Parses the address into a numeric tuple for proper ordering
-    (e.g., 10.0.0.2 before 10.0.0.10). Falls back to string comparison.
-    """
+    """Return a sort key for an IP address object (dict or string)."""
     addr_str = ""
     if isinstance(ip_obj, dict):
         addr_str = ip_obj.get("address", "")
@@ -45,17 +37,7 @@ def _sort_key_ip(ip_obj: Any) -> tuple:
 
 
 def _normalize_afs(afs: list[dict[str, Any]]) -> list[str]:
-    """Convert RoutingBGPAddressFamily objects to simple label strings for templates.
-
-    Templates check membership like ``'evpn' in session.address_families``, so we
-    reduce each AFI/SAFI pair to a single string:
-      l2vpn / evpn  → "evpn"
-      ipv4  / *     → "ipv4"
-      ipv6  / *     → "ipv6"
-      vpnv4 / *     → "vpnv4"
-    For distinctive SAFIs (evpn, vpn, flowspec, labeled_unicast) the SAFI wins;
-    otherwise the AFI is used.
-    """
+    """Convert RoutingBGPAddressFamily objects to simple label strings for templates."""
     distinctive_safis = {"evpn", "vpn", "flowspec", "labeled_unicast", "multicast"}
     return [
         safi if safi in distinctive_safis else (af.get("afi") or "") for af in afs for safi in [af.get("safi") or ""]
@@ -63,11 +45,7 @@ def _normalize_afs(afs: list[dict[str, Any]]) -> list[str]:
 
 
 def _extract_remote_asn_from_peering(peering_node: dict, remote_device_name: str) -> int | None:
-    """Extract remote device's ASN from the peering's bgp_processes.
-
-    Each peering has 2 bgp_processes (local + remote). Find the one
-    belonging to the remote device and return its ASN.
-    """
+    """Extract remote device's ASN from the peering's bgp_processes."""
     bgp_procs = peering_node.get("bgp_processes", [])
     if not isinstance(bgp_procs, list):
         return None
@@ -83,11 +61,7 @@ def _extract_remote_asn_from_peering(peering_node: dict, remote_device_name: str
 
 
 def _peering_ends(peering_node: dict[str, Any], device_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The peering's (local, remote) capabilities entries, split by device name.
-
-    Raises:
-        ValueError: When the peering does not have exactly two ends, one on ``device_name``.
-    """
+    """The peering's (local, remote) capabilities entries, split by device name."""
     peering_ifaces = peering_node.get("capabilities", [])
     if not isinstance(peering_ifaces, list) or len(peering_ifaces) != 2:
         raise ValueError(
@@ -112,20 +86,7 @@ def _peering_ends(peering_node: dict[str, Any], device_name: str) -> tuple[dict[
 
 
 def _far_end_is_ours(peering_node: dict[str, Any], remote_device: str, own_devices: frozenset[str]) -> bool:
-    """Whether the far end of a peering is one of OUR devices, so its session is internal.
-
-    Two signals, neither of them the device's owner (the templates stamp one organisation on all the kit,
-    and the shared SD-WAN gateway is owned by Internal yet must stay filtered):
-
-    - the far end's BGP process in this peering has process_role ``overlay`` (the rule add_virtual_circuit
-      uses for "our end", utils/circuit_underlay.py OVERLAY_ROLE), which makes a handoff between two of our
-      edges internal from both sides. Not when the far end DEVICE is a ``CloudNetworkAppliance`` (a
-      provider-hosted Network Edge): it is not ours to filter for, so the hop to it stays external and,
-      with nothing registered behind it, is denied both ways. A far end whose kind the query did not
-      return (``typename`` absent) is not an appliance;
-    - the far end is in ``own_devices``: the devices the caller knows are ours, for example the office's own
-      SD-WAN edge (``deployment.lisp_wan_edges``). This one holds whatever the kind.
-    """
+    """Whether the far end of a peering is one of OUR devices, so its session is internal."""
     if not remote_device:
         return False
     if remote_device in own_devices:
@@ -153,17 +114,7 @@ def _build_session_from_peering(
     *,
     own_devices: frozenset[str] = frozenset(),
 ) -> dict[str, Any] | None:
-    """Build a BGP session dict from a peering node using interfaces.
-
-    Determines local vs remote by matching device name in interfaces.
-    Returns None only for valid "skip" conditions (for example no physical
-    underlay path, or unresolved remote ASN on eBGP session).
-
-    ``own_devices`` names devices that are ours beyond the BGP process roles (see _far_end_is_ours).
-
-    Raises:
-        ValueError: When peering data shape is malformed.
-    """
+    """Build a BGP session dict from a peering node using interfaces."""
     local_iface, remote_iface = _peering_ends(peering_node, device_name)
 
     password_rel = peering_node.get("password") or {}
@@ -193,11 +144,8 @@ def _build_session_from_peering(
     ttl = peering_node.get("ttl", 255)
     remote_device_name = remote_iface.get("device", {}).get("name", "")
 
-    # A local address in a tenant namespace (IpamNamespace is this project's
-    # VRF) makes this a VRF session — e.g. the colocation edge's PROD handoff to
-    # the SD-WAN gateway. Its addresses are always the inline ones on the
-    # peering's own handoff sub-interfaces: a cable or circuit on the parent
-    # port would resolve the parent's default-namespace address instead.
+    # A local address in a tenant namespace (IpamNamespace is this project's VRF) makes this a VRF session — e.g. the
+    # colocation edge's PROD handoff to the SD-WAN gateway.
     local_ip_obj = local_iface.get("ip_address") or {}
     full_iface = next((iface for iface in interfaces or [] if iface.get("name") == local_iface.get("name")), {})
     local_ns = interface_security_zone({**full_iface, **local_iface})
@@ -210,15 +158,7 @@ def _build_session_from_peering(
         ns_type = local_ns.get("vrf_type")
         if ns_type == INTERNET_TYPE:
             session["transit"] = True
-        # INTERNAL vs EXTERNAL. A regular session in a prod/non_prod namespace
-        # is external (a cloud VIF, the SD-WAN gateway, a provider, a hosted
-        # CloudNetworkAppliance) UNLESS its far end is one of our devices
-        # (_far_end_is_ours: an overlay-role BGP process on a far end that is
-        # not an appliance, or a name in own_devices). An external session
-        # gets only the far end's registered prefixes in and, out, only what
-        # the same owners have on-prem or behind another external session
-        # (external_policies, edges template; never another owner's); an
-        # internal one renders like any plain VRF neighbour, without route-maps.
+        # INTERNAL vs EXTERNAL. A regular session in a prod/non_prod namespace is external.
         elif (
             ns_type in EXCHANGE_PEERS
             and peering_node.get("peering_role") == "regular"
@@ -258,10 +198,7 @@ def _build_session_from_peering(
                 break
 
         if not local_interface_ip and not local_iface_name:
-            # No cable resolved an IP — fall back to the IP already set
-            # directly on the peering's own capabilities (e.g. a VTI/
-            # sub-interface addressed inline, with no DcimCable and no separate
-            # TopologyCircuit object to traverse).
+            # No cable resolved an IP — fall back to the IP already set directly on the peering's own capabilities.
             local_interface_ip = local_iface.get("ip_address")
             remote_interface_ip = remote_iface.get("ip_address")
             if local_interface_ip:
@@ -307,10 +244,7 @@ def _build_session_from_peering(
     if session_type in ("EBGP", "EBGP_MULTIHOP", "EBGP_UNNUMBERED") and "remote_as" not in session:
         return None
 
-    # Address families: use explicit schema config if set, otherwise derive from TTL.
-    # Overlay (TTL != 1) → EVPN. Underlay (TTL == 1) → IPv4 or IPv6 unicast, based on
-    # the neighbor address family — never empty, so templates can rely on membership
-    # checks ('ipv4' in / 'evpn' in) instead of truthiness to decide what to activate.
+    # Address families: use explicit schema config if set, otherwise derive from TTL. Overlay (TTL != 1) → EVPN.
     schema_afs = peering_node.get("address_families") or []
     if schema_afs:
         session["address_families"] = _normalize_afs(schema_afs)
@@ -333,34 +267,10 @@ def _any_flags(sessions: list[dict[str, Any]], *flags: str) -> dict[str, bool]:
 
 
 def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") -> list[dict[str, Any]]:
-    """Assign sessions to peer groups and return group definitions.
-
-    Always creates a peer group when there is at least one session of the type:
-    - UNDERLAY-PEERS: eBGP sessions with TTL=1 (P2P underlay), per-neighbor remote-as
-    - EVPN-PEERS: iBGP sessions with TTL!=1 (EVPN overlay), shared remote-as from peer group
-    - EVPN-OVERLAY: eBGP sessions with TTL!=1 (eBGP EVPN overlay), per-neighbor remote-as
-    - DCI-UNDERLAY-PEERS: peering_role=dci-underlay sessions, the eBGP unicast over the
-      physical DCI ports between two EVPN Multi-Site border gateways. Their sessions
-      announce only this box's own loopbacks (``export_local_only``) and take a
-      no-export inbound policy (``dci_inbound``)
-    - DCI-PEERS: peering_role=dci sessions, the loopback-to-loopback eBGP EVPN between
-      the same border gateways (EVPN only, ``ebgp_multihop`` the largest session TTL,
-      each session sourced from its own loopback: ``update_source``)
-    - FABRIC-PEERS: peering_role=fabric sessions, an iBGP session on a directly cabled
-      link between the two border gateways of one site (the metro edge pair)
-
-    VRF sessions (``session["vrf"]``) join no group: they are rendered inside
-    their VRF, where the global templates' policy does not apply.
-
-    Mutates sessions in-place by adding 'peer_group' (and 'remote_as_from_peer_group' for iBGP)
-    keys. Returns list of peer group definitions.
-    """
+    """Assign sessions to peer groups and return group definitions."""
     sessions = [s for s in sessions if not s.get("vrf")]
-    # A DCI underlay session is directly connected (ttl 1) like the underlay, but
-    # the neighbour is in another fabric — it must not inherit UNDERLAY-PEERS'
-    # policy. The DCI EVPN session is multihop between loopbacks (ttl 2) and would
-    # otherwise fall into EVPN-OVERLAY, whose ebgp-multihop 255 and update-source
-    # loopback0 are wrong for it.
+    # A DCI underlay session is directly connected (ttl 1) like the underlay, but the neighbour is in another fabric —
+    # it must not inherit UNDERLAY-PEERS' policy.
     dci_underlay = [s for s in sessions if s.get("peering_role") == "dci-underlay"]
     dci = [s for s in sessions if s.get("peering_role") == "dci"]
     # A fabric session is iBGP over a cabled link (ttl 1): without its own group
@@ -403,8 +313,6 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 break
         has_rr_flag = any(bool(s.get("route_reflector_client")) for s in overlay_ibgp)
         # Every overlay RR role (RR_ROLES) is an RR when peerings have the RR flag.
-        # Leafs become intermediate RRs in middle_rack/mixed deployments
-        # when they have overlay sessions with tors (2-level RR hierarchy).
         is_spine_rr = has_rr_flag and device_role in RR_ROLES
         is_leaf_rr = (
             has_rr_flag
@@ -430,18 +338,8 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
 
     if overlay_ebgp:
         pg_name = "EVPN-OVERLAY"
-        # Under ebgp-ebgp the spine tier does not reflect EVPN routes, it
-        # *re-advertises* them — and normal eBGP behaviour is to rewrite the BGP
-        # next-hop to the advertising router's own address. A spine is not a
-        # VTEP and has no `interface nve1`, so without next-hop-unchanged every
-        # remote VTEP learns the spine's loopback as the tunnel endpoint and
-        # builds a VXLAN tunnel to a device that cannot terminate it: the
-        # sessions come up, the routes are present, and traffic is silently
-        # blackholed. RFC 8365 §5.1.2.1.
-        #
-        # Only the relaying tier needs it. A leaf/border-leaf originates its own
-        # routes with itself as the next-hop, so setting it there would be
-        # wrong (it would preserve a next-hop the leaf must own).
+        # Under ebgp-ebgp the spine tier does not reflect EVPN routes, it *re-advertises* them — and normal eBGP
+        # behaviour is to rewrite the BGP next-hop to the advertising router's own address.
         is_evpn_relay = device_role in RR_ROLES
         peer_groups.append(
             {
@@ -450,9 +348,8 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "session_type": "EBGP",
                 **_any_flags(overlay_ebgp, *_POLICY_FLAGS),
                 "next_hop_unchanged": is_evpn_relay,
-                # A spine carries no VRF and no L2VNI, so it has no import
-                # route-target and would discard the very EVPN NLRI it exists to
-                # relay. `retain route-target all` keeps them.
+                # A spine carries no VRF and no L2VNI, so it has no import route-target and would discard the very EVPN
+                # NLRI it exists to relay.
                 "retain_route_target_all": is_evpn_relay,
                 "ebgp_multihop": 255,
                 "address_families": ["evpn"],
@@ -477,9 +374,8 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
         )
         for session in dci_underlay:
             session["peer_group"] = pg_name
-            # Announce only this box's own loopbacks (RM-FABRIC-OUT) and tag what
-            # the other site sends no-export (RM-DCI-IN): a DCI port is a transit
-            # for nobody's routes.
+            # Announce only this box's own loopbacks (RM-FABRIC-OUT) and tag what the other site sends no-export
+            # (RM-DCI-IN): a DCI port is a transit for nobody's routes.
             session["export_local_only"] = True
             session["dci_inbound"] = True
 
@@ -517,11 +413,7 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
         )
         for session in fabric:
             session["peer_group"] = pg_name
-            # Both ends share the site AS (the session is iBGP, so remote_as is
-            # already local_as). No peer-type: NX-OS treats a neighbour as
-            # fabric-internal by default, which is what a BGW sibling is.
-            # D5: announce only this box's own loopbacks (VTEP and site VIP) in
-            # unicast, never what it learned (cisco_nxos_bgp.j2 RM-FABRIC-OUT).
+            # Both ends share the site AS (the session is iBGP, so remote_as is already local_as).
             session["export_local_only"] = True
 
     peer_groups.sort(key=lambda pg: pg.get("name", ""))
@@ -529,31 +421,7 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
 
 
 def _collapse_to_single_instance(configs: list[dict[str, Any]], device_name: str = "") -> list[dict[str, Any]]:
-    """Reduce a device's BGP configs to the one instance a router can actually run.
-
-    Every platform this project targets allows exactly ONE BGP ASN per routing
-    instance. Under ebgp-ebgp the merge by ASN above already leaves one config,
-    because the underlay and overlay processes share the device's ASN. Under
-    ebgp-ibgp they do not: the underlay is eBGP on a per-device ASN (65001) and
-    the overlay is iBGP on the fabric-wide ASN (65000), so two configs survive
-    and the templates would emit two `router bgp` stanzas. The second one is
-    rejected by the device, which means the whole push fails — or worse, on a
-    platform that accepts the first and ignores the rest, half the routing
-    silently disappears.
-
-    The instance ASN has to be the OVERLAY one. It is the shared ASN, so overlay
-    sessions stay natively iBGP and the route-reflector semantics the EVPN design
-    depends on keep working. The underlay's per-device ASN then moves onto its own
-    sessions as ``local_as_override``, which templates render as
-    ``local-as <asn> no-prepend replace-as``: the eBGP neighbour still sees 65001
-    exactly as its own ``remote-as 65001`` expects, and 65000 never leaks into the
-    underlay AS-path. Doing it the other way round — instance on the underlay ASN,
-    override on the overlay sessions — would turn the EVPN sessions into eBGP and
-    break route reflection.
-
-    Returns a single-element list, or the input unchanged when there is nothing to
-    collapse.
-    """
+    """Reduce a device's BGP configs to the one instance a router can actually run."""
     if len(configs) <= 1:
         return configs
 
@@ -564,10 +432,7 @@ def _collapse_to_single_instance(configs: list[dict[str, Any]], device_name: str
     if len(evpn_configs) == 1:
         anchor = evpn_configs[0]
     else:
-        # No process carries EVPN, or several do (neither should happen for the
-        # strategies this project generates). Anchoring on the lowest ASN is
-        # arbitrary but still produces ONE valid instance instead of N invalid
-        # ones — say so, because the choice may not be the intended one.
+        # No process carries EVPN, or several do (neither should happen for the strategies this project generates).
         anchor = configs[0]
         _log.error(
             "%s: %d BGP processes with different ASNs and %s carries the EVPN address-family, "
@@ -585,9 +450,8 @@ def _collapse_to_single_instance(configs: list[dict[str, Any]], device_name: str
             continue
         override = cast(dict[str, Any], cfg["local_as"])
         for session in cfg.get("sessions", []):
-            # The neighbour's `remote-as` was built from this process's ASN, so
-            # the session has to keep presenting it even though the instance now
-            # runs under anchor_asn.
+            # The neighbour's `remote-as` was built from this process's ASN, so the session has to keep presenting it
+            # even though the instance now runs under anchor_asn.
             session["local_as_override"] = override
             anchor["sessions"].append(session)
         _log.info(
@@ -612,21 +476,7 @@ def get_bgp_profile(
     *,
     own_devices: frozenset[str] = frozenset(),
 ) -> list[dict[str, Any]]:
-    """
-    Extract BGP configuration from ManagedBGP services with peerings.
-
-    Uses interfaces to determine local vs remote peer (by device name)
-    and to get peer IP addresses.
-
-    For underlay peerings (TTL=1), uses physical interface IPs from interfaces.
-    For overlay peerings (TTL!=1), uses loopback IPs from interfaces.
-
-    Remote ASN for eBGP: resolved from bgp_processes in the peering data.
-    Remote ASN for iBGP: equals local_as (same AS by definition).
-
-    ``own_devices``: names of devices that are ours although no overlay BGP process says so (the office's
-    own SD-WAN edge); a regular VRF session to one of them is internal, not external.
-    """
+    """Extract BGP configuration from ManagedBGP services with peerings."""
     if not device_capabilities:
         return []
 
@@ -697,8 +547,6 @@ def get_bgp_profile(
         bgp_config["peer_groups"] = _build_peer_groups(bgp_config["sessions"], device_role=device_role)
 
         # RR devices get an explicit cluster-id equal to their router-id for loop prevention.
-        # Cisco/Arista/FRR default cluster-id to router-id when unset, but being explicit
-        # makes the intent clear and is considered best practice.
         is_rr = any(pg.get("route_reflector_client") for pg in bgp_config["peer_groups"])
         if is_rr:
             bgp_config["cluster_id"] = host_ip(cast(dict[str, Any], bgp_config["router_id"])["address"])
@@ -708,19 +556,7 @@ def get_bgp_profile(
 
 
 def add_template_fields(bgp_config: dict[str, Any]) -> None:
-    """Add the values every vendor BGP template renders from.
-
-    - ``router_ip``: the router-id without its prefix length.
-    - ``session.neighbor``: the interface of an unnumbered session, else the
-      remote address without its prefix length.
-    - ``session.policy``: the composed routing policy (transforms/helpers/bgp_policy.py); peer groups
-      are assigned by now, which the policy reads.
-    - ``has_ipv6`` / ``has_evpn``: whether a peer group or global (non-VRF)
-      session carries that address family.
-    - ``vrf_sessions``: VRF name -> its sessions; ``vrf_af_sessions``: VRF
-      name -> {"ipv4"/"ipv6": the VRF's sessions of that family}, families
-      without sessions left out.
-    """
+    """Add the values every vendor BGP template renders from."""
     bgp_config["router_ip"] = host_ip((bgp_config.get("router_id") or {}).get("address"))
     sessions = bgp_config.get("sessions") or []
     for session in sessions:

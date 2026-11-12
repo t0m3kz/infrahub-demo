@@ -11,14 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 async def far_end_interfaces(client: Any, interfaces: list[Any], include: list[str]) -> dict[str, Any]:
-    """interface id -> the physical interface at the other end of its cable, fetched with ``include``.
-
-    Resolves several cabled interfaces in two queries, whatever
-    their number: their cables, then the far ends. An interface whose cable
-    has no other endpoint, or whose far end is not a physical interface (a patch panel port: the far end
-    through a panel is not followed), is absent from the result; the latter is logged at warning level, never as
-    an error. No query at all for no interfaces.
-    """
+    """interface id -> the physical interface at the other end of its cable, in two queries.
+    An interface with no far end, or a far end that is not physical (a patch panel port, logged), is absent."""
     if not interfaces:
         return {}
     cables = {
@@ -50,12 +44,8 @@ async def far_end_interfaces(client: Any, interfaces: list[Any], include: list[s
 
 
 async def ports_free_for(client: Any, interfaces: list[Any], peer_device_ids: set[str]) -> list[Any]:
-    """The interfaces that are uncabled or cabled to one of ``peer_device_ids``; those cabled elsewhere are left out.
-
-    A chain of devices cables the free ports of a role; a second chain on the same ports (the external pair beside
-    the internal pair on the border leaves' firewall ports) must not pick the ones the first has cabled, while a re-run
-    of the first chain still finds its own. A cabled interface whose far end is not a physical interface is left out.
-    """
+    """Interfaces that are uncabled or cabled to one of ``peer_device_ids``; those cabled elsewhere are left out.
+    A second chain on the same ports must not pick ports the first has cabled."""
     cabled = [iface for iface in interfaces if getattr(getattr(iface, "cable", None), "id", None)]
     if not cabled:
         return interfaces

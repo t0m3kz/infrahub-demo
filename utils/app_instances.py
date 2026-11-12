@@ -1,13 +1,5 @@
-"""Where an AppInstance sits: the physical device it is cabled through.
-
-One implementation for the generator that tags the switch ports of a component's
-instances (generators/topology/app_instance_segment.py) and the NX-OS GPO transform
-that classifies the same ports (transforms/helpers/group_policy/ component_coverage):
-both must agree on which device an instance lands on, or a port is tagged for one host
-and classified for another.
-
-Inputs are cleaned query data (utils.data_cleaning.clean_data): an instance dict with
-``typename`` and, for a hosted one, ``hosting_device``.
+"""Where an AppInstance sits: the physical device it is cabled through (shared by the port tagger and the GPO
+transform).
 """
 
 from __future__ import annotations
@@ -23,12 +15,7 @@ HOSTED_INSTANCE_TYPENAMES = frozenset({"DcimVirtualDevice", "ManagedControllerVi
 
 
 def physical_host(instance: dict[str, Any]) -> dict[str, Any] | None:
-    """The physical device an AppInstance is actually cabled through, or None.
-
-    A bare physical device/controller is its own host. A virtual instance walks
-    its ``hosting_device`` (None when unset). Anything else (a cloud instance)
-    has no on-prem device.
-    """
+    """The physical device an AppInstance is cabled through (itself, or its hosting device), else None."""
     typename = instance.get("typename")
     if typename in PHYSICAL_INSTANCE_TYPENAMES:
         return instance

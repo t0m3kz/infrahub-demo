@@ -1,10 +1,4 @@
-"""generators/fabric_sizing.py: every fabric pool size, derived from the design envelope.
-
-The designs are read from data/bootstrap/14b_fabric_templates.yml (tests/unit/simulators/fabric_designs.py).
-The golden tables below were computed from the contract formulas, independently of the module; the formula
-tests check the module against the formulas themselves (headroom, minimality, containment), and the capacity
-tests check that the bootstrap parent pools hold every demo DC's pools.
-"""
+"""generators/fabric_sizing.py: every fabric pool size, derived from the design envelope."""
 
 from __future__ import annotations
 
@@ -84,9 +78,7 @@ def _hosts(dc: str, pod: str) -> bool:
     return pod in {template["name"] for template in dc_design(dc)["pod_templates"]}
 
 
-# ---------------------------------------------------------------------------
 # Golden tables
-# ---------------------------------------------------------------------------
 
 
 def test_the_golden_tables_cover_every_bootstrap_design() -> None:
@@ -122,9 +114,7 @@ def test_every_dc_design_hosts_every_pod_design(dc: str) -> None:
     assert all(_hosts(dc, pod) for pod in POD_DESIGN_NAMES)
 
 
-# ---------------------------------------------------------------------------
 # The formulas
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(("dc", "pod"), _PAIRS)
@@ -198,9 +188,7 @@ def test_max_sibling_spines_is_the_widest_pod_design() -> None:
     assert max_sibling_spines(design) == 3
 
 
-# ---------------------------------------------------------------------------
 # Edge cases
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -266,9 +254,7 @@ def test_a_dc_design_without_pod_templates_cannot_be_sized() -> None:
         dc_technical_bits(custom_dc_design(pod_templates=[]))
 
 
-# ---------------------------------------------------------------------------
 # The bootstrap parent pools hold every demo DC
-# ---------------------------------------------------------------------------
 
 
 def _parent_host_bits(pool_name: str) -> int:

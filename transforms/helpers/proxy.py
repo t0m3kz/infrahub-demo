@@ -1,9 +1,4 @@
-"""Proxy policy helpers for device/service transforms.
-
-Mirrors get_zone_policies() (transforms/helpers/firewall.py) but for
-ProxyPolicy/ProxyPolicyRule — normalizes proxy-level and customer-owned policies
-into a flat, render-ready rule list.
-"""
+"""Proxy policy helpers for device/service transforms."""
 
 from __future__ import annotations
 
@@ -15,24 +10,7 @@ from utils.ports import PortProfileHelper
 
 
 def get_proxy_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-    """Build a render-ready policy list from ProxyPolicy nodes.
-
-    Returns:
-        [
-          {
-            "name": "proxy-shared-cloud-proxy-egress",
-            "default_action": "block",
-            "rules": [
-              {
-                "priority": 10, "name": "...", "action": "allow",
-                "destination_type": "fqdn", "destinations": ["api.stripe.com"],
-                "ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
-                "log": False, "description": "...",
-              }
-            ],
-          }
-        ]
-    """
+    """Build a render-ready policy list from ProxyPolicy nodes."""
     if not policies_data:
         return []
 
@@ -74,11 +52,7 @@ def get_proxy_policies(policies_data: list[dict[str, Any]] | None = None) -> lis
 
 
 def flatten_proxy_rules(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Flatten grouped policies into one globally-ordered, uniquely-named rule list.
-
-    Templates render this flat list instead of nesting per-policy loops, so ACL/rule
-    names stay unique across policies without juggling nested Jinja loop counters.
-    """
+    """Flatten grouped policies into one globally-ordered, uniquely-named rule list."""
     flat: list[dict[str, Any]] = []
     for policy in policies:
         for rule in policy.get("rules") or []:
@@ -89,14 +63,10 @@ def flatten_proxy_rules(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return flat
 
 
-# The access verdict of each ProxyPolicyRule action. `bypass` (allow without TLS inspection) and `inspect`
-# (allow with it) are allows; _refuse_unrenderable refuses `inspect`: no cloud payload inspects TLS on request.
-# `redirect` has none: the schema models no redirect target, so no renderer can express it.
+# The access verdict of each ProxyPolicyRule action.
 _VERDICTS = {"allow": "allow", "bypass": "allow", "inspect": "allow", "block": "block"}
 
-# The destination types each renderer (a cloud proxy's template name) matches. Every one matches hostnames
-# (fqdn); the generic and ZIA payloads also list address ranges untyped. Anywhere else a CIDR would match as a
-# hostname and a regex as a literal string.
+# The destination types each renderer (a cloud proxy's template name) matches. Every one matches hostnames (fqdn).
 _HOSTNAME_DESTINATIONS = frozenset({"fqdn"})
 _DESTINATION_TYPES: dict[str, frozenset[str]] = {
     "generic": _HOSTNAME_DESTINATIONS | {"cidr"},
@@ -107,11 +77,7 @@ _DESTINATION_TYPES: dict[str, frozenset[str]] = {
 def proxy_rules(
     shared_policies: list[dict[str, Any]] | None, customers: list[dict[str, Any]] | None, renderer: str
 ) -> list[dict[str, Any]]:
-    """The flat rule list of one proxy: its shared policies plus each customer's own, merged by name.
-
-    Each rule carries its access ``verdict`` (allow/block) for ``renderer``.
-    Raises ValueError for a rule ``renderer`` cannot express, instead of rendering it as something else.
-    """
+    """The flat rule list of one proxy: its shared policies plus each customer's own, merged by name."""
     customer_policies = [policy for customer in customers or [] for policy in customer.get("proxy_policies") or []]
     rules = flatten_proxy_rules(get_proxy_policies(merge_policies(shared_policies or [], customer_policies)))
     for rule in rules:
@@ -149,20 +115,7 @@ def _render_ports(specs: list[str] | None) -> list[dict[str, Any]]:
 
 
 def get_private_access_segments(customers: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """Build ZTNA segments from customers assigned to this private-access service.
-
-    A segment is a component that at least one access profile is granted to
-    (an AppDependency with a source_profile). Each grant opens its own ports,
-    or every port of the component when it lists none; its profile's
-    allowed_groups say who may use them. A denied grant admits nobody; a
-    component with no grant, or whose grants resolve to no ports, is not
-    published.
-
-    Returns:
-        [{"name": "frontend", "fqdn": "checkout.internal.c001.demo.local",
-          "ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
-          "allowed_groups": ["engineering"]}]
-    """
+    """Build ZTNA segments from customers assigned to this private-access service."""
     segments: list[dict[str, Any]] = []
     for customer in customers or []:
         for application in customer.get("applications") or []:

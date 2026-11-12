@@ -1,18 +1,11 @@
-"""Offline data tests: the internet rules of 30_all name footprints the internet_egress check can judge.
-
-checks/internet_egress.py follows an enabled rule with ``destination_zone: INTERNET`` from its source segment to
-the segment's DC and colocation footprints. The firewall pair, legs, exchange, ports and SNAT address of those
-footprints come from the generators, so only the pieces the data declares are asserted: the rule names the internet
-zone, and its source segment is activated in a declared DC or colocation footprint (not a cloud or office one, which
-the check skips).
-"""
+"""Offline data tests: the internet rules of 30_all name footprints the internet_egress check can judge."""
 
 from __future__ import annotations
 
 import pytest
 
-from tasks import ALL_DEMO_DATA
 from tests.integration.demo_data import ROOT, declared, name
+from tests.unit.simulators.all_demo_virtual_circuits import ALL_DEMO_DATA
 from utils.exchange_transit import INTERNET_ZONE
 
 _ALL = ROOT / ALL_DEMO_DATA

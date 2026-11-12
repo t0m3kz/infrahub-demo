@@ -9,9 +9,8 @@ from utils.limits import APPLICATION_ORCHESTRATOR_GROUPS, TOPOLOGY_ORCHESTRATOR_
 
 from ..common import CommonGenerator
 
-# The groups of the routed node. Read here, not in the definition query: the server makes every node of that query's
-# result a member of the run's query group, and a group that becomes one is reported as a new member of that group,
-# so its group trigger (data/events/99_group_triggers.yml) would start the group's generators for the query group.
+# Read here, not in the definition query: a node in that query's result would join the run's query group and fire its
+# group trigger (data/events/99_group_triggers.yml).
 _NODE_GROUPS_QUERY = (
     "query OrchestratorNodeGroups($ids: [ID]) { CoreNode(ids: $ids) { edges { node {"
     " member_of_groups { edges { node { id name { value } } } } } } } }"
@@ -19,12 +18,8 @@ _NODE_GROUPS_QUERY = (
 
 
 class BaseOrchestratorRoutingGenerator(CommonGenerator):
-    """Synchronize routing groups from an orchestrator dropdown field.
-
-    Owns nothing, so every write is untracked: the routing group is shared by
-    every node routed into it, and the node is this run's target. Tracked,
-    either would be deleted by the first run that does not save it again
-    (an unchanged node, or an orchestrator switched to another group).
+    """Synchronize routing groups from an orchestrator dropdown field; every write is untracked (the group is shared,
+    the node is the target).
     """
 
     query_roots: tuple[str, ...] = ()
@@ -54,7 +49,7 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
             return group
 
     async def _current_groups(self, node_id: str) -> list[dict[str, Any]]:
-        """The groups the node is a member of (one query, outside the definition query: see _NODE_GROUPS_QUERY)."""
+        """The groups the node is a member of (see _NODE_GROUPS_QUERY)."""
         result = clean_data(await self.client.execute_graphql(query=_NODE_GROUPS_QUERY, variables={"ids": [node_id]}))
         nodes = result.get("CoreNode") or []
         return list(nodes[0].get("member_of_groups") or []) if nodes else []
@@ -92,7 +87,7 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
 
         final_group_ids = list(retained_group_ids)
         if routing_group_name:
-            # The node's groups (read above) already name the routing group it is in: no lookup.
+            # The groups read above already name the routing group: no lookup.
             routing_group_id = next(
                 (
                     group["id"]

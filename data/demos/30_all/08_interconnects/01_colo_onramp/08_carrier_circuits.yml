@@ -1,0 +1,162 @@
+---
+# Carrier circuits of the colocation on-ramp (shared underlay, unowned).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - circuit_id: "DF-DC10-EQXFR2"
+      member_of_groups: [carrier_circuits]
+      name: "DF-DC10-EQXFR2"
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC10 border leaf to Equinix FR2 cage, 100G dark fibre"
+      locations:
+        - "FR2"
+      capabilities:
+        - ["bl-dc101101", "Ethernet1/35"]
+        - ["eg-fr201", "Ethernet1/10"]
+
+    - circuit_id: "DF-DC11-EQXFR2"
+      member_of_groups: [carrier_circuits]
+      name: "DF-DC11-EQXFR2"
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC11 border leaf to Equinix FR2 cage, 100G dark fibre"
+      locations:
+        - "FR2"
+      capabilities:
+        - ["bl-dc1111101", "Ethernet1/35"]
+        - ["eg-fr201", "Ethernet1/11"]
+
+    - circuit_id: "DF-DC12-EQXPA4"
+      member_of_groups: [carrier_circuits]
+      name: "DF-DC12-EQXPA4"
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC12 border leaf to Equinix PA4 cage, 100G dark fibre"
+      locations:
+        - "PA4"
+      capabilities:
+        - ["bl-dc1212101", "Ethernet1/35"]
+        - ["eg-pa401", "Ethernet1/10"]
+
+    - circuit_id: "DF-DC10-EQXFR2-B"
+      member_of_groups: [carrier_circuits]
+      name: "DF-DC10-EQXFR2-B"
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC10 border leaf to Equinix FR2 cage, second 100G dark fibre (second border gateway)"
+      locations:
+        - "FR2"
+      capabilities:
+        - ["bl-dc101101", "Ethernet1/36"]
+        - ["eg-fr202", "Ethernet1/10"]
+
+    - circuit_id: "DF-DC11-EQXFR2-B"
+      member_of_groups: [carrier_circuits]
+      name: "DF-DC11-EQXFR2-B"
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC11 border leaf to Equinix FR2 cage, second 100G dark fibre (second border gateway)"
+      locations:
+        - "FR2"
+      capabilities:
+        - ["bl-dc1111101", "Ethernet1/36"]
+        - ["eg-fr202", "Ethernet1/11"]
+
+    - circuit_id: "DF-DC12-EQXPA4-B"
+      member_of_groups: [carrier_circuits]
+      name: "DF-DC12-EQXPA4-B"
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC12 border leaf to Equinix PA4 cage, second 100G dark fibre (second border gateway)"
+      locations:
+        - "PA4"
+      capabilities:
+        - ["bl-dc1212101", "Ethernet1/36"]
+        - ["eg-pa402", "Ethernet1/10"]
+
+    - circuit_id: "XC-EQXPA4-AZURE-WEU-PRI"
+      member_of_groups: [carrier_circuits]
+      name: "XC-EQXPA4-AZURE-WEU-PRI"
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 10000
+      redundancy_group: "AZURE-WEU-PA4"
+      provider: "P016"
+      description: "Equinix PA4 cage to Azure westeurope, ExpressRoute primary leg, 10G"
+      locations:
+        - "PA4"
+      capabilities:
+        - ["eg-pa401", "Ethernet1/13"]
+        - ["EXT-AZURE-ER-WEU", "msee-pri"]
+
+    - circuit_id: "XC-EQXPA4-AZURE-WEU-SEC"
+      member_of_groups: [carrier_circuits]
+      name: "XC-EQXPA4-AZURE-WEU-SEC"
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 10000
+      redundancy_group: "AZURE-WEU-PA4"
+      provider: "P016"
+      description: "Equinix PA4 cage to Azure westeurope, ExpressRoute secondary leg, 10G"
+      locations:
+        - "PA4"
+      capabilities:
+        - ["eg-pa402", "Ethernet1/13"]
+        - ["EXT-AZURE-ER-WEU", "msee-sec"]
+
+    - circuit_id: "XC-EQXPA4-MEGAPORT"
+      member_of_groups: [carrier_circuits]
+      name: "XC-EQXPA4-MEGAPORT"
+      circuit_type: cross_connect
+      status: active
+      bandwidth: 10000
+      provider: "P016"
+      description: "Equinix PA4 cage to the Megaport Cloud Router (MCR) in Paris, 10G"
+      locations:
+        - "PA4"
+      capabilities:
+        - ["eg-pa401", "Ethernet1/1"]
+        - ["EXT-MEGAPORT-MCR1", "et-0/0/0"]
+
+    - circuit_id: "FABRIC-FR2-AMNE01"
+      member_of_groups: [carrier_circuits]
+      name: "FABRIC-FR2-AMNE01"
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 1000
+      provider: "P016"
+      description: "Equinix Fabric virtual connection, Fabric port of the cage FR to the Network Edge router eg-am-ne01 in AM-NE, 1G"  # yamllint disable-line rule:line-length
+      locations:
+        - "FR2"
+      capabilities:
+        - ["EXT-EQX-FABRIC-FR2", "et-0/0/0.1301"]
+        - ["eg-am-ne01", "Ethernet1/1"]
+
+    - circuit_id: "FABRIC-AMNE02-AWS-EUC1"
+      member_of_groups: [carrier_circuits]
+      name: "FABRIC-AMNE02-AWS-EUC1"
+      circuit_type: virtual_connection
+      status: active
+      bandwidth: 1000
+      provider: "P016"
+      description: "Equinix Fabric virtual connection, Network Edge router eg-am-ne02 to AWS eu-central-1 (hosted Direct Connect), 1G"  # yamllint disable-line rule:line-length
+      locations:
+        - "AM-NE"
+      capabilities:
+        - ["eg-am-ne02", "Ethernet1/1"]
+        - ["EXT-AWS-DX-EUC1", "dxcon-amne"]

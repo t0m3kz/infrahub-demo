@@ -1,27 +1,7 @@
-"""Addresses a VXLAN segment, and boards the customer pools it is addressed from.
-
-A segment with no gateway gets a prefix of its ``ip_version`` and its anycast gateway on the first address
-(``OFFSET_ANYCAST``); an authored gateway is kept. An IPv4 segment is sized from its ``host_count``, else the
-``segment_prefix_length`` of its footprint's design; an IPv6 segment (no ``host_count``) is the design's
-``ipv6_segment_prefix_length``. An office has no design: its segment takes the default length of the global tenant
-pool.
-
-The prefix comes from the CUSTOMER's pool of the segment's family, one per (customer, environment, facility kind,
-family) named ``{org_id}-{environment}-{dc|colocation|cloud}-{ipv4|ipv6}``. The pools are created WHEN THE FOOTPRINT IS
-BOARDED (``ensure_customer_pools``, called by add_customer_deployment_dc, _colocation and _cloud): a block of the
-design's ``address_prefix_length`` (IPv6: ``ipv6_prefix_length``) is carved from the environment's global tenant pool
-(``Tenant-PROD-IPv4``, ``Tenant-NONPROD-IPv6``, ...) and becomes the pool's first resource. The segment generator calls
-the same function again (idempotent: it repairs a pool that is missing), and a request the pool cannot satisfy carves
-another block of the same length and adds it to the same pool, once (identifier ``{pool name}-{n}``); nothing is ever
-re-allocated. One lock per customer pool serializes creating, growing and drawing. A customer's footprints of one kind
-and environment share the pool (the second finds it).
-
-The footprint whose design decides the block and the pool is the first of the segment's footprints of the first kind
-in DC, colocation order (``utils/segment_addressing.py`` ``addressing_footprint``).
-
-The segment's prefix is keyed by the segment name, so a re-run returns the same prefix. The server refuses another
-length for an identifier it already allocated: a changed ``host_count`` is reported with its remedy and never
-re-allocated.
+"""Addresses a VXLAN segment and boards the customer pools it is addressed from (see AGENTS.md Service tiers and
+customer pools). A segment with no gateway gets a prefix of its ``ip_version`` (``host_count``, else the design's
+length) and the anycast gateway on its first address; an authored gateway is kept. The prefix is keyed by segment name,
+drawn from the customer pool under a per-pool lock; a changed ``host_count`` is reported, never re-allocated.
 """
 
 from __future__ import annotations
@@ -59,10 +39,8 @@ _LENGTH_CHANGE_MARKER = "cannot be changed"
 
 
 class SegmentAddressingMixin:
-    """Mixin giving a VXLAN segment its prefix and anycast gateway (see the module docstring).
-
-    Expects the host class to provide ``client``, ``logger``, ``resource_lock`` and ``ensure_sliced_pool``
-    (PoolMixin), ``upsert_prefix_addresses`` (CablingMixin) and ``fail`` (CommonGenerator).
+    """Mixin giving a VXLAN segment its prefix and anycast gateway; the host provides the client, logger, locks and pool
+    helpers.
     """
 
     client: Any
@@ -78,11 +56,7 @@ class SegmentAddressingMixin:
         self, *, kind: str, org_id: str, environment: str, design: dict[str, Any], footprint_name: str
     ) -> None:
         """Board a footprint: create, once, the customer's pool of each family its kind has (find it when it exists).
-
-        ``kind`` is the footprint kind (``TopologyCustomerDC``, ``...Colocation`` or ``...Cloud``), ``design`` the
-        cleaned template row with the block lengths. A customer's footprints of one kind and environment share the
-        pools, so the second footprint finds them. The global pool is the environment's tenant pool of the family.
-        """
+        ``design`` is the cleaned template row with the block lengths."""
         zone = ZONE_BY_NS_TYPE[namespace_type_for_environment(environment)]
         for family in CUSTOMER_POOL_FAMILIES[kind]:
             block_length = design.get(BLOCK_LENGTH_FIELD[family])
@@ -135,10 +109,8 @@ class SegmentAddressingMixin:
         self.logger.info(f"Segment {segment_name}: gateway {gateway.address.value} from {pool_name}")
 
     def _check_allocated_length(self, segment: dict[str, Any], host_count: int | None) -> None:
-        """Fail, naming the remedy, when a segment with a host_count has a prefix of another length.
-
-        A prefix length cannot change in place, so a host_count edited after the allocation is reported and never
-        re-allocated. A segment without a host_count (every IPv6 one) takes its design's default and is not judged here.
+        """Fail, naming the remedy, when a segment with a host_count has a prefix of another length (IPv6 segments are
+        not judged).
         """
         if host_count is None:
             return
@@ -173,9 +145,8 @@ class SegmentAddressingMixin:
             )
 
     async def _allocate_from_tenant_pool(self, segment_name: str, pool_name: str, host_count: int | None) -> Any:
-        """The prefix of a segment with no design (an office's) straight from the global tenant pool.
-
-        Sized from its host_count, else the pool's own default length.
+        """The prefix of a segment with no design (an office's) from the global tenant pool, sized by host_count or the
+        pool default.
         """
         pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name)
         if not pools:
@@ -187,11 +158,8 @@ class SegmentAddressingMixin:
         return prefix
 
     async def _find_or_create_customer_pool(self, pool_name: str, global_pool_name: str, block_length: int) -> Any:
-        """The customer's pool by name (with its resources), created from a block of the global pool when missing.
-
-        The caller holds the pool's lock. The one implementation of "ensure the pool", for boarding and for the
-        segment request that repairs a missing one. The pool is shared by the customer's footprints and segments, so
-        it is saved untracked: no single run's cleanup may reclaim it.
+        """The customer's pool by name (with its resources), created from a block of the global pool when missing; the
+        caller holds the lock; untracked.
         """
         pools = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name, include=["resources"])
         if pools:
@@ -233,9 +201,8 @@ class SegmentAddressingMixin:
     async def _allocate_customer_slice(
         self, name: str, pool_name: str, global_pool_name: str, block_length: int, length: int
     ) -> Any:
-        """A prefix of ``length`` keyed by ``name`` from the customer's pool, created or grown by one block when needed.
-
-        The one draw from a customer pool, for a segment's subnet and for a cloud virtual network's routed range.
+        """A prefix of ``length`` keyed by ``name`` from the customer's pool, grown by one block when needed (segment
+        subnet or cloud range).
         """
         async with self.resource_lock(f"customer-pool-{pool_name}"):
             pool = await self._find_or_create_customer_pool(pool_name, global_pool_name, block_length)
@@ -252,11 +219,8 @@ class SegmentAddressingMixin:
         return prefix
 
     async def _grow_customer_pool(self, pool: Any, pool_name: str, global_pool_name: str, block_length: int) -> None:
-        """Carve one more block of ``block_length`` from the global tenant pool into the customer's pool.
-
-        The block is keyed ``{pool name}-{n}`` (n: the pool's resources plus one), so a run that failed between the
-        carving and the attach returns the same block on its retry. The edge is added alone: the pool's other
-        resources stay.
+        """Carve one more block of ``block_length`` from the global tenant pool into the customer's pool, keyed ``{pool
+        name}-{n}`` so a retry returns it.
         """
         number = len(pool.resources.peers) + 1
         parent_pool = await self._get_parent_pool_with_retry(global_pool_name)

@@ -46,14 +46,7 @@ def segment_security_view(
     *,
     local: set[str] | None = None,
 ) -> dict[str, Any]:
-    """The contract set as MSS-G segments by prefix, policies under the destination (module docstring).
-
-    ``groups`` are every group the rows name, ``local`` the segment groups to
-    list (None: all) besides every segment a row names (a ``from`` line needs its
-    source defined); ``prefixes``: segment name -> its gateway prefix (the
-    segment's definition). A row that names a component group is unsupported, and so is the reply of
-    a permit-all row (MSS-G is stateless: its reply is not a port the device can mirror).
-    """
+    """The contract set as MSS-G segments by prefix, policies under the destination (module docstring)."""
     by_name = {group.name: group for group in groups}
     segment_group = {group.segment: group.name for group in by_name.values() if group.kind == "segment"}
     policies: dict[tuple[str, str], tuple[set[Entry], set[str]]] = {}
@@ -160,14 +153,7 @@ def _has_any(entries: set[Entry]) -> bool:
 
 
 class _MssgCatalog:
-    """The global objects the custom policies of one device name: field-sets, applications and policies.
-
-    Every name is the hash of its content, so equal content is one object on every device of a data center and
-    a re-render is byte-identical. A policy is the entries a source may send to the destination (``forward``,
-    matched on the destination port) and the replies of the entries the destination may send to the source
-    (``reply``, matched on the source port: MSS-G is stateless, spec 3.7), ended by a drop of everything else
-    (documented-not-lab-verified, spec 3.9).
-    """
+    """The global objects the custom policies of one device name: field-sets, applications and policies."""
 
     def __init__(self, who: str) -> None:
         self.who = who
@@ -176,12 +162,7 @@ class _MssgCatalog:
         self.policies: dict[str, dict[str, Any]] = {}
 
     def policy(self, forward: set[Entry], reply: set[Entry]) -> str | None:
-        """The policy name for the entry sets, None when they allow nothing.
-
-        The built-in forward-all only when the FORWARD set (what the contract permits into the destination) has
-        ``any``. A reply of ``any`` cannot be matched by source port: it is left closed, never widened into the
-        forward direction.
-        """
+        """The policy name for the entry sets, None when they allow nothing."""
         if _has_any(forward):
             return _MSSG_FORWARD_ALL
         reply = set() if _has_any(reply) else reply
@@ -261,32 +242,14 @@ class _MssgCatalog:
 
 
 def _fallback_entries(item: dict[str, Any]) -> tuple[set[Entry], set[Entry]]:
-    """(forward, reply) of a destination's fallback: what UNCLASSIFIED may send in; the reply of what it may send out."""
+    """(forward, reply) of a destination's fallback."""
     forward = _entry_set((item["fallback"] or {}).get("entries"))
     reply = _entry_set((item["to_unclassified"] or {}).get("entries"))
     return forward, set() if _has_any(reply) else reply
 
 
 def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
-    """The EOS MSS-G view one VTEP renders, or None when it renders none.
-
-    The view is the data center's ``segment_security_view`` cut to the VRFs the device carries
-    (``scope.vrfs``, as for ``_vxlan_gpo_build``), with:
-
-    - every segment named by a ``from`` line defined, remote ones included, and, in a VRF with a
-      fallback, every segment of the VRF (a fallback also catches a source in a segment without a
-      ``from`` line, so those get an explicit ``policy-drop-all``); at most ``EOS_MSSG_MAX_SEGMENTS``;
-    - a VRF holding a segment with no gateway prefix not rendered at all (``skipped``): enforcement is
-      box-wide, so a segment that cannot be classified would be dropped to, or from, wholesale;
-    - the reply of every permitted flow as a mirrored policy on the source port (MSS-G is stateless),
-      the built-in ``policy-forward-all`` for a permit-all entry, a content-hashed custom policy
-      (AVD's model; documented-not-lab-verified) for the rest;
-    - ``enforce`` False when the data center stages group policy (``shutdown`` instead of
-      ``no shutdown``). Never rendered: ``no segment policy policy-drop-all default``, redirect,
-      log, ``match interface`` (spec 3.5, 3.4, 2.7).
-
-    None when the device has no VRF with a segment to define.
-    """
+    """The EOS MSS-G view one VTEP renders, or None when it renders none."""
     who, contracts = scope.who, scope.contracts
     prefixes = {str(segment.get("name")): own_prefix(segment) for segment in contracts.all_segments}
     view = segment_security_view(contracts.all_groups, contracts.rows, prefixes, local=contracts.local_names)

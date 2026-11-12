@@ -1,9 +1,4 @@
-"""Unit tests for CheckCircuitPlacement session rules: one session circuit per port, environment separation and
-decommissioned session circuits.
-
-The payload builders are in tests/unit/circuit_placement_check_helpers.py; the placement rules per circuit kind are
-in tests/unit/test_circuit_placement_check.py.
-"""
+"""Unit tests for CheckCircuitPlacement session rules: one session circuit per port."""
 
 from __future__ import annotations
 
@@ -163,8 +158,7 @@ class TestEnvironmentSeparation:
 
 
 class TestDecommissionedSessionCircuits:
-    """add_virtual_circuit builds nothing for a decommissioned session circuit, so the check does not enforce the
-    session rules on it; the same defect on an active circuit is still reported."""
+    """add_virtual_circuit builds nothing for a decommissioned session circuit."""
 
     @staticmethod
     def _uncarried_dci(status: str) -> dict[str, Any]:

@@ -1,0 +1,46 @@
+---
+# Cables inside one cage (a hop within one facility is a cable, not a circuit).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-FR2-SDWAN-GW1-ETH0"
+      type: copper
+      deployment: "FR2"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EQX-FR2-SDWAN-GW1"
+            name: "eth0"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "eg-fr201"
+            name: "Ethernet1/12"
+
+    - name: "CBL-FR2-EQX-FABRIC-FR201"
+      type: smf
+      deployment: "FR2"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "eg-fr201"
+            name: "Ethernet1/1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EXT-EQX-FABRIC-FR2"
+            name: "et-0/0/0"
+
+    - name: "CBL-FR2-EDGE-AWS-DX"
+      cable_id: "XC-EQXFR2-AWS-EUC1"
+      type: smf
+      deployment: "FR2"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "eg-fr201"
+            name: "Ethernet1/13"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EXT-AWS-DX-FR2"
+            name: "dxcon-fr2"

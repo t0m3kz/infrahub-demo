@@ -246,10 +246,7 @@ class TestSizing:
 
     @pytest.mark.parametrize("super_spines", [0, 2])
     def test_the_pool_sized_by_the_design_is_the_underlay_limit(self, super_spines: int) -> None:
-        """The limit is the capacity of the pool fabric_sizing derived (with its headroom), plus the VIPs of the family.
-
-        super_spines=0 is the back-to-back pod fabric (``pod_links``).
-        """
+        """The limit is the capacity of the pool fabric_sizing derived (with its headroom), plus the VIPs of the family."""
         dc = self._dc(super_spines)
         bits = fabric_sizing.dc_loopback_bits(dc)
         pool = f"10.250.0.0/{fabric_sizing.host_bits_to_prefix_length(bits, ipv6=False)}"

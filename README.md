@@ -45,9 +45,38 @@ But topology is just the appetizer. The main course—the part that makes season
 
 This is application-driven infrastructure: the network exists to serve the application, not the other way around. No more "just open a change request and we'll get to it eventually." No more hand-carved ACLs that nobody dares touch because nobody remembers why they're there. You declare intent, the generators do the honest work, and the humans get their Friday afternoons back.
 
+**A word about ServiceNow.** Nothing against it: somebody has to own the ticket number, the change advisory board
+calendar and the approvals the auditors accept. But a change request typed by hand is a work of fiction written at
+4:55pm on a Friday, and the diff is the only part of it that was ever true. So this demo derives the request from the
+diff (devices, risk, rollout, backout, test plan, a maintenance window), gates the merge on it, and renders it as a
+ServiceNow-shaped body you can hand over (`change_request_servicenow`). ServiceNow stays the system of record; the demo
+is merely the part that does the typing. See [Change Requests](#change-requests).
+
 **Special thanks to [OpsMill](https://opsmill.com) for making this happen** – they built Infrahub with the vision that infrastructure teams should have complete control, not be prisoners to vendor constraints. (And yes, I'm bloody jealous I didn't have the power and motivation to come up with such a brilliant idea myself – like Prometheus watching others steal the fire of the gods!)
 
 **To companies/vendors** who may borrow ideas from this repo for your customer environments: please sponsor at least 3 open source communities. Odds are, open source powers half your commercial products anyway. The volunteers who build these tools deserve more than just a "thanks" and a GitHub star. And if you’ve ever filed a bug report and then complained about how long it takes to fix, remember: a few dollars a month for open source won’t even dent your coffee budget—so go ahead, give back and help keep these communities caffeinated and strong.
+
+**In short:** this repository models data center, colocation, cloud, SaaS and office networks in
+[Infrahub](https://docs.infrahub.app) and generates them from design data. Schemas define the data model, generators
+build the topology, transforms render device configurations, and checks validate the result before a change is merged.
+Two ideas drive it:
+
+- **Design-driven topology.** A fabric is described by its design (size, pod layout, routing strategy, naming
+  convention). Generators derive the devices, cabling, addressing and routing from it, so a new pod, rack or switch
+  is a data change, not a manual build.
+- **Application-driven infrastructure.** An application team declares what its application needs (for example
+  "checkout talks to payment on tcp/443"). Generators derive the firewall rules, proxy configuration, security policy
+  and routing from that one declaration, consistently, on a branch that is reviewed before it is merged.
+
+*On the design-driven approach:* a DC6 fabric of forty-odd devices, with their cabling, ASNs and addresses, comes from a
+handful of YAML files and one command, and nobody typed a single cable into a spreadsheet. The spreadsheet is the same
+age as the network it describes, and about as accurate. Here the design is the source of truth and the devices are an
+output, which is a rare case of the documentation being unable to lie.
+
+*On the application-driven approach:* the firewall rule exists because an application declared what it needs, not
+because somebody remembered to ask in the right queue. The security team keeps its job, and gets a better one: reviewing
+a diff of what will actually change, instead of transcribing a ticket into five vendors' syntax and hoping the ticket
+was right.
 
 ---
 
@@ -55,17 +84,23 @@ This is application-driven infrastructure: the network exists to serve the appli
 
 - Python 3.11, 3.12, 3.13, or 3.14
 - [uv](https://github.com/astral-sh/uv) for dependency management
-- Docker (for containerlab and some integration tests)
-- **Infrahub 1.5** (or higher) - See note below
+- Docker (the Infrahub stack, containerlab and the integration tests)
+- **Infrahub 1.10** or higher (the registered flattened queries need **1.12**; the integration stack runs **1.12.1**)
 
-> **Version Compatibility Note**: This demo is designed for Infrahub 1.5. The data models and generators can be modified to work with previous versions of Infrahub if needed.
+> **Version Compatibility Note**: the data models and generators can be modified to work with older versions of
+> Infrahub if needed, but the registered queries are flattened copies that need 1.12 (see [AGENTS.md](AGENTS.md)).
+> Who does the modifying is traditionally settled by whoever missed the upgrade planning meeting.
 
 ## Features
 
 - Design-driven network automation demo using [Infrahub](https://docs.infrahub.app)
 - Application-driven infrastructure: declare app dependencies once ("app A talks to app B on 443") and let generators materialize the firewall rules, proxy config, security policy, and routing—no three-sprint change request required
+- Kicks: every demo deploys as a series of reviewed changes with one command (`uv run invoke kick dc6`), each stage a branch, a proposed change, its checks and artifacts, and a merge
+- Change requests: a Proposed Change gets a ServiceNow-style change request whose description, risk, rollout,
+  backout and test plans are derived from its own diff, created by Infrahub itself and gated by a check
+  ([docs/change_requests.md](docs/change_requests.md))
 - Example data, schemas, and menu for rapid onboarding
-- Scripts for bootstrapping, demo use cases, and CI integration
+- Invoke tasks for bootstrapping, deploying demos, and CI integration
 - Modular structure for easy extension and experimentation
 
 ## Project Structure
@@ -76,6 +111,7 @@ This is application-driven infrastructure: the network exists to serve the appli
 - [`menu/`](menu/) – Example menu definition
 - [`queries/`](queries/) – GraphQL queries for Infrahub
 - [`schemas/`](schemas/) – Base and extension schemas
+- [`tasks/`](tasks/) – Invoke tasks and the kicks (`kicks.yml`) that deploy the demos
 - [`templates/`](templates/) – Jinja2 templates for device configs
 - [`tests/`](tests/) – Unit, integration, and smoke tests
 - [`transforms/`](transforms/) – Python transforms for Infrahub
@@ -109,7 +145,8 @@ One command to setup everything:
 uv run invoke setup
 ```
 
-This starts containers, loads schemas, menu, and bootstrap data. Then explore at <http://localhost:8000>
+This starts the dev stack if it is not running, loads schemas, menu and bootstrap data, and registers the repository
+with its event rules. Then explore at <http://localhost:8000>
 
 ### Manual Setup (Alternative)
 
@@ -131,7 +168,7 @@ Load demo data
 uv run invoke load-objects
 ```
 
-Register repository and load event actions
+Register repository and load event actions (`setup` already does this when no repository is registered)
 
 ```bash
 uv run invoke register-repo
@@ -140,6 +177,7 @@ uv run invoke register-repo
 ### Deploy Data Center Scenarios
 
 **6 strategic scenarios** demonstrating vendor platforms, naming strategies, multi-vendor architectures.
+Each deploys with one command, `uv run invoke kick dc1` (`dc2` ... `dc7`), see [Deploying a Scenario](#deploying-a-scenario).
 
 #### Single-Vendor Deployments (DC1-DC4)
 
@@ -159,36 +197,96 @@ uv run invoke register-repo
 
 #### Expansion & Incremental Deployment Scenarios
 
-Explore LLM upgrades and organic growth patterns—all in one place. The switch, rack and pod demos grow DC6, so
-make sure DC6 is already deployed; llm time works on DC1:
+Explore LLM upgrades and organic growth patterns—all in one place. The switch, rack, pod and spine demos grow DC6, so
+make sure DC6 is already deployed (`uv run invoke kick dc6-growth` does the whole path); llm time works on DC1:
 
 | Scenario | Location | Type/Architecture | Description |
 | ---------- | ---------- | ------------------- | ------------- |
 | **[switch](data/demos/02_switch_dc6/)** | Katowice 🇵🇱 | Rack Expansion | "Just TWO more switches"—organic chaos. |
 | **[rack](data/demos/03_rack_dc6/)** | Katowice 🇵🇱 | Leaf + Access-Leaf Rack | Minimalist rack: started as a test, now it's critical. |
 | **[pod](data/demos/04_pod_dc6/)** | Katowice 🇵🇱 | Pod Expansion | Pod 4: because 3 wasn't enough. |
-| **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
+| **[spine](data/demos/05_spine_dc6/)** | Katowice 🇵🇱 | Spine Expansion | One more spine in POD-1: a data change, not a purchase order. |
+| **[llm time](data/demos/09_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included (illustrative only, no kick loads it). |
 
 #### Everything at Once
 
 **[30_all](data/demos/30_all/)** loads every fabric, colocation, cloud, office, customer and application into
-one branch. It has to be loaded stage by stage, so use `uv run invoke load-all-demo`, which loads the stages in
-order and waits for the generators in between. The demo README explains why and how to do it by hand.
+one branch. It has to be loaded stage by stage, so use `uv run invoke kick all-demo` (or `load-all-demo`, the same
+kick), which loads the stages in order and waits for the generators in between. The demo README explains why and how
+to do it by hand.
 
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
+
+## Deploying a Scenario
+
+Demos are deployed by **kicks**: YAML in [`tasks/kicks.yml`](tasks/kicks.yml), run with `invoke`.
+
+```bash
+uv run invoke kicks                                     # list every kick, demo and suite
+uv run invoke kick dc6                                  # deploy DC6 as a change
+uv run invoke kick all-demo --from-stage applications   # resume after a failed stage
+```
+
+A kick is a list of stages. A kick with a `branch` loads its stages onto that branch in turn (`all-demo` loads
+`30_all` onto `all-demo-scenario`; `uv run invoke load-all-demo` is the same kick). A kick without one makes each stage
+a **change**: branch `<kick>-<stage>` from `main`, load, wait for the generators to settle, a proposed change, its
+checks and artifacts, then the merge. Failed tasks must be zero throughout.
+
+`invoke kick` looks at the stack first. It waits for a repository that is still syncing, runs `invoke setup` when the
+bootstrap data, the repository or a generator is missing, and starts a dev stack only at <http://localhost:8000>.
+An `INFRAHUB_ADDRESS` that answers nothing and is not that one is refused.
+
+To load a folder without a kick (never directly on `main`):
+
+```bash
+uv run infrahubctl branch create my-branch
+uv run infrahubctl object load data/demos/01_data_center/dc6/ --branch my-branch
+```
+
+The generators start automatically when the loaded objects join their target groups (see
+[`data/events/`](data/events/)). Follow progress in the Infrahub UI under Tasks; open a Proposed Change from the
+branch to see the diff, the artifacts and the check results. `30_all` references objects that generators create in
+earlier stages, which is why it only loads through its kick.
+
+## Change Requests
+
+A Proposed Change gets a ServiceNow-style [change request](docs/change_requests.md), and nobody has to ask for it.
+When the last artifact validator of the PC completes, Infrahub creates `CHG-<pc>` on the source branch (or re-derives
+it), and the generator `add_change_request` fills it in from the PC's own diff and artifacts: devices, customers,
+risk, change type, plans and a maintenance window. It also writes a "Change request" thread on the PC (link, type, risk,
+devices, window, ticket), because the UI shows a PC only through its fixed pages. The check
+`validate_change_request` gates the merge of a PC that has one. No outside service is needed. The change advisory board
+still meets, but most of its paperwork now writes itself from the diff instead of from someone's optimism at 4:55pm on
+a Friday.
+
+Who is more flexible, ServiceNow or this demo?
+
+| | ServiceNow | This demo |
+| --- | --- | --- |
+| Content | Typed by the requester, once | Derived from the diff, re-derived after every pipeline run |
+| Window | Negotiated | Computed: next Thursday 22:00 Europe/Warsaw, 10 minutes per device, at least 30 |
+| Risk | A questionnaire | Scored from what actually changes (roles, removals, routing, customers) |
+| Merge | Waits for an approval | Refused by `validate_change_request` when the request is incomplete |
+| A new rule | A workflow designer and a consultant | A few lines of Python and a template |
+| Ticket number, CAB workflow, approvals with teeth, an audit trail auditors accept | Yes | None. `external_id` stays empty until someone files it |
+
+The demo renders a ServiceNow-shaped body on demand (`change_request_servicenow`), so it can feed the real thing. It
+is flexible about everything except being accountable.
 
 ## CI/CD
 
 This project uses GitHub Actions for continuous integration. All pushes and pull requests are tested for lint, type checks, and unit tests.
+A robot notices a broken commit long before a customer does, and it never asks for a meeting about it.
 
 ## Security & Secrets
 
 - Do not commit real API tokens. Use `.env` or GitHub secrets for sensitive data in production.
-- Example tokens in this README are for demo purposes only.
+- Example tokens in this README are for demo purposes only (they open a local demo stack, not the procurement vault).
 
 ## Troubleshooting
 
-- If you encounter port conflicts, ensure no other service is running on port 8000.
+- If you encounter port conflicts, ensure no other service is running on port 8000
+  (usually a stack you forgot you started last Tuesday).
 - For dependency issues, run `uv sync` again.
 - For Docker/infrahub issues, ensure Docker is running and you have the correct permissions.
 - **macOS + Colima + integration tests**: Colima often does not share the system temp folder (e.g. `/var/folders/...`) into the VM.
@@ -197,7 +295,7 @@ Use a repo-local pytest temp directory via `--basetemp` (see Testing below).
 
 ## Testing
 
-Run all tests using:
+Run all tests using (before the Friday deploy, not after it):
 
 ```bash
 uv run inv validate
@@ -214,32 +312,26 @@ uv run invoke test-unit
 uv run invoke test-integration
 ```
 
-These tasks run pytest with `--basetemp .pytest-tmp`.
+These tasks run pytest with a repo-local basetemp.
 
 ### Integration Test Profiles
 
-The integration suite shares one Docker stack per pytest invocation. Running several scenarios in one command is therefore much cheaper than starting a fresh small universe for every file.
-
-Use the focused profiles when you want useful feedback before the full topology marathon:
+The integration suite shares one Docker stack per pytest invocation, which is much cheaper than starting a fresh small
+universe for every file. It is three files: `test_01` (schemas and bootstrap), `test_02` (repository sync) and `test_04`
+(the suite kicks of [`tests/integration/kicks/`](tests/integration/kicks/): `dc6-suite` grows DC6 change by change,
+`full-topology-suite` loads the full topology as one checked change), with assertions per stage.
 
 ```bash
-# Setup and repository prerequisites only
+# Setup, repository sync and the full-topology sample on its own branch
 uv run invoke test-integration-fast
 
-# The 30_all demo end to end: staged load, app catalogue, compute,
-# interconnects, zone policies
-uv run invoke test-integration-all-demo
-
-# Automatic DC/POD/rack trigger and routing regression
-uv run invoke test-integration-routing
-
-# Everything, including the full DC matrix
+# Everything, including dc6-suite (about half an hour)
 uv run invoke test-integration
 ```
 
-All profiles load the shared setup and repository prerequisites first. `all-demo` then builds one branch holding the whole `30_all` data set and asserts against it: that the staged load converged, that Infrahub dispatched every generator the trigger rules promise, that each fabric, its host cabling and the application graph came out as declared, that the circuit layer reaches both clouds, and that the colocation zone policies pass the firewall check and render. The full profile is deliberately heavier still: it exercises the long-running DC lifecycle and all dependent workflows. It is excellent at finding trouble and less excellent at respecting your afternoon.
-
-Integration task waits now fail with the active branch task titles and states when the queue does not settle within the timeout. That is intentional: a later assertion against half-generated infrastructure is rarely the thrilling plot twist anyone requested.
+The test stack serves on port **8100**, so it can run next to your dev stack on 8000. A stage fails on the first failed
+task, and the failure names it. Which profile a change needs, and what the suite no longer covers, is in
+[CONTRIBUTING.md](CONTRIBUTING.md#testing) and [tests/integration/README.md](tests/integration/README.md).
 
 Alternative (manual):
 
@@ -301,7 +393,7 @@ This project is licensed under the MIT License.
 [ruff-badge]:
 <https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json>
 [ruff-link]:
-(<https://github.com/astral-sh/ruff>)
+<https://github.com/astral-sh/ruff>
 [github-discussions-link]:
 <https://github.com/t0m3kz/infrahub-demo/discussions/>
 [github-discussions-badge]:

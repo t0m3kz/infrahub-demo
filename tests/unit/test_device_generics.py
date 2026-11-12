@@ -109,8 +109,7 @@ def test_a_cloud_transport_inherits_only_the_slim_device() -> None:
 
 
 def test_the_internet_is_a_passive_device_and_a_facility_with_one_interface_kind() -> None:
-    """Ports through the slim device, a location through the facility; no role, platform, owner, artifact, capability.
-    Its interface is a kind of its own, the only one a carrier check exempts from one carrier per port."""
+    """Ports through the slim device, a location through the facility; no role, platform, owner, artifact, capability."""
     nodes = _kinds("nodes")
 
     assert set(nodes["TopologyInternet"]["inherit_from"]) == {
@@ -124,8 +123,7 @@ def test_the_internet_is_a_passive_device_and_a_facility_with_one_interface_kind
 
 
 def test_only_the_known_kinds_inherit_the_slim_device() -> None:
-    """A new holder of interfaces is a decision: managed kinds take both generics, transports and THE INTERNET only the
-    slim one."""
+    """A new holder of interfaces is a decision: managed kinds take both generics."""
     inheritors = {kind for kind, node in _kinds("nodes").items() if "DcimDevice" in (node.get("inherit_from") or [])}
 
     assert inheritors == _MANAGED_KINDS | _TRANSPORTS | _PASSIVE
@@ -153,8 +151,7 @@ def test_the_peers_that_need_a_managed_device_are_retyped() -> None:
 
 
 def test_the_provider_connect_is_one_slim_device_placed_by_one_facility() -> None:
-    """The provider's connect device holds interfaces and nothing else: no account, owner, region or SaaS region of a
-    transport; its place is ONE mandatory `location` (a facility), so no check is needed for 'exactly one place'."""
+    """The provider's connect device holds interfaces and nothing else: no account, owner."""
     node = _kinds("nodes")["TopologyProviderConnect"]
     assert set(node["inherit_from"]) == {"DcimDevice", "DcimProviderPort"}
     (location,) = [r for r in node["relationships"] if r["name"] == "location"]

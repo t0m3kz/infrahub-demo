@@ -28,7 +28,7 @@ Key use cases demonstrated:
 
 - **Package Manager**: Use `uv` for all dependency management.
 - **Python Version**: Supports Python 3.11 to 3.14.
-- **Key Dependencies**: `infrahub-sdk[all]>=1.7.2,<2.0.0`, `invoke>=2.2.0`.
+- **Key Dependencies**: `infrahub-sdk[ctl]>=1.24.0,<2.0.0`, `infrahub-testcontainers>=1.12.1` (Infrahub 1.12.1), `invoke>=3.0.3`.
 
 ### Common `uv` Commands
 
@@ -80,7 +80,8 @@ Schema Definition → Data Loading → Generator Execution → Transform Process
 ### Key Files
 
 - `.infrahub.yml` - Central registry for all components (transforms, generators, checks, queries)
-- `tasks.py` - Invoke task definitions for automation
+- `tasks/` - Invoke tasks (`__init__.py`), the kick loader (`kicks.py`) and the proposed change flow (`proposed_change.py`)
+- `tasks/kicks.yml` - Deployment tests of the demos (`uv run invoke kick <name>`; `invoke kicks` lists them)
 - `pyproject.toml` - Project dependencies and tool configuration
 
 ## Development Workflow
@@ -253,6 +254,7 @@ class MyCheck(InfrahubCheck):
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
 | Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
 | Security, Loadbalancer, Proxy, App, Virt | Functional domains |
+| Change | `ChangeRequest`: the ServiceNow-style change request of one Proposed Change (see **Change requests**) |
 
 - **One Managed generic per concept, with an implementation per technology**: `ManagedVxlanSegment` and
   `CloudNetworkSegment` inherit `ManagedNetworkSegment`; `ManagedLoadbalancerHA` and `CloudLoadBalancer` inherit
@@ -417,8 +419,8 @@ class MyCheck(InfrahubCheck):
   are the peering's `advertised_prefixes` (public or static only). A cloud region hosts nothing, a SaaS region or a
   virtual colocation hosts `appliances` (`TopologyApplianceHosting`). A provider's own router that a cable reaches is a
   physical device owned by that provider with no `deployment`. `OrganizationProvider.connection_profile` names the operator's
-  vocabulary and is inventory only. The sample is `data/demos/00_full_topology` (one topology in numbered folders by facility type, `tests/traversal/load_topology.py` loads it;
-  its README holds the per-operator table, `test_03_full_topology.py` loads it; three sites reach each other and the INTERNET: the DC, one colocation cage `PAR-COLO1` where every cloud and SaaS leg lands (never on the DC edge) and the C900 office with an SD-WAN edge of its own); `checks/cloud_connection.py` (R1 to R11) holds what the schema cannot (the edge derives the cloud side's
+  vocabulary and is inventory only. The sample is `data/demos/00_full_topology` (one topology in numbered folders by facility type, one `infrahubctl object load` of the folder loads it;
+  its README holds the per-operator table, the suite kick `full-topology-suite` loads it as a checked change; three sites reach each other and the INTERNET: the DC, one colocation cage `PAR-COLO1` where every cloud and SaaS leg lands (never on the DC edge) and the C900 office with an SD-WAN edge of its own); `checks/cloud_connection.py` (R1 to R11) holds what the schema cannot (the edge derives the cloud side's
   prefixes, see **Border policy**).
 - **Session circuits** (virtual circuits): `TopologySessionCircuit` is the connection between topologies on which routing
   is generated or recorded; its role is its `circuit_type` (`dci`, `handoff`, `tunnel`, `vpn`), required, never a kind. It has no `owner` field (derived, see **Circuit placement**). The
@@ -632,7 +634,7 @@ class MyCheck(InfrahubCheck):
     (`apply_context_routes`), and `get_firewall_static_routes` skips an interface with a `virtual_ip`.
   - **Check**: `checks/segment_placement.py` holds a termination to a gateway inside the segment prefix, DC footprints
     only, exactly one, listing a firewall context (`serving_firewall_contexts`). Demo: C005's `firewalled-dc10` in
-    `data/demos/30_all/07_applications/c005/00_segments.yml`, on DC10's shared PROD context (`test_64c`).
+    `data/demos/30_all/07_applications/c005/00_segments.yml`, on DC10's shared PROD context.
 - **Footprint segments**: `network_segments` (the reverse of `segment__customer_deployments`) is declared per kind in
   `schemas/extensions/service/segment.yml`: `ManagedVxlanSegment` on `TopologyCustomerDC`, `TopologyCustomerColocation`
   and `TopologyCustomerOffice`, `CloudNetworkSegment` on `TopologyCustomerCloud`, never on the `TopologyCustomer`
@@ -1036,6 +1038,25 @@ class MyCheck(InfrahubCheck):
   `deployment` or `role`, or a port taken off a handoff circuit, re-runs nothing. The check also reports demand
   without a membership, a member of another topology's instance, a device with demand and no hosting deployment
   (ERRORs), an instance with no member (WARNING) and the SVI rules.
+- **Change requests**: one `ChangeRequest` (`schemas/extensions/change/change_request.yml`, branch-aware, `CHG-<pc
+  name>`) per Proposed Change, created on the PC's source branch with `member_of_groups: [change_requests]` so it shows in
+  the PC diff and merges as history. Infrahub creates it: when the LAST artifact validator of an open PC completes, `open_change_request`
+  (`generators/change/open_change_request.py`, a rule on `CoreArtifactValidator`, group `artifact_validators`) creates
+  `CHG-<pc>` on the source branch, which starts `add_change_request`, or re-runs `add_change_request` on the existing
+  one; no outside service is needed (creating one by hand still works). `add_change_request`
+  (`generators/change/change_request.py`, the group trigger) reads the PC through `proposed_change`, the artifact diff
+  (REST `/api/diff/artifacts`) and the data diff (`utils/change_sources.py`: `DiffTreeSummary` counts, never a listing
+  of the changed nodes, and one paged `DiffTree` read filtered to the segments, rules, cables, circuits, footprints and
+  applications, with their values and the `owner` peers), the artifact targets' role, place and pair in one query
+  (`change_request_facts.gql`), and writes what `utils/change_rules.py` derives (the one weight table, the window, the
+  `artifact_fingerprint`) and `utils/change_text.py` renders (`templates/change/*.j2`, one per text field, from the
+  facts of `utils/change_facts.py`: devices, links, firewall rules, segments). It also keeps the PC's "Change request"
+  thread (`CoreChangeThread`, one comment from `templates/change/pc_comment.j2`: link, type, effective risk, devices,
+  window in Europe/Warsaw, ticket; the UI shows a PC only through fixed pages, so the summary is a thread, not
+  fields). `planned_start` and `planned_end` are fully derived, a manual edit is overwritten by the next derivation. It never writes the author fields (`justification`, `risk_override`, `risk_override_reason`,
+  `requested_by`) nor `external_id`. `checks/change_request.py` (CR1-CR5) gates a PC that has a change request (opt-in: a PC with none is not gated, so the repository never blocks a merge without one); `change_request_servicenow` (a
+  python transform rendered on demand, not an artifact) is the ServiceNow `change_request` body. Only an `open` PC
+  counts: a deleted branch's PC stays as `canceled`.
 - **What the schema refuses, measured on a server (1.11.9)**: `parameters` (min/max of a Number) and `max_count` are
   enforced on create and on update; `min_count` only on update (a member removed below the minimum is refused, a
   domain created with one member of a `min_count: 2` is accepted); `optional: false` refuses an omitted relationship
@@ -1373,22 +1394,29 @@ uv run pytest --cov=.
 Integration runs go through `uv run invoke test-integration` (see the `infrahub-running-integration-tests` skill), one
 stack at a time. Two loops:
 
-- **Fast (minutes)**: `uv run invoke test-integration-fast` (`test_01` setup, `test_02` repository sync, `test_03` loads
-  `data/demos/00_full_topology` onto the branch `full-topology`, never onto `main`, which the other scenarios deploy into;
-  the scenarios share one session). For a review stack, run it with `INFRAHUB_TESTING_KEEP_STACK=1`:
-  the stack stays up on :8100 with the sample on that branch. Run it BEFORE the full subset for any schema, query or generator change: `test_02` registers every query
-  against the live schema, so a field the schema rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict")
-  fails there, where the full subset costs tens of minutes (the task worker log names the field).
-- **Full 30_all subset**: `test_01, 02, 59, 60, 61, 62, 64, 65, 66` (`62` is `test_62`, `62b`, `62c`; `64` is `test_64`,
-  `64b`, `64c`). `test_65` (idempotency) is the last ~20 of its ~55 minutes, `test_66` (circuit lifecycle, mutates the
-  branch) runs last. The fast loop loads its topology onto its own branch, so it can share a session with the scenarios; `uv run invoke
-  clean-testcontainers` first.
+- **Fast (minutes)**: `uv run invoke test-integration-fast` (`test_01` setup, `test_02` repository sync, the
+  `full-topology-suite` kick of `test_04` loads `data/demos/00_full_topology` as an unmerged proposed change on
+  `full-topology-suite-topology` that must pass every check). For a review stack, run it with
+  `INFRAHUB_TESTING_KEEP_STACK=1`: the stack stays up on :8100 with the sample on that branch. Run it first for any
+  schema, query or generator change: `test_02` registers every query against the live schema, so a field the schema
+  rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there (the task worker log names the field).
+- **Suite kicks and demo kicks**: the integration deployments are suite kicks, one YAML file each in
+  `tests/integration/kicks/` (`dc6-suite` grows DC6 step by step), with per-stage `expect` assertions (`count`,
+  `unchanged`, `added`, `removed`; `tests/integration/kick_expect.py`) and an optional `run: <generator>`; `test_04`
+  runs them (`-k <name>` picks one). The demo kicks of `tasks/kicks.yml` carry no assertions
+  (`uv run invoke kick <name>`, `load-all-demo` for `30_all`) and run against a kept stack. There is no
+  30_all integration suite: re-run idempotency, generator cleanup and the 30_all object counts are not covered
+  (`tests/integration/README.md` lists what is). A change stage is: branch `<kick>-<stage>` from main, load, generators
+  settle, no failed task, proposed change, its checks, artifacts, merge; failed tasks must be 0 throughout.
+  `invoke kick` checks the stack first: it waits for a syncing repository, runs `invoke setup` when the bootstrap data,
+  the repository or a generator is missing, and starts the local dev stack only at <http://localhost:8000>.
+  `invoke setup` also registers the repository when none is. Run `uv run invoke clean-testcontainers` before a run.
 
 | Change touches | Run |
 | --- | --- |
-| Schema, queries, checks of the model, `data/demos/00_full_topology` | Fast: `test-integration-fast` (`01, 02, 03`) |
-| Generators (including their helpers), `data/bootstrap`, `data/demos/30_all`, queries used by generators | Fast, then the full subset **including `test_65` and `test_66`** (a generator's cleanup is only proven by `test_66`) |
-| Templates, transforms, checks and their validation queries | Fast, then subset `01, 02, 59–64` (no `test_65` or `test_66`) plus the smoke golden diff |
+| Schema, queries, checks of the model, `data/demos/00_full_topology` | Fast: `test-integration-fast` (`01, 02`, `04 -k full-topology-suite`) |
+| Generators (including their helpers), `data/bootstrap`, `data/demos/30_all`, queries used by generators | Fast, then `test_04 -k dc6-suite` and `invoke kick all-demo` on a kept stack |
+| Templates, transforms, checks and their validation queries | Fast, plus the smoke golden diff |
 | Docs, tests only | Unit + smoke |
 
 Queries are validated by the smoke tests: every registered query has a `syntax_check` entry in
@@ -1406,7 +1434,7 @@ The test stack serves on port 8100 (`--server-port` moves it).
 
 Always, after any run that registers a new check or transform query: run that query against the settled stack
 (`KEEP_STACK`) and simulate the check or transform on the real data. Unit tests with canned responses do not catch
-schema-invalid queries or false positives on real data. Run `test_65` once on `main` before every release. Clean the
+schema-invalid queries or false positives on real data. Clean the
 previous stack (`uv run invoke clean-testcontainers`) before starting a run, and confirm a merged PR's `state` is
 `MERGED` before relying on it.
 

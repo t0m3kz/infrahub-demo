@@ -1,10 +1,4 @@
-"""Unit tests for the PAN-OS non-context path: one ``default`` virtual router holds every L3 interface.
-
-An inter-zone policy needs both zones' interfaces in the same routing table, so the non-context path keeps a single
-``default`` virtual router; its members come from the firewall interfaces (not from the route list), so an
-interface without a static route is a member too. The context path (a vsys with its own virtual router)
-is covered by tests/unit/test_firewall_transform_contexts.py.
-"""
+"""Unit tests for the PAN-OS non-context path: one ``default`` virtual router holds every L3 interface."""
 
 from __future__ import annotations
 

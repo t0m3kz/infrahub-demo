@@ -5,11 +5,7 @@ from typing import Any
 
 
 def template_interface_names_by_role(*, interfaces: Iterable[Any], role: str | None = None) -> list[str]:
-    """Extract interface names from template interfaces, optionally filtering by role.
-
-    Accepts SDK model objects (with .name/.role) and plain dict payloads
-    ({"name": ..., "role": ...}).
-    """
+    """Interface names from template interfaces (SDK objects or dicts), optionally filtered by role."""
 
     names: list[str] = []
     for interface in interfaces:

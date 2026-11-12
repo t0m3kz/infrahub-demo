@@ -1,10 +1,4 @@
-"""Unit tests for RackGenerator parsing and row-dependent-rack fan-out.
-
-Covers:
-- parse_rack_data()                     – direct node dict vs GQL result vs unknown shape
-- _fan_out_to_row_dependent_racks()      – only fires for mixed+network with leafs
-- generate() role-vs-deployment gate     – _role_compatibility_errors
-"""
+"""Unit tests for RackGenerator parsing and row-dependent-rack fan-out."""
 
 from __future__ import annotations
 
@@ -19,9 +13,7 @@ from generators.protocols import DcimPhysicalDevice
 from generators.topology.rack import RackGenerator, TopologyRackData
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 
-# ---------------------------------------------------------------------------
 # Helpers (shared with test_rack_offset_calculation.py)
-# ---------------------------------------------------------------------------
 
 
 _DEFAULT_LEAF = {"role": "leaf", "quantity": 2, "template": {"id": "tmpl-leaf"}}
@@ -83,22 +75,12 @@ def _pod_rack(name: str, rack_type: str, row_index: int = 1, index: int = 1) -> 
     return {"id": f"id-{name}", "name": name, "rack_type": rack_type, "row_index": row_index, "index": index}
 
 
-# ---------------------------------------------------------------------------
 # parse_rack_data
-# ---------------------------------------------------------------------------
 
 
 class TestParseRackData:
     def test_direct_node_dict_dispatches_on_name_being_dict(self) -> None:
-        """parse_rack_data takes the direct-node path when data['name'] is a dict.
-
-        The direct-node path returns data as-is, unvalidated (no more
-        Pydantic model in the loop) — the dispatch condition itself (not
-        model construction) is what this test verifies: a dict `name` routes
-        here instead of falling through to the 'Unknown data structure'
-        ValueError raised when neither condition matches (see
-        test_unknown_shape_raises_value_error).
-        """
+        """parse_rack_data takes the direct-node path when data['name'] is a dict."""
         # name is a dict → triggers the 'direct node data' branch
         data = {"name": {"value": "TEST-RACK"}, "checksum": "abc", "index": 5}
         result = parse_rack_data(data)
@@ -134,8 +116,7 @@ class TestParseRackData:
                 },
             },
         }
-        # name is a plain string → NOT a dict → falls through to the GQL/unknown branch
-        # (raises ValueError "Unknown data structure" because 'LocationRack' key is missing)
+        # A plain string name is not a dict: falls through to the unknown-structure ValueError.
         with pytest.raises(ValueError, match="Unknown data structure"):
             parse_rack_data(data)
 
@@ -228,14 +209,7 @@ class TestDeriveSpineInfo:
             gen._derive_spine_info()
 
     def test_raises_when_every_spine_entry_has_zero_quantity(self) -> None:
-        """A zero-quantity spine entry is the same case as no entry at all.
-
-        spine_slot_templates -> templates_by_role filters to quantity > 0, so
-        _derive_spine_info never has to handle an empty device_names list of its
-        own: it can only get there via the no-entries branch, which already
-        raises. Pinned because a guard against empty device_names downstream
-        would be unreachable code.
-        """
+        """A zero-quantity spine entry is the same case as no entry at all."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
         gen.data["deployment"]["index"] = 1
@@ -276,15 +250,11 @@ class TestDeriveSpineInfo:
             gen._derive_spine_info()
 
 
-# ---------------------------------------------------------------------------
 # update_checksum (mixed deployment, network rack → cascade to ToR racks)
-# ---------------------------------------------------------------------------
 
 
 class TestFanOutToRowDependentRacks:
-    """_fan_out_to_row_dependent_racks(): network rack -> add_rack for tor/compute
-    racks in its own row (mixed deployment only), via run_generator
-    instead of a checksum write."""
+    """_fan_out_to_row_dependent_racks()"""
 
     @pytest.mark.asyncio
     async def test_non_mixed_deployment_does_nothing(self) -> None:
@@ -333,10 +303,7 @@ class TestFanOutToRowDependentRacks:
         # (row, index, name) order, read from the pod projection: no query for the racks
         assert args[1] == [tor_rack["id"], compute_rack["id"]]
         gen.client.filters.assert_not_awaited()
-        # fire-and-forget: a network rack's own task must not stay RUNNING while
-        # waiting on its row-dependent racks, or their own wait-for-parent guard
-        # (checking for an in-flight "Run generator add_rack" on this same rack)
-        # would deadlock against the very call waiting on it.
+        # Fire-and-forget: awaiting row-dependent racks here would deadlock on their wait-for-parent guard.
         assert kwargs["wait"] is False
 
     @pytest.mark.asyncio
@@ -372,15 +339,7 @@ class TestGenerateRackGating:
 
     @pytest.mark.asyncio
     async def test_colocation_rack_stops_before_reading_pod_id(self) -> None:
-        """A rack whose `deployment` is not a TopologyPod must no-op, not raise.
-
-        LocationRack.deployment accepts any TopologyRackHosting peer, so a colocation
-        rack's pod is a TopologyColocationZone. rack.gql's RackPodFields fragment is
-        on TopologyPod, so such a pod arrives as an empty dict — the guard has to
-        fire before wait_for_parent_generator_and_refetch(…, pod["id"]) reads it.
-        Every LocationRack lands here because trigger-rack-generator-on-created
-        fires on the node kind and cannot filter on the parent topology.
-        """
+        """A rack whose `deployment` is not a TopologyPod must no-op, not raise."""
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
         gen.data["deployment"] = {}
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
@@ -419,11 +378,7 @@ class TestGenerateRackGating:
     async def test_rack_defers_until_the_spine_bgp_its_strategy_creates_is_ready(
         self, strategy: str, expected_role: str
     ) -> None:
-        """A rack waits for the spine process role its routing strategy really creates.
-
-        ospf-ibgp has no underlay ManagedBGP, so waiting for one deferred every
-        rack of such a fabric forever.
-        """
+        """A rack waits for the spine process role its routing strategy really creates."""
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
         gen.data["deployment"]["parent"]["routing_strategy"] = strategy
         gen.client.filters = AsyncMock(return_value=[_device("spine-2"), _device("spine-1")])
@@ -459,11 +414,7 @@ class TestGenerateRackGating:
 
     @pytest.mark.asyncio
     async def test_row_dependent_rack_waits_for_the_network_racks_of_its_row_from_the_payload(self) -> None:
-        """A compute rack of a mixed pod waits for the add_rack run of each network rack in its own row.
-
-        The racks are the pod projection of the query: no LocationRack read, and a network rack of
-        another row or a rack of another type is not waited for.
-        """
+        """A compute rack of a mixed pod waits for the add_rack run of each network rack in its own row."""
         gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
         gen.data["tors"] = []
         gen.data["l2_leafs"] = []
@@ -544,14 +495,7 @@ class TestGenerateRackGating:
         gen._prepare_generation_context.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # _role_compatibility_errors / generate() role-vs-deployment gate
-#
-# middle_rack has no cabling strategy for "tor" (_generate_tors always
-# targets the pod spines; only middle_rack's offset=0 branch claims
-# otherwise) — see ROLES_BY_DEPLOYMENT_TYPE. "tor" and "l2_leaf"/
-# "access_leaf" are mutually exclusive on the same rack in any deployment.
-# ---------------------------------------------------------------------------
 
 
 class TestRoleDeploymentCompatibility:

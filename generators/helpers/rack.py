@@ -12,13 +12,8 @@ from .naming import DeviceNameContext, DeviceNamingConfig
 def pod_row_racks(
     pod: Mapping[str, Any], row_index: int, rack_types: Collection[str] | None = None
 ) -> list[dict[str, Any]]:
-    """The racks of one row of a pod, from the pod's ``racks`` projection (``RackPodFields`` in
-    rack.gql, ``EndpointPodFields`` in endpoint.gql), in a deterministic (row, index, name) order for stable
-    idempotent selections. ``rack_types`` narrows them; None keeps every type.
-
-    Racks are data, never a generator's output, so the payload read at the start of the run
-    replaces a ``filters(LocationRack, deployment__ids=..., row_index__value=...)`` round trip.
-    """
+    """The racks of one row of a pod from its ``racks`` projection, ordered by (row, index, name).
+    ``rack_types`` narrows them; None keeps every type."""
     return sorted(
         (
             rack
@@ -31,15 +26,7 @@ def pod_row_racks(
 
 def parse_rack_data(data: dict[str, Any]) -> dict[str, Any]:
     """Normalize trigger/query data into a plain LocationRack dict.
-
-    Two entry shapes, dispatched on whether data["name"] is still a
-    GraphQL-wrapped dict (e.g. {"value": "X"}):
-    - "name" is a dict: returned as-is, no clean_data() applied (downstream
-      code reading self.data["name"] on this path gets the raw wrapped dict,
-      not a string).
-    - GraphQL query result ({"LocationRack": {"edges": [...]}}) — run
-      through clean_data() to unwrap GraphQL's {value:}/{node:}/edges shapes.
-    """
+    If data["name"] is a wrapped dict it is returned as-is; a GraphQL result goes through clean_data()."""
     if "name" in data and isinstance(data.get("name"), dict):
         return data
     if "LocationRack" in data:
@@ -64,7 +51,7 @@ def expected_device_names(
     role: str,
     quantity: int,
 ) -> set[str]:
-    """Build deterministic device names for one role template."""
+    """Deterministic device names for one role template."""
     return {
         naming_config.format_device_name(
             DeviceNameContext.from_indexes(
@@ -79,18 +66,13 @@ def expected_device_names(
 
 
 class RackRolesHelper:
-    """Preparation-only helper for rack role generation.
-
-    This helper must not perform any database operations.
-    It only computes deterministic payload fragments and selections used by
-    RackGenerator, which performs all create/query/save calls.
-    """
+    """Preparation-only helper for rack role generation: no database operations."""
 
     def __init__(self, ctx: Any) -> None:
         self.ctx = ctx
 
     def expected_names(self, *, role: str, quantity: int) -> set[str]:
-        """Build deterministic device names for one role template."""
+        """Deterministic device names for one role template."""
         return expected_device_names(
             naming_config=DeviceNamingConfig(strategy=self.ctx._naming_conv),
             fabric_name=self.ctx.fabric_name,
@@ -106,12 +88,7 @@ class RackRolesHelper:
         mlag: bool = False,
         mlag_supports_virtual: bool = True,
     ) -> DeviceOptions:
-        """Build DeviceOptions payload for role device creation.
-
-        mlag=True passes the pod's mlag_create setting through so
-        create_devices() pairs the created devices itself — see
-        DeviceOptions.mlag_create/mlag_supports_virtual.
-        """
+        """DeviceOptions payload for role device creation; mlag=True passes the pod's mlag_create setting."""
         options = DeviceOptions(
             indexes=self.ctx._device_indexes,
             allocate_loopback=allocate_loopback,
@@ -127,5 +104,5 @@ class RackRolesHelper:
         return options
 
     def overlay_only_routing_options(self) -> RoutingOptions:
-        """Build routing options payload for overlay-only access-leaf peering."""
+        """Routing options payload for overlay-only access-leaf peering."""
         return {**self.ctx._routing_options, "skip_underlay": True}

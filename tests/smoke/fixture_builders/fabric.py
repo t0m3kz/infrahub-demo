@@ -29,18 +29,10 @@ from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
 from transforms.config.tor import ToR
 
-# ============================================================================
-# Scenario builders
-# ============================================================================
-# Roles that terminate customer segments, so their fixtures need segments attached.
-# Mirrors utils/fabric_roles.py's VTEP_ROLES (without edge) plus l2-leaf (pure L2, no VNI) and an office's access-switch.
+# Scenario builders Roles that terminate customer segments (VTEP_ROLES without edge, plus l2-leaf and access-switch).
 SEGMENT_ROLES = ("leaf", "border-leaf", "border-spine", "tor", "l2-leaf", "access-leaf", "access-switch")
 
-# Fabric-wide EVPN route-target administrative ASN
-# (TopologySegmentHosting.evpn_rt_as). Deliberately NOT any device's own ASN:
-# every VTEP in the fabric must derive the same route-target or imports never
-# match, so the golden output must show one constant regardless of the device's
-# local ASN. See transforms/helpers/vxlan.py's rt_asn.
+# Fabric-wide EVPN route-target administrative ASN (TopologySegmentHosting.evpn_rt_as).
 FABRIC_RT_ASN = 65000
 
 
@@ -57,30 +49,7 @@ def build_device_data(
     vlan_segment_vrf: bool = False,
     routing_identity: bool = False,
 ) -> dict:
-    """Build a complete raw GraphQL response for a device config query.
-
-    ``routing_identity`` tags the segments with their routing_tag and their owner's: seg-100 (segment 12, owner 5),
-    and with ``vlan_segment_vrf`` seg-200 too (segment 13, owner without a tag), so a device renders both the
-    two-community and the segment-only origination sequence.
-
-    ``vlan_segment_vrf`` puts the VLAN-only seg-200 in VRF_A with an L3 VNI instead of the default
-    namespace: an office LISP fabric refuses a gateway outside a VRF with an L3 instance-id.
-
-    Scenarios:
-        ebgp_ebgp: eBGP underlay (TTL=1) + eBGP overlay (TTL=2), per-device ASN
-                   - Underlay and overlay both use the device's own ASN (65001),
-                     so get_bgp_profile merges them into ONE `router bgp` stanza
-                   - This is the schema default (9 of 10 demo topologies) and the
-                     only scenario that produces an EVPN-OVERLAY peer group, so it
-                     is the only one exercising next-hop-unchanged / retain
-                     route-target all on the relaying tier
-        ebgp_ibgp: eBGP underlay (TTL=1) + iBGP overlay (TTL=2)
-                   - Underlay: per-device ASN (65001), remote spines have different ASNs (65100, 65101)
-                   - Overlay: shared iBGP ASN (65000) for all devices
-        ospf_ibgp: OSPF underlay + iBGP overlay (TTL=2)
-                   - Shared ASN (65000) for iBGP overlay
-                   - OSPF on P2P interfaces
-    """
+    """Build a complete raw GraphQL response for a device config query."""
     router_id = "10.0.0.1/32"
 
     # Neighbor topology: 2 spines with different loopback and P2P IPs
@@ -96,12 +65,7 @@ def build_device_data(
     use_ospf_on_interfaces = False
 
     if scenario == "ebgp_ebgp":
-        # eBGP underlay + eBGP overlay, both on the device's OWN ASN. The
-        # generator really does create two ManagedBGP processes here
-        # (`-bgp-underlay` and `-bgp-overlay`, see generators/helpers/routing.py
-        # _plan_overlay_processes) that share one per-device ASN, and
-        # get_bgp_profile merges same-ASN processes into a single stanza. Keep
-        # both processes in the fixture so that merge stays covered.
+        # eBGP underlay + eBGP overlay, both on the device's OWN ASN.
         device_asn = 65001
         spine1_asn = 65100
         spine2_asn = 65101
@@ -149,9 +113,7 @@ def build_device_data(
             }
         )
 
-        # Overlay eBGP peerings: multihop over loopbacks, remote ASN is the
-        # spine's own ASN — every VTEP a different AS, which is exactly why the
-        # RT cannot be `auto` and why the spine needs next-hop-unchanged.
+        # Overlay eBGP peerings: multihop over loopbacks, remote ASN is the spine's own ASN
         overlay_peering_1 = _make_bgp_peering(
             device_name=device_name,
             device_ip=router_id,
@@ -389,8 +351,7 @@ def build_device_data(
                 ],
             )
 
-        # The vlans row points at this device (its id) or the
-        # transform skips the VxlanSegment.
+        # The vlans row points at this device (its id) or the transform skips the VxlanSegment.
         row_device_id = f"dev-{device_name}"
 
         segment_kwargs.append(
@@ -401,9 +362,7 @@ def build_device_data(
                 "seg_name": "seg-100",
                 "gateway_ip": "10.100.0.1/24",
                 "ns_name": "VRF_A",
-                # Non-default namespace + l3_vni is what makes this a symmetric-IRB
-                # segment: it drives the L3 VNI / VRF stanza. 50001 is just a
-                # fixture value, disjoint from the L2 range above.
+                # Non-default namespace + l3_vni is what makes this a symmetric-IRB segment
                 "l3_vni": 50001,
                 "security_policy": policy_vxlan,
                 "num_deployments": 1,
@@ -427,9 +386,7 @@ def build_device_data(
             }
         )
 
-    # An l2-leaf is pure L2 (generators/topology/rack.py _generate_l2_leafs): its uplinks are 802.1Q trunks to the
-    # leaf pair, cabled with no pool, so they hold no address, no routing and no segments
-    # (SegmentPortTagMixin tags only customer-facing host ports, never leaf-to-leaf trunks).
+    # An l2-leaf is pure L2 (generators/topology/rack.py _generate_l2_leafs)
     if role == "l2-leaf":
         interfaces[1:3] = [
             _make_interface(
@@ -442,10 +399,7 @@ def build_device_data(
             for port in (1, 2)
         ]
 
-    # VXLAN/EVPN is rendered ONLY from capabilities, so the
-    # customer-facing port must carry the segments. Attaching them solely to
-    # deployment.segment_deployments (as this generator used to) left every
-    # fixture with zero VXLAN output while still passing.
+    # VXLAN/EVPN is rendered ONLY from capabilities
     if role in SEGMENT_ROLES:
         interfaces.append(
             _make_interface(
@@ -458,8 +412,7 @@ def build_device_data(
             )
         )
 
-    # deployment.segment_deployments is a DIFFERENT consumer: border-leaf's
-    # DC-wide PBR rules. Keep both in sync from the same source.
+    # deployment.segment_deployments is a DIFFERENT consumer: border-leaf's DC-wide PBR rules.
     activations: list[dict] = [_make_segment_deployment(**kw) for kw in segment_kwargs]
 
     device_node: dict[str, Any] = {
@@ -486,12 +439,7 @@ def build_device_data(
             {
                 "id": "dc-1",
                 "name": _v("DC-1"),
-                # TopologySegmentHosting.evpn_rt_as — the fabric-wide EVPN
-                # route-target administrative ASN. Without it, get_vxlan_config
-                # falls back to the device's OWN overlay ASN, which under
-                # ebgp-ebgp gives every VTEP a different route-target. The
-                # generator populates it, so the fixtures must too or the golden
-                # output pins the broken fallback.
+                # TopologySegmentHosting.evpn_rt_as
                 "evpn_rt_as": _node({"asn": _v(FABRIC_RT_ASN)}),
                 "segment_deployments": _edges(activations),
             }
@@ -501,9 +449,7 @@ def build_device_data(
     return {"DcimDevice": _edges([device_node])}
 
 
-# A segment terminated on a firewall context: gatewayed by the context's pair (its gateway is the pair's floating VIP),
-# so every fabric switch carries it as pure L2 - VLAN + L2 VNI, no SVI / VRF / L3 VNI. The gateway still sits in VRF_A
-# with an L3 VNI so the fixtures prove the fabric drops both.
+# A segment terminated on a firewall context
 _TERMINATED_SEGMENT_KWARGS: dict[str, Any] = {
     "vlan_id": 150,
     "vni": 10150,
@@ -522,12 +468,7 @@ def _make_terminated_segment_node(row_device_id: str) -> dict:
 
 
 def build_terminated_segment_data(*, device_name: str, role: str, platform: str) -> dict:
-    """A leaf or border-leaf carrying one segment terminated on a firewall context.
-
-    leaf: the segment is on the customer port (Ethernet10, access) - VLAN + L2 VNI, no SVI. border-leaf: the segment
-    is on a firewall-role service port (Ethernet20) facing a pair member, which the segment generator tags with it -
-    rendered as a tagged trunk. Either way the segment is in the device's own row (its device id).
-    """
+    """A leaf or border-leaf carrying one segment terminated on a firewall context."""
     data = build_device_data(
         device_name=device_name, role=role, platform=platform, scenario="ebgp_ibgp", include_segments=False
     )
@@ -571,20 +512,12 @@ ACL_PLATFORMS = FABRIC_PLATFORMS
 FIREWALL_PLATFORMS = ["paloalto_panos", "checkpoint_gaia"]
 
 # (transform, role, dir_prefix, platforms).
-#
-# `role` must be the literal value from the role dropdown in schemas/base/dcim.yml
-# — hyphenated, not underscored. get_bgp_profile() and _build_peer_groups() branch
-# on the device's `role` straight out of the query, so an underscored fixture role
-# silently skipped the border-leaf and super-spine branches. `dir_prefix` keeps the
-# underscore so existing fixture directory names are unaffected.
 DEVICE_CONFIGS: list[tuple[type, str, str, list[str]]] = [
     (Leaf, "leaf", "leaf", FABRIC_PLATFORMS),
     (Spine, "spine", "spine", FABRIC_PLATFORMS),
     (SuperSpine, "super-spine", "super_spine", FABRIC_PLATFORMS),
     (BorderLeaf, "border-leaf", "border_leaf", FABRIC_PLATFORMS),
-    # border-spine collapses spine + border-leaf: a relaying tier that is also a
-    # VTEP, so it is the only role exercising both the EVPN relay knobs and the
-    # VXLAN block on the same device.
+    # border-spine collapses spine + border-leaf: a relaying tier that is also a VTEP
     (BorderSpine, "border-spine", "border_spine", FABRIC_PLATFORMS),
     (ToR, "tor", "tor", FABRIC_PLATFORMS),
     (L2Leaf, "l2-leaf", "l2_leaf", L2_LEAF_PLATFORMS),
@@ -654,8 +587,7 @@ def write_fixtures() -> tuple[int, int]:
         generated += g
         errors += e
 
-    # BGP security/hardening fields: local_pref, med,
-    # send_extended_community, remove_private_as, password on the underlay peering
+    # BGP security/hardening fields: local_pref, med, send_extended_community, remove_private_as
     print("\nGenerating BGP security-fields fixtures (leaf):")
     for platform in FABRIC_PLATFORMS:
         g, e = _write_fixture(
@@ -671,8 +603,7 @@ def write_fixtures() -> tuple[int, int]:
         generated += g
         errors += e
 
-    # Segment terminated on a firewall context: pure L2 on the fabric (no SVI / VRF / L3 VNI);
-    # the border-leaf trunks it on the service port facing the pair gatewaying it.
+    # Segment terminated on a firewall context: pure L2 on the fabric (no SVI / VRF / L3 VNI)
     print("\nGenerating terminated segment fixtures (leaf, border-leaf):")
     g, e = write_data_fixtures(
         (

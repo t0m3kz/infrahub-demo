@@ -1,14 +1,6 @@
-"""Gives a virtual network its routed range when a gateway attachment to it appears or is retargeted.
-
-Triggered when a ``CloudGatewayAttachment`` joins the ``cloud_attachment_ranges`` group (data/events/99_group_triggers.yml)
-and when its ``virtual_network`` changes (data/events/99_actions.yml). The attachment is the node that fired the event, so
-it is the generator's target; the work is the footprint's: the attachment's network belongs to an account, the account has
-one ``TopologyCustomerCloud`` footprint, and ``CloudRangeMixin.ensure_cloud_ranges`` (the function
-``add_customer_deployment_cloud`` calls too) gives every network of that footprint an attached /29 slice of the footprint's
-pool where its attachments have no ``allowed_prefixes``. Authored prefixes win; see generators/topology/cloud_range.py.
-
-An attachment to a gateway (no ``virtual_network``) or to a network of an account with no footprint (a hub account) is
-logged and left alone. Registered as add_cloud_attachment_range in .infrahub.yml, querying cloud_attachment_range.gql.
+"""Gives a virtual network its routed range when a gateway attachment to it appears or is retargeted. Work is the
+footprint's (``CloudRangeMixin.ensure_cloud_ranges``, cloud_range.py); an attachment to a gateway, or to a network with
+no footprint, is logged and left alone.
 """
 
 from __future__ import annotations

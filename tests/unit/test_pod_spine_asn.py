@@ -1,9 +1,4 @@
-"""Unit tests for PodTopologyGenerator._ensure_pod_spine_as.
-
-All spines within one pod share ONE underlay ASN (.dev/bgp.txt) — this
-method finds-or-creates it, same idiom as dc.py's shared overlay/
-super-spine AS (generators/routing.py's _create_shared_routing_objects).
-"""
+"""Unit tests for PodTopologyGenerator._ensure_pod_spine_as."""
 
 from __future__ import annotations
 

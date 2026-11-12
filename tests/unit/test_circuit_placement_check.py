@@ -1,16 +1,4 @@
-"""Unit tests for CheckCircuitPlacement (where circuits terminate, what carries them, which environment they are in).
-
-The payloads are raw GraphQL responses shaped like queries/validation/circuit_placement.gql (one root per circuit
-kind); ``validate`` runs them through ``clean_data``. The places mirror data/demos/30_all: DC10/DC11 with their
-border leaves, the Equinix FR cage FR2 (the edges eg-fr201/eg-fr202 are deployed to the ZONE FR2, not the metro),
-the Equinix AM virtual colocation AM-NE, AWS eu-central-1, the ISPs Orange and Lumen, C001's office (owner of its
-access circuit INET-C001-OFFICE).
-
-A virtual circuit's carrier is derived, never listed: the carrier circuits found in the ``capabilities`` of its own
-ports, or of the parent interface of a sub-interface. ``_vport`` puts them there, nested under the port as the
-query selects them. The ports mirror the demo data: DF-DC10-EQXFR2 ends on bl-dc101101 Ethernet1/35 and eg-fr201
-Ethernet1/10, the cross-connect XC-EQXFR2-AWS-EUC1 on eg-fr201 Ethernet1/13 and the stub's et-0/0/0.
-"""
+"""Unit tests for CheckCircuitPlacement (where circuits terminate, what carries them, which environment they are in)."""
 
 from __future__ import annotations
 
@@ -78,8 +66,7 @@ class TestCarrierCircuitPlacement:
             INET_GW,
             # A device racked in the cage itself places the cage end too.
             _carrier_circuit("XC-GW-AWS", [FR2, EUC1], [GW_ETH0_END, AWS_END]),
-            # A virtual colocation is a circuit end like a zone. Synthetic: no demo carrier circuit ends on
-            # AM-NE (eg-am-ne01 is a virtual edge); XC_AM_NE is the fixture, a cross-connect from AM-NE to AWS.
+            # A virtual colocation is a circuit end like a zone.
             XC_AM_NE,
         ],
         ids=[
@@ -154,8 +141,7 @@ class TestCarrierCircuitPlacement:
         assert "Carrier circuit 'DF-DC10-EQXAMNE' terminates on" in messages[0]
 
     def test_sibling_cage_of_the_same_metro_fails(self) -> None:
-        """Authored FR6 while the edge sits in FR2: add_circuit (plan_locations) refuses it as contradicting the
-        endpoint devices' deployment, so the check does too."""
+        """Authored FR6 while the edge sits in FR2: add_circuit."""
         messages = _run(carrier=[_carrier_circuit("DF-DC10-EQXFR6", [DC10, FR6], [BL10_END, EG_FR_END])])
         assert len(messages) == 1
         assert "eg-fr201:Ethernet1/13 in TopologyColocationZone 'FR2'" in messages[0]
@@ -307,8 +293,7 @@ class TestTunnelCircuit:
 
 
 class TestInterconnectCircuit:
-    """DCI between two border gateways: unowned, each end on a live circuit, one contiguous path, pure fibre, one
-    overlay process per end device."""
+    """DCI between two border gateways: unowned, each end on a live circuit, one contiguous path, pure fibre."""
 
     def test_pure_fibre_passes(self) -> None:
         """The reference DCI (border leaf to cage edge over one dark fibre) has no finding."""
@@ -603,7 +588,7 @@ class TestHandoffCircuit:
         assert "has no live carrier circuit and no cable" in messages[0]
 
     def test_end_that_is_not_a_vlan_sub_interface_fails(self) -> None:
-        """A handoff end must be a sub-interface with an encapsulation (or a routed port); a bare port of no kind is reported."""
+        """A handoff end must be a sub-interface with an encapsulation (or a routed port)."""
         ends = [EG_FR_VLAN, _vport("EXT-AWS-DX-FR2", "et-0/0/0", (XC,))]
         messages = _run(handoffs=[_handoff("HO", None, ends)])
         assert messages == [

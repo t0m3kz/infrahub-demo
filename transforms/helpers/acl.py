@@ -45,22 +45,14 @@ def _port_match(rule: dict[str, Any], acl_proto: str) -> str | None:
     return f"eq {port_start}"
 
 
-# Own rules sit below the return legs (the application generator hands out 100, 110, ...), and the "outside" band of
-# a permit to the internet zone follows the last return leg: the bands are
-# ACL_RETURN_LEG_SEQ_START and ACL_INTERNET_BAND_SEQ_START of utils/limits.py.
+# Own rules sit below the return legs (the application generator hands out 100, 110, ...), and the "outside" band of a
+# permit to the internet zone follows the last return leg.
 
 
 def _internet_band(
     rule: dict[str, Any], seen_denies: set[tuple[str, str]], seq: int, family: str
 ) -> list[dict[str, Any]]:
-    """The ACL lines of a permit whose destination is the internet zone.
-
-    `permit <proto> <src> any` alone would open every same-VRF destination at
-    this leaf, the intra-zone enforcement point. First-match ACLs have no
-    "not": every non-internet prefix of the ACL's family (utils/internet_space.py ``non_internet_prefixes``: the
-    RFC 1918 family for IPv4, the ULA, link-local and other non-global space for IPv6) is denied for the source
-    first (once per source, the deny is protocol-less), then the permit to any.
-    """
+    """The ACL lines of a permit whose destination is the internet zone."""
     permit = _build_acl_rule(rule, family)
     lines: list[dict[str, Any]] = []
     for prefix in non_internet_prefixes(family):
@@ -99,9 +91,8 @@ def _build_acl_rule(rule: dict[str, Any], family: str) -> dict[str, Any]:
     src_zone = rule_zone(rule, "source")
     dst_zone = rule_zone(rule, "destination")
 
-    # Customer/environment identity — per-rule, not just per-ACL, since a
-    # single policy can mix rules from different customers' segments on the
-    # same VLAN (via source_segment/destination_segment).
+    # Customer/environment identity — per-rule, not just per-ACL, since a single policy can mix rules from different
+    # customers' segments on the same VLAN (via source_segment/destination_segment).
     return {
         "seq": rule.get("index"),
         "action": rule.get("action", "deny"),
@@ -125,14 +116,7 @@ def _build_acl_rule(rule: dict[str, Any], family: str) -> dict[str, Any]:
 def _build_return_rule(
     rule: dict[str, Any], own_prefix: str | None, own_name: str, own_environment: str | None, family: str
 ) -> dict[str, Any]:
-    """The reply leg of an inbound permit, for this segment's own ingress ACL.
-
-    The forward rule A -> B:port sits on A's VLAN. B's hosts answer from
-    B:port to A, so B's ACL needs src=B, src_port=port, dst=A. tcp is held
-    to `established` (ACK/RST set), so B still can't open a connection to A
-    on the strength of A's rule. udp has no such flag, and any/icmp have no
-    port: those return legs are the plain reverse match.
-    """
+    """The reply leg of an inbound permit, for this segment's own ingress ACL."""
     acl_proto = _acl_protocol(rule, family)
     src_seg = rule.get("source_segment") or {}
     peer_prefix = rule_endpoint(rule, "source")
@@ -172,12 +156,7 @@ def _inbound_permits(seg: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _refuse_cross_family(rules: list[dict[str, Any]], family: str, segment_name: str) -> None:
-    """Raise when a rule of the segment's ACL names an endpoint of the other address family.
-
-    A segment has one gateway of one family, so its ACL is of that family; a rule to (or a return leg from) a segment
-    or prefix of the other family can match nothing in it, and dropping the line would change what the policy says.
-    ``checks/segment_security.py`` reports such a rule before a transform meets it.
-    """
+    """Raise when a rule of the segment's ACL names an endpoint of the other address family."""
     for rule in rules:
         for end in (rule["src"], rule["dst"]):
             if end != "any" and prefix_family(end) != family:
@@ -188,65 +167,7 @@ def _refuse_cross_family(rules: list[dict[str, Any]], family: str, segment_name:
 
 
 def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-    """Build ACL list from SegmentDeployment security policies (zero-trust).
-
-    Generates an ingress ACL on each segment's SVI, i.e. for traffic its own
-    hosts send:
-
-    1. **Own rules**: the segment's own egress policies (A -> B on A's VLAN).
-
-    2. **Return rules**: every permit whose destination is this segment
-       (``inbound_rules``, from any segment's policy, on any leaf) adds its
-       reply leg here: src=own prefix, src_port=the rule's port,
-       dst=the rule's source, ``established`` for tcp. Without it the
-       implicit deny drops B's answers to A. They are read from the segment
-       itself, so they don't depend on A being on the same leaf.
-
-    3. **Internet band**: a permit whose destination is the internet zone
-       (``destination_zone``) cannot be `permit <src> any`, that would open every
-       same-VRF destination. It follows the return legs (seq 6000+) as a deny
-       for each NON_INTERNET_PREFIXES entry, then the permit to any. Under a
-       default permit it is dropped as redundant. A rule to the internet is in no
-       segment's ``inbound_rules``, so it has no return leg. A rule FROM the
-       internet (``source_zone`` INTERNET, ``is_internet_source``) into the
-       segment is not one of its own rules even when its own policy holds it:
-       only its reply leg renders here (to any, ``established`` for tcp).
-
-    4. **Zone support**: the source/destination segments' security_zone names are passed
-       through as ``src_zone`` / ``dst_zone`` fields for templates to render as remarks/comments
-       or to drive zone-aware platform ACL APIs.
-
-    5. **Customer/environment attribution**: each rule also carries
-       ``src_customer``/``src_environment``/``dst_customer``/``dst_environment``
-       so a policy mixing rules from different customers' segments on the
-       same VLAN can be attributed per-rule, not just at the whole-ACL
-       ``segment_name`` level.
-
-    Args:
-        activations: List of SegmentDeployment dicts (after clean_data).
-
-    Returns:
-        List of ACL dicts:
-        [
-          {
-            "name": "ACL-VLAN100-IN",
-            "vlan_id": 100,
-            "segment_name": "...",
-            "rules": [
-              {"seq": 10, "action": "permit", "protocol": "tcp",
-               "src": "10.0.1.0/24", "src_port": None,
-               "dst": "10.0.2.0/24", "dst_port": "eq 80", "established": False,
-               "log": False, "src_zone": None, "dst_zone": "internal"},
-              {"seq": 5000, "action": "permit", "protocol": "tcp",
-               "src": "10.0.1.0/24", "src_port": "eq 5432",
-               "dst": "10.0.3.0/24", "dst_port": None, "established": True,
-               "name": "return-to-db-clients-app-to-db"},
-              {"seq": 9990, "action": "deny", "protocol": "ip",
-               "src": "any", "dst": "any", "log": True, "name": "implicit-deny-all"},
-            ],
-          }
-        ]
-    """
+    """Build ACL list from SegmentDeployment security policies (zero-trust)."""
     if not activations:
         return []
 
@@ -276,9 +197,7 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
 
         default_permit = egress["default_action"] == "permit"
 
-        # Own policies. A permit to the internet zone is held back
-        # for the band after the return legs; under a default permit it adds
-        # nothing, and the denies of its band would close the internal space.
+        # Own policies. A permit to the internet zone is held back for the band after the return legs.
         outside_permits: list[dict[str, Any]] = []
         for rule in egress["rules"]:
             if is_internet_source(rule):

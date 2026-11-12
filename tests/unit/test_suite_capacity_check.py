@@ -1,8 +1,4 @@
-"""Unit tests for CheckSuiteCapacity (racks and pod designs must fit the suite hosting them).
-
-The payloads are raw GraphQL responses shaped like queries/validation/suite_capacity.gql (one ``LocationRack`` root,
-each rack with its suite and the pod hosting it); ``validate`` runs them through ``clean_data``.
-"""
+"""Unit tests for CheckSuiteCapacity (racks and pod designs must fit the suite hosting them)."""
 
 from __future__ import annotations
 

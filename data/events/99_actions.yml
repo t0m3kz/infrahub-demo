@@ -724,3 +724,23 @@ spec:
         data:
           - relationship_name: shared_devices
             modification_type: updated
+
+    # A Proposed Change gets its change request when its artifacts are computed. Validators live on main: the first
+    # rule adds each new artifact validator to artifact_validators, the second runs open_change_request on completion.
+    - name: trigger-artifact-validator-on-created
+      branch_scope: "default_branch"
+      node_kind: CoreArtifactValidator
+      mutation_action: created
+      action: add-to-artifact-validators
+
+    - name: trigger-artifact-validator-completed
+      branch_scope: "default_branch"
+      node_kind: CoreArtifactValidator
+      mutation_action: updated
+      action: run-open-change-request
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: state
+            value_match: value
+            value: completed

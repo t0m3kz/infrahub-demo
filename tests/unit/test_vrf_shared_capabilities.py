@@ -1,9 +1,4 @@
-"""ManagedVRF membership rides the shared device edge (``DcimDeviceManaged.shared_capabilities``).
-
-``device_memberships`` is the one typename filter; the queries select the edge only inside ``... on DcimDeviceManaged``
-or a concrete kind that inherits it (``... on DcimPhysicalDevice``, the firewalls of a switch's hosting deployment):
-the field is not on ``DcimDevice``. No query selects a device-level ``vrfs`` any more.
-"""
+"""ManagedVRF membership rides the shared device edge (``DcimDeviceManaged.shared_capabilities``)."""
 
 from __future__ import annotations
 
@@ -29,8 +24,7 @@ from utils.vrf_demand import device_memberships, device_vrf_facts
 QUERIES = Path(__file__).resolve().parents[2] / "queries"
 EDGE = "shared_capabilities"
 CAPABILITIES = "DcimDeviceManaged"
-#: kinds that inherit ``DcimDeviceManaged``: a query that names one of them reaches the edge without the generic
-#: (a firewall's contexts are its shared capabilities, read through ``... on DcimPhysicalDevice``)
+#: kinds that inherit ``DcimDeviceManaged``: a query naming one reaches the edge without the generic
 CAPABILITY_KINDS = {CAPABILITIES, "DcimPhysicalDevice"}
 #: parents that may still select a field named ``vrfs`` (a deployment's or a namespace's own instances)
 VRFS_ALLOWED_PARENTS = {"TopologySegmentHosting", "SecurityZone", "TopologyCustomerOffice"}
@@ -87,10 +81,7 @@ def _fields(path: Path) -> list[tuple[str, tuple[str, ...]]]:
 
 
 def _vrfs_owners(path: Path) -> list[tuple[str, ...]]:
-    """For each ``vrfs`` field: the type conditions and root kinds that enclose it (field chain, spreads expanded).
-
-    An offline parse cannot type a nested field, so the owner is the root field (``TopologyCustomerOffice``,
-    ``SecurityZone``) or the fragment's own type condition."""
+    """For each ``vrfs`` field"""
     document = _parse(path)
     fragments = _fragments(document)
     found: list[tuple[str, ...]] = []
@@ -160,7 +151,7 @@ def _spreaders(fragment: str) -> list[Path]:
     return [path for path in _all_queries() if f"...{fragment}" in path.read_text()]
 
 
-# --- device_memberships / device_vrfs / device_vrf_facts ---------------------------------------------------------
+# --- device_memberships / device_vrfs / device_vrf_facts
 
 
 def test_device_memberships_keeps_only_the_vrf_kind() -> None:
@@ -200,7 +191,7 @@ def test_raw_device_with_a_foreign_shared_kind_has_the_same_facts() -> None:
     assert len(mixed.instances) == 1
 
 
-# --- query shape ---------------------------------------------------------------------------------------------------
+# --- query shape
 
 
 def test_every_shared_capabilities_selection_is_inside_a_capabilities_kind() -> None:
@@ -247,7 +238,7 @@ def test_vrf_instances_query_selects_shared_devices_on_the_root() -> None:
     assert "devices {" not in text.replace("shared_devices {", "")
 
 
-# --- audit: every query spreading DeviceCapabilitiesOnDeviceFields -----------------------------------------------
+# --- audit: every query spreading DeviceCapabilitiesOnDeviceFields
 
 SPREADERS = _spreaders("DeviceCapabilitiesOnDeviceFields")
 

@@ -1,8 +1,4 @@
-"""tests/integration/query_field_collisions.py finds a field selected twice on one object, and only a real one.
-
-The integration test runs it against the live schema; here a small SDL schema pins the rules offline: a second
-selection that asks for more is a collision, one that asks for a subset or sits under a disjoint type is not.
-"""
+"""tests/integration/query_field_collisions.py finds a field selected twice on one object, and only a real one."""
 
 from pathlib import Path
 

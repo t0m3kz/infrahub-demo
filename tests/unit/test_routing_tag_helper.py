@@ -1,7 +1,4 @@
-"""Unit tests for generators/helpers/routing_tag.py and the customer routing tag generator.
-
-A tag is drawn from its kind's Number pool once: a node that has it writes nothing, a missing pool fails the run.
-"""
+"""Unit tests for generators/helpers/routing_tag.py and the customer routing tag generator."""
 
 from __future__ import annotations
 

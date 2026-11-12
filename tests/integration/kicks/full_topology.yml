@@ -1,0 +1,11 @@
+---
+# The full-topology sample (data/demos/00_full_topology) as one proposed change that must pass every check: the
+# proposed change's validations are the assertion. It is never merged: main is where dc6-suite deploys. The test
+# closes the open proposed change afterwards, so its validators do not re-run each time main changes.
+kicks:
+  full-topology-suite:
+    description: The full topology as one validated change, left unmerged on its own branch.
+    stages:
+      - name: topology
+        load: [data/demos/00_full_topology]
+        merge: false

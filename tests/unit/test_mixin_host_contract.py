@@ -1,11 +1,4 @@
-"""The host contract of the generator mixins.
-
-A mixin that needs a member of another base (``fail``, ``resource_lock``, ``create_cabling``, ...) aliases the
-real one in a class-body ``if TYPE_CHECKING:`` block (``fail = CommonGenerator.fail``), so the type checker sees one
-definition instead of a hand-copied signature, and nothing is defined at runtime. These tests read those aliases
-from the source and prove the second half: no alias is defined at runtime (it would sit ahead of the real member
-in the MRO and shadow it), and a host resolves each aliased name to its owner's member.
-"""
+"""The host contract of the generator mixins."""
 
 from __future__ import annotations
 

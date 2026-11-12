@@ -1,9 +1,4 @@
-"""Unit tests for the session generator (generators/topology/virtual_circuit.py, add_virtual_circuit).
-
-An interconnect circuit builds a DCI (underlay eBGP on a /31 plus a loopback-to-loopback EVPN session), a handoff
-circuit one eBGP session over a /31 of its namespace's pool, a tunnel circuit nothing. Every precondition must fail
-before the first write. Fakes: tests/unit/simulators/circuit_fakes.py.
-"""
+"""Unit tests for the session generator (generators/topology/virtual_circuit.py, add_virtual_circuit)."""
 
 from __future__ import annotations
 
@@ -137,10 +132,7 @@ class TestNothingToBuild:
     )
     @pytest.mark.asyncio
     async def test_not_enough_carried_ends_builds_nothing(self, payload_for: Any, ends: list[dict[str, Any]]) -> None:
-        """Neither a circuit nor a cable on the ends that need one: an info line, no error, no write.
-
-        add_circuit reruns this generator once a port is linked to a circuit.
-        """
+        """Neither a circuit nor a cable on the ends that need one: an info line, no error, no write."""
         client = FakeClient()
 
         gen = await _run(client, payload_for(ends=ends))
@@ -226,10 +218,7 @@ class TestCableCarrier:
 
     @pytest.mark.asyncio
     async def test_a_cable_only_handoff_builds_without_waiting(self) -> None:
-        """A cable on the parent of the sub-interface, no carrier circuit anywhere: nothing to wait for, built.
-
-        (A handoff end is always a sub-interface, so the cable is on its parent.)
-        """
+        """A cable on the parent of the sub-interface, no carrier circuit anywhere: nothing to wait for, built."""
         client = FakeClient()
         edge = handoff_edge_port(parent_circuits=[], parent_cabled=True)
 
@@ -381,11 +370,7 @@ class TestWaitsForTheCarriersAtOnce:
 
 
 class _LaggingClient(FakeClient):
-    """A client whose reads lag: another session circuit is visible to a run only once ITS session is built.
-
-    The worst case of a stale read for the one-port-one-session check: both circuits exist, but each run reads before
-    the other's session is there. Without a lock around check and write, two runs on one port both pass.
-    """
+    """A client whose reads lag"""
 
     async def filters(self, kind: Any, **kwargs: Any) -> list[Any]:
         found = await super().filters(kind, **kwargs)

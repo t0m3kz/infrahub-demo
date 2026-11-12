@@ -1,8 +1,4 @@
-"""Unit tests for CheckVirtualDevicePlacement (checks/virtual_device_placement.py).
-
-The payloads are raw GraphQL responses shaped like queries/validation/virtual_device_placement.gql. The data test
-reads the demo files: every declared DcimVirtualDevice names a data center or a customer footprint.
-"""
+"""Unit tests for CheckVirtualDevicePlacement (checks/virtual_device_placement.py)."""
 
 from __future__ import annotations
 

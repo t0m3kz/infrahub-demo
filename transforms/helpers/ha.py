@@ -1,9 +1,4 @@
-"""HA (High Availability) configuration helpers for device transforms.
-
-Mirrors the MLAG helper pattern (transforms/helpers/mlag.py) but for
-ManagedFirewallHA / ManagedLoadbalancerHA capabilities
-instead of ManagedMLAG.
-"""
+"""HA (High Availability) configuration helpers for device transforms."""
 
 from ipaddress import ip_interface
 from typing import Any
@@ -11,9 +6,8 @@ from typing import Any
 from transforms.helpers.addressing import host_ip
 from utils.limits import OFFSET_VIP
 
-# The HA sync link is a back-to-back cable between the two members, never
-# routed anywhere else, so its addresses are a fixed link-local /30 per pair
-# rather than IPAM-allocated: the primary (first member by name) takes .1.
+# The HA sync link is a back-to-back cable between the two members, never routed anywhere else, so its addresses are a
+# fixed link-local /30 per pair rather than IPAM-allocated: the primary (first member by name) takes .1.
 HA_LINK_ADDRESSES = {"primary": "169.254.255.1/30", "secondary": "169.254.255.2/30"}
 
 _HA_TYPENAMES = (
@@ -27,27 +21,7 @@ def get_ha(
     interfaces: list[dict[str, Any]] | None = None,
     device_name: str | None = None,
 ) -> dict[str, Any] | None:
-    """Extract HA domain configuration for template rendering.
-
-    Scans device_capabilities for an HA domain entry (ManagedFirewallHA or
-    ManagedLoadbalancerHA).
-    Both peer devices reference the same HA node via device_capabilities, so
-    this function returns the first matching capability found, or None if the
-    device has no HA domain.
-
-    Mirrors get_mlag() from transforms/helpers/mlag.py but for HA.
-    Key difference: the peer device list comes from cap.get("capabilities")
-    (the inbound relationship name on the HA node), not cap.get("devices").
-
-    If interfaces are provided, the HA link interface (role == 'ha')
-    is identified and included as ha_link in the result.
-
-    With device_name, ``unit`` is this device's role in the pair — "primary"
-    for the first member by name, "secondary" for the other — the unit the
-    HA link addresses (HA_LINK_ADDRESSES) and the keepalived state are keyed by,
-    and ``peer_management_ip`` the other member's management address (its
-    primary_address, where the query selects it: the NetScaler HA node).
-    """
+    """Extract HA domain configuration for template rendering."""
     for cap in device_capabilities or []:
         if cap.get("typename") not in _HA_TYPENAMES:
             continue
@@ -82,12 +56,7 @@ def get_ha(
 
 
 def leg_virtual_ip(ha: dict[str, Any] | None, leg_address: str) -> dict[str, str | None]:
-    """The HA pair's virtual IP on an exchange transit leg.
-
-    ``leg_address`` is the member's own address in the leg's /29 (see utils/exchange_transit.py): virtual_ip is the
-    /29's firewall VIP, a fixed offset that needs no lookup of the peer. virtual_ip is None when the device has no
-    HA or the leg is not IPv4.
-    """
+    """The HA pair's virtual IP on an exchange transit leg."""
     if not ha:
         return {"virtual_ip": None}
     network = ip_interface(leg_address).network

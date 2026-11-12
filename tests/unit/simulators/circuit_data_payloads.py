@@ -1,21 +1,4 @@
-"""Check payloads for the 30_all circuits, built from the object files instead of typed by hand.
-
-``build_payloads`` reads the YAML the demo loads (``data/demos/30_all``, ``data/bootstrap`` namespaces) and shapes it
-like the raw GraphQL response of ``queries/validation/circuit_placement.gql``: one root per circuit kind (the session circuits in one, told apart by circuit_type), every end
-port with the carrier circuits found on it (or on its parent interface), the cable on the port, the device with its
-BGP processes and deployment. What the generators add at load time is rebuilt here by the same rules, so the real
-``CheckCircuitPlacement`` can run over the shipped data without an Infrahub:
-
-- the cloud transports (``CloudDirectConnect``: placed by their ``region``, they have no ``deployment``) and their
-  peering interfaces (the far end of a cloud handoff),
-- the colocation edges (``eg-<zone><NN>``: a ``CloudNetworkAppliance`` in a virtual colocation, else a physical
-  device), the DC border leaves (``bl-<dc>...``) and the SD-WAN offices' edges, each with its one ``overlay`` process,
-- the facility locations of each carrier circuit, derived by the real ``plan_locations`` of ``add_circuit``,
-- per SD-WAN office the ``INET-<office>`` underlay and the ``<office>-SDWAN-<zone>`` tunnel ``add_sdwan_edge`` builds,
-
-Anything the data names that this module cannot resolve (a device, a place, a namespace) raises ``KeyError``: a payload
-that silently dropped an end would make "zero findings" meaningless.
-"""
+"""Check payloads for the 30_all circuits, built from the object files instead of typed by hand."""
 
 from __future__ import annotations
 
@@ -179,8 +162,7 @@ class _Model:
             }
 
     def facility(self, device: str) -> str | None:
-        """Where a device sits: its ``deployment``, else (a cloud transport) its region, else (the provider's connect
-        device) its location: the same order as add_circuit."""
+        """Where a device sits: its ``deployment``, else (a cloud transport) its region, else."""
         info = self.devices[device]
         if info["kind"] == INTERNET:
             return device  # it is a facility itself
@@ -193,7 +175,8 @@ class _Model:
 
     def port_kind(self, device: str, port: str = "") -> str:
         """The kind of a port: THE INTERNET's only port and the end of a provider connection have a kind of their own,
-        the rest are physical."""
+        the rest are physical.
+        """
         if (device, port) in self.provider_ports:
             return PROVIDER_INTERFACE
         return INTERNET_BUS if self.devices[device]["kind"] == INTERNET else "DcimPhysicalInterface"
@@ -385,7 +368,7 @@ class _Model:
         *,
         facility_only: bool = False,
     ) -> dict[str, Any]:
-        """The fields every virtual kind selects. A tunnel's office location carries its owner; facilities never do."""
+        """The fields every virtual kind selects."""
         places = [self.places[place] for place in locations]
         if facility_only:
             places = [{key: place[key] for key in ("id", "__typename", "name")} for place in places]
@@ -422,11 +405,7 @@ def _handoff(
 
 
 def build_payloads(without_cables: bool = False, without_circuits: Iterable[str] = ()) -> dict[str, Any]:
-    """The raw GraphQL response of ``circuit_placement.gql`` over the 30_all data.
-
-    ``without_cables`` drops every declared DcimCable and ``without_circuits`` the named carrier circuits, to show the
-    check reports what they carried (a payload that cannot fail proves nothing).
-    """
+    """The raw GraphQL response of ``circuit_placement.gql`` over the 30_all data."""
     model = _Model(without_cables, frozenset(without_circuits))
 
     tunnels = [

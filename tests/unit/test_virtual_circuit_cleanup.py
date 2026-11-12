@@ -1,13 +1,4 @@
-"""The tracked cleanup of add_virtual_circuit, with the SDK's real group semantics.
-
-infrahub_sdk's ``update_group`` returns BEFORE any cleanup when a run tracked nothing. Cleanup therefore runs for
-EXPLICIT reasons only, the ones where the generator tracks the circuit (its target) so the group is never empty: the
-circuit is decommissioned, it has fewer than two ends, or its whole carrier is decommissioned. A run that merely does
-not see enough carried ends (no carrier found, one end of an interconnect only) cannot tell "not linked yet / not
-visible yet" from "gone": it tracks nothing, the SDK cleans nothing and the session an earlier run built stays.
-``SdkTrackingGroup`` (tests/unit/simulators/circuit_fakes.py) mirrors the SDK function, so these tests fail if the
-generator stops tracking on an explicit path, or starts tracking on the transient one.
-"""
+"""The tracked cleanup of add_virtual_circuit, with the SDK's real group semantics."""
 
 from __future__ import annotations
 

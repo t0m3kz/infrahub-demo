@@ -1,11 +1,4 @@
-"""The patch panel model in schemas/extensions/dcim/patch_panel.yml.
-
-DcimPatchPanel is a standalone node (no device, no artifact, no capabilities); its two port kinds inherit DcimEndpoint
-only, so a DcimCable joins them unchanged. The model is flat: the panel lists its rear ports and its front ports, and a
-front port names its rear port (``rear_port``). A panel names its ``panel_type`` and the generator builds the ports of
-the type (tests/unit/test_patch_panel_pairing.py); there is no panel template. The capability-edge side of this (no
-``capabilities`` / ``shared_capabilities`` on any kind) is guarded in tests/unit/test_capability_edge_names.py.
-"""
+"""The patch panel model in schemas/extensions/dcim/patch_panel.yml."""
 
 from __future__ import annotations
 

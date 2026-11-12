@@ -1,12 +1,4 @@
-"""Unit tests for the context legs of CustomerDeploymentDCExchangeGenerator.
-
-FirewallContext transit legs and LoadbalancerContext one-arm legs: the same
-mixin flow (generators/firewall_context.py), one ContextSpec each. Runs the
-real mixin code (generators/firewall_context.py, connections.py)
-against a small stateful fake of the Infrahub client, so a test asserts what a
-boarding run WROTE and with which tracking, and a second run sees what the
-first left behind — instead of a brittle list of canned return values.
-"""
+"""Unit tests for the context legs of CustomerDeploymentDCExchangeGenerator."""
 
 from __future__ import annotations
 
@@ -109,8 +101,7 @@ class TestFreshSharedBoarding:
 
     @pytest.mark.asyncio
     async def test_one_exchange_per_peer_names_its_gateway_and_the_vrfs_of_its_legs(self) -> None:
-        """An exchange names its context and its two VRFs; its legs are derived (the context's legs in those VRFs), so a
-        leg carries its VRF instance and nothing else: no exchange, no context."""
+        """An exchange names its context and its two VRFs; its legs are derived (the context's legs in those VRFs)."""
         world = _World()
         gen, _ = _make_gen(world)
 
@@ -134,8 +125,7 @@ class TestFreshSharedBoarding:
 
     @pytest.mark.asyncio
     async def test_the_context_joins_service_contexts_once_its_legs_are_written(self) -> None:
-        """No port is tagged (the border ports are derived from the members' cables); the context joins the target
-        group of add_context_routes after its legs, so that generator starts on a complete context."""
+        """No port is tagged (the border ports are derived from the members' cables)."""
         world = _World()
         gen, _ = _make_gen(world)
 
@@ -369,8 +359,8 @@ class TestDedicatedContext:
 
         await _run(gen, world, _payload(dedicated=True))
 
-        # No lock-free fast path for a tracked context: delete_unused_nodes
-        # reclaims whatever the run does not save again.
+        # No lock-free fast path for a tracked context: delete_unused_nodes reclaims whatever the run does not save
+        # again.
         assert first_run_saves > 0
         assert world.saved("ManagedFirewallContext") == ["DC10-ded-prod"]
         assert len(world.saved("IpamIPAddress")) == 12

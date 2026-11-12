@@ -1,10 +1,4 @@
-"""Unit tests for transforms/config/controller.py.
-
-Covers:
-  - ControllerPayload.transform() — dispatch to the right vendor builder by
-    (controller_type, platform-name) pulled straight out of the query result.
-  - No matching builder → ValueError; no controller found → empty JSON object.
-"""
+"""Unit tests for transforms/config/controller.py."""
 
 from __future__ import annotations
 
@@ -181,9 +175,7 @@ class TestVelocloudVcoPayload:
         assert [e["hostname"] for e in payload["edges"]] == ["EQX-FR2-SDWAN-GW1", "C002-OFFICE-EDGE1"]
 
     def test_branch_to_branch_read_per_edge_from_its_own_office(self) -> None:
-        """Different offices under the same VCO can carry different
-        branch_to_branch policies — it's read per managed device's own
-        deployment, not once for the whole controller."""
+        """Different offices under the same VCO can carry different branch_to_branch policies."""
         data = _raw_controller(
             "VCO1",
             "sdwan_orchestrator",
@@ -242,10 +234,7 @@ def _gateway_with_handoff(
     password: str | None = "demo-handoff-secret",
     local_vlan: int | None = -1,
 ) -> dict:
-    """GW1 as data/demos/30_all/08_interconnects/04_sdwan/06_vrf_handoff.yml loads it.
-
-    password is the peering's RoutingPassword value; None leaves the peering without one.
-    """
+    """GW1 as data/demos/30_all/08_interconnects/04_sdwan/06_vrf_handoff.yml loads it."""
     device = _raw_device("EQX-FR2-SDWAN-GW1", role="edge", address=None)
     peering = {
         "node": {
@@ -285,8 +274,7 @@ def _gateway_with_handoff(
 
 
 class TestVelocloudVrfHandoffs:
-    """The Orchestrator pushes GW1's side of the PROD handoff to eg-fr201, so
-    the VCO payload — not a device-config transform — has to carry it."""
+    """The Orchestrator pushes GW1's side of the PROD handoff to eg-fr201, so the VCO payload."""
 
     def _payload(self, device: dict) -> dict[str, Any]:
         data = _raw_controller("VCO1", "sdwan_orchestrator", platform_name="linux", devices=[device])
@@ -404,8 +392,7 @@ def _office_edge_with_wan_exit(password: str | None = "0ff1c3-w4n-k3y") -> dict:
 
 
 class TestVelocloudOfficeEdgeWanExit:
-    """The office's WAN exit needs no VCO-side field of its own: the edge's handoff is described, like the gateway's,
-    from the one ManagedBGPPeering add_office_fabric generates (the border renders the other end)."""
+    """The office's WAN exit needs no VCO-side field of its own: the edge's handoff is described, like the gateway's."""
 
     def _handoffs(self, device: dict) -> list[dict[str, Any]]:
         data = _raw_controller("VCO1", "sdwan_orchestrator", platform_name="linux", devices=[device])

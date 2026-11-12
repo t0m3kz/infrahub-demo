@@ -14,27 +14,7 @@ from utils.ports import PortProfileHelper, PortSpec
 
 
 class CheckAppDependency(InfrahubCheck):
-    """The schema cannot say "exactly one of", so this check does.
-
-    A dependency the generator cannot turn into a rule is skipped there with
-    only a log line; reporting it here makes the missing flow visible on the
-    proposed change instead.
-
-    An approved dependency between two owners' components opens a hole in the
-    target owner's segment, so it must say exactly what it opens (``ports``;
-    without them it would open every port the target lists, including any
-    added later) and why (``decision_reason``). RulesPlanner keeps it closed
-    until it is approved (utils.dependency_access.crosses_owners).
-
-    A load_balanced component gets one VIP per port with its instances as the
-    pool members, so the generator refuses one that lists a port range, no
-    port or no instance (generators/helpers/lb_vip.py); this check reports
-    the same, on-prem or cloud (a cloud load balancer has a listener per
-    port and its instances as targets too). A dependency into an on-prem
-    load_balanced component is ruled to the VIPs (R_client) rather than to
-    the component's segment, into a cloud one to its segment as before; its
-    ports are validated the same way.
-    """
+    """Validate dependency shape (exactly one of source/target), ports, cross-owner approvals and load balancers."""
 
     query = "app_dependency_validation"
 
@@ -42,7 +22,6 @@ class CheckAppDependency(InfrahubCheck):
         cleaned = clean_data(data)
         for component in cleaned.get("AppComponent") or []:
             ports = self._parse_ports(component.get("ports"), f"Component '{component.get('fqdn', '<unnamed>')}'")
-            # A port that does not parse is reported above already.
             if ports is None or not component.get("load_balanced"):
                 continue
             _vip_ports, errors = vip_ports(component)
@@ -97,7 +76,6 @@ class CheckAppDependency(InfrahubCheck):
                     message=f"{label} is an approved cross-owner flow ({flow}) and must record its decision_reason."
                 )
 
-        # The component loop already reported a target port that does not parse.
         target_ports = self._parse_ports(target.get("ports"), "", report=False)
         if target_ports is None:
             return

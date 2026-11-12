@@ -1,0 +1,63 @@
+---
+# EVPN Multi-Site VIPs: one /128 per site, shared by its border gateways.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "loopback100"
+      device: "bl-dc101101"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for DC10"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::10/128"
+    - name: "loopback100"
+      device: "bl-dc1111101"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for DC11"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::11/128"
+    - name: "loopback100"
+      device: "bl-dc1212101"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for DC12"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::12/128"
+    - name: "loopback100"
+      device: "eg-fr201"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for metro FR"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::f1/128"
+    - name: "loopback100"
+      device: "eg-pa401"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for metro PA"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::f2/128"
+    - name: "loopback100"
+      device: "eg-fr202"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for metro FR"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::f1/128"
+    - name: "loopback100"
+      device: "eg-pa402"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for metro PA"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::f2/128"

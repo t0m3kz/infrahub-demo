@@ -34,31 +34,11 @@ class AppApplicationGenerator(
     PoolMixin,
     CommonGenerator,
 ):
-    """Generate segment-scoped security rules from app dependencies.
-
-    Orchestration only — domain logic lives in the mixins above, one per
-    dependency-edge shape: ZtnaMixin (target_fqdn egress and private-access
-    publishing for access-profile grants), SegmentFirewallMixin (every
-    segment-to-segment SecurityPolicyRule, on-prem or cloud endpoint, plus
-    zone handling), LoadbalancerVipMixin (the VIPs of load_balanced
-    components and their R_server rules, or a cloud component's
-    CloudLoadBalancer; CablingMixin for the addresses). Every routed tenant
-    segment it touches gets its segment group tag, and each component of a
-    microsegmented segment its component tag (_ensure_component_tags; PoolMixin for the lock). A cloud flow is
-    a SecurityPolicyRule like any other;
-    the former sg-{app} CloudSecurityGroup objects are no longer generated and
-    are deleted by this application's tracking group on its next run (they
-    were created tracked, and the run saves its rules as other members).
-    """
+    """Generate segment-scoped security rules from app dependencies (orchestration only; logic is in the mixins).
+    Touched routed tenant segments get their group tag, microsegmented components their component tag."""
 
     async def run(self, identifier: str, data: dict[str, Any] | None = None) -> None:
-        """Track generated policy objects independently for each application.
-
-        Only an AppApplication payload saves anything (see generate()); the
-        dependency/component entry points only fan out, so their groups stay
-        empty and — the SDK skips the group update for a run with no members —
-        never delete anything.
-        """
+        """Track generated policy objects per application; only an AppApplication payload saves anything."""
         if not data:
             data = await self.collect_data()
         unpacked = data.get("data") or data
@@ -80,19 +60,8 @@ class AppApplicationGenerator(
             await self.generate(data=unpacked)
 
     async def generate(self, data: dict[str, Any]) -> None:
-        """Reconcile an application's rules, or fan out to the applications a
-        dependency/component touches.
-
-        Only the add_app_application definition writes: its tracking group is
-        keyed by the application, so it is the one owner of that
-        application's rules. add_app_dependency and add_app_component are the
-        same class under another definition, whose group is keyed by the
-        dependency/component instead — a rule saved there would be claimed by
-        a group that no longer reconciles it once the dependency/component
-        moves to another application, and that group's next run would delete
-        the old application's rules. So those two entry points only trigger
-        add_app_application for the affected application(s) and save nothing.
-        """
+        """Reconcile an application's rules, or fan out to the applications a dependency/component touches.
+        Only add_app_application writes; add_app_dependency and add_app_component trigger it and save nothing."""
         cleaned = clean_data(data)
 
         if deps := cleaned.get("AppDependency"):
@@ -100,10 +69,8 @@ class AppApplicationGenerator(
             return
 
         if components := cleaned.get("AppComponent"):
-            # Another application's rule into this component names its
-            # segment and ports, and only that application's own run rewrites
-            # it. add_app_application does not fan out again, so two
-            # applications calling each other cannot loop.
+            # Another application's rule names this segment and ports; only its own run rewrites it, and no fan-out
+            # loop.
             component = components[0]
             own_app_id = self._component_trigger_app_id(component)
             callers = self._calling_application_ids(component)
@@ -119,16 +86,8 @@ class AppApplicationGenerator(
         await self._reconcile_application_rules(await self._await_segment_addressing(app_list[0]))
 
     async def _await_segment_addressing(self, app: dict[str, Any]) -> dict[str, Any]:
-        """The application, re-read after add_vxlan_segment addressed the gateway-less VXLAN segments it uses.
-
-        add_vxlan_segment gives such a segment its gateway, and the group tag
-        and the rules here read it (a routed tenant segment). Both are
-        triggered by the same load, so this run can start first: for each such
-        segment (a component's own or an edge target's) with an add_vxlan_segment
-        run in flight, wait for it and re-read the application. The segment
-        generator never waits on this one, so it cannot deadlock. No run in
-        flight leaves the application as read: the segment generator tags its
-        segment itself once it has a gateway.
+        """The application, re-read after add_vxlan_segment addressed the gateway-less segments it uses (waits for
+        in-flight runs, never on this one).
         """
         components: list[dict[str, Any]] = app.get("children") or []
         pending = sorted(
@@ -161,8 +120,7 @@ class AppApplicationGenerator(
             if not dep.get("source_profile"):
                 self.logger.warning("Dependency has neither a source component nor a source_profile - skipping")
                 return []
-            # An access-profile grant: the application is the target's,
-            # and publishing reads the grant from the component itself.
+            # An access-profile grant: the application is the target's
             target_app_id = (dst_comp.get("parent") or {}).get("id", "")
             if not target_app_id:
                 self.logger.warning("Dependency target has no parent application - skipping")
@@ -174,10 +132,7 @@ class AppApplicationGenerator(
         if not app_id:
             self.logger.warning("Dependency source has no parent application - skipping")
             return []
-        # The trigger fires once the dependency is committed, so the
-        # application query already reads it through depends_on. The
-        # app_dependency payload only carries enough to find the
-        # application, too little to build a rule from.
+        # The trigger fires after commit, so the query reads the dependency; the payload only finds the application.
         self.logger.info("Dependency trigger '%s' -> add_app_application for %s", dep_ref, app_id)
         return [str(app_id)]
 
@@ -205,11 +160,8 @@ class AppApplicationGenerator(
 
         edges = self._dependency_edges_from_components(components)
 
-        # Runs unconditionally per component (not gated on having a
-        # dependency edge below) so every segment this app uses gets its
-        # tags and isolation mode; each edge target gets its tags too, as it
-        # may belong to an application that has not run yet. The zone is the
-        # segment's own (mandatory in the schema, read by the query).
+        # Per component, even without edges: tags and isolation mode for every segment used and each edge target's (it
+        # may belong to an application that has not run yet).
         segments = self._used_segments(components, edges)
         # A segment without an id is a component without one.
         for segment in segments:
@@ -218,8 +170,7 @@ class AppApplicationGenerator(
                 await ensure_segment_routing_tag(self.client, segment=segment)
         for component in components:
             await self._ensure_segment_isolation_mode(component.get("network_segment") or {}, app_security_profile)
-        # An edge target on one of those segments is a second dict of it:
-        # the rules below read its mode (apply_on_switch, the rule tags).
+        # An edge target on those segments is a second dict of it; the rules below read its mode
         modes = {
             segment["id"]: segment.get("isolation_mode")
             for component in components
@@ -228,20 +179,17 @@ class AppApplicationGenerator(
         for segment in segments:
             if segment.get("id") in modes:
                 segment["isolation_mode"] = modes[segment["id"]]
-        # After the isolation modes (recorded on the segment dicts) and before
-        # the rules, which carry the tags of an intra-segment flow's components.
+        # After the isolation modes and before the rules, which carry the component tags
         await self._ensure_component_tags(components, edges)
 
-        # After the tags (R_server carries the backend component's) and before
-        # the rules (R_client reads the VIPs). Its errors fail the run once
-        # every other rule is written.
+        # After the tags (R_server carries the backend's) and before the rules (R_client reads the VIPs); errors fail
+        # the run last
         rule_indexes: dict[str, set[int]] = {}
         lb_vips, lb_errors = await self._reconcile_load_balancing(
             components, edges, rule_indexes, security_profile=app_security_profile
         )
 
-        # Access-profile grants hang off the target component, not a source
-        # component, so they are published whether or not the app has edges.
+        # Access-profile grants hang off the target component, so publish them with or without edges
         rules_created, rules_skipped = await self._reconcile_private_access_components(app_name, components)
 
         if not edges:
@@ -299,9 +247,8 @@ class AppApplicationGenerator(
 
             src_seg = src_comp.get("network_segment") or {}
             dst_seg = dst_comp.get("network_segment") or {}
-            # Strict load balancing: an on-prem load_balanced target is reached
-            # through its VIPs only (R_client), never directly. A cloud one
-            # keeps the direct rule: its managed load balancer is VPC-native.
+            # Strict load balancing: on-prem load_balanced targets are reached through VIPs only; a cloud one keeps the
+            # direct rule
             strict = dst_comp.get("load_balanced") and not is_cloud_component(dst_comp)
             target_vips = lb_vips.get(dst_comp.get("id") or "", {}) if strict else None
 
@@ -352,11 +299,7 @@ class AppApplicationGenerator(
             raise RuntimeError(f"Application {app_name}: {rules_failed} rule(s) failed")
 
     def _fail_on_lb_errors(self, app_name: str, errors: list[str]) -> None:
-        """Fail the run with every load balancing error at once; no-op without any.
-
-        A failed run leaves its tracking group as it was, so a VIP that a
-        broken component can no longer produce is kept, not deleted.
-        """
+        """Fail the run with every load balancing error at once; a failed run keeps its tracking group as is."""
         if errors:
             self.fail(f"Application {app_name}: load balancing: {'; '.join(errors)}")
 
@@ -365,16 +308,9 @@ class AppApplicationGenerator(
         components: list[dict[str, Any]],
         edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
     ) -> None:
-        """Tag every component of a microsegmented segment and record the tag on the dicts.
-
-        The application's own components on a microsegmented segment get their
-        tag; one that has a tag on any other segment loses it (it left the
-        segment). An edge target on one of those segments is tagged too: it can
-        belong to an application that has not run yet, and the intra-segment
-        rule to it needs both tags now. A target and the same component as a
-        child are two dicts, so the tag id is written into every dict of it.
-        The other applications calling a component tagged in this run are
-        reconciled again: their rules into it name its tag.
+        """Tag every component of a microsegmented segment and record the tag on the dicts. Own components get the tag
+        (one with a tag elsewhere loses it), edge targets are tagged too, and other applications calling a newly tagged
+        component are reconciled again.
         """
         microsegmented = {
             segment["id"]
@@ -403,19 +339,14 @@ class AppApplicationGenerator(
         for component in [*components, *targets]:
             if component.get("id") in tag_ids:
                 component["security_tag"] = {"id": tag_ids[component["id"]]}
-        # A rule another application wrote into a component carries the
-        # component's tag (RulesPlanner.rule_tags). A component tagged only now
-        # had none when that application ran, so it runs again; a later run of
-        # this application tags nothing new, so this fans out once.
+        # Rules from other applications carry the component's tag; a component tagged only now needs them to run again
         if callers:
             self.logger.info("  Re-reconciling %d calling application(s) of newly tagged components", len(callers))
             await self._fan_out(sorted(callers))
 
     @staticmethod
     def _calling_application_ids(component: dict[str, Any]) -> list[str]:
-        """Ids of the other applications with a component calling this one.
-        Access-profile grants have no calling application; the component's
-        own application is reconciled already."""
+        """Ids of the other applications with a component calling this one."""
         own_app_id = (component.get("parent") or {}).get("id")
         callers: set[str] = set()
         for dep in component.get("dependents") or []:

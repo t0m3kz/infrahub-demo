@@ -1,12 +1,4 @@
-"""Unit tests for ASN pool range calculations.
-
-ASN is allocated per GROUP, not per device (see .dev/bgp.txt /
-generators/helpers/routing.py's MLAG-pair/pod-spine/super-spine grouping):
-super-spine is one shared ASN fabric-wide, spine is one shared ASN per pod
-— neither scales the block-size estimate by device count anymore. Only
-max_pods and max_border_leafs_per_fabric (border-leaf isn't MLAG-paired in
-this project, still one ASN per device) affect the estimate now.
-"""
+"""Unit tests for ASN pool range calculations."""
 
 from __future__ import annotations
 
@@ -28,8 +20,7 @@ from utils.limits import PRIVATE_ASN32_START
     ],
 )
 def test_block_size(max_pods: int, max_border_leafs_per_fabric: int | None, expected: int) -> None:
-    """Small (<=50 estimated ASNs) gets 200, medium (<=200) 500, large 2000; more border-leafs (not MLAG-paired,
-    still one ASN each) increase the estimate and block size, and pod count alone does the same."""
+    """Small (<=50 estimated ASNs) gets 200, medium (<=200) 500, large 2000; more border-leafs (not MLAG-paired."""
     kwargs = {} if max_border_leafs_per_fabric is None else {"max_border_leafs_per_fabric": max_border_leafs_per_fabric}
     assert calculate_fabric_asn_block_size(max_pods=max_pods, **kwargs) == expected
 
@@ -71,12 +62,7 @@ def test_name_to_asn_range_block_size_matches_fabric(name: str, max_pods: int, s
 
 @pytest.mark.parametrize("max_pods", [1, 3, 8])
 def test_overlay_asn_stays_inside_own_slot(max_pods: int) -> None:
-    """dc.py's overlay AS (end + 1) never lands in an adjacent DC's pool.
-
-    DC10/DC11/DC12 hash to consecutive grid slots; with a full 2000 block
-    DC10's overlay ASN was DC11's first pool ASN, so the two shared one AS
-    object and every rerun drew new ASNs for one of them.
-    """
+    """dc.py's overlay AS (end + 1) never lands in an adjacent DC's pool."""
     ranges = {name: name_to_asn_range(name, max_pods=max_pods) for name in ("DC10", "DC11", "DC12")}
     starts = sorted(start for start, _ in ranges.values())
     assert starts[1] - starts[0] == starts[2] - starts[1] == 2000

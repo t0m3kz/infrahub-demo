@@ -21,7 +21,7 @@ def _refuse(who: str, why: str) -> ValueError:
 
 
 def _digest(payload: Any) -> str:
-    """The first 10 hex of the sha256 of the canonical JSON of ``payload`` (never hash()): the content name of an object."""
+    """The first 10 hex of the sha256 of the canonical JSON of ``payload`` (never hash())."""
     return hashlib.sha256(json.dumps(payload, separators=(",", ":")).encode()).hexdigest()[:10]
 
 

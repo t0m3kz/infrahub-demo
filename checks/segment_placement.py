@@ -16,33 +16,18 @@ OFFICE_ENVIRONMENT = "p"
 
 
 class CheckSegmentPlacement(WarningCheck):
-    """Validate deployment-type compatibility and VXLAN stretch constraints.
-
-    A segment agrees with every footprint it names. Its environment must
-    be the footprint's (an ERROR: the environment picks the segment's
-    namespace, zone and firewall leg, so a segment in another environment than
-    its footprint lands in the wrong VRF): DC and Colocation footprints state
-    one, an office is always PROD (`p`), and a cloud footprint has none (the
-    segment's environment against its CloudAccount's is
-    checks/routing_invariants.py's). The owner is a WARNING when it differs
-    from the footprint's: an exchange-zone segment is a shared service of
-    another owner by design, and a footprint owned by a provider hosts
-    customers' segments.
-    """
+    """Validate footprint compatibility and VXLAN stretch constraints (environment, owner, termination)."""
 
     query = "segment_placement"
 
-    # Footprints that state the environment they represent (TopologyEnvironmentScoped).
+    # Footprints that state an environment (TopologyEnvironmentScoped).
     _ENVIRONMENT_SCOPED_DEPLOYMENTS = {"TopologyCustomerDC", "TopologyCustomerColocation"}
     _VXLAN_ALLOWED_DEPLOYMENTS = {
         "TopologyCustomerDC",
         "TopologyCustomerColocation",
         "TopologyCustomerOffice",
     }
-    # Footprints that are TopologySegmentHosting themselves: they host their
-    # segments (VNI pool, SegmentDeployment) and have no hosting parent to check.
-    # An office has no border gateway to stretch a segment through, so its
-    # segments are local-only.
+    # Footprints that host their own segments: no hosting parent to check; an office stretches nothing.
     _SELF_HOSTING_DEPLOYMENTS = {"TopologyCustomerOffice"}
     _VXLAN_ALLOWED_PARENTS = {
         "TopologyDataCenter",
@@ -93,13 +78,8 @@ class CheckSegmentPlacement(WarningCheck):
                 )
 
     def _validate_termination(self, segment: dict[str, Any]) -> None:
-        """A segment with ``firewall_gateway`` is a floating VIP the footprint's firewall pair owns.
-
-        - its ``gateway`` is set and inside the segment's prefix (the VIP the firewall holds);
-        - it names exactly one footprint (a segment stretched over two would put two pairs on one VIP), a DC footprint
-          (a colocation firewall has no trunk of its own to the leaf, an office or a cloud has no pair of ours);
-        - that footprint lists an internal firewall context (``serving_firewall_contexts``), otherwise the segment
-          would be bridged to a pair that holds none of its rules.
+        """A ``firewall_gateway`` segment has its VIP inside its prefix and names one DC footprint with a firewall
+        context.
         """
         if not segment.get("firewall_gateway"):
             return

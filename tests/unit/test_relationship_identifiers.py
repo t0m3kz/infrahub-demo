@@ -1,10 +1,4 @@
-"""A relationship declared on both ends pairs only when both ends have the same identifier.
-
-Without an ``identifier`` Infrahub derives ``<kind_a>__<kind_z>`` from the two kinds, so two ends that both leave it
-out pair, and so do two that spell the same one. An end with an explicit identifier and a peer end that leaves it out
-(or spells another) are two separate relationships: a value written on one is never seen from the other.
-ProxyPolicy.rules / ProxyPolicyRule.policy were like that: every rule pointed at its policy and the policy listed none.
-"""
+"""A relationship declared on both ends pairs only when both ends have the same identifier."""
 
 from __future__ import annotations
 

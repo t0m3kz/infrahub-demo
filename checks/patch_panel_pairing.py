@@ -13,17 +13,7 @@ PANEL_KIND = "DcimPatchPanel"
 
 
 class CheckPatchPanelPairing(InfrahubCheck):
-    """A panel's ports are what add_patch_panel builds from its `panel_type` (ERRORs).
-
-    The generator builds the ports and the pairing, and a person can edit both, so they need a guard of their own.
-    Per panel, compared with its type (generators/helpers/patch_panel.py audit()):
-
-    - the type is known and every port name is a number, used once;
-    - no rear or front port the type has is missing, and none is there that the type does not have;
-    - every port has the connector of its type;
-    - every front port is on the rear port the type gives it (a jack: front N on rear N; a cassette: rear k carries
-      front (k-1)*F+1 .. k*F).
-    """
+    """A panel's ports match its `panel_type`: none missing or extra, right connector, fronts on their rear ports."""
 
     query = "patch_panel_pairing"
 
@@ -64,7 +54,7 @@ class CheckPatchPanelPairing(InfrahubCheck):
 
 
 def _numbers(numbers: list[int]) -> str:
-    """1, 2, 3, 7 -> '1-3, 7': a panel of 96 ports reads in one line."""
+    """1, 2, 3, 7 -> '1-3, 7'."""
     runs: list[tuple[int, int]] = []
     for number in sorted(numbers):
         if runs and number == runs[-1][1] + 1:

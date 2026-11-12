@@ -1,10 +1,4 @@
-"""Unit tests for EndpointUplinkMixin (generators/endpoint.py) — the plain-uplink
-dual-homing cabling flow used by EndpointConnectivityGenerator for role="uplink"
-endpoints (as opposed to the LAG/MLAG bond flow in generators/topology/endpoint.py).
-
-Covers _process_endpoint_connections, _process_speed_aware, _execute_cabling,
-and _build_connection_plan.
-"""
+"""Unit tests for EndpointUplinkMixin (generators/endpoint.py)."""
 
 from __future__ import annotations
 
@@ -19,8 +13,7 @@ from generators.types import ConnectionFingerprint
 
 
 class _Host(EndpointUplinkMixin):
-    """Concrete host exposing the mixin's required attributes, mirroring how
-    EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator) composes it."""
+    """Concrete host exposing the mixin's required attributes."""
 
 
 def _iface(name: str, *, device: str, interface_type: str | None = None, cabled: bool = False) -> MagicMock:
@@ -103,8 +96,7 @@ class TestProcessEndpointConnections:
 
     @pytest.mark.asyncio
     async def test_sticky_devices_preferred_over_first_two(self) -> None:
-        """A device this endpoint is already cabled to must be selected even if
-        it doesn't sort first among the discovered target devices."""
+        """A device already cabled to the endpoint is selected even if it does not sort first."""
         host = _make_host()
         host._existing_switch_names = {"leaf-2"}
         host._free_interfaces = [
@@ -163,10 +155,7 @@ class TestProcessSpeedAware:
 
     @pytest.mark.asyncio
     async def test_plan_validation_failure_for_a_speed_group_is_skipped(self) -> None:
-        """A plan ConnectionValidator rejects (e.g. duplicate switch endpoints —
-        not producible via _build_connection_plan's own dedup invariants, so
-        forced directly) is logged as an error and that speed group is
-        skipped, but processing continues without raising."""
+        """A plan the ConnectionValidator rejects is logged and skipped; processing continues."""
         host = _make_host()
         dup_fingerprint = ConnectionFingerprint("server-1", "eth0", "leaf-1", "Eth1")
         host._build_connection_plan = MagicMock(return_value=[dup_fingerprint, dup_fingerprint])
@@ -184,9 +173,7 @@ class TestProcessSpeedAware:
 
     @pytest.mark.asyncio
     async def test_invalid_plan_for_a_speed_group_is_skipped(self) -> None:
-        """A speed group whose switch-side interfaces all have an
-        unresolvable device name yields an empty connection plan — logged
-        as a warning and skipped rather than executed."""
+        """A speed group with unresolvable switch-side device names yields an empty plan, skipped."""
         host = _make_host()
         server_intfs = [_iface("eth0", device="server-1", interface_type="100gbase-x-qsfp28")]
         unresolvable_switch = _iface("Eth1", device="leaf-1", interface_type="100gbase-x-qsfp28")
@@ -318,8 +305,7 @@ class TestBuildConnectionPlan:
         assert any("Could not determine device name" in str(c.args[0]) for c in host.logger.warning.call_args_list)
 
     def test_no_available_interfaces_on_switch_logs_error(self) -> None:
-        """A server NIC with no switch port left is a failed deployment: logged as an
-        error, which raises under the generator's FailOnErrorLogger."""
+        """A server NIC with no switch port left is a failed deployment:"""
         host = _make_host()
         server_intfs = [_iface(f"eth{i}", device="server-1") for i in range(2)]
         # Only leaf-1 has interfaces; leaf-2 has none registered.

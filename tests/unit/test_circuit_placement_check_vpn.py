@@ -1,7 +1,4 @@
-"""CheckCircuitPlacement: the vpn circuit (a tunnel interface pair, model only).
-
-Payload builders: tests/unit/circuit_placement_check_helpers.py (``_vpn``, ``VPN_CIRCUIT``).
-"""
+"""CheckCircuitPlacement: the vpn circuit (a tunnel interface pair, model only)."""
 
 from __future__ import annotations
 

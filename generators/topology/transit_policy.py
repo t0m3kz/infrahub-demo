@@ -15,11 +15,8 @@ DIRECTION_OF = {"transit-in": "import_policies", "transit-out": "export_policies
 
 
 class TransitPolicyGenerator(CommonGenerator):
-    """Write the shared transit policies (``origin: generated``) and attach them to the peering.
-
-    Runs when a peering joins `transit_peerings` (data/events/99_group_triggers.yml). The objects are shared and
-    named, so every run upserts the same ones; the entries of a list that the public space no longer has are deleted.
-    A policy a person attached stays: the attachment only adds. The write is untracked, no run owns the shared objects.
+    """Write the shared transit policies (``origin: generated``) and attach them to the peering; untracked, a person's
+    policy stays.
     """
 
     graphql_root_key = PEERING_KIND

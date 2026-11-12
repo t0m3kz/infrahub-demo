@@ -1,14 +1,4 @@
-"""Unit tests for CustomerDeploymentDCExchangeGenerator (generators/topology/customer_dc.py).
-
-Covers FirewallContext and LoadbalancerContext target resolution (shared +
-dedicated; their legs are tests/unit/test_customer_dc_transit*.py), the dedicated
-pair step, and the _all_controllers wiring that lets create_devices() route
-dedicated FW/LB pairs to an existing ManagedController.
-TopologyCustomerDC never has a circuit of its own (DC customers reach
-everything over the fabric's own L2 domain), so there is no exchange-gateway
-logic here — see test_customer_colocation.py/test_customer_cloud.py/
-test_customer_office.py for that.
-"""
+"""Unit tests for CustomerDeploymentDCExchangeGenerator (generators/topology/customer_dc.py)."""
 
 from __future__ import annotations
 
@@ -120,10 +110,7 @@ class TestDCDeployment:
 
 
 class TestWaitsForParentDcGenerator:
-    """A customer can board concurrently with (or immediately after) its
-    parent DC's own creation — generate() must wait for an in-flight
-    add_dc/dc_pod_cascade before reading firewall_devices/loadbalancer_devices,
-    same as pod.py waits for its own parent DC."""
+    """A customer can board concurrently with (or immediately after) its parent DC's own creation."""
 
     @pytest.mark.asyncio
     async def test_waits_on_both_parent_generators_when_dc_id_present(self) -> None:
@@ -145,9 +132,7 @@ class TestWaitsForParentDcGenerator:
 
     @pytest.mark.asyncio
     async def test_refetched_data_is_reparsed_and_used(self) -> None:
-        """If add_dc was in-flight, the refreshed data (now carrying
-        firewall_devices that were missing the first time) replaces the
-        original — not just logged and discarded."""
+        """If add_dc was in-flight, the refreshed data."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         refreshed_payload = _dc_payload_with_parent(fw_devices=[_fw_device(id="fw-1", name="DC10-FW1")])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed_payload, None])
@@ -184,9 +169,7 @@ class TestFirewallContextNoFirewallOrCluster:
 
     @pytest.mark.asyncio
     async def test_unpaired_firewalls_wait_for_parent_then_use_its_cluster(self) -> None:
-        """Unpaired firewalls mean add_dc/dc_pod_cascade has not finished: the
-        customer waits for it and re-queries — it never pairs the DC's
-        firewalls itself (that would claim the DC's HA for this run's group)."""
+        """Unpaired firewalls mean add_dc/dc_pod_cascade has not finished: the customer waits for it and re-queries."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         cluster = MagicMock(id="cluster-1")
         cluster.name.value = "DC10-FW1-FW2"
@@ -210,8 +193,7 @@ class TestFirewallContextNoFirewallOrCluster:
 
     @pytest.mark.asyncio
     async def test_still_unpaired_after_waiting_fails_without_writing(self) -> None:
-        """Still unpaired after the wait: logger.error (FailOnErrorLogger
-        raises in a real run) and nothing is created, paired or saved."""
+        """Still unpaired after the wait: logger.error."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.filters = AsyncMock(side_effect=[[], []])
         gen._ensure_ha_pairs = AsyncMock()
@@ -230,11 +212,9 @@ class TestFirewallContextNoFirewallOrCluster:
 
 
 class TestAllControllersWiring:
-    """self._all_controllers must be populated from customer.parent's own
-    security_manager_controllers/lb_manager_controllers (queries/topology/
-    add/customer_dc.gql) before create_devices() runs — otherwise
-    _resolve_role_controller (generators/devices.py) always returns None and
-    dedicated FW/LB pairs never route to an existing ManagedController."""
+    """self._all_controllers is populated from the customer parent before create_devices(), so dedicated FW/LB pairs
+    find a controller.
+    """
 
     @pytest.mark.asyncio
     async def test_merges_security_manager_and_lb_manager_controllers(self) -> None:
@@ -309,10 +289,7 @@ class TestFirewallContextProvisioning:
 
     @pytest.mark.asyncio
     async def test_virtual_instances_on_the_parent_are_ignored(self) -> None:
-        """The role-filtered parent list also holds other customers' dedicated
-        virtual firewalls: the shared cluster is looked up by the first
-        physical firewall by name, and the dedicated pair is hosted on the 2
-        physical ones only."""
+        """The role-filtered parent list also holds other customers' dedicated virtual firewalls."""
         gen, _, cluster = self._make_gen_with_cluster()
         cluster.capabilities.peers = [MagicMock(id="fw-1"), MagicMock(id="fw-2")]
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
@@ -329,9 +306,7 @@ class TestFirewallContextProvisioning:
 
     @pytest.mark.asyncio
     async def test_dedicated_request_without_dedicated_pair_provisions_no_context(self) -> None:
-        """A dedicated request whose pair cannot be built never lands on the shared context: no
-        context target is resolved, so no transit leg is written (the real logger.error raises, which
-        fails the run; see TestEnsureDedicatedDevicePair for each cause)."""
+        """A dedicated request whose pair cannot be built never lands on the shared context."""
         gen, _, _ = self._make_gen_with_cluster()
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
 
@@ -356,8 +331,7 @@ class TestLinkServingContext:
 
     @pytest.mark.asyncio
     async def test_lb_link_is_saved_untracked(self) -> None:
-        """The deployment is the generator's target; tracking it would let
-        delete_unused_nodes remove it on a later run."""
+        """The deployment is the generator's target; tracking it would let delete_unused_nodes remove it on a later run."""
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
         deployment = MagicMock()
         deployment.serving_loadbalancer_context.id = None
@@ -548,9 +522,7 @@ class TestServingContextRelink:
 
 
 class TestEnsureDedicatedDevicePair:
-    """Dedicated customers get an actual dedicated virtual HA pair (firewall
-    or load-balancer) from the *_CUSTOMER_* template, not just shared
-    capacity — one virtual instance hosted on each physical peer."""
+    """Dedicated customers get an actual dedicated virtual HA pair."""
 
     def _make_gen(self) -> Any:
         gen = make_generator(CustomerDeploymentDCExchangeGenerator)
@@ -715,8 +687,7 @@ class TestEnsureDedicatedDevicePair:
 
     @pytest.mark.asyncio
     async def test_load_balancer_pair_uses_the_lb_template_and_ha_kind(self) -> None:
-        """A dedicated load-balancer pair pairs into ManagedLoadbalancerHA; the
-        tenant goes on its dedicated context, never on the HA domain."""
+        """A dedicated load-balancer pair pairs into ManagedLoadbalancerHA; the tenant goes on its dedicated context."""
         gen = self._make_gen()
         physical = self._physical_pair(platform="f5_tmos")
         template_obj = MagicMock(id="tmpl-1")
@@ -758,9 +729,7 @@ def _lb_device(*, id: str, name: str) -> dict:
 
 
 class TestLoadbalancerContextTarget:
-    """The LoadbalancerContext run is independent of the firewall one — a
-    customer gets one on a DC with load balancers and no firewalls, and
-    dedicated_loadbalancer without dedicated_firewall."""
+    """The LoadbalancerContext run is independent of the firewall one."""
 
     _LBS = [_lb_device(id="lb-1", name="DC10-LB1"), _lb_device(id="lb-2", name="DC10-LB2")]
 
@@ -929,9 +898,7 @@ class TestUplinksByDevice:
 
 
 class TestGetOrCreateContext:
-    """Always create+upsert, never pre-check-and-skip — both context kinds'
-    uniqueness_constraints on name__value make allow_upsert=True match the
-    existing node by name, same convention as dc.py/pools.py's pool creation."""
+    """Always create+upsert, never pre-check-and-skip."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("spec", [FIREWALL_CONTEXT, LOADBALANCER_CONTEXT])

@@ -133,9 +133,7 @@ def _make_fw() -> Firewall:
     return fw
 
 
-# ===========================================================================
 # Shared smoke-test data builder
-# ===========================================================================
 
 
 # The smoke segment as a rule references it (PolicyRuleSegmentFields).
@@ -144,13 +142,7 @@ _SMOKE_SEGMENT_REF: dict[str, Any] = {"id": "seg-smoke", "name": {"value": "seg-
 
 
 def _make_smoke_data(platform: str) -> dict[str, Any]:
-    """Build a realistic but minimal raw GQL dict for a full-render smoke test.
-
-    Includes:
-    - One FW device with the given platform
-    - One DcimFirewallInterface with a security_zone
-    - One zone with one segment whose own policy has one permit rule
-    """
+    """Build a realistic but minimal raw GQL dict for a full-render smoke test."""
     # Segment node embedded in capabilities (security_zone + policies on segment)
     seg_node: dict[str, Any] = {
         "__typename": "ManagedVxlanSegment",
@@ -286,21 +278,11 @@ def _smoke_segment(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _add_segment_rule(data: dict[str, Any], rule_node: dict[str, Any]) -> None:
-    """Append a rule to the carried segment's own policy (every rule lives in
-    its source segment's policy)."""
+    """Append a rule to the carried segment's own policy (every rule lives in its source segment's policy)."""
     _smoke_segment(data)["security_policy"]["node"]["rules"]["edges"].append({"node": rule_node})
 
 
-# ===========================================================================
 # Class 3 — Address-family-aware rendering (IPv6 P2P links, IPv4 fw_interfaces)
-# ===========================================================================
-#
-# FW-context P2P links default to IPv6 (/127, generators/topology/dc.py's
-# FirewallContext legs) — templates must branch on address family
-# rather than hardcoding an IPv4-only command (e.g. PAN-OS "ipv4 addr" for
-# an actual IPv6 address is simply wrong syntax). Renders templates directly
-# (not through Firewall.transform()) since only the address-family branching
-# is under test here, not the full data-shaping pipeline.
 
 
 def _render_template(platform: str, **context: Any) -> str:
@@ -310,9 +292,7 @@ def _render_template(platform: str, **context: Any) -> str:
 
 
 def _make_context_smoke_data(platform: str, *, serves_segment: bool) -> dict[str, Any]:
-    """Smoke data whose firewall also has a dedicated context. The context
-    serves the carried segment only when one of its served deployments
-    lists it among its network_segments."""
+    """Smoke data whose firewall also has a dedicated context."""
     data = _make_smoke_data(platform)
     device = data["DcimPhysicalDevice"]["edges"][0]["node"]
     segment = _smoke_segment(data)

@@ -1,9 +1,4 @@
-"""A VXLAN segment without a gateway is the infrastructure VLAN: the fabric renders it pure L2.
-
-A transfer or management L2 link is a ManagedVxlanSegment with no ``gateway`` (AGENTS.md, "Segments are VXLAN only"): the
-leaf declares its VLAN and maps it to its L2 VNI, the port carries it, and nothing L3 is rendered for it (no SVI, no VRF
-member, no ACL).
-"""
+"""A VXLAN segment without a gateway is the infrastructure VLAN: the fabric renders it pure L2."""
 
 from __future__ import annotations
 

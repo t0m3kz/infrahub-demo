@@ -1,7 +1,4 @@
-"""utils/ownership.py: the same-owner exchange between external sessions and the conflicts that break it.
-
-Pure functions over plain data: owner keys and prefix strings, one namespace at a time.
-"""
+"""utils/ownership.py:"""
 
 from __future__ import annotations
 

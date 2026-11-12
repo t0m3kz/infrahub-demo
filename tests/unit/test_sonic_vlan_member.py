@@ -1,9 +1,4 @@
-"""SONiC ConfigDB VLAN_MEMBER for host ports (templates/configs/common/sonic_common.j2).
-
-A trunk host port is a tagged member of each of its VLANs, an access port an untagged
-member of its single VLAN. The shared leaf template serves leaf, tor, access-leaf and
-the border roles on SONiC and Dell SONiC; the l2-leaf template shares the same block.
-"""
+"""SONiC ConfigDB VLAN_MEMBER for host ports (templates/configs/common/sonic_common.j2)."""
 
 from __future__ import annotations
 

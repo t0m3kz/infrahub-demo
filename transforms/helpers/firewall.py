@@ -21,22 +21,7 @@ from utils.segment_addressing import IPV4, own_prefix, prefix_family
 
 
 def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-    """Build the zone list and address objects from context-scoped zone data.
-
-    Args:
-        zones_data: List of cleaned SecurityZone dicts.
-
-    Returns:
-        List of zone dicts sorted by trust_level descending (most trusted first):
-        [
-          {
-            "name": "internal",
-            "trust_level": 100,
-            "description": "...",
-            "member_cidrs": ["10.0.1.0/24", "10.0.2.0/24"],
-          }
-        ]
-    """
+    """Build the zone list and address objects from context-scoped zone data."""
     if not zones_data:
         return []
 
@@ -65,30 +50,7 @@ def get_firewall_static_routes(
     fw_interfaces: list[dict[str, Any]],
     zones: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Build static routes for the firewall — one default route per zone interface.
-
-    Each FW sub-interface terminates in one zone/namespace. The return path to the
-    leaf is via a static route: destination = zone member CIDRs, nexthop = leaf /30 IP
-    (conventionally the .2 in the /30, i.e. network_address + 2).
-
-    Args:
-        fw_interfaces: List of DcimFirewallInterface dicts (already cleaned, with
-                       vrf.security_zone and ip_address populated).
-        zones:         Output of get_firewall_zones() — used to look up member_cidrs
-                       per zone name.
-
-    Returns:
-        List of static route dicts:
-        [
-          {
-            "vrf":         "VRF-INTERNAL",     # namespace name on the FW
-            "destination": "10.99.0.0/24",     # zone member CIDR
-            "nexthop":     "10.99.99.2",        # leaf /30 IP (.2 in the /30 link)
-            "interface":   "eth0.99",           # FW sub-interface name
-            "zone":        "internal",          # its zone
-          }
-        ]
-    """
+    """Build static routes for the firewall — one default route per zone interface."""
     # Build zone-name → member_cidrs lookup from already-processed zones
     zone_cidrs: dict[str, list[str]] = {z["name"]: z["member_cidrs"] for z in zones}
 
@@ -138,15 +100,7 @@ def get_firewall_static_routes(
 
 
 def _transit_names(ctx: dict[str, Any], namespace: str) -> tuple[str, str]:
-    """(full name, VLAN name) of a context leg's pseudo segment.
-
-    A firewall leg is ``XCHG-<context>-<VRF>`` (both names). A load-balancer context has one leg and a
-    shared context's name already ends in its namespace, so its leg is ``LB-<context>``; past
-    VLAN_NAME_MAX the VLAN name is cut to fit with a 4-hex digest of the full name (deterministic, and
-    two long names sharing a stem still differ), and the full name stays in the SVI description. A
-    leaf's contexts come from the firewall HA traversal (utils/service_contexts.py contexts_with_legs): they
-    are firewall contexts.
-    """
+    """(full name, VLAN name) of a context leg's pseudo segment."""
     if (ctx.get("typename") or FIREWALL_CONTEXT_KIND) == FIREWALL_CONTEXT_KIND:
         name = f"XCHG-{ctx.get('name')}-{namespace}"
         return name, name
@@ -158,14 +112,7 @@ def _transit_names(ctx: dict[str, Any], namespace: str) -> tuple[str, str]:
 
 
 def transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """The context's legs in a non-default VRF namespace, keyed by namespace name.
-
-    Each carries the namespace type/l3_vni, the transit /29, the transit VLAN and
-    VNI, and the fixed addresses (anycast .1, VIP .4, members .5/.6), all by the
-    utils.exchange_transit rules. A leg is a sub-interface of an HA member (a
-    firewall or a load balancer); ``ctx["legs"]``
-    (utils/service_contexts.py); legs in the default namespace are skipped.
-    """
+    """The context's legs in a non-default VRF namespace, keyed by namespace name."""
     legs: dict[str, dict[str, Any]] = {}
     context_vlan = ctx.get("vlan_id")
     for leg in ctx.get("legs") or []:
@@ -196,12 +143,7 @@ def transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | None:
-    """The PBR nexthop toward a context: the VIP of its leg in ``namespace``.
-
-    A transit leg (non-default VRF namespace) is a /29 whose firewall VIP sits at a
-    fixed offset (utils.exchange_transit); the members' own addresses are never the
-    nexthop. None without a transit leg in ``namespace``.
-    """
+    """The PBR nexthop toward a context: the VIP of its leg in ``namespace``."""
     for leg in ctx.get("legs") or []:
         if (leg.get("device") or {}).get("role") not in FIREWALL_ROLES:
             continue
@@ -222,20 +164,7 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
 def get_exchange_transits(
     contexts: list[dict[str, Any]], *, legs: set[tuple[str, str]] | None = None
 ) -> list[dict[str, Any]]:
-    """Pseudo segment activations for the transit legs of ``contexts``.
-
-    Every leg of a context becomes a VLAN + L2 VNI + anycast gateway (.1 of the
-    leg's /29) in the leg's VRF, so a VLAN sub-interface of the firewall or load
-    balancer (border leaf, edge) or a PBR next hop (leaf) has something to attach
-    to. Fed ONLY to get_vlans / get_vxlan_config / get_interfaces (never ACL, SGT
-    or PBR input). ``transit_context`` names the context whose trunk ports must
-    allow the VLAN. A firewall leg is ``XCHG-<context>-<VRF>``, the one leg of a
-    load-balancer context ``LB-<context>`` (see _transit_names).
-
-    ``legs`` restricts the result to the (namespace, VIP) pairs a leaf redirects
-    to (the key of _context_leg_ip); None keeps every leg, as a border device does
-    for the contexts tagged on its service ports.
-    """
+    """Pseudo segment activations for the transit legs of ``contexts``."""
     transits: dict[int, dict[str, Any]] = {}
     for ctx in contexts:
         for leg in transit_legs(ctx).values():
@@ -278,15 +207,7 @@ def get_exchange_transits(
 def get_leaf_firewall_transits(
     pbr_rules: list[dict[str, Any]], firewall_contexts: list[dict[str, Any]] | None, *, device_name: str
 ) -> list[dict[str, Any]]:
-    """The transit legs a leaf must hold locally for its firewall PBR next hops.
-
-    A PBR next hop is a context's leg VIP in the segment's own VRF; the leaf bridges
-    to it over the transit L2VNI, so the VIP has to be a connected next hop. Only
-    the (context, VRF) legs a rule redirects to are rendered (get_exchange_transits).
-    Raises when a next hop has no derivable leg (a missing context name, vlan_id or
-    namespace l3_vni): the leaf would otherwise redirect into a VIP it cannot reach
-    and the firewall would be bypassed silently.
-    """
+    """The transit legs a leaf must hold locally for its firewall PBR next hops."""
     wanted = {
         (rule["fw_namespace"], rule["fw_nexthop"])
         for rule in pbr_rules
@@ -325,10 +246,7 @@ def _snat_host(cap: dict[str, Any]) -> str | None:
 
 
 def _resolved_endpoint(rule: dict[str, Any], side: str) -> str | None:
-    """The CIDR a rule matches on ``side`` (None: any), or an error when a segment or selector it names has none.
-
-    A rule that names a segment (or a prefix selector) whose address is missing would otherwise render as ``any``.
-    """
+    """The CIDR a rule matches on ``side`` (None: any), or an error when a segment or selector it names has none."""
     endpoint = rule_endpoint(rule, side)
     segment = rule.get(f"{side}_segment") or {}
     if endpoint is None and (segment.get("id") or segment.get("name")):
@@ -341,44 +259,12 @@ def _resolved_endpoint(rule: dict[str, Any], side: str) -> str | None:
 
 
 def _ipv6_ref(cidr: str | None) -> str | None:
-    """The table name of an IPv6 endpoint; IPv4 endpoints stay inline in the templates (byte-identical IPv4 configs)."""
+    """The table name of an IPv6 endpoint;"""
     return endpoint_ref(cidr) if cidr and prefix_family(cidr) == "ipv6" else None
 
 
 def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-    """Build a rule table from SecurityPolicy dicts (place_policies_in_contexts).
-
-    Disabled policies and disabled rules are skipped. Every template renders
-    the policies as one flat rule table (a context's, or the root one), so
-    rules are numbered 10, 20, ... across the whole table in policy order,
-    then rule index order: per-policy indexes collide (each policy starts
-    at the same index) and Check Point `position`
-    would overwrite or reorder them. One implicit deny-all closes the table,
-    on the last policy; one per policy would shadow every later policy.
-
-    Args:
-        policies_data: List of cleaned SecurityPolicy dicts.
-
-    Returns:
-        List of policy dicts:
-        [
-          {
-            "name": "east-west",
-            "default_action": "deny",
-            "rules": [
-              {
-                "seq": 10, "name": "allow-https",
-                "action": "permit", "protocol": "tcp", "raw_protocol": "tcp",
-                "port_start": 443, "port_end": None,
-                "src_zone": "dmz", "dst_zone": "internal",
-                "src": None, "dst": None,
-                "dst_port": "eq 443", "log": True,
-                "description": "", "security_profile": "strict-av",
-              }
-            ],
-          }
-        ]
-    """
+    """Build a rule table from SecurityPolicy dicts (place_policies_in_contexts)."""
     if not policies_data:
         return []
 
@@ -410,11 +296,8 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
                     "name": rule.get("name") or "",
                     "action": rule.get("action", "deny"),
                     "protocol": acl_proto,
-                    # Unmapped protocol ("tcp"/"udp"/"icmp"/"any") plus raw
-                    # numeric ports, for templates that build their own
-                    # service/application object (PAN-OS, Junos) instead of
-                    # consuming the pre-formatted Cisco-ACL-style dst_port
-                    # string above ("eq 443" / "range 8080 8090").
+                    # Unmapped protocol ("tcp"/"udp"/"icmp"/"any") plus raw numeric ports, for templates that build
+                    # their own service/application object.
                     "raw_protocol": protocol,
                     "port_start": port_start,
                     "port_end": port_end,
@@ -433,9 +316,8 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
             )
 
         if policy.get("default_action") == "permit":
-            # Default permit closes the policy's own segment, not the table:
-            # unmatched traffic FROM that segment passes, everything else still
-            # falls through to the implicit deny below.
+            # Default permit closes the policy's own segment, not the table: unmatched traffic FROM that segment passes,
+            # everything else still falls through to the implicit deny below.
             seq += 10
             segment = policy.get("segment") or {}
             src = own_prefix(segment) if segment else None

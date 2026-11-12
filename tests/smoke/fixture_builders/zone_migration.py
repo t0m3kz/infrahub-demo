@@ -1,8 +1,4 @@
-"""Explicit migration of the historical smoke routing/policy owners to the zone catalog.
-
-Only zone relationships are migrated. An IPAM namespace, a CIDR, an interface
-name or an unrelated dictionary called ``namespace`` never supplies authority.
-"""
+"""Explicit migration of the historical smoke routing/policy owners to the zone catalog."""
 
 from __future__ import annotations
 

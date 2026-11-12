@@ -1,0 +1,11 @@
+---
+# C002 office LAN; created before the office that references it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.210.2.0/24"
+      ip_namespace: "default"
+      status: active
+      description: "C002 Marseille Branch office LAN"

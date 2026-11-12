@@ -1,22 +1,4 @@
-"""Policy/rule selection shared by the ACL, firewall and proxy helpers.
-
-Each rule is stored once, in its source segment's policy (``security_policy``,
-which also holds the segment's egress ``default_action``). ``inbound_rules`` is
-only the schema reverse index of ``destination_segment``. A rule to the internet has no destination
-segment: its ``destination_zone`` is INTERNET (``is_internet_destination``). ``segment_flows``
-is the one view of both; every consumer builds on it according to whether its
-enforcement point tracks sessions:
-
-| Consumer | Egress view (own rules) | Ingress view (rules into the segment) |
-| -------- | ----------------------- | ------------------------------------- |
-| Stateful: firewall rule table (``segment_rule_policies``), cloud SG | Own rules as written | Inbound rules as plain rules, no reply legs (the session carries the reply); none from a segment-less (LB context) policy |
-| Stateless: leaf ACL (``acl.py``), PBR bypass (``firewall.py``); later cloud NACL / edge VIF ACL | Own rules + ``default_action`` | Reply legs only. Leaf: seq >= 5000, tcp ``established``, excluding self-sourced rules. A NACL would need ephemeral 1024-65535 |
-| Stateless: group contracts (``group_policy.py``) | Own permit rules: segment tag to segment tag, component tag to component tag inside one segment, and the same entries on the unclassified service legs; deny by default | None: forward rows only, replies are the renderer's (NX-OS ``bidir``) |
-
-Known limit: stateless reply legs for udp/any/icmp are plain reverse matches,
-and port-agnostic ``established`` lets ACK scans through; firewall inspection
-is the answer for sensitive flows.
-"""
+"""Policy/rule selection shared by the ACL, firewall and proxy helpers."""
 
 from collections.abc import Iterable
 from typing import Any
@@ -70,13 +52,7 @@ def rule_zone(rule: dict[str, Any], side: str) -> str | None:
 
 
 def _first_selector(prefixes: list[dict[str, Any]] | None, ip_addresses: list[dict[str, Any]] | None) -> str | None:
-    """First explicit *_prefixes or *_ip_addresses selector, as a
-    ``(CIDR/address string, namespace name)`` pair. Every rendered src/dst is a
-    single scalar (ACL lines, firewall templates), so a multi-value selector
-    list can only ever render its first entry — a documented limitation, not an
-    address-group/fanout implementation. Prefixes are checked before IP
-    addresses since a prefix-based rule is the common case for the
-    cloud/partner/SaaS CIDR this selector shape was added for."""
+    """First explicit *_prefixes or *_ip_addresses selector, as a ``(CIDR/address string, namespace name)`` pair."""
     for prefix in prefixes or []:
         cidr = prefix.get("prefix")
         if cidr:
@@ -96,34 +72,22 @@ def rule_selector(rule: dict[str, Any], side: str) -> tuple[str, str | None] | N
 
 
 def rule_endpoint(rule: dict[str, Any], side: str) -> str | None:
-    """What a rule matches on `side` ("source"/"destination"): its segment's
-    prefix, else its first prefix/IP selector, else None (any). The one
-    resolver behind the leaf ACL and the firewall rule table, so a rule to an
-    external prefix (no destination segment) renders the same on both. A segment resolves to its prefix of its one
-    family (``own_prefix``): the switch ACLs render either family."""
+    """What a rule matches on `side`: its segment's prefix (own family), else its first prefix/IP selector, else None
+    (any).
+    """
     segment = rule.get(f"{side}_segment") or {}
     selector = rule_selector(rule, side)
     return (own_prefix(segment) if segment else None) or (selector[0] if selector else None)
 
 
 def is_internet_destination(rule: dict[str, Any]) -> bool:
-    """Whether the rule's destination is the internet: ``destination_zone`` is INTERNET and no
-    selector narrows it.
-
-    rule_endpoint returns None (any) for it, but unlike a rule with no destination
-    at all it means "outside", not "everything".
-    """
+    """Whether the rule's destination is the internet."""
     zone = (rule.get("destination_zone") or {}).get("name")
     return zone == INTERNET_ZONE and rule_endpoint(rule, "destination") is None
 
 
 def is_internet_source(rule: dict[str, Any]) -> bool:
-    """Whether the rule's source is the internet: ``source_zone`` is INTERNET and no source segment.
-
-    A source selector (``source_prefixes`` / ``source_ip_addresses``) only narrows WHICH outside addresses: the rule
-    still enters from the internet. Such a rule sits in the policy of a segment it reaches (usually its destination
-    segment's own policy: a rule needs a policy with a segment to be placed, ``segment_rule_policies``).
-    """
+    """Whether the rule's source is the internet: ``source_zone`` is INTERNET and no source segment."""
     zone = (rule.get("source_zone") or {}).get("name")
     return zone == INTERNET_ZONE and not (rule.get("source_segment") or {}).get("id")
 
@@ -134,14 +98,7 @@ def is_internet_rule(rule: dict[str, Any]) -> bool:
 
 
 def segment_flows(segment: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """The segment's rule view: ``(egress, ingress)``.
-
-    ``egress`` is ``{"rules": [...], "default_action": "permit" | "deny"}``: the
-    active rules of the segment's own enabled policies in index order, and the
-    closing action (permit if any enabled policy says so). ``ingress`` is the
-    active permit rules of enabled policies targeting the segment (its
-    ``inbound_rules``).
-    """
+    """The segment's rule view: ``(egress, ingress)``."""
     policies = enabled_policies(segment_policies(segment))
     egress = {
         "rules": [rule for policy in policies for rule in active_rules(policy)],
@@ -168,22 +125,7 @@ def rule_key(policy: str, rule: dict[str, Any]) -> str:
 
 
 def segment_rule_policies(segments: Iterable[dict[str, Any]], exclude: set[str] | None = None) -> list[dict[str, Any]]:
-    """The policies enforcing `segments`' traffic: each segment's own policy
-    (its egress rules) plus, regrouped under their own policy, the rules into
-    it (``inbound_rules``, the ingress leg of another segment's rule).
-
-    Rules are de-duplicated by id (a rule between two of the segments is
-    reached from both), and rules whose id is in ``exclude`` are left out:
-    a policy left without rules is dropped, one that has none at all is kept.
-    Policies are sorted by name, so the flat rule numbering of a rule table
-    (get_zone_policies) does not depend on the query's order.
-
-    An inbound rule of a policy with no segment is left out: that is a
-    load-balancer context's ``lb-<context>`` policy (R_server, its leg /29 to
-    the backend), and the LB never sits behind a firewall — the leg is in the
-    backend's own VRF, so the flow is a PBR bypass and the leaf ACL's
-    ``established`` reply leg (segment_flows) is all it needs.
-    """
+    """The policies enforcing `segments`' traffic."""
     excluded = exclude or set()
     policies: dict[str, dict[str, Any]] = {}
     offered: set[str] = set()

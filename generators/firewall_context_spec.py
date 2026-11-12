@@ -1,9 +1,5 @@
-"""What a kind of service context differs in, and the records a context flow passes around.
-
-ContextSpec (FIREWALL_CONTEXT, LOADBALANCER_CONTEXT) is the per-kind configuration of
-generators/firewall_context.py's FirewallContextMixin and generators/firewall_transit.py's
-TransitLegsMixin; _ContextTarget, _TransitMember and _TransitState are the values they hand to
-each other.
+"""What a kind of service context differs in, and the records a context flow passes around. ContextSpec is the per-kind
+configuration of FirewallContextMixin (firewall_context.py) and TransitLegsMixin (firewall_transit.py).
 """
 
 from __future__ import annotations
@@ -43,7 +39,8 @@ def _no_skip(_parent: dict[str, Any]) -> str | None:
 
 def _inline_parent(parent: dict[str, Any]) -> str | None:
     """Why an inline DC gets no load-balancer context: its load balancers sit in the firewall chain
-    (CablingMixin._cable_border_services), so no uplink faces a border load-balancer service port."""
+    (CablingMixin._cable_border_services).
+    """
     if parent.get("connectivity_mode") == "inline":
         return "its load balancers are inline behind the firewall (connectivity_mode inline)"
     return None
@@ -51,23 +48,8 @@ def _inline_parent(parent: dict[str, Any]) -> str | None:
 
 @dataclass(frozen=True)
 class ContextSpec:
-    """What a kind of service context differs in; everything else is one flow.
-
-    key prefixes the context's resource lock (`{key}-{context}`) and names the
-    parent's VLAN pool (`{parent}-{key}-vlan-pool`, PoolMixin). leg_types maps
-    the tenant namespace type to the namespace types of the context's legs,
-    tenant first; the others are exchanged with it. leg_identifier ends a
-    leg's allocation identifier (`{context_id}-{namespace}-{leg_identifier}`).
-    vlan_range bounds the parent's VLAN pool. skip_reason reads the hosting
-    facility (the DC, or a zone of the metro) and returns why it gets no
-    context of this kind, or None. vip_pool_name, when set, gives the context
-    a VIP prefix from that pool of the tenant namespace. serving_field names the
-    deployment's relationship to the context(s) serving it: ``serving_many`` when it is a list (the firewall contexts
-    of a footprint, internal and Internet edge alike, one list: a spec converges the ones of its ``role``), else the
-    one context of the kind. relink_consumers, when set, lists the nodes whose generated output sits on the context a
-    deployment is served by (client, deployment id -> node ids):
-    link_serving_context runs relink_generator for them when the deployment
-    moves from one context to another (a single serving field only).
+    """What a kind of service context differs in; everything else is one flow. Fields: lock key and VLAN pool name,
+    tenant leg types, leg identifier, VLAN range, skip reason, VIP pool, serving field(s), relink consumers.
     """
 
     label: str
@@ -112,10 +94,10 @@ EDGE_CONTEXT = ContextSpec(
     dedicated_flag="",
     ha_kind=ManagedFirewallHA,
     context_kind=ManagedFirewallContext,
-    # The VLAN pool and the lock prefix are the firewall contexts': an edge context takes its transit VLAN from the
-    # same pool of the DC, so no two contexts of a DC share one.
+    # The VLAN pool and lock prefix are the firewall contexts': an edge context draws from the same DC pool, so no two
+    # share a VLAN
     key="fw-context",
-    # The footprint lists its Internet edge context next to its internal one (utils/firewall_split.py).
+    # The footprint lists its Internet edge context next to its internal one (utils/firewall_split.py)
     serving_field="serving_firewall_contexts",
     serving_many=True,
     leg_types=_edge_leg_types,
@@ -140,9 +122,8 @@ LOADBALANCER_CONTEXT = ContextSpec(
     vlan_range=(LB_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END),
     skip_reason=_inline_parent,
     vip_pool_name=lb_vip_pool_name,
-    # A VIP and its R_server rule live on the serving context and the callers'
-    # R_client rules name the VIP; the firewall's rules are placed by the
-    # transform at render time, so FIREWALL_CONTEXT has nothing to re-run.
+    # The VIP and its R_server rule live on the serving context; the firewall's rules are placed at render time, so
+    # nothing to re-run
     relink_consumers=load_balanced_components_in,
     relink_generator=APP_COMPONENT_GENERATOR,
 )
@@ -154,24 +135,20 @@ class _ContextTarget:
 
     spec: ContextSpec
     name_base: str
-    # The hosting deployment (a DC, or the metro of a zone): the context's mandatory Parent.
+    # The hosting deployment (a DC, or the metro of a zone): the context's mandatory Parent
     deployment_id: str
     tenant_id: str | None
     track: bool
     devices: list[Any]
     parent_name: str
-    # The hosting facility has an external-firewall pair: its customer contexts keep no INTERNET leg (the Internet edge
-    # context has it), and a dedicated one only its own public address.
+    # With an external-firewall pair the customer contexts keep no INTERNET leg (the edge context has it), a dedicated
+    # one only its own public address
     edge_hosted: bool = False
 
     def context_name(self, tenant_namespace: str) -> str:
-        """The context's name: `{name_base}-{namespace}` (track), else `shared-{name_base}-{namespace}`.
-
-        Lowercase, like every other name here, the environment class last and the owner (dedicated, in name_base)
-        or `shared` first. A shared context is per (cluster, tenant namespace), for a firewall as for a load
-        balancer, so PROD and NON-PROD tenants never meet on one context. A dedicated pair's HA domain is
-        `{name_base}-ha-{namespace}`: the two are nodes of one generic and must not share a name (the server
-        resolves an upsert by name).
+        """The context's name: `{name_base}-{namespace}` (track), else `shared-{name_base}-{namespace}`. Shared is per
+        (cluster, tenant namespace) so PROD and NON-PROD never meet; a dedicated pair's HA domain is
+        `{name_base}-ha-{namespace}` (a distinct name).
         """
         scope = "" if self.track else "shared-"
         return f"{scope}{self.name_base}-{tenant_namespace.lower()}"
@@ -179,11 +156,8 @@ class _ContextTarget:
 
 @dataclass(frozen=True)
 class _TransitMember:
-    """An HA member as a context leg sees it.
-
-    offset is the member's /29 host offset: members sorted by name take
-    .5 / .6, the order transforms/helpers/ha.py uses. bl_port is the border
-    service port its uplink is cabled to.
+    """An HA member as a context leg sees it. ``offset`` is the /29 host offset (members sorted by name take .5/.6, as
+    transforms/helpers/ha.py); ``bl_port`` is the border service port its uplink is cabled to.
     """
 
     name: str
@@ -201,10 +175,7 @@ class _TransitState:
     complete: bool
 
 
-# (physical template's platform name, device_role) -> matching virtual
-# template's name prefix — see data/bootstrap's 09_virtual_device_templates_
-# *.yaml, where every platform/role combination provides a _CUSTOMER_<design>
-# variant per DC fabric design (e.g. "CloudGuard_EDGE_CUSTOMER_L").
+# (physical platform name, device_role) -> virtual template name prefix (data/bootstrap 09_virtual_device_templates_*)
 _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
     ("checkpoint_gaia", INTERNAL_FIREWALL_ROLE): "CloudGuard_EDGE",
     ("paloalto_panos", INTERNAL_FIREWALL_ROLE): "PA-VM_EDGE",

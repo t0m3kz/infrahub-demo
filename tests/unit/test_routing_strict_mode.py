@@ -1,8 +1,4 @@
-"""Unit tests for strict validation mode in RoutingPlanner.
-
-When strict=True, the planner raises ValueError instead of silently
-skipping devices with missing prerequisites.
-"""
+"""Unit tests for strict validation mode in RoutingPlanner."""
 
 import pytest
 

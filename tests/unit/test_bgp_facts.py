@@ -177,10 +177,7 @@ def test_entries_of_a_range_and_a_host_stay_distinct() -> None:
 
 
 def _zone(prefix: str, namespace: str, kind: str) -> dict[str, Any]:
-    """An ``environment_zones`` entry (queries/config/*.gql): a security zone and a segment gateway prefix routed in it.
-
-    IPAM keeps every prefix in the builtin ``default`` namespace; the zone alone says where it is routed.
-    """
+    """An ``environment_zones`` entry (queries/config/*.gql): a security zone and a segment gateway prefix routed in it."""
     return {
         "name": namespace,
         "vrf_type": kind,
@@ -226,7 +223,7 @@ class TestEnvironmentFacts:
         assert fabric.l2vni_count == 3
 
     def test_the_default_comes_from_internet_border_gateways_and_tenant_borders(self) -> None:
-        """INTERNET: a member that carries a multisite VIP. A tenant VRF: its borders (the shared context's 0/0 static)."""
+        """INTERNET: a member that carries a multisite VIP."""
         roots = {
             "DcimVirtualInterface": [
                 {"ip_address": {"address": VIP}, "device": {"name": "bl1", "role": "border-leaf", "interfaces": []}}

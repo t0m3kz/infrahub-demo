@@ -1,7 +1,4 @@
-"""Pools, devices, device names and service cabling of ColocationZoneGenerator.
-
-The generator lives in generators/topology/colocation_fabric.py.
-"""
+"""Pools, devices, device names and service cabling of ColocationZoneGenerator."""
 
 from __future__ import annotations
 
@@ -108,9 +105,7 @@ class TestZonePools:
 
     @pytest.mark.asyncio
     async def test_attach_saves_plainly_and_untracked(self) -> None:
-        """The real attach_refs: one fetch by id, setattr per pool, plain save without group-context tracking.
-
-        allow_upsert=True would resend every relationship and re-fire the fabric_templates `updated` trigger."""
+        """The real attach_refs: one fetch by id, setattr per pool, plain save without group-context tracking."""
         gen = self._pools_generator()
         del gen.attach_refs
         zone_node = AsyncMock()
@@ -311,10 +306,7 @@ class TestFabricDevices:
 
     @pytest.mark.asyncio
     async def test_appliances_are_created_but_never_registered_for_cabling(self) -> None:
-        """A DcimCable is fibre between two chassis: provider-hosted instances are created, then withheld.
-
-        Not hypothetical: PA-VM_EDGE_CUSTOMER_* exposes `uplink` on eth[1-6], the role _cable_border_services claims
-        on the service side, so without this a virtual edge+firewall pair would reach create_chain_cabling."""
+        """A DcimCable is fibre between two chassis: provider-hosted instances are created, then withheld."""
         templates = [
             {"role": "edge", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
             {"role": "internal-firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
@@ -408,8 +400,7 @@ class TestFabricDevices:
 
 
 class TestGeneratedDeviceNames:
-    """data/demos/30_all/08_interconnects/ references these names literally: the zone or virtual colocation NAME is
-    in the device name, so they are part of the generator's contract."""
+    """data/demos/30_all/08_interconnects/ references these names literally."""
 
     @pytest.mark.parametrize(
         ("fabric", "role", "index", "expected"),

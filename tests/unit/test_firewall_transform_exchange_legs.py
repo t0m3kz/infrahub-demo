@@ -10,12 +10,9 @@ from tests.unit.firewall_transform_helpers import (
     _make_fw,
 )
 
-# ===========================================================================
 # Exchange transit legs (one VLAN sub-interface per VRF of a context)
-# ===========================================================================
 
-# vendor -> markers of a PROD + INTERNET context: leg (transit VLAN, VIP), the
-# tenant prefix via the PROD anycast .1, 0/0 via the INTERNET anycast .1, zones.
+# vendor -> markers of a PROD + INTERNET context: leg, tenant prefix, 0/0, zones.
 _LEG_MARKERS = {
     "paloalto_panos": [
         "set network interface ethernet eth1 layer3 units eth1.3000 tag 3000",
@@ -113,8 +110,7 @@ class TestFirewallExchangeLegs:
 
     @pytest.mark.asyncio
     async def test_cluster_context_without_legs_renders_its_policies(self) -> None:
-        """A colocation context is a shared capability of the member only (no interface on a member):
-        its vsys and the rules of the segments it serves still render."""
+        """A colocation context is a shared capability of the member only (no interface on a member):"""
         data = _make_context_smoke_data("paloalto_panos", serves_segment=True)
         device = data["DcimPhysicalDevice"]["edges"][0]["node"]
         device["interfaces"]["edges"].pop()  # the leg: a context with no member leg is the colocation case

@@ -1,10 +1,5 @@
-"""Routing-protection fixtures: a spine's and a leaf's BGP sessions with the derived maximum-prefix, staged and enforced.
-
-Each fixture is a NEW directory next to the unprotected ones, whose goldens stay as they were: the derivation needs the
-hosting deployment's loopback pool (``TopologyDataCenter.loopback_pool``) and its ``routing_filter_enforce`` switch
-(utils/bgp_expectation.py, transforms/helpers/bgp_facts.py). Staged (``routing_filter_enforce`` false) renders the
-limit as warning-only and the filters unattached; enforced renders them live.
-"""
+"""Routing-protection fixtures: a spine's and a leaf's BGP sessions with the derived maximum-prefix, staged and
+enforced."""
 
 from __future__ import annotations
 
@@ -23,11 +18,7 @@ SPINE_PLATFORMS = ("arista_eos", "cisco_nxos", "sonic")
 
 
 def add_route_protection_facts(data: dict, *, device_name: str, enforce: bool) -> None:
-    """Give a device fixture what the route protection reads: the pool and switch on its deployment, the extra roots.
-
-    The roots are the ones queries/config/*.gql carry: the environment prefixes, the VRF instances, the multisite VIP
-    interfaces (which make a device a border gateway) and the segments (their count bounds the EVPN routes).
-    """
+    """Give a device fixture what the route protection reads: the pool and switch on its deployment, the extra roots."""
     deployment = data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]
     deployment["routing_filter_enforce"] = _v(enforce)
     deployment["loopback_pool"] = _node({"resources": _edges([{"prefix": _v(LOOPBACK_POOL)}])})

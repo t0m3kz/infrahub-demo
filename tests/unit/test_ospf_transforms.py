@@ -1,9 +1,4 @@
-"""Unit tests for OSPF configuration helpers.
-
-Covers:
-- get_ospf() — process extraction, router_id/process_id/reference_bandwidth passthrough
-- the OSPF partials' interface authentication per platform, and refuse_unrenderable_ospf_auth()
-"""
+"""Unit tests for OSPF configuration helpers."""
 
 from __future__ import annotations
 
@@ -104,9 +99,7 @@ class TestGetOspfReferenceBandwidthFromInterfaces:
         assert result[0]["reference_bandwidth"] == 40000
 
 
-# ---------------------------------------------------------------------------
 # OSPF interface authentication: rendered per platform, or refused
-# ---------------------------------------------------------------------------
 
 _TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "templates" / "configs"
 

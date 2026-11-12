@@ -1,31 +1,7 @@
-"""What a BGP session may carry in each direction, derived from the model: the one derivation of the route protection.
+"""What a BGP session may carry in each direction, derived from the model (pure, no I/O, no vendor syntax).
 
-Pure, no I/O: plain facts in, frozen results out. The transform renders the result (transforms/helpers/bgp_policy.py)
-and ``checks/bgp_expectations.py`` compares the two ends of every session with it, so a filter and its check cannot
-drift apart. Nothing here is vendor syntax.
-
-A session is classified by ``session_class`` and gets, per address family it carries, a ``FamilyPolicy``:
-
-- ``inbound`` / ``outbound``: the prefixes allowed, as ``Entry`` values (a prefix plus an optional ``le``). ``None``
-  means "not derivable from the facts" (for example no loopback pool of that family): the family is then rendered
-  UNPROTECTED and the check reports it, never as an empty (deny-all) list, which would take a working session down.
-- ``default_in`` / ``default_out``: whether ``0.0.0.0/0`` / ``::/0`` is allowed. Only a default exit originates one.
-- ``max_prefix``: the most prefixes the session should ever carry, sized from the same model (``None``: unknown).
-
-Classes (the key is ``peering_role``, ``ttl``, ``vrf``, ``transit`` and ``external`` of the built session):
-
-- underlay: the loopback range of the pool the fabric is sliced from plus the multisite VIPs in; out is the device's own
-  loopback and VIP, except a relaying tier (spine), which passes the whole range on;
-- fabric and dci-underlay: the far border gateway's loopback and VIP in, the device's own out;
-- overlay and dci (EVPN): the type-5 prefixes of the VRFs the device is a member of, plus a default route only from a
-  default exit; the firewall and load-balancer transit /29s are never in the set;
-- internal VRF session: the routed prefixes of its namespace;
-- external and transit: the policy ``utils/ownership.py exchange_policies`` and the internet prefixes already
-  produced, unchanged; only the maximum is derived;
-- an SD-WAN/LISP far end (``Fabric.unmanaged``): left out, ``unclassified``.
-
-The maximum of an address pool is its capacity: the pool was sized by ``generators/fabric_sizing.py`` with its headroom
-(``dc_loopback_bits``), so no headroom is added here.
+A session gets a ``session_class`` and per address family a ``FamilyPolicy``; ``None`` means not derivable
+(UNPROTECTED).
 """
 
 from __future__ import annotations
@@ -101,11 +77,7 @@ def accepts(entries: frozenset[Entry], prefix: str) -> bool:
 
 
 def covers(allowed: frozenset[Entry], sent: frozenset[Entry]) -> bool:
-    """Whether everything the entries ``sent`` match is matched by ``allowed``.
-
-    Conservative: one ``allowed`` entry must contain a whole ``sent`` entry, so a ``sent`` range split over two
-    allowed entries is reported as not covered (the check then asks for a person to look, never a false pass).
-    """
+    """Whether ``allowed`` matches everything ``sent`` matches (conservative: one allowed entry per sent entry)."""
     return all(any(_inside(s.prefix, a.prefix) and s.longest <= a.longest for a in allowed) for s in sent)
 
 
@@ -123,10 +95,8 @@ class DeviceAddrs:
 
 @dataclass(frozen=True)
 class Device:
-    """The device a session sits on: ``namespaces`` are its VRF memberships.
-
-    ``local_only`` are routed prefixes the device holds for itself and must not originate into EVPN (a leaf's
-    firewall transit /29s for PBR: only the borders originate them, cisco_nxos_route_maps.j2 ``PL-XCHG-TRANSIT``).
+    """The device a session sits on: ``namespaces`` are its VRF memberships, ``local_only`` prefixes it must not
+    originate.
     """
 
     name: str
@@ -146,16 +116,7 @@ class ExternalPolicy:
 
 @dataclass(frozen=True)
 class Fabric:
-    """The model facts every device of one fabric shares.
-
-    ``loopback_ranges``: the CIDRs of the loopback pools (DC and zone) the fabric is sliced from. ``vips``: every
-    EVPN Multi-Site VIP of the model. ``devices``: the far ends by device name (role, addresses, memberships). ``namespace_prefixes``:
-    routed prefixes per namespace (segment prefixes and what is registered behind an external session).
-    ``range_namespaces``: namespaces whose prefixes are matched with ``le`` (the internet: SNAT /32s ride inside the
-    public aggregate). ``default_exits``: the devices that originate the default route per namespace.
-    ``l2vni_count``: the stretched and local L2 VNIs. ``external``: ``ExternalPolicy`` by the session's ``local_interface``. ``internet_prefixes``: what the edge
-    announces upstream. ``unmanaged``: far ends the first class set leaves out (an office's SD-WAN edge).
-    """
+    """The model facts every device of one fabric shares (range namespaces, default exits, external sessions)."""
 
     loopback_ranges: tuple[str, ...] = ()
     vips: frozenset[str] = frozenset()
@@ -275,27 +236,19 @@ def _type5(namespaces: frozenset[str], fabric: Fabric) -> frozenset[Entry]:
 
 
 def _host_addresses(prefixes: frozenset[Entry]) -> int:
-    """IPv4 host addresses behind the prefixes: the loose bound on type-2 routes per MAC/IP pair is twice this."""
+    """IPv4 host addresses behind the prefixes."""
     return sum(max(0, ip_network(e.prefix).num_addresses - 2) for e in prefixes if e.family == IPV4)
 
 
 def evpn_route_bound(vteps: int, l2vnis: int, type5: frozenset[Entry]) -> int:
-    """An upper bound of the EVPN routes a VTEP can hold: type-3 (VTEPs x L2 VNIs), type-5 and type-2.
-
-    Type 2 is twice the IPv4 host addresses of the routed prefixes (a MAC/IP route and a MAC-only one per host); IPv6
-    host space is not counted, it is not a bound. Loose on purpose: it is a runaway guard, not a tight cap.
+    """A loose upper bound of the EVPN routes a VTEP holds: type-3 (VTEPs x L2 VNIs), type-5 and type-2 (2 per IPv4
+    host).
     """
     return vteps * l2vnis + len(type5) + 2 * _host_addresses(type5)
 
 
 def _evpn_family(session: Mapping[str, Any], device: Device, fabric: Fabric) -> FamilyPolicy:
-    """The EVPN address family: the type-5 prefixes of the namespaces; a default only from a default exit.
-
-    A relaying tier (spine) holds no VRF and passes every namespace's routes on, so its set is all of them; any other
-    device takes the namespaces it is a member of. What it must not originate (``Device.local_only``) is left out of
-    its outbound set only: it still accepts the border's copy of the same prefix. A query that carried no environment
-    prefixes at all gives "not derivable", never an empty set (which would filter every type-5 route out).
-    """
+    """The EVPN family: type-5 prefixes of the namespaces (a spine relays all); a default only from a default exit."""
     if not fabric.namespace_prefixes:
         return FamilyPolicy(None, None)
     far = _far_end(session, fabric)
@@ -314,7 +267,7 @@ def _evpn_family(session: Mapping[str, Any], device: Device, fabric: Fabric) -> 
 
 
 def _far_end(session: Mapping[str, Any], fabric: Fabric) -> Device:
-    """The far end of a session: the facts' device, else its role as the peering names it (a relay is a spine)."""
+    """The far end of a session: the facts' device, else built from the peering's ``remote_role``."""
     name = str(session.get("remote_device"))
     return fabric.devices.get(name) or Device(name, str(session.get("remote_role") or ""))
 

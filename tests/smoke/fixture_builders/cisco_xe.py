@@ -18,8 +18,7 @@ from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
 
-# Catalyst 9000 (IOS-XE): an EVPN-VXLAN leaf, access-leaf and border-leaf only. Every other role has no
-# cisco_xe fabric template, so cisco_xe is not in FABRIC_PLATFORMS.
+# Catalyst 9000 (IOS-XE): an EVPN-VXLAN leaf, access-leaf and border-leaf only.
 CISCO_XE_DEVICE_CONFIGS: list[tuple[type, str, str]] = [
     (Leaf, "leaf", "leaf"),
     (AccessLeaf, "access-leaf", "access_leaf"),
@@ -46,10 +45,7 @@ def write_cisco_xe_fixtures() -> tuple[int, int]:
     return generated, errors
 
 
-# Segment ACL + inter-VRF statics on a Catalyst 9000. The segments' security_policy is in the query, so every hosted
-# routed segment gets an implicit-deny SVI ACL (get_acls). The default ACL fixtures only hold tcp `eq` rules; this adds
-# one of each other shape IOS-XE writes differently: a udp port range towards a zoned prefix, icmp, a host destination
-# with `log`, and the return leg (tcp `established`, source port) of a permit from another segment.
+# Segment ACL + inter-VRF statics on a Catalyst 9000.
 def _add_cisco_xe_acl_rules(segments: list[dict]) -> None:
     """Extend the policy of seg-100 (and the inbound rules of seg-200) of the `include_acls` segments."""
     by_name = {seg["name"]["value"]: seg for seg in segments}
@@ -118,11 +114,7 @@ def build_cisco_xe_acl_data(*, device_name: str, role: str = "leaf") -> dict:
 
 
 def build_cisco_xe_exchange_data(*, device_name: str, role: str, with_acl: bool) -> dict:
-    """The exchange-transit wiring (firewall port tagged with two contexts) on a cisco_xe leaf or border leaf.
-
-    Its inter-VRF statics (PROD 0/0 to the shared context's VIP, the SNAT /32s in INTERNET) are the
-    `ip route vrf` lines. With `with_acl` the customer-port segment seg-shared also carries a zero-trust policy.
-    """
+    """The exchange-transit wiring (firewall port tagged with two contexts) on a cisco_xe leaf or border leaf."""
     data = build_exchange_transit_bl_data(device_name=device_name, platform="cisco_xe", role=role)
     if with_acl:
         shared = _interface_segments(data)[0]

@@ -1,9 +1,4 @@
-"""Unit tests for the per-run read of a policy's rules (generators/segment_firewall.py).
-
-A policy's rules are listed once per run, with their selectors: the lookup of a rule by name, the used indexes
-and the create all work from that one list. What another run adds after the read is caught by the index
-collision re-read, not by a read per rule.
-"""
+"""Unit tests for the per-run read of a policy's rules (generators/segment_firewall.py)."""
 
 from __future__ import annotations
 
@@ -127,9 +122,7 @@ class TestPolicyRulesAreReadOncePerRun:
 class TestRulesOtherRunsAddAfterTheRead:
     @pytest.mark.asyncio
     async def test_a_sibling_run_taking_the_index_is_caught_by_the_collision_re_read(self) -> None:
-        """The read found the policy empty; a sibling run then created a rule at index 100. The create collides,
-        the policy is read again and the retry takes the next free index. The staleness window is the read-to-create
-        gap and no wider: the collision is the guard, not a read per rule."""
+        """The read found the policy empty"""
         gen = _make_gen()
         sibling = _stored_rule("rule-sibling", 100)
         gen.client.filters = AsyncMock(side_effect=[[], [sibling]])

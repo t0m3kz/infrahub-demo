@@ -1,16 +1,6 @@
 """Addressing plan for inter-VRF exchange transits through a firewall context.
 
-One implementation shared by generators, transforms and checks: the generator
-allocates a /29 per (context, namespace) leg and tags VLANs, the border-leaf and edge
-transforms re-derive the VLAN/VNI/addresses from the same rules, so the two can
-never drift apart.
-
-Per leg (a context's VLAN sub-interface in one VRF):
-
-    .1 border-leaf / edge anycast gateway (shared by both border devices)
-    .2/.3 reserved, never allocated
-    .4 firewall VIP
-    .5 / .6 firewall member A / B (members sorted by name)
+Per leg a /29: .1 border anycast gateway, .2/.3 reserved, .4 firewall VIP, .5/.6 member A/B (sorted by name).
 """
 
 from __future__ import annotations
@@ -51,9 +41,8 @@ MANAGEMENT_TYPE = "management"
 TRANSIT_SLOT: dict[str, int] = {PROD_TYPE: 0, "non_prod": 1, INTERNET_TYPE: 2, MANAGEMENT_TYPE: 3}
 """Namespace type -> VLAN slot; one slot per fixed VRF namespace."""
 
-# The VLAN and VNI bands and the prefix lengths of the plan are design limits of utils/limits.py: a leg is
-# `context VLAN + TRANSIT_VLAN_BAND x slot`, so a firewall context's legs (3000-3099 + slot) and a load-balancer
-# context's (3100-3199 + slot) never meet in the same slot or in another; transit VNI = TRANSIT_VNI_BASE + transit VLAN.
+# Bands are limits from utils/limits.py: leg VLAN = context VLAN + TRANSIT_VLAN_BAND x slot; VNI = TRANSIT_VNI_BASE +
+# VLAN.
 TRANSIT_VLAN_MIN = FW_CONTEXT_VLAN_START
 TRANSIT_VLAN_MAX = LB_CONTEXT_VLAN_END + TRANSIT_VLAN_BAND * max(TRANSIT_SLOT.values())
 TRANSIT_VNI_MIN = TRANSIT_VNI_BASE + TRANSIT_VLAN_MIN
@@ -87,14 +76,7 @@ BORDER_ROLE_FOR_SERVICES: dict[str, str] = {
     EXTERNAL_FIREWALL_ROLE: "firewall",
     "load-balancer": "load-balancer",
 }
-"""Device role of an HA member -> the interface role of the border service port facing it.
-
-Every bootstrap border tier (N9K-C9336C-FX2_BORDER_LEAF's Ethernet1/[25-28]/[29-32], border-spine's equivalent blocks,
-N9K-C9316D-GX_EDGE's Ethernet1/[15-16]) names its firewall-facing and load-balancer-facing port blocks after the
-service role itself, so the border-facing role and the service role are the same string. Shared by the generators that
-cable the border tiers (dc.py, pod.py, colocation_fabric.py), the context generator and the readers that derive the
-ports of a context (utils/service_contexts.py): a caller whose border tier uses a different port-naming convention
-builds and passes its own dict instead of reusing this one."""
+"""Device role of an HA member -> the interface role of the border service port facing it (the same string)."""
 
 SERVICE_MEMBER_ROLES = frozenset(BORDER_ROLE_FOR_SERVICES)
 """The DEVICE roles of the HA members a service context's legs sit on (any firewall pair, or a load-balancer pair)."""
@@ -117,11 +99,7 @@ TRANSIT_OFFSETS: tuple[int, ...] = (OFFSET_ANYCAST, OFFSET_VIP, OFFSET_MEMBER_A,
 
 
 def is_public_address(address: str) -> bool:
-    """Whether an IPv4 address (with or without a mask) lies outside NON_INTERNET_PREFIXES.
-
-    IPv4 by design: the only caller judges a context's ``snat_address``, which is IPv4 (an IPv6 source is not translated).
-    The ACL internet band is family-aware on its own (utils/internet_space.py ``non_internet_prefixes``).
-    """
+    """Whether an IPv4 address lies outside NON_INTERNET_PREFIXES (IPv4 only: it judges a ``snat_address``)."""
     ip = ipaddress.ip_interface(address).ip
     return ip.version == 4 and not any(ip in ipaddress.ip_network(prefix) for prefix in NON_INTERNET_PREFIXES)
 
@@ -133,17 +111,17 @@ class TransitAddresses(TypedDict):
 
 
 def transit_pool_name(namespace_name: str) -> str:
-    """The bootstrap prefix pool of a VRF's transit space (data/bootstrap/23_transit_pools.yml), e.g. FW-Transit-PROD-IPv4."""
+    """The bootstrap pool of a VRF's transit space, e.g. FW-Transit-PROD-IPv4."""
     return FW_TRANSIT_POOL_TEMPLATE.format(namespace=namespace_name)
 
 
 def lb_leg_pool_name(namespace_name: str) -> str:
-    """The bootstrap prefix pool of a load-balancer leg /29 in a tenant VRF, e.g. LB-Leg-PROD-IPv4 (23_transit_pools.yml)."""
+    """The bootstrap pool of a load-balancer leg /29 in a tenant VRF, e.g. LB-Leg-PROD-IPv4."""
     return LB_LEG_POOL_TEMPLATE.format(namespace=namespace_name)
 
 
 def lb_vip_pool_name(namespace_name: str) -> str:
-    """The bootstrap prefix pool of a load-balancer context's VIP /26 in a tenant VRF, e.g. LB-VIP-PROD-IPv4."""
+    """The bootstrap pool of a load-balancer context's VIP /26, e.g. LB-VIP-PROD-IPv4."""
     return LB_VIP_POOL_TEMPLATE.format(namespace=namespace_name)
 
 
@@ -153,11 +131,7 @@ def wan_exit_vlan(namespace_type: str) -> int:
 
 
 def l3vni_svi_vlan(namespace_type: str | None) -> int | None:
-    """The local VLAN of a VRF's L3 VNI SVI (NX-OS, Cisco XE and SONiC symmetric IRB), fixed per namespace type.
-
-    ``L3VNI_SVI_VLAN_BASE + TRANSIT_SLOT[namespace type]`` (3900 PROD, 3901 NON-PROD, 3902 INTERNET, 3903 MANAGEMENT):
-    a VRF keeps its VLAN whatever other VRFs the device carries. None for a namespace type without a slot.
-    """
+    """The L3 VNI SVI VLAN of a VRF: ``L3VNI_SVI_VLAN_BASE + TRANSIT_SLOT[type]``, None without a slot."""
     slot = TRANSIT_SLOT.get(namespace_type or "")
     return None if slot is None else L3VNI_SVI_VLAN_BASE + slot
 
@@ -168,10 +142,7 @@ def namespace_type_for_environment(environment: str) -> str:
 
 
 def joins_prod_and_nonprod(environment_a: str | None, environment_b: str | None) -> bool:
-    """Whether a flow between two environments would join the prod and non-prod namespaces.
-
-    Fails closed: a missing or empty environment counts as a join, since its namespace type cannot be known.
-    """
+    """Whether a flow between two environments joins prod and non-prod (fails closed on a missing environment)."""
     if not environment_a or not environment_b:
         return True
     return namespace_type_for_environment(environment_a) != namespace_type_for_environment(environment_b)
@@ -187,26 +158,12 @@ def exchange_peer_zones() -> frozenset[str]:
 
 
 def is_exchange_zone(zone: str | None) -> bool:
-    """Whether ``zone`` is an exchange zone (INTERNET, MANAGEMENT).
-
-    The one exchange-zone predicate. A segment in an exchange zone is a shared
-    service by design (e.g. the DC-local MANAGEMENT services), so its zone is
-    authored data, not f(environment): the segment_security check exempts it
-    from the environment rules, RulesPlanner governs its flows by
-    EXCHANGE_PEERS, and it is never a routed tenant segment.
-    """
+    """Whether ``zone`` is an exchange zone (INTERNET, MANAGEMENT): a shared service, never a routed tenant segment."""
     return zone in exchange_peer_zones()
 
 
 def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
-    """A VLAN/VXLAN segment the fabric routes in a tenant SecurityZone, outside the exchange zones.
-
-    A segment a firewall context terminates (``firewall_gateway``) has no SVI and is not one.
-    The one definition of a tenant SVI in a shared VRF: the L0 SVI protection
-    check and the segment group tags (generators/helpers/security_tag.py,
-    transforms/helpers/group_policy/) read it. ``segment`` is cleaned query
-    data with ``typename``, ``gateway``, ``security_zone.vrf_type`` and ``security_zone.name``.
-    """
+    """A segment the fabric routes in a tenant zone outside the exchange zones (not a firewall-terminated one)."""
     if segment.get("typename") not in ROUTED_SEGMENT_KINDS:
         return False
     namespace_type = routed_segment_namespace(segment).get("vrf_type")
@@ -215,12 +172,8 @@ def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
 
 
 def transit_leg_namespace(context_vlan: int | None, leg: dict[str, Any]) -> dict[str, Any] | None:
-    """The VRF namespace of one context leg, or None when the leg is no transit leg.
-
-    A transit leg is a sub-interface of an HA member (a firewall or a load balancer) with an address in a
-    non-default namespace whose type has a slot, on a context with a VLAN. The one rule for the transform's
-    transit legs (transforms/helpers/firewall.py transit_legs) and the border device's VRF demand
-    (utils/vrf_demand.py); ``leg`` is a cleaned leg interface (utils/service_contexts.py ``leg_interfaces``).
+    """The VRF namespace of a context leg, or None when it is no transit leg (an addressed member sub-interface on a
+    context with a VLAN).
     """
     if (leg.get("device") or {}).get("role") not in SERVICE_MEMBER_ROLES:
         return None
@@ -264,13 +217,8 @@ def exchange_route_specs(
     snat: str | None,
     export_tenant_default: bool = True,
 ) -> list[dict[str, Any]]:
-    """The static routes one exchange of a firewall context needs on a border device.
-
-    ``tenant_leg`` and ``peer_leg`` are the two legs of the exchange (``namespace``, ``l3_vni``, ``ns_type``, ``vip``).
-    The tenant VRF gets ``0.0.0.0/0`` to the tenant leg's VIP when the context is the shared one; a dedicated context
-    steers its tenant by leaf PBR. The INTERNET VRF gets the context's SNAT /32 to the INTERNET leg's VIP, the return
-    path of its translated flows. The single rule of the generator that writes them as
-    ManagedStaticRoute objects (generators/exchange_routes.py); the transform renders those objects.
+    """The static routes one exchange of a firewall context needs on a border device (tenant default, INTERNET SNAT
+    /32).
     """
     routes: list[dict[str, Any]] = []
     if shared:

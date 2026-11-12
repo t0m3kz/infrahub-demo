@@ -1,10 +1,4 @@
-"""Routing identity: the tag readers, the origination entries of a VTEP and the query fields that carry the tags.
-
-utils/routing_identity.py derives the two standard communities (``64496:<customer tag>``, ``64497:<segment tag>``) from
-the ``routing_tag`` of a customer and of a segment; transforms/helpers/origination.py turns the routed, tagged segments
-of a device into the entries its templates render. The community is a tag for visibility, never a filter. Fixtures of
-code that reads a query payload are built from the raw GraphQL shape through ``clean_data``.
-"""
+"""Routing identity"""
 
 from __future__ import annotations
 
@@ -31,9 +25,7 @@ from utils.routing_identity import (
 _QUERIES = Path(__file__).parents[2] / "queries"
 
 
-# ---------------------------------------------------------------------------
 # utils/routing_identity.py
-# ---------------------------------------------------------------------------
 
 
 class TestReaders:
@@ -104,9 +96,7 @@ class TestReaders:
         assert list_name_part(name) == expected
 
 
-# ---------------------------------------------------------------------------
 # transforms/helpers/origination.py
-# ---------------------------------------------------------------------------
 
 
 def _raw_segment(
@@ -221,9 +211,7 @@ class TestOrigination:
         assert entry["name"] == "c005-web-p"
 
 
-# ---------------------------------------------------------------------------
 # The queries carry the tags
-# ---------------------------------------------------------------------------
 
 
 def _fragment(path: str, name: str) -> FragmentDefinitionNode:

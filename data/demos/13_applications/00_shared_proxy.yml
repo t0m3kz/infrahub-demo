@@ -1,5 +1,5 @@
 ---
-# Shared SASE egress proxy assigned to customers rather than components.
+# Shared SASE egress proxy assigned to customers.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -11,14 +11,3 @@ spec:
       service_type: web_gateway
       member_of_groups:
         - saas_proxies
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: OrganizationCustomer
-  data:
-    - org_id: "C001"
-      member_of_groups:
-        - customers
-      egress_service: shared-cloud-proxy

@@ -1,11 +1,4 @@
-"""The circuit check queries select every field the checks read, and the checks read every field they select.
-
-Unit tests feed canned payloads, so a field a check reads but the query does not select passes here and fails only on
-a real stack (the cleaned dict simply lacks it). These tests parse the ``.gql`` files with graphql-core, flatten them
-to the field paths the cleaned data carries (``edges``/``node``/``value`` wrappers dropped, fragments merged) and
-compare them with the paths the checks read, listed by hand below, and with the paths of the fixtures the check
-tests feed.
-"""
+"""The circuit check queries select every field the checks read, and the checks read every field they select."""
 
 from __future__ import annotations
 
@@ -54,8 +47,7 @@ _PHYSICAL_READS = [
 ]
 
 # What it reads from the end ports of a virtual circuit (the shared VirtualPort fragment): the port, the physical
-# circuits on it and on its parent interface (utils.circuit_underlay.port_underlay), the cable on either
-# (port_cabled), the device and its processes.
+# circuits on it and on its parent interface (utils.circuit_underlay.port_underlay), the cable on either (port_cabled).
 _PORT_READS = [
     "capabilities.id",
     "capabilities.name",
@@ -102,8 +94,8 @@ _PORT_READS = [
     ),
 ]
 
-# What it reads from a session circuit, for every circuit_type: the office locations (with their owner), a dci's and
-# a handoff's status, the namespace of a handoff or vpn, and the fields it refuses on the other types.
+# What it reads from a session circuit, for every circuit_type: the office locations (with their owner), a dci's and a
+# handoff's status, the namespace of a handoff or vpn, and the fields it refuses on the other types.
 _SESSION_READS = [
     "id",
     "name",
@@ -142,8 +134,7 @@ def test_the_placement_query_selects_what_the_check_reads(root: str, placement_p
 
 
 def test_the_placement_query_selects_nothing_the_check_never_reads(placement_paths: dict[str, set[str]]) -> None:
-    """A selected leaf that no kind's rules read is dead weight on every run (the shared port fragment is read by
-    the union of the kinds: a tunnel never reads the BGP processes, a dci does)."""
+    """A selected leaf that no kind's rules read is dead weight on every run."""
     read = {path for root in placement_paths for path in _reads(root)}
     prefixes = {".".join(path.split(".")[:i]) for path in read for i in range(1, len(path.split(".")))}
     unread = {path for paths in placement_paths.values() for path in paths} - read - prefixes

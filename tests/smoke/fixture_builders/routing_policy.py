@@ -1,10 +1,4 @@
-"""Routing-policy fixtures: a leaf whose first peering carries an import and an export policy, enforced and staged.
-
-A NEW directory next to the route-protection ones (its goldens stay as they were). The policies are the ones a transit
-session gets: the import tags and prefers what it learns, the export announces only the own prefixes with a prepend, never
-what was learned from another transit, and strips the internal communities. Enforced, every user map first denies what the
-route protection does not allow; staged, the guard is not enforced and so not part of the terms.
-"""
+"""Routing-policy fixtures: a leaf whose first peering carries an import and an export policy, enforced and staged."""
 
 from __future__ import annotations
 

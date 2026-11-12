@@ -1,10 +1,4 @@
-"""The realization of a segment in a DC is data of its own, so a second load of the sample updates it.
-
-``ManagedSegmentDeployment`` is named by its segment and its deployment and ``ManagedSegmentVlan`` by its device and
-VLAN id (schemas/extensions/service/segment.yml). A deployment nested under its segment (``segment_deployments``) has no
-name to match an existing one by, so a second load would create it again and break its uniqueness: the sample declares
-it as a row of its own.
-"""
+"""The realization of a segment in a DC is data of its own, so a second load of the sample updates it."""
 
 from __future__ import annotations
 
@@ -89,8 +83,7 @@ def _gateways() -> dict[str, list[str]]:
 
 
 def _row_bindings() -> list[dict]:
-    """The port lists of the VLAN rows (90_bindings/96_segment_ports upserts each row by [device, vlan_id] with its
-    ``capabilities``)."""
+    """The port lists of the VLAN rows."""
     return [
         row
         for _, doc in _documents()
@@ -101,9 +94,7 @@ def _row_bindings() -> list[dict]:
 
 
 def test_every_svi_is_a_row_of_its_device_and_carries_its_segment_s_gateway() -> None:
-    """The deployment's nested row names no SVI (the SVI is a member of the row, 96_segment_ports); the SVI is named for
-    its row's VLAN on the row's device, and it carries the segment's anycast gateway (the existing address object,
-    referenced by [address, namespace])."""
+    """The deployment's nested row names no SVI (the SVI is a member of the row, 96_segment_ports);"""
     segment_of = {
         (vlan["device"], f"Vlan{vlan['vlan_id']}"): row["segment"]
         for row in _deployment_rows()
@@ -128,9 +119,7 @@ def _svi_members(row: dict) -> list[dict]:
 
 
 def test_every_port_of_a_row_is_a_switch_port_of_the_row_s_switch() -> None:
-    """A port is a member of its own switch's VLAN row, a physical port or a LAG, each row's list declared once (an
-    upsert of the list replaces it), and the row is one its deployment declares (a person only picks an existing
-    row)."""
+    """A port is a member of its own switch's VLAN row."""
     declared = {
         (vlan["device"], vlan["vlan_id"]): (row["segment"], row["deployment"])
         for row in _deployment_rows()
@@ -208,8 +197,7 @@ def test_the_stretched_segment_is_shared_one_vni_and_the_vlan_it_gives_on_every_
 
 
 def test_the_office_wifi_segments_are_a_guest_and_a_staff_one_on_the_access_switches() -> None:
-    """Both segments are realized in the office on both access switches (same VLAN id on the pair), and the guest one has
-    no permit rule but the one to the internet."""
+    """Both segments are realized in the office on both access switches."""
     rows = {row["segment"]: row for row in _deployment_rows() if row["deployment"] == "C900-OFFICE"}
     assert set(rows) == {"c900-wifi-guest-p", "c900-wifi-corp-p"}
     for row in rows.values():
@@ -239,9 +227,7 @@ def _port_key(port: dict[str, Any]) -> tuple[str, str, str]:
 
 
 def test_the_memberships_are_exactly_the_requests_per_deployment() -> None:
-    """00_full runs no generator, so it authors the intent (the ports assigned to a deployment, its ``capabilities``,
-    95b_segment_requests) and its realization (the rows' ports, 96_segment_ports) by hand: per deployment, the same
-    set of ports."""
+    """00_full runs no generator, so it authors the intent."""
     requests: dict[tuple[str, str], set[tuple[str, str, str]]] = {}
     for row in _deployment_declarations():
         if "capabilities" in row:
@@ -258,9 +244,7 @@ def test_the_memberships_are_exactly_the_requests_per_deployment() -> None:
 
 
 def test_every_authored_svi_is_a_member_of_exactly_the_row_of_its_device_and_segment() -> None:
-    """The SVI is a member of its row (the row's ``capabilities``, the interface edge a port is a member through): the
-    row of its device whose VLAN its name bears and whose segment's gateway it carries; a row has at most one SVI and
-    every SVI member is an authored one."""
+    """The SVI is a member of its row (the row's ``capabilities``, the interface edge a port is a member through):"""
     segment_of = {
         (vlan["device"], vlan["vlan_id"]): row["segment"] for row in _deployment_rows() for vlan in row["vlans"]["data"]
     }

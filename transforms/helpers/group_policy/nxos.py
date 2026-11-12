@@ -47,17 +47,7 @@ def vxlan_gpo_view(
     reference_sites: set[str],
     local: set[str] | None = None,
 ) -> dict[str, Any]:
-    """The contract set by group ID, with the reserved groups of the profile (module docstring).
-
-    ``groups`` are every group the rows name; ``reserved`` the profile's
-    ``unclassified`` / ``unaware`` group IDs (None: the row cannot be rendered
-    until the profile names one); ``reference_sites`` the site ids whose
-    VTEPs are policy-aware; ``local`` the groups whose stretched halves get
-    their intra-group row (None: all). A group's own ID is on the wire where
-    it is active on a reference site; where it is also (or only) active
-    elsewhere, it arrives as the unaware group. A row whose ends would both be
-    reserved is dropped.
-    """
+    """The contract set by group ID, with the reserved groups of the profile (module docstring)."""
     by_name = {group.name: group for group in groups}
     unaware = (UNAWARE, reserved.get("unaware"), True)
 
@@ -115,12 +105,7 @@ def vxlan_gpo_view(
     }
 
 
-# Class-map match line per protocol of an entry without ports, from ONE table, with why it
-# is not verified. A tcp/udp entry with a port is D (the guide's `match ipv4|ipv6 tcp dport N
-# [to M]`, built in _class_map); the rest is the guide's silence (spec 4.1/4.3/4.12): the
-# sample `show run` prints `match ip tcp` / `match ip udp` without saying how to configure
-# them, and icmp and a permit-all class are not documented at all. None of these forms has
-# an ipv6 variant, so IPv6 for such an entry is denied by the VRF's default deny.
+# Class-map match line per protocol of an entry without ports, from ONE table, with why it is not verified.
 _UNVERIFIED_CLASS_LINES: dict[str, tuple[str, str]] = {
     "tcp": ("match ip tcp", "only in the guide's sample show running-config"),
     "udp": ("match ip udp", "only in the guide's sample show running-config"),
@@ -180,12 +165,7 @@ def _class_map(who: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
 def _validate_group_ids(
     who: str, rows: list[dict[str, Any]], defined: set[str], by_name: dict[str, Group]
 ) -> dict[str, int]:
-    """Group name -> its ID for every group the rows name or the VRFs define; refuses what cannot be numbered.
-
-    A group without an ID (tag or profile reserved group not allocated), two groups on one ID and two groups
-    with one CLI name are refused. A row end carries the ID the view gave it (a reserved group's, a stretched
-    group's unaware half).
-    """
+    """Group name -> its ID for every group the rows name or the VRFs define; refuses what cannot be numbered."""
     named_ids: dict[str, int | None] = {name: by_name[name].group_id for name in defined}
     for row in rows:
         named_ids[row["src"]], named_ids[row["dst"]] = row["src_group_id"], row["dst_group_id"]
@@ -206,7 +186,7 @@ def _validate_group_ids(
 
 @dataclass(frozen=True)
 class ComponentClaim:
-    """One host-facing port a component group classifies: ``match vlan <segment's VLAN> interface <port>`` on ``vtep``."""
+    """One host-facing port a component group classifies."""
 
     group: str
     segment_id: str
@@ -216,36 +196,21 @@ class ComponentClaim:
 
 @dataclass(frozen=True)
 class ComponentCoverage:
-    """Where the component groups of a data center's segments are classified, and what stops them from being.
-
-    ``claims``: the (VTEP, port) pairs, sorted. ``blockers``: component group name -> why it cannot be
-    classified completely (sorted texts); the VRFs naming such a group are left unenforced.
-    """
+    """Where the component groups of a data center's segments are classified, and what stops them from being."""
 
     claims: list[ComponentClaim]
     blockers: dict[str, list[str]]
 
 
 def _segment_ids(interface: dict[str, Any]) -> set[str]:
-    """The ids of the segments a switch port or LAG carries (through its VLAN rows; a sub-interface is never a host
-    port)."""
+    """The ids of the segments a switch port or LAG carries (through its VLAN rows;"""
     return {str(item["id"]) for item in port_segments(interface) if item.get("id")}
 
 
 def _place_instance(
     instance: dict[str, Any], segment_id: str, *, vtep_names: set[str], other_vtep_names: set[str]
 ) -> tuple[set[tuple[str, str]], list[str]]:
-    """((VTEP, port) pairs carrying the segment, problems) of one instance of a component of that segment.
-
-    The host (utils/app_instances.physical_host) has its uplink/bond-member NICs; the far end of each NIC's
-    cable (the near end skipped by id) is a switch port. A far end that is a VTEP of this data center is
-    claimed when it, or its port-channel for a LAG member (never the member port: a LAG member without a
-    port-channel is a problem), carries the segment; when it does not, that is a problem too (the component's
-    traffic enters the VTEP unclassified). A cable that does not have exactly one far end is a problem. A far end that is a VTEP of another data center is that
-    data center's to classify and is ignored; a far end that is a VTEP of none (a leaf below a VTEP, a
-    firewall) cannot classify, so it is a problem. An instance reaching no VTEP at all is a problem too, in
-    every data center of its segment: where it sits is not known.
-    """
+    """((VTEP, port) pairs carrying the segment, problems) of one instance of a component of that segment."""
     typename = instance.get("typename")
     label = str(instance.get("name") or instance.get("id") or "?")
     host = physical_host(instance)
@@ -262,9 +227,8 @@ def _place_instance(
         endpoints = (nic.get("cable") or {}).get("endpoints") or []
         if not endpoints:
             continue
-        # The near end is the NIC itself (by id); an endpoint with no id did not match the query's
-        # inline fragment and is no end of anything. A cable that does not leave exactly one other end
-        # (a bundle, a patch panel, a half-loaded cable) cannot say where the NIC lands.
+        # The near end is the NIC itself (by id); an endpoint with no id did not match the query's inline fragment and
+        # is no end of anything.
         far_ends = [end for end in endpoints if end.get("id") and end["id"] != nic.get("id")]
         if len(far_ends) != 1:
             problems.append(f"{nic_label}: cable has {len(far_ends)} far ends")
@@ -303,20 +267,7 @@ def _place_instance(
 def component_coverage(
     contracts: DataCenterContracts, *, vtep_names: set[str], other_vtep_names: set[str]
 ) -> ComponentCoverage:
-    """The ports each component group of this data center's segments is classified on, and the blockers.
-
-    Per component group (a tagged AppComponent of a microsegmented segment active in this data center):
-    the (VTEP, port) pairs its instances' hosts are cabled to (``_place_instance``), keyed by
-    (VTEP, port, segment): the interface selector cannot tell two components of one segment apart, so a
-    port two of them land on is claimed by neither and blocks both. The same port in two segments is fine
-    (a selector names the segment's VLAN). A component with no instance in this data center, and the
-    component groups of a remote segment (the far end of a local row), have no blocker: nothing to
-    classify here. An instance whose host resolves nowhere blocks every data center of its segment, since
-    where it sits is not known (conservative).
-
-    ``vtep_names`` are this data center's VTEPs, ``other_vtep_names`` those of the rest of the fleet.
-    Computed from the fleet roots alone, so every VTEP of the data center gets the same coverage.
-    """
+    """The ports each component group of this data center's segments is classified on, and the blockers."""
     components_of = contracts.components_of
     owners: dict[tuple[str, str, str], set[str]] = defaultdict(set)
     problems: dict[str, set[str]] = defaultdict(set)
@@ -358,9 +309,7 @@ def component_coverage(
 
 @dataclass
 class _Selectors:
-    """What one device classifies: ``vlans`` (segment group -> its VLAN here), ``ports`` (component group -> its
-    ``{vlan_id, name}`` host ports here), ``unclassified`` (VRF -> its segments with no classifier here) and
-    ``problems`` (component group -> why a claimed port of this device cannot be rendered)."""
+    """What one device classifies."""
 
     vlans: dict[str, int]
     ports: dict[str, list[dict[str, Any]]]
@@ -376,15 +325,7 @@ def _selectors(
     device_name: str,
     interfaces: Iterable[dict[str, Any]],
 ) -> _Selectors:
-    """The selectors of one device (``_Selectors``).
-
-    A routed tenant segment activated on the device is classified by ``match vlan`` only when it has a
-    group and a VLAN here. A component group is
-    classified by ``match vlan <its segment's VLAN here> interface <port>`` on each port the coverage
-    claims on THIS device, provided the device has that interface, tagged with the segment, and the
-    segment a VLAN here; otherwise the claim is a problem of this device (inconsistent or not yet
-    converged data) and the VRF stays unenforced.
-    """
+    """The selectors of one device (``_Selectors``)."""
     segments = {str(segment.get("id")): segment for segment in contracts.all_segments}
     vlans: dict[str, int] = {}
     vlan_of_segment: dict[str, int] = {}
@@ -427,8 +368,8 @@ _PORT_LIST_LIMIT = 8
 
 
 def _claimed_ports_text(claims: Iterable[ComponentClaim], groups: Iterable[str]) -> str | None:
-    """``<device> <port>, ...`` of the ports the given component groups are classified on, data-center wide
-    (the same on every VTEP), sorted by device and naturally by port, at most ``_PORT_LIST_LIMIT`` listed."""
+    """``<device> <port>, ...`` of the ports the given component groups are classified on, data-center wide (the
+    same on every VTEP), sorted by device and naturally by port, at most ``_PORT_LIST_LIMIT`` listed."""
     wanted = set(groups)
     by_device: dict[str, set[str]] = defaultdict(set)
     for claim in claims:
@@ -456,18 +397,7 @@ def _vrf_view(
     claims: Iterable[ComponentClaim],
     staged: str | None,
 ) -> dict[str, Any]:
-    """The contracts and the enforcement of one VRF (``_vxlan_gpo_build``).
-
-    Enforced when the data center enforces (``staged`` is the reason it does not, listed first), no
-    component group the VRF's contracts name has a blocker (``component_coverage``, plus the problems of
-    this device's claimed ports) and no tenant segment it holds here lacks a classifier.
-
-    The coverage part of that verdict is the data center's, identical on every VTEP of the VRF. The
-    per-device part is not: ``component_blockers`` also holds the problems of THIS device's claimed ports
-    (missing, untagged, no VLAN here), so one vPC peer can be left unenforced while the other enforces.
-    ``classified_ports`` (data center wide, identical on every VTEP) lists the ports the VRF's enforcement
-    relies on: component classification by interface + VLAN is documented-not-lab-verified.
-    """
+    """The contracts and the enforcement of one VRF (``_vxlan_gpo_build``)."""
     vrf_rows = sorted(vrf_rows, key=lambda row: (row["src_group_id"], row["dst_group_id"]))
     forward = {(row["src"], row["dst"]) for row in vrf_rows}
     contract_views = []
@@ -516,29 +446,7 @@ def _vrf_view(
 
 
 def _vxlan_gpo_build(scope: _DeviceScope) -> dict[str, Any]:
-    """The NX-OS group policy one VTEP renders (module docstring).
-
-    A VTEP of a reference fabric always gets it: with no contract row for the VRFs it carries the view is
-    enablement only (empty ``class_maps``, ``groups`` and ``vrfs``).
-
-    The scope's ``contracts`` are the cleaned fleet roots' contracts of the device's data center,
-    ``activations`` the device's segment activations (``vlan_id`` and ``segment.id``: the VLAN
-    ID of a group's segment here, which is per device), ``vrfs`` the
-    VRFs it carries (``vxlan.l3_vni_mappings``): a segment's VRF is its
-    gateway namespace, the ``vrf_name`` of its L3 VNI mapping, and ``interfaces``
-    its own cleaned interfaces (the host ports a component selector names must be
-    among them, tagged with the segment).
-
-    Each group dict carries ``vlan_id`` (its segment's VLAN here, segment groups)
-    and ``interfaces`` (``{vlan_id, name}`` of the host ports of this device that
-    classify it, component groups).
-    A VRF is enforced (``security enforce``, deny by default) only when every
-    component group its contracts name can be classified (no coverage blocker)
-    and every routed tenant segment it holds on this device is classified: a
-    segment activated here without a group or a VLAN has no classifier. Such a
-    VRF gets its groups and contracts but is left unenforced, with the reasons. So does every VRF of a
-    data center that does not enforce (``group_policy_enforce`` false, A6): that reason comes first.
-    """
+    """The NX-OS group policy one VTEP renders (module docstring)."""
     who, dc_id, fleet, contracts = scope.who, scope.dc_id, scope.fleet, scope.contracts
     device_name, activations, interfaces = scope.device_name, scope.activations, scope.interfaces
     reserved = reserved_groups(contracts.profiles, scope.kind)
@@ -555,17 +463,15 @@ def _vxlan_gpo_build(scope: _DeviceScope) -> dict[str, Any]:
         if row["vrf"] in on_device:
             rows_by_vrf[row["vrf"]].append(row)
     if not rows_by_vrf:
-        # A VTEP with no contracts still enables GPO: a policy-unaware VTEP in a reference
-        # site is the mixed state the profile excludes (spec 2.9). Nothing else is rendered,
-        # so none of the group data is validated (the refusals below guard what is rendered).
+        # A VTEP with no contracts still enables GPO: a policy-unaware VTEP in a reference site is the mixed state the
+        # profile excludes (spec 2.9).
         return {"class_maps": [], "groups": [], "vrfs": {}}
     _refuse_ambiguous_groups(who, contracts.all_groups)
     rows = [row for vrf_rows in rows_by_vrf.values() for row in vrf_rows]
     by_name = contracts.groups_by_name
 
-    # Every group the VRFs hold on this data center must be defined: an enforced
-    # VRF denies what no selector classified, so a rule-less segment would lose
-    # its own intra-group traffic.
+    # Every group the VRFs hold on this data center must be defined: an enforced VRF denies what no selector classified,
+    # so a rule-less segment would lose its own intra-group traffic.
     defined = {row[end] for row in rows for end in ("src", "dst") if row[end] in by_name}
     defined |= {group.name for group in contracts.local if group.vrf in rows_by_vrf}
     group_ids = _validate_group_ids(who, rows, defined, by_name)

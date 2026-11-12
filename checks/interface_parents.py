@@ -1,28 +1,6 @@
-"""Validate what an interface rides on (the ``parent`` of its ``ManagedInterfaceEncapsulation``).
+"""Check what an interface rides on (the ``parent`` of its ``ManagedInterfaceEncapsulation``).
 
-An interface that rides on another one has one ``ManagedInterfaceEncapsulation`` among its ``capabilities``
-(schemas/extensions/capabilities/encapsulation.yml): a virtual interface, a cloud peering interface or the end of a
-provider connection. The schema holds no same-device rule (no ``common_parent``):
-
-* a sub-interface (a context leg, an SVI's port) rides on a NIC, port or LAG of ITS OWN device; so does the cloud
-  peering interface of a transport, unless the cloud's port is the provider's own in a cage: a Direct Connect or
-  Interconnect virtual interface rides on a port or LAG of the ``TopologyProviderConnect`` that holds it;
-* a base NIC of a virtual device (a DcimVirtualInterface with the role management, uplink or ha, which
-  generators/virtual_nics.py pins) rides on a port of the hosting device, and that port carries the cable, so the
-  border leaf -> host port -> NIC path is a path in the graph.
-
-Rules:
-
-1. a parent on another device is an ERROR, except for a NIC of a virtual device whose parent is a port of its
-   ``hosting_device`` and a cloud peering interface whose parent is on a ``TopologyProviderConnect``;
-2. the parent of a NIC of a virtual device is a port of that ``hosting_device`` (a NIC on a device without one is
-   rule 1 when its parent is elsewhere);
-3. the host port of an uplink NIC is cabled (otherwise nothing reaches the border leaf through it);
-4. a NIC without a parent is not reported: a machine can have more uplinks than its host (it has no encapsulation);
-5. the parent of a NIC is a DcimPhysicalInterface (a host port, not a LAG, a NIC or a sub-interface);
-6. an interface has at most one encapsulation, and an encapsulation is on one interface (ERROR);
-7. an interface is not its own parent (ERROR);
-8. (WARNING) an encapsulation on no interface: the interface it belonged to was deleted and left it behind.
+The schema holds no same-device rule, so this does; see AGENTS.md "Interface encapsulation".
 """
 
 from __future__ import annotations
@@ -46,7 +24,7 @@ def _label(node: dict[str, Any]) -> str:
 
 
 def interface_parent_errors(iface: dict[str, Any], parent: dict[str, Any] | None) -> list[str]:
-    """The messages (rules 1, 2, 3, 5) of one cleaned interface of interface_parents.gql and the parent it rides on."""
+    """Messages for rules 1, 2, 3 and 5 of one interface and its parent."""
     if not isinstance(parent, dict):
         return []
     device = iface.get("device") or {}

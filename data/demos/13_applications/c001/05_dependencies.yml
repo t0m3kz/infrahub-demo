@@ -1,0 +1,28 @@
+---
+# Dependencies between storefront components (no ports: every port of the target).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c001-storefront-p-web-frontend-to-app-backend
+      source: storefront.c001.demo.local
+      target: backend.storefront.c001.demo.local
+      access_status: auto
+      description: "Storefront web calls the backend API"
+      member_of_groups:
+        - app_dependencies
+    - name: c001-storefront-p-app-backend-to-order-db
+      source: backend.storefront.c001.demo.local
+      target: db.storefront.c001.demo.local
+      access_status: auto
+      description: "Backend reads and writes orders"
+      member_of_groups:
+        - app_dependencies
+    - name: c001-storefront-p-app-backend-to-session-cache
+      source: backend.storefront.c001.demo.local
+      target: cache.storefront.c001.demo.local
+      access_status: auto
+      description: "Backend keeps sessions in the cache and joins the cache cluster bus"
+      member_of_groups:
+        - app_dependencies

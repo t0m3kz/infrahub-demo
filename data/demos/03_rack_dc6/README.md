@@ -1,23 +1,19 @@
 # 03 - Single Rack Demo
 
-The minimalist's approach (or "I ran out of budget", but with better branding)
+Deploy a single network rack.
 
 ## Overview
 
-**Purpose:** Deploy a single network rack to DC6's Pod 1. Because sometimes "minimal" is just code for "we ran out of money" (and yes, procurement will still ask why it took so long).
-
-**Philosophy:** Sometimes less is more. Sometimes it's just all you can afford. Sometimes it's a lie.
-
-**Difficulty:** Trivial (until it becomes critical infrastructure and nobody wants to touch it, or even look at it directly).
+**Purpose:** Deploy a single network rack to DC6's Pod 1.
 
 ---
 
 ## What's Inside
 
-One humble rack (`ktw-1-s-1-r-4-5`) containing:
+One rack (`ktw-1-s-1-r-4-5`) containing:
 
 - **2x Dell PowerSwitch leafs** - Cabled to the existing DC6 Pod 1 spines
-- **2x Dell PowerSwitch L2 leafs** - The bare minimum for redundancy and plausible deniability, cabled to the rack's own leafs
+- **2x Dell PowerSwitch L2 leafs** - Cabled to the rack's own leafs
   and paired as a back-to-back MLAG (Pod 1 is `mlag_create: back-to-back`, like the pod's other network racks)
 - **Deployment Type:** Network rack - connects to the existing DC6 Pod 1 fabric
 - **Location:** Katowice DC6, Pod 1, Row 4, Index 5
@@ -26,13 +22,11 @@ One humble rack (`ktw-1-s-1-r-4-5`) containing:
 
 ## Use Case
 
-This rack is perfect for:
+Applicable for:
 
-- "We only need ONE rack" projects (that always grow)
-- Budget-conscious deployments (until next quarter)
-- Testing minimal viable topology (before reality sets in)
-- Proof of concepts that become production (whoops)
-- That application that "doesn't need much" (lies)
+- Deployments that need a single rack
+- Testing a minimal viable topology
+- Proofs of concept
 
 ---
 
@@ -43,7 +37,7 @@ uv run infrahubctl branch create your_branch
 uv run infrahubctl object load data/demos/03_rack_dc6/ --branch your_branch
 ```
 
-The rack generator will trigger **automatically** when the rack object is created! ✨ No wand required.
+The rack generator will trigger **automatically** when the rack object is created.
 
 The generator will:
 
@@ -51,7 +45,7 @@ The generator will:
 2. **Create the 2 L2 leafs** and cable them to the rack's own leaf pair
 3. **Allocate underlay ASNs and routing** for the new leafs (the L2 leafs carry no BGP), leaving every existing switch's ASN alone
 
-**After generator completes,** manually regenerate the cabling artifact (the one step it politely leaves to you):
+**After the generator completes,** manually regenerate the cabling artifact:
 
 ```bash
 uv run infrahubctl artifact generate "Cable matrix for DC" DC6 --branch your_branch
@@ -61,7 +55,7 @@ Or in InfraHub UI → Artifacts → "Cable matrix for DC" (DC6) → Regenerate
 
 ## Validation
 
-Run `uv run invoke test-integration` for the full rack lifecycle. If the change affects parent-to-child generator ordering, start with `uv run invoke test-integration-routing`.
+Run `uv run invoke kick dc6-growth` (DC6, then this rack as its `rack` stage) or the `rack` stage of the integration suite's `dc6-suite` kick, which asserts it.
 
 ---
 
@@ -78,17 +72,3 @@ Pod 1 is a middle_rack pod, so a network rack carries its own leafs:
 
 Row 4 is past the 3 rows of racks the DC6 data already builds in suite `ktw-1-s-1`, but within the 4 rows the suite
 declares (`rows: 4`, `racks_per_row: 9`, the pod's M_MIDDLE design envelope; checks/suite_capacity.py enforces both).
-
----
-
-## Pro Tip
-
-This rack will outlive your tenure at the company, and probably the company. Plan accordingly. If you label it "test," expect it to be running in production by next year.
-
----
-
-## Fun Fact
-
-Minimal racks are never minimal for long.
-
-The only thing more permanent than a temporary rack is a temporary workaround. Both will be found in an audit, labelled "do not touch".

@@ -1,5 +1,4 @@
-"""The checks see the registrations the edge accepts behind a cloud peering: segment security reachability and the
-routing invariants rules 7 and 8 (transforms/helpers/bgp_cloud.py, shared with the edge transform)."""
+"""The checks see the registrations the edge accepts behind a cloud peering."""
 
 from __future__ import annotations
 
@@ -180,8 +179,7 @@ def test_the_queries_select_what_the_cloud_legs_read(query: str) -> None:
 
 
 def test_the_firewall_selects_exchange_gateway_zone_owners_without_registry_fallbacks() -> None:
-    """The exchange's two routing domains come from its VRF edges, not address namespaces: the firewall reads the
-    exchanges of its contexts (``exchanges``), whose legs are the context's legs in those VRFs."""
+    """The exchange's two routing domains come from its VRF edges, not address namespaces."""
     document = parse(load_query(_QUERIES / "config/firewall.gql"))
     fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
     operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))

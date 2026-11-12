@@ -1,50 +1,7 @@
-"""Office fabric: the pools, switches, cabling and OSPF underlay of an office's LISP site.
-
-Triggered on TopologyCustomerOffice creation (trigger rule
-trigger-customer-office-fabric-on-added in data/events/99_group_triggers.yml) and
-on a later fabric_templates update. Registered as add_office_fabric in
-.infrahub.yml, targeting the customer_deployments_office group and querying
-office_fabric.gql.
-
-No-ops unless office.fabric_templates is set — that relationship is the opt-in
-(schemas/extensions/topology/topology_customer.yml), the way sdwan_gateway is
-add_sdwan_edge's (generators/topology/sdwan_edge.py). It declares the fabric the
-way a colocation zone declares its on-ramp kit: ``2 x distribution-switch on
-template X``, never hand-written DcimPhysicalDevices.
-
-One office footprint is one fabric (an SD-Access style site). Two roles, and no
-others (utils/fabric_roles.py):
-
-* distribution-switch — the co-located border and control-plane (map-server /
-  map-resolver) node;
-* access-switch — the fabric edge the office's hosts attach to.
-
-What a run produces, all idempotent and all scoped to the office:
-
-* ``{office}-loopback|management|technical-pool`` — one slice of each bootstrap
-  IPv4 pool (data/bootstrap/17_ip_prefix_pools.yml), keyed by the pool name — and
-  ``{office}-vni-pool``, the L2 VNI pool (the LISP instance-id) segments hosted by
-  the office draw from; this one is attached to the office as ``vni_pool``, the
-  field generators/topology/segment.py reads;
-* the switches, with Loopback0 (the RLOC) and a management address;
-* every access-switch dual-homed to every distribution-switch, and the pair of
-  distribution-switches linked to each other, all on /31 point-to-point links
-  from the technical pool;
-* an OSPF area 0 underlay over those links, in the default namespace, and no
-  overlay BGP at all (RoutingOptions.no_overlay);
-* the LISP site key, attached to the office as ``lisp_site_key`` — the one secret
-  the map-servers authenticate the edge ETRs with;
-* the WAN exit, when the office has an SD-WAN edge (``<office>-EDGE1``, created by
-  add_sdwan_edge — the office's sdwan_gateway is the signal): each distribution-switch
-  cabled to the edge, a dot1q sub-interface on that link in the office's tenant VRF
-  with a /31 from the VRF's transit pool, and an eBGP session (peering_role regular,
-  ttl 1, ipv4 unicast, a key of its own) between a BGP process on the switch and one
-  on the edge. The same shape as the hand-authored gateway handoff
-  (data/demos/30_all/08_interconnects/04_sdwan/06_vrf_handoff.yml), generated. No new
-  operator input: the AS numbers come from PRIVATE-ASN32, the VLAN from the VRF
-  (utils/exchange_transit.wan_exit_vlan), everything else from the two devices. The
-  edge's VCO payload describes its side from the same peering
-  (transforms/config/controller.py _vrf_handoffs).
+"""Office fabric: pools, switches, cabling and OSPF underlay of an office's LISP site (add_office_fabric); no-op unless
+office.fabric_templates is set. Roles distribution-switch and access-switch, dual-homed on /31 links, OSPF area 0, no
+overlay BGP; attaches ``vni_pool`` and ``lisp_site_key``. With an SD-WAN edge it also builds the WAN exit (cabling,
+tenant-VRF sub-interfaces, eBGP; AS from PRIVATE-ASN32, VLAN from wan_exit_vlan).
 """
 
 from __future__ import annotations
@@ -95,35 +52,26 @@ _OFFICE_VALID_FABRIC_ROLES = CAMPUS_FABRIC_ROLES | LISP_BORDER_ROLES
 
 _PHYSICAL_TEMPLATE_KIND = "TemplateDcimPhysicalDevice"
 
-# The access-to-distribution link: the access-switch's `uplink` ports to the
-# distribution-switch's `downlink` ports, and the link between the two
-# distribution-switches on their `interlink` ports.
+# Access-to-distribution link ports: access `uplink` to distribution `downlink`; the distribution pair on `interlink`.
 _UPLINK_ROLE = "uplink"
 _DOWNLINK_ROLE = "downlink"
 _INTERLINK_ROLE = "interlink"
 
-# The office underlay is IPv4 and not design-driven (contrast dc.py, which
-# derives every prefix length from its design in fabric_sizing.py). Sized for
-# the campus (a handful of switches), well inside the bootstrap supernets: a /28 holds the
-# loopbacks and the management addresses, a /27 the sixteen /31 links of two
-# distribution-switches and a few access-switches.
+# IPv4 and not design-driven (contrast dc.py), sized for a campus: a /28 for loopbacks and management, a /27 for the /31
+# links.
 _UNDERLAY_PROTOCOL = "ipv4"
 _OFFICE_LOOPBACK_PREFIX_LENGTH = 28
 _OFFICE_MANAGEMENT_PREFIX_LENGTH = 28
 _OFFICE_TECHNICAL_PREFIX_LENGTH = 27
 
-# The routing planner derives the underlay from the strategy's first half
-# ("ospf") and, with RoutingOptions.no_overlay, ignores the second.
+# The planner derives the underlay from the first half ("ospf"); RoutingOptions.no_overlay ignores the second.
 _ROUTING_STRATEGY = "ospf-ibgp"
 
-# The WAN exit (see the module docstring). The edge's LAN ports are the `downlink`
-# ports of its template (VCE-610_EDGE: GE3, GE4), the switch side its `uplink` port
-# (_UPLINK_ROLE: toward the WAN), one switch per edge port.
+# The WAN exit: the edge's LAN ports are its template's `downlink` ports, the switch side its `uplink` port.
 _EDGE_LAN_PORT_ROLE = "downlink"
 _WAN_EXIT_LINK_PREFIX_LENGTH = 31
 _WAN_EXIT_PROCESS_ROLE = "regular"
-# add_sdwan_edge runs beside this generator, not before it: wait a little for the edge it creates rather than
-# skip the exit on a race. An office without an sdwan_gateway never waits.
+# add_sdwan_edge runs beside this generator: wait a little for the edge rather than skip the exit on a race.
 
 
 class TopologyCustomerOfficeData(TypedDict, total=False):
@@ -168,10 +116,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         office_id = self.data["id"]
         office_name = self.data["name"]
 
-        # pod_name stays None: an office has no pod tier, which is what makes
-        # DeviceMixin.create_devices() and RoutingMixin name their per-fabric
-        # objects after the office ("{fabric_name}-loopback-pool", "-ospf-area-0",
-        # "-lisp-site-key").
+        # pod_name stays None: an office has no pod tier, so per-fabric objects are named after the office.
         self.fabric_name = office_name.lower()
         self.pod_name = None
         self.deployment_id = office_id
@@ -221,14 +166,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
             await self._ensure_wan_exit(distribution_names=distribution_names, distribution_template=template)
 
     def _valid_fabric_templates(self) -> list[dict[str, Any]]:
-        """Drop entries this generator cannot act on, warning per entry.
-
-        warning(), not error(): one bad entry must not stop the office's other
-        role from being created (FailOnErrorLogger turns error() into a task
-        failure), matching colocation.py. At most one entry per role: device
-        names are derived from the role alone, so a second entry would rename
-        the first one's devices onto itself.
-        """
+        """Drop entries this generator cannot act on, warning per entry (one entry per role; names derive from it)."""
         usable: list[dict[str, Any]] = []
         seen_roles: set[str] = set()
         for entry in self.data.get("fabric_templates") or []:
@@ -270,19 +208,9 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         return usable
 
     async def _ensure_office_pools(self, *, office_id: str) -> dict[str, Any]:
-        """Create this office's loopback/management/technical/VNI pools (attaching the VNI pool is the caller's job).
-
-        Each IP pool is a SLICE of a global bootstrap pool, never a fresh
-        top-level supernet invented at runtime (see colocation_fabric.py's
-        _ensure_fabric_pools for why), keyed by the pool name so a re-run
-        gets the same slice back. The loopback and management pools are address
-        pools because create_devices() hands them straight to
-        allocate_next_ip_address(); the technical pool is a prefix pool the /31
-        links are allocated from. Management addresses live in the MANAGEMENT
-        namespace, as a data center's do (PoolMixin.allocate_resource_pools).
-
-        Under a per-office lock: two overlapping runs would otherwise both
-        create the same-named pool as two separate nodes.
+        """Create this office's loopback/management/technical/VNI pools (the caller attaches the VNI pool), under a
+        per-office lock. Each IP pool is a slice of a bootstrap pool keyed by pool name; management addresses live in
+        the MANAGEMENT namespace.
         """
         office = self.fabric_name
         async with self.resource_lock(f"office-pools-{office_id}"):
@@ -308,9 +236,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
                 role="technical",
                 kind="prefix",
             )
-            # The L2 VNI (the LISP instance-id) of a segment hosted by the office.
-            # An office never stretches a segment (checks/segment_placement.py), so
-            # only the local band is needed.
+            # The L2 VNI (LISP instance-id) of an office segment; never stretched, so only the local band.
             vni_pool = await self.upsert_number_pool(
                 pool_name=f"{office}-vni-pool",
                 description=f"L2 VNI pool for office {office.upper()}",
@@ -325,12 +251,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         self, *, templates: list[dict[str, Any]], office_id: str, pools: dict[str, Any]
     ) -> dict[str, list[str]]:
         """Instantiate every fabric_templates entry as the office's switches; names by role.
-
-        indexes=[] — an office is flat, so the "standard" naming strategy yields
-        "{role code}-{office}{NN}" (``ds-c005-office01``). Both roles get a Loopback0
-        (the RLOC) and a management address, from the pools passed explicitly
-        rather than re-resolved by name.
-        """
+        indexes=[] (flat names ``{role code}-{office}{NN}``); both roles get Loopback0 and a management address."""
         naming_convention = naming_convention_of(self.data)
         names_by_role: dict[str, list[str]] = {}
         for entry in templates:
@@ -359,15 +280,8 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         distribution_names: list[str],
         technical_pool: Any,
     ) -> list[tuple[Any, Any]]:
-        """Cable every access-switch to every distribution-switch, and the distribution pair to each other.
-
-        Returns the cabled interface pairs, the P2P links the OSPF underlay runs on.
-        The ports come from the templates' own port roles: ``rack`` strategy gives
-        each access-switch one uplink per distribution-switch (a plan that cannot
-        fit raises, naming the shortfall). The interlink only exists for exactly
-        two distribution-switches; without an `interlink` port pair it is skipped
-        with a warning, and the pair still reaches each other through the access
-        switches.
+        """Cable every access-switch to every distribution-switch and the distribution pair to each other; returns the
+        pairs the OSPF underlay runs on. The interlink is skipped with a warning without an `interlink` port pair.
         """
         templates_by_role = {entry["role"]: entry["template"] for entry in templates}
         options = CablingOptions(pool=technical_pool, p2p_prefix_length=p2p_prefix_length(_UNDERLAY_PROTOCOL))
@@ -417,12 +331,8 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         return pairs
 
     async def _find_sdwan_edge(self, edge_name: str) -> tuple[Any, list[str]] | None:
-        """The office's SD-WAN edge and the names of its LAN ports, None when it is not there (yet).
-
-        add_sdwan_edge creates the edge from its own trigger, so it can land after this run reaches
-        the exit. An office with an sdwan_gateway has an edge coming and polls for it (and for its
-        template's ports, which are instantiated asynchronously); one without never waits. A run
-        that still finds nothing skips the exit and the next run of this generator builds it.
+        """The office's SD-WAN edge and the names of its LAN ports, None when it is not there (yet). An office with an
+        sdwan_gateway polls for add_sdwan_edge, otherwise it never waits; a miss skips the exit until the next run.
         """
         attempts = OFFICE_EDGE_WAIT.attempts if self.data.get("sdwan_gateway") else 1
         for attempt in range(attempts):
@@ -443,12 +353,8 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         return None
 
     async def _ensure_wan_exit(self, *, distribution_names: list[str], distribution_template: dict[str, Any]) -> None:
-        """Build the office's exit to its SD-WAN edge: cabling, tenant-VRF handoff sub-interfaces, eBGP.
-
-        Skipped (logged, never raised) while the office has no SD-WAN edge. Everything it writes is
-        keyed by the two devices, so a re-run converges on the same objects: the links by their
-        interface ids (the /31 identifier), the AS numbers by description, the processes and the
-        peerings by name.
+        """Build the office's exit to its SD-WAN edge: cabling, tenant-VRF handoff sub-interfaces, eBGP; skipped
+        (logged) while there is no edge.
         """
         office_name = self.data["name"]
         edge_name = sdwan_edge_name(office_name)
@@ -460,8 +366,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
             return
         edge, edge_ports = found
 
-        # The switch side of the link is the template's `uplink` port: toward the WAN, as an access-switch's
-        # uplink is toward the distribution layer.
+        # The switch side is the template's `uplink` port: toward the WAN.
         switch_ports = template_interface_names_by_role(
             interfaces=distribution_template.get("interfaces") or [], role=_UPLINK_ROLE
         )
@@ -486,8 +391,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
                 f"Office {office_name}: transit pool {pool_name} not found — load data/bootstrap/23_transit_pools.yml"
             )
 
-        # One run of an office at a time writes its exit: two overlapping runs would both create the same
-        # processes, sub-interfaces and peerings.
+        # One run per office: overlapping runs would create the same processes, sub-interfaces and peerings.
         async with self.resource_lock(f"office-wan-exit-{self.data['id']}"):
             await self._build_wan_exit(
                 edge=edge,
@@ -513,8 +417,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         vlan: int,
     ) -> None:
         """Cable, address and peer every link of the exit; every precondition has held by now."""
-        # Edge -> switch ("rack": every edge port to its own switch). No technical pool: the addresses of the
-        # link are the tenant-VRF ones below, on the sub-interfaces.
+        # Edge -> switch, every edge port to its own switch; the link addresses are the tenant-VRF ones below.
         pairs = await self.create_cabling(
             bottom_devices=[edge_name],
             bottom_interfaces=edge_ports,
@@ -525,8 +428,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         if not pairs:
             return
 
-        # Both ends of every link get an instance of the namespace first (generators/helpers/vrf.py), and keep their
-        # device locks until the addresses are saved: a pruning pass must not see an instance without its demand.
+        # Both ends get an instance of the namespace first and keep their device locks until the addresses are saved.
         needs = {port.device.id: {security_zone.name.value} for pair in pairs for port in pair}
         links: list[_ExitLink] = []
         async with self.vrfs_held(needs):
@@ -556,13 +458,8 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         security_zone: SecurityZone,
         vlan: int,
     ) -> _ExitLink | None:
-        """Address one cabled link in the tenant VRF: a /31 from its transit pool, a dot1q sub-interface per end.
-
-        The /31 is keyed by the link (its two interface ids), so a re-run gets the same one. Both
-        sub-interfaces are ``<port>.<vlan>`` with the port's own role, the convention of a handoff circuit's
-        ends (``eth0.1900``, add_virtual_circuit); the switch takes the lower address.
-
-        The caller holds both devices' VRF locks and has ensured their instances of ``namespace``.
+        """Address one cabled link in the tenant VRF: a /31 from its transit pool (keyed by the link), a dot1q
+        sub-interface per end. The switch takes the lower address; the caller holds both devices' VRF locks.
         """
         switch_name = switch_port.device.display_label
         prefix = await self.client.allocate_next_ip_prefix(
@@ -615,11 +512,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
 
     async def _peer_exit_links(self, *, links: list[_ExitLink], edge: Any, edge_name: str) -> None:
         """One BGP process per distribution-switch, one on the edge, one eBGP peering per link.
-
-        The two AS numbers are found by description before one is drawn (a Number pool is not idempotent
-        per run), the key is the shared find-or-create password helper's. Processes and peerings are
-        passed by id, never looked up by name (search-index lag on same-run objects).
-        """
+        The two AS numbers are found by description before one is drawn."""
         office_name = self.data["name"]
         key_id = await self._ensure_routing_password(
             name=f"{self.fabric_name}-wan-exit-key",
@@ -627,8 +520,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         )
         if key_id is None:
             return
-        # The BGP AS numbers of the exit: one for the pair of distribution-switches, one for the edge, each found by
-        # its description (ensure_shared_as) before one is drawn from the bootstrap private 32-bit pool.
+        # The AS numbers: one for the distribution pair, one for the edge, each found by description (ensure_shared_as).
         asn_pool = await self.client.get(kind=CoreNumberPool, name__value=PRIVATE_ASN32_POOL)
         switch_as_id = await self.ensure_shared_as(
             description=f"{self.fabric_name} WAN exit ASN", asn_pool_id=asn_pool.id

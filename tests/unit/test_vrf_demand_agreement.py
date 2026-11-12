@@ -1,11 +1,4 @@
-"""The transform's VRF demand and the generator's agree on every smoke golden input.
-
-Two gatherers feed the one derivation (utils/vrf_demand.py ``vrf_demand``): the generators and checks/vrf_instances.py
-read queries/validation/vrf_instances.gql through ``device_vrf_facts``, the transforms read their config query through
-transforms/helpers/vrf.py ``vrf_requirements``. For each smoke input (a config query response) the device is re-shaped
-into the vrf_instances.gql shape (its routed rows are the rows of its own VLAN domain behind its segment activations),
-and both must name the same namespaces: a drift in the address, leg, SVI or role handling of either side fails here.
-"""
+"""The transform's VRF demand and the generator's agree on every smoke golden input."""
 
 from __future__ import annotations
 
@@ -47,8 +40,7 @@ def _as_vrf_instances_node(device: dict[str, Any]) -> dict[str, Any]:
     return node
 
 
-# Only the device config inputs: the cloud load-balancer and proxy inputs of the same directory
-# carry no device and no VRF, so they are not parametrized here (a skip per case would only add noise).
+# Only device config inputs: cloud load-balancer and proxy inputs carry no device and no VRF.
 INPUTS = [path for path in sorted(CONFIGS.glob("*/input.json")) if _prepared(path) is not None]
 
 

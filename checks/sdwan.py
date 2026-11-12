@@ -6,11 +6,7 @@ from .common import BaseDeviceCheck
 
 
 def validate_managed_devices_active(data: dict[str, Any]) -> list[str]:
-    """A VCO with no managed devices, or one managing a non-active device
-    (Gateway/Edge), means the SD-WAN deployment it's supposed to represent
-    isn't actually up — see generators/topology/sdwan_edge.py, which appends
-    every provisioned Edge to managed_devices.
-    """
+    """Errors for an orchestrator with no managed devices or a non-active one."""
     errors: list[str] = []
     managed = data.get("managed_devices") or []
     if not managed:

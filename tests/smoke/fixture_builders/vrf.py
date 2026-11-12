@@ -1,11 +1,4 @@
-"""The VRF memberships and SVI objects a fixture device's config demands, appended to its raw input.
-
-A transform refuses a device whose config uses a VRF it is no member of, or a routed segment with no
-role-``svi`` interface (transforms/helpers/vrf.py). The fixture writers (``common._write_data_fixture``) and the unit
-tests that build their own device data therefore go through ``with_vrf_objects``: it asks the transform's own
-``vrf_requirements`` what the device demands, so there is no second derivation, and appends the missing
-nodes in the RAW GraphQL shape, as the config queries return them. Idempotent: a node already present is kept.
-"""
+"""The VRF memberships and SVI objects a fixture device's config demands, appended to its raw input."""
 
 from __future__ import annotations
 
@@ -19,16 +12,14 @@ from utils.segment_vlan import ROW_KIND
 from utils.service_contexts import device_services
 from utils.vrf_demand import PBR_KIND, SVI_ROLE, VRF_KIND, svi_name
 
-# Standard routing metadata belongs to the explicit SecurityZone owner, not
-# to an address's IPAM namespace or the gateway prefix.
+# Standard routing metadata belongs to the explicit SecurityZone owner
 ZONE_CATALOG: dict[str, tuple[str, int]] = {
     "PROD": ("prod", 60000),
     "NONPROD": ("non_prod", 60001),
     "INTERNET": ("internet", 60002),
     "MANAGEMENT": ("management", 60003),
 }
-# The old fixtures modelled VRFs and firewall labels separately. The new
-# fixtures use the zone's catalog name for both routing and policy.
+# The old fixtures modelled VRFs and firewall labels separately.
 LEGACY_ZONE_NAMES = {
     "VRF_A": "PROD",
     "VRF-INTERNAL": "PROD",
@@ -115,7 +106,7 @@ def _svi_node(vlan_id: int, namespace: ZoneMetadata, gateway: dict[str, Any] | N
     ``segment.gateway``) as its address, in the raw shape."""
     address = (gateway or {}).get("address")
     node = {"id": (gateway or {}).get("id") or f"fixture-gateway-{vlan_id}", "address": _value(address)}
-    # The SVI is in its VRF and a member of the VLAN row it realizes: both are among its capabilities.
+    # The SVI is in its VRF and a member of the VLAN row it realizes
     row = {"__typename": ROW_KIND, "id": f"fixture-row-{vlan_id}", "vlan_id": _value(vlan_id)}
     capabilities = interface_vrf_capability(routing_vrf(namespace["name"]))
     capabilities["zone_capabilities"]["edges"].append({"node": row})
@@ -140,8 +131,8 @@ def _gateways(device_data: dict[str, Any]) -> dict[int, dict[str, Any]]:
 
 
 def interface_vrf_capability(vrf: dict[str, Any]) -> dict[str, Any]:
-    """The raw selection that puts an interface in ``vrf`` (a raw ManagedVRF node): the ManagedVRF among its capabilities,
-    under the alias ``zone_capabilities`` (queries/fragments/routing_zone.gql ``InterfaceRoutingZoneFields``)."""
+    """The raw selection that puts an interface in ``vrf`` (a raw ManagedVRF node): the ManagedVRF among its
+    capabilities."""
     return {"zone_capabilities": {"edges": [{"node": {"__typename": VRF_KIND, **vrf}}]}}
 
 
@@ -158,10 +149,7 @@ def _is_interface(item: dict[str, Any]) -> bool:
 
 
 def with_interface_vrfs(data: Any) -> Any:
-    """A copy of raw fixture data where every interface's ``vrf`` (the builders' shorthand) is its VRF capability.
-
-    An interface is in a VRF through the instance's interface edge: the config queries select it as the ManagedVRF among
-    the interface's ``zone_capabilities`` (``interface_vrf_capability``), never as a ``vrf`` of the interface."""
+    """A copy of raw fixture data where every interface's ``vrf`` (the builders' shorthand) is its VRF capability."""
     result = copy.deepcopy(data)
 
     def walk(item: Any) -> None:
@@ -210,10 +198,7 @@ def add_requirements(
     namespaces: dict[str, ZoneMetadata],
     gateways: dict[int, dict[str, Any]],
 ) -> None:
-    """Append to the raw ``device`` node the memberships (``shared_capabilities``) and SVIs it does not have yet.
-
-    ``namespaces`` holds each explicitly owned zone's complete L3 VNI and purpose.
-    """
+    """Append to the raw ``device`` node the memberships (``shared_capabilities``) and SVIs it does not have yet."""
     have = {
         edge["node"]["security_zone"]["node"]["name"]["value"]
         for edge in (device.get("shared_capabilities") or {}).get("edges") or []
@@ -240,10 +225,7 @@ def add_requirements(
 
 
 def with_vrf_objects(transform: BaseDeviceTransform, data: dict[str, Any]) -> dict[str, Any]:
-    """A copy of the raw device query response ``data`` with the VRF memberships and SVIs its config demands added.
-
-    The nested service data the config derives from (``DeviceServices``) is given first, from what the response
-    declares (tests/smoke/fixture_builders/derived_services.py): the demand depends on the contexts behind the ports."""
+    """A copy of the raw device query response ``data`` with the VRF memberships and SVIs its config demands added."""
     from tests.smoke.fixture_builders.derived_services import with_device_services  # noqa: PLC0415 - import cycle
 
     result = copy.deepcopy(with_device_services(transform, with_interface_vrfs(data)))
@@ -255,7 +237,7 @@ def with_vrf_objects(transform: BaseDeviceTransform, data: dict[str, Any]) -> di
     requirements = vrf_requirements(device_data)
     if requirements.namespaces or requirements.svis:
         add_requirements(node, requirements, _namespace_dicts(device_data), _gateways(device_data))
-    # A device that steers an SVI to a firewall has its ManagedPBR, the way the VRF pass of the device leaves it.
+    # A device that steers an SVI to a firewall has its ManagedPBR
     if pbr_bindings(device_services(device_data)) and not has_pbr(device_data):
         _append(node, "capabilities", [_pbr_node(str(device_data.get("name") or "device"))])
     return result
