@@ -3,9 +3,10 @@
 The target is the ``ChangeRequest`` on the PC's source branch: a request created with ``member_of_groups:
 [change_requests]`` starts the run (data/events/99_group_triggers.yml), and the change service re-runs it once the PC's
 artifacts are computed. The run reads the PC through the request's ``proposed_change``, the artifact and data diffs of
-its branch (utils/change_sources.py), the facts of the affected devices and the owners of the changed objects in one
+its branch (utils/change_sources.py: the server's counts, and the segments, rules, cables, circuits, footprints and
+applications with their values, owners included, in one paged filtered read), the facts of the artifact targets in one
 query (change_request_facts.gql) and the requests of the other open PCs (change_request_peers.gql, on their branches),
-and writes what utils/change_rules.py derives. It never writes an AUTHOR field (justification, risk_override,
+and writes what utils/change_rules.py and utils/change_text.py derive. It never writes an AUTHOR field (justification, risk_override,
 risk_override_reason, requested_by) nor the external_id. A field already equal is not written and the two edges are
 changed peer by peer, so a re-run with nothing new writes nothing. A PC that is no longer open is left alone.
 """
@@ -19,16 +20,14 @@ from typing import Any
 
 from utils.change_rules import (
     CHANGE_REQUEST_KIND,
-    OWNER_DIFF_KINDS,
-    REMOVED,
     ChangeInputs,
     affected_customers,
-    derive_change_request,
     device_facts,
     parse_datetime,
     prod_objects,
 )
 from utils.change_sources import fetch_artifact_diff, fetch_data_diff
+from utils.change_text import derive_change_request
 from utils.data_cleaning import clean_data
 from utils.query_flatten import load_flat_query
 
@@ -99,14 +98,10 @@ class ChangeRequestGenerator(CommonGenerator):
             self.logger.warning(f"{request.get('name')}: runs on {self.branch_name}, its PC's branch is {branch}")
 
         artifacts = await fetch_artifact_diff(self.client, branch)
-        nodes, counts, truncated = await fetch_data_diff(self.client, branch)
-        facts = await self._facts(
-            branch,
-            device_ids=sorted({a.target_id for a in artifacts if a.target_id}),
-            object_ids=sorted({n.uuid for n in nodes if n.kind in OWNER_DIFF_KINDS and n.status != REMOVED and n.uuid}),
-        )
+        diff = await fetch_data_diff(self.client, branch)
+        facts = await self._facts(branch, sorted({a.target_id for a in artifacts if a.target_id}))
         devices = [device_facts(row) for row in facts.get("DcimDeviceManaged") or []]
-        customers = affected_customers(facts)
+        customers = affected_customers(facts, diff.objects)
         derived = derive_change_request(
             ChangeInputs(
                 pc_name=str(pc.get("name") or request.get("name")),
@@ -114,14 +109,17 @@ class ChangeRequestGenerator(CommonGenerator):
                 branch=branch,
                 now=utc_now(),
                 artifacts=artifacts,
-                diff_nodes=nodes,
-                diff_counts=counts,
-                diff_truncated=truncated,
+                diff_counts=diff.counts,
+                only_standard=diff.only_standard,
+                routing_changed=diff.routing_changed,
+                objects=diff.objects,
+                objects_truncated=diff.objects_truncated,
                 devices=devices,
                 customers=sorted(customers.values()),
-                prod_objects=prod_objects(facts),
+                prod_objects=prod_objects(diff.objects),
                 conflicts=await self._conflicts(pc["id"], branch),
                 current_planned_start=parse_datetime(request.get("planned_start")),
+                rows=facts,
             )
         )
         await self._write(request, derived, {d.id for d in devices}, set(customers))
@@ -130,19 +128,12 @@ class ChangeRequestGenerator(CommonGenerator):
             f"{len(devices)} device(s), {len(customers)} customer(s)"
         )
 
-    async def _facts(self, branch: str, *, device_ids: list[str], object_ids: list[str]) -> dict[str, Any]:
-        """The device and owner rows of change_request_facts.gql in one round trip (none when there is nothing to ask)."""
-        if not device_ids and not object_ids:
+    async def _facts(self, branch: str, device_ids: list[str]) -> dict[str, Any]:
+        """The device rows of change_request_facts.gql in one round trip (none when there is no artifact target)."""
+        if not device_ids:
             return {}
         result = await self.client.execute_graphql(
-            query=load_flat_query(FACTS_QUERY),
-            branch_name=branch,
-            variables={
-                "device_ids": device_ids,
-                "object_ids": object_ids,
-                "with_devices": bool(device_ids),
-                "with_objects": bool(object_ids),
-            },
+            query=load_flat_query(FACTS_QUERY), branch_name=branch, variables={"device_ids": device_ids}
         )
         return clean_data(result)
 

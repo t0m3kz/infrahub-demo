@@ -21,6 +21,7 @@ from generators.change import change_request as module
 from generators.change.change_request import ChangeRequestGenerator, changed_fields
 from generators.logger import GeneratorError
 from tests.integration.demo_data import ROOT
+from tests.unit.change_text_helpers import raw_node, raw_segment, raw_summaries
 from tests.unit.query_shape_helpers import query_tree, unselected
 
 NOW = datetime(2026, 11, 12, 9, 0, tzinfo=UTC)
@@ -80,13 +81,20 @@ ARTIFACTS = {
 }
 
 DIFF = {
-    "DiffTree": {
+    **raw_summaries((1, 1, 0), (1, 1, 0), (0, 0, 0)),
+    "objects": {
         "nodes": [
-            {"kind": "ManagedVxlanSegment", "label": "c005-web", "status": "UPDATED", "uuid": "seg1"},
-            {"kind": "ChangeRequest", "label": "CHG-leaf", "status": "ADDED", "uuid": "cr1"},
+            raw_segment("seg1", "c005-web", "10.5.1.1/24", status="UPDATED"),
+            raw_node(
+                "TopologyCustomerDC",
+                "C005-P-DC-DC1",
+                "ADDED",
+                "fp1",
+                {"environment": "p"},
+                {"owner": [("C005", "cust-c005")]},
+            ),
         ]
     },
-    "DiffTreeSummary": {"num_added": 1, "num_updated": 1, "num_removed": 0},
 }
 
 
@@ -96,6 +104,7 @@ def _device(device_id: str, name: str, peer: str) -> dict[str, Any]:
         "__typename": "DcimPhysicalDevice",
         "name": _v(name),
         "role": _v("leaf"),
+        "site": {"node": {"name": _v("DC1")}},
         "owner": {"node": {"__typename": "OrganizationProvider"}},
         "capabilities": _edges(
             {
@@ -111,8 +120,7 @@ def _device(device_id: str, name: str, peer: str) -> dict[str, Any]:
 FACTS = {
     "DcimDeviceManaged": _edges(
         _device("d1", "dc1-leaf-01", "dc1-leaf-02"), _device("d2", "dc1-leaf-02", "dc1-leaf-02")
-    ),
-    "ManagedNetworkSegment": _edges({"id": "seg1", "owner": {"node": {"id": "c5", "name": _v("C005")}}}),
+    )
 }
 
 
@@ -171,14 +179,17 @@ def test_a_first_run_writes_the_derived_fields_and_the_edges(monkeypatch: pytest
     (update,) = client.mutations("ChangeRequestDerive")
     assert update["id"] == "cr1"
     assert (
-        update["short_description"]["value"] == "leaf change: 0 added, 1 updated, 0 removed objects; 2 device configs"
+        update["short_description"]["value"] == "leaf change: 1 added, 1 updated, 0 removed objects; 2 device configs"
     )
     assert update["change_type"]["value"] == "normal"
     assert update["planned_start"]["value"] == "2026-11-12T21:00:00+00:00"
-    assert "1. Deploy dc1-leaf-01: leaf: old1 -> new1" in update["implementation_plan"]["value"]
+    assert "1. Deploy dc1-leaf-01 (leaf, DC1): leaf: old1 -> new1" in update["implementation_plan"]["value"]
+    description = update["description"]["value"]
+    assert "NETWORK SEGMENTS (1)" in description and "c005-web: C005, p, ipv4, 10.5.1.0/24" in description
+    assert "Customers: C005" in description
     assert "3. Deploy dc1-leaf-02" in update["implementation_plan"]["value"]
     adds = {d["name"]: [n["id"] for n in d["nodes"]] for d in client.mutations("EdgeAdd")}
-    assert adds == {"affected_devices": ["d1", "d2"], "affected_customers": ["c5"]}
+    assert adds == {"affected_devices": ["d1", "d2"], "affected_customers": ["cust-c005"]}
     assert client.group_context.related_node_ids == ["cr1"]
     assert client.gets == ["http://infrahub:8000/api/diff/artifacts?branch=feat%2Fleaf"]
 
@@ -203,7 +214,7 @@ def test_a_rerun_with_nothing_new_writes_nothing(monkeypatch: pytest.MonkeyPatch
     }
 
     second = FakeClient()
-    _run(second, request_row(devices=["d1", "d2"], customers=["c5"], **written), monkeypatch)
+    _run(second, request_row(devices=["d1", "d2"], customers=["cust-c005"], **written), monkeypatch)
 
     assert second.mutations("ChangeRequestDerive") == []
     assert second.mutations("EdgeAdd") == []
@@ -214,7 +225,7 @@ def test_a_device_no_longer_affected_is_removed_from_the_edge(monkeypatch: pytes
     """A stale peer goes peer by peer; the others stay."""
     client = FakeClient()
 
-    _run(client, request_row(devices=["d1", "d2", "d9"], customers=["c5"]), monkeypatch)
+    _run(client, request_row(devices=["d1", "d2", "d9"], customers=["cust-c005"]), monkeypatch)
 
     assert client.mutations("EdgeRemove") == [{"id": "cr1", "name": "affected_devices", "nodes": [{"id": "d9"}]}]
     assert client.mutations("EdgeAdd") == []
@@ -272,14 +283,38 @@ def test_conflicts_are_read_from_the_other_open_pcs_branches(monkeypatch: pytest
     assert update["conflicts"]["value"] == "spine change (feat/spine): dc1-leaf-02"
 
 
-def test_the_facts_query_asks_only_for_what_exists(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The devices of the artifact diff and the owner-bearing objects of the data diff, one call."""
+def test_the_reads_of_a_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The artifact targets in one facts call (nothing else is asked of the devices); the data diff is read once, in
+    pages of the kinds the description names; the other open PCs' requests are read on their branches."""
     client = FakeClient()
 
     _run(client, request_row(), monkeypatch)
 
     (facts,) = [variables for op, _, variables in client.calls if op == "change_request_facts"]
-    assert facts == {"device_ids": ["d1", "d2"], "object_ids": ["seg1"], "with_devices": True, "with_objects": True}
+    assert facts == {"device_ids": ["d1", "d2"]}
+    (diff,) = [variables for op, _, variables in client.calls if op == "change_request_diff"]
+    assert diff["with_summary"] is True and diff["offset"] == 0
+    assert "SecurityPolicyRule" in diff["kinds"] and "ChangeRequest" in diff["bookkeeping"]
+    assert [op for op, _, _ in client.calls if op not in ("ChangeRequestDerive", "EdgeAdd")] == [
+        "change_request_diff",
+        "change_request_facts",
+        "change_request_peers",
+    ]
+    assert client.gets == ["http://infrahub:8000/api/diff/artifacts?branch=feat%2Fleaf"]
+
+
+def test_no_artifact_target_asks_no_facts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A data-only change reads no device."""
+    client = FakeClient()
+    monkeypatch.setattr(module, "fetch_artifact_diff", _no_artifacts)
+
+    _run(client, request_row(), monkeypatch)
+
+    assert not [op for op, _, _ in client.calls if op == "change_request_facts"]
+
+
+async def _no_artifacts(*_: Any) -> list:
+    return []
 
 
 def test_changed_fields_compares_datetimes_as_instants() -> None:

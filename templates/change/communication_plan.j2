@@ -1,0 +1,8 @@
+{% if not customers %}
+No customer is affected: notify the network operations team only.
+{% else %}
+Notify the affected customers: {{ customers | join(", ") }}
+{% endif %}
+{% if sites %}
+Sites in scope: {{ sites | join(", ") }}
+{% endif %}

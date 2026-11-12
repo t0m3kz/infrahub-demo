@@ -7,21 +7,31 @@ fingerprint the generator writes and the one the check recomputes come from the 
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from utils.change_rules import ArtifactChange, DiffNode, parse_artifact_diff, parse_diff_nodes
+from utils.change_facts import OBJECT_DIFF_KINDS
+from utils.change_rules import (
+    BOOKKEEPING_KINDS,
+    ROUTING_KINDS,
+    STANDARD_KINDS,
+    ArtifactChange,
+    ObjectDiff,
+    parse_artifact_diff,
+    parse_diff_summaries,
+    parse_object_nodes,
+)
 from utils.query_flatten import load_flat_query
 
 ARTIFACT_DIFF_PATH = "/api/diff/artifacts"
-DIFF_PAGE_SIZE = 500
-DIFF_MAX_NODES = 5000
-"""The data diff is read in pages up to this many changed nodes: enough to describe a change, and a bulk load (the
-full topology sample is ~90k nodes) is described by the server's counts instead."""
+OBJECT_PAGE_SIZE = 100
+OBJECT_MAX = 1000
+"""The objects the description names carry their values: small pages, and the description lists a few of them, so the
+read stops at OBJECT_MAX (the counts are the server's, whatever the number)."""
 
 _DIFF_QUERY = Path(__file__).resolve().parents[1] / "queries" / "change" / "change_request_diff.gql"
-_SUMMARY_KEYS = {"num_added": "ADDED", "num_updated": "UPDATED", "num_removed": "REMOVED"}
 
 
 async def fetch_artifact_diff(client: Any, branch: str) -> list[ArtifactChange]:
@@ -31,25 +41,44 @@ async def fetch_artifact_diff(client: Any, branch: str) -> list[ArtifactChange]:
     return parse_artifact_diff(response.json())
 
 
-async def fetch_data_diff(client: Any, branch: str) -> tuple[list[DiffNode], dict[str, int], bool]:
-    """(changed nodes, the server's counts by status, whether the read stopped at DIFF_MAX_NODES)."""
+@dataclass(frozen=True)
+class DataDiff:
+    """What the data diff of a branch says: the server's counts and the described objects."""
+
+    counts: dict[str, int]
+    only_standard: bool
+    routing_changed: bool
+    objects: list[ObjectDiff]
+    objects_truncated: bool
+
+
+async def fetch_data_diff(client: Any, branch: str) -> DataDiff:
+    """The counts (``DiffTreeSummary``: all changed objects, those of a non-standard kind, those of a routing kind)
+    and, in pages of OBJECT_PAGE_SIZE up to OBJECT_MAX, the objects of OBJECT_DIFF_KINDS with their values."""
     query = load_flat_query(_DIFF_QUERY)
     raw: list[dict[str, Any]] = []
-    counts: dict[str, int] = {}
+    summaries: dict[str, Any] = {}
     offset = 0
     while True:
         result = await client.execute_graphql(
             query=query,
             branch_name=branch,
-            variables={"branch": branch, "limit": DIFF_PAGE_SIZE, "offset": offset, "with_summary": offset == 0},
+            variables={
+                "branch": branch,
+                "limit": OBJECT_PAGE_SIZE,
+                "offset": offset,
+                "kinds": sorted(OBJECT_DIFF_KINDS),
+                "bookkeeping": sorted(BOOKKEEPING_KINDS),
+                "non_standard": sorted(STANDARD_KINDS | BOOKKEEPING_KINDS),
+                "routing": sorted(ROUTING_KINDS),
+                "with_summary": offset == 0,
+            },
         )
         if offset == 0:
-            summary = result.get("DiffTreeSummary") or {}
-            counts = {status: int(summary.get(key) or 0) for key, status in _SUMMARY_KEYS.items()}
-        page = (result.get("DiffTree") or {}).get("nodes") or []
+            summaries = result
+        page = (result.get("objects") or {}).get("nodes") or []
         raw.extend(page)
-        offset += DIFF_PAGE_SIZE
-        if len(page) < DIFF_PAGE_SIZE:
-            return parse_diff_nodes(raw), counts, False
-        if offset >= DIFF_MAX_NODES:
-            return parse_diff_nodes(raw), counts, True
+        offset += OBJECT_PAGE_SIZE
+        if len(page) < OBJECT_PAGE_SIZE or offset >= OBJECT_MAX:
+            counts, only_standard, routing = parse_diff_summaries(summaries)
+            return DataDiff(counts, only_standard, routing, parse_object_nodes(raw), len(page) == OBJECT_PAGE_SIZE)

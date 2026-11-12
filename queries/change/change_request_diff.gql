@@ -1,23 +1,73 @@
-# One page of the data diff of a branch (the changed nodes, no unchanged parents) and, on the first page, the
-# server's counts. Read by utils/change_sources.py for add_change_request.
-query change_request_diff($branch: String!, $limit: Int!, $offset: Int!, $with_summary: Boolean = false) {
-  DiffTree(
+# The data diff of a branch for add_change_request (utils/change_sources.py): the server's counts and, in small pages,
+# the objects the description names. No node of the diff is listed except those: a bulk change is described by its
+# counts. The kinds are variables (utils/change_rules.py and utils/change_facts.py hold the lists, once):
+#   $bookkeeping  kinds a run writes as a side effect (never counted)
+#   $non_standard the standard kinds and the bookkeeping kinds: a change with none of the other kinds is a standard one
+#   $routing      the routing kinds
+#   $kinds        the objects to read with their values: segments, rules, cables, circuits, footprints, applications
+# An attribute's value is its HAS_VALUE property (previous_value on a removed object), a peer is its label and id.
+query change_request_diff(
+  $branch: String!
+  $limit: Int!
+  $offset: Int!
+  $kinds: [String!]!
+  $bookkeeping: [String!]!
+  $non_standard: [String!]!
+  $routing: [String!]!
+  $with_summary: Boolean = false
+) {
+  total: DiffTreeSummary(
+    branch: $branch
+    filters: { kind: { excludes: $bookkeeping }, status: { excludes: [UNCHANGED] } }
+  ) @include(if: $with_summary) {
+    num_added
+    num_updated
+    num_removed
+  }
+  non_standard: DiffTreeSummary(
+    branch: $branch
+    filters: { kind: { excludes: $non_standard }, status: { excludes: [UNCHANGED] } }
+  ) @include(if: $with_summary) {
+    num_added
+    num_updated
+    num_removed
+  }
+  routing: DiffTreeSummary(
+    branch: $branch
+    filters: { kind: { includes: $routing }, status: { excludes: [UNCHANGED] } }
+  ) @include(if: $with_summary) {
+    num_added
+    num_updated
+    num_removed
+  }
+  objects: DiffTree(
     branch: $branch
     limit: $limit
     offset: $offset
     include_parents: false
-    filters: { status: { excludes: [UNCHANGED] } }
+    filters: { kind: { includes: $kinds }, status: { excludes: [UNCHANGED] } }
   ) {
     nodes {
+      uuid
       kind
       label
       status
-      uuid
+      attributes {
+        name
+        properties {
+          property_type
+          new_value
+          previous_value
+        }
+      }
+      relationships {
+        name
+        elements {
+          peer_id
+          peer_label
+          status
+        }
+      }
     }
-  }
-  DiffTreeSummary(branch: $branch, filters: { status: { excludes: [UNCHANGED] } }) @include(if: $with_summary) {
-    num_added
-    num_updated
-    num_removed
   }
 }

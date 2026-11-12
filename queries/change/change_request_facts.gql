@@ -1,14 +1,9 @@
-# What the plans of a change request say about its devices and customers (add_change_request), in one round trip:
-# the devices of the artifact diff (role, owner, MLAG or HA peer, BGP sessions, PROD VRF or footprint) and the owners
-# of the changed segments, footprints, offices and applications of the data diff. A root is skipped when its ids are
-# empty (an empty `ids` filter is no filter).
-query change_request_facts(
-  $device_ids: [ID]
-  $object_ids: [ID]
-  $with_devices: Boolean = true
-  $with_objects: Boolean = true
-) {
-  DcimDeviceManaged(ids: $device_ids) @include(if: $with_devices) {
+# What the plans of a change request say about the devices of its artifact diff (add_change_request), in one round
+# trip: role, site, owner, MLAG or HA peer, BGP sessions, PROD VRF or footprint. A device's configuration is in the
+# artifact diff, its place and role are not (the data diff names a device only when it changed). The generator asks
+# only when the diff has an artifact target (an empty `ids` filter is no filter).
+query change_request_facts($device_ids: [ID]) {
+  DcimDeviceManaged(ids: $device_ids) {
     edges {
       node {
         id
@@ -16,10 +11,12 @@ query change_request_facts(
         name { value }
         role { value }
         owner { node { __typename ... on OrganizationCustomer { id name { value } } } }
+        ... on DcimPhysicalDevice { site: deployment { node { name { value } } } }
         ... on DcimVirtualDevice {
           deployment {
             node {
               __typename
+              name { value }
               ... on TopologyEnvironmentScoped { environment { value } }
               ... on TopologyCustomer { owner { node { __typename ... on OrganizationCustomer { id name { value } } } } }
             }
@@ -49,23 +46,5 @@ query change_request_facts(
         }
       }
     }
-  }
-  ManagedNetworkSegment(ids: $object_ids) @include(if: $with_objects) {
-    edges { node { id owner { node { id name { value } } } } }
-  }
-  TopologyCustomer(ids: $object_ids) @include(if: $with_objects) {
-    edges {
-      node {
-        id
-        owner { node { __typename ... on OrganizationCustomer { id name { value } } } }
-        ... on TopologyEnvironmentScoped { environment { value } }
-      }
-    }
-  }
-  TopologyCustomerOffice(ids: $object_ids) @include(if: $with_objects) {
-    edges { node { id owner { node { __typename ... on OrganizationCustomer { id name { value } } } } } }
-  }
-  AppApplication(ids: $object_ids) @include(if: $with_objects) {
-    edges { node { id owner { node { id name { value } } } } }
   }
 }

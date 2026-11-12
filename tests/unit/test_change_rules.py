@@ -10,8 +10,6 @@ import pytest
 
 from utils.change_rules import (
     CUSTOMER_WEIGHT_CAP,
-    DESCRIPTION_MAX_CHARS,
-    LABELS_PER_KIND,
     MAINTENANCE_TZ,
     MIN_WINDOW_MINUTES,
     PROD_WEIGHT,
@@ -21,31 +19,25 @@ from utils.change_rules import (
     ArtifactChange,
     ChangeInputs,
     DeviceFacts,
-    DiffNode,
+    ObjectDiff,
     affected_customers,
     artifact_fingerprint,
-    backout_plan,
     change_type,
-    communication_plan,
     conflicts,
-    derive_change_request,
-    description,
     device_facts,
     effective_risk,
     impact,
-    implementation_plan,
     next_window,
     parse_artifact_diff,
     parse_datetime,
-    parse_diff_nodes,
+    parse_diff_summaries,
+    parse_object_nodes,
     planned_window,
     prod_objects,
     risk_level,
     risk_rank,
     risk_score,
     role_weight,
-    short_description,
-    verification_plan,
     window_minutes,
 )
 
@@ -80,7 +72,7 @@ def _inputs(**overrides: Any) -> ChangeInputs:
         "branch": "feat/segment",
         "now": NOW,
         "artifacts": [],
-        "diff_nodes": [DiffNode("ManagedVxlanSegment", "c005-web", "ADDED", "s1")],
+        "diff_counts": {"ADDED": 1, "UPDATED": 0, "REMOVED": 0},
     }
     base.update(overrides)
     return ChangeInputs(**base)
@@ -125,18 +117,80 @@ class TestParsing:
         assert parse_artifact_diff(None) == []
         assert parse_artifact_diff({}) == []
 
-    def test_unchanged_and_bookkeeping_nodes_are_dropped(self) -> None:
-        """UNCHANGED parents, the request itself and the group memberships are never counted."""
-        nodes = parse_diff_nodes(
+    def test_an_object_node_has_its_values_peers_and_changes(self) -> None:
+        """A value is the HAS_VALUE property (the previous one on a removed node, "NULL" is unset); a peer is a label and
+        an id; an updated attribute keeps its previous value; a dropped peer of an update is listed apart."""
+        has = "HAS_VALUE"
+        nodes = parse_object_nodes(
             [
-                {"kind": "ManagedVxlanSegment", "label": "a", "status": "ADDED", "uuid": "1"},
-                {"kind": "TopologyDataCenter", "label": "dc1", "status": "UNCHANGED", "uuid": "2"},
-                {"kind": "ChangeRequest", "label": "CHG-x", "status": "ADDED", "uuid": "3"},
-                {"kind": "CoreStandardGroup", "label": "vxlan_segments", "status": "UPDATED", "uuid": "4"},
+                {
+                    "uuid": "u1",
+                    "kind": "SecurityPolicyRule",
+                    "label": "r",
+                    "status": "UPDATED",
+                    "attributes": [
+                        {
+                            "name": "action",
+                            "properties": [{"property_type": has, "new_value": "permit", "previous_value": "deny"}],
+                        },
+                        {
+                            "name": "port_end",
+                            "properties": [{"property_type": has, "new_value": "NULL", "previous_value": None}],
+                        },
+                    ],
+                    "relationships": [
+                        {
+                            "name": "destination_segment",
+                            "elements": [
+                                {"peer_label": "b", "peer_id": "2", "status": "ADDED"},
+                                {"peer_label": "a", "peer_id": "1", "status": "REMOVED"},
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "uuid": "u2",
+                    "kind": "DcimCable",
+                    "label": "gone",
+                    "status": "REMOVED",
+                    "attributes": [
+                        {
+                            "name": "type",
+                            "properties": [{"property_type": has, "new_value": None, "previous_value": "smf"}],
+                        }
+                    ],
+                    "relationships": [
+                        {"name": "endpoints", "elements": [{"peer_label": "x", "peer_id": "3", "status": "REMOVED"}]}
+                    ],
+                },
+                {"uuid": "u3", "kind": "DcimCable", "label": "same", "status": "UNCHANGED"},
             ]
         )
 
-        assert nodes == [DiffNode("ManagedVxlanSegment", "a", "ADDED", "1")]
+        rule, cable = nodes
+        assert rule.values == {"action": "permit", "port_end": None}
+        assert rule.changes == {"action": ("deny", "permit")}
+        assert (rule.peers, rule.peer_ids, rule.dropped) == (
+            {"destination_segment": ("b",)},
+            {"destination_segment": ("2",)},
+            {"destination_segment": ("a",)},
+        )
+        assert cable.values == {"type": "smf"}
+        assert cable.peers == {"endpoints": ("x",)}
+        assert len(nodes) == 2
+
+    def test_the_summaries_give_the_counts_the_standard_flag_and_the_routing_flag(self) -> None:
+        """Standard: something changed and nothing of another kind; routing: any routing object changed."""
+        none = {"num_added": 0, "num_updated": 0, "num_removed": 0}
+        total = {"num_added": 5, "num_updated": 2, "num_removed": 1}
+        assert parse_diff_summaries({"total": total, "non_standard": none, "routing": none}) == (
+            {"ADDED": 5, "UPDATED": 2, "REMOVED": 1},
+            True,
+            False,
+        )
+        assert parse_diff_summaries({"total": total, "non_standard": total, "routing": total})[1:] == (False, True)
+        assert parse_diff_summaries({"total": none, "non_standard": none, "routing": none})[1] is False
+        assert parse_diff_summaries({}) == ({"ADDED": 0, "UPDATED": 0, "REMOVED": 0}, False, False)
 
     def test_a_datetime_value_is_read_aware(self) -> None:
         """The server's ISO value (Z or an offset) is an aware datetime; unset or garbage is None."""
@@ -191,8 +245,8 @@ class TestFacts:
             }
         ).prod
 
-    def test_customers_are_the_customer_owners_of_devices_footprints_and_objects(self) -> None:
-        """A provider owner is not a customer; a segment owner (peer OrganizationCustomer) carries no typename."""
+    def test_customers_are_the_customer_owners_of_devices_footprints_and_changed_objects(self) -> None:
+        """A provider owner is not a customer; the owner of a changed segment or application is its ``owner`` peer."""
         cleaned = {
             "DcimDeviceManaged": [
                 {"owner": {"typename": "OrganizationProvider"}},
@@ -200,18 +254,24 @@ class TestFacts:
                     "owner": None,
                     "deployment": {"owner": {"typename": "OrganizationCustomer", "id": "c5", "name": "C005"}},
                 },
-            ],
-            "ManagedNetworkSegment": [{"owner": {"id": "c1", "name": "C001"}}],
-            "AppApplication": [{"owner": {"id": "c1", "name": "C001"}}],
+            ]
         }
+        objects = [
+            ObjectDiff(
+                "s", "ManagedVxlanSegment", "seg", "ADDED", peers={"owner": ("C001",)}, peer_ids={"owner": ("c1",)}
+            ),
+            ObjectDiff("a", "AppApplication", "app", "ADDED", peers={"owner": ("C001",)}, peer_ids={"owner": ("c1",)}),
+            ObjectDiff("r", "SecurityPolicyRule", "rule", "ADDED", peers={"owner": ("X",)}, peer_ids={"owner": ("x",)}),
+        ]
 
-        assert affected_customers(cleaned) == {"c1": "C001", "c5": "C005"}
+        assert affected_customers(cleaned, objects) == {"c1": "C001", "c5": "C005"}
 
     def test_a_prod_footprint_or_an_office_is_a_prod_object(self) -> None:
-        """The office is always PROD; a NONPROD footprint alone is not."""
-        assert prod_objects({"TopologyCustomer": [{"environment": "p"}]})
-        assert prod_objects({"TopologyCustomerOffice": [{"id": "o"}]})
-        assert not prod_objects({"TopologyCustomer": [{"environment": "n"}]})
+        """The office is always PROD; a NONPROD footprint alone is not; a removed footprint says so by its old value."""
+        footprint = ObjectDiff("f", "TopologyCustomerDC", "fp", "ADDED", values={"environment": "p"})
+        assert prod_objects([footprint])
+        assert prod_objects([ObjectDiff("o", "TopologyCustomerOffice", "office", "UPDATED")])
+        assert not prod_objects([ObjectDiff("f", "TopologyCustomerDC", "fp", "ADDED", values={"environment": "n"})])
 
 
 class TestRisk:
@@ -249,7 +309,8 @@ class TestRisk:
     def test_removal_routing_prod_and_customers_add_up(self) -> None:
         """Each factor adds its weight; customers are capped."""
         inputs = _inputs(
-            diff_nodes=[DiffNode("ManagedBGPPeering", "p", "REMOVED"), DiffNode("RoutingPolicyTerm", "t", "UPDATED")],
+            diff_counts={"ADDED": 0, "UPDATED": 1, "REMOVED": 1},
+            routing_changed=True,
             customers=[f"C{i}" for i in range(10)],
             prod_objects=True,
         )
@@ -285,131 +346,24 @@ class TestChangeType:
 
     def test_standard_kinds_only_at_low_risk_is_standard(self) -> None:
         """A new segment with its realization and an address, nothing removed."""
-        nodes = [DiffNode("ManagedVxlanSegment", "s", "ADDED"), DiffNode("IpamIPAddress", "a", "ADDED")]
-        assert change_type(_inputs(diff_nodes=nodes), "low") == "standard"
+        assert change_type(_inputs(only_standard=True), "low") == "standard"
 
     @pytest.mark.parametrize(
-        ("nodes", "risk", "truncated"),
+        ("overrides", "risk"),
         [
-            ([DiffNode("ManagedVxlanSegment", "s", "ADDED")], "moderate", False),
-            ([DiffNode("ManagedVxlanSegment", "s", "REMOVED")], "low", False),
-            ([DiffNode("ManagedBGP", "b", "UPDATED")], "low", False),
-            ([DiffNode("ManagedVxlanSegment", "s", "ADDED")], "low", True),
-            ([], "low", False),
+            ({"only_standard": True}, "moderate"),
+            ({"only_standard": True, "diff_counts": {"ADDED": 0, "UPDATED": 0, "REMOVED": 1}}, "low"),
+            ({"only_standard": False}, "low"),
         ],
-        ids=["risk", "removal", "other-kind", "truncated", "empty"],
+        ids=["risk", "removal", "other-kind-or-nothing"],
     )
-    def test_anything_else_is_normal(self, nodes: list[DiffNode], risk: str, truncated: bool) -> None:
-        """A higher risk, a removal, a non-standard kind, a diff read in part or no change at all."""
-        assert change_type(_inputs(diff_nodes=nodes, diff_truncated=truncated), risk) == "normal"
+    def test_anything_else_is_normal(self, overrides: dict[str, Any], risk: str) -> None:
+        """A higher risk, a removal, a non-standard kind or no change at all."""
+        assert change_type(_inputs(**overrides), risk) == "normal"
 
 
-class TestTexts:
-    """short_description, description and the plans."""
-
-    def test_short_description_counts_objects_and_configs(self) -> None:
-        """Counted from the nodes read; the configs are the artifact entries."""
-        inputs = _inputs(artifacts=[_artifact("a"), _artifact("b")])
-        assert short_description(inputs) == "add segment: 1 added, 0 updated, 0 removed objects; 2 device configs"
-
-    def test_a_truncated_diff_takes_the_server_counts(self) -> None:
-        """The part read is not the whole: the summary counts."""
-        inputs = _inputs(diff_truncated=True, diff_counts={"ADDED": 900, "UPDATED": 5, "REMOVED": 1})
-        assert short_description(inputs).startswith("add segment: 900 added, 5 updated, 1 removed objects")
-
-    def test_description_groups_by_status_then_kind_caps_labels_and_ends_with_the_pc_text(self) -> None:
-        """Added before Updated, kinds sorted, at most LABELS_PER_KIND labels and the rest counted."""
-        nodes = [DiffNode("IpamIPAddress", f"10.0.0.{i}/32", "ADDED") for i in range(LABELS_PER_KIND + 2)]
-        nodes.append(DiffNode("DcimPhysicalDevice", "leaf-01", "UPDATED"))
-
-        text = description(_inputs(diff_nodes=nodes))
-
-        assert text.index("Added:") < text.index("Updated:")
-        assert f"IpamIPAddress ({LABELS_PER_KIND + 2}):" in text
-        assert "(+2 more)" in text
-        assert text.endswith("Adds a web segment for C005.")
-
-    def test_description_is_capped_and_keeps_the_pc_text(self) -> None:
-        """A huge listing is cut at DESCRIPTION_MAX_CHARS; the PC description still follows."""
-        nodes = [DiffNode(f"Kind{i:04d}", "x" * 50, "ADDED") for i in range(400)]
-        text = description(_inputs(diff_nodes=nodes))
-        listing = text.rsplit("\n\n", 1)[0]
-        assert len(listing) <= DESCRIPTION_MAX_CHARS
-        assert text.endswith("Adds a web segment for C005.")
-
-    def test_implementation_plan_least_critical_first_and_a_pair_member_before_its_peer(self) -> None:
-        """Leaves before the spine; of the MLAG pair one leaf, verify, then the other; checksums old -> new."""
-        devices = [
-            DeviceFacts("s", "spine-01", "spine"),
-            DeviceFacts("b", "leaf-02", "leaf", peer="leaf-01"),
-            DeviceFacts("a", "leaf-01", "leaf", peer="leaf-02"),
-            DeviceFacts("c", "host-01", "endpoint"),
-        ]
-        artifacts = [
-            _artifact("spine-01"),
-            _artifact("leaf-02"),
-            _artifact("leaf-01", previous=None),
-            _artifact("host-01"),
-        ]
-
-        plan = implementation_plan(_inputs(devices=devices, artifacts=artifacts)).splitlines()
-
-        assert [line.split(" ")[2].rstrip(":") for line in plan] == [
-            "host-01",
-            "host-01",
-            "leaf-01",
-            "leaf-01",
-            "leaf-02",
-            "leaf-02",
-            "spine-01",
-            "spine-01",
-        ]
-        assert plan[1] == "2. Verify host-01 before the next step"
-        assert "leaf: new config n1" in plan[2]
-        assert "leaf: p1 -> n1" in plan[4]
-
-    def test_a_pair_is_rolled_out_at_the_weight_of_its_more_critical_member(self) -> None:
-        """An HA pair whose peer is a firewall goes after a plain leaf, its two members back to back."""
-        devices = [
-            DeviceFacts("f1", "fw-01", "internal-firewall", peer="fw-02"),
-            DeviceFacts("f2", "fw-02", "internal-firewall", peer="fw-01"),
-            DeviceFacts("l", "leaf-09", "leaf"),
-        ]
-        artifacts = [_artifact("fw-02"), _artifact("fw-01"), _artifact("leaf-09")]
-        plan = implementation_plan(_inputs(devices=devices, artifacts=artifacts)).splitlines()
-        assert [line.split(" ")[2].rstrip(":") for line in plan[::2]] == ["leaf-09", "fw-01", "fw-02"]
-
-    def test_no_artifact_is_a_data_only_plan(self) -> None:
-        """Nothing to deploy."""
-        assert implementation_plan(_inputs()).startswith("No device configuration changes")
-
-    def test_backout_returns_to_the_previous_config_and_warns_on_removals(self) -> None:
-        """The previous checksum and storage id, a new device's config removed, the auto-rollback line and the
-        allocation warning when an object is removed."""
-        inputs = _inputs(
-            artifacts=[_artifact("leaf-01"), _artifact("leaf-03", previous=None)],
-            diff_nodes=[DiffNode("IpamPrefix", "10.0.0.0/24", "REMOVED")],
-        )
-        plan = backout_plan(inputs)
-        assert "Revoking the approval rolls every device back automatically." in plan
-        assert "leaf-01 leaf: back to p1 (storage st-p1)" in plan
-        assert "leaf-03 leaf: new device: config removed" in plan
-        assert "WARNING" in plan
-        assert "WARNING" not in backout_plan(_inputs(artifacts=[_artifact("leaf-01")]))
-
-    def test_test_plan_names_the_expected_sessions_and_the_checksum_verification(self) -> None:
-        """Per device its role and BGP sessions."""
-        plan = verification_plan(
-            _inputs(devices=[DeviceFacts("a", "leaf-01", "leaf", bgp_peerings=4), DeviceFacts("b", "h", None)])
-        )
-        assert "running config checksum equals the artifact checksum" in plan
-        assert "leaf-01 (leaf): 4 BGP peering(s) established" in plan
-        assert "h (no role): no BGP peering" in plan
-
-    def test_communication_plan_lists_the_customers(self) -> None:
-        """Sorted names, or the operations team alone."""
-        assert communication_plan(_inputs(customers=["C005", "C001"])) == "Notify the affected customers: C001, C005"
-        assert "No customer" in communication_plan(_inputs())
+class TestConflicts:
+    """The other open PCs whose request lists a device of this one."""
 
     def test_conflicts_are_the_other_pcs_sharing_a_device(self) -> None:
         """Only the shared devices are named; a PC with none is left out."""
@@ -463,28 +417,3 @@ class TestFingerprintAndDerive:
         assert artifact_fingerprint([a, b]) == artifact_fingerprint([b, a])
         assert artifact_fingerprint([a, b]) != artifact_fingerprint([a, replace(b, checksum_new="n2")])
         assert len(artifact_fingerprint([])) == 64
-
-    def test_derive_returns_every_derived_field_and_no_author_field(self) -> None:
-        """The generator writes exactly these keys."""
-        derived = derive_change_request(
-            _inputs(artifacts=[_artifact("leaf-01")], devices=[DeviceFacts("a", "leaf-01", "leaf")])
-        )
-        assert set(derived) == {
-            "short_description",
-            "description",
-            "change_type",
-            "risk",
-            "risk_score",
-            "impact",
-            "implementation_plan",
-            "backout_plan",
-            "test_plan",
-            "communication_plan",
-            "conflicts",
-            "planned_start",
-            "planned_end",
-            "artifact_fingerprint",
-        }
-        assert derived["conflicts"] is None
-        assert derived["change_type"] == "standard"
-        assert derived["planned_start"] == NOW

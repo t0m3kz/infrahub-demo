@@ -1,0 +1,103 @@
+{% macro changed_suffix(x) %}{% if x.changed %} (changed: {{ x.changed | join('; ') }}){% endif %}{% endmacro %}
+{% macro link_line(l) %}
+{{ l.family }} {{ l.name }}{% set facts = [l.link_type, l.provider, ("id " ~ l.cable_id) if l.cable_id else "", ("vrf " ~ l.vrf) if l.vrf else ""] | select | list %}{% if facts %} [{{ facts | join(", ") }}]{% endif %}{% if l.ends %}: {{ l.ends | join(" <-> ") }}{% endif %}{% if l.places %}; {{ l.places | join(" <-> ") }}{% endif %}{{ changed_suffix(l) }}
+{% endmacro %}
+{% macro rule_line(r) %}
+{{ r.policy ~ " / " if r.policy else "" }}{{ r.name }}{% if r.index %} (#{{ r.index }}){% endif %}{% if r.action %}: {{ r.action }} {{ r.source }} -> {{ r.destination }} {{ r.service }}{% endif %}{% if not r.enabled %} [disabled]{% endif %}{{ changed_suffix(r) }}
+{% endmacro %}
+{% macro segment_line(s) %}
+{{ s.name }}{% set facts = [s.owner, s.environment, s.ip_version, s.prefix, ("gateway " ~ s.gateway) if s.gateway else "", ("VNI " ~ s.vnis | join("/")) if s.vnis else "", ("vlan " ~ s.vlan_scope) if s.vlan_scope else "", ("stretch " ~ s.stretch_scope) if s.stretch_scope else "", "firewall terminated" if s.firewall_gateway else ""] | select | list %}{% if facts %}: {{ facts | join(", ") }}{% endif %}{% if s.footprints %}; footprints {{ s.footprints | join(", ") }}{% endif %}{{ changed_suffix(s) }}
+{% endmacro %}
+{% set config_words = {"new": "new config", "updated": "config updated", "removed": "config removed"} %}
+{% set listing %}
+{% if summary %}
+{% for s in summary %}{{ s.verb }} {{ s.parts | join(", ") }}.{{ " " if not loop.last }}{% endfor %}{% if config_parts %} Device configuration: {{ config_parts | join(", ") }}.{% endif %}
+
+
+{% elif config_parts %}
+Device configuration: {{ config_parts | join(", ") }}.
+
+
+{% endif %}
+{% if counts.ADDED or counts.UPDATED or counts.REMOVED %}
+Data diff: {{ counts.ADDED }} added, {{ counts.UPDATED }} updated, {{ counts.REMOVED }} removed objects.
+{% else %}
+No object changes.
+{% endif %}
+{% if customers %}
+Customers: {{ customers | join(", ") }}
+{% endif %}
+{% if sites %}
+Sites: {{ sites | join(", ") }}
+{% endif %}
+{% if devices.total %}
+
+DEVICES ({{ devices.total }})
+{% for site in devices.sites %}
+{{ site.name }}
+{% for role in site.roles %}
+  {{ role.name }}
+{% for d in role.devices %}
+    - {{ d.name }}: {{ config_words[d.action] }}{% for a in d.artifacts %}; {{ a.definition }} {{ a.change_text }}{% endfor %}{% if d.pair %}; pair {{ d.pair }}{% endif %}
+
+{% endfor %}
+{% endfor %}
+{% endfor %}
+{% if devices.more %}
+  (+{{ devices.more }} more)
+{% endif %}
+{% endif %}
+{% if links.total %}
+
+LINKS ({{ links.total }})
+{% for g in links.groups %}
+{{ g.word }}:
+{% for l in g.items %}
+  - {{ link_line(l) | trim }}
+{% endfor %}
+{% endfor %}
+{% if links.more %}
+  (+{{ links.more }} more)
+{% endif %}
+{% endif %}
+{% if rules.total %}
+
+FIREWALL RULES ({{ rules.total }})
+{% for g in rules.groups %}
+{{ g.word }}:
+{% for r in g.items %}
+  - {{ rule_line(r) | trim }}
+{% endfor %}
+{% endfor %}
+{% if rules.more %}
+  (+{{ rules.more }} more)
+{% endif %}
+{% endif %}
+{% if segments.total %}
+
+NETWORK SEGMENTS ({{ segments.total }})
+{% for g in segments.groups %}
+{{ g.word }}:
+{% for s in g.items %}
+  - {{ segment_line(s) | trim }}
+{% endfor %}
+{% endfor %}
+{% if segments.more %}
+  (+{{ segments.more }} more)
+{% endif %}
+{% endif %}
+{% if others %}
+
+OTHER OBJECTS (not listed): {% for status, n in others.items() %}{{ n }} {{ status | lower }}{{ ", " if not loop.last }}{% endfor %}
+
+{% endif %}
+{% if truncated_note %}
+
+{{ truncated_note }}
+{% endif %}
+{% endset %}
+{{ listing | trim | limit_chars(max_chars) }}
+{% if pc_description %}
+
+{{ pc_description }}
+{% endif %}

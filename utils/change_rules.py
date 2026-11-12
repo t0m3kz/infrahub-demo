@@ -26,7 +26,6 @@ ADDED = "ADDED"
 UPDATED = "UPDATED"
 REMOVED = "REMOVED"
 STATUS_ORDER = (ADDED, UPDATED, REMOVED)
-STATUS_WORDS = {ADDED: "Added", UPDATED: "Updated", REMOVED: "Removed"}
 
 CHANGE_REQUEST_KIND = "ChangeRequest"
 BOOKKEEPING_KINDS = frozenset({CHANGE_REQUEST_KIND, "CoreStandardGroup", "CoreGeneratorGroup", "CoreGraphQLQueryGroup"})
@@ -48,9 +47,18 @@ STANDARD_KINDS = frozenset(
 policy rule, a prefix, an address), with no removal and a low risk, is a standard change."""
 
 ROUTING_KINDS = frozenset(
-    {"ManagedBGP", "ManagedBGPPeering", "ManagedVRF", "TopologyCarrierCircuit", "TopologySessionCircuit"}
+    {
+        "ManagedBGP",
+        "ManagedBGPPeering",
+        "ManagedVRF",
+        "TopologyCarrierCircuit",
+        "TopologySessionCircuit",
+        "RoutingPolicy",
+        "RoutingPolicyTerm",
+        "RoutingPrefixList",
+        "RoutingPrefixListEntry",
+    }
 )
-ROUTING_KIND_PREFIXES = ("RoutingPolicy", "RoutingPrefixList")
 """A changed routing object (a process, a session, a policy or a prefix list and their entries, a VRF, a circuit)."""
 
 # --- risk -------------------------------------------------------------------------------------------------------
@@ -94,9 +102,12 @@ HOTFIX_PREFIX = "hotfix/"
 
 # --- text caps --------------------------------------------------------------------------------------------------
 
-LABELS_PER_KIND = 5
 DESCRIPTION_MAX_CHARS = 4000
-DIFF_TRUNCATED_NOTE = "(the data diff is longer than the part read; the counts are the server's)"
+SECTION_MAX_ITEMS = 15
+DEVICE_MAX_ITEMS = 30
+OTHER_KINDS_MAX = 12
+"""The caps of the text fields: the listing of a description, the items of a section, the kinds counted as other."""
+DIFF_TRUNCATED_NOTE = "(more objects changed than the part read: the lists above are the first ones)"
 
 
 @dataclass(frozen=True)
@@ -113,15 +124,33 @@ class ArtifactChange:
     checksum_previous: str | None
     storage_previous: str | None
 
+    @property
+    def change_text(self) -> str:
+        """What happens to the config: ``new config <sum>``, ``remove config <sum>`` or ``<old> -> <new>``."""
+        if self.action == "removed":
+            return f"remove config {self.checksum_previous or '?'}"
+        if not self.checksum_previous:
+            return f"new config {self.checksum_new or '?'}"
+        return f"{self.checksum_previous} -> {self.checksum_new or '?'}"
+
 
 @dataclass(frozen=True)
-class DiffNode:
-    """One node of the data diff."""
+class ObjectDiff:
+    """One changed object of the filtered data diff (segment, rule, cable, circuit) with what the diff says of it.
 
+    ``values`` are its attributes (``None`` when unset; the previous values on a removed object), ``changes`` the
+    attributes of an updated object that changed (name -> (previous, new)), ``peers`` the labels of the peers of its
+    relationships (``peer_ids`` their ids, in the same order) and ``dropped`` the peers an update removed."""
+
+    uuid: str
     kind: str
     label: str
     status: str
-    uuid: str = ""
+    values: Mapping[str, str | None] = field(default_factory=dict)
+    changes: Mapping[str, tuple[str | None, str | None]] = field(default_factory=dict)
+    peers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    peer_ids: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    dropped: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -146,14 +175,23 @@ class ChangeInputs:
     branch: str
     now: datetime
     artifacts: Sequence[ArtifactChange]
-    diff_nodes: Sequence[DiffNode]
     diff_counts: Mapping[str, int] = field(default_factory=dict)
-    diff_truncated: bool = False
+    """Added, updated and removed objects of the data diff, bookkeeping kinds apart: the server's counts."""
+    only_standard: bool = False
+    """The data diff holds objects of STANDARD_KINDS only (the server's count of any other kind is zero)."""
+    routing_changed: bool = False
+    """The data diff holds a routing object (ROUTING_KINDS)."""
     devices: Sequence[DeviceFacts] = ()
     customers: Sequence[str] = ()
     prod_objects: bool = False
     conflicts: Mapping[str, Sequence[str]] = field(default_factory=dict)
     current_planned_start: datetime | None = None
+    rows: Mapping[str, Any] = field(default_factory=dict)
+    """The cleaned rows of change_request_facts.gql, by root kind (the place of a device: utils/change_facts.py)."""
+    objects: Sequence[ObjectDiff] = ()
+    """The segments, rules, cables, circuits, footprints and applications of the data diff, with their values."""
+    objects_truncated: bool = False
+    """The objects were read up to a cap (utils/change_sources.py): more changed than are described."""
 
 
 # --- parsing ----------------------------------------------------------------------------------------------------
@@ -188,41 +226,93 @@ def parse_artifact_diff(payload: Mapping[str, Any] | None) -> list[ArtifactChang
     return sorted(changes, key=lambda c: (c.target, c.definition, c.id))
 
 
-def parse_diff_nodes(nodes: Iterable[Mapping[str, Any]]) -> list[DiffNode]:
-    """The changed nodes of ``DiffTree``: unchanged parents and bookkeeping kinds dropped."""
-    return [
-        DiffNode(
-            kind=str(n.get("kind")),
-            label=str(n.get("label") or n.get("uuid")),
-            status=str(n.get("status")),
-            uuid=str(n.get("uuid") or ""),
+NULL_VALUE = "NULL"
+"""How the diff spells an unset attribute."""
+
+
+def _property(attribute: Mapping[str, Any], name: str) -> Any:
+    for prop in attribute.get("properties") or []:
+        if prop.get("property_type") == "HAS_VALUE":
+            return prop.get(name)
+    return None
+
+
+def _text(value: Any) -> str | None:
+    return None if value is None or value == NULL_VALUE else str(value)
+
+
+def parse_diff_summaries(result: Mapping[str, Any]) -> tuple[dict[str, int], bool, bool]:
+    """(counts, only standard kinds, routing changed) of the aliased ``DiffTreeSummary`` roots of the diff query:
+    ``total`` (bookkeeping kinds apart), ``non_standard`` and ``routing``."""
+
+    def counts(root: str) -> dict[str, int]:
+        summary = result.get(root) or {}
+        return {status: int(summary.get(f"num_{status.lower()}") or 0) for status in STATUS_ORDER}
+
+    total = counts("total")
+    only_standard = bool(sum(total.values())) and not sum(counts("non_standard").values())
+    return total, only_standard, bool(sum(counts("routing").values()))
+
+
+def parse_object_nodes(nodes: Iterable[Mapping[str, Any]]) -> list[ObjectDiff]:
+    """The objects of the filtered ``DiffTree`` read: values, changed values and peers by relationship name."""
+    objects = []
+    for n in nodes:
+        if n.get("status") not in STATUS_ORDER:
+            continue
+        removed = n.get("status") == REMOVED
+        values: dict[str, str | None] = {}
+        changes: dict[str, tuple[str | None, str | None]] = {}
+        for attribute in n.get("attributes") or []:
+            new, previous = _text(_property(attribute, "new_value")), _text(_property(attribute, "previous_value"))
+            values[str(attribute.get("name"))] = previous if removed else new
+            if n.get("status") == UPDATED and new != previous and previous is not None:
+                changes[str(attribute.get("name"))] = (previous, new)
+        peers: dict[str, tuple[str, ...]] = {}
+        peer_ids: dict[str, tuple[str, ...]] = {}
+        dropped: dict[str, tuple[str, ...]] = {}
+        for relationship in n.get("relationships") or []:
+            elements = relationship.get("elements") or []
+            name = str(relationship.get("name"))
+            kept = sorted(
+                (str(e.get("peer_label")), str(e.get("peer_id") or ""))
+                for e in elements
+                if e.get("status") != REMOVED or removed
+            )
+            peers[name] = tuple(label for label, _ in kept)
+            peer_ids[name] = tuple(peer_id for _, peer_id in kept)
+            if gone := tuple(
+                sorted(str(e.get("peer_label")) for e in elements if e.get("status") == REMOVED and not removed)
+            ):
+                dropped[name] = gone
+        objects.append(
+            ObjectDiff(
+                uuid=str(n.get("uuid") or ""),
+                kind=str(n.get("kind")),
+                label=str(n.get("label") or n.get("uuid")),
+                status=str(n.get("status")),
+                values=values,
+                changes=changes,
+                peers=peers,
+                peer_ids=peer_ids,
+                dropped=dropped,
+            )
         )
-        for n in nodes
-        if n.get("status") in STATUS_ORDER and n.get("kind") not in BOOKKEEPING_KINDS
-    ]
+    return objects
 
 
-CUSTOMER_KIND = "OrganizationCustomer"
 PAIR_KINDS = frozenset({"ManagedMLAG", "ManagedFirewallHA", "ManagedLoadbalancerHA"})
 OFFICE_KIND = "TopologyCustomerOffice"
-OWNER_ROOTS = ("ManagedNetworkSegment", "TopologyCustomer", OFFICE_KIND, "AppApplication")
-"""The roots of change_request_facts.gql whose owner is an affected customer."""
+FOOTPRINT_KINDS = frozenset({"TopologyCustomerDC", "TopologyCustomerColocation", "TopologyCustomerCloud"})
 OWNER_DIFF_KINDS = frozenset(
-    {
-        "ManagedVxlanSegment",
-        "CloudNetworkSegment",
-        "TopologyCustomerDC",
-        "TopologyCustomerColocation",
-        "TopologyCustomerCloud",
-        OFFICE_KIND,
-        "AppApplication",
-    }
+    {"ManagedVxlanSegment", "CloudNetworkSegment", OFFICE_KIND, "AppApplication"} | FOOTPRINT_KINDS
 )
-"""The changed kinds of the data diff whose owner the facts query reads (a removed one is gone from the branch)."""
+"""The changed kinds of the data diff whose ``owner`` is an affected customer (read with the objects)."""
+CUSTOMER_KIND = "OrganizationCustomer"
 
 
 def _customer(owner: Any) -> tuple[str, str] | None:
-    """(id, name) of an owner that is a customer (a provider or our own organisation is not)."""
+    """(id, name) of a device owner that is a customer (a provider or our own organisation is not)."""
     if not isinstance(owner, Mapping) or not owner.get("id"):
         return None
     if owner.get("typename", CUSTOMER_KIND) != CUSTOMER_KIND:
@@ -259,20 +349,27 @@ def device_facts(row: Mapping[str, Any]) -> DeviceFacts:
     )
 
 
-def affected_customers(cleaned: Mapping[str, Any]) -> dict[str, str]:
-    """Customer id -> name: the owners of the devices, of their footprints and of the changed objects."""
+def affected_customers(cleaned: Mapping[str, Any], objects: Iterable[ObjectDiff] = ()) -> dict[str, str]:
+    """Customer id -> name: the owners of the devices and of their footprints (change_request_facts.gql) and of the
+    changed objects (their ``owner`` peers in the data diff, by label)."""
     owners = []
     for row in cleaned.get("DcimDeviceManaged") or []:
         owners += [row.get("owner"), (row.get("deployment") or {}).get("owner")]
-    for root in OWNER_ROOTS:
-        owners += [row.get("owner") for row in cleaned.get(root) or []]
-    return dict(sorted(customer for owner in owners if (customer := _customer(owner))))
+    found = dict(sorted(customer for owner in owners if (customer := _customer(owner))))
+    for changed in objects:
+        if changed.kind in OWNER_DIFF_KINDS:
+            found |= {
+                i: label for i, label in zip(changed.peer_ids.get("owner", ()), changed.peers.get("owner", ())) if i
+            }
+    return dict(sorted(found.items()))
 
 
-def prod_objects(cleaned: Mapping[str, Any]) -> bool:
+def prod_objects(objects: Iterable[ObjectDiff]) -> bool:
     """A changed object is PROD: a PROD footprint, or an office (always PROD)."""
-    footprints = cleaned.get("TopologyCustomer") or []
-    return bool(cleaned.get(OFFICE_KIND)) or any(row.get("environment") == PROD_ENVIRONMENT for row in footprints)
+    return any(
+        o.kind == OFFICE_KIND or (o.kind in FOOTPRINT_KINDS and o.values.get("environment") == PROD_ENVIRONMENT)
+        for o in objects
+    )
 
 
 def parse_datetime(value: Any) -> datetime | None:
@@ -308,17 +405,8 @@ def risk_rank(risk: str | None) -> int:
 
 
 def diff_counts(inputs: ChangeInputs) -> dict[str, int]:
-    """Added, updated and removed: counted from the nodes read, or the server's summary when the read was cut."""
-    if inputs.diff_truncated:
-        return {status: int(inputs.diff_counts.get(status, 0)) for status in STATUS_ORDER}
-    counts = dict.fromkeys(STATUS_ORDER, 0)
-    for node in inputs.diff_nodes:
-        counts[node.status] += 1
-    return counts
-
-
-def _is_routing_kind(kind: str) -> bool:
-    return kind in ROUTING_KINDS or kind.startswith(ROUTING_KIND_PREFIXES)
+    """Added, updated and removed objects of the data diff, whatever their number."""
+    return {status: int(inputs.diff_counts.get(status, 0)) for status in STATUS_ORDER}
 
 
 def role_weight(role: str | None) -> int:
@@ -337,7 +425,7 @@ def risk_score(inputs: ChangeInputs) -> int:
     score = max((role_weight(device.role) for device in inputs.devices), default=0)
     if counts[REMOVED]:
         score += REMOVED_WEIGHT
-    if any(_is_routing_kind(node.kind) for node in inputs.diff_nodes):
+    if inputs.routing_changed:
         score += ROUTING_WEIGHT
     if is_prod(inputs):
         score += PROD_WEIGHT
@@ -362,64 +450,27 @@ def impact(inputs: ChangeInputs) -> int:
 
 def change_type(inputs: ChangeInputs, risk: str) -> str:
     """emergency on a hotfix branch; standard when every changed kind is standard, nothing is removed and the risk is
-    low; else normal. A diff read only in part is never standard: the kinds not read are unknown."""
+    low; else normal."""
     if inputs.branch.startswith(HOTFIX_PREFIX):
         return "emergency"
-    counts = diff_counts(inputs)
-    kinds = {node.kind for node in inputs.diff_nodes}
-    if not inputs.diff_truncated and kinds and kinds <= STANDARD_KINDS and not counts[REMOVED] and risk == "low":
+    if inputs.only_standard and not diff_counts(inputs)[REMOVED] and risk == "low":
         return "standard"
     return "normal"
 
 
-def short_description(inputs: ChangeInputs) -> str:
-    """``<pc>: <n> added, <n> updated, <n> removed objects; <n> device configs``."""
-    counts = diff_counts(inputs)
-    configs = len(inputs.artifacts)
-    return (
-        f"{inputs.pc_name}: {counts[ADDED]} added, {counts[UPDATED]} updated, {counts[REMOVED]} removed objects; "
-        f"{configs} device config{'' if configs == 1 else 's'}"
-    )
-
-
-def description(inputs: ChangeInputs) -> str:
-    """The changed objects by status then kind (count and up to LABELS_PER_KIND labels), then the PC description.
-
-    The object listing is capped at DESCRIPTION_MAX_CHARS; the PC description always follows in full."""
-    grouped: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
-    for node in inputs.diff_nodes:
-        grouped[node.status][node.kind].append(node.label)
-    lines: list[str] = []
-    for status in STATUS_ORDER:
-        if status not in grouped:
-            continue
-        lines.append(f"{STATUS_WORDS[status]}:")
-        for kind in sorted(grouped[status]):
-            labels = sorted(grouped[status][kind])
-            shown = ", ".join(labels[:LABELS_PER_KIND])
-            more = f" (+{len(labels) - LABELS_PER_KIND} more)" if len(labels) > LABELS_PER_KIND else ""
-            lines.append(f"  {kind} ({len(labels)}): {shown}{more}")
-    if inputs.diff_truncated:
-        lines.append(DIFF_TRUNCATED_NOTE)
-    listing = "\n".join(lines) or "No object changes."
-    if len(listing) > DESCRIPTION_MAX_CHARS:
-        listing = listing[: DESCRIPTION_MAX_CHARS - 4].rstrip() + "\n..."
-    pc_text = (inputs.pc_description or "").strip()
-    return f"{listing}\n\n{pc_text}" if pc_text else listing
-
-
-def _artifacts_by_target(inputs: ChangeInputs) -> dict[str, list[ArtifactChange]]:
+def artifacts_by_target(inputs: ChangeInputs) -> dict[str, list[ArtifactChange]]:
+    """The artifact diff by target name."""
     by_target: dict[str, list[ArtifactChange]] = defaultdict(list)
     for artifact in inputs.artifacts:
         by_target[artifact.target].append(artifact)
     return by_target
 
 
-def _ordered_targets(inputs: ChangeInputs) -> list[str]:
+def ordered_targets(inputs: ChangeInputs) -> list[str]:
     """The artifact targets in rollout order: least critical role first, then name; the peer of an MLAG or HA pair
     right after its first member, so one member is verified before the other is touched."""
     facts = {device.name: device for device in inputs.devices}
-    targets = sorted(_artifacts_by_target(inputs))
+    targets = sorted(artifacts_by_target(inputs))
 
     def peer_of(name: str) -> str | None:
         peer = facts[name].peer if name in facts else None
@@ -438,64 +489,6 @@ def _ordered_targets(inputs: ChangeInputs) -> list[str]:
         if peer and peer not in ordered:
             ordered.append(peer)
     return ordered
-
-
-def _checksum_step(artifact: ArtifactChange) -> str:
-    if artifact.action == "removed":
-        return f"{artifact.definition}: remove config {artifact.checksum_previous or '?'}"
-    if not artifact.checksum_previous:
-        return f"{artifact.definition}: new config {artifact.checksum_new or '?'}"
-    return f"{artifact.definition}: {artifact.checksum_previous} -> {artifact.checksum_new or '?'}"
-
-
-def implementation_plan(inputs: ChangeInputs) -> str:
-    """One step per artifact target in rollout order, each followed by its verification."""
-    by_target = _artifacts_by_target(inputs)
-    if not by_target:
-        return "No device configuration changes: merge the data change."
-    lines = []
-    step = 1
-    for target in _ordered_targets(inputs):
-        changes = "; ".join(_checksum_step(a) for a in by_target[target])
-        lines.append(f"{step}. Deploy {target}: {changes}")
-        lines.append(f"{step + 1}. Verify {target} before the next step")
-        step += 2
-    return "\n".join(lines)
-
-
-def backout_plan(inputs: ChangeInputs) -> str:
-    """The configuration each target returns to; a warning when objects are removed."""
-    lines = ["Revoking the approval rolls every device back automatically."]
-    for artifact in inputs.artifacts:
-        if artifact.checksum_previous:
-            lines.append(
-                f"{artifact.target} {artifact.definition}: back to {artifact.checksum_previous} "
-                f"(storage {artifact.storage_previous or '?'})"
-            )
-        else:
-            lines.append(f"{artifact.target} {artifact.definition}: new device: config removed")
-    if diff_counts(inputs)[REMOVED]:
-        lines.append(
-            "WARNING: the change removes objects; a configuration rollback does not restore their allocations "
-            "(addresses, prefixes, numbers): re-create them on a new branch."
-        )
-    return "\n".join(lines)
-
-
-def verification_plan(inputs: ChangeInputs) -> str:
-    """The expected state of each affected device after the change."""
-    lines = ["Deployment verification: the running config checksum equals the artifact checksum on every device."]
-    for device in sorted(inputs.devices, key=lambda d: d.name):
-        expected = f"{device.bgp_peerings} BGP peering(s) established" if device.bgp_peerings else "no BGP peering"
-        lines.append(f"{device.name} ({device.role or 'no role'}): {expected}")
-    return "\n".join(lines)
-
-
-def communication_plan(inputs: ChangeInputs) -> str:
-    """The customers to notify."""
-    if not inputs.customers:
-        return "No customer is affected: notify the network operations team only."
-    return "Notify the affected customers: " + ", ".join(sorted(inputs.customers))
 
 
 def next_window(now: datetime) -> datetime:
@@ -517,7 +510,7 @@ def window_minutes(device_count: int) -> int:
 def planned_window(inputs: ChangeInputs, kind: str) -> tuple[datetime, datetime]:
     """(start, end): a normal change in the next window; a standard or emergency one now. A start a previous run set
     that is already due is kept, so a re-run does not move it."""
-    targets = len(_artifacts_by_target(inputs))
+    targets = len(artifacts_by_target(inputs))
     if kind == "normal":
         start = next_window(inputs.now)
     elif inputs.current_planned_start and inputs.current_planned_start <= inputs.now:
@@ -536,27 +529,3 @@ def conflicts(inputs: ChangeInputs) -> str:
         if (shared := mine & set(devices))
     ]
     return "\n".join(lines)
-
-
-def derive_change_request(inputs: ChangeInputs) -> dict[str, Any]:
-    """Every derived field of the change request, keyed by its attribute name."""
-    score = risk_score(inputs)
-    risk = risk_level(score)
-    kind = change_type(inputs, risk)
-    start, end = planned_window(inputs, kind)
-    return {
-        "short_description": short_description(inputs),
-        "description": description(inputs),
-        "change_type": kind,
-        "risk": risk,
-        "risk_score": score,
-        "impact": impact(inputs),
-        "implementation_plan": implementation_plan(inputs),
-        "backout_plan": backout_plan(inputs),
-        "test_plan": verification_plan(inputs),
-        "communication_plan": communication_plan(inputs),
-        "conflicts": conflicts(inputs) or None,
-        "planned_start": start,
-        "planned_end": end,
-        "artifact_fingerprint": artifact_fingerprint(inputs.artifacts),
-    }
