@@ -118,8 +118,7 @@ class TestParsing:
         assert parse_artifact_diff({}) == []
 
     def test_an_object_node_has_its_values_peers_and_changes(self) -> None:
-        """A value is the HAS_VALUE property (the previous one on a removed node, "NULL" is unset); a peer is a label and
-        an id; an updated attribute keeps its previous value; a dropped peer of an update is listed apart."""
+        """A value is the HAS_VALUE property (the previous one on a removed node, "NULL" is unset)."""
         has = "HAS_VALUE"
         nodes = parse_object_nodes(
             [
@@ -204,8 +203,7 @@ class TestFacts:
     """A cleaned row of change_request_facts.gql."""
 
     def test_a_device_row_gives_its_peer_bgp_sessions_and_prod(self) -> None:
-        """The other member of its MLAG or HA domain is the peer; the sessions of its BGP processes add up; a PROD
-        VRF membership is PROD."""
+        """The other member of its MLAG or HA domain is the peer; the sessions of its BGP processes add up."""
         row = {
             "id": "d1",
             "typename": "DcimPhysicalDevice",

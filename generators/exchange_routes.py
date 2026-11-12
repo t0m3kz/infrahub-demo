@@ -1,11 +1,6 @@
 """The static routes of a service context's exchange, written as ``ManagedStaticRoute`` objects on its border devices.
-
-A firewall context joins the tenant VRF to INTERNET and MANAGEMENT; the border leaf (or the colocation edge) whose service
-port faces a member carries the static routes of that exchange: the tenant default route and the return route of the
-context's public address. A load-balancer context carries the route of its VIP range. The rule is one function
-(``utils.exchange_transit.exchange_route_specs``) and the transform renders the objects this module writes, so there is
-one path from model to configuration. The generator that calls this is generators/topology/context_routes.py: the routes
-are its tracked output, so the run's group deletes the ones it no longer derives.
+The rule is ``utils.exchange_transit.exchange_route_specs``; the routes are tracked output of
+generators/topology/context_routes.py.
 """
 
 from __future__ import annotations
@@ -26,12 +21,12 @@ device exports it into EVPN."""
 
 
 def route_name(context: str, device: str, namespace: str, prefix: str) -> str:
-    """The name of a route: unique per context, device, VRF and prefix, stable across runs (``rt:`` is the generator's)."""
+    """Route name: unique per context, device, VRF and prefix, stable across runs."""
     return f"rt:{context}:{device}:{namespace}:{prefix}".lower()
 
 
 class ExchangeRoutesMixin:
-    """Route specs of a service context and the write of them as tracked objects."""
+    """Route specs of a service context and their write as tracked objects."""
 
     client: Any
     logger: logging.Logger
@@ -45,7 +40,7 @@ class ExchangeRoutesMixin:
         snat: str | None,
         edge: bool,
     ) -> list[dict[str, Any]]:
-        """The routes of a firewall context's exchanges (the one rule), for a border device of this kind."""
+        """Routes of a firewall context's exchanges, for a border device of this kind."""
         return [
             spec
             for peer_leg in peer_legs
@@ -67,11 +62,9 @@ class ExchangeRoutesMixin:
         specs_for: Mapping[bool, list[dict[str, Any]]],
         leg_interfaces: Mapping[str, str],
     ) -> None:
-        """Save each route on its device in the device's VRF instance; every one is tracked by the run.
-
-        A device in no instance of a route's VRF fails the run: the instance follows the legs, so it is a defect to
-        report, not a route to skip."""
-        # DcimDeviceManaged, not the slim DcimDevice: the role (an edge keeps its tenant default local) is on it.
+        """Save each route on its device in its VRF instance, tracked by the run.
+        A device in no instance of the route's VRF fails the run."""
+        # DcimDeviceManaged, not the slim DcimDevice: the role (an edge keeps its tenant default local) is on it
         devices = await self.client.filters(kind=DcimDeviceManaged, ids=device_ids)
         instances = await self._vrf_instances([d.id for d in devices])
         for device in devices:
@@ -108,7 +101,7 @@ class ExchangeRoutesMixin:
                     return
 
     async def _vrf_instances(self, device_ids: list[str]) -> dict[tuple[str, str], str]:
-        """(device id, namespace name) -> id of the VRF instance the device is a member of, one read."""
+        """(device id, namespace name) -> id of the VRF instance the device is a member of."""
         found = await self.client.filters(
             kind=ManagedVRF, shared_devices__ids=device_ids, include=["shared_devices", "security_zone"]
         )

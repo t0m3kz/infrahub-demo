@@ -1,32 +1,6 @@
-"""Group policy: VTEPs and data centers against the reference profile, and which segments need group policy.
+"""Group policy: whether VTEPs and data centers match the reference profile, and which segments need group policy.
 
-One implementation each, shared by checks/reference_fabric.py, checks/segment_security.py,
-the group tag helper (generators/helpers/security_tag.py) and the contract builder
-(transforms/helpers/group_policy/):
-
-- ``profiles_by_platform``: platform -> its one usable DcimGroupPolicyProfile row,
-  and why the other rows cannot be used;
-- ``tag_pool``: the one number pool the rows draw group IDs from;
-- ``reserved_groups``: the reserved group IDs of one group-policy kind;
-- ``fabric_reason``: why one VTEP is outside its platform's row (None: in it);
-- ``site_reason`` / ``site_kind``: why a data center is not a reference fabric
-  (None: it is), and the one group-policy kind of its VTEPs. A site is one only
-  when every VTEP is in its row and all rows share one kind (NX-OS: "GPO is not
-  supported on a site that has policy-aware and policy-unaware nodes");
-- ``site_vteps`` / ``vteps_by_data_center``: the devices of a data center that
-  are VTEPs (its own and its pods');
-- ``segment_sites``: the sites (data center, colocation metro) a
-  segment is active in;
-- ``gbp_required``: whether a segment needs component group policy.
-
-The profile is data (data/bootstrap/19b_group_policy_profile.yml): nothing here
-knows a platform, device type, memory size, release, kind or pool name. Everything
-fails closed: a platform without a row or with several, an unusable row, a
-missing platform, device type, memory or image, a release that does not parse.
-
-Inputs are cleaned query data (utils.data_cleaning.clean_data): devices as
-selected by the DeviceGroupPolicyFields fragment and profile rows by
-GroupPolicyProfileFields (queries/fragments/group_policy.gql).
+The profile is data (data/bootstrap/19b_group_policy_profile.yml); everything fails closed.
 """
 
 from __future__ import annotations
@@ -42,11 +16,7 @@ Profiles = dict[str, dict[str, Any]]
 
 
 def release_key(version: str | None) -> tuple[int, ...]:
-    """The numbers of a release string, in order: ``10.6(1)F`` -> (10, 6, 1).
-
-    Compared only within one platform: 10.3(3) < 10.6(1)F < 10.6(3)F. An empty
-    tuple means unparseable: callers fail closed.
-    """
+    """The numbers of a release string: ``10.6(1)F`` -> (10, 6, 1); empty means unparseable."""
     return tuple(int(number) for number in re.findall(r"\d+", version or ""))
 
 
@@ -68,11 +38,7 @@ def _row_problem(row: dict[str, Any]) -> str | None:
 
 
 def profiles_by_platform(rows: Iterable[dict[str, Any]]) -> tuple[Profiles, list[str]]:
-    """Platform -> its one usable row, and the problems of every other row, sorted.
-
-    A platform named by two rows has none (fail closed); so has one whose only
-    row is unusable, and a row without a platform. No row at all is a problem.
-    """
+    """Platform -> its one usable row, plus sorted problems; a platform with two rows or an unusable row has none."""
     rows = list(rows)
     if not rows:
         return {}, ["no DcimGroupPolicyProfile row: no fabric is a reference fabric"]
@@ -97,10 +63,7 @@ def profiles_by_platform(rows: Iterable[dict[str, Any]]) -> tuple[Profiles, list
 
 
 def tag_pool(rows: Iterable[dict[str, Any]]) -> tuple[dict[str, Any] | None, str | None]:
-    """The one number pool the profile rows name (``id``, ``name``, ranges), or None and why.
-
-    Group IDs are fabric-wide, so every row that names a pool names the same.
-    """
+    """The one number pool the profile rows name, or None and why."""
     pools = {str(pool["id"]): pool for row in rows if (pool := row.get("tag_pool") or {}).get("id")}
     if len(pools) != 1:
         names = sorted(str(pool.get("name") or pool_id) for pool_id, pool in pools.items())
@@ -133,10 +96,7 @@ def site_vteps(devices: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
 def vteps_by_data_center(
     data_centers: Iterable[dict[str, Any]], pods: Iterable[dict[str, Any]]
 ) -> dict[str, list[dict[str, Any]]]:
-    """Data center id -> its VTEPs (site_vteps): its own devices and those of its pods.
-
-    ``pods`` carry ``parent.id``; a pod's devices belong to its data center.
-    """
+    """Data center id -> its VTEPs, its own and its pods' (``pods`` carry ``parent.id``)."""
     pod_devices: dict[str, list[dict[str, Any]]] = {}
     for pod in pods:
         if parent := (pod.get("parent") or {}).get("id"):
@@ -151,11 +111,7 @@ def vteps_by_data_center(
 
 
 def segment_sites(segment: dict[str, Any]) -> set[str]:
-    """Ids of the sites a segment is active in.
-
-    The deployments of a VXLAN segment's segment deployments (data centers,
-    colocation metros).
-    """
+    """Ids of the sites (data centers, colocation metros) a segment is active in."""
     return {
         str(deployment["id"])
         for activation in segment.get("segment_deployments") or []
@@ -169,11 +125,7 @@ def _profile(device: dict[str, Any], profiles: Profiles) -> dict[str, Any] | Non
 
 
 def fabric_reason(device: dict[str, Any], profiles: Profiles) -> str | None:
-    """Why one VTEP is outside its platform's row, or None when it is in it.
-
-    The first failing property, in order: platform row, device type, memory
-    (only when the row sets a floor), software image release.
-    """
+    """Why one VTEP is outside its platform's row (first failing property), or None."""
     profile = _profile(device, profiles)
     if profile is None:
         platform = (device.get("platform") or {}).get("name")
@@ -219,11 +171,7 @@ def _device_label(device: dict[str, Any]) -> str:
 
 
 def site_reason(vteps: Iterable[dict[str, Any]], profiles: Profiles) -> str | None:
-    """Why a data center is not a reference fabric, or None when every VTEP is in one-kind rows.
-
-    Each distinct cause is listed once, with the first VTEP (by name) it
-    applies to and how many more share it.
-    """
+    """Why a data center is not a reference fabric, or None; each cause is listed once with its first VTEP."""
     ordered = sorted(vteps, key=lambda device: str(device.get("name")))
     if not ordered:
         return "no VTEPs"
@@ -265,9 +213,5 @@ def is_microsegmented(segment: dict[str, Any]) -> bool:
 
 
 def gbp_required(segment: dict[str, Any], tag_count: int) -> bool:
-    """A microsegmented segment hosting at least two tagged components.
-
-    Only traffic between two components of one segment is bridged past the
-    segment's SVI ACL, so only such a segment needs group policy.
-    """
+    """A microsegmented segment hosting at least two tagged components needs group policy."""
     return is_microsegmented(segment) and tag_count >= 2

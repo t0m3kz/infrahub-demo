@@ -1,9 +1,4 @@
-"""Unit tests for HA (High Availability) configuration helpers.
-
-Covers:
-- get_ha() — domain extraction, HA link detection, missing-capability path
-- Integration with device data shapes used by BaseDeviceTransform
-"""
+"""Unit tests for HA (High Availability) configuration helpers."""
 
 from __future__ import annotations
 
@@ -13,9 +8,7 @@ import pytest
 
 from transforms.helpers.ha import HA_LINK_ADDRESSES, get_ha, leg_virtual_ip
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _ha_cap(
@@ -50,9 +43,7 @@ def _uplink_iface(name: str = "Ethernet1/1") -> dict:
     return {"name": name, "role": "uplink"}
 
 
-# ---------------------------------------------------------------------------
 # get_ha — empty / missing capability
-# ---------------------------------------------------------------------------
 
 
 class TestGetHaNoDomain:
@@ -69,9 +60,7 @@ class TestGetHaNoDomain:
         assert get_ha(caps) is None
 
 
-# ---------------------------------------------------------------------------
 # get_ha — domain field extraction
-# ---------------------------------------------------------------------------
 
 
 class TestGetHaDomainExtraction:
@@ -159,9 +148,7 @@ class TestGetHaDomainExtraction:
         assert result["devices"] == ["dc3-lb-01", "dc3-lb-02"]
 
 
-# ---------------------------------------------------------------------------
 # get_ha — defaults when fields are missing
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -176,9 +163,7 @@ def test_a_missing_field_takes_its_default(field: str, default: object) -> None:
     assert type(result[field]) is type(default)
 
 
-# ---------------------------------------------------------------------------
 # get_ha — HA link detection
-# ---------------------------------------------------------------------------
 
 
 class TestGetHaLink:
@@ -203,9 +188,7 @@ class TestGetHaLink:
         assert result["ha_link"] is None
 
 
-# ---------------------------------------------------------------------------
 # get_ha — first HA capability wins
-# ---------------------------------------------------------------------------
 
 
 class TestGetHaFirstCapabilityWins:
@@ -232,9 +215,7 @@ class TestGetHaFirstCapabilityWins:
         assert result["name"] == "MY-HA"
 
 
-# ---------------------------------------------------------------------------
 # Real firewall HA scenario
-# ---------------------------------------------------------------------------
 
 
 def test_dc1_firewall_ha_scenario() -> None:

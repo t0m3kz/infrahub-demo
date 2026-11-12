@@ -144,7 +144,7 @@ def _p2p_errors(
     label: str, addresses: list[str | None], length: int, pools: list[Any], prefixes: list[dict[str, Any]] | None
 ) -> list[str]:
     """Why two interface addresses are not one point-to-point /``length`` inside one of ``pools``, or why the circuit's
-    own prefix (``prefixes``, found by description: exactly one) is not that network, a technical one."""
+    own prefix (``prefixes``, found by description: exactly one) is not that network."""
     if len(addresses) != CIRCUIT_ENDS or any(address is None for address in addresses):
         return [f"{label}: interface addresses {addresses} are not two"]
     first, second = (ipaddress.ip_interface(str(address)) for address in addresses)
@@ -198,8 +198,8 @@ def _contiguous(hops: list[list[str]], start: str, finish: str) -> bool:
 
 
 def _tunnel_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, Any]]) -> list[str]:
-    """A Tunnel: owned by its office's owner, one end on the gateway's public port in the gateway's zone, and every
-    end on a live internet carrier circuit of its own (a carrier of circuit_type internet): no shared path to be contiguous."""
+    """A Tunnel: owned by its office's owner, one end on the gateway's public port in the gateway's zone, and every end
+    on a live internet carrier circuit of its own (a carrier of circuit_type internet)"""
     name = circuit["name"]
     errors: list[str] = []
     locations = circuit["location_nodes"]
@@ -238,8 +238,7 @@ def _tunnel_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, 
 
 def _interconnect_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict[str, Any]]) -> list[str]:
     """An Interconnect (a DCI): unowned, two facilities, every end on a live carrier circuit, and those circuits one
-    contiguous path between the two facilities. When one circuit carries it, it is pure fibre: its two ends are
-    exactly the DCI's two ports."""
+    contiguous path between the two facilities."""
     name = circuit["name"]
     errors: list[str] = []
     locations = circuit["location_nodes"]
@@ -282,10 +281,7 @@ def _interconnect_errors(circuit: dict[str, Any], physical_by_id: dict[str, dict
 
 def _handoff_errors(circuit: dict[str, Any]) -> list[str]:
     """A Handoff: one or two facilities that are where its two ends are deployed, its namespace stated, at least one
-    end carried by a live carrier circuit or a cable, and each end a `<port>.<vlan>` VLAN sub-interface, a routed
-    physical port (an address, no VLAN) or a cloud peering interface (its `vlan_id` is optional); the ends are of one
-    shape (a cloud peering interface fits any) and the VLANs that are set are equal. A cloud transport sits in its
-    region, which stands in the end device's deployment."""
+    end carried by a live carrier circuit or a cable."""
     name = circuit["name"]
     errors: list[str] = []
     locations = circuit["location_nodes"]
@@ -346,9 +342,7 @@ def _session_port_errors(virtual: list[dict[str, Any]]) -> list[str]:
 
 
 def _environment_errors(virtual: list[dict[str, Any]]) -> list[str]:
-    """Prod and nonprod never connect: circuits meeting at a device share an environment class. A Tunnel is PROD (its
-    office is always production), a Handoff takes the type of its namespace (INTERNET and MANAGEMENT state none), an
-    Interconnect runs in the underlay and states none."""
+    """Prod and nonprod never connect: circuits meeting at a device share an environment class."""
     by_device: dict[str, tuple[str, list[tuple[str, str]]]] = {}
     for circuit in virtual:
         env_class: str | None = None
@@ -369,8 +363,8 @@ def _environment_errors(virtual: list[dict[str, Any]]) -> list[str]:
 
 
 def _expectation_errors(virtual: list[dict[str, Any]]) -> list[str]:
-    """Where the virtual circuits of the branch differ from ALL_DEMO_VIRTUAL_CIRCUITS: a missing or an unexpected
-    one, and per circuit its kind, derived owner, locations, ends, derived carrier and namespace."""
+    """Where the virtual circuits of the branch differ from ALL_DEMO_VIRTUAL_CIRCUITS: a missing or an unexpected one,
+    and per circuit its kind, derived owner, locations, ends, derived carrier and namespace."""
     by_name = {circuit["name"]: circuit for circuit in virtual}
     errors: list[str] = []
     missing = sorted(set(ALL_DEMO_VIRTUAL_CIRCUITS) - set(by_name))

@@ -15,11 +15,7 @@ def _on_device(interfaces: list[dict[str, Any]], device_name: str) -> list[dict[
 
 
 def _peer_link_rank(interface: dict[str, Any]) -> tuple[int, str]:
-    """Sort key of the peer-link candidates among a member's listed ``mlag-peer`` interfaces.
-
-    The port-channel first, then the virtual peer-link, then a physical port (the LAG's member, or the port of a
-    peer-link authored without a LAG), each by name.
-    """
+    """Sort key of the peer-link candidates among a member's listed ``mlag-peer`` interfaces."""
     if interface.get("lag_id") is not None:
         rank = 0
     elif interface.get("typename") == "DcimVirtualInterface":
@@ -30,12 +26,7 @@ def _peer_link_rank(interface: dict[str, Any]) -> tuple[int, str]:
 
 
 def _control_address(interfaces: list[dict[str, Any]]) -> tuple[str | None, str | None]:
-    """Return (interface name, address with prefix length) of one member's MLAG control session.
-
-    ``interfaces`` are the member's interfaces listed by the domain: the control SVI (a ``mlag-control`` interface),
-    or the virtual peer-link loopback when the domain has no physical peer-link. (None, None) for vPC, which has no
-    control session.
-    """
+    """Return (interface name, address with prefix length) of one member's MLAG control session."""
     candidates = [
         interface
         for interface in interfaces
@@ -55,25 +46,7 @@ def get_mlag(
     interfaces: list[dict[str, Any]] | None = None,
     device_name: str = "",
 ) -> dict[str, Any] | None:
-    """Extract MLAG domain configuration for template rendering.
-
-    Scans device_capabilities for a ManagedMLAG entry. Both peer devices
-    reference the same ManagedMLAG node via device_capabilities, so this
-    function returns the first ManagedMLAG capability found, or None if
-    the device has no MLAG domain.
-
-    The domain's own ``interfaces`` (the ManagedMLAG edge, cleaned query data) are the peer-link and the control SVI
-    of both members; nothing is found on the device by role or name. The peer-link name is taken directly from the
-    database: the generator creates it with the vendor-correct naming convention (Port-Channel100, port-channel100,
-    lag-100, PortChannel100, peer-link, etc.). ``interfaces`` (the device's own) only tells the host-facing
-    port-channels of the domain (``mlag_domain``) from the ones the domain lists.
-
-    ``virtual_peer_link`` is True when that interface is a DcimVirtualInterface:
-    the generator's member-less stand-in for a pod with ``mlag_create: virtual``
-    (generators/mlag.py _ensure_virtual_peer_link), not a port-channel a device
-    can bind. Templates that need a physical peer-link must not render it (cisco_nxos_vpc.j2 does
-    not; arista_eos_mlag.j2 does not consult it yet, but no EOS pod is virtual).
-    """
+    """Extract MLAG domain configuration for template rendering."""
     for cap in device_capabilities or []:
         if cap.get("typename") != "ManagedMLAG":
             continue
@@ -142,11 +115,7 @@ def get_mlag(
 
 
 def get_sonic_mlag_config(mlag: dict[str, Any] | None) -> dict[str, Any]:
-    """Build the SONiC ConfigDB tables for an MC-LAG domain. The ICCP session
-    runs between the peer-link SVI's IPv4 /31 addresses (MLAG-Control-IPv4
-    pool), so the SVI's VLAN, tagged peer-link membership and address are
-    emitted alongside MCLAG_DOMAIN. Templates must merge these per table —
-    a shallow update would drop VLANs defined elsewhere in the device config."""
+    """Build the SONiC ConfigDB tables for an MC-LAG domain."""
     if not mlag:
         return {}
     if not all(mlag.get(field) for field in ("domain_id", "local_address", "peer_ip", "peer_link_lag_id")):

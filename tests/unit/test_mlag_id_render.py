@@ -146,8 +146,7 @@ def test_get_interfaces_binds_members_with_the_lag_mode() -> None:
 
 
 def test_a_static_lag_renders_on_never_static_in_every_channel_group_line() -> None:
-    """EOS and NX-OS take `on | active | passive`, not `static`: the LAG, its members and the peer-link carry the
-    mapped keyword, and the templates render only that."""
+    """EOS and NX-OS take `on | active | passive`, not `static`:"""
     from transforms.helpers.mlag import CHANNEL_GROUP_MODE, get_mlag
     from transforms.helpers.vxlan import get_interfaces
 

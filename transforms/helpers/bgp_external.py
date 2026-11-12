@@ -1,9 +1,4 @@
-"""External BGP session policy helpers: what an external (tenant VRF, handoff) session accepts and is announced.
-
-Split out of ``transforms.helpers.bgp`` (session building and peer groups stay there). The prefix registries
-(on-prem segments, office LANs, tunnel ranges) and the per-session policy built from them by the same-owner
-exchange rule in ``utils/ownership.py``.
-"""
+"""External BGP session policy helpers: what an external (tenant VRF, handoff) session accepts and is announced."""
 
 import logging
 from collections.abc import Iterable, Mapping
@@ -34,17 +29,7 @@ def _routable_ipv4(prefix: str | None) -> bool:
 
 
 def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, dict[str, list[str]]]:
-    """Tenant VRF name -> owner -> the IPv4 prefixes behind that owner's on-prem segment gateways, sorted.
-
-    ``segments`` is the cleaned ManagedNetworkSegment query root. A prefix behind
-    a segment gateway is the on-prem routed space (the same definition
-    checks/routing_invariants.py uses for the VPC overlap gate); a container
-    (member_type prefix) is skipped. Only prod/non_prod namespaces qualify, each
-    keeps its own lists, so an external peer in PROD is never offered a
-    NON-PROD prefix. A segment without a customer owner (customer_owner) is skipped:
-    the owner registers the prefix, so an ownerless one is announced to nobody.
-    What an external tenant-VRF peer is announced (get_external_session_policies).
-    """
+    """Tenant VRF name -> owner -> the IPv4 prefixes behind that owner's on-prem segment gateways, sorted."""
     by_vrf: dict[str, dict[str, set[str]]] = {}
     for segment in segments or []:
         owner = customer_owner(segment.get("owner"))
@@ -67,11 +52,7 @@ def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, dict
 
 
 def session_circuit_owner(circuit: dict[str, Any]) -> str | None:
-    """The customer key of a cleaned session circuit, derived (the circuit stores no owner).
-
-    The owner of the single ``TopologyCustomerOffice`` among its ``locations`` (a tunnel); ``utils/ownership.py``
-    circuit_owner. Raises ``CircuitOwnerError`` for two offices of different owners.
-    """
+    """The customer key of a cleaned session circuit, derived (the circuit stores no owner)."""
     return circuit_owner(customer_owner(location.get("owner")) for location in circuit.get("locations") or [])
 
 
@@ -94,13 +75,7 @@ def _far_end_devices(device_capabilities: list[dict[str, Any]] | None, device_na
 
 
 def office_registered(office: dict[str, Any]) -> list[Registered]:
-    """The (owner, prefix) pairs one office footprint registers: its ``lan_prefixes`` and the hosted segments' prefixes.
-
-    The ``lan_prefixes`` are owned by the office's owner. Derived, the gateway prefix of every segment the office
-    hosts itself (``segment_deployments``: an office with a fabric hosts its LAN as a VXLAN segment, whose prefix
-    comes from the tenant pool, not from the office) is owned by the segment's owner.
-    ``office`` is one cleaned TopologyCustomerOffice.
-    """
+    """The (owner, prefix) pairs one office footprint registers."""
     office_owner = customer_owner(office.get("owner"))
     gateway = office.get("sdwan_gateway") or {}
     instances = [
@@ -137,16 +112,7 @@ def office_registered(office: dict[str, Any]) -> list[Registered]:
 def registered_by_gateway(
     offices: list[dict[str, Any]] | None, tunnels: list[dict[str, Any]] | None
 ) -> dict[str, list[Registered]]:
-    """SD-WAN gateway name -> the (owner, prefix) pairs registered behind it, by offices and by tunnels.
-
-    An office footprint attached to the gateway registers what office_registered returns. A tunnel registers its
-    ``registered_prefixes`` (owned by the tunnel's owner, derived: session_circuit_owner) behind the gateway at one of its ends, the way an office
-    LAN is: the space its far end reaches that no office of ours hosts (a B2B partner's range). Its other end (an
-    office edge, a partner router) is no gateway and gets nothing.
-    ``offices`` is the cleaned TopologyCustomerOffice query root, ``tunnels`` the tunnel TopologySessionCircuit one.
-    A gateway with offices but no registered prefix is present with an empty list; a gateway no office names
-    is absent, so a tunnel registers behind a gateway only where an office sits behind it too.
-    """
+    """SD-WAN gateway name -> the (owner, prefix) pairs registered behind it, by offices and by tunnels."""
     registered_by: dict[str, list[Registered]] = {}
     for office in offices or []:
         gateway = (office.get("sdwan_gateway") or {}).get("name")
@@ -171,13 +137,7 @@ def registered_by_attachment(
     tunnels: list[dict[str, Any]] | None,
     legs: Iterable[CloudLeg] | None,
 ) -> dict[str, list[Registered]]:
-    """Attachment point -> the (owner, prefix) pairs registered behind it, as the edge reads them.
-
-    An attachment point is where an external session lands: an SD-WAN gateway (registered_by_gateway: its offices and
-    tunnels, keyed by the gateway's name) or a cloud gateway (the legs of ``transforms/helpers/bgp_cloud.py``; the primary and secondary peering of
-    one gateway are one point). Shared by checks/routing_invariants.py rule 8 and checks/segment_security.py, so both
-    see the registrations the edge accepts.
-    """
+    """Attachment point -> the (owner, prefix) pairs registered behind it, as the edge reads them."""
     points = dict(registered_by_gateway(offices, tunnels))
     for leg in legs or []:
         points.setdefault(leg.point, []).extend(leg.registered)
@@ -185,12 +145,7 @@ def registered_by_attachment(
 
 
 def registered_by_namespace(registered: list[Registered]) -> dict[str, dict[str, set[str]]]:
-    """Namespace name -> owner -> the routable IPv4 prefixes of the (owner, IpamPrefix) pairs registered there.
-
-    A pair without a customer owner, a prefix without a namespace, the default route and IPv6 are dropped.
-    Shared by the edge (get_external_peer_prefixes) and checks/routing_invariants.py rule 8, so both read
-    "what an owner registered behind an attachment point" the same way.
-    """
+    """Namespace name -> owner -> the routable IPv4 prefixes of the (owner, IpamPrefix) pairs registered there."""
     found: dict[str, dict[str, set[str]]] = {}
     for registration in registered:
         owner, prefix = registration.customer, registration.prefix
@@ -209,28 +164,7 @@ def get_external_peer_prefixes(
     tunnels: list[dict[str, Any]] | None,
     cloud_legs: Mapping[str, CloudLeg] | None = None,
 ) -> dict[str, dict[str, list[str]]]:
-    """Handoff sub-interface name -> owner -> the far end's registered IPv4 prefixes of that owner, sorted.
-
-    Two kinds of far end are known, each with its registered prefixes:
-
-    - The SD-WAN gateway: a handoff whose only BGP far end
-      (``device_capabilities`` peerings) is the ``sdwan_gateway`` of some
-      office footprint accepts the ``lan_prefixes`` (owner: the office's owner)
-      and the hosted segments' prefixes (owner: the segment's owner) of every
-      office behind that gateway, and the ``registered_prefixes`` (owner: the
-      tunnel's derived owner) of every tunnel ending on it (registered_by_gateway).
-    - A cloud peering: ``cloud_legs`` (transforms/helpers/bgp_cloud.py legs_by_interface) maps the interface to the
-      leg of the session circuit it ends, and the session accepts what the leg registers: the allowed prefixes or
-      the network blocks behind the peering's gateway, owned by the transport's owner.
-
-    Ownership belongs to the object that registers the prefix, never to the
-    handoff circuit, and only a customer owner counts (customer_owner): a
-    prefix without one is never accepted. Only prefixes registered in the
-    sub-interface's own namespace are kept, so a PROD session never accepts a
-    NON-PROD prefix, and never the default route or IPv6. A sub-interface with
-    neither far end is absent, and a known far end with nothing customer-owned
-    registered maps to ``{}``: both accept nothing.
-    """
+    """Handoff sub-interface name -> owner -> the far end's registered IPv4 prefixes of that owner, sorted."""
     registered_behind = registered_by_gateway(offices, tunnels)
     far_ends = _far_end_devices(device_capabilities, device_name)
 
@@ -260,33 +194,7 @@ def get_external_session_policies(
     routing_identity: bool = False,
     cloud_legs: Mapping[str, CloudLeg] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Handoff sub-interface name -> the prefix policy of its external session.
-
-    ``owners`` are the customers that registered a prefix behind the session
-    (``peer_prefixes``, get_external_peer_prefixes); ``in`` is the sorted union
-    of their registered prefixes (what the far end may send); ``out`` is what
-    the far end is announced, by the same-owner exchange rule
-    (utils/ownership.py exchange_policies, one call per namespace with
-    ``onprem_prefixes[<namespace>]`` as the segments): for each of the
-    session's owners its on-prem segment prefixes and whatever it registered
-    behind another session of the namespace, minus ``in`` (never announced
-    back to where it was learned), and nothing of any other customer. A prefix
-    registered by two owners, or one owner's prefix behind two sessions, is
-    logged as a WARNING (ownership_conflicts) with ``device_name``; ``cloud_legs`` (legs_by_interface) tells it that
-    the sessions of one cloud gateway are one attachment point and which prefixes a public or static cloud peering
-    announces to its session alone (``advertised``). Exact
-    prefixes only; a session with no owner has empty lists and the template
-    renders deny-all both ways, a sub-interface without a namespace exchanges
-    with nothing.
-
-    With ``routing_identity`` (any customer or segment carries a routing tag, utils/routing_identity.py
-    identity_in_use) a policy also has ``identity: True`` (the template strips our communities from what it
-    sends and accepts) and ``in_owners``: one entry per owner with an accepted prefix, sorted, as ``owner``,
-    ``name`` (the owner, safe in a prefix-list name), ``prefixes`` and ``community`` (the owner's
-    ``64496:<tag>`` from ``customer_tags``, None when it has no tag). The inbound community is set per
-    prefix through the owner that registered it, so a session with several owners tags each correctly.
-    Without ``routing_identity`` the policy is exactly the three fields above.
-    """
+    """Handoff sub-interface name -> the prefix policy of its external session."""
     namespaces = {iface.get("name"): interface_security_zone(iface).get("name") for iface in interfaces or []}
     # One group per namespace; a session without one stands alone, it has no on-prem space to exchange.
     groups: dict[tuple[str | None, str | None], dict[str, dict[str, list[str]]]] = {}

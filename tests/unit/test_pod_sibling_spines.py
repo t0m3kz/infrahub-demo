@@ -1,12 +1,4 @@
-"""A pod finds its lower-index siblings' spine-slot devices by name, not by deployment.
-
-Regression for DC7 (two S_BORDER_SPINE_POD pods, back-to-back, no super-spine):
-pod 2 failed with "sibling pod idx=1 still has no spine devices/uplinks" because
-it looked the sibling's spines up with ``deployment__ids=[sibling.id]``, while a
-border-spine is deployed to the DC, not to its pod. Spine-slot names are
-deterministic ([dc.index, pod.index] + role + role_index), so the name is what
-attributes a device to its pod, whichever deployment it sits in.
-"""
+"""A pod finds its lower-index siblings' spine-slot devices by name, not by deployment."""
 
 from __future__ import annotations
 
@@ -269,9 +261,7 @@ class TestMeshPortSlots:
 
     @pytest.mark.asyncio
     async def test_a_sibling_seen_with_only_some_spines_keeps_the_full_slot(self) -> None:
-        """Pod 1 is mid-creation (1 of its 2 spines visible): pod 3 still lands at port 2 of pod 1
-        and of pod 2. The live count used to shrink the stride to 1, putting pod 3 on pod 1's port 1,
-        which pod 2's link to pod 1 (ports 0-1) already uses."""
+        """Pod 1 is mid-creation (1 of its 2 spines visible)"""
         pod_1 = _pod_spines(1, role="spine", deployment_id="pod-1")[:1]
         pod_2 = _pod_spines(2, role="spine", deployment_id="pod-2")
         pod_3 = _pod_spines(3, role="spine", deployment_id="pod-3")

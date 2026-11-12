@@ -1,41 +1,4 @@
-"""Integration test — the 30_all interconnect and tenant-service layer.
-
-Everything here is the part of the model that leaves a single site: the dark
-fibre and cross-connects into the colocation on-ramps, the virtual circuits
-riding them (the DCI between the border gateways, the SD-WAN gateway handoff and
-the SD-WAN branches' tunnels and internet
-underlay.
-
-A carrier circuit is a pure carrier. The role of a session circuit is its
-`circuit_type`: a Tunnel (inventory only, no session), an Interconnect (a DCI: an
-underlay and an EVPN session), a Handoff (one eBGP session in one environment
-namespace) or a VPN (model only, none in 30_all). Their carrier is never declared: it is derived
-from the circuit's own ports. A circuit has no owner of its own: it is derived
-from its office (utils.ownership.circuit_owner).
-
-The edge that matters here is ``capabilities`` — how a circuit surfaces on the
-port it terminates on. It is the single uniform "what is this port doing" edge,
-and a regression would silently split the graph into islands.
-
-Circuit placement is checked from both sides: a carrier circuit ends on two
-facilities where its end devices sit (the end the data leaves out is the one
-add_circuit derived), a tunnel on its owner's office, and every location's
-reverse ``circuits`` lists exactly the circuits naming it. The per-kind rules
-(_tunnel_errors, _interconnect_errors, _handoff_errors) assert on the live data
-what checks/circuit_placement.py enforces, independently of it.
-
-Also covered: the sessions add_virtual_circuit builds (two per DCI, one per
-Handoff, none for a Tunnel), the tenant-scoped firewall and load-balancer
-contexts (shared vs dedicated, driven by the customer design blueprint), the
-VIPs of the load_balanced components with their R_server/R_client rules, and
-the segment deployment legs, where a stretch segment must carry one leg per DC.
-
-Runs against the branch test_59 builds; it never loads data of its own.
-
-This module holds the circuit steps (physical, virtual, location circuits). The tenant-scoped services follow in
-test_62b_all_demo_tenant_services.py and the colocation, session and internet steps in
-test_62c_all_demo_circuit_sessions.py; their helpers are interconnect_queries.py and interconnect_rules.py.
-"""
+"""Integration test — the 30_all interconnect and tenant-service layer."""
 
 import logging
 
@@ -103,16 +66,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the physical underlay: type mix, provider, placement and two distinct ends.
-
-        Every circuit is point-to-point, so exactly two locations and exactly
-        two distinct ports (its capabilities, min and max count 2) are
-        hard invariants, and a port is an end of at most one circuit — the
-        SD-WAN offices' INET-<office> circuits, created concurrently, are where a
-        shared access port would show. Each location is a facility, and each
-        is where one end's device is deployed (_placement_errors); the ends the
-        data leaves out are the ones add_circuit derived (_derived_location_errors).
-        """
+        """Verify the physical underlay: type mix, provider, placement and two distinct ends."""
         logging.info("=== %s - Step 1: Carrier Circuits ===", SCENARIO_NAME)
 
         inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)
@@ -136,9 +90,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             circuit_id = circuit["circuit_id"]
             if not circuit["provider"]:
                 errors.append(f"{circuit_id}: no provider")
-            # The shared circuits (dark fibre, cross-connects, ISP transit, the
-            # gateway's own access) are deliberately unowned; only a customer's
-            # own internet underlay names an owner.
+            # The shared circuits (dark fibre, cross-connects, ISP transit, the gateway's own access) are deliberately
+            # unowned; only a customer's own internet underlay names an owner.
             transit = circuit_id in ALL_DEMO_SHARED_INTERNET_CIRCUITS
             if circuit["circuit_type"] == "internet" and not transit and not circuit["owner"]:
                 errors.append(f"{circuit_id}: internet underlay with no owning customer")
@@ -178,14 +131,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
     @staticmethod
     def _placement_errors(physical: list[dict]) -> list[str]:
-        """At most two distinct facilities, one per end that has a place (an on-ramp edge: its zone).
-
-        A facility is a TopologyFacility kind (DC, colocation zone, cloud region,
-        ISP, SaaS region, office); a pod, a metro or a footprint is never one, and an
-        office only ends its own internet access. The two ends' devices must account for
-        the two locations one-to-one: the border leaf's DC, the PE's ISP, the provider
-        router's region, and for the on-ramp edge (deployed to its zone) that zone.
-        """
+        """At most two distinct facilities, one per end that has a place (an on-ramp edge: its zone)."""
         errors: list[str] = []
         for circuit in sorted(physical, key=lambda c: c["circuit_id"]):
             circuit_id = circuit["circuit_id"]
@@ -209,9 +155,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if len(devices) != 2:
                 errors.append(f"{circuit_id}: end devices {_deployments(circuit)}, expected 2")
                 continue
-            # Exact, like checks/circuit_placement.py: the locations ARE the places of the ends that have one (a
-            # deployment, region, SaaS region, provider connect location or THE INTERNET), never a sibling cage of the
-            # same metro. A provider's own router has no place and no location.
+            # Exact, like checks/circuit_placement.py
             placed = {device["deployment_id"] for device in devices if device["deployment_id"]}
             if placed != location_ids:
                 errors.append(
@@ -222,15 +166,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
     @staticmethod
     def _derived_location_errors(physical: list[dict]) -> list[str]:
-        """The data authors only what is not derivable; add_circuit wrote exactly the derived ends.
-
-        Derivable: an end device's deployment that is itself a facility (DC, ISP,
-        cloud region, colocation zone or virtual colocation). The 30_all data must not
-        list one, except the cage it authors (redundant with the edge's zone, which
-        add_circuit also derives: an authored zone must be that zone), and the
-        locations the branch holds beyond the data's are exactly those. Circuits no data file declares
-        (INET-<office>, add_sdwan_edge) are written whole by their generator.
-        """
+        """The data authors only what is not derivable; add_circuit wrote exactly the derived ends."""
         errors: list[str] = []
         by_id = {circuit["circuit_id"]: circuit for circuit in physical}
         for circuit_id, declared in sorted(ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS.items()):
@@ -251,8 +187,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     if device["deployment_kind"] in ALL_DEMO_FACILITY_KINDS - _ZONE_KINDS
                 }
             )
-            # A circuit with no end in a cage has nothing but derivable facilities, and the schema requires one
-            # location: authoring exactly one of them is then unavoidable, not redundant.
+            # A circuit with no end in a cage has nothing but derivable facilities
             no_cage_end = not any(device["deployment_kind"] in _ZONE_KINDS for device in circuit["end_devices"])
             if listed and not (no_cage_end and len(declared) == 1):
                 errors.append(f"{circuit_id}: the data lists {listed}, which add_circuit derives from the end devices")
@@ -269,12 +204,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
     @staticmethod
     def _sdwan_underlay_errors(physical: list[dict]) -> list[str]:
-        """INET-<office>: the office edge's uplink to its own access-PE port, in the office and the ISP.
-
-        The offices board in one load and add_sdwan_edge picks the first free
-        port of the access PE under a lock, so the five circuits together
-        hold exactly xe-0/1/[0-4].
-        """
+        """INET-<office>: the office edge's uplink to its own access-PE port, in the office and the ISP."""
         errors: list[str] = []
         by_id = {circuit["circuit_id"]: circuit for circuit in physical}
         isp_ports: list[str] = []
@@ -331,12 +261,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each virtual circuit's kind, owner, locations, ends, derived carrier and placement.
-
-        The role of a virtual circuit is its kind (Tunnel, Interconnect, Handoff, VPN). The carrier is derived, never
-        declared: the carrier circuits on the circuit's own ports (or on the parent of a sub-interface), compared
-        with ALL_DEMO_VIRTUAL_CIRCUITS. The per-kind rules (_virtual_placement_errors) hold on the live data.
-        """
+        """Verify each virtual circuit's kind, owner, locations, ends, derived carrier and placement."""
         logging.info("=== %s - Step 2: Virtual Circuits ===", SCENARIO_NAME)
 
         inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)
@@ -355,14 +280,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
     @staticmethod
     def _virtual_placement_errors(virtual: list[dict], physical: list[dict]) -> list[str]:
-        """Where each virtual circuit ends and what carries it, per kind, then across circuits.
-
-        Every circuit has two distinct ports, and the locations the data authors are exactly the ones on the branch
-        (add_sdwan_edge writes a tunnel's own). Then the rules of its kind (_tunnel_errors, _interconnect_errors,
-        _handoff_errors): the same ones checks/circuit_placement.py enforces, asserted here on the live data. Across
-        circuits: one port, one session (_session_port_errors), and prod never meets nonprod at a device
-        (_environment_errors).
-        """
+        """Where each virtual circuit ends and what carries it, per kind, then across circuits."""
         errors: list[str] = []
         physical_by_id = {circuit["circuit_id"]: circuit for circuit in physical}
         for circuit in sorted(virtual, key=lambda c: c["name"]):
@@ -404,9 +322,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify `virtual_circuits`, add_virtual_circuit's target group, is exactly the session circuits: the DCI and
-        handoff circuits it builds sessions for, and the tunnels (a member because the generator starts only for a
-        member; the generator logs and stops, the SD-WAN orchestrator owns the overlay routing)."""
+        """Verify `virtual_circuits`, add_virtual_circuit's target group, is exactly the session circuits."""
         logging.info("=== %s - Step 2a: virtual_circuits group ===", SCENARIO_NAME)
 
         inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)
@@ -442,14 +358,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify every location's `circuits` lists exactly the circuits that name it, physical and virtual.
-
-        `circuits` is the reverse of a circuit's `locations` (one identifier,
-        circuit__location), so the two directions must agree for every location on
-        the branch: a circuit missing from its location's list, or a location listing
-        a circuit that does not name it, is a schema or generator write that took
-        only one side.
-        """
+        """Verify every location's `circuits` lists exactly the circuits that name it, physical and virtual."""
         logging.info("=== %s - Step 2b: Location circuits ===", SCENARIO_NAME)
 
         inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)
@@ -493,11 +402,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """PP-EQX-FR2-01 (type lc-24) has all 24 front ports, each on its rear port N, built by add_patch_panel.
-
-        The generator builds the ports of the type when the panel joins patch_panels, so the result is waited for
-        like the other generator output.
-        """
+        """PP-EQX-FR2-01 (type lc-24) has all 24 front ports, each on its rear port N."""
         query = """
         query {
           DcimPatchPanel(panel_id__value: "fr2-s1-r-1:PP-EQX-FR2-01") {

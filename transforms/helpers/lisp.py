@@ -1,21 +1,4 @@
-"""LISP rendering of the control-plane-neutral overlay model (transforms/helpers/overlay.py).
-
-The renderer of an office's LISP site: its switches (access-switch edge, distribution-switch border,
-utils/fabric_roles.OFFICE_LISP_ROLES).
-
-The LISP counterpart of ``evpn_vxlan_context`` in transforms/helpers/vxlan.py: ``get_lisp_config``
-adds what LISP needs on top of the neutral model (the map-server set, the site and its key, the EID
-records a border registers) and nothing of the EVPN layer, which this module never imports.
-
-EID prefixes and address families are not model fields: they come from ``L2Instance.gateway_ip``
-(IPv4) grouped by ``vrf``. A gateway with only an IPv6 address is refused because ``service ipv6``
-is not rendered. There is no flood mode, extranet or publisher/subscriber (see
-templates/configs/common/cisco_xe_lisp.j2); the map-server and map-resolver are co-located on the
-borders (the office's distribution switches). An office whose deployment has an SD-WAN edge
-(``wan_exit``) adds the exit: its borders are the proxy-ETR/ITR and the default route out, its edges
-``use-petr`` the borders (the same locators as the map-servers). Only platforms in
-``OVERLAY_RENDERERS["lisp"]`` render the result (transforms/common.py).
-"""
+"""LISP rendering of the control-plane-neutral overlay model (transforms/helpers/overlay.py)."""
 
 import ipaddress
 from collections.abc import Iterable
@@ -42,13 +25,7 @@ class EidRecord:
 
 @dataclass(frozen=True)
 class LispInputs:
-    """What the LISP renderer needs beyond the neutral overlay model: this fabric's LISP state.
-
-    ``map_servers`` are the loopback addresses of the borders (mask stripped, sorted by device
-    name); ``site_name`` and ``l3_records`` / ``l2_instance_ids`` (the EID records of the site) are
-    only filled for a border, the one device that renders the ``site`` stanza. ``wan_exit``: the office
-    has an SD-WAN edge, so its borders carry the exit and its edges use them as PETRs.
-    """
+    """What the LISP renderer needs beyond the neutral overlay model: this fabric's LISP state."""
 
     map_servers: tuple[str, ...]
     site_name: str | None
@@ -64,11 +41,7 @@ def _is_border(device_role: str) -> bool:
 
 
 def _map_server_addresses(servers: Iterable[dict[str, Any]]) -> tuple[str, ...]:
-    """The loopback address of each map-server device, sorted by device name.
-
-    A border without a loopback address cannot be addressed, so it is refused rather than
-    left out of the set (an edge would otherwise register with a partial set).
-    """
+    """The loopback address of each map-server device, sorted by device name."""
     addresses: list[str] = []
     for server in sorted(servers, key=lambda s: s.get("name") or ""):
         address = next(
@@ -88,10 +61,7 @@ def _map_server_addresses(servers: Iterable[dict[str, Any]]) -> tuple[str, ...]:
 
 
 def _border_records(segment_deployments: Iterable[dict[str, Any]]) -> tuple[tuple[EidRecord, ...], tuple[int, ...]]:
-    """The L3 EID records and L2 instance-ids of the site's active VNI segments (what a border registers).
-
-    A segment without a VNI is a traditional VLAN and has no instance. A segment prefix of the IPv6 family is refused.
-    """
+    """The L3 EID records and L2 instance-ids of the site's active VNI segments (what a border registers)."""
     l3_records: set[EidRecord] = set()
     l2_ids: set[int] = set()
     for dep in segment_deployments:
@@ -117,11 +87,7 @@ def _border_records(segment_deployments: Iterable[dict[str, Any]]) -> tuple[tupl
 
 
 def build_lisp_inputs(deployment: Any, device_role: str) -> LispInputs:
-    """This device's LISP inputs, read off its own deployment: the office, which hosts its devices directly.
-
-    Every switch of the office resolves the same map-server set and key. Only a border reads the site's
-    segment activations and name (it renders the ``site``).
-    """
+    """This device's LISP inputs, read off its own deployment: the office, which hosts its devices directly."""
     office = deployment if isinstance(deployment, dict) else {}
     site_key = (office.get("lisp_site_key") or {}).get("password")
     border = _is_border(device_role)
@@ -147,12 +113,7 @@ def _refuse(role: str, why: str) -> ValueError:
 
 
 def _refuse_unroutable_gateways(device_role: str, activations: list[dict[str, Any]]) -> None:
-    """Raise for a segment whose SVI the LISP overlay cannot carry, VNI-bearing or not.
-
-    Every segment with a gateway gets an SVI (get_vlans), so every one needs a VRF with an L3 instance-id:
-    a gateway in the default namespace, or in a VRF without an ``l3_vni``, would render a host SVI in the
-    global table next to the EID tables. An IPv6 gateway is refused because ``service ipv6`` is not rendered.
-    """
+    """Raise for a segment whose SVI the LISP overlay cannot carry, VNI-bearing or not."""
     for act in activations:
         gateway_ip, gateway_ipv6, vrf, l3_vni = _get_segment_gateways(act.get("segment") or {})
         if gateway_ipv6:
@@ -168,17 +129,7 @@ def get_lisp_config(
     lisp_inputs: LispInputs,
     fabric_anycast_mac: str | None = None,
 ) -> dict[str, Any]:
-    """The ``lisp`` template context of one switch of an office's LISP site (access-switch or distribution-switch).
-
-    Every such device gets a context, whether or not it hosts anything yet: a fabric edge always carries
-    the RLOC, the ITR/ETR and the map-server registration (hosts register with it later), with empty
-    ``l2_instances`` / ``l3_instances`` until a segment is activated on it; a border is the map-server
-    with its ``site`` even with no instance of its own. Pure: no input is modified.
-
-    Raises:
-        ValueError: a segment has an IPv6 gateway or a gateway outside a VRF with an L3 instance-id,
-            the fabric has no map-server or no site key, or a border has no site name.
-    """
+    """The ``lisp`` template context of one switch of an office's LISP site (access-switch or distribution-switch)."""
     border = _is_border(device_role)
     vrfs = device_vrfs(data)
     node = build_overlay_node(

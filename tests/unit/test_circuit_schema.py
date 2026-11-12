@@ -1,11 +1,4 @@
-"""The circuit model in schemas/extensions/topology/topology_connectivity.yml.
-
-Two kinds: TopologyCarrierCircuit (the carrier) and TopologySessionCircuit (dci, handoff, tunnel by ``circuit_type``).
-The locations are declared once on the TopologyCircuit generic. The ends (``capabilities``, the shared edge of
-ManagedGenericInterfaces, min 1 and max 2) are re-declared on each node: hoisting them onto the generic is refused by
-the server (a node that inherits two generics declaring ``capabilities`` with a different min_count, measured on
-1.11.9). The far end may be an interface of a cloud transport.
-"""
+"""The circuit model in schemas/extensions/topology/topology_connectivity.yml."""
 
 from __future__ import annotations
 

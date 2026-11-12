@@ -13,8 +13,9 @@ from generators.topology.segment import VxlanSegmentGenerator
 
 
 def make_gen() -> Any:
-    """A VxlanSegmentGenerator (a real SegmentVlanMixin host) with a mocked
-    client/logger and a resource_lock that records the keys it was taken for."""
+    """A VxlanSegmentGenerator (a real SegmentVlanMixin host) with a mocked client/logger and a resource_lock that
+    records the keys it was taken for.
+    """
     gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
     gen.client = AsyncMock()
     gen.logger = MagicMock()
@@ -62,11 +63,7 @@ def raw_state(
     customer_deployments: list[dict[str, Any]] | None = None,
     requested: dict[str, list[tuple[str, str]]] | None = None,
 ) -> dict[str, Any]:
-    """A raw segment_vlans.gql response, merged with the raw SEGMENT_PORTS_QUERY one (the generator reads both and
-    each takes its own keys): interfaces are (id, typename, device id), each a member of its device's row of the
-    segment (a port whose device has no row has no edge: a port joins an existing row only), and ``requested`` maps
-    a segment deployment id to the (id, typename) of the interfaces assigned to it (its ``capabilities``); deployments are (segment deployment id,
-    hosting deployment id), by default one in ``dc-1``; rows are (row id, device id, vlan id, segment deployment id)."""
+    """A raw segment_vlans.gql response, merged with the raw SEGMENT_PORTS_QUERY one."""
     realizations = deployments or [(segment_deployment_id(segment_id), "dc-1")]
     row_of_device = {device_id: row_id for row_id, device_id, _vlan, _sd in rows}
 
@@ -157,9 +154,7 @@ class _Row:
 
 
 class VlanWorld:
-    """An in-memory server for the reconciliation: the stored ManagedSegmentVlan rows, shared by every
-    generator built from it (so two segments see each other). A segment's realization is ``sd-<segment>`` in
-    ``dc-1`` unless the test names others."""
+    """An in-memory server for the reconciliation: the stored ManagedSegmentVlan rows."""
 
     def __init__(self) -> None:
         self.rows: list[_Row] = []
@@ -271,7 +266,6 @@ class VlanWorld:
 
 
 async def reconcile(gen: Any, segment_id: str, segment_name: str) -> None:
-    """The VLAN row reconcile of a segment under its segment lock, as the segment generators run it: the devices of
-    the world's interfaces are the devices of the derived ports."""
+    """The VLAN row reconcile of a segment under its segment lock, as the segment generators run it."""
     async with gen.resource_lock(segment_lock_key(segment_id)):
         await gen._reconcile_segment_vlans_locked(segment_id, segment_name, None, gen.port_device_ids)

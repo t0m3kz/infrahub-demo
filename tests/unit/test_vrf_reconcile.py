@@ -52,8 +52,7 @@ def test_a_routed_row_creates_the_instance_and_its_svi() -> None:
 
     _reconcile(host, ["d1"])
 
-    # The first member is part of the create: a RelationshipAdd on the node just created can hit the other replica
-    # first and fail with an unretried NODE_NOT_FOUND.
+    # The first member is part of the create: a RelationshipAdd on a just-created node can hit the other replica first.
     assert host.written("ManagedVRF") == [
         {
             "name": "dc1-vrf-prod",
@@ -547,9 +546,7 @@ def test_the_generator_query_skips_the_instances_root() -> None:
 
 
 def test_an_instance_kept_alive_by_a_non_svi_interface_is_never_deleted() -> None:
-    """``_delete_if_unused`` asks for ANY DcimVirtualInterface with ``vrf`` = the instance, not only role svi: a
-    loopback or sub-interface that has ``vrf`` set and no member keeps the empty instance forever. Only rule (f) of
-    checks/vrf_instances.py reports it; the generator does not own such an interface, so it leaves it alone."""
+    """``_delete_if_unused`` asks for ANY DcimVirtualInterface with ``vrf`` = the instance, not only role svi"""
     empty = raw_instance("vrf-1", "x", "PROD")
     host = VrfHost(response(instances=(raw_root_instance(empty),)))
     host.store.svi_refs["vrf-1"] = {"lo-1"}

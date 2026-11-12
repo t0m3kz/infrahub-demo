@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
-"""Generate smoke test fixtures (input.json + output.txt) for all config transforms.
-
-Usage:
-    PYTHONPATH=. uv run python tests/smoke/generate_config_fixtures.py
-
-Creates directories under tests/smoke/configs/ with input.json and output.txt
-for each device-type × platform × scenario combination.
-
-Scenarios:
-    ebgp_ibgp  — eBGP underlay + iBGP overlay (separate ASNs)
-    ospf_ibgp  — OSPF underlay + iBGP overlay (single shared ASN)
-
-The builders live in tests/smoke/fixture_builders/, one module per device family; each
-exposes the writers of its fixtures, which this entry point runs in turn.
-"""
+"""Generate smoke test fixtures (input.json + output.txt) for all config transforms."""
 
 from __future__ import annotations
 
@@ -69,9 +55,7 @@ def main() -> int:
         errors += e
 
     print(f"\nDone: {generated} generated, {errors} errors")
-    # A fixture that fails to render writes no file, so it leaves no diff for the
-    # CI staleness check to catch — the failure has to surface here instead. That
-    # is how a broken template filter once went unnoticed.
+    # A fixture that fails to render writes no file
     return 1 if errors else 0
 
 

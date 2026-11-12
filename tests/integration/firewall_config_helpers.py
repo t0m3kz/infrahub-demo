@@ -40,15 +40,11 @@ from .service_inventory_helpers import fetch_loadbalancer_inventory, match_loadb
 SCENARIO_NAME = "Scenario 30_all: Colo Cloud/Partner/SaaS Zone Policy"
 
 
-# The destination CIDRs of the prefix-selector rules of 07_zone_policies/05_security_policy.yml: the AWS rule's
-# VPC block (06_customer_boarding/c001/cloud) and the Acme extranet range (07_zone_policies/01_partner_tunnel.yml). The
-# Zscaler rule names the internet zone, so it has no CIDR to render.
+# The destination CIDRs of the prefix-selector rules of 07_zone_policies/05_security_policy.yml
 EXPECTED_DESTINATION_CIDRS = ("10.10.0.0/16", "198.18.0.0/24")
 
 
-# The rule names from 05_security_policy.yml. Unlike the CIDRs, nothing else in
-# the branch carries them, so their absence from a config proves the policy was
-# not placed there.
+# The rule names from 05_security_policy.yml.
 EXPECTED_RULE_NAMES = ("nordix-prod-to-aws", "nordix-prod-to-partner-acme", "nordix-prod-to-saas-zscaler")
 
 
@@ -104,8 +100,7 @@ query {
 """
 
 
-# A segment's prefix and its VLAN on each switch. A segment's VLAN is a row per switch (the row's ``device``), and its prefix is allocated by add_vxlan_segment (or
-# authored), so neither is typed here.
+# A segment's prefix and its VLAN on each switch.
 SEGMENT_QUERY = """
 query ($name: String!) {
   ManagedNetworkSegment(name__value: $name) {
@@ -198,12 +193,7 @@ async def _platform_by_name(client: InfrahubClient, branch: str) -> dict[str, st
 
 
 def _management_border_leaf_errors(device: str, rendered: str, contexts: list[dict[str, Any]]) -> list[str]:
-    """What a border leaf must carry for the MANAGEMENT exchange of `contexts`.
-
-    `vrf context MANAGEMENT` exists, each context's MANAGEMENT transit SVI (VLAN = transit_vlan(ctx VLAN,
-    management), anycast .1 of the leg /29) is in that VRF, and no tenant (non-public) prefix is routed
-    inside the VRF: tenants are source-NATed behind the leg VIP, so the leaf needs no return route.
-    """
+    """What a border leaf must carry for the MANAGEMENT exchange of `contexts`."""
     errors: list[str] = []
     vrf_block = _block(rendered, f"vrf context {MANAGEMENT_NAMESPACE}")
     if vrf_block is None:
@@ -242,8 +232,7 @@ def _site_contexts(inventory: dict[str, list[dict[str, Any]]]) -> dict[tuple[str
 
 
 def _context_lines(rendered: str, platform: str | None, context: str) -> str:
-    """The lines of a rendered firewall config that belong to one context: its `set vsys <context>` lines (PAN-OS), or
-    the lines under its `set|add virtual-system <context>` header up to the next `!` comment (Check Point)."""
+    """The lines of a rendered firewall config that belong to one context: its `set vsys <context>` lines (PAN-OS)"""
     if platform == "paloalto_panos":
         return "\n".join(line for line in rendered.splitlines() if f"set vsys {context} " in line)
     own: list[str] = []
@@ -280,14 +269,7 @@ def _leg_network(context: dict[str, Any], namespace: str) -> ipaddress.IPv4Netwo
 def _panos_context_leg_errors(
     device: str, rendered: str, context: dict[str, Any], expected: ExpectedTransitContext
 ) -> list[str]:
-    """What a PAN-OS member must render for the transit legs of `context` (the layer3 half of a shared context).
-
-    Per leg of this member: the sub-interface with its VLAN tag and the HA VIP, its import into the
-    vsys, its zone and its place in the context's own virtual router. Then the vr's default route via
-    the INTERNET leg anycast, a SNAT rule per tenant zone (to INTERNET translating to the SNAT
-    /32, to MANAGEMENT translating to the MANAGEMENT VIP) and a logged MANAGEMENT -> tenant
-    deny per tenant zone. PROD<->NONPROD isolation only when the context holds both.
-    """
+    """What a PAN-OS member must render for the transit legs of `context` (the layer3 half of a shared context)."""
     errors: list[str] = []
     name = str(context["name"])
     vr = f"vr-{name}"
@@ -357,24 +339,13 @@ def _allowed_vlans(port_block: str) -> set[int]:
 
 
 def _interface_block(rendered: str, interface: str) -> str | None:
-    """The `interface <name>` stanza of an NX-OS render, None if absent.
-
-    An interface stanza may hold blank lines (empty includes), which _block would stop at.
-    """
+    """The `interface <name>` stanza of an NX-OS render, None if absent."""
     match = re.search(rf"^interface {re.escape(interface)}\n((?:(?:[ \t]+.*)?\n)*)", rendered + "\n", re.MULTILINE)
     return match.group(1) if match else None
 
 
 def _edge_transit_errors(device: str, rendered: str, context: dict[str, Any]) -> list[str]:
-    """What a zone's edge must render for the transit legs of its shared firewall context.
-
-    The firewall-role ports tagged with the context are trunks of every transit VLAN; each VLAN has
-    its L2VNI (`vn-segment` of transit_vni) and an `interface Vlan<N>` in the leg's VRF with the
-    anycast .1 of the /29 and the anycast-gateway mode. `vrf context PROD` holds the 0/0 static to the
-    PROD VIP, `vrf context INTERNET` the context's SNAT /32 to the INTERNET VIP. Statics stay local per
-    D3: INTERNET's are redistributed into EVPN through RM-VRF-STATIC-2-EVPN-INTERNET, PROD's 0/0 is not
-    (no `redistribute static` in `vrf PROD`), and every RM-VRF-STATIC-2-EVPN-* referenced is defined.
-    """
+    """What a zone's edge must render for the transit legs of its shared firewall context."""
     errors: list[str] = []
     vlans = {
         str(leg["namespace"]): transit_vlan(int(context["vlan"]), transit_namespace_type(str(leg["namespace"])))
@@ -431,13 +402,7 @@ def _edge_transit_errors(device: str, rendered: str, context: dict[str, Any]) ->
 
 
 def _fabric_pair_errors(device: str, rendered: str) -> list[str]:
-    """What an edge of a two-edge zone must render for its FABRIC iBGP session and Multi-Site tracking.
-
-    Exactly one neighbour inherits FABRIC-PEERS-SESSION: iBGP (remote-as equal to the
-    process's own AS, the site AS), no peer-type, no update-source, an `out` route-map on
-    IPv6 unicast (the derived filter, or `RM-FABRIC-OUT` while the deployment stages). `fabric-tracking` sits on the interlink port alone; `dci-tracking` on the
-    ports of this edge's dark fibres (ALL_DEMO_DCI_CIRCUITS) and never on the interlink.
-    """
+    """What an edge of a two-edge zone must render for its FABRIC iBGP session and Multi-Site tracking."""
     errors: list[str] = []
     local_as = re.search(r"^router bgp (\d+)$", rendered, re.MULTILINE)
     if "template peer-session FABRIC-PEERS-SESSION" not in rendered:
@@ -461,8 +426,7 @@ def _fabric_pair_errors(device: str, rendered: str) -> list[str]:
             )
         if re.search(r"update-source|peer-type", body):
             errors.append(f"{device}: FABRIC neighbour {address} sets update-source/peer-type")
-        # The announcement filter on IPv6 unicast: the derived per-session map while the deployment enforces
-        # (routing_filter_enforce), RM-FABRIC-OUT while it stages; either way it is defined in the config.
+        # The announcement filter on IPv6 unicast
         out_map = re.search(r"^ +route-map (\S+) out$", body, re.MULTILINE)
         if out_map is None:
             errors.append(f"{device}: FABRIC neighbour {address} has no 'route-map <name> out'")
@@ -500,14 +464,7 @@ async def _vip_contexts(client: InfrahubClient, branch: str) -> dict[Loadbalance
 
 
 def _dci_session_errors(device: str, rendered: str, expected: int) -> list[str]:
-    """What an edge renders for the DCI sessions of its ``expected`` dark fibres (add_virtual_circuit builds two each).
-
-    The underlay neighbours inherit DCI-UNDERLAY-PEERS-SESSION: one per fibre, with the `maximum-prefix` derived from the
-    far border gateway (utils/bgp_expectation.py), announcing only the box's own loopbacks (an `out` route-map: the
-    derived filter, or RM-FABRIC-OUT while the deployment stages) and tagging what the other site sends no-export (an
-    `in` route-map that sets `no-export`, defined: the derived filter, or RM-DCI-IN while staged). The EVPN neighbours inherit DCI-PEERS-SESSION: one per fibre, keyed, sourced from the
-    loopback their peering names (`update-source`), the template giving `ebgp-multihop 2`.
-    """
+    """What an edge renders for the DCI sessions of its ``expected`` dark fibres (add_virtual_circuit builds two each)."""
     errors: list[str] = []
     neighbours = re.findall(r"^  neighbor (\S+)\n((?:    .*\n)*)", rendered + "\n", re.MULTILINE)
     underlay = [body for _, body in neighbours if "inherit peer-session DCI-UNDERLAY-PEERS-SESSION" in body]
@@ -519,7 +476,7 @@ def _dci_session_errors(device: str, rendered: str, expected: int) -> list[str]:
     for direction in ("in", "out"):
         if any(not re.search(rf"^ +route-map \S+ {direction}$", body, re.MULTILINE) for body in underlay):
             errors.append(f"{device}: a DCI underlay neighbour has no 'route-map <name> {direction}'")
-    # The limit is a number derived from the model, not a constant: any value is right, none is wrong.
+    # The limit is a number derived from the model, not a constant: any value is right
     if any(not re.search(r"^ +maximum-prefix \d+$", body, re.MULTILINE) for body in underlay):
         errors.append(f"{device}: a DCI underlay neighbour has no 'maximum-prefix <n>'")
     for needle in ("update-source ", "password "):
@@ -553,13 +510,7 @@ def _f5_block(rendered: str, header: str) -> str | None:
 
 
 def _border_leaf_lb_leg_errors(device: str, rendered: str, context: dict[str, Any]) -> list[str]:
-    """What an NX-OS border leaf must render for a load-balancer context tagged on its ports.
-
-    Nothing when none of its ports is tagged (it then carries no leg of the context). Otherwise the
-    tagged `load-balancer` port trunks the leg VLAN, the VLAN has its L2VNI, the SVI is the leg's
-    anycast .1 in the tenant VRF, and `vrf context <NS>` routes the VIP /26 to the floating .4,
-    exported through PL-VRF-STATIC-<NS>.
-    """
+    """What an NX-OS border leaf must render for a load-balancer context tagged on its ports."""
     ports = [str(port["interface"]) for port in context["border_ports"] if port["device"] == device]
     if not ports:
         return []

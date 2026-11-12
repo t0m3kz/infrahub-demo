@@ -25,19 +25,14 @@ SEGMENT_LENGTH_FIELD = {IPV4: "segment_prefix_length", IPV6: "ipv6_segment_prefi
 
 
 def tenant_pool_name(zone_name: str, ip_version: str = IPV4) -> str:
-    """The semantic bootstrap pool name of the zone's tenant space in one family; its IPAM namespace remains default."""
+    """The bootstrap pool name of the zone's tenant space in one family."""
     template = TENANT_POOL_TEMPLATE_IPV6 if ip_version == IPV6 else TENANT_POOL_TEMPLATE
     return template.format(namespace=zone_name)
 
 
 def segment_prefix_length(host_count: int | None, default: int | None = None) -> int:
-    """The prefix length of a segment that must hold ``host_count`` hosts (None: ``default``).
-
-    The smallest prefix that holds the hosts plus the network, broadcast and gateway addresses (a power of two), never
-    smaller than a /29 (``SEGMENT_PREFIX_LENGTH_MAX``). The default is the footprint design's ``segment_prefix_length``
-    (an office has no design: the tenant pool's own default). The one sizing rule: the VXLAN segment allocator
-    (generators/topology/segment_addressing.py) and the cloud segment check (checks/customer_quota.py) both use it.
-    """
+    """The prefix length for ``host_count`` hosts (the one sizing rule): the smallest holding hosts plus network,
+    broadcast and gateway, never smaller than a /29; with None, ``default``."""
     if host_count is None:
         if default is None:
             raise ValueError("a segment with no host_count needs a default prefix length")
@@ -68,11 +63,7 @@ CUSTOMER_POOL_FAMILIES = {
 
 
 def addressing_footprint(customer_deployments: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """The footprint whose design sizes the customer pool of a segment, or None when it has none (an office).
-
-    The first of the segment's footprints of the first kind in ``FOOTPRINT_KIND_ORDER`` (a data center, else a
-    colocation), by name. ``customer_deployments`` is cleaned query data with ``typename`` and ``name``.
-    """
+    """The footprint whose design sizes a segment's customer pool (first of the first kind in order, by name), or None."""
     for kind in FOOTPRINT_KIND_ORDER:
         of_kind = sorted((d for d in customer_deployments if d.get("typename") == kind), key=lambda d: d["name"])
         if of_kind:
@@ -95,24 +86,14 @@ HOSTING_KINDS = frozenset({"TopologyDataCenter", "TopologyColocationMetro", "Top
 
 
 def segment_hosting_candidates(deployment: Any) -> list[dict]:
-    """The device's deployment and its parent, nearest first.
-
-    Only TopologyDataCenter, TopologyColocationMetro and TopologyCustomerOffice
-    inherit TopologySegmentHosting: a border-leaf's deployment IS the DC, but a
-    leaf's deployment is the pod and a colocation edge's is its zone or virtual
-    colocation, one hop below the DC or metro. The device-scoped fragments
-    (evpn_fabric.gql, firewall_contexts.gql) nest one `parent` hop for that case.
-    """
+    """The device's deployment and its parent, nearest first (a pod or colocation zone sits one hop below its host)."""
     parent = deployment.get("parent") if isinstance(deployment, dict) else None
     return [c for c in (deployment, parent) if isinstance(c, dict)]
 
 
 def hosting_deployment(deployment: Any) -> dict[str, Any] | None:
-    """The device's hosting deployment (a DC, a colocation metro or an office): the first of its deployment and that
-    deployment's parent whose kind is a hosting kind, None when neither is.
-
-    The one rule for where a device's VRF instances live (utils/vrf_demand.py). ``deployment`` is cleaned query data
-    with ``typename`` (and ``parent`` with ``typename`` for a pod, a colocation zone or a virtual colocation).
+    """The device's hosting deployment (DC, colocation metro or office): its deployment or that deployment's parent,
+    else None.
     """
     return next((c for c in segment_hosting_candidates(deployment) if c.get("typename") in HOSTING_KINDS), None)
 
@@ -129,15 +110,7 @@ def segment_namespace(seg: dict[str, Any]) -> dict[str, Any]:
 
 
 def is_terminated(seg: dict[str, Any]) -> bool:
-    """True when a firewall context terminates the segment: its L3 gateway is the pair's floating VIP, not the fabric.
-
-    A terminated segment still carries a `gateway` (the VIP, rendered by the firewall transform on the
-    ``<uplink trunk>.<vlan>`` sub-interface it stores) but on every fabric switch (leaf, ToR, border leaf) it is pure
-    L2: VLAN and L2 VNI only, no SVI, no VRF, no L3 VNI, no PBR or SVI ACL. ``routed_segment_namespace`` and
-    ``transforms/helpers/segments.py`` ``_get_segment_gateways`` hide the gateway behind this check, so every fabric
-    consumer of them drops the L3 side at once. ``seg`` is cleaned query data: ``firewall_gateway`` is the segment's
-    flag or absent (a query that does not select it reads every segment as routed).
-    """
+    """True when a firewall context terminates the segment (``seg`` must select ``firewall_gateway``)."""
     return bool(seg.get("firewall_gateway"))
 
 
@@ -147,12 +120,8 @@ L2_ONLY_KEY = "l2_only"
 
 
 def l2_only_on(role: str | None, seg: dict[str, Any]) -> bool:
-    """Whether a device of ``role`` carries the segment as L2 only (VLAN and L2 VNI, no SVI, VRF or L3 VNI).
-
-    A border leaf carries a STRETCHED segment (``stretch_scope`` not ``local``) that way: it relays the DCI routes and
-    has no host in it, so it has no anycast SVI of it (the leaves have). The one rule for the generator's SVIs and VRF
-    demand (utils/vrf_demand.py) and the switch transforms (transforms/common.py). ``seg`` is cleaned query data that
-    selects ``stretch_scope`` (a query that does not reads every segment as local).
+    """Whether a device of ``role`` carries the segment as L2 only: a border leaf with a stretched segment (no host, no
+    SVI).
     """
     return role == BORDER_LEAF_ROLE and (seg.get("stretch_scope") or "local") != "local"
 
@@ -163,19 +132,13 @@ def l2_only_view(seg: dict[str, Any]) -> dict[str, Any]:
 
 
 def is_fabric_l2(seg: dict[str, Any]) -> bool:
-    """True when the fabric switch carrying the segment does not route it: terminated on a firewall context
-    (``is_terminated``) or the device's L2-only view of it (``l2_only_view``). The gate every fabric reader of the
-    gateway goes through (``routed_segment_namespace``, transforms/helpers/segments.py)."""
+    """True when the fabric switch does not route the segment: terminated on a firewall or an L2-only view of it."""
     return is_terminated(seg) or bool(seg.get(L2_ONLY_KEY))
 
 
 def routed_segment_namespace(seg: dict[str, Any]) -> dict[str, Any]:
-    """The ip_namespace (VRF) the fabric routes the segment in, or {} when the fabric does not route it.
-
-    Empty for a segment without a gateway, a terminated one and a device's L2-only view of it (``is_fabric_l2``): the
-    fabric does not route it, so it needs no VRF instance (utils/vrf_demand.py), no SVI and no L3 VNI.
-    ``segment_namespace`` stays the namespace of the gateway prefix for the readers that are not the fabric (the
-    firewall, its policies and PBR next hops).
+    """The ip_namespace (VRF) the fabric routes the segment in, or {} when the fabric does not route it
+    (``is_fabric_l2``).
     """
     if is_fabric_l2(seg) or not seg.get("gateway"):
         return {}
@@ -183,11 +146,7 @@ def routed_segment_namespace(seg: dict[str, Any]) -> dict[str, Any]:
 
 
 def segment_prefix(seg: dict[str, Any], family: str) -> str | None:
-    """The CIDR a segment matches on, or None when it has none in `family`.
-
-    The gateway's prefix wins (on-prem VLAN/VXLAN segments); a cloud segment
-    has no gateway and falls back to its IPv4 `cidr_block` (a Text attribute).
-    """
+    """The CIDR a segment matches on in `family`, or None; the gateway's prefix wins, a cloud segment uses `cidr_block`."""
     gateway_prefix = ((seg.get("gateway") or {}).get("ip_prefix") or {}).get("prefix")
     if gateway_prefix:
         return gateway_prefix if _in_family(gateway_prefix, family) else None
@@ -198,12 +157,7 @@ def segment_prefix(seg: dict[str, Any], family: str) -> str | None:
 
 
 def own_prefix(seg: dict[str, Any]) -> str | None:
-    """The segment's prefix in its OWN family (``segment_family``), None for a segment with no gateway and no cidr_block.
-
-    The reader for every consumer that works on a segment as it is (ACL, firewall zone and rule endpoint, policy, the
-    MSS-G classifier, the checks). A consumer that is IPv4 only by design calls ``segment_prefix(seg, IPV4)`` instead,
-    so its intent is visible.
-    """
+    """The segment's prefix in its OWN family (``segment_family``), None with no gateway and no cidr_block."""
     family = segment_family(seg)
     return segment_prefix(seg, family) if family else None
 
@@ -214,8 +168,7 @@ def prefix_family(prefix: str) -> str:
 
 
 def segment_family(seg: dict[str, Any]) -> str | None:
-    """The segment's own address family, from its gateway (the address, else its prefix); a cloud segment with a
-    ``cidr_block`` is IPv4; a segment with neither (L2 only) has no family: None."""
+    """The segment's address family from its gateway; IPv4 for a cloud ``cidr_block``; None for L2 only."""
     gateway = seg.get("gateway") or {}
     address = gateway.get("address") or (gateway.get("ip_prefix") or {}).get("prefix")
     if address:
@@ -232,10 +185,8 @@ class AddressFamilyMismatchError(ValueError):
 
 
 def has_ipv6_gateway(seg: dict[str, Any]) -> bool:
-    """Whether the segment's single gateway (its address, else its prefix) is IPv6.
-
-    The signal is the gateway, not the ``ip_version`` attribute, because a segment with no gateway yet is L2 only and
-    has nothing to render, and the transform queries read the gateway everywhere. ``seg`` is cleaned query data.
+    """Whether the segment's single gateway (address, else prefix) is IPv6; the gateway is the signal, not
+    ``ip_version``.
     """
     gateway = seg.get("gateway") or {}
     address = gateway.get("address") or (gateway.get("ip_prefix") or {}).get("prefix")
@@ -243,13 +194,7 @@ def has_ipv6_gateway(seg: dict[str, Any]) -> bool:
 
 
 def refuse_ipv6_segment(seg: dict[str, Any], consumer: str) -> None:
-    """Raise when ``seg`` has an IPv6 gateway: ``consumer`` renders IPv4 only and would give a wrong or incomplete config.
-
-    A transform refuses what it cannot render and never skips it (AGENTS.md, **IPv6 segments**). ``consumer`` names
-    the renderer in the message. The fabric switches render an IPv6 segment (SVI, VRF family, ACL); the consumers
-    still gated are the firewall (zones, rule tables, context routes), the office policy, the PBR to a firewall context
-    (its legs are IPv4 only) and the switch roles whose templates were not extended (the colocation edge).
-    """
+    """Raise when ``seg`` has an IPv6 gateway: ``consumer`` renders IPv4 only (AGENTS.md "IPv6 segments")."""
     if has_ipv6_gateway(seg):
         raise Ipv6SegmentNotRenderedError(
             f"Segment '{seg.get('name')}': IPv6 segments are not rendered by {consumer} yet; refusing incomplete config"

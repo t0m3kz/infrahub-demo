@@ -1,12 +1,4 @@
-"""Transform: ManagedController → vendor-native onboarding/inventory payload (JSON).
-
-One query (`controller_payload`, queries/config/controller.gql) scoped to a single
-controller by name, one artifact_definition targeting the `managed_controllers` group.
-Infrahub itself resolves `controller_type`/`vendor` as extra query parameters straight
-off the target object (see .infrahub.yml's parameters: controller_type__value /
-platform__name__value) — the transform just dispatches on those, no per-controller
-querying/matching needed in Python.
-"""
+"""Transform: ManagedController → vendor-native onboarding/inventory payload (JSON)."""
 
 import json
 from typing import Any
@@ -99,14 +91,7 @@ def _build_netscaler_adm(controller: dict[str, Any]) -> dict[str, Any]:
 
 
 def _vrf_handoffs(device: dict[str, Any]) -> list[dict[str, Any]]:
-    """The device's eBGP handoffs into a tenant VRF, as VCO segment handoffs.
-
-    Sessions come from the same helper the device-config transforms use
-    (transforms/helpers/bgp.py), so both ends of a handoff agree on addresses
-    and ASNs; only VRF sessions qualify (the local address sits in a non-default
-    IpamNamespace). The VLAN is the handoff sub-interface's dot1q tag
-    (its encapsulation `vlan_id`, 1900 for `eth0.1900`); None when the interface is untagged.
-    """
+    """The device's eBGP handoffs into a tenant VRF, as VCO segment handoffs."""
     handoffs: list[dict[str, Any]] = []
     device_name = device.get("name") or ""
     for bgp_config in get_bgp_profile(device.get("capabilities") or [], device_name=device_name):
@@ -133,22 +118,8 @@ def _vrf_handoffs(device: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _build_velocloud_vco(controller: dict[str, Any]) -> dict[str, Any]:
-    """VCO payload — the Gateway plus every office Edge it manages
-    (generators/topology/sdwan_edge.py's SdwanEdgeGenerator appends Edges to
-    managed_devices; the Gateway itself is added by hand, see
-    data/demos/30_all/02_colo/equinix/fr/04_sdwan_gateway.yml).
-
-    branch_to_branch is read per-edge from its own office
-    (TopologyCustomerOffice.branch_to_branch, schemas/extensions/topology/
-    topology_customer.yml) rather than once for the whole VCO — real
-    VeloCloud business-policy profiles are assigned per edge, and different
-    offices under the same VCO can want different mesh policies. Missing for
-    the Gateway itself (it has no office/deployment carrying that field).
-
-    handoffs are the device's VRF eBGP sessions (see _vrf_handoffs) — e.g. the
-    Gateway's PROD handoff to the colocation BGW. The Orchestrator pushes that
-    side, so no device-config transform here renders it.
-    """
+    """VCO payload — the Gateway plus every office Edge it manages (generators/topology/sdwan_edge.py's
+    SdwanEdgeGenerator appends Edges to managed_devices;"""
     edges = [
         {
             "hostname": device.get("name"),
@@ -175,10 +146,8 @@ def _build_dna_center(controller: dict[str, Any]) -> dict[str, Any]:
     return {"siteName": controller.get("name"), "devices": devices}
 
 
-# (controller_type, vendor) -> payload builder. `vendor` is the controller's own
-# platform name — None means "any platform" (fabric controller_types aren't tied to
-# one vendor platform the way firewall/lb managers are; the one sdwan_orchestrator
-# modelled, VeloCloud, runs on the generic `linux` platform).
+# (controller_type, vendor) -> payload builder. `vendor` is the controller's own platform name — None means "any
+# platform" (fabric controller_types aren't tied to one vendor platform the way firewall/lb managers are.
 _BUILDERS: dict[tuple[str, str | None], Any] = {
     ("aci_apic", None): _build_apic,
     ("dcnm", None): _build_dcnm,

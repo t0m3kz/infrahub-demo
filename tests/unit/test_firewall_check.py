@@ -1,5 +1,4 @@
-"""Unit tests for CheckFirewall: the infrastructure of a firewall (exchange legs, SNAT addresses, context members),
-fed the raw firewall_config query shape. The policy rules are judged by the segment security check."""
+"""Unit tests for CheckFirewall:"""
 
 from __future__ import annotations
 
@@ -81,8 +80,7 @@ def _payload(*capabilities: dict[str, Any]) -> dict[str, Any]:
     interfaces = [
         {
             "name": _v(f"eth0.{i}"),
-            # A carried segment is the segment of a VLAN row's deployment among the interface's capabilities; a context
-            # is a shared capability of the device.
+            # A carried segment comes from a VLAN row's deployment; a context is a shared capability.
             "capabilities": _edges(
                 []
                 if capability["__typename"] == "ManagedFirewallContext"
@@ -197,8 +195,7 @@ class TestFirewallExchangeLegs:
 
 
 class TestContextRoutesUseSegmentOwnGateway:
-    """firewall.gql fetches each served segment's own gateway prefix and zone;
-    apply_context_routes prefers them to the SecurityZone root."""
+    """firewall.gql fetches each served segment's own gateway prefix and zone;"""
 
     @staticmethod
     def _context(segment: dict[str, Any]) -> dict[str, Any]:

@@ -1,4 +1,4 @@
-"""What a routing policy may contain: community syntax and prefix list entries (pure, shared by the check and tests)."""
+"""Community syntax and prefix list entry rules of a routing policy (pure)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import re
 from ipaddress import ip_network
 from typing import Any
 
-# The well-known standard communities a policy may name (RFC 1997 and RFC 8326).
+# Well-known standard communities (RFC 1997, RFC 8326).
 WELL_KNOWN_COMMUNITIES = frozenset({"no-export", "no-advertise", "local-AS", "no-peer", "graceful-shutdown"})
 _STANDARD = re.compile(r"^(\d{1,5}):(\d{1,5})$")
 _LARGE = re.compile(r"^(\d{1,10}):(\d{1,10}):(\d{1,10})$")

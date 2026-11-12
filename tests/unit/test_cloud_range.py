@@ -1,9 +1,4 @@
-"""The routed range of a cloud virtual network: one /29 slice of the footprint's pool, written on its attachments.
-
-``CloudRangeMixin.ensure_cloud_ranges`` is the one implementation, called by add_customer_deployment_cloud (the
-footprint is boarded) and add_cloud_attachment_range (an attachment appears). The server is mocked: what is held is which
-slices are drawn (pool, identifier, length), which attachments get an edge, and what is left alone.
-"""
+"""The routed range of a cloud virtual network: one /29 slice of the footprint's pool, written on its attachments."""
 
 from __future__ import annotations
 

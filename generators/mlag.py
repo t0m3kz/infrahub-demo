@@ -30,15 +30,12 @@ from .protocols import (
 _PEER_LINK_LAG_ID = 100
 _CONTROL_SVI_NAME = "Vlan4094"
 
-# The MLAG control session runs between the two peers only (over the
-# peer-link SVI, or the virtual peer-link loopback) and is never routed, so
-# its address family is independent of the fabric underlay. SONiC MC-LAG
-# (ICCP) only accepts IPv4 source/peer IPs; every other platform uses IPv6.
+# The MLAG control session runs between the peers only and is never routed, so its family is independent of the
+# underlay. SONiC MC-LAG (ICCP) accepts IPv4 only; others use IPv6.
 _IPV4_CONTROL_PLATFORMS = frozenset({"sonic", "dell_sonic"})
-# vPC has no routed control session — its only IP dependency is the
-# peer-keepalive, which runs over the management network.
+# vPC has no routed control session; its peer-keepalive runs over management
 _NO_CONTROL_PLATFORMS = frozenset({"cisco_nxos"})
-# family → (pool name, peer-link prefix length, virtual loopback prefix length)
+# family -> (pool name, peer-link prefix length, virtual loopback prefix length)
 _CONTROL_POOLS: dict[int, tuple[str, int, int]] = {
     4: (MLAG_CONTROL_IPV4_POOL, 31, 32),
     6: (MLAG_CONTROL_IPV6_POOL, 127, 128),
@@ -46,22 +43,14 @@ _CONTROL_POOLS: dict[int, tuple[str, int, int]] = {
 
 
 class MLAGWiringMixin:
-    """Mixin providing MLAG peer-link wiring, shared by DeviceMixin
-    (synchronous, right after creating/finding a ManagedMLAG domain — no
-    separate add_mlag generator round-trip for domain creation, closing a
-    bulk-regen concurrency storm) and MLAGGenerator (generators/topology/
-    mlag.py, off the two remaining ManagedMLAG "updated" triggers:
-    capabilities/virtual_peer_link changed outside this flow, e.g. a direct
-    API/UI edit or branch merge).
-
-    Expects the host class to provide: ``client``, ``logger``, CablingMixin's
-    ``upsert_p2p_addresses`` and ``_cable_layouts`` and PoolMixin's ``resource_lock``.
+    """MLAG peer-link wiring, shared by DeviceMixin (right after creating a ManagedMLAG domain) and MLAGGenerator
+    (generators/topology/mlag.py, for ManagedMLAG "updated" triggers). The host provides ``client``, ``logger``,
+    CablingMixin's ``upsert_p2p_addresses`` and ``_cable_layouts`` and PoolMixin's ``resource_lock``.
     """
 
     client: InfrahubClient
     logger: logging.Logger
-    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
-    # nothing shadows them in the MRO.
+    # Type checking only: aliases of the host's other bases, so nothing shadows them in the MRO
     if TYPE_CHECKING:
         _cable_layouts = CablingMixin._cable_layouts
         resource_lock = PoolMixin.resource_lock
@@ -70,20 +59,9 @@ class MLAGWiringMixin:
     async def ensure_mlag_wiring(
         self, mlag_obj: Any, mlag_name: str, *, member_ids: list[str], track: bool = True
     ) -> None:
-        """Wire one MLAG domain, serialized per domain.
-
-        track: whether this run owns the wiring. The device generator that
-        creates the domain (DeviceMixin._ensure_mlag_pairs) does and tracks
-        it; MLAGGenerator only re-wires a domain that generator owns, so it
-        passes track=False and writes everything untracked — tracked, a
-        domain it stopped reaching would lose its peer-link to its cleanup.
-
-        The pod/rack generator (via DeviceMixin._ensure_mlag_pairs) and the
-        add_mlag trigger can wire the same domain at the same moment. Each
-        run's query-before-create guards then both find nothing and both
-        create the same control address, which fails Schema Integrity at
-        merge (seen on DC6's l2-leaf domains). Same lock idiom as the
-        FirewallContext and pool creation paths.
+        """Wire one MLAG domain, serialized per domain. ``track``: whether this run owns the wiring.
+        DeviceMixin._ensure_mlag_pairs does; MLAGGenerator passes track=False and writes untracked, or its cleanup would
+        remove a peer-link it stopped reaching. The lock stops two runs creating the same control address.
         """
         async with self.resource_lock(f"mlag-wiring-{mlag_obj.id}"):
             await self._ensure_mlag_wiring_locked(mlag_obj, mlag_name, member_ids=member_ids, track=track)
@@ -91,22 +69,9 @@ class MLAGWiringMixin:
     async def _ensure_mlag_wiring_locked(
         self, mlag_obj: Any, mlag_name: str, *, member_ids: list[str], track: bool = True
     ) -> None:
-        """Wire peer-link interfaces (LAG or virtual loopback) for both
-        devices in an MLAG domain. Every peer-link/cable is always
-        created/upserted (existing id passed when found, full desired state
-        resent every time) — mirrors create_devices()'s own device/loopback
-        pattern: re-upserting unconditionally is what keeps a node inside
-        this run's tracking group, so delete_unused_nodes doesn't remove it
-        as "unused" on a run where nothing actually changed.
-
-        member_ids: the two device ids. DeviceMixin._ensure_mlag_pairs has
-        both devices in hand; MLAGGenerator reads them off the domain's
-        capabilities.
-
-        The pair's interfaces are read once per kind for both devices, before
-        any write: every write below is scoped to one device, so it cannot
-        change what the other device's lookup would have returned.
-        """
+        """Wire peer-link interfaces (LAG or virtual loopback) for both devices of an MLAG domain.
+        Every peer-link/cable is re-upserted each run (existing id passed), which keeps it in the tracking group.
+        ``member_ids``: the two device ids. The pair's interfaces are read once per kind before any write."""
         if len(member_ids) != 2:
             self.logger.error(f"[{mlag_name}] Expected exactly 2 peer devices in capabilities, got {len(member_ids)}")
             return
@@ -116,8 +81,7 @@ class MLAGWiringMixin:
             f"Processing MLAG domain {mlag_name} ({'virtual' if virtual_peer_link else 'physical'} peer-link)"
         )
 
-        # include= also selects the platform's attributes and puts it in the
-        # client store, so platform.peer resolves without a fetch().
+        # include= puts the platform in the client store, so platform.peer resolves without a fetch()
         member_devices = await self.client.filters(
             kind=DcimPhysicalDevice, ids=member_ids, include=["deployment", "platform"]
         )
@@ -135,8 +99,7 @@ class MLAGWiringMixin:
         )
 
         device_ids = [device_obj.id for device_obj in member_devices]
-        # Physical and virtual peer-links are mutually exclusive representations
-        # of the same domain: the one for the other mode is stale.
+        # Physical and virtual peer-links are mutually exclusive: the one for the other mode is stale
         peer_link_kind, stale_kind = (
             (DcimVirtualInterface, DcimLAGInterface) if virtual_peer_link else (DcimLAGInterface, DcimVirtualInterface)
         )
@@ -150,8 +113,8 @@ class MLAGWiringMixin:
         )
 
         peer_link_ifaces: list[Any] = []
-        # The domain lists every interface it configures: the peer-link (LAG or virtual), the physical mlag-peer ports
-        # (the LAG's members, or the unused ports of a virtual peer-link) and the control SVIs.
+        # The domain lists every interface it configures: the peer-link, the physical mlag-peer ports and the control
+        # SVIs
         domain_ifaces: list[Any] = [port for ports in peer_ports.values() for port in ports]
         for device_obj in member_devices:
             await self._disconnect_stale_peer_link(
@@ -193,12 +156,8 @@ class MLAGWiringMixin:
             )
 
     async def _list_domain_interfaces(self, mlag_obj: Any, mlag_name: str, interfaces: list[Any]) -> None:
-        """List the interfaces the domain configures (both peer-links, the control SVIs) on its ``interfaces`` edge.
-
-        One additive RelationshipAdd of exactly these peers, untracked (never a save of the list: the edge belongs to
-        the domain, and an add of a peer already listed is a no-op, so a re-run converges). A stale interface needs no
-        removal: the stale peer-link and control SVI nodes are deleted above and their edge goes with them.
-        """
+        """List the interfaces the domain configures on its ``interfaces`` edge.
+        One additive RelationshipAdd, untracked; stale nodes are deleted above and their edges go with them."""
         if not interfaces:
             return
         await mlag_obj.add_relationships(relation_to_update="interfaces", related_nodes=[i.id for i in interfaces])
@@ -207,10 +166,7 @@ class MLAGWiringMixin:
     async def _interfaces_by_device(
         self, kind: type[Any], device_ids: list[str], role: str, **kwargs: Any
     ) -> dict[str, list[Any]]:
-        """The ``role`` interfaces of ``kind`` on ``device_ids``, grouped by
-        device id — one query for the pair. A device's list keeps the order a
-        query for that device alone returns: the interface order_by (device
-        name, then interface name) is a per-node key."""
+        """The ``role`` interfaces of ``kind`` on ``device_ids``, grouped by device id, in one query."""
         by_device: dict[str, list[Any]] = {device_id: [] for device_id in device_ids}
         for iface in await self.client.filters(kind=kind, device__ids=device_ids, role__value=role, **kwargs):
             by_device[getattr(iface, "device").id].append(iface)
@@ -219,12 +175,9 @@ class MLAGWiringMixin:
     async def _disconnect_stale_peer_link(
         self, device_obj: Any, stale: list[Any], mlag_name: str, virtual_peer_link: bool
     ) -> None:
-        """Delete the peer-link interface node left over from the OTHER mode
-        when pod.mlag_create switched since this domain was last wired —
-        physical (DcimLAGInterface) and virtual (DcimVirtualInterface
-        loopback) peer-links are mutually exclusive representations of the
-        same domain. ``stale``: the device's role=mlag-peer interfaces of
-        that other kind."""
+        """Delete the peer-link left over from the OTHER mode when pod.mlag_create switched; ``stale`` is the device's
+        role=mlag-peer interfaces of that kind.
+        """
         if not stale:
             return
         stale_kind, stale_label = (
@@ -249,14 +202,10 @@ class MLAGWiringMixin:
         *,
         track: bool = True,
     ) -> Any | None:
-        """Create or upsert a DcimLAGInterface peer-link, bundling ALL
-        role=mlag-peer physical interfaces on this device (``member_ifaces``)
-        as member_interfaces (unlike HA's single sync interface, an MLAG
-        peer-link LAG can bundle more than one physical port). Always
-        create()+save()'d with the full desired state (``existing_lag``'s id
-        passed when found) — never a conditional skip — so mlag_domain/member_interfaces
-        self-heal on every run and the node stays inside this run's tracking
-        group."""
+        """Create or upsert a DcimLAGInterface peer-link bundling ALL role=mlag-peer physical interfaces
+        (``member_ifaces``). Always saved with the full desired state (``existing_lag``'s id passed) so it self-heals
+        and stays tracked.
+        """
         dev_name = device_obj.name.value
         lag_name = get_lag_name(platform_name, _PEER_LINK_LAG_ID)
 
@@ -270,8 +219,7 @@ class MLAGWiringMixin:
             if getattr(iface, "status").value == "active":
                 continue
             getattr(iface, "status").value = "active"
-            # update_group_context=False: a physical interface belongs to the device's
-            # object_template, not to this generator run — never a delete_unused_nodes candidate.
+            # update_group_context=False: a physical interface belongs to the object_template, not this run
             await iface.save(allow_upsert=True, update_group_context=False)
 
         lag_obj = await self.client.create(
@@ -306,10 +254,9 @@ class MLAGWiringMixin:
         *,
         track: bool = True,
     ) -> Any | None:
-        """Create or upsert a loopback virtual peer-link (single per
-        device). Always create()+save()'d with the full desired state
-        (``existing_virt``'s id passed when found) — same self-healing/always-tracked
-        rationale as _ensure_lag_peer_link."""
+        """Create or upsert a loopback virtual peer-link (one per device), always saved like _ensure_lag_peer_link
+        (``existing_virt``'s id passed).
+        """
         dev_name = device_obj.name.value
         loopback_name = get_loopback_name(platform_name, 100)
 
@@ -342,24 +289,18 @@ class MLAGWiringMixin:
         *,
         track: bool = True,
     ) -> dict[str, str]:
-        """Allocate the MLAG control-session addresses for both peers and
-        return {device_id: IpamIPAddress id}. One /31 (SONiC) or /127 (all
-        other platforms) per domain, keyed by the domain id so re-runs get
-        the same prefix back; the lower address goes to the device that
-        sorts first by name. A virtual peer-link carries the address on its
-        loopback as a host route (/32, /128) instead of a peer-link SVI.
-        Returns {} when the platform has no control session (vPC) or the
-        pool isn't loaded, and removes any control SVI left from an earlier
-        run that no longer applies."""
+        """Allocate the MLAG control-session addresses and return {device_id: IpamIPAddress id}. One /31 (SONiC) or /127
+        per domain, stable per domain id; the lower address goes to the device sorting first by name. A virtual
+        peer-link carries it on its loopback (/32, /128). Returns {} for vPC or an unloaded pool, and removes a stale
+        control SVI.
+        """
         if platforms & _NO_CONTROL_PLATFORMS:
             await self._disconnect_stale_control_svis(member_devices, mlag_name)
             return {}
 
         family = 4 if platforms & _IPV4_CONTROL_PLATFORMS else 6
         pool_name, prefix_length, loopback_length = _CONTROL_POOLS[family]
-        # The control pools are static bootstrap data and every domain of a run
-        # draws from the same one: read each once per run. A missing pool is not
-        # remembered, so a later domain looks again.
+        # Control pools are static bootstrap data read once per run; a missing pool is not remembered
         pool_memo: dict[str, Any] = self.__dict__.setdefault("_control_pool_memo", {})
         pool = pool_memo.get(pool_name)
         if pool is None:
@@ -398,9 +339,9 @@ class MLAGWiringMixin:
     async def _ensure_control_svi(
         self, device_obj: Any, mlag_name: str, control_ip_id: str, existing_svi: Any | None, *, track: bool = True
     ) -> Any:
-        """Create or upsert the Vlan4094 SVI that carries the MLAG control
-        session over a back-to-back peer-link (``existing_svi``'s id passed
-        when found); returns the saved SVI."""
+        """Create or upsert the Vlan4094 SVI that carries the control session over a back-to-back peer-link; returns the
+        saved SVI.
+        """
         svi_obj = await self.client.create(
             kind=DcimVirtualInterface,
             data={
@@ -421,9 +362,9 @@ class MLAGWiringMixin:
         return svi_obj
 
     async def _disconnect_stale_control_svis(self, member_devices: list[Any], mlag_name: str) -> None:
-        """Delete control SVIs left from a back-to-back run — a virtual
-        peer-link carries the control address on its loopback, and vPC has
-        no control session at all."""
+        """Delete control SVIs left from a back-to-back run (a virtual peer-link uses its loopback; vPC has no control
+        session).
+        """
         stale = await self._interfaces_by_device(
             DcimVirtualInterface, [device_obj.id for device_obj in member_devices], "mlag-control"
         )
@@ -435,16 +376,14 @@ class MLAGWiringMixin:
                 await self.client.delete(kind=DcimVirtualInterface, id=stale_obj.id)
 
     async def _resolve_peer_link_deployment_id(self, device_obj: Any) -> str | None:
-        """Peer-link cables are filed against the device's deployment's
-        PARENT when that deployment is a TopologyPod (a pod-scoped
-        leaf/tor's own deployment is the pod; the cable is recorded one
-        level up, at the pod's containing room/DC deployment). Falls back
-        to the deployment itself for any other deployment kind."""
+        """Peer-link cables are filed against the PARENT of the device's deployment when that is a TopologyPod, else the
+        deployment itself.
+        """
         deployment_rel = getattr(device_obj, "deployment", None)
         if deployment_rel is None or not deployment_rel.initialized:
             return None
         if deployment_rel.typename == "TopologyPod":
-            # Every MLAG pair of a run sits in the same pod: read its parent once.
+            # Every MLAG pair of a run sits in the same pod: read its parent once
             parent_memo: dict[str, str | None] = self.__dict__.setdefault("_pod_parent_id_memo", {})
             if deployment_rel.id not in parent_memo:
                 pod_obj = await self.client.get(kind=TopologyPod, id=deployment_rel.id, include=["parent"])
@@ -465,16 +404,10 @@ class MLAGWiringMixin:
         *,
         track: bool = True,
     ) -> None:
-        """Create/upsert a DcimCable for each index-matched pair of sorted
-        role=mlag-peer physical interfaces between the two devices
-        (``ports_a``/``ports_b``, read with their cable; potentially more
-        than one, unlike HA's single sync cable). Always create()+save()'d
-        (existing/orphan id passed when found) — same
-        self-healing/always-tracked rationale as the peer-link interfaces.
-
-        The by-name lookup stays per cable, inside the loop: adopting an
-        orphan renames it, so an earlier index can take the cable a later
-        name would have found."""
+        """Create/upsert a DcimCable for each index-matched pair of sorted role=mlag-peer ports
+        (``ports_a``/``ports_b``). Saved like the peer-link interfaces. The by-name lookup stays per cable: adopting an
+        orphan renames it.
+        """
         dev_a_name, dev_b_name = dev_a.name.value, dev_b.name.value
         deployment_id = await self._resolve_peer_link_deployment_id(dev_a)
 
@@ -491,9 +424,8 @@ class MLAGWiringMixin:
             existing_cable_id: str | None = existing_cables[0].id if existing_cables else None
 
             if existing_cable_id is None:
-                # Adopt an orphan cable already connected to either interface
-                # (e.g. left over from a rename) instead of creating a duplicate.
-                # Its id is all the upsert needs: the ports came with include=["cable"].
+                # Adopt an orphan cable already on either interface (e.g. after a rename); the ports came with
+                # include=["cable"]
                 cable_a, cable_b = getattr(iface_a, "cable", None), getattr(iface_b, "cable", None)
                 if cable_a is not None and cable_a.initialized:
                     existing_cable_id = cable_a.id
@@ -525,11 +457,9 @@ class MLAGWiringMixin:
             )
 
     async def _disconnect_stale_peer_link_cables(self, mlag_name: str, port_count: int) -> None:
-        """Delete leftover physical peer-link cable(s) from a previous
-        back-to-back run — pod.mlag_create switched to virtual, which has
-        no cable of its own (the peer-link is a loopback). ``port_count``:
-        the most role=mlag-peer physical ports either device has, i.e. how
-        many PL<n> cables a back-to-back run would have made."""
+        """Delete leftover physical peer-link cables from a back-to-back run; ``port_count`` is the most role=mlag-peer
+        ports either device has.
+        """
         cable_names = [f"CBL-{mlag_name}-PL{idx}" for idx in range(1, port_count + 1)]
         if not cable_names:
             return

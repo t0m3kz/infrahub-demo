@@ -1,9 +1,4 @@
-"""The VRF instance's deployment and the segment deployment's deployment must be the same node.
-
-They are chosen by different code: ``hosting_deployment`` (utils/segment_addressing.py, the device side, used by the
-VRF demand) and ``SegmentVlanMixin._deployment_by_device_deployment`` (generators/segment_vlan.py, the row-writing side,
-fed by ``_device_deployment_ids``). This pins that they agree for a pod, a colocation zone and a virtual colocation.
-"""
+"""The VRF instance's deployment and the segment deployment's deployment must be the same node."""
 
 from __future__ import annotations
 

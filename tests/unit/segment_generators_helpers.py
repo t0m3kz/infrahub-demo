@@ -7,26 +7,19 @@ from unittest.mock import AsyncMock, MagicMock
 
 from generators.topology.segment import VxlanSegmentGenerator
 
-# ---------------------------------------------------------------------------
 # Harness helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_gen() -> Any:
-    """Return a VxlanSegmentGenerator instance with mocked client and logger.
-
-    Typed as Any so that ty does not flag mock attribute assignments or
-    mock method calls (e.g. gen.logger.error.assert_called_once()).
-    """
+    """Return a VxlanSegmentGenerator instance with mocked client and logger."""
     gen = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
     gen.client = AsyncMock()
     gen.logger = MagicMock()
-    # generate() waits for an in-flight add_dc/dc_pod_cascade on a target
-    # deployment missing its vni_pool (see customer_dc.py's identical
-    # wait) — no in-flight parent in these unit tests, so no-op.
+    # generate() waits for an in-flight add_dc/dc_pod_cascade on a target deployment missing its vni_pool (see
+    # customer_dc.py's identical wait) — no in-flight parent in these unit tests, so no-op.
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-    # The port tag and VLAN row reconciliation has its own tests
-    # (tests/unit/test_segment_vlan_reconcile.py, test_app_instance_segment_generator.py) — stubbed at the boundary.
+    # The port tag and VLAN row reconciliation has its own tests (tests/unit/test_segment_vlan_reconcile.py,
+    # test_app_instance_segment_generator.py) — stubbed at the boundary.
     gen.reconcile_vxlan_segment = AsyncMock()
     # Tenant addressing has its own test class (TestEnsureSegmentAddressing).
     gen.ensure_segment_addressing = AsyncMock()
@@ -35,9 +28,7 @@ def _make_gen() -> Any:
     return gen
 
 
-# ---------------------------------------------------------------------------
 # Raw GQL response builder
-# ---------------------------------------------------------------------------
 
 
 def _seg_response(
@@ -46,16 +37,7 @@ def _seg_response(
     deployments: list[dict],
     stretch_scope: str | None = None,
 ) -> dict:
-    """Build a raw (un-cleaned) GraphQL response for a vxlan_segment_data query.
-
-    Each entry in `deployments` is a customer footprint (CustomerDC/Colocation)
-    dict with "id", "name", and "parent" (the hosting DC/Metro dict, optionally
-    carrying a "vni_pool" sub-dict with "id"/"name") — mirroring the
-    `... on TopologyCustomerDC/Colocation { parent { node {... vni_pool ...} } }`
-    fragment in the real vxlan_segment query. An office entry has no "parent"
-    but its own "vni_pool" key (value None when the pool is not set yet),
-    mirroring `... on TopologyCustomerOffice { vni_pool }`.
-    """
+    """Build a raw (un-cleaned) GraphQL response for a vxlan_segment_data query."""
 
     def _pool_node(pool: dict | None) -> dict | None:
         if pool is None:

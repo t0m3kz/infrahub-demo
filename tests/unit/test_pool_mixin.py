@@ -1,9 +1,4 @@
-"""Unit tests for PoolMixin.allocate_resource_pools' IPAM namespace scoping
-(generators/pools.py).
-
-Management, technical and loopback pools all use builtin `default` for IPAM
-identity. Pool namespaces do not determine routing security zones.
-"""
+"""Unit tests for PoolMixin.allocate_resource_pools' IPAM namespace scoping (generators/pools.py)."""
 
 from __future__ import annotations
 
@@ -27,11 +22,7 @@ def _make_gen() -> Any:
     gen.branch_name = "main"
     gen.fabric_name = "DC1"
     gen.pod_name = None
-    # allocate_resource_pools() serializes concurrent callers for the same
-    # (strategy, id) via acquire_resource_lock/release_resource_lock — not
-    # under test here, and the lock's own client.create(kind=CoreStandardGroup)
-    # call would otherwise show up in gen.client.create.await_args_list
-    # alongside the pool creates these tests actually inspect.
+    # The per-(strategy, id) lock is not under test; its client.create would pollute the pool create calls.
     gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
     gen.release_resource_lock = AsyncMock()
     return gen
@@ -89,11 +80,7 @@ class TestAllocateResourcePoolsNamespaceScoping:
 
 
 class TestAllocateResourcePoolsSerializesConcurrentCallers:
-    """Two overlapping generator runs for the same (strategy, id) must not
-    both create a pool with the same name — see allocate_resource_pools()'s
-    own comment for the reproduced DC4 hyper-spine collision this guards
-    against. Only the lock/unlock discipline is under test here; the pool
-    creation itself is covered above."""
+    """Two overlapping generator runs for the same (strategy, id) must not both create a pool with the same name"""
 
     def test_lock_is_acquired_before_creating_and_released_after(self) -> None:
         gen = _make_gen()
@@ -115,9 +102,7 @@ class TestAllocateResourcePoolsSerializesConcurrentCallers:
             )
         )
 
-        # Acquired before any pool creation, released only after it finished,
-        # and scoped to this exact (strategy, id) — a different DC's call
-        # would compute a different key and never contend with this one.
+        # The lock is taken before pool creation, released after, and keyed per (strategy, id).
         assert calls == ["acquire:pool-alloc-fabric-dc-1", "release:lock-id"]
 
     def test_lock_is_released_even_if_pool_creation_raises(self) -> None:

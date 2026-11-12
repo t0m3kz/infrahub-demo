@@ -19,11 +19,9 @@ class RoutingDomainError(ValueError):
 
 
 def interface_vrfs(interface: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """The VRF instances of an interface: the ``ManagedVRF`` nodes among its capabilities, each once (by id).
-
-    An interface is in at most one VRF (checks/vrf_instances.py); a reader takes ``interface_vrf``. A query that selects
-    the interface's own ``capabilities`` next to ``zone_capabilities`` sees the instance there too, often with nothing
-    but its typename: an entry with no id counts only when no entry has one."""
+    """The ``ManagedVRF`` nodes among an interface's capabilities, each once (by id); an entry with no id counts only if
+    none has one.
+    """
     entries = [
         cap
         for key in INTERFACE_CAPABILITY_KEYS
@@ -37,9 +35,7 @@ def interface_vrfs(interface: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def interface_vrf(interface: Mapping[str, Any] | None) -> dict[str, Any]:
-    """The VRF instance of an interface (the ``ManagedVRF`` among its capabilities), ``{}`` when it has none.
-
-    Two instances on one interface raise: the routing table of the interface would be ambiguous."""
+    """The VRF instance of an interface, ``{}`` when it has none; two instances raise."""
     vrfs = interface_vrfs(interface or {})
     if len(vrfs) > 1:
         raise RoutingDomainError(f"{(interface or {}).get('name') or 'interface'}: in more than one VRF instance")
@@ -49,10 +45,9 @@ def interface_vrf(interface: Mapping[str, Any] | None) -> dict[str, Any]:
 def resolve_vrf(
     owners: Iterable[Mapping[str, Any] | None], *, required: bool = False, label: str = "routed object"
 ) -> dict[str, Any]:
-    """Resolve an explicit scoped instance; IPAM and parent interfaces supply no authority.
-
-    An owner's instance is its ``vrf`` (a session circuit, a static route, a registration) or, for an interface, the
-    ``ManagedVRF`` among its capabilities (``interface_vrf``)."""
+    """Resolve an explicit scoped instance from owners (``vrf`` or the interface's ``ManagedVRF``); IPAM supplies no
+    authority.
+    """
     instances = [vrf for owner in owners if owner if (vrf := owner.get("vrf") or interface_vrf(owner))]
     identities = {vrf.get("id") for vrf in instances if vrf.get("id")}
     if len(identities) > 1:
@@ -74,12 +69,7 @@ def resolve_vrf(
 def resolve_security_zone(
     owners: Iterable[Mapping[str, Any] | None], *, required: bool = False, label: str = "routed object"
 ) -> dict[str, Any]:
-    """Merge explicit owner zones; reject disagreement and incomplete tenant authority.
-
-    Owners are VRF instances or policy segments with a native ``security_zone`` relationship.
-    Underlay objects have no zone and resolve to an empty mapping. IPAM namespace,
-    pool names and CIDRs are deliberately not consulted.
-    """
+    """Merge explicit owner zones; reject disagreement and incomplete tenant authority (underlay: empty mapping)."""
     zones = [zone for owner in owners if owner if (zone := (owner.get("vrf") or owner).get("security_zone"))]
     identities = {(zone.get("id"), zone.get("name")) for zone in zones}
     ids = {identity[0] for identity in identities if identity[0]}
@@ -99,11 +89,7 @@ def resolve_security_zone(
 
 
 def interface_security_zone(interface: Mapping[str, Any], *, required: bool = False) -> dict[str, Any]:
-    """Read an interface's local VRF; a circuit validates its zone, not its scoped identity.
-
-    A parent port is not an owner: different sub-interfaces legitimately carry
-    different VRFs. A remote deployment realizes the same zone in a different instance.
-    """
+    """Read an interface's local VRF zone; a parent port is not an owner."""
     vrf = interface_vrf(interface)
     capabilities = [cap for key in INTERFACE_CAPABILITY_KEYS for cap in interface.get(key) or []]
     circuits = [

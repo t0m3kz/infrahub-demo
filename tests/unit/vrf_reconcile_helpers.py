@@ -1,10 +1,4 @@
-"""A generator host and a fake client for the tests of generators/helpers/vrf.py and the callers that use it.
-
-The fake client keeps the instances (``ManagedVRF``) and the SVIs in them (the instance's interface ``capabilities``) in
-a ``VrfStore``: the ``filters`` reads, the edge mutations (``add_relationships`` / ``remove_relationships`` of
-``shared_devices`` and ``capabilities``) and the deletes act on it, so a pass sees its own writes and several hosts can
-share one store.
-"""
+"""A generator host and a fake client for the tests of generators/helpers/vrf.py and the callers that use it."""
 
 from __future__ import annotations
 
@@ -27,11 +21,7 @@ def raw_namespaces() -> dict[str, Any]:
 
 
 def response(*devices: dict[str, Any], instances: tuple[dict[str, Any], ...] = ()) -> dict[str, Any]:
-    """The whole query response (raw GraphQL shape) for the given raw device nodes.
-
-    ``instances`` are extra ``ManagedVRF`` root nodes (``raw_root_instance``), for instances the devices are not
-    members of.
-    """
+    """The whole query response (raw GraphQL shape) for the given raw device nodes."""
     return {**raw_response(*devices, instances=instances), "SecurityZone": raw_namespaces()}
 
 
@@ -78,10 +68,7 @@ class FakeVrf:
 
 @dataclass
 class VrfStore:
-    """The graph the fake client reads and writes: instances, and the interfaces in them (vrf id -> interface ids).
-
-    ``external_refs`` are other references that keep an instance (``session_circuits``, ``capabilities`` of
-    non-SVI interfaces, ``exchanges``: the routed exchanges naming it as ``vrf_a`` or ``vrf_z``)."""
+    """The graph the fake client reads and writes"""
 
     vrfs: dict[str, FakeVrf] = field(default_factory=dict)
     svi_refs: dict[str, set[str]] = field(default_factory=dict)
@@ -203,8 +190,7 @@ class VrfHost(VrfMixin):
             if kind.__name__ == "ManagedVRF":
                 self.store.add(vrf)
             elif kind.__name__ == "DcimVirtualInterface" and "capabilities" in data:
-                # The saved list replaces the interface's capabilities (an SVI's only one is its VRF); a save without
-                # it leaves its edges alone.
+                # The saved list replaces the interface's capabilities; a save without it leaves its edges alone.
                 for refs in self.store.svi_refs.values():
                     refs.discard(node_id)
                 for cap in data["capabilities"]:

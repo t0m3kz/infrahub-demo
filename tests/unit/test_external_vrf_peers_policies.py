@@ -47,9 +47,7 @@ def _segment(
     )
 
 
-# ---------------------------------------------------------------------------
 # Outbound: the namespace's on-prem prefixes
-# ---------------------------------------------------------------------------
 
 
 class TestOnpremPrefixes:
@@ -287,9 +285,7 @@ class TestExternalSessionPolicies:
         assert caplog.records == []
 
 
-# ---------------------------------------------------------------------------
 # Internal vs external
-# ---------------------------------------------------------------------------
 
 
 def _with_far_end_role(peering: dict[str, Any], role: str | None) -> dict[str, Any]:

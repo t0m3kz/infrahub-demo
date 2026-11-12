@@ -1,8 +1,4 @@
-"""The firewall address table: one named object per prefix, family-agnostic, rendered by every vendor.
-
-An IPv4-only, an IPv6-only and a mixed firewall render through the same table (transforms/helpers/address_table.py).
-An IPv6 rule endpoint is rendered by NAME; an endpoint that resolves to no address is an error, never ``any``.
-"""
+"""The firewall address table: one named object per prefix, family-agnostic, rendered by every vendor."""
 
 from __future__ import annotations
 

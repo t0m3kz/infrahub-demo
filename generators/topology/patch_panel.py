@@ -18,18 +18,9 @@ FRONT_PORT_KIND = "DcimFrontPatchPanelPort"
 
 
 class PatchPanelGenerator(PoolMixin, CommonGenerator):
-    """Create the ports `panel_type` asks for and pair every front port with its rear port (jack or cassette).
-
-    The type is the layout (generators/helpers/patch_panel.py PANEL_TYPES). A run creates the missing rear ports, then
-    the missing front ports already on their rear port, and pairs a front port left unpaired. It never deletes or
-    re-pairs a port: one the type does not have, with another connector, or on another rear port (a hand edit, or a
-    type changed to a smaller one) is warned about and left, and checks/patch_panel_pairing.py reports it, so a
-    re-run over a complete panel writes nothing. Runs when a panel joins patch_panels (data/events/99_group_triggers.yml)
-    and when its `panel_type` changes (data/events/99_actions.yml). The writes are untracked: no run owns a panel, so
-    no cleanup may delete its ports. One lock per panel: two runs at once would both create the missing ports. Every
-    port is saved as an upsert, which the server resolves by the port's uniqueness ([panel, name]): the object file
-    that creates the panel may upsert the same port in the same moment (a cable end, a used jack), and both writes then
-    land on one port.
+    """Create the ports `panel_type` asks for and pair every front port with its rear port; never deletes or re-pairs.
+    Untracked, one lock per panel, every port an upsert by [panel, name]; mismatches are warned about
+    (checks/patch_panel_pairing.py).
     """
 
     graphql_root_key = PANEL_KIND
@@ -84,11 +75,7 @@ class PatchPanelGenerator(PoolMixin, CommonGenerator):
         )
 
     async def _upsert(self, kind: str, data: dict[str, Any]) -> str:
-        """Save one port as an untracked upsert and return its id.
-
-        Two creates of one new port at the same instant (this run and an object load) can both miss it and one is
-        refused; the second attempt then finds the port the other wrote.
-        """
+        """Save one port as an untracked upsert and return its id; one retry covers a concurrent create."""
         port = await self.client.create(kind=kind, data=data)
         try:
             await port.save(allow_upsert=True, update_group_context=False)

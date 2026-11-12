@@ -1,17 +1,4 @@
-"""Unit tests for CustomerDeploymentColocationExchangeGenerator
-(generators/topology/customer_colocation.py).
-
-Mirrors test_customer_dc.py's structure — the two generators share nearly
-identical logic — but focuses on what's colocation-specific: the footprint's
-``parent`` is its METRO (a TopologyColocationMetro, which owns no devices) and the
-facilities that host its contexts are the metro's zones (customer_colocation.gql
-reads ``parent.children`` with each zone's firewall_devices). The footprint is served
-by EVERY zone with a firewall pair, one shared context each; a zone without firewalls
-does nothing and a metro with none gives the footprint no context. The zone's
-fabric-tier devices carry role=edge, never border-leaf (see _COLO_VALID_FABRIC_ROLES
-in generators/topology/colocation_fabric.py). Colocation boards through the same
-leg step as a DC; its legs face the edge pair's firewall ports.
-"""
+"""Unit tests for CustomerDeploymentColocationExchangeGenerator (generators/topology/customer_colocation.py)."""
 
 from __future__ import annotations
 
@@ -59,8 +46,7 @@ def _colo_payload_with_parent(
     zones: list[dict] | None = None,
     serving: list[str] | None = None,
 ) -> dict:
-    """A footprint in metro FR. By default one zone FR2 holding fw_devices (a default pair member); ``zones``
-    replaces the zones, ``serving`` lists the contexts it is already linked to."""
+    """A footprint in metro FR."""
     children = (
         zones
         if zones is not None
@@ -108,9 +94,7 @@ class TestColocationDeployment:
 
     @pytest.mark.asyncio
     async def test_all_controllers_always_empty(self) -> None:
-        """ColocationMetro has no controllers to fetch (customer_colocation.gql
-        has no security_manager_controllers/lb_manager_controllers aliases,
-        unlike customer_dc.gql) — _all_controllers stays [] unconditionally."""
+        """ColocationMetro has no controllers to fetch."""
         gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate(_colo_payload_with_parent(fw_devices=[]))
@@ -119,8 +103,7 @@ class TestColocationDeployment:
 
 
 class TestWaitsForZoneGenerators:
-    """add_colocation_zone writes the zone's firewall devices and owns their
-    HA pair — a customer boarding concurrently with it waits first, for every zone of the metro."""
+    """add_colocation_zone writes the zone's firewall devices and owns their HA pair."""
 
     @pytest.mark.asyncio
     async def test_waits_on_add_colocation_zone_for_every_zone_of_the_metro(self) -> None:
@@ -273,8 +256,7 @@ class TestFirewallContextNoFirewallOrCluster:
 
     @pytest.mark.asyncio
     async def test_unpaired_firewalls_wait_for_zone_then_use_its_cluster(self) -> None:
-        """add_colocation_zone owns the zone's HA pair: the customer waits
-        for it and re-queries, never pairing the firewalls itself."""
+        """add_colocation_zone owns the zone's HA pair: the customer waits for it and re-queries."""
         gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         cluster = _cluster("cluster-1", "fw-fr201-fw-fr202", ["fw-1", "fw-2"])
         gen.client.filters = AsyncMock(side_effect=[[], [cluster]])
@@ -359,8 +341,7 @@ class TestFirewallContextProvisioning:
 
     @pytest.mark.asyncio
     async def test_dedicated_request_without_dedicated_pair_provisions_no_context(self) -> None:
-        """No dedicated pair provisioned: no shared-context fallback, no context target and no transit leg
-        (the real logger.error raises inside the pair step, which fails the run)."""
+        """No dedicated pair provisioned: no shared-context fallback, no context target and no transit leg."""
         gen, _, _ = self._make_gen_with_cluster()
         gen._ensure_transit_legs = AsyncMock()
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
@@ -404,8 +385,7 @@ class TestLinkServingFirewallContext:
 
     @pytest.mark.asyncio
     async def test_context_is_added_without_a_save(self) -> None:
-        """Only the relationship is written (an additive mutation), on the footprint, which is the generator's
-        target: never a tracked save that would let delete_unused_nodes remove it on a later run."""
+        """Only the relationship is written (an additive mutation), on the footprint."""
         gen = make_generator(CustomerDeploymentColocationExchangeGenerator)
         deployment = MagicMock()
         deployment.add_relationships = AsyncMock()

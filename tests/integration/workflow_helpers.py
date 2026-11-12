@@ -1,10 +1,4 @@
-"""Reusable workflow helpers for integration tests.
-
-These helpers encapsulate workflow control patterns:
-- Running generators and waiting for completion
-- Creating and merging proposed changes
-- Waiting for validations and in-flight tasks
-"""
+"""Reusable workflow helpers for integration tests."""
 
 import asyncio
 import logging
@@ -38,14 +32,7 @@ async def verify_no_failed_tasks(
     client: InfrahubClient,
     branch: str,
 ) -> dict[str, Any]:
-    """Verify no tasks failed on the branch during generator execution.
-
-    Each DC (or scenario) deploys on its own dedicated branch, so scoping by
-    branch alone is sufficient — do not additionally filter by DC name in the
-    task title: task titles are generic ("Run generator pod_rack_cascade",
-    "Execute generator add_rack") and never contain the DC name, so a
-    title-substring filter silently discards every real failure.
-    """
+    """Verify no tasks failed on the branch during generator execution."""
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
 
     clean_checks = 0
@@ -121,13 +108,7 @@ async def wait_for_tasks_completion(
     poll_interval: int = 5,
     stable_zero_count: int = 2,
 ) -> None:
-    """Wait for all in-flight tasks on a branch to finish.
-
-    Waits an initial delay for cascading generators to be scheduled,
-    then polls until no PENDING/RUNNING/SCHEDULED tasks remain for
-    `stable_zero_count` consecutive checks (to handle gaps between
-    cascading generator waves).
-    """
+    """Wait for all in-flight tasks on a branch to finish."""
     logger.info("Waiting %ds for cascading tasks to be scheduled on branch '%s'...", initial_delay, branch)
     await asyncio.sleep(initial_delay)
 
@@ -200,20 +181,7 @@ async def run_generator(
     branch: str,
     settle_zero_count: int = 2,
 ) -> dict[str, Any]:
-    """Run a generator and wait for completion.
-
-    First waits for the branch's in-flight tasks to settle
-    (``settle_zero_count`` consecutive empty polls): the object load that
-    precedes most calls fires event triggers that run the same generator on
-    the same nodes. Two runs of one generator on one target share a tracking
-    group, and one run's cleanup then deletes nodes the other has just linked
-    (observed: add_dc deleting a RoutingAutonomousSystem still held by
-    ManagedBGP.local_as). Started after the triggered run, this one is an
-    idempotent re-run.
-
-    Returns:
-        Dictionary with task_id, task_state, and success flag
-    """
+    """Run a generator and wait for completion."""
     await wait_for_tasks_completion(client, branch, stable_zero_count=settle_zero_count)
     logger.info("Running generator '%s' on branch '%s' with %d node(s)", generator_name, branch, len(node_ids))
 
@@ -276,11 +244,7 @@ def create_proposed_change(
     source_branch: str,
     destination_branch: str = "main",
 ) -> str:
-    """Create a proposed change. Returns the PC ID.
-
-    It is created once the queue has been quiet for a minute: the generators the scenario started (a cascade has gaps
-    between its tasks) must have written everything the validators are to judge.
-    """
+    """Create a proposed change. Returns the PC ID."""
     wait_for_no_running_tasks(client, branch=None, stable_zero=QUIET_POLLS_BEFORE_PROPOSED_CHANGE)
     logger.info("Creating proposed change: %s (%s -> %s)", name, source_branch, destination_branch)
 
@@ -326,9 +290,7 @@ def create_proposed_change(
 
 
 # Polls of ``wait_for_no_running_tasks`` (5 s apart) with nothing in flight that a proposed change or a merge needs
-# first. A cascade of generators (a pod swap starts pod_rack_cascade, which starts the pod generator) leaves gaps of
-# a minute on a loaded machine between two of its tasks, and a proposed change created in a gap is validated, then
-# validated again as the next generator writes to its branch: the validators end half old, half new.
+# first.
 QUIET_POLLS_BEFORE_PROPOSED_CHANGE = 12
 
 
@@ -339,8 +301,8 @@ def wait_for_no_running_tasks(
     poll_interval: int = 5,
     stable_zero: int = 3,
 ) -> None:
-    """Wait until no task is pending/running/scheduled on ``branch`` — on any
-    branch when None — for ``stable_zero`` consecutive polls."""
+    """Wait until no task is pending/running/scheduled on ``branch`` — on any branch when None — for ``stable_zero``
+    consecutive polls."""
     from infrahub_sdk.task.models import TaskFilter, TaskState
 
     in_flight_states = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
@@ -379,17 +341,7 @@ def wait_for_validations(
     pc_name: str,
     allow_failures: bool = False,
 ) -> list[Any]:
-    """Wait for proposed change validations to complete.
-
-    Looks the proposed change up by the id create_proposed_change() returned
-    (pc_name is only for messages), and treats "not found" as not ready yet:
-    the first read can come straight after the create and miss it — observed
-    as a NodeNotFoundError on the first poll in test_16, after the same lookup
-    had worked for test_12 and test_14 in the same run.
-
-    Returns:
-        List of validation results
-    """
+    """Wait for proposed change validations to complete."""
     logger.info("Waiting for validations to complete for PC: %s (%s)", pc_name, pc_id)
 
     def _check_validations() -> tuple[bool, list[Any]]:
@@ -458,18 +410,7 @@ def wait_for_validations(
 
 
 def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
-    """Return one description per failing CoreCheck on this proposed change.
-
-    Infrahub's own merge task rejects a merge whose validators contain a
-    failing check ("Unable to merge proposed change containing failing
-    checks") without saying which one — a validator's own conclusion says
-    nothing about the individual checks under it, and a validator can still
-    show "success" overall depending on aggregation. Used by the merge path
-    and by wait_for_validations() when a validator fails. This
-    is the only path to the actual self.log_error() message a check reported,
-    which is the one piece of information that turns "the merge failed" into
-    something actionable.
-    """
+    """Return one description per failing CoreCheck on this proposed change."""
     query = """
         query ProposedChangeFailedChecks($pc_id: ID!) {
             CoreProposedChange(ids: [$pc_id]) {
@@ -521,8 +462,7 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
                     f"[{validator_label}] validator state={validator_state} conclusion={validator_conclusion} "
                     f"({len(checks)} check(s) under it)"
                 )
-                # What each of its checks says, whatever its conclusion: the verdict of the validator and the one of
-                # its checks can differ, and the message is the only thing that names the object.
+                # What each of its checks says, whatever its conclusion
                 for check_edge in checks:
                     check = check_edge.get("node") or {}
                     descriptions.append(
@@ -542,13 +482,7 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
 
 
 def _rerun_unfinished_validators(client: InfrahubClientSync, pc_id: str) -> None:
-    """Run the checks of the proposed change again when its validators are not all green and no check failed.
-
-    The platform refuses a merge while a validator has not concluded or says failure, and a repeated merge changes
-    nothing: a validator starved under load (queued, an import check with no conclusion, a verdict of failure over
-    successful checks) only changes when the checks run again, which is what the "run checks" button of the GUI does.
-    A check that really failed is left alone (it is the finding) and the call is only made when none did.
-    """
+    """Run the checks of the proposed change again when its validators are not all green and no check failed."""
     descriptions = _fetch_failed_checks(client, pc_id)
     if not descriptions:
         return
@@ -574,14 +508,7 @@ def merge_proposed_change(
     max_retries: int = 3,
     retry_delay: int = 30,
 ) -> dict[str, Any]:
-    """Merge a proposed change. Retries on transient failures.
-
-    After a successful merge, waits for any post-merge background tasks
-    (generators re-triggered on main) to complete.
-
-    Returns:
-        Dictionary with merge task info and success status
-    """
+    """Merge a proposed change. Retries on transient failures."""
     from infrahub_sdk.task.models import TaskFilter
 
     logger.info("Merging proposed change ID: %s", pc_id)
@@ -592,11 +519,7 @@ def merge_proposed_change(
     failed_checks: list[str] = []
 
     for attempt in range(1, max_retries + 1):
-        # A merge blocks every write on every branch while it runs
-        # (MERGE_IN_PROGRESS): anything still in flight anywhere — this
-        # branch's tasks, or other open proposed changes' pipelines that the
-        # previous merge into main re-triggered — would fail mid-write. Wait
-        # for the whole queue, not just the source branch.
+        # A merge blocks every write on every branch while it runs (MERGE_IN_PROGRESS)
         wait_for_no_running_tasks(client, branch=None, stable_zero=QUIET_POLLS_BEFORE_PROPOSED_CHANGE)
 
         mutation = Mutation(
@@ -620,10 +543,7 @@ def merge_proposed_change(
         pc_state_after = pc_after.state.value if hasattr(pc_after.state, "value") else pc_after.state
 
         if pc_state_after in ["merged", "closed"]:
-            # Wait for post-merge background tasks on main. Triggers schedule
-            # them a few seconds after the merge, so one empty poll is not
-            # "done": require POST_MERGE_STABLE_ZERO consecutive empty polls,
-            # or the next scenario's branch is cut while main is still moving.
+            # Wait for post-merge background tasks on main.
             logger.info("Merge succeeded, waiting for post-merge tasks on main...")
             time.sleep(5)
             in_flight_states = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
@@ -655,12 +575,7 @@ def merge_proposed_change(
                 "success": True,
             }
 
-        # Only an OPEN proposed change can be merged. A crashed merge task leaves
-        # it in "merging", so every remaining attempt raises a 422 "Only proposed
-        # change in OPEN state can be merged" out of execute_graphql — which
-        # propagates as *the* error and buries the one that actually matters
-        # (observed hiding a Neo4j DeadlockDetected during the merge). Stop and
-        # report the real state instead of retrying into a guaranteed failure.
+        # Only an OPEN proposed change can be merged.
         if pc_state_after != "open":
             failed_checks = _fetch_failed_checks(client, pc_id)
             logger.error(
@@ -711,10 +626,7 @@ def create_and_validate_proposed_change(
     source_branch: str,
     destination_branch: str = "main",
 ) -> dict[str, Any]:
-    """Create a proposed change and wait for validations.
-
-    Returns the PC identifier and raw validation results.
-    """
+    """Create a proposed change and wait for validations."""
     pc_id = create_proposed_change(
         client=client,
         name=name,
@@ -733,20 +645,7 @@ async def run_full_dc_pipeline(
     branch: str,
     dc_name: str,
 ) -> dict[str, Any]:
-    """Run add_dc generator for a DC (creates super-spines, pods, racks, cabling, routing).
-
-    The add_dc generator handles the full pipeline internally:
-    it creates all devices (super-spines, spines, leafs, tors) and
-    all cabling and routing for the entire DC topology.
-
-    Args:
-        client: Infrahub async client
-        branch: Branch to run on
-        dc_name: Name of the DC to generate (e.g., "DC2")
-
-    Returns:
-        Dictionary with generator result info
-    """
+    """Run add_dc generator for a DC (creates super-spines, pods, racks, cabling, routing)."""
 
     original_branch = client.default_branch
     client.default_branch = branch

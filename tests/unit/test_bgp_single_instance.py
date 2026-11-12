@@ -1,17 +1,4 @@
-"""Unit tests for _collapse_to_single_instance().
-
-A router runs exactly ONE BGP ASN per routing instance. Under ebgp-ibgp the
-underlay is eBGP on a per-device ASN and the overlay is iBGP on the fabric-wide
-ASN, so two BGP configs survive the merge-by-ASN step and the templates would
-emit two `router bgp` stanzas. The device rejects the second — or, on a platform
-that accepts the first and ignores the rest, half the routing silently
-disappears.
-
-The collapse anchors on the OVERLAY ASN and moves the underlay ASN onto its own
-sessions as `local_as_override`. The direction matters: anchoring on the underlay
-ASN instead would make the EVPN sessions eBGP and break route reflection, so
-several tests here assert the direction explicitly rather than just the count.
-"""
+"""Unit tests for _collapse_to_single_instance()."""
 
 from __future__ import annotations
 
@@ -62,8 +49,9 @@ class TestOverlayAnchoredCollapse:
         assert len(result) == 1
 
     def test_instance_asn_is_the_overlay_asn(self) -> None:
-        """The whole point: the shared ASN must own the instance so the EVPN
-        sessions stay natively iBGP and route reflection keeps working."""
+        """The whole point: the shared ASN must own the instance so the EVPN sessions stay natively iBGP and route
+        reflection keeps working.
+        """
         result = _collapse_to_single_instance([_underlay(), _overlay()])
         assert result[0]["local_as"]["asn"] == OVERLAY_ASN
 
@@ -80,16 +68,16 @@ class TestOverlayAnchoredCollapse:
         assert sorted(s["name"] for s in result[0]["sessions"]) == ["to-rr-1", "to-spine-1", "to-spine-2"]
 
     def test_underlay_sessions_carry_the_local_as_override(self) -> None:
-        """The eBGP neighbour's own `remote-as 65001` has not changed, so the
-        folded sessions must keep presenting 65001."""
+        """The eBGP neighbour's own `remote-as 65001` has not changed, so the folded sessions must keep presenting
+        65001.
+        """
         result = _collapse_to_single_instance([_underlay(), _overlay()])
         folded = [s for s in result[0]["sessions"] if s["name"].startswith("to-spine")]
         assert len(folded) == 2
         assert all(s["local_as_override"] == {"asn": UNDERLAY_ASN} for s in folded)
 
     def test_overlay_sessions_carry_no_override(self) -> None:
-        """An override on the EVPN session would turn it into eBGP — the exact
-        failure this design avoids."""
+        """An override on the EVPN session would turn it into eBGP — the exact failure this design avoids."""
         result = _collapse_to_single_instance([_underlay(), _overlay()])
         evpn = next(s for s in result[0]["sessions"] if s["name"] == "to-rr-1")
         assert "local_as_override" not in evpn
@@ -103,10 +91,7 @@ class TestOverlayAnchoredCollapse:
 
 
 class TestAmbiguousAnchor:
-    """Neither of these should happen for the strategies this project generates.
-    Producing ONE valid instance beats N invalid ones, but the arbitrary choice
-    has to be visible.
-    """
+    """Neither of these should happen for the strategies this project generates."""
 
     def test_no_evpn_process_still_collapses_and_errors(self, caplog: pytest.LogCaptureFixture) -> None:
         configs = [
@@ -121,8 +106,7 @@ class TestAmbiguousAnchor:
         assert "dc1-leaf-1" in caplog.text
 
     def test_no_evpn_process_anchors_on_the_first_config(self) -> None:
-        """Documents the fallback rather than endorsing it — get_bgp_profile
-        sorts by ASN before calling this, so `configs[0]` is the lowest ASN."""
+        """Documents the fallback rather than endorsing it — get_bgp_profile sorts by ASN before calling this."""
         configs = [
             _config(OVERLAY_ASN, "bgp-a", [_session("to-a", ["ipv4"])]),
             _config(UNDERLAY_ASN, "bgp-b", [_session("to-b", ["ipv4"])]),
@@ -152,8 +136,7 @@ class TestAmbiguousAnchor:
 
 class TestThreeProcesses:
     def test_every_non_anchor_process_is_folded_with_its_own_override(self) -> None:
-        """Not a shape this project generates today, but the fold must not assume
-        exactly two processes — a silently dropped third would delete peerings."""
+        """Not a shape this project generates today, but the fold must not assume exactly two processes."""
         configs = [
             _config(65001, "bgp-underlay", [_session("to-spine", ["ipv4"])]),
             _config(65002, "bgp-external", [_session("to-wan", ["ipv4"])]),

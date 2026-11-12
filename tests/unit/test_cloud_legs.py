@@ -1,5 +1,4 @@
-"""Cloud legs (transforms/helpers/bgp_cloud.py): the neighbor, the owner and the registered prefixes of a session
-whose far end is a CloudPeeringInterface, and what the edge policy makes of them (utils/ownership.py)."""
+"""Cloud legs (transforms/helpers/bgp_cloud.py): the neighbor."""
 
 from __future__ import annotations
 

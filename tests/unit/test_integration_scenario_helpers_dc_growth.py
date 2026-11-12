@@ -1,11 +1,4 @@
-"""Unit tests for the DC-scoped growth/ASN helpers used by the DC6 scenario chain.
-
-tests/integration/test_12..test_20 decide pass/fail from these helpers, so a
-helper that silently returns "no shortfall" or "no drift" would let a broken
-generator run green. The pure functions are tested directly; the async
-snapshot helpers are driven through a mocked client returning a raw
-GraphQL payload shaped like queries/get_dc_devices.gql.
-"""
+"""Unit tests for the DC-scoped growth/ASN helpers used by the DC6 scenario chain."""
 
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -94,9 +87,7 @@ def mock_client() -> MagicMock:
     return client
 
 
-# ----------------------------------------------------------------------
 # find_min_growth_shortfalls
-# ----------------------------------------------------------------------
 
 
 def test_min_growth_met_returns_no_shortfalls() -> None:
@@ -146,9 +137,7 @@ def test_min_growth_shortfalls_are_sorted_by_role() -> None:
     assert [line.split(":")[0] for line in shortfalls] == ["access-leaf", "leaf", "spine"]
 
 
-# ----------------------------------------------------------------------
 # find_underlay_asn_drift
-# ----------------------------------------------------------------------
 
 
 def test_asn_drift_none_when_baseline_kept_and_new_devices_added() -> None:
@@ -190,9 +179,7 @@ def test_asn_drift_empty_baseline_never_drifts() -> None:
     assert find_underlay_asn_drift("leaf", {"x": 1}, {}) == []
 
 
-# ----------------------------------------------------------------------
 # Pure topology computations
-# ----------------------------------------------------------------------
 
 
 def test_compute_underlay_asn_only_reads_underlay_process() -> None:
@@ -237,9 +224,7 @@ def test_compute_role_counts_groups_by_role() -> None:
     assert compute_role_counts(devices) == {"leaf": 2, "spine": 1, "": 1}
 
 
-# ----------------------------------------------------------------------
 # Async DC-scoped snapshots (mocked client)
-# ----------------------------------------------------------------------
 
 
 async def test_snapshot_dc_counts_covers_dc_pod_and_rack_devices(mock_client: MagicMock) -> None:

@@ -1,13 +1,4 @@
-"""The real CheckSuiteCapacity rules over payloads built from the shipped demo object files.
-
-``tests/unit/simulators/suite_capacity_payloads.py`` shapes the YAML a demo loads like the response of
-``queries/validation/suite_capacity.gql`` (every rack with its suite capacity and its pod's design envelope). The
-check then runs unchanged: this is the offline proof that the suites, the racks and the pod designs of the data agree.
-The tests that break the data on purpose show the proof is not vacuous.
-
-The demo roots below are the sets that load together (one stack at a time): the DC demo, the DC6 build-up on top of
-it (switch, rack, pod and server stages), the colocation demo, the 30_all demo, the Arista MSS-G fabric and the full-topology sample.
-"""
+"""The real CheckSuiteCapacity rules over payloads built from the shipped demo object files."""
 
 from __future__ import annotations
 

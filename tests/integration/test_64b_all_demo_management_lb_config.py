@@ -1,12 +1,4 @@
-"""Integration test — the 30_all management exchange, office fabric and load-balancer renders (continues test_64).
-
-The management exchange legs and services rules on the firewalls, the leaf without PBR to the management services,
-CheckLispFabric and the LISP render of the offices' switches, then the load-balancer steps: CheckLoadBalancer on the
-members of the contexts holding the VIPs of ALL_DEMO_LOAD_BALANCED_COMPONENTS, the F5 render of those contexts, the
-border leafs' leg and VIP static, and the client leaf's PBR bypass of the VIP/32.
-
-Runs against the branch test_59 built, after test_64.
-"""
+"""Integration test — the 30_all management exchange, office fabric and load-balancer renders (continues test_64)."""
 
 import ipaddress
 import logging
@@ -93,14 +85,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Every member of each DC's shared context renders the MANAGEMENT exchange.
-
-        The MANAGEMENT leg, tenant zones source-NATed to the MANAGEMENT leg VIP (PAN-OS
-        `snat-<zone>-MANAGEMENT`, Check Point `SNAT-<context>-MANAGEMENT`; the VIP already is the
-        interface address, so no secondary IP) and a logged MANAGEMENT -> tenant-zone deny per
-        tenant zone held. Only DC11 holds the services segment, so only its context routes
-        10.250.0.0/24 via the MANAGEMENT leg anycast (.1); the other DCs have the leg but no such route.
-        """
+        """Every member of each DC's shared context renders the MANAGEMENT exchange."""
         logging.info("=== %s - Step 7: Render firewall MANAGEMENT exchange ===", SCENARIO_NAME)
 
         contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
@@ -111,7 +96,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         rendered_by_platform: dict[str, int] = {}
         for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
             if expected["tenant"] is not None:
-                continue  # a dedicated context's members are virtual: not a firewall_config device
+                continue  # a dedicated context's members are virtual
             dc = expected["site"]
             context = contexts.get((dc, expected["namespace"], None))
             if context is None:
@@ -160,9 +145,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     routes = re.findall(
                         r"static-route (rt-\d+) destination " + re.escape(MANAGEMENT_SERVICES_PREFIX), rendered
                     )
-                    # The zone's CIDRs come from the global SecurityZone root, so every context with a
-                    # MANAGEMENT leg routes the services prefix to its own anycast (inert outside DC11:
-                    # no rule permits it there and the border leaf has no such prefix in its VRF).
+                    # The zone's CIDRs come from the global SecurityZone root
                     nexthops = {
                         route
                         for route in routes
@@ -203,8 +186,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     )
                     if route not in rendered:
                         errors.append(f"{dc}/{device}: '{route}' missing")
-                # A member renders every context of its cluster (DC12's PROD and NONPROD ones), so the zones this
-                # context does not hold are looked for in its own vsys / virtual system only.
+                # A member renders every context of its cluster (DC12's PROD and NONPROD ones)
                 own = _context_lines(rendered, platform, name)
                 for zone in other_zones:
                     if f"deny-{management_zone}-to-{zone}" in own:
@@ -226,13 +208,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """DC11 (PAN-OS) permits PROD -> MANAGEMENT udp/53 and udp/123 from the c006 segment.
-
-        Rules `nordix-prod-to-core-dns` / `nordix-prod-to-core-ntp` (05_security_policy.yml) render in the
-        shared context's vsys on every member: source the client segment's prefix (allocated by
-        add_vxlan_segment, read from the graph), destination 10.250.0.0/24, service svc-udp-<port>,
-        action allow.
-        """
+        """DC11 (PAN-OS) permits PROD -> MANAGEMENT udp/53 and udp/123 from the c006 segment."""
         logging.info("=== %s - Step 7: Render core DNS/NTP rules ===", SCENARIO_NAME)
 
         client_prefix = (
@@ -271,14 +247,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """The services segment is never steered, and nothing bypasses the firewall towards it.
-
-        Leaf/access-leaf carrying the c006 segment (its VLAN on that switch, read from the graph): the PBR
-        bypass ACL, if rendered, does not permit 10.250.0.0/24, so the flow goes to the firewall. Every leaf that
-        carries the services segment (its VLAN on that switch, read from the graph: the segment's ports come from the
-        instances of the INFRA application) renders that VLAN's SVI in VRF MANAGEMENT with the anycast gateway
-        10.250.0.1/24 and no PBR (no `ip policy route-map`, no RM-LEAF-PBR-VLAN<n> / PBR-BYPASS-VLAN<n>).
-        """
+        """The services segment is never steered, and nothing bypasses the firewall towards it."""
         logging.info("=== %s - Step 7: Leaf PBR and the services SVI ===", SCENARIO_NAME)
 
         errors: list[str] = []
@@ -347,15 +316,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """CheckLispFabric finds nothing to report, and every switch of an office fabric renders its LISP site.
-
-        The distribution-switches are the co-located map-servers: ``router lisp``, ``map-server``, the office's
-        ``site`` with its key and the EID records of its segments, over the OSPF underlay. The access-switches are
-        the edges: ``router lisp`` with ``etr map-server ... key`` toward every map-server and no map-server role of
-        their own. An office with an SD-WAN edge adds the exit: ``proxy-etr`` on the borders, ``use-petr`` on the
-        edges. No office renders the EVPN control plane or VXLAN (the BGP process of the WAN exit is not EVPN). The
-        shape of the render is pinned, not device behaviour: every LISP line is unverified-no-lab.
-        """
+        """CheckLispFabric finds nothing to report, and every switch of an office fabric renders its LISP site."""
         logging.info("=== %s - Step 8: Office fabrics ===", SCENARIO_NAME)
 
         check = CheckLispFabric(branch=scenario_branch, client=async_client_main, params={})
@@ -424,9 +385,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """CheckLoadBalancer finds no error on every member of a context holding VIPs: the
-        appliance is ready, and every context of its cluster has its VLAN, VIP range, a leg on
-        the member and VIPs inside the range with pool members."""
+        """CheckLoadBalancer finds no error on every member of a context holding VIPs: the appliance is ready."""
         logging.info("=== %s - Step 9: CheckLoadBalancer ===", SCENARIO_NAME)
 
         contexts = await _vip_contexts(async_client_main, scenario_branch)
@@ -453,14 +412,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Every member of a context holding VIPs renders the context (F5 TMOS, the DC10 and DC12 pairs).
-
-        The context's partition (`SHARED-<NS>` for a shared one) defaults to a strict route
-        domain whose id is the tenant namespace's l3_vni (PROD 60000, NONPROD 60001, parent
-        none); the leg VLAN tagged on the uplink, the member's own self IP (.5/.6), the floating
-        .4 and the default route to the border anycast .1; per VIP a virtual server
-        `destination /<partition>/<vip>:<port>` with SNAT automap and a pool of its members.
-        """
+        """Every member of a context holding VIPs renders the context (F5 TMOS, the DC10 and DC12 pairs)."""
         logging.info("=== %s - Step 9: Render load-balancer contexts ===", SCENARIO_NAME)
 
         contexts = await _vip_contexts(async_client_main, scenario_branch)
@@ -535,13 +487,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """The border leafs of a DC holding VIPs carry every load-balancer context of the DC.
-
-        Per context: the `load-balancer` port facing each member trunks the leg VLAN; the leg
-        VLAN has its L2VNI (transit_vni) and an anycast SVI (.1 of the leg /29) in the tenant
-        VRF; `vrf context <NS>` routes the VIP /26 to the leg's floating .4, and the static is
-        exported into EVPN (PL-VRF-STATIC-<NS>).
-        """
+        """The border leafs of a DC holding VIPs carry every load-balancer context of the DC."""
         logging.info("=== %s - Step 9: Render border-leaf load-balancer legs ===", SCENARIO_NAME)
 
         by_key, _ = match_loadbalancer_contexts(
@@ -577,11 +523,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """A client of a load-balanced component reaches its VIP in its own VRF, never through the firewall.
-
-        Every leaf or access-leaf carrying the client's segment (ALL_DEMO_LB_CLIENT_DEPENDENCIES)
-        permits the VIP/32 in the PBR bypass ACL of the segment's VLAN.
-        """
+        """A client of a load-balanced component reaches its VIP in its own VRF, never through the firewall."""
         logging.info("=== %s - Step 9: Client leaf bypass to the VIP ===", SCENARIO_NAME)
 
         contexts = await _vip_contexts(async_client_main, scenario_branch)

@@ -1,36 +1,4 @@
-"""Integration test — Phase 01: DC Deployments (DC1 – DC7).
-
-Every DC deploys on its own branch (deploy-dc1 … deploy-dc7), all at the same
-time — as several operators boarding DCs at once would — then merges in turn:
-
-  test_00_deploy_all (concurrent, up to DC_DEPLOYMENT_CONCURRENCY at once):
-    1. Load demo data from data/demos/01_data_center/<dc>/
-    2. Run add_dc generator, wait for cascade (add_pod, add_rack)
-    3. Verify no failed tasks
-    4. Verify topology
-    5. Create proposed change
-    6. Wait for validations
-    7. Verify artifacts
-  test_01_merge (one per DC, in DC order):
-    8. Merge to main
-  test_02_verify_after_merge (one per DC):
-    9. Verify devices and routing on main (post-merge)
-
-Every branch is cut from main before any DC merges, so no DC depends on
-another's merge: each merge test checks its own DC's deploy outcome and runs
-whether or not an earlier DC failed. That only holds while DCs share no
-branch-created node — shared singletons (BGP address families, role groups,
-security zones) live in data/bootstrap so every branch finds one on main
-instead of creating its own, which would fail the second merge on uniqueness.
-
-The DC6 expansion chain (test_12 - test_20: add-switch, add-rack …) depends on
-``dc6_verify_after_merge`` so it only starts once DC6 is verified in main.
-DC7 (micro-fabric / border-spine pattern) still deploys here, but nothing in
-the chain depends on it. Merge and post-merge verification are two separate
-tests per DC so that a flaky re-verification never hides a successful merge.
-
-Per-DC configuration and expected results are defined in ``DC_CONFIGS`` below.
-"""
+"""Integration test — Phase 01: DC Deployments (DC1 – DC7)."""
 
 import asyncio
 import logging
@@ -53,16 +21,7 @@ from .workflow_helpers import (
     wait_for_tasks_completion,
 )
 
-# ---------------------------------------------------------------------------
-# Per-DC configuration and expected results
-#
-# Keys:
-#   data_path         – infrahubctl object load path (from DEMO_DC_DATA_ROOT)
-#   dc_name           – TopologyDataCenter.name value
-#   routing_strategy  – underlay/overlay protocol combination (see _check_routing)
-#   naming_convention – device naming pattern (see _check_naming_convention)
-#   branch            – git branch used during the test
-# ---------------------------------------------------------------------------
+# Per-DC configuration: data_path, dc_name, routing_strategy, naming_convention, branch.
 
 DC_CONFIGS: dict[str, dict[str, Any]] = {
     "dc1": {
@@ -71,8 +30,7 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ebgp-ebgp",
         "naming_convention": "standard",
         "branch": "deploy-dc1",
-        # 2 pods: middle_rack(2sp each, 2 racks/pod) + 2 super-spines + 8 leafs
-        # + 8 l2-leafs + 2 border-leafs (design L)
+        # 2 pods: middle_rack(2sp each, 2 racks/pod) + 2 super-spines + 8 leafs + 8 l2-leafs + 2 border-leafs (design L)
         "expected_devices": 24,
         "expected_roles": {"super-spine": 2, "spine": 4, "leaf": 8, "l2-leaf": 8, "border-leaf": 2},
         "expected_min_cables": 24,
@@ -83,9 +41,8 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ebgp-ebgp",
         "naming_convention": "hierarchical",
         "branch": "deploy-dc2",
-        # 4 pods: middle_rack(2sp each), no super-spines (design M — data's
-        # fabric_templates has no super-spine role entry) + 8 leafs + 8 l2-leafs
-        # + 2 border-leafs
+        # 4 pods: middle_rack(2sp each), no super-spines (design M — data's fabric_templates has no super-spine role
+        # entry) + 8 leafs + 8 l2-leafs + 2 border-leafs
         "expected_devices": 26,
         "expected_roles": {"spine": 8, "leaf": 8, "l2-leaf": 8, "border-leaf": 2},
         "expected_min_cables": 26,
@@ -96,8 +53,7 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ebgp-ebgp",
         "naming_convention": "flat",
         "branch": "deploy-dc3",
-        # 4 pods: middle_rack(2sp each) + 4 super-spines + 8 leafs + 8 l2-leafs
-        # + 2 border-leafs (design L)
+        # 4 pods: middle_rack(2sp each) + 4 super-spines + 8 leafs + 8 l2-leafs + 2 border-leafs (design L)
         "expected_devices": 30,
         "expected_roles": {"super-spine": 4, "spine": 8, "leaf": 8, "l2-leaf": 8, "border-leaf": 2},
         "expected_min_cables": 30,
@@ -108,11 +64,8 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ebgp-ebgp",
         "naming_convention": "hierarchical",
         "branch": "deploy-dc4",
-        # 3 pods: middle_rack(2sp)+mixed(4sp)+tor(4sp) + 4 super-spines + 2
-        # hyper-spines + 4 leafs + 4 l2-leafs + 2 tors + 2 border-leafs (design XL).
-        # Border-leafs match the firewall/load-balancer pair rather than the pod
-        # count: the service chain is index-paired and firewalls are HA pairs, so
-        # a third border-leaf would have no firewall port budget left.
+        # 3 pods: middle_rack(2sp)+mixed(4sp)+tor(4sp) + 4 super-spines + 2 hyper-spines + 4 leafs + 4 l2-leafs + 2 tors
+        # + 2 border-leafs (design XL).
         "expected_devices": 28,
         "expected_roles": {
             "super-spine": 4,
@@ -142,8 +95,8 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ebgp-ibgp",
         "naming_convention": "standard",
         "branch": "deploy-dc6",
-        # 3 pods: middle_rack(2sp)+tor(2sp)+mixed(2sp) + 2 super-spines + 8 leafs
-        # + 12 l2-leafs + 8 tors + 2 border-leafs
+        # 3 pods: middle_rack(2sp)+tor(2sp)+mixed(2sp) + 2 super-spines + 8 leafs + 12 l2-leafs + 8 tors + 2
+        # border-leafs
         "expected_devices": 38,
         "expected_roles": {"super-spine": 2, "spine": 6, "leaf": 8, "l2-leaf": 12, "tor": 8, "border-leaf": 2},
         "expected_min_cables": 38,
@@ -154,17 +107,14 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ebgp-ebgp",
         "naming_convention": "hierarchical",
         "branch": "deploy-dc7",
-        # 2 pods: middle_rack(2 border-spine each), no super-spine tier and no
-        # DC-level border-leaf (border-spine collapses spine+border-leaf) + 16 leafs
+        # 2 pods: middle_rack(2 border-spine each)
         "expected_devices": 20,
         "expected_roles": {"border-spine": 4, "leaf": 16},
         "expected_min_cables": 20,
     },
 }
 
-# l2-leaf is L2-only aggregation (not a VTEP) — it never runs BGP/OSPF, so routing
-# verification must exclude it from expected_roles (see generators/helpers/routing.py's
-# _OVERLAY_ROLES, which omits "l2-leaf" by design).
+# l2-leaf is L2-only aggregation (not a VTEP) — it never runs BGP/OSPF
 for _cfg in DC_CONFIGS.values():
     _cfg["expected_routing_roles"] = {
         role: count for role, count in _cfg["expected_roles"].items() if role != "l2-leaf"
@@ -172,15 +122,7 @@ for _cfg in DC_CONFIGS.values():
 
 
 def _resolve_dc_order() -> list[str]:
-    """Full dc1..dc7 set by default. Set DC_DEPLOYMENT_TEST_DCS to a
-    comma-separated subset (e.g. "dc6" or "dc6,dc7") to isolate just those
-    DCs for a fast re-check without editing this file; they merge in the
-    given order.
-
-    Example:
-        DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke test-integration-routing
-        DC_DEPLOYMENT_TEST_DCS=dc6,dc7 uv run invoke test-integration-routing
-    """
+    """Full dc1..dc7 set by default."""
     selected = os.environ.get("DC_DEPLOYMENT_TEST_DCS")
     if not selected:
         return ["dc1", "dc2", "dc3", "dc4", "dc5", "dc6", "dc7"]
@@ -194,22 +136,15 @@ def _resolve_dc_order() -> list[str]:
 # Merge order
 DC_ORDER = _resolve_dc_order()
 
-# How many DCs deploy at once; unset or 0 means all of them. The stack's task
-# workers are shared, so a lower value trades wall-clock time for headroom.
+# How many DCs deploy at once; unset or 0 means all of them.
 DC_DEPLOYMENT_CONCURRENCY = int(os.environ.get("DC_DEPLOYMENT_CONCURRENCY", "0")) or len(DC_ORDER)
-# Polls (5s apart) a branch's generator cascade may take to settle: every DC's
-# cascade shares the task workers with the others in flight.
+# Polls (5s apart) a branch's generator cascade may take to settle
 DC_CASCADE_MAX_POLLS = 240
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# ---------------------------------------------------------------------------
-# One merge and one verify test per DC, interleaved by order number: dc1_merge,
-# dc1_verify, dc2_merge, … — all after test_00_deploy_all (order 99). A merge
-# depends only on triggers_active (its DC's deploy outcome is checked inside,
-# from _DEPLOYED), never on another DC; verify depends on its own DC's merge
-# and produces "_verify_after_merge" for test_12's sake.
-# ---------------------------------------------------------------------------
+# One merge and one verify test per DC, interleaved by order after test_00_deploy_all; verify follows its own DC's
+# merge.
 
 _PARAMS_MERGE_SEQUENCE = []
 _PARAMS_VERIFY_SEQUENCE = []
@@ -236,8 +171,7 @@ for i, dc_key in enumerate(DC_ORDER):
         )
     )
 
-# dc_key -> its proposed change id, or the exception its deploy raised
-# (written by test_00_deploy_all, read by test_01_merge).
+# dc_key -> its proposed change id
 _DEPLOYED: dict[str, str | BaseException] = {}
 
 
@@ -251,12 +185,7 @@ def _check_naming_convention(
     dc_name: str,
     naming_convention: Literal["flat", "standard", "hierarchical"],
 ) -> list[str]:
-    """Sanity-check names against DeviceNamingConfig's actual output shape
-    (see generators/helpers/naming.py):
-      - flat: no separators at all, fabric_name first, e.g. "dc123lf01"
-      - standard: role code, one hyphen, then fabric_name+indexes, e.g. "lf-dc11312401"
-      - hierarchical: dot-joined fabric_name + indexes + role, e.g. "dc1.2.3.lf01"
-    """
+    """Sanity-check names against DeviceNamingConfig's actual output shape (see generators/helpers/naming.py)."""
     dc_lower = dc_name.lower()
     mismatches = []
     for name in device_names:
@@ -280,18 +209,7 @@ async def _fetch_topology_and_routing_when_settled(
     dc_name: str,
     cfg: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Fetch topology + routing summary, retrying while peering writes are still settling.
-
-    Task completion (wait_for_tasks_completion) only confirms the generator
-    tasks finished — it doesn't guarantee every peering write triggered by
-    those tasks has propagated by the time this query runs. Retry a few times
-    if any device with a routing-capable role is missing a peering that
-    _check_routing() would flag as an error, before trusting the result —
-    mirroring the poll-until-settled pattern used elsewhere for async
-    generator output (e.g. fetch_segment_deployments). Mirrors _check_routing's
-    own underlay_type logic: underlay_peerings == 0 is only a problem for
-    "ebgp" underlay (OSPF underlay never has BGP underlay peerings).
-    """
+    """Fetch topology + routing summary, retrying while peering writes are still settling."""
     routing_roles = set(cfg["expected_routing_roles"].keys())
     underlay_type = cfg["routing_strategy"].split("-")[0]
 
@@ -427,9 +345,8 @@ def _check_routing(
 
 
 async def _deploy_dc(dc_key: str, config: Config, execute_command: Any) -> str:
-    """Steps 1-7 for one DC on its own clients (the deploys run concurrently):
-    load, let the triggered generators settle, verify, open and validate the
-    proposed change, check artifacts. Returns the proposed change id."""
+    """Steps 1-7 for one DC on its own clients (the deploys run concurrently): load, let the triggered generators
+    settle, verify, open and validate the proposed change, check artifacts."""
     cfg = DC_CONFIGS[dc_key]
     branch = cfg["branch"]
     dc_name = cfg["dc_name"]
@@ -449,14 +366,9 @@ async def _deploy_dc(dc_key: str, config: Config, execute_command: Any) -> str:
     )
     logging.info("%s data loaded", dc_name)
 
-    # Loading the DC fires trigger-dc-generator-on-created (add_dc), which
-    # fans out to add_pod/add_rack per pod. Those per-pod events are not
-    # dispatched together, so the queue can go quiet between pods: 10 empty
-    # polls (50s) comfortably exceed that spread before "settled" is trusted.
+    # Loading the DC fires trigger-dc-generator-on-created (add_dc)
     logging.info("=== %s — Step 2-3: Triggered Generators + No Failed Tasks ===", dc_name)
-    # A busy event queue can hold the trigger back for longer than the quiet
-    # window below, which would then call an untouched branch "settled": wait
-    # for the triggered add_dc to have been dispatched first.
+    # A busy event queue can hold the trigger back for longer than the quiet window below
 
     async def _add_dc_dispatched() -> tuple[bool, None]:
         tasks = await client.task.filter(filter=TaskFilter(branch=branch))
@@ -492,11 +404,8 @@ async def _deploy_dc(dc_key: str, config: Config, execute_command: Any) -> str:
     logging.info("%s PC %s: %d validations", dc_name, pc_result["pc_id"], len(pc_result["validations"]))
 
     logging.info("=== %s — Step 7: Verify Artifacts ===", dc_name)
-    # The pipeline creates the artifact validator only after the validators
-    # wait_for_validations already saw, and its "Check artifact creation"
-    # tasks queue behind every other DC's on the shared workers: let the
-    # branch settle, and give fetch_artifacts the cascade's window rather
-    # than its default two minutes.
+    # The artifact validator appears late and queues behind other DCs' tasks: let the branch settle, widen
+    # fetch_artifacts' window.
     await wait_for_tasks_completion(client, branch, stable_zero_count=3, max_wait_attempts=DC_CASCADE_MAX_POLLS)
     artifacts_result = await fetch_artifacts(
         client=client, branch=branch, expected_min_total=1, max_polls=DC_CASCADE_MAX_POLLS // 2
@@ -515,8 +424,7 @@ class TestDCDeployment(TestInfrahubDockerWithClient):
     @pytest.mark.dependency(scope="session", depends=["triggers_active"])
     @pytest.mark.asyncio
     async def test_00_deploy_all(self, client_main: InfrahubClientSync) -> None:
-        """Steps 1-7 for every DC concurrently. Each DC's outcome is recorded
-        in _DEPLOYED for its own merge test; this test fails if any DC did."""
+        """Steps 1-7 for every DC concurrently."""
         limit = asyncio.Semaphore(DC_DEPLOYMENT_CONCURRENCY)
 
         async def _one(dc_key: str) -> None:
@@ -534,8 +442,7 @@ class TestDCDeployment(TestInfrahubDockerWithClient):
 
     @pytest.mark.parametrize("dc_key", _PARAMS_MERGE_SEQUENCE)
     def test_01_merge(self, dc_key: str, client_main: InfrahubClientSync) -> None:
-        """Merge this DC's proposed change — step 8. Needs only its own
-        deploy: every branch was cut before any DC merged."""
+        """Merge this DC's proposed change — step 8."""
         dc_name = DC_CONFIGS[dc_key]["dc_name"]
         outcome = _DEPLOYED.get(dc_key)
         if outcome is None:
@@ -565,11 +472,7 @@ class TestDCDeployment(TestInfrahubDockerWithClient):
         dc_key: str,
         async_client_main: InfrahubClient,
     ) -> None:
-        """Verify devices and routing on main after the merge — step 9.
-
-        Runs only once this DC's own merge succeeded (dependency: its
-        "_merged" marker); a failure here touches no other DC.
-        """
+        """Verify devices and routing on main after the merge — step 9."""
         cfg = DC_CONFIGS[dc_key]
         dc_name = cfg["dc_name"]
 

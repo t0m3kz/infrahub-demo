@@ -1,9 +1,4 @@
-"""The pure readers and judges of test_66's MLAG scenario (test_05), and the reads that feed them.
-
-Option (d) of the VLAN rows: a ManagedSegmentVlan points straight at its DEVICE, so the ManagedMLAG pairing two
-access-leafs owns no row. Deleting the MLAG, and building it again, must therefore leave every row (id, VLAN id, SVI)
-alone. These functions say what changed; tests/unit/test_integration_mlag_lifecycle.py runs them on canned payloads.
-"""
+"""The pure readers and judges of test_66's MLAG scenario (test_05), and the reads that feed them."""
 
 from __future__ import annotations
 
@@ -21,7 +16,7 @@ MLAG_KIND = "ManagedMLAG"
 SVI_ROLE = "svi"
 MLAG_MEMBERS = 2
 
-# Row: device id -> {segment deployment id -> {id, vlan_id, svi_id}}; SVIs: device id -> {interface name -> id}.
+# Row: device id -> {segment deployment id -> {id, vlan_id, svi_id}}; SVIs
 Rows = dict[str, dict[str, dict[str, Any]]]
 Svis = dict[str, dict[str, str]]
 
@@ -66,9 +61,7 @@ query ($devices: [ID]) {
 """
 
 _MLAG_GQL = Path(__file__).parent.parent.parent / "queries" / "validation" / "mlag_domains.gql"
-# Lines of a rendered access-leaf that name a VLAN of a segment, per platform. The first group is the VLAN id (an
-# EOS ``vlan 100`` / ``interface Vlan100`` / ``   vxlan vlan 100 vni 10100``); ``vn-segment`` (NX-OS) and ``member vni``
-# carry a VNI and no VLAN id, and nothing of an MLAG's own config uses them.
+# Lines of a rendered access-leaf that name a VLAN of a segment, per platform.
 _VLAN_LINE = re.compile(r"^\s*(?:vlan|interface Vlan|vxlan vlan) ?(\d+)\b")
 _VNI_LINE = re.compile(r"^\s*(?:vn-segment|member vni) \d+")
 
@@ -146,8 +139,8 @@ def pick_candidate(candidates: list[dict[str, Any]], rows: Rows) -> tuple[dict[s
 
 
 def snapshot_errors(before: tuple[Rows, Svis], after: tuple[Rows, Svis], names: dict[str, str]) -> list[str]:
-    """What changed between two (rows, svis) snapshots of the pair's devices: a row added, deleted, re-created (new id),
-    renumbered; an SVI (the row has no link to it: found by device and name) added, deleted or re-created. ``names``: device id -> name."""
+    """What changed between two (rows, svis) snapshots of the pair's devices: a row added, deleted, re-created (new
+    id), renumbered; an SVI (the row has no link to it: found by device and name) added."""
     errors: list[str] = []
     for device_id, name in sorted(names.items(), key=lambda item: item[1]):
         old_rows, new_rows = before[0].get(device_id, {}), after[0].get(device_id, {})
@@ -170,10 +163,7 @@ def snapshot_errors(before: tuple[Rows, Svis], after: tuple[Rows, Svis], names: 
 
 
 def vlan_lines(rendered: str, vlan_ids: set[Any]) -> list[str]:
-    """The lines of a rendered config that carry a segment's VLAN or VNI, in order: ``vlan N``, ``interface VlanN`` and
-    ``vxlan vlan N vni M`` for the ids in ``vlan_ids`` (the MLAG's own VLAN, for example the peer-link's 4094, is not
-    one), and every ``vn-segment`` / ``member vni`` line. The rest of the config (the MLAG / vPC domain block, the
-    peer-link) is not part of this subset."""
+    """The lines of a rendered config that carry a segment's VLAN or VNI, in order: ``vlan N``"""
     wanted = {str(vlan_id) for vlan_id in vlan_ids}
     lines = []
     for line in rendered.splitlines():

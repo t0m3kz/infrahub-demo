@@ -90,8 +90,7 @@ def test_a_branch_with_no_open_pc_reports_nothing() -> None:
 
 
 def test_cr1_a_pc_without_a_change_request_is_not_gated() -> None:
-    """A change request is opt-in: a PC with none reports nothing, so a repository without a change service never
-    blocks a merge (a failing user check refuses it). A request of another PC does not count."""
+    """A change request is opt-in: a PC with none reports nothing."""
     assert _logs([_pc()], [_request("pc9")]) == []
 
 
@@ -141,8 +140,7 @@ def test_cr3_a_high_risk_or_emergency_change_needs_a_window(values: dict[str, An
 
 
 def test_cr4_a_lowered_risk_needs_a_reason() -> None:
-    """high -> low without a reason is an ERROR (and the low effective risk needs no window); with one it passes; a
-    raised override needs none."""
+    """high -> low without a reason is an ERROR (and the low effective risk needs no window); with one it passes."""
     errors = _errors(_logs([_pc()], [_request(risk="high", risk_override="low")]))
     assert errors == ["CR4 CHG-pc1: risk lowered from high to low without a reason"]
     assert _logs([_pc()], [_request(risk="high", risk_override="low", risk_override_reason="Lab-proven.")]) == []

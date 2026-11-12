@@ -1,16 +1,4 @@
-"""Unit tests for CheckColocationPlacement (checks/colocation_placement.py).
-
-The payloads are raw GraphQL responses shaped like queries/validation/colocation_placement.gql; ``validate`` runs
-them through ``clean_data`` (which collapses a dict whose only key is ``id`` into the id string). Each rule is also
-tested directly on the cleaned shape.
-
-The design rules (kit needs a design, kit within the envelope, zone design in the metro envelope, zones within the
-metro envelope) read the optional ``design`` of a metro, zone and virtual colocation; ``_hosting`` gives every zone
-a roomy design (4 of each role) unless a test sets another or ``NO_DESIGN``.
-
-The places mirror data/demos/30_all: the Equinix metros FR (zones FR2 with the edge pair and the firewalls, FR6
-with nothing) and AM (virtual colocation AM-NE). A footprint names no zone, so none is checked here.
-"""
+"""Unit tests for CheckColocationPlacement (checks/colocation_placement.py)."""
 
 from __future__ import annotations
 

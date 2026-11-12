@@ -9,20 +9,11 @@ _PORT_SPEC = re.compile(r"^(tcp|udp)/([1-9]\d{0,4})(?:-([1-9]\d{0,4}))?$")
 
 
 class PortProfileHelper:
-    """Port/protocol utilities for dependency-derived security rules.
-
-    A port is written as ``protocol/port`` or ``protocol/start-end``
-    (``tcp/443``, ``udp/30000-30010``), the same on AppComponent.ports,
-    AppDependency.ports and ProxyPolicyRule.ports.
-    """
+    """Port/protocol utilities for dependency-derived security rules (``tcp/443``, ``udp/30000-30010``)."""
 
     @staticmethod
     def parse_port_spec(spec: Any) -> PortSpec:
-        """Return (protocol, port_start, port_end); port_end is None for a single port.
-
-        Raises ValueError on anything else, so a typo never turns into an
-        any-port rule.
-        """
+        """Return (protocol, port_start, port_end), port_end None for a single port; raise ValueError otherwise."""
         match = _PORT_SPEC.match(str(spec).strip().lower())
         if not match:
             raise ValueError(f"invalid port '{spec}', expected protocol/port or protocol/start-end (tcp/443)")
@@ -40,10 +31,7 @@ class PortProfileHelper:
 
     @classmethod
     def resolve_dependency_ports(cls, dep: dict[str, Any], target: dict[str, Any] | None = None) -> list[PortSpec]:
-        """Ports a dependency opens: its own list, else every port of its target component.
-
-        Raises ValueError when a port does not parse.
-        """
+        """Ports a dependency opens: its own list, else its target component's; ValueError when one does not parse."""
         specs = dep.get("ports") or (target or {}).get("ports") or []
         ports: list[PortSpec] = []
         for spec in specs:

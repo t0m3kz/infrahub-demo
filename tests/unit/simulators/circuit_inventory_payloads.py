@@ -1,12 +1,4 @@
-"""The raw response of ``tests/integration/queries/get_interconnect_inventory.gql`` over the 30_all data.
-
-Built on the simulator of the placement check (``circuit_data_payloads``, shaped like ``circuit_placement.gql``) and
-completed with what the inventory query selects on top: the carrier circuits' ``circuit_id`` and status, the owners (a
-circuit has none: the office locations carry them, as customers),
-each end device's deployment, the interface kind, the parent of a sub-interface, a handoff's key and a declared
-tunnel's VRF. No
-address is set (nothing generated it offline): ``addresses`` puts them on named ports.
-"""
+"""The raw response of ``tests/integration/queries/get_interconnect_inventory.gql`` over the 30_all data."""
 
 from __future__ import annotations
 
@@ -52,8 +44,7 @@ def inventory_payload(
     status = {row["name"]: row["status"] for row in model.carriers}
 
     def customer(org_id: str | None) -> dict[str, Any]:
-        """An owner as CircuitOwner selects it: only an OrganizationCustomer carries a name (the operator's own
-        account belongs to a provider, which is no customer)."""
+        """An owner as CircuitOwner selects it: only an OrganizationCustomer carries a name."""
         if org_id is None:
             return {"node": None}
         if org_id in organisations:

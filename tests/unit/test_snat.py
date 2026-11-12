@@ -1,8 +1,4 @@
-"""Unit tests for 4d: SNAT rendering per firewall vendor and the edge's public-space export.
-
-The unmodified golden inputs (SNAT and MANAGEMENT NAT rendered per vendor) are guarded by the smoke golden diff;
-these tests cover the variants the goldens do not render.
-"""
+"""Unit tests for 4d: SNAT rendering per firewall vendor and the edge's public-space export."""
 
 from __future__ import annotations
 
@@ -143,7 +139,7 @@ def test_no_nat_entry_without_a_tenant_leg() -> None:
     assert context["nat"] == []
 
 
-# --- MANAGEMENT NAT per vendor (golden input: shared PROD+NONPROD, acme PROD) ----
+# --- MANAGEMENT NAT per vendor (golden input: shared PROD+NONPROD, acme PROD)
 
 _VENDOR_MANAGEMENT_NAT = {
     "paloalto_panos": [
@@ -169,7 +165,7 @@ def test_management_nat_survives_without_a_snat_address(vendor: str) -> None:
     assert "192.0.2" not in output
 
 
-# --- edge ---------------------------------------------------------------------
+# --- edge
 
 
 def _origin(*prefixes: str, zone_type: str = "internet", name: str = "INET") -> dict[str, Any]:

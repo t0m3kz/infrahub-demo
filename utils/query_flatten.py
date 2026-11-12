@@ -1,22 +1,6 @@
 """Flatten a GraphQL query for the Infrahub server: fragments written out in place, the meaning unchanged.
 
-The server's cost of a query document grows with its fragment use, not with its size or depth: the same 2,546 fields
-take 3.4 s reached through five levels of fragments and 0.13 s written out, and a device-config query with fragments
-takes nearly as long for a device that does not exist (no data read) as for a real one. So the registered queries are
-the flattened form of the source files under ``queries/``, which keep their fragments for the people who edit them.
-
-A fragment spread is an inline fragment with the fragment's type condition, so writing it out changes nothing. One
-shape is kept as a fragment: an inline fragment directly inside another inline fragment of the operation, which the
-server's query analyzer refuses with HTTP 500 (``infrahub_sdk.utils.extract_fields`` reads ``.name`` off it). There
-the inner block becomes a fragment used exactly once, whose body may nest freely (the analyzer does not walk fragment
-bodies). No schema is needed and every type condition is kept, so the server answers exactly what it answered before.
-
-The registered copies live in ``queries/flat/`` under the source's relative path and are written by
-``uv run invoke flatten-queries``: run it after editing a query or a fragment, the server runs only the copies.
-
-Server version: proven on Infrahub 1.12 (the version ``uv.lock`` runs), where every copy answers byte for byte what its
-source answers. On 1.11.11 a fragment spread inside an inline fragment returns nulls for the fragment's fields (and a
-type condition nested two levels deep loses its fields too), so the copies need 1.12.
+Run by ``uv run invoke flatten-queries``; the server runs only the copies in ``queries/flat/`` (needs Infrahub 1.12).
 """
 
 from __future__ import annotations
@@ -130,10 +114,7 @@ class _Flattener:
 
 
 def flatten_query(text: str, prefix: str) -> str:
-    """The query document ``text`` (one operation and every fragment it spreads) with its fragments written out.
-
-    ``prefix`` names the fragments that stay (``<prefix>1``, ``<prefix>2``, ...); give each query its own.
-    """
+    """The query ``text`` (one operation and its fragments) with fragments written out; ``prefix`` names kept ones."""
     document = parse(text)
     fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
     operations = [d for d in document.definitions if isinstance(d, OperationDefinitionNode)]
@@ -168,9 +149,8 @@ def render_flat(name: str, source: Path) -> str:
 
 
 def registered_queries() -> list[tuple[str, Path, Path]]:
-    """(name, registered flat copy, source) of every ``queries:`` entry of ``.infrahub.yml``.
-
-    An entry must register the flat copy: a source path there would send the server the slow, fragment-built form.
+    """(name, registered flat copy, source) of every ``queries:`` entry of ``.infrahub.yml``; entries must be flat
+    copies.
     """
     import yaml  # noqa: PLC0415 - only the registry readers need it
 

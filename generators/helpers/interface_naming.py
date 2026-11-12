@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-# Maps platform slug → (lag_prefix, loopback_prefix)
-# lag_prefix: prefix for port-channel/LAG interfaces (formatted: prefix + id)
-# loopback_prefix: prefix for loopback interfaces (formatted: prefix + id)
+# Platform slug -> (lag_prefix, loopback_prefix); each is formatted as prefix + id.
 _PLATFORM_NAMING: dict[str, tuple[str, str]] = {
     "arista_eos": ("Port-Channel", "Loopback"),
     "cisco_nxos": ("port-channel", "loopback"),

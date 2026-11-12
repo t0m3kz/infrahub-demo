@@ -25,14 +25,10 @@ from .protocols import (
 from .types import DeviceOptions, NamingConvention
 from .virtual_nics import VirtualNicMixin
 
-# device_role values that pair into an HA domain via DeviceOptions.ha_kind
-# rather than MLAG — see create_devices()'s pairing dispatch below.
+# device_role values that pair into an HA domain (DeviceOptions.ha_kind) rather than MLAG
 _HA_PAIRED_ROLES = frozenset({"internal-firewall", "external-firewall", "load-balancer"})
 
-# Fabric-tier device roles route to a controller by controller_type alone —
-# ACI APIC/DCNM/NSX/UCS/DNA Center aren't a 1:1 vendor pairing with the
-# device's own platform the way a firewall pairs with its dedicated
-# manager, so no platform match is required for these.
+# Fabric-tier roles route to a controller by controller_type alone (no platform match needed)
 _FABRIC_CONTROLLER_TYPES = frozenset({"aci_apic", "dcnm", "nsx_manager", "ucs_manager", "dna_center"})
 _FABRIC_ROLES = frozenset(
     {
@@ -50,22 +46,18 @@ _FABRIC_ROLES = frozenset(
     }
 )
 
-# A generator query's role-bucketed controller aliases (see queries/topology/
-# add/dc.gql), merged into one list by set_controllers_from.
+# A generator query's role-bucketed controller aliases (queries/topology/add/dc.gql), merged by set_controllers_from
 _CONTROLLER_ALIASES = ("fabric_controllers", "security_manager_controllers", "lb_manager_controllers")
 
-# firewall/load-balancer route to a controller by controller_type AND a
-# platform match against the device's own template — a checkpoint_gaia
-# firewall must never route to a Panorama (paloalto_panos) controller just because
-# both happen to be controller_type=security_manager.
+# firewall/load-balancer route to a controller by controller_type AND platform, so a checkpoint_gaia firewall never gets
+# a Panorama controller
 _ROLE_CONTROLLER_TYPE: dict[str, str] = {
     "internal-firewall": "security_manager",
     "external-firewall": "security_manager",
     "load-balancer": "lb_manager",
 }
 
-# device_role -> HA node kind. Pairing itself happens inside create_devices()
-# (DeviceOptions.ha_kind) — this only picks the right kind per role.
+# device_role -> HA node kind (pairing itself happens in create_devices())
 HA_KIND_BY_ROLE: dict[str, str] = {
     "internal-firewall": "ManagedFirewallHA",
     "external-firewall": "ManagedFirewallHA",
@@ -83,35 +75,23 @@ def _object_id(value: Any | None) -> Any | None:
 
 
 def _initialized_peer_id(rel: Any) -> str | None:
-    """Peer id of a RelatedNode, or None when it is missing or unset.
-
-    A RelatedNode wrapper is always truthy even when unset (no __bool__
-    override), and its .peer property raises ValueError instead of returning
-    None when neither id nor hfid is set. Check .initialized before touching
-    .peer at all.
-    """
+    """Peer id of a RelatedNode, or None when missing or unset.
+    A RelatedNode is always truthy and .peer raises when unset, so check .initialized first."""
     return rel.peer.id if rel is not None and rel.initialized else None
 
 
 class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
-    """Mixin providing device creation methods for CommonGenerator.
+    """Device creation methods for CommonGenerator.
+    The host provides ``client``, ``logger``, ``fabric_name``, ``pod_name`` and ``_resolve_pool``."""
 
-    Expects the host class to provide: ``client``, ``logger``, ``fabric_name``,
-    ``pod_name``, and ``_resolve_pool`` (all present on ``CommonGenerator``).
-    """
-
-    # Attribute declarations for the type checker — provided by CommonGenerator / InfrahubGenerator
+    # Attribute declarations for the type checker, provided by CommonGenerator / InfrahubGenerator
     client: Any
     logger: logging.Logger
     fabric_name: str
     pod_name: str | None
-    # CommonGenerator._resolve_pool — annotation only, no method body.
+    # CommonGenerator._resolve_pool, annotation only
     _resolve_pool: Any
-    # Set once per generator run via set_controllers_from() — see
-    # _resolve_role_controller, which reads this via getattr(...,
-    # default=[]) since a generator that never sets it (e.g. one that
-    # doesn't call create_devices() for a controller-eligible role) simply
-    # means "no controllers", not an error.
+    # Set by set_controllers_from(); read via getattr with default [] (no controllers is not an error)
     _all_controllers: list[dict[str, Any]]
 
     async def create_devices(
@@ -125,13 +105,9 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
         *,
         hosting_device: Any | None = None,
     ) -> list[str]:
-        """Create devices using batch creation.
-
-        Uses self.fabric_name and self.pod_name (if set) from instance variables.
-        See ``DeviceOptions`` for available option keys. The device owner comes from
-        ``template["owner"]``; ``hosting_device`` places a virtual device on its host.
+        """Create devices in a batch using self.fabric_name and self.pod_name (if set); see ``DeviceOptions`` for
+        options. The owner comes from ``template["owner"]``; ``hosting_device`` places a virtual device on its host.
         """
-        # Normalize options
         if options is None:
             options = DeviceOptions()
         fabric_name = self.fabric_name
@@ -143,7 +119,7 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
         allocate_loopback: bool = bool(options.get("allocate_loopback", False))
         rack: str = options.get("rack", "")
 
-        # Accept pool references from options: SDK objects, ID strings, or None
+        # Pool references: SDK objects, ID strings, or None
         provided_loopback_pool = options.get("loopback_pool")
         provided_management_pool = options.get("management_pool")
 
@@ -173,13 +149,10 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
         management_pool_name = f"{fabric_name}-management-pool"
 
         if device_role in ("super-spine", "border-leaf"):
-            # Both are DC-level fabric tiers sharing one fabric-scoped loopback pool
-            # (see dc.py's "dc-fabric-loopback" allocation) — neither is owned by
-            # any one pod's own loopback pool.
+            # Both are DC-level fabric tiers sharing one fabric-scoped loopback pool (dc.py "dc-fabric-loopback")
             loopback_pool_name = f"{fabric_name}-dc-fabric-loopback-pool"
         else:
-            # Other devices (spine, leaf, etc.) use pod-level loopback pool
-            # device_prefix already includes fabric-pod combination when pod_name is present
+            # Other devices use the pod-level loopback pool
             loopback_pool_name = f"{device_prefix}-loopback-pool"
 
         device_kind = CloudNetworkAppliance if appliance else DcimVirtualDevice if virtual else DcimPhysicalDevice
@@ -187,7 +160,7 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
         owner_id = _object_id(template.get("owner"))
         hosting_device_id = _object_id(hosting_device)
 
-        # Resolve pools: accept SDK objects, ID strings, or fall back to name-based lookup
+        # Resolve pools: SDK objects, ID strings, or name-based lookup
         management_pool = await self._resolve_pool(
             provided=provided_management_pool,
             kind=CoreIPAddressPool,
@@ -208,9 +181,7 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
         controller_info = self._resolve_role_controller(device_role=device_role, template=template)
         controller = None
         if controller_info is not None:
-            # include= loads the managed_devices peer ids with the controller, so
-            # the attach below needs no fetch() (a re-get plus a full-node read
-            # of every device the controller manages).
+            # include= loads the managed_devices peer ids, so the attach below needs no fetch()
             controller = await self.client.get(
                 kind=ManagedController, id=controller_info["id"], include=["managed_devices"]
             )
@@ -218,13 +189,11 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
         device_group = None
         if controller is None:
             group_name = ROLE_GROUP_NAMES.get(device_role) or f"{device_role}s"
-            # Keep generators robust on branches where bootstrap groups were not
-            # loaded yet (e.g. ad-hoc test branches): a missing group is created.
+            # A missing bootstrap group (e.g. ad-hoc test branches) is created
             device_group = await self._standard_group(
                 group_name, create_description=f"Auto-created by generator for role {device_role}"
             )
         try:
-            # Fetch all existing devices in a single batch to optimize performance
             existing_devices_list = await self.client.filters(
                 kind=device_kind,
                 name__values=device_names,
@@ -241,23 +210,19 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
                     include=["device", "ip_address"],
                 )
                 for loopback in existing_loopbacks:
-                    # device is a mandatory Parent relationship (schemas/base/dcim.yml),
-                    # always resolvable given include=["device"] above.
+                    # device is a mandatory Parent (schemas/base/dcim.yml), resolvable via include=["device"]
                     existing_loopbacks_by_device[loopback.device.peer.name.value] = loopback
 
-            # Add device objects and related loopback interfaces (if any) to the batch
             for name in device_names:
                 existing_device = existing_devices_map.get(name)
                 if controller is not None:
-                    # Controller-managed: tracked via managed_devices below,
-                    # not group membership.
+                    # Controller-managed: tracked via managed_devices below, not group membership
                     groups = []
                 elif existing_device:
                     groups = [peer.id for peer in existing_device.member_of_groups.peers]
                 else:
                     groups = []
 
-                # Ensure the new group is not duplicated
                 if device_group is not None and device_group.id not in groups:
                     groups.append(device_group.id)
 
@@ -276,12 +241,10 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
                 obj = await self.client.create(
                     kind=device_kind,
                     data={
-                        # Pass existing id so upsert matches by ID, not hfid lookup
+                        # Pass the existing id so the upsert matches by ID
                         **({"id": existing_device.id} if existing_device else {}),
                         "name": name,
-                        # Only send object_template on first creation — re-sending it on an existing
-                        # device triggers a server-side re-instantiation that fails with
-                        # "device is mandatory for DcimPhysicalInterface".
+                        # object_template only on first creation: re-sending it on an existing device fails server-side
                         **(
                             {"object_template": {"id": template.get("id") if template else None}}
                             if not existing_device
@@ -323,7 +286,6 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
                             **({"id": existing_loopback.id} if existing_loopback else {}),
                             "name": get_loopback_name((template.get("platform") or {}).get("name") or "", 0),
                             "description": "Loopback interface",
-                            # Reference device object directly
                             "device": obj,
                             "status": "active",
                             "role": "loopback",
@@ -332,7 +294,6 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
                     )
                     batch_loopbacks.add(task=loopback_obj.save, allow_upsert=True, node=loopback_obj)
 
-            # Execute batch and collect created nodes
             created_devices = []
             created_loopbacks = []
 
@@ -352,7 +313,6 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
                 verb = "Updated" if node.device.hfid[0] in existing_loopbacks_by_device else "Created"
                 self.logger.info(f"  - {verb} [{node.get_kind()}] {node.device.hfid} {node.name.value}")
 
-            # Summary logging
             self.logger.info(
                 f"Device creation completed: {len(created_devices)} {device_role}(s) created"
                 + (f" with {len(created_loopbacks)} loopback interface(s)" if created_loopbacks else "")
@@ -361,10 +321,8 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
             if controller is not None and created_devices:
                 existing_managed_ids = {peer.id for peer in controller.managed_devices.peers}
                 missing_ids = [node.id for node in created_devices if node.id not in existing_managed_ids]
-                # A RelationshipAdd of just these devices, not a save of the whole peer list: every
-                # rack and pod of the deployments one controller manages attaches to it concurrently,
-                # and a save lets the last writer drop the others' devices. It stays untracked: the
-                # controller is data-loaded and shared, not this run's output.
+                # A RelationshipAdd of just these devices, not a list save, since concurrent racks and pods attach to
+                # one controller; untracked because the controller is shared data
                 if missing_ids:
                     await controller.add_relationships(relation_to_update="managed_devices", related_nodes=missing_ids)
                 self.logger.info(
@@ -405,23 +363,9 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
         appliance_template_kind: str | None = None,
         appliance_options: DeviceOptions | None = None,
     ) -> list[tuple[dict[str, Any], list[str]]]:
-        """Create HA-paired firewall/load-balancer devices for one fabric_templates role.
-
-        Shared shape used by dc.py (DC-wide), pod.py (per-pod border-spine),
-        and colocation_fabric.py (zone / virtual colocation on-ramp): each entry's devices are paired
-        into an HA domain two-at-a-time by create_devices() itself (any
-        quantity — an odd device is left unpaired). No loopback allocation —
-        these appliances sit off the underlay/overlay, not in it.
-
-        Returns (entry, created_names) per fabric_templates entry rather than
-        one flat list, so a caller that needs per-entry follow-up (colocation_fabric.py
-        registers virtual and physical entries apart) still has the entry at hand.
-
-        appliance_template_kind: when given, an entry whose own
-        template["template_kind"] matches it gets DeviceOptions.appliance=True
-        plus ``appliance_options`` (its account)
-        (colocation_fabric.py's on-ramp appliances can themselves be provider-hosted,
-        unlike dc.py's/pod.py's, which are always physical).
+        """Create HA-paired firewall/load-balancer devices for one fabric_templates role; returns (entry, created_names)
+        per entry. No loopbacks. An entry matching ``appliance_template_kind`` gets DeviceOptions.appliance=True plus
+        ``appliance_options``.
         """
         options = DeviceOptions(indexes=indexes, ha_kind=HA_KIND_BY_ROLE[role])
 
@@ -446,30 +390,15 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
         return results
 
     def set_controllers_from(self, source: Mapping[str, Any]) -> None:
-        """Set ``self._all_controllers`` from a query's fabric_controllers/
-        security_manager_controllers/lb_manager_controllers aliases — an
-        absent or null alias contributes nothing."""
+        """Set ``self._all_controllers`` from a query's fabric/security_manager/lb_manager controller aliases; an absent
+        alias adds nothing.
+        """
         self._all_controllers = [controller for alias in _CONTROLLER_ALIASES for controller in source.get(alias) or []]
 
     def _resolve_role_controller(self, *, device_role: str, template: dict[str, Any]) -> dict[str, Any] | None:
-        """Find the pre-fetched controller (if any) governing this
-        device_role, from ``self._all_controllers`` — a flat list the caller
-        (dc.py/pod.py/rack.py's generate()) builds once per run by merging
-        its own query's fabric_controllers/security_manager_controllers/
-        lb_manager_controllers aliased fields (see queries/topology/add/
-        dc.gql) — no runtime query here, this data already arrived with the
-        rest of the generator's own fetch.
-
-        Fabric roles (spine/leaf/border-leaf/...) match by controller_type
-        alone (ACI APIC/DCNM/NSX/UCS aren't a 1:1 vendor pairing with the
-        device's own platform). firewall/load-balancer match by
-        controller_type AND platform, so e.g. a checkpoint_gaia firewall
-        never routes to a Panorama (paloalto_panos) controller.
-
-        Returns None (no controller — caller falls back to a
-        CoreStandardGroup) when the role has no controller mapping, or no
-        controller in ``self._all_controllers`` matches.
-        """
+        """The pre-fetched controller governing this device_role from ``self._all_controllers``, no query.
+        Fabric roles match by controller_type alone; firewall/load-balancer by controller_type AND platform.
+        Returns None (caller falls back to a CoreStandardGroup) when there is no mapping or match."""
         if device_role not in _FABRIC_ROLES and device_role not in _ROLE_CONTROLLER_TYPE:
             return None
 
@@ -492,9 +421,7 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
             )
 
         if controller is None and controllers:
-            # Only warn when the deployment has SOME controllers but none
-            # match this role — a deployment with no controllers at all is
-            # simply not controller-managed, which isn't worth a warning.
+            # Warn only if the deployment has some controllers but none match this role
             self.logger.warning(
                 f"No controller matching role={device_role!r} found among this deployment's "
                 f"controllers — devices will be added to the '{device_role}s' group instead. "

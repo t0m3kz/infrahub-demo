@@ -1,20 +1,4 @@
-"""Unit tests asserting the VNI bands in shipped data and generator constants stay disjoint.
-
-A VNI is a single flat 24-bit field on the wire with no L2/L3 discriminator, so
-an L2 VNI and an L3 VNI that collide put bridged tenant traffic and a routed VRF
-into the same segment. Nothing in the rendered config looks wrong when that
-happens -- it is a property of the numbering plan, not of any one device.
-
-``checks/evpn_fabric.py`` catches a collision once objects exist in Infrahub.
-These tests catch it earlier and for free, in the sources that seed those objects.
-L3 VNIs are only the four hand-set values on the fixed namespaces in
-``22_namespaces.yml``; no pool allocates them. The only dynamic VNI pools are the
-per-site L2 pool the generators create (``SITE_VNI_START``..``SITE_VNI_END`` in
-``utils/limits.py``) and ``GLOBAL-L2VNI`` in ``18_vni_pools.yml``.
-Nothing at load time stops someone re-picking a namespace value that one of those
-pools will later hand out; they did in fact once overlap (the namespaces sat at
-30000-40001, inside the L2 pool).
-"""
+"""Unit tests asserting the VNI bands in shipped data and generator constants stay disjoint."""
 
 from __future__ import annotations
 
@@ -60,12 +44,7 @@ def bootstrap_number_pools(root_dir: Path) -> list[dict[str, Any]]:
 
 @pytest.fixture(scope="module")
 def l2_vni_pools(root_dir: Path) -> list[dict[str, Any]]:
-    """The L2 VNI pools in play: GLOBAL-L2VNI from bootstrap plus the per-site pool.
-
-    The per-site pool is created by the generators (dc, colocation, office_fabric),
-    so it is modelled as a synthetic pool dict built from the shared constants,
-    which are its source of truth.
-    """
+    """The L2 VNI pools in play: GLOBAL-L2VNI from bootstrap plus the per-site pool."""
     pools = _pools_for_attribute(
         _load_objects(root_dir / "data" / "bootstrap" / "18_vni_pools.yml", "CoreNumberPool"), "vni"
     )
@@ -110,10 +89,7 @@ class TestFixedNamespaceL3Vnis:
 
 
 class TestFixedNamespacesAvoidEveryPool:
-    """The fixed namespaces are allocated by hand, deliberately pool-free. That
-    only stays safe while their values sit outside every pool's range -- a pool
-    has no idea these four exist and will hand out anything in its band.
-    """
+    """The fixed namespaces are allocated by hand, deliberately pool-free."""
 
     def test_no_fixed_namespace_sits_inside_an_l2_vni_pool(
         self, fixed_namespace_l3_vnis: dict[str, int], l2_vni_pools: list[dict[str, Any]]
@@ -152,12 +128,7 @@ class TestPoolBandsAreDisjoint:
     """The site L2 pool, the stretched pool and every VNI pool stay apart and encodable."""
 
     def test_site_l2_pool_never_overlaps_the_stretched_pool(self, l2_vni_pools: list[dict[str, Any]]) -> None:
-        """Stretched segments share one VNI from GLOBAL-L2VNI across every site.
-
-        Every site pool hands out the same band, so if the stretched band
-        overlapped it, a stretched VNI reused in a site could equal what that
-        site's own pool gave a local segment -- two segments bridged together.
-        """
+        """Stretched segments share one VNI from GLOBAL-L2VNI across every site."""
         stretched = [p for p in l2_vni_pools if p["name"] == "GLOBAL-L2VNI"]
         assert len(stretched) == 1, "GLOBAL-L2VNI is missing from data/bootstrap/18_vni_pools.yml"
         band = stretched[0]
@@ -172,13 +143,7 @@ class TestPoolBandsAreDisjoint:
             )
 
     def test_every_vni_pool_stays_encodable(self, l2_vni_pools: list[dict[str, Any]]) -> None:
-        """Every VNI pool is EVPN-carried and so RD/RT-encoded.
-
-        This previously exempted virtual-circuit pools as WAN-scoped and
-        never route-targeted; GLOBAL-INTERCONNECT-VNI was the only such pool and
-        it is gone. Re-add the exemption deliberately if a WAN VNI pool returns,
-        rather than widening a band to make this pass.
-        """
+        """Every VNI pool is EVPN-carried and so RD/RT-encoded."""
         for pool in l2_vni_pools:
             assert pool["end_range"] <= MAX_ENCODABLE_VNI, (
                 f"pool '{pool['name']}' can hand out {pool['end_range']}, which cannot be "

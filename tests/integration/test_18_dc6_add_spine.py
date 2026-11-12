@@ -1,30 +1,4 @@
-"""Integration test - Scenario 5: Extend a DC6 Pod with a New Spine.
-
-Coverage: Verifies that pointing DC6-1-POD-1's spine fabric_templates entry
-at a bigger TopologyElement (2 -> 3 spines) triggers the pod generator
-automatically (trigger-pod-update-fabric-templates -> run-pod-rack-cascade)
-and creates exactly one additional POD-1 spine with cabling and routing,
-without touching any other DC6 pod or any existing switch's underlay ASN.
-
-Why a new element instead of bumping the existing one's quantity:
-TopologyElement nodes are shared — ["2", "spine", "N9K-C9336C-FX2_SPINE"] is
-referenced by several DC6 pods and other DCs, and its HFID contains the
-quantity. Mutating it would silently resize every pod that uses it (on the
-next run of their generators) and does not update the pod itself, so no pod
-trigger fires. Swapping POD-1's relationship to a dedicated 3-spine element is
-a real pod mutation, scoped to POD-1 only.
-
-Prerequisites: DC6 merged (Scenario 1), pod added (Scenario 4).
-
-Steps:
-1.  Create branch, upsert a 3-spine element, and swap it into POD-1's fabric_templates
-2.  Wait for event-triggered generators to complete and verify no failures
-3.  Verify exactly one new POD-1 spine, other pods unchanged, ASNs stable
-4.  Create proposed change
-5.  Wait for validations, verify diff and artifacts
-6.  Merge to main
-7.  Verify in main
-"""
+"""Integration test - Scenario 5: Extend a DC6 Pod with a New Spine."""
 
 import asyncio
 import json
@@ -193,8 +167,7 @@ class TestDC6AddSpine(TestInfrahubDockerWithClient):
         )
         new_element_id = upsert["TopologyElementUpsert"]["object"]["id"]
 
-        # Swap it into POD-1, keeping every non-spine entry as-is. Updating the
-        # pod's fabric_templates relationship is what fires the cascade trigger.
+        # Swap it into POD-1, keeping every non-spine entry as-is.
         fabric_template_ids = [element["id"] for element in elements if element["id"] != spine_element["id"]]
         fabric_template_ids.append(new_element_id)
         related = ", ".join(f"{{ id: {json.dumps(element_id)} }}" for element_id in fabric_template_ids)
@@ -254,8 +227,7 @@ class TestDC6AddSpine(TestInfrahubDockerWithClient):
         logging.info("=== %s - Step 3: Verify Devices ===", SCENARIO_NAME)
 
         # The new spine comes from a cascade of generators the swap triggers (pod_rack_cascade, then the pod generator):
-        # the wait for tasks can return in the gap between two of them, a wide gap on a loaded machine. Wait for the
-        # effect, not for the tasks: poll until the pod has its spine, and fail on the count only when it never does.
+        # the wait for tasks can return in the gap between two of them, a wide gap on a loaded machine.
         expected = len(workflow_state["dc6_add_spine_before"].get(SCENARIO_POD_1, [])) + SPINES_ADDED
         for attempt in range(1, SPINE_POLLS + 1):
             after = await self._snapshot_spines_by_pod(async_client_main, scenario_branch, SCENARIO_DC_NAME)

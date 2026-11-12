@@ -1,10 +1,4 @@
-"""CheckCircuitPlacement: a cloud transport end (no deployment, placed by its region) and a routed-port handoff end.
-
-A cloud transport (CloudDirectConnect, CloudVPNConnection) is a device with no ``deployment``: its ``region`` or
-``saas_region`` places an end. A handoff end is a ``<port>.<vlan>`` sub-interface, a routed physical port (an IP
-address, no VLAN) or a cloud peering interface (its ``vlan_id`` is optional). Payload builders:
-tests/unit/circuit_placement_check_helpers.py.
-"""
+"""CheckCircuitPlacement: a cloud transport end (no deployment, placed by its region) and a routed-port handoff end."""
 
 from __future__ import annotations
 

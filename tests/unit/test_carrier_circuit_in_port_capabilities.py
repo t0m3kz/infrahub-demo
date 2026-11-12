@@ -1,11 +1,4 @@
-"""A TopologyCarrierCircuit in a port's capabilities must not change a rendered config.
-
-TopologyCarrierCircuit is a ManagedGenericInterfaces since step 5 of the caps series, so every circuit end
-port lists its circuit next to the OSPF/segment/firewall capabilities. The shared fragments select only
-``__typename`` (and ``id``) for kinds without their own fragment, exactly as a TopologySessionCircuit already
-appears today. Each smoke fixture below is rendered with such a circuit added to every device interface and
-must match its golden output byte for byte.
-"""
+"""A TopologyCarrierCircuit in a port's capabilities must not change a rendered config."""
 
 from __future__ import annotations
 

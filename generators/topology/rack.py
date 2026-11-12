@@ -24,10 +24,7 @@ from ..types import CablingOptions
 
 
 class TopologyRackParentData(TypedDict, total=False):
-    """Shape of the nested TopologyDataCenter projection under
-    TopologyPod.parent (see queries/topology/add/rack.gql's RackPodFields
-    fragment) — declared here, at the read site, instead of a shared
-    Pydantic model file."""
+    """Nested TopologyDataCenter projection under TopologyPod.parent (rack.gql RackPodFields)."""
 
     id: str
     name: str
@@ -55,8 +52,7 @@ class TopologyRackPodRackData(TypedDict):
 
 
 class TopologyRackPodData(TypedDict, total=False):
-    """Shape of the nested TopologyPod projection under LocationRack.deployment (see
-    queries/topology/add/rack.gql's RackPodFields fragment)."""
+    """Nested TopologyPod projection under LocationRack.deployment (rack.gql RackPodFields)."""
 
     id: str
     name: str
@@ -73,8 +69,7 @@ class TopologyRackPodData(TypedDict, total=False):
 
 
 class TopologyRackParentSuiteData(TypedDict, total=False):
-    """Shape of the nested LocationSuite projection under LocationRack.parent
-    (see queries/topology/add/rack.gql)."""
+    """Nested LocationSuite projection under LocationRack.parent."""
 
     id: str | None
     index: int
@@ -83,11 +78,7 @@ class TopologyRackParentSuiteData(TypedDict, total=False):
 
 
 class TopologyRackData(TypedDict, total=False):
-    """Shape of one clean_data()-processed LocationRack entry (see
-    queries/topology/add/rack.gql) — declared here, at the read site,
-    instead of a shared Pydantic model file. No runtime validation: a
-    missing/mistyped key surfaces as ``KeyError``/``AttributeError`` at
-    first read, caught by generate()'s own except clause below."""
+    """One clean_data()-processed LocationRack entry; a missing key raises at first read."""
 
     id: str
     name: str
@@ -109,9 +100,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
     @property
     def _spine_role(self) -> Literal["spine", "border-spine"]:
-        """This pod's spine-slot role, set by _prepare_generation_context().
-        Defaults to "spine" when unset (e.g. a unit test driving a generator
-        method directly without going through that setup)."""
+        """This pod's spine-slot role (set by _prepare_generation_context()); "spine" when unset."""
         return getattr(self, "_spine_role_value", "spine")
 
     @_spine_role.setter
@@ -142,13 +131,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         return {role for role, templates in role_templates.items() if self._has_role_templates(templates)}
 
     def _role_compatibility_errors(self, deployment_type: str) -> list[str]:
-        """Return human-readable errors for fabric_templates roles this rack can't actually cable.
-
-        Two independent checks:
-        - ROLES_BY_DEPLOYMENT_TYPE: is each present role valid for this pod's deployment_type
-          at all (e.g. "tor" has no cabling strategy under middle_rack).
-        - MUTUALLY_EXCLUSIVE_ROLE_GROUPS: "tor" (cables to a spine) and "l2_leaf"/"access_leaf"
-          (cable to a local leaf pair) can't coexist on one rack regardless of deployment_type.
+        """Human-readable errors for fabric_templates roles this rack can't cable (ROLES_BY_DEPLOYMENT_TYPE,
+        MUTUALLY_EXCLUSIVE_ROLE_GROUPS).
         """
         present = self._present_roles()
         errors: list[str] = []
@@ -174,15 +158,9 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         device_type: str = "leaf",
         racks_in_previous_rows: int | None = None,
     ) -> int:
-        """Calculate cabling offset using simple formula based on rack position.
-
-        Entirely derived from live rack position (row_index/index) and the
-        caller-supplied count of sibling racks already deployed in previous
-        rows of this pod — never from a design's declared capacity. A design
-        cap describes what's ALLOWED, not what's actually built, and sizing
-        offsets off it either wastes spine ports (cap larger than reality)
-        or overflows them (cap smaller, e.g. a partially-built pod using
-        fewer racks per row than its design allows)."""
+        """Cabling offset from the rack's row/index position and the count of racks in previous rows; never from a
+        design cap.
+        """
         data = self.data
         current_index = data["index"]
         pod = data["deployment"]
@@ -196,8 +174,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 f"Calculated {device_type} offset={offset} for rack {data['name']} (mode=middle_rack) - intra-rack cabling"
             )
 
-        # For mixed/middle_rack deployment leafs: calculate offset based on row position
-        # Middle rack leafs serve all ToRs in their row
+        # mixed/middle_rack leafs: offset by row position (middle-rack leafs serve all ToRs in their row).
         elif deployment_type in ("mixed", "middle_rack") and device_type == "leaf":
             offset = (data["row_index"] - 1) * device_count
 
@@ -206,10 +183,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 f"(row_index={data['row_index']}, leafs_per_rack={device_count}, mode={deployment_type})"
             )
 
-        # For mixed/tor deployment ToRs: cumulative offset across the pod's ToR
-        # block on the spines (spine_downlink_layout: from port 0 in a tor pod,
-        # past the leafs and border-leafs in a mixed one), plus the rack slots
-        # of previous rows the caller passes in.
+        # mixed/tor ToRs: cumulative offset on the spines (from port 0 in a tor pod, past leafs and border-leafs in
+        # mixed) plus previous rows' rack slots.
         elif deployment_type in ("mixed", "tor") and device_type == "tor":
             tor_block_start = spine_downlink_layout(pod["design"])["tor"]
             tors_in_previous_rows = (racks_in_previous_rows or 0) * device_count
@@ -224,7 +199,6 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             )
 
         else:
-            # Other cases: no offset needed
             offset = 0
             self.logger.info(f"No offset needed for {device_type} in rack {data['name']} (mode={deployment_type})")
 
@@ -235,11 +209,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         return pod_profile(self.data["deployment"]["design"])
 
     def _planned_previous_row_rack_slots(self) -> int:
-        """Deterministic count of row-dependent rack slots before this row.
-
-        Uses pod design capacity rather than live object count so offsets remain
-        stable even when racks are created incrementally or in parallel.
-        """
+        """Deterministic count of row-dependent rack slots before this row, from pod design capacity."""
         if self.data["row_index"] <= 1:
             return 0
         profile = self._pod_profile()
@@ -251,11 +221,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         return (self.data["row_index"] - 1) * racks_per_row
 
     def _validate_profile_capacity_limits(self) -> list[str]:
-        """Return profile-capacity violations for this rack context.
-
-        Profile maxima define allowed topology shape. Offsets are only valid
-        when the rack/request stays within those limits.
-        """
+        """Profile-capacity violations for this rack context (offsets are only valid within them)."""
         profile = self._pod_profile()
         errors: list[str] = []
 
@@ -348,14 +314,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         shape = "direct node data" if "name" in data and isinstance(data.get("name"), dict) else "query result"
         self.logger.info(f"Processing {shape}")
 
-        # LocationRack.deployment accepts any TopologyRackHosting peer, not just TopologyPod
-        # (e.g. a colocation rack's pod is a TopologyColocationZone). Those don't carry
-        # DC-fabric fields like design — nothing for this generator to build.
-        # Checked before anything reads pod["id"]: rack.gql's RackPodFields fragment is on
-        # TopologyPod, so a colocation zone comes back as an empty pod dict and every
-        # later access raises. Every LocationRack of topologies_rack reaches this generator
-        # (trigger-rack-generator-on-added, data/events/99_group_triggers.yml), a colocation
-        # cage's rack too: the group cannot filter on which topology the rack hangs off.
+        # A rack whose deployment is not a TopologyPod (e.g. a colocation zone) has no DC-fabric fields: nothing to
+        # build. Checked before reading pod["id"]; every LocationRack reaches this generator (group trigger).
         pod = self.data.get("deployment") or {}
         if "design" not in pod:
             self.logger.info(
@@ -365,8 +325,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             )
             return
 
-        # Wait for an in-flight add_pod/pod_rack_cascade on our pod before reading
-        # pod-level data (spine devices, ASN/loopback pools) — avoid partial data.
+        # Wait for an in-flight add_pod/pod_rack_cascade on our pod before reading pod-level data.
         refreshed = await self.wait_for_parent_generator_and_refetch(POD_GENERATORS, pod["id"])
         if refreshed is not None:
             if not self._load_rack_data(refreshed):
@@ -384,13 +343,11 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             return
         deployment_type = pod_deployment_type(pod["design"])
 
-        # The grandparent DC's controllers (queries/topology/add/rack.gql's
-        # RackPodFields fragment), read by create_devices().
+        # The grandparent DC's controllers (rack.gql RackPodFields), read by create_devices().
         self.set_controllers_from(pod.get("parent", {}))
 
-        # A row-dependent (tor/compute) rack's l2-leaf/access-leaf switches cable
-        # to its row's network rack's leafs. If triggered independently while that rack's add_rack is still
-        # running, wait for it rather than cabling against leafs that don't exist yet.
+        # A row-dependent rack's l2-leaf/access-leaf cables to its row's network rack's leafs: wait for that add_rack if
+        # still running.
         if deployment_type == "mixed" and self.data["rack_type"] in ROW_DEPENDENT_RACK_TYPES:
             for network_rack in pod_row_racks(pod, self.data["row_index"], {"network"}):
                 refreshed = await self.wait_for_parent_generator_and_refetch("add_rack", network_rack["id"])
@@ -405,8 +362,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             f"[type={self.data['rack_type']}, deployment={deployment_type}]"
         )
 
-        # Endpoint-only racks (no switch templates) are handled by endpoint flows.
-        # Skip rack generation here to avoid unnecessary checksum/dependency gating.
+        # Endpoint-only racks (no switch templates) are handled by endpoint flows; skip here.
         if not self._present_roles():
             self.logger.info(
                 f"Rack {self.data['name']} has no switch templates — skipping rack generator (endpoint-only rack)."
@@ -433,9 +389,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         await self._prepare_generation_context()
 
-        # Names created THIS run, to skip duplicate templates within this invocation.
-        # Do NOT pre-populate with existing devices — every object must be re-upserted
-        # each run or the generator's group-context cleanup deletes it as "unused".
+        # Names created this run, to skip duplicate templates. Not pre-populated: every object must be re-upserted each
+        # run or group-context cleanup deletes it.
         self._created_device_names: set[str] = set()
         self._leaf_row_cache: tuple[list[str], list[str]] | None = None
         created_leaf_devices: list[str] = []
@@ -445,7 +400,6 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         await self._generate_l2_leafs(created_leaf_devices)
         await self._generate_access_leafs(created_leaf_devices)
 
-        # Generation completion summary
         total_devices = len(created_leaf_devices) + sum(tor_role["quantity"] for tor_role in self.data.get("tors", []))
         self.logger.info(
             f"Rack generation completed: {self.data['name']} - {total_devices} device(s) created with connectivity"
@@ -463,12 +417,9 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         mlag: bool = False,
         mlag_supports_virtual: bool = True,
     ) -> list[str]:
-        """create_devices() + _created_device_names bookkeeping shared by every
-        role generator method (leaf/tor/border-leaf/firewall/load-balancer).
-
-        mlag=True has create_devices() itself pair the created devices into
-        MLAG domains, per the pod's mlag_create setting — see
-        RackRolesHelper.build_device_options."""
+        """create_devices() plus _created_device_names bookkeeping; mlag=True pairs the created devices into MLAG
+        domains per the pod's mlag_create.
+        """
         devices = await self.create_devices(
             deployment_id=deployment_id,
             device_role=device_role,
@@ -494,12 +445,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         offset: int,
         mlag: bool,
     ) -> list[str]:
-        """Shared executor for every role that dual-homes to the pod's spines:
-        create devices, optionally MLAG-pair them, cable+route against
-        self._spine_device_names at the given offset. Offset formula and
-        bottom_interfaces selection differ per role (leaf/tor/border-leaf each
-        compute them differently — see their own methods) and are passed in
-        rather than recomputed here.
+        """Shared executor for roles that dual-home to the pod's spines: create devices, optionally MLAG-pair,
+        cable+route at the given offset.
         """
         pod = self.data["deployment"]
         devices = await self._create_devices_for_role(
@@ -545,22 +492,14 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             created_leaf_devices.extend(leaf_devices)
 
     async def _generate_tors(self) -> None:
-        """Create -> cable -> route ToR devices.
-
-        L2-only aggregation switches below leafs use role "l2-leaf"/"access-leaf" instead.
-        """
+        """Create -> cable -> route ToR devices (L2-only switches below leafs use l2-leaf/access-leaf)."""
         pod = self.data["deployment"]
         if not (tor_roles := self.data.get("tors", [])):
             return
 
-        # The "if not self._spine_device_names" guard that used to sit here is
-        # gone: _derive_spine_info() now raises on every way of ending up with
-        # no spine names, during _prepare_generation_context() and therefore
-        # before any device exists. Guarding here only ever covered ToRs, and
-        # only after _generate_leafs() had already run without a guard of its own.
+        # No spine-names guard here: _derive_spine_info() raises before any device exists.
 
-        # Both invariant across tor_roles (not derived from any single role) —
-        # computed once rather than once per role template.
+        # Invariant across tor_roles: computed once.
         tors_per_rack = sum(r["quantity"] for r in tor_roles)
         prev_row_racks = self._planned_previous_row_rack_slots()
 
@@ -598,12 +537,10 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         ]
         | None
     ):
-        """Create + MLAG-pair one l2-leaf/access-leaf role entry, and resolve its
-        local-leaf cabling target — shared by _generate_l2_leafs/_generate_access_leafs.
-        Returns None if unresolved (already logged) — caller should ``continue``.
+        """Create + MLAG-pair one l2-leaf/access-leaf role entry and resolve its local-leaf cabling target; None if
+        unresolved (logged).
         """
-        # allocate_loopback doubles as "participates in routing/EVPN" here:
-        # l2-leaf (False) is L2-only by design, access-leaf (True) is a routed VTEP.
+        # allocate_loopback = participates in routing/EVPN: l2-leaf False (L2-only), access-leaf True (routed VTEP).
         devices = await self._create_devices_for_role(
             role,
             device_role=device_role,
@@ -654,10 +591,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             )
 
     async def _generate_access_leafs(self, created_leaf_devices: list[str]) -> None:
-        """Create access-leaf devices: routed VTEPs in the same position as l2-leafs.
-
-        Cabled to the local leaf pair (underlay eBGP/OSPF), plus a second,
-        underlay-less overlay EVPN session straight to the pod's spines.
+        """Create access-leaf devices (routed VTEPs): cabled to the local leaf pair, plus an overlay EVPN session to the
+        spines.
         """
         for access_leaf_role in self.data.get("access_leafs", []):
             result = await self._create_local_leaf_role_devices(

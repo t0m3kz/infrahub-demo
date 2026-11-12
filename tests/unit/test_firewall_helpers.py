@@ -12,9 +12,7 @@ from transforms.helpers.firewall import (
 from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from utils.exchange_transit import EXCHANGE_PEERS, exchange_peer_zones
 
-# ---------------------------------------------------------------------------
 # Helpers — zone data
-# ---------------------------------------------------------------------------
 
 
 def _make_zone(
@@ -35,9 +33,7 @@ def _make_zone(
     return zone
 
 
-# ---------------------------------------------------------------------------
 # Helpers — FW interface data
-# ---------------------------------------------------------------------------
 
 
 def _make_fw_interface(
@@ -55,9 +51,7 @@ def _make_fw_interface(
     return iface
 
 
-# ---------------------------------------------------------------------------
 # Helpers — activation / SegmentDeployment data
-# ---------------------------------------------------------------------------
 
 
 def _make_activation(
@@ -85,9 +79,7 @@ def _make_activation(
     return {"segment": seg}
 
 
-# ===========================================================================
 # get_firewall_zones()
-# ===========================================================================
 
 
 class TestGetFirewallZones:
@@ -178,9 +170,7 @@ class TestGetFirewallZones:
         assert names == {"a", "b"}
 
 
-# ===========================================================================
 # get_firewall_static_routes()
-# ===========================================================================
 
 
 class TestGetFirewallStaticRoutes:
@@ -305,9 +295,7 @@ class TestGetFirewallStaticRoutes:
         assert result == []
 
 
-# ===========================================================================
 # get_exchange_transits() / get_exchange_routes()
-# ===========================================================================
 
 
 def _ns(name: str, ns_type: str, l3_vni: int) -> dict:

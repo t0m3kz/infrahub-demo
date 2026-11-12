@@ -1,7 +1,4 @@
-"""Shared builders of the GPO device view tests (test_gpo_device_view*.py).
-
-The leaf fleet roots, the view call and the component placement helpers.
-"""
+"""Shared builders of the GPO device view tests (test_gpo_device_view*.py)."""
 
 from __future__ import annotations
 
@@ -32,8 +29,7 @@ LEAF_SEGMENTS = ("web-np", "app-np", "pay-p", "portal-p")
 
 
 def _raw(**kwargs: Any) -> dict:
-    """The raw query response of the leaf of DC10 (Ethernet10 carries the four segments, the access port
-    Ethernet11 only pay-p), with the fleet roots."""
+    """The raw query response of the leaf of DC10 (Ethernet10 carries the four segments."""
     return build_gpo_device_data(
         device_name="dc1-leaf-01",
         role="leaf",

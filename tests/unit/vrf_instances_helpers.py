@@ -29,10 +29,7 @@ def namespace_ref(name: str, vrf_type: str | None = None) -> dict[str, Any]:
 
 
 def address(addr: str, namespace: str, vrf_type: str | None = None) -> dict[str, Any]:
-    """An ``ip_address`` relationship; IPAM stays in ``default``, the routing zone rides in ``_zone``.
-
-    ``_zone`` is a fixture-only hint, popped by ``zone_vrf`` when the address is put on an interface: the query reads
-    the zone from the interface's ``vrf``, never from the address."""
+    """An ``ip_address`` relationship; IPAM stays in ``default``, the routing zone rides in ``_zone``."""
     return {
         "node": {
             "address": {"value": addr},
@@ -67,10 +64,7 @@ def raw_row(
     footprints: list[dict[str, Any]] | None = None,
     stretch_scope: str | None = None,
 ) -> dict[str, Any]:
-    """A ManagedSegmentVlan row; ``namespace`` None means a segment without a gateway (pure L2).
-
-    ``terminated`` is a segment terminated on a firewall context: it keeps its gateway (the pair's VIP) and is pure
-    L2 on the fabric all the same. ``stretch_scope`` (unset: not selected, read as local) makes it a stretched one."""
+    """A ManagedSegmentVlan row; ``namespace`` None means a segment without a gateway (pure L2)."""
     seg: dict[str, Any] = {
         "__typename": "ManagedVxlanSegment",
         "id": f"seg-{segment}",
@@ -209,14 +203,7 @@ def raw_service_port(
     member_role: str | None = None,
     raw_legs: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
-    """A border service port whose cable ends on the first uplink of a member of one service context.
-
-    ``raw_legs`` are ready-made leg sub-interfaces (``ip_address``, ``zone_capabilities`` and the ``ns_type`` of their VRF named
-    ``_ns_type``) for a caller that holds the real addresses; ``member_role`` is the role of the member.
-
-    Each leg is ``(member role, namespace, namespace type)``: a sub-interface ``<uplink>.<transit VLAN>`` of the member
-    (the member takes the role of the first leg), addressed in that namespace. ``served`` are the footprints the context
-    serves ``(id, environment)`` and ``tenant`` its dedicated one."""
+    """A border service port whose cable ends on the first uplink of a member of one service context."""
     ctx_id = context_id or f"ctx-{kind}-{vlan_id}"
     served_key = "fw_served" if kind == FIREWALL_CONTEXT_KIND else "lb_served"
     context = {
@@ -314,12 +301,7 @@ def raw_device(
     shared_others: list[str] | None = None,
     pbr: bool = False,
 ) -> dict[str, Any]:
-    """One DcimDevice node of the query. ``vrfs`` are its memberships (``raw_instance``), emitted as
-    ``shared_capabilities``; a ManagedVRF passed in ``capabilities`` is taken as a membership too (the pre-r3
-    spelling), any other capability is dropped; ``shared_others`` are foreign shared kinds (a ``__typename`` only).
-    ``pbr`` gives it a ManagedPBR among its individual ``capabilities`` (it steers). The device sits in a pod of the DC
-    ``hosting_id`` (None: a deployment with no hosting parent); ``deployment_kind=None`` gives it no deployment, and
-    ``owner_kind`` selects its owner's ``__typename``."""
+    """One DcimDevice node of the query."""
     caps = capabilities or []
     members = [*(vrfs or []), *(cap for cap in caps if cap.get("__typename") == VRF_KIND)]
     node: dict[str, Any] = {

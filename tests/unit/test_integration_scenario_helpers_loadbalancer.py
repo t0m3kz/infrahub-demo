@@ -16,9 +16,7 @@ from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.integration_scenario_helpers_helpers import _no_propagation_delay  # noqa: F401 (autouse fixture)
 from tests.unit.test_circuit_query_shapes import _selected_paths
 
-# ---------------------------------------------------------------------------
 # Load-balancer inventory (test_62, test_64)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -177,8 +175,7 @@ def _raw_vrf(zone: str, vrf_type: str, l3_vni: int) -> dict[str, Any]:
 def _raw_members(
     kind: str, ctx_id: str, vlan: int, vrf: dict[str, Any] | None, *, far_port: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """The raw members of a context: one load balancer whose uplink ``eth1`` (cabled to ``far_port``) carries the leg
-    ``eth1.<vlan>``, addressed in default and in ``vrf`` (none: in no VRF)."""
+    """The raw members of a context:"""
     uplink = {
         "__typename": "DcimPhysicalInterface",
         "id": "up1",
@@ -210,8 +207,7 @@ def _raw_members(
 
 
 async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None:
-    """The leg sub-interfaces, the border-leaf load-balancer ports (with their role) and each VIP's
-    address, servers, member addresses and health checks come out flat; a port on another role's device is ignored."""
+    """The leg sub-interfaces, the border-leaf load-balancer ports."""
 
     def value(v: Any) -> dict:
         return {"value": v}
@@ -295,8 +291,7 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
             ]
         },
     }
-    # A context holds no HA edge: its pair is the ManagedLoadbalancerHA among its member's own capabilities, and
-    # its DC the member's deployment.
+    # A context has no HA edge: its pair and DC come from its member.
     (member,) = node["shared_devices"]["edges"]
     member["node"]["capabilities"] = {
         "edges": [

@@ -1,7 +1,4 @@
-"""The edge pair (interlink cable, /127 and FABRIC iBGP session) of ColocationFabricGenerator.
-
-The generator lives in generators/topology/colocation_fabric.py.
-"""
+"""The edge pair (interlink cable, /127 and FABRIC iBGP session) of ColocationFabricGenerator."""
 
 from __future__ import annotations
 

@@ -11,17 +11,7 @@ from utils.exchange_transit import is_routed_tenant_segment
 
 
 class CheckTenantSviProtection(InfrahubCheck):
-    """A routed tenant segment must not be an any-to-any SVI inside the shared VRF.
-
-    All customers of an environment share the PROD or NON-PROD VRF, so isolation
-    rests on the SVI ACL and on PBR to a firewall context. A routed segment (a
-    gateway in a PROD or NON-PROD namespace, outside the exchange zones) is
-    protected when it has:
-
-    - an enabled security policy with rules or a default action (the leaf ACL);
-    - or a firewall context that PBR redirects it to: one serving one of its
-      customer deployments, or a shared (tenant-less) one.
-    """
+    """A routed tenant segment needs an ACL-bearing policy or a PBR firewall context, else it is any-to-any in its VRF."""
 
     query = "tenant_svi_protection"
 
@@ -54,5 +44,5 @@ class CheckTenantSviProtection(InfrahubCheck):
 
     @staticmethod
     def _deployment_ids(segment: dict[str, Any]) -> set[str]:
-        """The customer deployments the segment serves"""
+        """The customer deployments the segment serves."""
         return {dep["id"] for dep in segment.get("customer_deployments") or [] if dep}

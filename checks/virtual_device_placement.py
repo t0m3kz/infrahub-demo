@@ -1,16 +1,4 @@
-"""Validate where a virtual device is deployed.
-
-* A DcimVirtualDevice is our own virtual machine or function on our own hosts. Its ``deployment`` is the data center
-  or the customer footprint it runs for (the footprints carry the environment class and the hosting scope that
-  checks/hypervisor_environment.py and checks/segment_placement.py rely on): TopologyDataCenter, TopologyCustomerDC or
-  TopologyCustomerColocation. A virtual device deployed to a colocation zone, a virtual colocation or any other
-  deployment is the old modelling of a provider-hosted function.
-A CloudNetworkAppliance (a network function a provider hosts: Equinix Network Edge, Megaport MVE) is deployed to a
-TopologyApplianceHosting only (a TopologyVirtualColocation or a TopologyCustomerCloud); the schema says so, so nothing
-is checked here.
-
-An unset ``deployment`` is not reported: the field is optional.
-"""
+"""A DcimVirtualDevice is deployed to a data center or a customer footprint; an unset deployment is not reported."""
 
 from __future__ import annotations
 

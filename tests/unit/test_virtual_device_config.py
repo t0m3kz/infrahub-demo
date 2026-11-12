@@ -1,9 +1,4 @@
-"""A dedicated virtual firewall gets a real config artifact, not the no-platform stub.
-
-queries/config/firewall.gql roots at the DcimDevice generic, so a DcimVirtualDevice member of the `firewalls`
-target group is found like a DcimPhysicalDevice one. The load-balancer config query keeps one root per kind (its
-fragment is shared with the validation query), so both kinds are guarded too.
-"""
+"""A dedicated virtual firewall gets a real config artifact, not the no-platform stub."""
 
 from __future__ import annotations
 

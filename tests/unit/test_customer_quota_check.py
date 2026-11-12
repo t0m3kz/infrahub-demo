@@ -1,11 +1,4 @@
-"""Unit tests for CheckCustomerQuota (segments and host-facing ports of a DC footprint against its design).
-
-The colocation and cloud footprints, the address block, the cloud segment block and the mixed-kind warning are in
-test_customer_quota_check_kinds.py.
-
-The payloads are raw GraphQL responses shaped like queries/validation/customer_quota.gql; ``validate`` runs them
-through ``clean_data``.
-"""
+"""Unit tests for CheckCustomerQuota (segments and host-facing ports of a DC footprint against its design)."""
 
 from __future__ import annotations
 
@@ -281,7 +274,8 @@ class TestPortQuota:
 
     def test_service_ports_are_not_host_facing(self) -> None:
         """The border-leaf ports facing a firewall or load balancer (where a terminated segment is tagged) are not
-        counted."""
+        counted.
+        """
         ports = [_port("fw", role="firewall"), _port("lb", role="load-balancer"), _port("host")]
         assert _run([_footprint(ports_25g=1)], [_segment("s1", ["C005-P-DC10"], *ports)]) == []
 
@@ -356,8 +350,7 @@ def test_check_and_query_are_registered() -> None:
 
 
 def test_query_reads_the_ports_from_the_port_side() -> None:
-    """The ports come from the physical and LAG roots (a capability present), their segments through their segment
-    deployments, joined to the segments by id."""
+    """The ports come from the physical and LAG roots (a capability present)."""
     compact = " ".join((_ROOT / "queries" / "validation" / "customer_quota.gql").read_text().split())
     assert "DcimPhysicalInterface(capabilities__isnull: false)" in compact
     assert "DcimLAGInterface(capabilities__isnull: false)" in compact
@@ -374,9 +367,7 @@ def test_query_selects_each_number_the_design_carries(field: str) -> None:
     assert f"{field} {{ value }}" in query
 
 
-# ---------------------------------------------------------------------------
 # 30_all: the bootstrap template rows hold every demo footprint
-# ---------------------------------------------------------------------------
 
 _ALL_DEMO = _ROOT / "data" / "demos" / "30_all"
 _BOOTSTRAP = _ROOT / "data" / "bootstrap"
@@ -394,11 +385,7 @@ def _server_nic_types() -> list[str]:
 
 
 def _all_demo_payload() -> dict[str, Any]:
-    """The 30_all footprints, segments and tagged ports in the query shape, from the object files alone.
-
-    A segment is tagged on the ports of the physical hosts of its AppComponents' instances (a VM through its
-    hosting_device): one port per NIC, in the DC the host's directory (03_dc/<dc>/) names.
-    """
+    """The 30_all footprints, segments and tagged ports in the query shape, from the object files alone."""
     templates = {t.item["name"]: t.item for t in declared("TopologyCustomerTemplateDC", _BOOTSTRAP)}
     footprint_rows = [
         _footprint(

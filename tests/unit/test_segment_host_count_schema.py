@@ -1,10 +1,4 @@
-"""host_count on a network segment, the customer templates in the hand-kept protocols, and what the segment generator reads.
-
-The schema fields are held in test_customer_template_data.py (templates, design) and test_limits_consistency.py
-(the range of host_count); this file holds the rest of the contract: the generic carries host_count for both
-implementations, the generator's query reads what the addressing needs, the protocols name the new classes and fields,
-and ``ensure_sliced_pool`` passes the member type and the pool flag of a block that is itself carved.
-"""
+"""host_count on a network segment"""
 
 from __future__ import annotations
 

@@ -1,42 +1,7 @@
-"""Traffic to the internet always goes through a firewall of ours, and the hardware is there to enforce it.
+"""Check that traffic to the internet goes through a complete firewall of ours.
 
-A ``SecurityPolicyRule`` whose ``destination_zone`` is INTERNET names the internet (checks/segment_security.py
-keeps the zone the only one a rule may name). A permit rule is only an intent: nothing enforces it unless the
-firewall pair, its legs, the exchange to the INTERNET VRF, the border ports and the SNAT address are in place. So the
-check fails closed: every ENABLED internet rule is followed from its source segment to each on-prem footprint of that
-segment (``network_segments`` of a ``TopologyCustomerDC`` or ``TopologyCustomerColocation``), and a missing element is
-an ERROR that blocks the proposed change. One finding per rule, footprint, context and missing element.
-
-Every firewall context a footprint lists (``serving_firewall_contexts``, internal and Internet edge alike) that holds
-its internet rules (utils/firewall_split.py: the Internet edge context when the footprint lists one, else its
-contexts) needs:
-
-1. exactly two member devices (``shared_devices``), both with role ``internal-firewall`` (``external-firewall`` for
-   the Internet edge context);
-2. for every member, an INTERNET leg: a sub-interface of the context tagged with the encapsulation ``vlan_id`` (the transit VLAN of the
-   INTERNET slot, utils/exchange_transit.py) with an address in the INTERNET namespace;
-3. a ``TopologyRoutedExchange`` of the context between the tenant VRF and INTERNET, with every INTERNET leg in its
-   INTERNET VRF (generators/firewall_context.py names it ``{context}-{A}-{Z}``; its legs are derived,
-   utils/service_contexts.py ``exchange_legs``);
-4. the border service ports behind the context: one ``DcimPhysicalInterface`` of role ``firewall`` on a border or
-   edge device per member (the port the member's uplink is cabled to, utils/service_contexts.py);
-5. a ``snat_address``.
-
-A colocation footprint names no zone: it is served by the context of every zone of its metro that has a physical
-firewall (generators/topology/customer_colocation.py). Each such zone must pass the elements above (a zone with no
-firewall device is ignored), and the footprint is served when at least one zone passed OR a
-``TopologyVirtualColocation`` of the metro has a complete provider-hosted pair: a ``ManagedFirewallHA`` whose members
-are exactly two ``CloudNetworkAppliance`` with role ``firewall`` and status ``active`` (no legs, ports, SNAT or
-contexts apply to it, the provider runs them). A metro with neither is an ERROR.
-
-A footprint that lists an Internet edge context (a context on an external-firewall pair) is checked against THAT
-context (the elements above): it must list exactly one, for its environment, and a dedicated internal context of it
-(``tenant`` set) needs only a ``snat_address`` (the public address its traffic is translated to on the edge). A
-footprint that lists none keeps the elements above on its serving contexts.
-
-Deliberate gap: only the on-prem footprints are checked. A cloud footprint (``TopologyCustomerCloud``) and an office
-(``TopologyCustomerOffice``) are skipped silently: egress from the cloud leaves through the provider's own gateways,
-which are outside our firewalls, and an office reaches the internet through its SD-WAN edge.
+Each enabled ``destination_zone`` INTERNET rule is followed to every DC and colocation footprint of its source. See
+AGENTS.md "Internet egress".
 """
 
 from __future__ import annotations
@@ -73,28 +38,28 @@ PAIR_SIZE = 2
 
 
 class Gap(NamedTuple):
-    """One missing element: the context it belongs to (None when it is not a context's) and what is missing."""
+    """One missing element: its context (None if not a context's) and what is missing."""
 
     context: str | None
     missing: str
 
 
 def _name(node: dict[str, Any] | str | None) -> str:
-    """The name of a cleaned node, else its id (a bare id string is what an id-only selection collapses to)."""
+    """Name of a node, else its id."""
     if isinstance(node, dict):
         return str(node.get("name") or node.get("id") or "<unnamed>")
     return str(node or "<unnamed>")
 
 
 def _id(node: dict[str, Any] | str | None) -> str | None:
-    """The id of a cleaned relationship: a dict with an ``id`` or the bare id string."""
+    """Id of a relationship: a dict with ``id`` or a bare id string."""
     if isinstance(node, dict):
         node = node.get("id")
     return str(node) if node else None
 
 
 def _members(context: dict[str, Any]) -> list[dict[str, Any]]:
-    """The member devices of a context (its ``shared_devices``), by name."""
+    """Member devices of a context, by name."""
     return sorted(
         (member for member in context.get("shared_devices") or [] if isinstance(member, dict)),
         key=_name,
@@ -102,7 +67,7 @@ def _members(context: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _ha_members(domain: dict[str, Any]) -> list[dict[str, Any]]:
-    """The member devices of an HA domain (its ``capabilities``), by name."""
+    """Member devices of an HA domain, by name."""
     return sorted(
         (member for member in domain.get("capabilities") or [] if isinstance(member, dict)),
         key=_name,
@@ -110,7 +75,7 @@ def _ha_members(domain: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _internet_exchange(context: dict[str, Any], exchanges: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """The context's exchange with the INTERNET namespace on one side, None when it has none."""
+    """The context's exchange with INTERNET on one side, or None."""
     for exchange in sorted(exchanges, key=_name):
         if _id(exchange.get("gateway")) != context.get("id"):
             continue
@@ -123,12 +88,7 @@ def _internet_exchange(context: dict[str, Any], exchanges: list[dict[str, Any]])
 def _leg_gaps(
     member: dict[str, Any], legs: list[dict[str, Any]], vlan: int | None, exchange: dict[str, Any] | None
 ) -> list[str]:
-    """What the INTERNET leg of one member lacks: the leg itself, its address in INTERNET, being a leg of the exchange.
-
-    ``legs`` are the member's legs of the context (utils/service_contexts.py ``leg_interfaces``). The leg is the one
-    that carries the INTERNET transit VLAN or already has an address in INTERNET; an address in another namespace is
-    reported, not skipped.
-    """
+    """What a member's INTERNET leg lacks: the leg, its INTERNET address, membership of the exchange."""
     member_name = _name(member)
     wanted_vlan = transit_vlan(vlan, INTERNET_TYPE) if vlan else None
     candidates = sorted(
@@ -163,11 +123,7 @@ def _leg_gaps(
 def context_gaps(
     context: dict[str, Any], exchanges: list[dict[str, Any]], member_role: str = FIREWALL_ROLE
 ) -> list[Gap]:
-    """What a firewall context lacks to enforce the internet egress, one gap per missing element.
-
-    ``member_role`` is the device role of the pair: ``firewall`` for a serving context, ``external-firewall`` for the
-    context a topology names as its Internet edge.
-    """
+    """One gap per element a firewall context lacks to enforce internet egress (``member_role``: the pair's role)."""
     label = _name(context)
     members = _members(context)
     firewalls = [member for member in members if member.get("role") == member_role]
@@ -210,11 +166,7 @@ def context_gaps(
 
 
 def virtual_pair_gaps(colocation: dict[str, Any]) -> list[str]:
-    """Why a virtual colocation has no complete firewall pair; empty when it has one.
-
-    A pair is a ManagedFirewallHA whose members are exactly two CloudNetworkAppliance with role firewall and status
-    active. The HA domains are found through the presence's appliances.
-    """
+    """Why a virtual colocation has no complete firewall pair (empty when it has one)."""
     domains: dict[str, dict[str, Any]] = {}
     for appliance in colocation.get("appliances") or []:
         for capability in appliance.get("capabilities") or []:
@@ -241,7 +193,7 @@ def virtual_pair_gaps(colocation: dict[str, Any]) -> list[str]:
 
 
 def _zone_firewall_ids(zone: dict[str, Any]) -> set[str]:
-    """The ids of the physical firewall devices of a zone (a dedicated virtual pair is hosted on them)."""
+    """Ids of the physical devices of a zone."""
     return {
         str(device["id"])
         for device in zone.get("devices") or []
@@ -303,7 +255,7 @@ def colocation_gaps(footprint: dict[str, Any], cleaned: dict[str, Any]) -> list[
 
 
 def _tenant_type(context: dict[str, Any], exchanges: list[dict[str, Any]]) -> str | None:
-    """The tenant namespace type of a context: the side of its INTERNET exchange that is not INTERNET."""
+    """Tenant namespace type: the side of the INTERNET exchange that is not INTERNET."""
     exchange = _internet_exchange(context, exchanges)
     for side in (((exchange or {}).get(f"vrf_{end}") or {}).get("security_zone") for end in ("a", "z")):
         if isinstance(side, dict) and side.get("vrf_type") not in (None, INTERNET_TYPE):
@@ -312,8 +264,8 @@ def _tenant_type(context: dict[str, Any], exchanges: list[dict[str, Any]]) -> st
 
 
 def _edge_gaps(footprint: dict[str, Any], contexts: list[dict[str, Any]], exchanges: list[dict[str, Any]]) -> list[Gap]:
-    """What the footprint's Internet edge lacks: one edge context of its environment, complete, and the public address
-    of a dedicated internal context (the address its traffic is translated to on the edge)."""
+    """What the footprint's Internet edge lacks: one complete edge context of its environment, and a dedicated
+    internal context's ``snat_address``."""
     edges = sorted((context for context in contexts if is_external(context)), key=_name)
     if len(edges) > 1:
         names = ", ".join(_name(context) for context in edges)
@@ -336,10 +288,7 @@ def _edge_gaps(footprint: dict[str, Any], contexts: list[dict[str, Any]], exchan
 
 
 def footprint_gaps(kind: str, footprint: dict[str, Any], cleaned: dict[str, Any]) -> list[Gap]:
-    """What an on-prem footprint lacks to send its segments' internet traffic through our firewalls.
-
-    The contexts that hold the footprint's internet rules are its Internet edge context when it lists one, else its
-    serving contexts (utils/firewall_split.py ``internet_contexts``)."""
+    """What an on-prem footprint lacks to send its internet traffic through our firewalls."""
     exchanges = cleaned.get(EXCHANGE_KIND) or []
     contexts = footprint_contexts(footprint)
     holders = internet_contexts(contexts)
@@ -353,7 +302,7 @@ def footprint_gaps(kind: str, footprint: dict[str, Any], cleaned: dict[str, Any]
 
 
 def _ip_version(segment: dict[str, Any] | str) -> str:
-    """The segment's ``ip_version`` (``ipv4`` when the query row is only an id)."""
+    """The segment's ``ip_version`` (``ipv4`` for an id-only row)."""
     return (segment.get("ip_version") if isinstance(segment, dict) else None) or "ipv4"
 
 
@@ -366,8 +315,7 @@ def internet_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if rule_enabled(rule)
             and (rule.get("destination_zone") or {}).get("name") == INTERNET_ZONE
             and _id(rule.get("source_segment"))
-            # An IPv6 source is not translated (accepted gap, like cloud and office egress): the check demands no
-            # snat_address for it, which is an IPv4 address.
+            # IPv6 sources are not translated (accepted gap): no IPv4 snat_address to demand.
             and _ip_version(rule["source_segment"]) != "ipv6"
         ),
         key=_name,
@@ -400,8 +348,7 @@ def egress_findings(cleaned: dict[str, Any]) -> list[str]:
 
 
 class CheckInternetEgress(InfrahubCheck):
-    """Every enabled internet rule is enforced by firewall hardware of ours on each on-prem footprint of its source
-    segment (see the module docstring)."""
+    """Every enabled internet rule is enforced by our firewalls on each on-prem footprint of its segment."""
 
     query = "internet_egress"
 

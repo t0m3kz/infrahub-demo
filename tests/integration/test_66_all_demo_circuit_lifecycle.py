@@ -1,33 +1,4 @@
-"""Integration test — the sessions of a 30_all circuit follow its status, both ways.
-
-add_virtual_circuit builds the BGP sessions of an Interconnect (a DCI) or a Handoff circuit and tracks what it
-writes (the /31 or /127 prefix, its two addresses, the peerings). A run that builds nothing -- the circuit
-decommissioned, or its whole carrier decommissioned -- must still delete what an earlier run built. It did not: the SDK
-skips the whole tracked cleanup when a run tracked nothing, so the sessions of a decommissioned carrier stayed
-`active` for good. The generator now tracks the circuit itself first, and this module proves the fix on a live stack:
-
-  * test_01 decommissions an Interconnect's CARRIER (the physical dark fibre). add_circuit reacts to the status change
-    and fans out to add_virtual_circuit, which must remove both peerings, the circuit's prefix and the two port
-    addresses, and leave the ports, the per-circuit key (same id, same secret) and every other circuit's sessions
-    alone. The carrier is then set active again and the sessions must come back, with the same key.
-  * test_02 does the same for a Handoff through the circuit's OWN status (its rule runs add_virtual_circuit
-    directly): the sub-interfaces, the circuit, both BGP processes and the data-loaded key stay.
-
-  * test_04 proves the VRF membership follows its demand for a segment: the SVIs a segment's rows demand on a switch go, and so does the switch's
-    membership of the DC's instance, when the segment no longer lands there (see the module-level constants of that
-    test); the instance survives through the other switches, and the switches rejoin it with the segment.
-  * test_05 deletes the ManagedMLAG of an access-leaf pair and builds it again (add_rack): a VLAN row hangs off its
-    DEVICE, so no row, VLAN id, SVI or VLAN/SVI line of the rendered config may change either way.
-
-A Tunnel is not covered: it has no trigger rule and is not in the generator's group, so setting its status starts
-nothing (tests/unit/test_event_rules.py pins both), and "no peering appeared" is true of every tunnel anyway.
-
-Every test restores the status it changed in a `finally`, so a failure leaves the branch as it found it.
-
-It runs AFTER test_65 because it mutates the branch the other modules read (and the idempotency snapshot must not
-see a half-rebuilt session): what it deletes it rebuilds, but the prefix may be a different /31 and the ids of the
-rebuilt peerings are new.
-"""
+"""Integration test — the sessions of a 30_all circuit follow its status, both ways."""
 
 from __future__ import annotations
 
@@ -84,9 +55,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 SCENARIO_NAME = "Scenario 30_all: Circuit Lifecycle"
 
-# add_circuit (carrier status -> fan-out -> add_virtual_circuit) is two task hops, each queued behind whatever else the
-# workers run; the probe that found the bug saw the sessions settle well inside a minute on an idle stack. 30 x 10 s
-# = 5 minutes is several times that, short enough that a generator that never reacts fails the run, not the CI budget.
+# add_circuit (carrier status -> fan-out -> add_virtual_circuit) is two task hops
 MAX_ATTEMPTS = 30
 POLL_INTERVAL = 10
 
@@ -94,11 +63,9 @@ DECOMMISSIONED = "decommissioned"
 ACTIVE = "active"
 CARRIER_CIRCUIT_KIND = "TopologyCarrierCircuit"
 
-# The DCI under test: the *-B fibre of DC12 to PA4. Its sibling ICX-DC12-EQXPA4 shares both devices and must not move.
+# The DCI under test: the *-B fibre of DC12 to PA4.
 INTERCONNECT_CIRCUIT = "ICX-DC12-EQXPA4-B"
-# The SD-WAN gateway's PROD handoff (data/demos/30_all/08_interconnects/04_sdwan/06_vrf_handoff.yml). Its key is
-# data-loaded: it must be there before and after. eg-fr201, its end, has other PROD handoffs and segments, so it stays
-# a member of its VRF instance.
+# The SD-WAN gateway's PROD handoff (data/demos/30_all/08_interconnects/04_sdwan/06_vrf_handoff.yml).
 HANDOFF_CIRCUIT = "HANDOFF-FR2-SDWAN-GW1-PROD"
 HANDOFF_KEY = "eqx-fr2-sdwan-handoff-key"
 
@@ -109,13 +76,7 @@ _ENDS = 2
 
 State = dict[str, Any]
 
-# Everything the generator owns or must leave alone, in one round trip: the sessions (and the other circuits', to prove
-# they are untouched), the keys, the circuit's prefix and addresses (found by the description the generator writes, "DCI
-# <name>" / "Handoff <name>"), and the two ports with the address they carry.
-#
-# Also the VRF instances (ManagedVRF, every one, with its topology and members: the ones of other devices are the
-# bystanders) and what else on the circuit's devices demands the circuit's namespace: an address on another interface,
-# an SVI.
+# Everything the generator owns or must leave alone, in one round trip
 _STATE_QUERY = """
 query ($peerings: [String], $keys: [String], $descriptions: [String], $devices: [String], $ports: [String]) {
   vrfs: ManagedVRF {
@@ -248,13 +209,7 @@ def subject_for(circuit: str, key: str | None = None) -> Subject:
 
 
 def parse_state(result: dict[str, Any], subject: Subject) -> State:
-    """The state of ``subject`` in a ``state_query`` result.
-
-    ``peerings``: name -> {id, status, password_id, process_ids} for the subject's sessions; ``bystanders``: name ->
-    (id, status) for the other circuits' sessions; ``key``: {id, password} or None; ``prefixes``: the circuit's
-    prefixes; ``address_count``: the addresses carrying its description; ``ports``: (device, interface) -> {id,
-    address} for each end that exists, address None when unaddressed.
-    """
+    """The state of ``subject`` in a ``state_query`` result."""
     peerings: dict[str, dict[str, Any]] = {}
     bystanders: dict[str, tuple[str, Any]] = {}
     for node in _edges(result, "ManagedBGPPeering"):
@@ -294,10 +249,7 @@ def parse_state(result: dict[str, Any], subject: Subject) -> State:
 
 
 def parse_vrfs(result: dict[str, Any], subject: Subject) -> dict[str, Any]:
-    """``all``: instance name -> {id, devices (frozenset of member names)} for every ManagedVRF; ``memberships``: end
-    device -> the name of the instance of the circuit's namespace it is a member of (those that are);
-    ``other_demand``: the end devices that something besides the circuit's own port demands the namespace for (an
-    address on another interface, an SVI routed in it)."""
+    """``all``: instance name -> {id, devices (frozenset of member names)} for every ManagedVRF; ``memberships``"""
     instances: dict[str, dict[str, Any]] = {}
     memberships: dict[str, str] = {}
     for node in _edges(result, "vrfs"):
@@ -412,9 +364,7 @@ def bystander_errors(before: State, after: State) -> list[str]:
 
 
 def vrf_down_errors(before: State, down: State) -> list[str]:
-    """The VRF instances once the session is gone. An end device leaves its instance of the circuit's namespace unless
-    something else demands it there; the instance keeps its id while other members remain and is deleted with its
-    last member; every other instance (and every bystander's membership) is as it was."""
+    """The VRF instances once the session is gone."""
     leaving = {device for device in before["vrfs"]["memberships"] if device not in before["vrfs"]["other_demand"]}
     errors: list[str] = []
     for name, instance in sorted(before["vrfs"]["all"].items()):
@@ -482,10 +432,7 @@ async def fetch_state(client: InfrahubClient, branch: str, subject: Subject) -> 
 
 
 async def set_status(client: InfrahubClient, branch: str, kind: str, status: str, **filters: Any) -> str:
-    """Set the status of the one ``kind`` node matching ``filters`` on the branch; returns the status it had.
-
-    Saved only when it differs, so restoring an unchanged node is a no-op.
-    """
+    """Set the status of the one ``kind`` node matching ``filters`` on the branch; returns the status it had."""
     node = await client.get(kind=kind, branch=branch, **filters)
     attribute = getattr(node, "status")  # noqa: B009 - SDK attributes are dynamic
     previous = str(attribute.value)
@@ -529,13 +476,7 @@ async def decommission_and_restore(
     **toggled: Any,
 ) -> None:
     """The lifecycle of one circuit's session, driven through the status of the node ``toggled_kind`` / ``toggled``
-    (the carrier of an Interconnect, the Handoff itself): decommission it and assert the session is gone and only the
-    session; set the status back (in a `finally`, so a failure leaves the branch as it was) and assert it is rebuilt
-    on the same key, with no other circuit's session touched and no failed task.
-
-    The VRF memberships follow (vrf_down_errors / vrf_up_errors): an end device leaves its topology's instance of the
-    circuit's namespace with the session when nothing else demands it there and stays a member when something does;
-    the instance survives (same id) while other members remain, and every other instance is untouched."""
+    (the carrier of an Interconnect, the Handoff itself)"""
     await wait_for_tasks_completion(client, branch)
     before = await fetch_state(client, branch, subject)
     errors = rebuilt_errors(before, subject)
@@ -552,8 +493,7 @@ async def decommission_and_restore(
     try:
         logging.info("%s %s: %s -> %s", toggled_kind, toggled, original, DECOMMISSIONED)
         await wait_for_state(client, branch, subject, torn_down_errors, f"{subject.circuit} session removed")
-        # The run that removed the session may still be finishing (its logs, the fan-out): let the queue drain, then
-        # judge what is left, so a late write cannot pass for a clean teardown.
+        # The run that removed the session may still be finishing (its logs, the fan-out)
         await wait_for_tasks_completion(client, branch)
         down = await fetch_state(client, branch, subject)
         left = await client.execute_graphql(query=PROCESSES_QUERY, variables={"ids": processes}, branch_name=branch)
@@ -586,14 +526,8 @@ async def decommission_and_restore(
     await verify_no_failed_tasks(client=client, branch=branch)
 
 
-# The segment under test: the MANAGEMENT-gateway segment of the Infrastructure Services pseudo-customer
-# (data/demos/30_all/07_applications/infra/00_segment.yml). Nothing else of 30_all routes in the MANAGEMENT namespace on
-# an access leaf (the tenant segments are PROD / NONPROD, and the firewall MANAGEMENT legs sit on border leaves), so on
-# the leaves of one host it is the ONLY demand of the MANAGEMENT instance. Its two components (dns, ntp) have the same
-# two VMs (07_applications/infra/01_application.yml) on two hosts racked in different rows, hence on different
-# access-leaf pairs (06_customer_boarding/c006/dc/dc11/02_instances.yml). Taking the second VM off both components
-# leaves the segment no port on the second host's leaves: their rows, SVIs and MANAGEMENT instance must go while the
-# first host's leaves keep theirs. The switches are read from the cabling, not named here.
+# The segment under test: the MANAGEMENT-gateway segment of the Infrastructure Services pseudo- customer
+# (data/demos/30_all/07_applications/infra/00_segment.yml).
 SEGMENT_COMPONENT_FQDNS = (
     "dns.core-services.infra.demo.local",
     "ntp.core-services.infra.demo.local",
@@ -649,9 +583,8 @@ async def poll_switches(
 
 
 async def nudge_segment(client: InfrahubClient, branch: str, component_ids: list[str], segment_id: str) -> None:
-    """Run the segment reconcile from both of its entry points and let the queue drain: the first run must have finished
-    before the second starts (run_generator waits for the branch to settle), and the cleanup of a run that deletes a
-    deployment runs after its generate(), so the next run is what removes what that cleanup freed."""
+    """Run the segment reconcile from both of its entry points and let the queue drain: the first run must have
+    finished before the second starts (run_generator waits for the branch to settle)"""
     for generator, ids in ((COMPONENT_SEGMENT_GENERATOR, component_ids), (SEGMENT_GENERATOR, [segment_id])):
         outcome = await run_generator(client=client, generator_name=generator, node_ids=ids, branch=branch)
         assert outcome["success"], f"{generator} failed: {outcome}"
@@ -693,8 +626,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Decommissioning the DCI's fibre removes both sessions, the /31 (/127) and the port addresses; ports and key
-        stay untouched, other circuits' sessions too; setting the fibre active again rebuilds it all on the same key."""
+        """Decommissioning the DCI's fibre removes both sessions, the /31 (/127) and the port addresses."""
         logging.info("=== %s - Step 1: Interconnect via its carrier ===", SCENARIO_NAME)
 
         (carrier,) = ALL_DEMO_VIRTUAL_CIRCUITS[INTERCONNECT_CIRCUIT]["carrier"]
@@ -719,8 +651,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Decommissioning the SD-WAN gateway handoff removes its session, /31 and sub-interface addresses; the sub-interfaces,
-        the circuit, the BGP processes and the data-loaded key stay; setting it active again rebuilds the session."""
+        """Decommissioning the SD-WAN gateway handoff removes its session, /31 and sub-interface addresses."""
         logging.info("=== %s - Step 2: Handoff via its own status ===", SCENARIO_NAME)
 
         await decommission_and_restore(
@@ -744,11 +675,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """The DNS/NTP segment is the only MANAGEMENT demand on the leaves of the host of its second VM: taking that VM
-        off the components removes the segment's SVIs there, then the switches' membership of the DC's MANAGEMENT
-        instance (the reconcile removes the member after the last SVI); the instance itself survives through the
-        switches of the host that stays, which keep their membership and SVIs. Giving the VM back restores the
-        memberships of the same instance, the SVIs in it."""
+        """The DNS/NTP segment is the only MANAGEMENT demand on the leaves of the host of its second VM."""
         client, branch = async_client_main, scenario_branch
         logging.info("=== %s - Step 4: Segment VRF instance ===", SCENARIO_NAME)
 
@@ -820,13 +747,7 @@ class TestAllDemoCircuitLifecycle(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Deleting the ManagedMLAG of an access-leaf pair changes no row, VLAN id or SVI of its members, nor the VLAN
-        and SVI lines of their rendered config; add_rack builds the MLAG again and the rows are still the same, none
-        created or deleted, and validate_mlag_domains (M4 / M5) has no new finding.
-
-        The full render DOES differ while the MLAG is gone: the mlag / vPC domain block and the peer-link are the MLAG's
-        own config. Only the lines of the segments' VLANs and SVIs (``vlan_lines``) are compared, plus the rows.
-        """
+        """Deleting the ManagedMLAG of an access-leaf pair changes no row, VLAN id or SVI of its members."""
         client, branch = async_client_main, scenario_branch
         logging.info("=== %s - Step 5: remove and re-add an MLAG ===", SCENARIO_NAME)
 

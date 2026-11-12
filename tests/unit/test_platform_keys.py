@@ -1,9 +1,4 @@
-"""Guard: the platform NAME is the key of the config template and of every platform table in the code.
-
-``DcimPlatform.name`` selects ``templates/configs/<role subdir>/<name>.j2`` (``BaseDeviceTransform._load_template``)
-and is what the generators, transforms and checks compare against. Two spellings of one platform (``panos`` in the data,
-``paloalto_panos`` in a table) silently skip the table, so this test ties data, templates and code tables together.
-"""
+"""Guard: the platform NAME is the key of the config template and of every platform table in the code."""
 
 from __future__ import annotations
 
@@ -106,9 +101,7 @@ def test_every_platform_the_data_names_is_defined(
     assert set(data_platform_roles) - platform_names == set()
 
 
-# (platform, role) pairs of the bootstrap catalog whose role has a config transform but whose platform has no template
-# for it today (a catalog row never instantiated by a deployment, or a device the artifact cannot render). Each is a gap
-# to close with a template, not a pattern to copy: the test below fails once one is closed, so the entry goes with it.
+# (platform, role) catalog pairs with a config transform but no template yet; the test fails once one is closed.
 _CATALOG_WITHOUT_TEMPLATE = {
     ("cisco_ios", "access-switch"),
     ("juniper_junos", "edge"),
@@ -131,11 +124,7 @@ def _pairs_without_template(root_dir: Path, data_platform_roles: dict[str, set[s
 def test_every_role_with_a_transform_has_a_template_per_platform_in_the_data(
     root_dir: Path, data_platform_roles: dict[str, set[str | None]]
 ) -> None:
-    """A platform used for a role that has a config transform needs templates/configs/<subdir>/<platform>.j2.
-
-    The roles without a transform (servers, controllers, console servers, ...) are derived from the transforms, not
-    listed here: such a platform has no config template, by design.
-    """
+    """A platform used for a role that has a config transform needs templates/configs/<subdir>/<platform>.j2."""
     assert _pairs_without_template(root_dir, data_platform_roles) - _CATALOG_WITHOUT_TEMPLATE == set()
 
 

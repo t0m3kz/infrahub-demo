@@ -1,9 +1,4 @@
-"""The segment half of test_66 (test_04, and the empty bystander instance), run on raw GraphQL payloads.
-
-The readers consume the results of ``_HOST_CABLES_QUERY`` and ``_SWITCH_VRF_QUERY``; the judges say why the switches are
-not in the expected state. A wrong path in a payload, a predicate that passes on an empty state or a comparison that
-cannot fail would only show in a 55-minute run, so they are pinned here.
-"""
+"""The segment half of test_66 (test_04, and the empty bystander instance), run on raw GraphQL payloads."""
 
 from __future__ import annotations
 
@@ -103,8 +98,7 @@ def _switch_result(
 
 
 def _healthy() -> dict[str, Any]:
-    """Both leaves members of the DC's MANAGEMENT instance, each with one SVI of the segment in it; an instance of
-    another namespace is a bystander."""
+    """Both leaves members of the DC's MANAGEMENT instance, each with one SVI of the segment in it;"""
     return _switch_result(
         [_vrf(DC_VRF, SEGMENT_NAMESPACE, LEAVES), _vrf("vrf-prod", "PROD", LEAVES)],
         [_svi(leaf, "Vlan100", SEGMENT_NAME, DC_VRF) for leaf in LEAVES],
@@ -115,9 +109,7 @@ def _state(result: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
     return parse_switch_vrf_state(result or _healthy(), LEAVES)
 
 
-# ---------------------------------------------------------------------------
 # The queries
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("query", [_HOST_CABLES_QUERY, _SWITCH_VRF_QUERY])
@@ -127,9 +119,7 @@ def test_the_segment_queries_parse(query: str) -> None:
     assert "device__name__values" in query
 
 
-# ---------------------------------------------------------------------------
 # switches_of_host
-# ---------------------------------------------------------------------------
 
 
 def test_switches_of_host_are_the_far_ends_of_its_cables() -> None:
@@ -152,9 +142,7 @@ def test_switches_of_host_ignore_the_ports_of_another_host() -> None:
     assert switches_of_host(result, "host-2") == {"leaf-z"}
 
 
-# ---------------------------------------------------------------------------
 # parse_switch_vrf_state
-# ---------------------------------------------------------------------------
 
 
 def test_the_state_of_a_healthy_pair_has_the_instance_and_the_segments_svis() -> None:
@@ -201,8 +189,7 @@ def test_an_svi_without_an_address_is_foreign_not_a_crash() -> None:
 
 
 def test_a_non_svi_virtual_interface_and_a_physical_address_in_the_namespace_are_foreign() -> None:
-    """A loopback in the namespace's VRF and a routed physical port addressed in it also demand the namespace; one in
-    another namespace does not."""
+    """A loopback in the namespace's VRF and a routed physical port addressed in it also demand the namespace;"""
     loopback = _svi("leaf-a", "Loopback10", None, DC_VRF, role="loopback")
     elsewhere = _svi("leaf-b", "Loopback11", None, None, role="loopback")
     physical = [
@@ -222,9 +209,7 @@ def test_an_empty_result_gives_empty_facts_per_device() -> None:
     assert parse_switch_vrf_state({}, LEAVES) == {leaf: {"vrf": None, "svis": {}, "foreign": []} for leaf in LEAVES}
 
 
-# ---------------------------------------------------------------------------
 # The judges
-# ---------------------------------------------------------------------------
 
 
 def test_precondition_passes_for_the_healthy_pair() -> None:
@@ -287,9 +272,7 @@ def test_back_requires_the_membership_and_the_svis_again() -> None:
     assert back_errors(gone)
 
 
-# ---------------------------------------------------------------------------
 # The empty bystander instance
-# ---------------------------------------------------------------------------
 
 
 def _vrfs(instances: dict[str, tuple[str, list[str]]]) -> dict[str, Any]:

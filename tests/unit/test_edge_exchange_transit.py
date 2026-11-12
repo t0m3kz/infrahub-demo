@@ -1,10 +1,4 @@
-"""Unit tests for the exchange transit legs rendered on a colocation edge.
-
-The edge renders the transit legs of the firewall contexts tagged on its
-firewall ports the way the border leaf does (trunk port, transit VLAN + L2VNI +
-anycast SVI, statics inside the VRF, route-maps defined), except that the
-tenant-VRF 0/0 -> VIP static is never exported into EVPN.
-"""
+"""Unit tests for the exchange transit legs rendered on a colocation edge."""
 
 from __future__ import annotations
 

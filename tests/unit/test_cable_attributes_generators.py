@@ -1,11 +1,4 @@
-"""Cable ID, colour and length at every place a generator creates a DcimCable.
-
-The three sites (CablingMixin's cabling, the HA sync cable, the MLAG peer-link cables) merge
-``cable_attributes`` into the create data and read the devices' racks through ONE method,
-``CablingMixin._cable_layouts``: three batched reads (devices, racks, suites) however many cables there are,
-and only what an earlier call of the same run has not read yet.
-Cables declared in data files have no generator and are not touched.
-"""
+"""Cable ID, colour and length at every place a generator creates a DcimCable."""
 
 from __future__ import annotations
 

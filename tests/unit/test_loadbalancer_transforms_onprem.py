@@ -10,9 +10,7 @@ from tests.smoke.fixture_builders.vrf import interface_vrf_capability
 from tests.unit.encapsulation_helpers import raw_encapsulation
 from transforms.config.loadbalancer import LoadBalancer
 
-# ===========================================================================
 # LoadBalancer.transform() — onprem, rendered with the real templates
-# ===========================================================================
 
 _PROJECT_ROOT = str(Path(__file__).resolve().parents[2])
 
@@ -269,8 +267,7 @@ class TestLoadBalancerOnpremContexts:
 
     @pytest.mark.asyncio
     async def test_haproxy_checks_source_the_own_leg_address_and_traffic_tracks_them(self) -> None:
-        """A server's source covers its checks too, so the checks run in a backend sourced from the
-        node's own .5 (the standby owns no .4) and the traffic servers, sourced from .4, track them."""
+        """A server's source covers its checks too."""
         vip = _onprem_vip(
             health_checks=_edges([{"check": _v("tcp"), "rise": _v(2), "fall": _v(3), "timeout": _v(1000)}])
         )

@@ -1,41 +1,6 @@
-"""Generator for VXLAN segment deployment activations.
-
-VxlanSegmentGenerator handles:
-  0. Address a segment without a gateway: a prefix sized from its host_count
-     (a /24 without one) out of its customer's pool, keyed by the segment name,
-     and the anycast gateway on its .1, once (ensure_segment_addressing,
-     generators/topology/segment_addressing.py). An authored gateway is kept.
-  1. Determine target customer deployments from segment.customer_deployments
-  2. Resolve each customer deployment's hosting node — the VNI pool and
-     SegmentDeployment record live on the TopologySegmentHosting node: the
-     parent (TopologyDataCenter or TopologyColocationMetro) of a DC or
-     colocation footprint, the footprint itself for an office (TopologyCustomerOffice).
-  3. For each resolved parent, create (or upsert) a ManagedSegmentDeployment
-     with a locally-allocated VNI from its pool range.
-  4. Reconcile the segment's customer-facing port tags from its components
-     and its LOCAL VLAN ID rows (one per device that needs it: every
-     switch carrying it on a port, its MLAG peer, plus — for a STRETCHED segment — every
-     border gateway of each deployment, the EVPN Multi-Site BGW plumbing: a
-     BGW only re-originates a VNI it has configured, and the row is what the
-     transform renders that from), each under the deployment its switch sits
-     in. See SegmentPortTagMixin.reconcile_vxlan_segment (shared with
-     app_instance_segment.py, written untracked). The tags are driven by
-     AppComponent.instances, one physical device at a time (see
-     generators/topology/app_instance_segment.py); a segment
-     with no AppComponent referencing it gets no generated customer-port
-     assignment (a port a person put on it from the port stays). Independent devices may reuse the same numeric VLAN ID, since
-     IEEE 802.1Q VLAN ID has only local significance (unlike VNI, which is
-     the real DC-wide/fabric-wide segment identifier).
-
-VNIs are allocated via from_pool. A local segment draws from its parent's
-own vni_pool, independently in every parent. A stretched segment draws ONE VNI
-from the global GLOBAL-L2VNI pool and every other parent reuses it. The per-site
-pools all hand out the same band, so a stretched VNI taken from one site's pool
-and written into another site would collide with whatever that site's own pool
-had already given a different segment. The two bands are disjoint, so a
-stretched VNI can never meet a local one. The idempotency check (existing
-SegmentDeployment lookup) ensures from_pool is only called for genuinely new
-deployments, avoiding double allocation.
+"""Generator for VXLAN segment deployment activations (add_vxlan_segment). Addresses a gateway-less segment, creates a
+ManagedSegmentDeployment with a VNI per hosting node, then reconciles port tags and VLAN rows. A local segment draws its
+VNI from its parent's vni_pool; a stretched one draws ONE from GLOBAL-L2VNI.
 """
 
 from __future__ import annotations
@@ -63,11 +28,7 @@ from .segment_ports import SegmentPortTagMixin
 class VxlanSegmentGenerator(
     PoolMixin, CablingMixin, SegmentAddressingMixin, SegmentPortTagMixin, SegmentPolicyMixin, CommonGenerator
 ):
-    """VXLAN segment generator — allocates a VNI from the DC's pool,
-    reconciles the segment's LOCAL VLAN ID activations (border gateways of a
-    stretched segment included). Customer-facing interface assignment is not done here — see
-    generators/topology/app_instance_segment.py.
-    """
+    """VXLAN segment generator: allocates a VNI per deployment and reconciles the segment's VLAN rows."""
 
     graphql_root_key = "ManagedVxlanSegment"
     _deployments_group: Any = None
@@ -118,8 +79,7 @@ class VxlanSegmentGenerator(
         await self.ensure_segment_addressing(segment)
         # Its default-deny policy, created with the segment: a segment is closed before any rule opens it.
         await self.ensure_segment_policy(segment)
-        # The segment's group tag (a routed tenant segment only), before any
-        # segment lock is taken: the helper takes its own.
+        # The segment's group tag (routed tenant segment only), before any segment lock: the helper takes its own.
         await ensure_segment_tag(self.client, self.resource_lock, segment=segment)
         # And its routing tag (the number of its segment community), same segments, one write when absent.
         await ensure_segment_routing_tag(self.client, segment=segment)
@@ -129,11 +89,7 @@ class VxlanSegmentGenerator(
             self.logger.error(f"Segment {segment_name}: could not resolve any hosting parent — cannot proceed")
             return
 
-        # A segment can reference a customer that just boarded onto a DC
-        # still being bootstrapped (its own add_dc/dc_pod_cascade hasn't
-        # created vni_pool yet) — wait for that in-flight parent
-        # and re-resolve rather than fail immediately (same race as
-        # customer_dc.py's firewall/LB device read).
+        # The DC may still be bootstrapping (no vni_pool yet): wait for it and re-resolve rather than fail.
         missing_pool_ids = [
             dep["id"] for dep in target_deployments if dep.get("id") and not (dep.get("vni_pool") or {}).get("id")
         ]
@@ -158,8 +114,7 @@ class VxlanSegmentGenerator(
         if stretched:
             stretched_vni_pool = await self._get_stretched_vni_pool()
             if stretched_vni_pool is None:
-                # Falling back to a site pool would reintroduce the collision
-                # this pool exists to prevent — fail instead.
+                # A site pool would reintroduce the collision: fail instead.
                 self.logger.error(
                     f"Segment {segment_name}: stretched VNI pool '{STRETCHED_VNI_POOL}' not found — "
                     "load data/bootstrap/18_vni_pools.yml"
@@ -172,10 +127,7 @@ class VxlanSegmentGenerator(
             f"{[d.get('name', d.get('id')) for d in target_deployments]}"
         )
 
-        # The one read of the segment's existing deployments: it answers both
-        # "which deployments already exist" (idempotency) and "which VNI does a
-        # stretched segment already carry" (reuse). A failure is fatal: creating
-        # on a blind read would allocate a second VNI / duplicate the records.
+        # The one read of existing deployments (idempotency and stretched-VNI reuse); a failure is fatal.
         try:
             existing_deployments = await self.client.filters(
                 kind=ManagedSegmentDeployment,
@@ -189,13 +141,10 @@ class VxlanSegmentGenerator(
             deployment_id = getattr(getattr(existing, "deployment", None), "id", None)
             if deployment_id and deployment_id not in existing_by_deployment_id:
                 existing_by_deployment_id[deployment_id] = existing
-        # Only a stretched segment shares a VNI across deployments; a local one
-        # always draws from its own deployment's pool.
+        # Only a stretched segment shares a VNI across deployments.
         reusable_vni = self._extract_existing_vni(existing_deployments) if stretched else None
 
-        # ----------------------------------------------------------------
         # Create/upsert SegmentDeployment per deployment
-        # ----------------------------------------------------------------
         failed_deployments: list[str] = []
         for dep in target_deployments:
             dep_id: str = dep.get("id", "")
@@ -221,9 +170,7 @@ class VxlanSegmentGenerator(
                 and dep_id not in existing_by_deployment_id
                 and dep is not target_deployments[-1]
             ):
-                # This activation just drew the stretched VNI from the global
-                # pool: read it back so the remaining deployments reuse that
-                # value instead of drawing a second one.
+                # Read back the stretched VNI just drawn so the remaining deployments reuse it.
                 reusable_vni = await self._read_segment_vni(segment_id)
 
         if failed_deployments:
@@ -232,10 +179,7 @@ class VxlanSegmentGenerator(
                 "State may be partially applied."
             )
 
-        # LOCAL VLAN ID per device: shared desired state of the segment
-        # (both this generator and add_app_component_segment reach it),
-        # reconciled from scratch and written untracked — see
-        # SegmentPortTagMixin.reconcile_vxlan_segment.
+        # LOCAL VLAN ID per device: reconciled from scratch, written untracked (SegmentPortTagMixin).
         await self.reconcile_vxlan_segment(segment_id, segment_name)
 
     def _resolve_target_deployments(self, segment: dict[str, Any], segment_name: str) -> list[dict[str, Any]]:
@@ -254,18 +198,8 @@ class VxlanSegmentGenerator(
         ]
 
     def _resolve_hosting_parent(self, customer_deployment: dict[str, Any], segment_name: str) -> dict[str, Any] | None:
-        """Resolve a customer footprint to the TopologySegmentHosting node that hosts its segments.
-
-        VLAN/VNI pools and SegmentDeployment records live on that node: the
-        footprint's parent (TopologyDataCenter / TopologyColocationMetro) for a
-        CustomerDC/CustomerColocation, the footprint itself for a
-        CustomerOffice, which is SegmentHosting in its own right (its parent
-        is only the "Campus and Office" label, which hosts nothing). The query selects
-        ``vni_pool`` on the footprint only where the footprint hosts itself —
-        its presence is the signal, whether the pool is set yet or not — the
-        same rule as utils/segment_addressing.py's segment_hosting_candidates.
-        Either way the node must be in the GraphQL response (the ``... on
-        TopologyCustomer*`` fragments of the vxlan_segment query) — no fallback fetch.
+        """Resolve a customer footprint to the TopologySegmentHosting node that hosts its segments: its parent (DC /
+        metro), or the office itself.
         """
         cust_id: str = customer_deployment.get("id", "")
         cust_name: str = customer_deployment.get("name", cust_id)
@@ -295,8 +229,9 @@ class VxlanSegmentGenerator(
         return self._deployments_group
 
     async def _join_segment_deployments(self, deployment: Any) -> None:
-        """Add an existing deployment (fetched with its groups) to GROUP_SEGMENT_DEPLOYMENTS when it is not a member:
-        one RelationshipAdd, so its other groups (this run's tracking group) stay."""
+        """Add an existing deployment to GROUP_SEGMENT_DEPLOYMENTS if not a member (one RelationshipAdd keeps its other
+        groups).
+        """
         if any(peer.hfid == [GROUP_SEGMENT_DEPLOYMENTS] for peer in deployment.member_of_groups.peers):
             return
         group = await self._segment_deployments_group()
@@ -312,21 +247,9 @@ class VxlanSegmentGenerator(
         existing_deployment: Any | None = None,
         reusable_vni: int | None = None,
     ) -> bool:
-        """Create or upsert one SegmentDeployment record (VNI-and-status only —
-        local VLAN ID realization is per device, a ManagedSegmentVlan
-        under this record, see SegmentPortTagMixin.reconcile_vxlan_segment).
-
-        VNI is allocated from vni_pool, a {"id": ..., "name": ...} dict: for a
-        local segment the deployment's own pool, read straight from the
-        vxlan_segment query's TopologySegmentHosting parent fragment (see
-        queries/topology/add/vxlan_segment.gql); for a stretched one the
-        global GLOBAL-L2VNI pool, used only by the first deployment — the
-        rest reuse its VNI. A local segment never reuses another site's VNI.
-        Idempotency: the caller passes the deployment's existing
-        SegmentDeployment, if any (generate() reads them all once) — from_pool
-        is only called for genuinely new deployments. reusable_vni is the VNI a
-        stretched segment already carries (None for a local one, and for the
-        first stretched deployment, which draws it from vni_pool).
+        """Create or upsert one SegmentDeployment record (VNI and status only); from_pool is called only for a new
+        deployment. ``vni_pool`` is a {"id", "name"} dict; ``reusable_vni`` is the VNI a stretched segment already
+        carries.
         """
         # --- Check idempotency first ---
         if existing_deployment:
@@ -340,10 +263,7 @@ class VxlanSegmentGenerator(
             return True
 
         # --- VNI ---
-        # A stretched segment must carry the same VNI in every site so that
-        # EVPN type-2/3 routes stitch correctly across DCI: reuse the VNI the
-        # first site drew from the global pool. A local segment has no such
-        # constraint and always draws from its own site's pool.
+        # A stretched segment must carry the same VNI in every site (EVPN type-2/3 stitching); a local one draws from its own pool.
         vni_from_pool: dict[str, Any] | None = None
         vni_literal: int | None = reusable_vni
         if vni_literal is not None:

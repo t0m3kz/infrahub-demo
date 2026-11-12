@@ -45,12 +45,7 @@ def make_member(
     subs: tuple[str | tuple[str, int | None, str], ...] = (),
     virtual: bool = False,
 ) -> dict[str, Any]:
-    """A cleaned member device with its uplinks and the given sub-interfaces.
-
-    A sub-interface is ``"<parent>.<vlan>"`` (its encapsulation ``parent`` and ``vlan_id`` are read from the string, as the
-    conventional name states them; a non-numeric suffix leaves ``vlan_id`` unset) or an explicit
-    ``(name, vlan_id, parent name)`` when the name must not say what the fields say.
-    """
+    """A cleaned member device with its uplinks and the given sub-interfaces."""
     kind = "DcimVirtualInterface" if virtual else "DcimPhysicalInterface"
     device_id = f"dev-{name}"
     interfaces = [make_iface(f"{name}:{up}", up, "uplink", kind, device={"id": device_id}) for up in uplinks]

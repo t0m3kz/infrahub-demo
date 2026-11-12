@@ -1,15 +1,5 @@
-"""Infrastructure generator for endpoint device connectivity.
-
-This generator connects endpoint devices (servers) to network infrastructure
-based on deployment type (middle_rack, tor, mixed). It follows deployment-aware
-routing logic with proper interface type matching and dual-homing support.
-
-Features:
-- Suite-level device distribution
-- Speed-aware interface matching (25G/100G)
-- Connection fingerprinting for idempotency
-- Pre-execution validation
-"""
+"""Infrastructure generator for endpoint device connectivity: connects servers to the fabric by deployment type.
+Interface type matching, dual-homing and connection fingerprinting for idempotency."""
 
 from __future__ import annotations
 
@@ -41,26 +31,17 @@ from ..types import ConnectionFingerprint
 from .endpoint_lag import EndpointLagMixin
 from .endpoint_targets import FREE_OR_CABLED_INTERFACE_STATUSES, EndpointTargetsMixin
 
-# Tags the switch ports a component's instances are cabled to with its segment
-# (generators/topology/app_instance_segment.py). A component usually exists
-# before its server is cabled, and its own triggers do not fire when cabling
-# lands later, so a run that cables this endpoint dispatches it for every
-# component instanced on the endpoint or on a VM it hosts.
+# Tags the switch ports a component's instances are cabled to (app_instance_segment.py). Its own triggers do not fire
+# when cabling lands later, so a run that cables this endpoint dispatches it; only GROUP_APP_COMPONENTS members run.
 _COMPONENT_SEGMENT_GENERATOR = "add_app_component_segment"
-# Its `targets` in .infrahub.yml are the GROUP_APP_COMPONENTS group: only members are dispatched.
-# The endpoint NIC roles this generator cables (and whose far ends add_app_component_segment
-# tags): plain uplinks and bond members.
+# The NIC roles this generator cables: plain uplinks and bond members.
 ENDPOINT_NIC_ROLES = ("uplink", "lag")
-# Instance kinds placed on a physical host through hosting_device. Their typenames are
-# utils/app_instances.HOSTED_INSTANCE_TYPENAMES (what physical_host resolves for the generator
-# and the NX-OS GPO transform); tests/unit/test_app_instances.py pins the two together.
+# Instance kinds placed on a physical host (pinned to utils/app_instances.HOSTED_INSTANCE_TYPENAMES by a unit test).
 HOSTED_INSTANCE_KINDS = (DcimVirtualDevice, ManagedControllerVirtual)
 
 
 def _is_generated_uplink_cable(cable: Any, own_ends: set[str]) -> bool:
-    """Whether create_cabling made this cable for one of this endpoint's
-    uplinks: its name joins the two "<device>-<interface>" ends with "__",
-    and one of them is ours. Hand-loaded cables use other names (CBL-...)."""
+    """Whether create_cabling made this cable for one of this endpoint's uplinks."""
     return bool(own_ends & set(str(cable.name.value).split("__")))
 
 
@@ -137,21 +118,8 @@ def _endpoint_device_name(intf: Any) -> str | None:
 class EndpointConnectivityGenerator(
     EndpointLagMixin, EndpointTargetsMixin, EndpointUplinkMixin, PoolMixin, CablingMixin, CommonGenerator
 ):
-    """Generate connectivity for endpoint devices based on deployment patterns.
-
-    Deployment strategies:
-    - middle_rack: Connect to Leaf switches in network rack in same row
-    - tor: Connect to ToR switches in same rack, fallback to same row
-    - mixed: Connect to ToR devices in same rack, fallback to middle rack leafs in same row
-
-    Features:
-    - Suite-level device distribution
-    - Connection fingerprinting for idempotency
-    - Pre-execution validation
-    - Interface type and role matching (customer ↔ access)
-    - Dual-homing across consecutive device pairs
-    - Uses CablingPlanner and CommonGenerator.create_cabling()
-    - Speed-aware: groups by speed first and only connects matching speeds
+    """Generate connectivity for endpoint devices by deployment type: middle_rack, tor or mixed (strategies in
+    endpoint_targets.py). Speed-aware, dual-homed across consecutive device pairs.
     """
 
     data: EndpointDeviceData
@@ -168,9 +136,7 @@ class EndpointConnectivityGenerator(
         self.planned_connections: set[ConnectionFingerprint] = set()
         self._free_interfaces: list[DcimPhysicalInterface] = []  # Free interfaces without cables
         self._already_connected: bool = False  # True when endpoint already has existing cables
-        # Switch device names this endpoint is already cabled to (from a prior
-        # run) — biases device-pair selection so additional free ports land on
-        # the SAME pair rather than a re-derived (possibly different) one.
+        # Switches already cabled to (prior run): keeps additional free ports on the SAME pair.
         self._existing_switch_names: set[str] = set()
 
     async def generate(self, data: dict[str, Any]) -> None:
@@ -181,10 +147,7 @@ class EndpointConnectivityGenerator(
                 self.logger.error("No Endpoint Device data found in GraphQL response")
                 return
 
-            # Filter out empty interface nodes (interfaces matching neither the
-            # EndpointInterfaceFields nor the BondFields fragment — e.g. a virtual
-            # interface) and split the server's own bonds (DcimLAGInterface, the ones
-            # with a lag_id) from its DcimPhysicalInterface members.
+            # Drop empty interface nodes; split the server's own bonds (with a lag_id) from its physical NICs.
             deployment_data = deployment_list[0]
             bonds: list[EndpointBondData] = []
             if "interfaces" in deployment_data:
@@ -193,10 +156,7 @@ class EndpointConnectivityGenerator(
                 deployment_data["interfaces"] = [intf for intf in present if "lag_id" not in intf]
 
             self.data = cast(EndpointDeviceData, deployment_data)
-            # No Pydantic validation left to catch a malformed/partial GraphQL
-            # response — force-read every field generate() treats as required
-            # here, inside the try, so a missing one raises KeyError in the
-            # same place the old EndpointModel(**deployment_data) construction did.
+            # No Pydantic validation: force-read every required field here so a partial response raises KeyError.
             endpoint_name = self.data["name"]
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
@@ -210,15 +170,8 @@ class EndpointConnectivityGenerator(
         assert rack is not None
         pod = rack.get("deployment") or {}
         if "design" not in pod:
-            # Same shape as RackGenerator's guard: LocationRack.deployment takes any
-            # TopologyRackHosting peer, and endpoint.gql's EndpointPodFields fragment is on
-            # TopologyPod, so a colocation cage rack (pod = TopologyColocationZone)
-            # arrives as an empty pod dict. There is no fabric to dual-home into —
-            # colocation kit is cabled explicitly in the object data (see
-            # data/demos/30_all/06_customer_boarding/*/colo/*/02_compute.yml). Every
-            # role=endpoint device reaches this generator regardless of where it
-            # sits, since trigger-endpoint-generator-on-created
-            # (data/events/99_actions.yml) matches on the attribute, not the site.
+            # Same guard as RackGenerator: a colocation cage rack arrives as an empty pod dict; its kit is cabled in the
+            # object data, but every role=endpoint device reaches this generator.
             self.logger.info(
                 "Endpoint %s: rack %s does not hang off a DC-fabric pod, nothing to cable",
                 endpoint_name,
@@ -234,32 +187,19 @@ class EndpointConnectivityGenerator(
 
         self.logger.info(f"Generating connectivity for endpoint {self.data['name']} in {deployment_type} deployment")
 
-        # Point the endpoint device's deployment at the pod. Never tracked: the
-        # server is data-loaded and is this run's target, not its output — a
-        # tracked server is deleted by the first run that does not save it.
+        # Never tracked: the server is data-loaded and is this run's target, not its output.
         if (self.data.get("deployment") or {}).get("id") != pod_id:
             endpoint_device = await self.client.get(kind=DcimPhysicalDevice, id=self.data["id"])
             endpoint_device.deployment = pod_id
             await endpoint_device.save(update_group_context=False)
             self.logger.info(f"Updated {self.data['name']} deployment to pod {self.pod_name}")
 
-        # Rack-to-spine cabling avoids port collisions via a deterministic per-device
-        # offset (calculate_cabling_offsets); endpoint cabling has no such offset — it
-        # picks the first free port it sees. Concurrent siblings (the backend fans
-        # multiple endpoint generator instances out via asyncio.gather — see
-        # acquire_resource_lock's docstring) targeting the same rack/row could both
-        # pick the same "free" port before either saves its cable. Lock on
-        # (pod, row) rather than just the rack: the tor/mixed fallback path also
-        # reaches into every rack in the same row, not just this endpoint's own.
+        # Concurrent endpoint runs would pick the same free port; lock on (pod, row) since tor/mixed reach the row.
         cabling_lock_key = f"endpoint-cabling-pod-{pod_id}-row-{rack['row_index']}"
 
-        # LAG-based endpoints (server declares role=lag physical NICs bundled into
-        # DcimLAGInterface bond(s) in its own object-load data) get switch-side
-        # port-channels wired into the target pair's ManagedMLAG domain instead of
-        # plain 1:1 uplink cabling — see _process_lag_endpoint_connections.
+        # LAG endpoints get port-channels in the pair's ManagedMLAG domain instead of 1:1 uplink cabling.
         if bonds:
-            # Members come from their own query, not the bonds' peers, so their
-            # cables and interface types are loaded.
+            # Members come from their own query so their cables and interface types are loaded.
             lag_nics: list[DcimPhysicalInterface] = await self.client.filters(
                 kind=DcimPhysicalInterface,
                 device__ids=[self.data["id"]],
@@ -271,14 +211,11 @@ class EndpointConnectivityGenerator(
                 bond["name"]: [nic_by_id[peer["id"]] for peer in bond["member_interfaces"] if peer["id"] in nic_by_id]
                 for bond in bonds
             }
-            # Remember which switches earlier bonds are already cabled to (see
-            # _extract_cabled_switch_names) so additional bonds land on the SAME
-            # pair rather than a freshly re-derived one.
+            # Keep additional bonds on the pair earlier bonds are cabled to.
             self._existing_switch_names = self._extract_cabled_switch_names(
                 [nic for nic in lag_nics if nic.cable and nic.cable.id]
             )
-            # The members stand in for the plain path's free uplinks: their
-            # types narrow the switch-port search to ports of the same speed.
+            # The members stand in for the free uplinks: their types narrow the switch-port search.
             self._free_interfaces = lag_nics
             cabled_before = {nic.id for nic in lag_nics if nic.cable and nic.cable.id}
 
@@ -288,8 +225,7 @@ class EndpointConnectivityGenerator(
                 await self._fan_out_component_segments(cabled_before)
             return
 
-        # Get all uplink interfaces from endpoint device (idempotency)
-        # Note: Endpoint devices use "uplink" role, ToR/Leaf devices use "customer" role
+        # Endpoints use the "uplink" role, ToR/Leaf devices the "customer" role.
         all_endpoint_interfaces: list[DcimPhysicalInterface] = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__ids=[self.data["id"]],
@@ -298,7 +234,7 @@ class EndpointConnectivityGenerator(
             include=["device", "interface_type", "cable"],
         )
 
-        # Filter to only interfaces without cables (for idempotency - only connect new interfaces)
+        # Only interfaces without cables are connected.
         endpoint_interfaces: list[DcimPhysicalInterface] = [
             intf for intf in all_endpoint_interfaces if not (intf.cable and intf.cable.id)
         ]
@@ -306,18 +242,10 @@ class EndpointConnectivityGenerator(
 
         existing_connections = len(all_endpoint_interfaces) - len(endpoint_interfaces)
 
-        # Remember which switches this endpoint is already cabled to, so
-        # additional free ports (extra NICs, re-runs) land on the SAME pair
-        # instead of a freshly re-derived one — see _process_endpoint_connections.
+        # Keep additional free ports (extra NICs, re-runs) on the SAME switch pair.
         self._existing_switch_names = self._extract_cabled_switch_names(already_cabled_interfaces)
 
-        # Re-save the cables a prior run made: the run tracks only what it saves,
-        # so a cable a rerun finds and skips is one delete_unused_nodes removes.
-        # Only this generator's own cables, recognized by create_cabling's
-        # naming convention: a cable loaded as data on an uplink is not this
-        # run's output, so it is left alone. One batch fetch instead of one
-        # get() per cable; the saves are independent (distinct cables), so they
-        # run concurrently too.
+        # Re-save this generator's own cables (named by create_cabling) so tracking keeps them; one batch fetch.
         cable_ids = sorted({str(intf.cable.id) for intf in already_cabled_interfaces})
         if cable_ids:
             cables = await self.client.filters(kind=DcimCable, ids=cable_ids)
@@ -341,7 +269,6 @@ class EndpointConnectivityGenerator(
                 f"will create connections for {len(endpoint_interfaces)} free interface(s)"
             )
 
-        # Store free interfaces and connection state for use in connection methods
         self._free_interfaces = endpoint_interfaces
         self._already_connected = existing_connections > 0
 
@@ -353,15 +280,8 @@ class EndpointConnectivityGenerator(
             await self._fan_out_component_segments({intf.id for intf in already_cabled_interfaces})
 
     async def _fan_out_component_segments(self, cabled_before: set[str]) -> None:
-        """Dispatch add_app_component_segment for the components on this endpoint
-        once this run has cabled at least one of its NICs.
-
-        `cabled_before` holds the ids of the NICs that already had a cable when
-        the run started. Only a NIC cabled by this run counts, so a rerun that
-        finds everything wired (or could not wire anything) dispatches nothing.
-        The components are those whose instances include this endpoint or a VM
-        it hosts, limited to members of the definition's target group. Fired
-        without waiting: each run takes its segment's lock itself.
+        """Dispatch add_app_component_segment, without waiting, for the components on this endpoint once this run cabled
+        a NIC. `cabled_before` holds the NICs already cabled, so a rerun dispatches nothing.
         """
         endpoint_id = self.data["id"]
         nics = await self.client.filters(

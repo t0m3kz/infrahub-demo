@@ -1,17 +1,4 @@
-"""Check payloads for the suite capacity rules, built from the object files instead of typed by hand.
-
-``build_payloads`` reads the YAML a demo loads and shapes it like the raw GraphQL response of
-``queries/validation/suite_capacity.gql``: one ``LocationRack`` root, every rack with its position, its suite (the
-capacity: ``rows`` and ``racks_per_row``) and the pod hosting it with the pod's design envelope. Racks are data, never
-a generator's output (``grep`` of ``generators/`` finds no rack creation), so the objects files are the complete
-rack inventory and the check can run over them unchanged.
-
-A rack is resolved the way the loader would: its suite is the ``parent`` shortname or the suite it is nested under,
-its pod the ``pod`` name (a pod is ``<DC>-<DC index>-POD-<index>``) or the pod it is nested under, its design the
-``TopologyTemplatePod`` of ``data/bootstrap``. A rack hosted by a colocation zone has no design. Anything the data
-names that cannot be resolved raises ``KeyError``: a payload that silently dropped a rack would make "zero findings"
-meaningless.
-"""
+"""Check payloads for the suite capacity rules, built from the object files instead of typed by hand."""
 
 from __future__ import annotations
 

@@ -1,12 +1,6 @@
-"""Validate the cloud footprint of a customer: its account (rules CA1, CA2 and CA3).
+"""Validate the cloud footprint of a customer: its account (CA1-CA3).
 
-A ``TopologyCustomerCloud`` is one customer's footprint in one cloud account (``account``, required and unique in
-the schema). What the schema cannot hold:
-
-CA1  the footprint's ``owner`` is the owner of its ``account`` (compared only when both have one)
-CA3  the footprint's ``environment`` is the environment of its ``account`` (a PROD footprint never holds a test account)
-CA2  every cloud segment of the footprint (``CloudNetworkSegment.customer_deployment``) uses a virtual network of the
-     footprint's account
+CA1 owner is the account's owner; CA2 segments use the account's networks; CA3 environment is the account's.
 """
 
 from __future__ import annotations

@@ -1,13 +1,4 @@
-"""Unit tests for transforms/topology/orchestrator_routing.py.
-
-Covers:
-  - Topology transforms (ansible/argocd/github_actions) — render
-    only when infrastructure_orchestrator matches the transform's own
-    orchestrator, else empty string.
-  - Application transforms (ansible/argocd/github_actions) — same gating on
-    application_orchestrator.
-  - No matching deployment/application in the query result → empty string.
-"""
+"""Unit tests for transforms/topology/orchestrator_routing.py."""
 
 from __future__ import annotations
 
@@ -42,8 +33,7 @@ def _raw_deployment(
     environment: str | None = "p",
     parent_name: str | None = "FR",
 ) -> dict[str, Any]:
-    """A raw GraphQL response; `environment=None` / `parent_name=None` leave the field out like the query does
-    for a cloud footprint (no environment) and an office (no environment, parent is only a label)."""
+    """A raw GraphQL response;"""
     node: dict[str, Any] = {
         "id": f"id-{name}",
         "name": {"value": name},
@@ -150,8 +140,7 @@ def _environment_of(builder: type[InfrahubTransform], rendered: str) -> str | No
 
 
 class TestOfficeCarriesNoEnvironmentAttribute:
-    """An office is always production: the node has no `environment` field to read. Every other footprint (DC,
-    colocation, cloud) states its own."""
+    """An office is always production:"""
 
     def test_an_office_is_rendered_as_environment_p_by_all_three_builders(self) -> None:
         """The transform supplies `p` for the office (_OFFICE_ENVIRONMENT); the node has no environment."""

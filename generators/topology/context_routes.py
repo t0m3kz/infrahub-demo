@@ -1,11 +1,6 @@
-"""Build the static routes of a service context on the border devices its service ports are tagged on.
-
-The target is the context (group ``service_contexts``), so each context owns its routes: they are saved tracked, and the
-run's group deletes the ones the derivation no longer yields, on whatever device they sat. A person's route is not in the
-group and is never touched; the names ``rt:<context>:...`` are the generator's. Starts when a context joins the group,
-which the context generator adds it to once its legs are written, and whenever its members change. The legs and the
-border devices are derived from the members (utils/service_contexts.py: a context has no interface edge). A run over an
-incomplete context (no leg or no cabled border port yet) writes nothing.
+"""Build the static routes of a service context on the border devices its service ports are tagged on. Routes are saved
+tracked (stale ones deleted, a person's never touched); an incomplete context writes nothing. See
+utils/service_contexts.py.
 """
 
 from __future__ import annotations
@@ -27,7 +22,7 @@ LOADBALANCER_KIND = "ManagedLoadbalancerContext"
 
 
 class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGenerator):
-    """The routes of one firewall or load-balancer context (see the module docstring)."""
+    """The routes of one firewall or load-balancer context."""
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
@@ -58,7 +53,7 @@ class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGen
                 edge: self.exchange_specs(tenant_leg=tenant_leg, peer_legs=peers, shared=shared, snat=snat, edge=edge)
                 for edge in (False, True)
             }
-        # The devices are in their VRF instances before a route points at one (idempotent; no context lock is held).
+        # Devices are in their VRF instances before a route points at one (idempotent; no context lock held)
         await self.reconcile_vrfs(sorted(devices))
         async with self.resource_lock(f"context-routes-{context['id']}"):
             await self.write_routes(
@@ -69,13 +64,10 @@ class ContextRoutesGenerator(ExchangeRoutesMixin, VrfMixin, PoolMixin, CommonGen
     def _legs_and_devices(
         context: dict[str, Any],
     ) -> tuple[dict[str, dict[str, Any]], set[str], dict[str, str]]:
-        """{namespace type: leg}, the ids of the border devices facing the members, and {VRF name: interface id}.
-
-        Derived from the members (``shared_devices``): a leg is a member's sub-interface of its first uplink tagged with
-        the context's transit VLAN (``leg_interfaces``), a border device the one whose service port of the member's role
-        that uplink is cabled to (``member_border_ports``). The interface is the leg of the first member (by device
-        name) in that VRF: the interface that owns the next hop of a route there (the pair's floating address has no
-        interface of its own), where a path through the firewall enters."""
+        """{namespace type: leg}, the border device ids facing the members, and {VRF name: interface id}. A leg is a
+        member's sub-interface of its first uplink with the transit VLAN; the first member's interface (by name) in a
+        VRF owns the next hop.
+        """
         legs: dict[str, dict[str, Any]] = {}
         interfaces: dict[str, tuple[str, str]] = {}
         devices: set[str] = set()

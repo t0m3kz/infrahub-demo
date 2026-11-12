@@ -1,11 +1,6 @@
-"""The fields of a change request, derived from what a Proposed Change changes. Pure: no I/O.
+"""The fields of a change request, derived from what a Proposed Change changes (pure, no I/O).
 
-``derive_change_request`` is the one derivation: generators/change/change_request.py feeds it the PC, its artifact
-diff (REST ``/api/diff/artifacts``), its data diff (``DiffTree``), the facts of the affected devices and customers and
-the other open PCs' requests, and writes what it returns. checks/change_request.py reads ``artifact_fingerprint`` and
-``effective_risk`` from here, and transforms/change/servicenow.py ``effective_risk``, so the three agree.
-
-Every weight, threshold and window is in this module: a change of the policy is a change of one table.
+Every weight, threshold and window is here, shared by the generator, the check and the ServiceNow transform.
 """
 
 from __future__ import annotations
@@ -20,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 from utils.fabric_roles import BORDER_ROLES, CARRIER_ROLES, FIREWALL_ROLES, RR_CLIENT_ROLES, RR_ROLES
 
-# --- data diff ----------------------------------------------------------------------------------------------------
+# --- data diff ---
 
 ADDED = "ADDED"
 UPDATED = "UPDATED"
@@ -61,7 +56,7 @@ ROUTING_KINDS = frozenset(
 )
 """A changed routing object (a process, a session, a policy or a prefix list and their entries, a VRF, a circuit)."""
 
-# --- risk -------------------------------------------------------------------------------------------------------
+# --- risk ---
 
 HIGH_BLAST_ROLES = RR_ROLES | CARRIER_ROLES | FIREWALL_ROLES
 """Spines, the border and the edge, the firewalls: a mistake there reaches every tenant behind them."""
@@ -90,7 +85,7 @@ RISK_LEVELS = ("low", "moderate", "high")
 PROD_ZONE = "PROD"
 PROD_ENVIRONMENT = "p"
 
-# --- window -----------------------------------------------------------------------------------------------------
+# --- window ---
 
 MAINTENANCE_TZ = ZoneInfo("Europe/Warsaw")
 MAINTENANCE_WEEKDAY = 3  # Thursday
@@ -100,7 +95,7 @@ STEP_MINUTES = 10
 MIN_WINDOW_MINUTES = 30
 HOTFIX_PREFIX = "hotfix/"
 
-# --- text caps --------------------------------------------------------------------------------------------------
+# --- text caps ---
 
 DESCRIPTION_MAX_CHARS = 4000
 SECTION_MAX_ITEMS = 15
@@ -136,11 +131,8 @@ class ArtifactChange:
 
 @dataclass(frozen=True)
 class ObjectDiff:
-    """One changed object of the filtered data diff (segment, rule, cable, circuit) with what the diff says of it.
-
-    ``values`` are its attributes (``None`` when unset; the previous values on a removed object), ``changes`` the
-    attributes of an updated object that changed (name -> (previous, new)), ``peers`` the labels of the peers of its
-    relationships (``peer_ids`` their ids, in the same order) and ``dropped`` the peers an update removed."""
+    """One changed object of the filtered data diff: ``values`` (previous ones when removed), ``changes`` (name ->
+    (previous, new)), ``peers`` labels by relationship (``peer_ids`` the ids, same order) and ``dropped`` peers."""
 
     uuid: str
     kind: str
@@ -194,11 +186,11 @@ class ChangeInputs:
     """The objects were read up to a cap (utils/change_sources.py): more changed than are described."""
 
 
-# --- parsing ----------------------------------------------------------------------------------------------------
+# --- parsing ---
 
 
 def parse_artifact_diff(payload: Mapping[str, Any] | None) -> list[ArtifactChange]:
-    """The entries of ``GET /api/diff/artifacts`` (a dict keyed by artifact id), sorted by target then definition."""
+    """The entries of ``GET /api/diff/artifacts``, sorted by target then definition."""
     changes = []
     for artifact_id, entry in (payload or {}).items():
         if not isinstance(entry, Mapping):
@@ -242,8 +234,7 @@ def _text(value: Any) -> str | None:
 
 
 def parse_diff_summaries(result: Mapping[str, Any]) -> tuple[dict[str, int], bool, bool]:
-    """(counts, only standard kinds, routing changed) of the aliased ``DiffTreeSummary`` roots of the diff query:
-    ``total`` (bookkeeping kinds apart), ``non_standard`` and ``routing``."""
+    """(counts, only standard kinds, routing changed) from the aliased ``DiffTreeSummary`` roots."""
 
     def counts(root: str) -> dict[str, int]:
         summary = result.get(root) or {}
@@ -350,8 +341,7 @@ def device_facts(row: Mapping[str, Any]) -> DeviceFacts:
 
 
 def affected_customers(cleaned: Mapping[str, Any], objects: Iterable[ObjectDiff] = ()) -> dict[str, str]:
-    """Customer id -> name: the owners of the devices and of their footprints (change_request_facts.gql) and of the
-    changed objects (their ``owner`` peers in the data diff, by label)."""
+    """Customer id -> name: owners of the devices, their footprints and the changed objects."""
     owners = []
     for row in cleaned.get("DcimDeviceManaged") or []:
         owners += [row.get("owner"), (row.get("deployment") or {}).get("owner")]
@@ -385,7 +375,7 @@ def parse_datetime(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
-# --- derivations ------------------------------------------------------------------------------------------------
+# --- derivations ---
 
 
 def artifact_fingerprint(artifacts: Iterable[ArtifactChange]) -> str:
@@ -449,8 +439,9 @@ def impact(inputs: ChangeInputs) -> int:
 
 
 def change_type(inputs: ChangeInputs, risk: str) -> str:
-    """emergency on a hotfix branch; standard when every changed kind is standard, nothing is removed and the risk is
-    low; else normal."""
+    """emergency on a hotfix branch; standard when only standard kinds changed, nothing is removed, risk low; else
+    normal.
+    """
     if inputs.branch.startswith(HOTFIX_PREFIX):
         return "emergency"
     if inputs.only_standard and not diff_counts(inputs)[REMOVED] and risk == "low":
@@ -467,8 +458,7 @@ def artifacts_by_target(inputs: ChangeInputs) -> dict[str, list[ArtifactChange]]
 
 
 def ordered_targets(inputs: ChangeInputs) -> list[str]:
-    """The artifact targets in rollout order: least critical role first, then name; the peer of an MLAG or HA pair
-    right after its first member, so one member is verified before the other is touched."""
+    """The artifact targets in rollout order: least critical first; an MLAG or HA peer right after its first member."""
     facts = {device.name: device for device in inputs.devices}
     targets = sorted(artifacts_by_target(inputs))
 
@@ -498,7 +488,7 @@ def next_window(now: datetime) -> datetime:
     start = (local + timedelta(days=days)).replace(hour=MAINTENANCE_HOUR, minute=0, second=0, microsecond=0)
     if start <= local:
         start += timedelta(days=7)
-    # Rebuild in the zone so a DST change between now and the window keeps 22:00 local.
+    # Rebuild in the zone so a DST change keeps 22:00 local.
     return datetime(start.year, start.month, start.day, MAINTENANCE_HOUR, tzinfo=MAINTENANCE_TZ)
 
 
@@ -508,8 +498,7 @@ def window_minutes(device_count: int) -> int:
 
 
 def planned_window(inputs: ChangeInputs, kind: str) -> tuple[datetime, datetime]:
-    """(start, end): a normal change in the next window; a standard or emergency one now. A start a previous run set
-    that is already due is kept, so a re-run does not move it."""
+    """(start, end): a normal change in the next window, else now; an already due start is kept."""
     targets = len(artifacts_by_target(inputs))
     if kind == "normal":
         start = next_window(inputs.now)

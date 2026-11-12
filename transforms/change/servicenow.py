@@ -1,10 +1,4 @@
-"""Transform: a change request -> the body of a ServiceNow ``change_request`` record.
-
-Not an artifact: the change service renders it on demand (``GET /api/transform/python/change_request_servicenow
-?branch=<branch>&name=<CHG-...>``) and posts the result to the ServiceNow Table API. The keys are ServiceNow's
-``change_request`` fields (``u_`` ones are custom columns); the risk is the effective one (the author's override where
-set, utils/change_rules.py ``effective_risk``) and the dates are ServiceNow's ``YYYY-MM-DD HH:MM:SS`` in UTC.
-"""
+"""Transform: a change request -> the body of a ServiceNow ``change_request`` record."""
 
 from __future__ import annotations
 

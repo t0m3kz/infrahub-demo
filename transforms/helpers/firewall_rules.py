@@ -1,12 +1,4 @@
-"""The rules of a firewall's served segments: finding the ones the query named by id, and putting them back.
-
-The registered ``firewall_config`` query selects the rules of the segments a firewall context serves as ids only
-(``SegmentRuleIdsFields``): the nested form read each rule twice (as its segment's own rule and as another segment's
-inbound rule) with both segment ends in full, which made a 10,000-rule firewall a 95 s, 47 MB answer. The ids keep the
-dependency in the registered query. These are the pure steps around the reading, which ``transforms/config/firewall.py``
-``read_rules`` does: find the bare rule edges, name the ids to read, and put the rules and segments read back in the
-shape ``SegmentRulesFields`` had, so the transform and the check read what they read before.
-"""
+"""The rules of a firewall's served segments: finding the ones the query named by id, and putting them back."""
 
 from __future__ import annotations
 
@@ -81,11 +73,7 @@ def put_rules_back(
     rules: dict[str, dict[str, Any]],
     segments: dict[str, dict[str, Any]],
 ) -> int:
-    """Replace the node of every bare rule edge by the rule read in full; returns how many edges were filled.
-
-    An own rule carries its two segment ends; an inbound rule also carries its policy with the policy's segment, as
-    ``SegmentRulesFields`` selected them. Raises ``FirewallRulesError`` when a rule the edges name is not in ``rules``.
-    """
+    """Replace the node of every bare rule edge by the rule read in full; returns how many edges were filled."""
     missing = sorted(set(rule_ids(edges)) - set(rules))
     if missing:
         raise FirewallRulesError(f"{len(missing)} rules named by the query could not be read back: {missing[:5]}")

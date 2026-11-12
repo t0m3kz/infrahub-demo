@@ -1,27 +1,4 @@
-"""Load-balancer contexts of one device: the partition, route domain and leg of each, and its VIPs.
-
-A ManagedLoadbalancerContext is a tenant-scoped slice of a ManagedLoadbalancerHA cluster: one per
-(cluster, tenant namespace) for the shared cluster, one per customer on a dedicated virtual pair. It is
-one-arm: a single /29 leg in the tenant VRF, faced by the border leaves' anycast gateway, with SNAT
-automap on the floating address so replies come back to the LB with no PBR. Its VIPs are a routed /26
-(``vip_prefix``) the border leaves route to that floating address.
-
-The leg is derived once (transforms/helpers/firewall.py transit_legs, on utils/exchange_transit.py), the
-rules the generator allocated it with and the border leaves render their side from, so the three never drift:
-
-    VLAN  transit_vlan(context.vlan_id, tenant namespace type), VNI transit_vni(VLAN)
-    .1    border-leaf anycast gateway (the context's default route)
-    .4    floating address: F5 floating self IP, NetScaler SNIP, HAProxy VRRP address and source
-    .5/.6 member A / B, the members sorted by name
-
-The namespace of a context is not stored: it is the namespace of its leg address, and its l3_vni is the
-F5 route-domain id and the Linux VRF table. The partition is ``SHARED-<NAMESPACE>`` for a shared context
-and ``<ORG_ID>-<ENV>`` for a dedicated one.
-
-The vendor tokens (load-balancing method, persistence, service type, monitors) are computed here once per
-VIP; a VIP a platform cannot express raises ValueError instead of rendering a config that does something
-else.
-"""
+"""Load-balancer contexts of one device: the partition, route domain and leg of each, and its VIPs."""
 
 from __future__ import annotations
 
@@ -49,8 +26,7 @@ _TLS_PROTOCOLS = frozenset({"https", "tls"})
 
 
 def member_address(member: dict[str, Any]) -> str | None:
-    """The address of a pool member, a server: its primary address (physical or virtual device) or its private_ip (cloud
-    instance), without prefix length. None for a server that has neither."""
+    """The address of a pool member, a server."""
     return host_ip((member.get("primary_address") or {}).get("address") or member.get("private_ip"))
 
 
@@ -69,13 +45,7 @@ def _vip_name(vip: dict[str, Any]) -> str:
 
 
 def _health_checks(checks: list[dict[str, Any]] | None, vip_name: str) -> list[dict[str, Any]]:
-    """The VIP's checks with their timers in every vendor's terms, in a stable order.
-
-    ``timeout_ms`` is the per-probe timeout (NetScaler, HAProxy); ``down_after_s``/``up_after_s`` are
-    F5's timeout and time-until-up (interval x fall + 1 and interval x rise). The interval grows past
-    HC_INTERVAL_S only when a probe's timeout would not fit in it. An http/ssl check requests ``path``;
-    ``tls`` says the probe runs over TLS (ssl).
-    """
+    """The VIP's checks with their timers in every vendor's terms, in a stable order."""
     normalized: list[dict[str, Any]] = []
     for check in checks or []:
         rise: int = check.get("rise") or HC_DEFAULTS["rise"]
@@ -106,10 +76,7 @@ def _token(table: Mapping[str, str | None], key: str, platform: str, vip: dict[s
     return table[key]
 
 
-# ── Vendor tokens ────────────────────────────────────────────────────────────
-# `weighted` is the weight-honouring round robin of each platform; the model has
-# no member weights, so every member weighs the same. `application` persistence
-# needs an application-specific rule no platform gets from the model.
+# Vendor tokens; `weighted` is each platform's weight-honouring round robin.
 
 _F5_METHODS = {
     "round_robin": "round-robin",
@@ -162,10 +129,7 @@ def _f5_vip(vip: dict[str, Any], partition: str) -> dict[str, Any]:
 
 
 def _netscaler_vip(vip: dict[str, Any], _partition: str) -> dict[str, Any]:
-    """NetScaler: service type (vserver and service group alike), method, persistence, monitor types.
-
-    Object names are local to the admin partition, so they need no partition in them.
-    """
+    """NetScaler: service type (vserver and service group alike), method, persistence, monitor types."""
     platform = "netscaler"
     if vip["protocol"] in _TLS_PROTOCOLS:
         service_type = ("SSL" if vip["protocol"] == "https" else "SSL_TCP") if vip["terminate_tls"] else "SSL_BRIDGE"
@@ -181,10 +145,7 @@ def _netscaler_vip(vip: dict[str, Any], _partition: str) -> dict[str, Any]:
 
 
 def _haproxy_vip(vip: dict[str, Any], partition: str) -> dict[str, Any]:
-    """HAProxy: proxy mode, balance, persistence, TLS and the one health check a server line holds.
-
-    HAProxy has no partitions, so the frontend/backend names carry the partition to stay unique.
-    """
+    """HAProxy: proxy mode, balance, persistence, TLS and the one health check a server line holds."""
     platform = "haproxy_technologies"
     if vip["protocol"] == "udp":
         raise _refuse(platform, vip, "protocol udp")
@@ -209,12 +170,7 @@ _VENDORS: dict[str, Callable[[dict[str, Any], str], dict[str, Any]]] = {
 
 
 def _vip(raw: dict[str, Any], platform: str, partition: str) -> dict[str, Any]:
-    """One LoadbalancerVIP, platform-neutral fields plus the platform's ``tokens``.
-
-    ``l7``: the LB parses HTTP (http, or https it terminates); ``terminate_tls``: https/tls with a
-    certificate (``ssl``), re-encrypted to the members; https/tls without one passes TLS through at L4.
-    ``members`` are the pool member IPs, served on the VIP's own port.
-    """
+    """One LoadbalancerVIP, platform-neutral fields plus the platform's ``tokens``."""
     vip = {
         "name": _vip_name(raw),
         "hostname": raw.get("hostname"),
@@ -256,14 +212,7 @@ def _partition_name(context: dict[str, Any], namespace_name: str) -> str:
 def _leg(
     context: dict[str, Any], own_legs: list[dict[str, Any]], device_name: str, ha: dict[str, Any] | None
 ) -> dict[str, Any] | None:
-    """This device's leg of ``context`` (``own_legs``: its leg interfaces), None while the generator has not built it.
-
-    The leg is the device's sub-interface of the context (utils/service_contexts.py ``context_legs``) with an IPv4 address; its VLAN, VNI and
-    fixed addresses are the context's transit leg in that namespace (transforms/helpers/firewall.py
-    transit_legs, the one derivation the border leaves render their side from). The member address
-    follows the name order of the pair (.5 first, .6 second); an address that disagrees would have both
-    members claim one self IP, so it raises.
-    """
+    """This device's leg of ``context`` (``own_legs``."""
     for iface in own_legs:
         if iface.get("typename") != "DcimVirtualInterface":
             continue
@@ -305,14 +254,7 @@ def _leg(
 
 
 def get_loadbalancer_contexts(device: dict[str, Any], ha: dict[str, Any] | None, platform: str) -> list[dict[str, Any]]:
-    """The load balancer contexts the device is a member of that have a leg on this device.
-
-    Each is {name, partition, dedicated, vrf (namespace name), route_domain (its l3_vni), vrf_device
-    (``vrf-<NAMESPACE>``), vip_prefix, leg (see _leg), vips (see _vip)}, PROD first. A context whose leg
-    is not built yet is left out: without its leg it has no namespace, route domain or path. Raises
-    ValueError for a platform with no load-balancer template, or two contexts in one VRF on one device
-    (they would share a route domain).
-    """
+    """The load balancer contexts the device is a member of that have a leg on this device."""
     device_name = device.get("name") or ""
     if platform not in _VENDORS:
         raise ValueError(f"{platform}: no load-balancer template; refusing to render {device_name}")

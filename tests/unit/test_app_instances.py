@@ -1,7 +1,4 @@
-"""Unit tests for utils/app_instances.py: the one place an AppInstance is resolved to its physical host.
-
-Shared by the generator that tags a component's switch ports and by the NX-OS GPO transform that classifies them.
-"""
+"""Unit tests for utils/app_instances.py: the one place an AppInstance is resolved to its physical host."""
 
 from __future__ import annotations
 

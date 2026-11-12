@@ -1,13 +1,4 @@
-"""Unit tests for endpoint connectivity generator.
-
-Tests:
-- clean_data() normalization of raw endpoint/rack/interface dicts for all
-  deployment types (middle_rack, tor, mixed)
-- Cable dict: simple ID-only format (no deep endpoint nesting)
-- Rack devices with existing cables don't break parsing
-- Connection fingerprinting and deduplication
-- Interface speed matching and grouping
-"""
+"""Unit tests for endpoint connectivity generator."""
 
 from __future__ import annotations
 
@@ -17,9 +8,7 @@ from generators.helpers.cabling import InterfaceSpeedMatcher
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 from utils.data_cleaning import clean_data
 
-# ============================================================================
 # Test Data Fixtures
-# ============================================================================
 
 
 # Shared pod/dc context
@@ -82,9 +71,7 @@ def _make_endpoint_data(
     }
 
 
-# ============================================================================
 # clean_data() Normalization Tests (endpoint shape)
-# ============================================================================
 
 
 class TestEndpointDataParsing:
@@ -132,11 +119,7 @@ class TestEndpointDataParsing:
         assert len(data["rack"]["devices"][0]["interfaces"]) == 2
 
     def test_tor_deployment_rack_devices_with_existing_cables(self) -> None:
-        """tor: ToR switches have existing cables to spines — must parse without error.
-
-        This was the original bug: cable endpoints had nested device objects
-        that broke the old flat CableEndpoint model.
-        """
+        """tor: ToR switches have existing cables to spines — must parse without error."""
         tor_devices = [
             {
                 "id": "tor-1",
@@ -216,8 +199,7 @@ class TestEndpointDataParsing:
         assert data["interfaces"][0]["cable"] is None
 
     def test_cable_wrapped_in_node(self) -> None:
-        """Cable data wrapped in GraphQL node structure is unwrapped one level (node stripped,
-        the inner {"id": ...} dict itself is not further flattened by this recursive call)."""
+        """Cable data wrapped in a GraphQL node is unwrapped one level."""
         raw = _make_endpoint_data(rack_devices=[])
         # Simulate pre-clean_data GraphQL format
         raw["interfaces"][0]["cable"] = {"node": {"id": "cable-wrapped"}}
@@ -226,14 +208,10 @@ class TestEndpointDataParsing:
         assert data["interfaces"][0]["cable"] == {"id": "cable-wrapped"}
 
 
-# ============================================================================
 # Connection Fingerprinting Tests
-# ============================================================================
 
 
-# ============================================================================
 # Interface Speed Matching Tests
-# ============================================================================
 
 
 class TestInterfaceSpeedMatching:

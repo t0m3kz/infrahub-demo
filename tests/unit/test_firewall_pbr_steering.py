@@ -1,9 +1,4 @@
-"""Which firewall context the leaf PBR steers a footprint to (transforms/helpers/firewall_contexts.py _steering_only).
-
-A footprint lists its internal context and, when it has one, its Internet edge context. The leaf steers its segments to
-the internal context in the device's DC; a footprint with no internal context there is steered to its edge (then its
-only firewall). The edge is never the shared fallback of the other footprints.
-"""
+"""Which firewall context the leaf PBR steers a footprint to."""
 
 from __future__ import annotations
 

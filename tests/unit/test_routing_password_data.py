@@ -1,8 +1,4 @@
-"""Every RoutingPassword value in the demo data is visibly a demo secret.
-
-A BGP key that looks real invites someone to reuse it; the "demo-" prefix makes
-a leaked artifact or a copied snippet obviously harmless (and greppable).
-"""
+"""Every RoutingPassword value in the demo data is visibly a demo secret."""
 
 from __future__ import annotations
 

@@ -16,9 +16,8 @@ from utils.routing_identity import customer_tags, identity_in_use, routing_commu
 class Edge(BaseDeviceTransform):
     query = "edge_config"
     template_subdir = "edges"
-    # A VTEP only where the edge is its colocation site's EVPN Multi-Site border
-    # gateway: get_vxlan_config returns None without stretched-segment
-    # activations, so every other edge renders exactly as before.
+    # A VTEP only where the edge is its colocation site's EVPN Multi-Site border gateway: get_vxlan_config returns None
+    # without stretched-segment activations, so every other edge renders exactly as before.
     device_role = "edge"
     # Only edges/cisco_nxos.j2 defines the RM-<session>-IN/-OUT maps of an external session.
     external_policy_platforms: ClassVar[frozenset[str]] = frozenset({"cisco_nxos"})
@@ -32,7 +31,8 @@ class Edge(BaseDeviceTransform):
         )
 
     def prepared_device(self, data: Any) -> tuple[dict, dict, str | None]:
-        """The prepared device, with the cloud peering interface of each cloud leg grafted on as its peering's far end."""
+        """The prepared device, with the cloud peering interface of each cloud leg grafted on as its peering's far
+        end."""
         device_data, extra_roots, platform_name = super().prepared_device(data)
         graft_cloud_far_ends(device_data, self._cloud_legs(device_data.get("name") or "", extra_roots))
         return device_data, extra_roots, platform_name
@@ -43,10 +43,8 @@ class Edge(BaseDeviceTransform):
         tags = customer_tags(roots.get("OrganizationCustomer"))
         # The public space an upstream transit session may announce.
         config["internet_prefixes"] = get_internet_prefixes(roots.get("public_origins"))
-        # External tenant-VRF peers (session.external): per handoff sub-interface, the owners behind
-        # it, what it may send in and what it is announced out: the same owners' on-prem prefixes and
-        # what they registered behind another external session, never another owner's, never back
-        # to the session it was learned on (utils/ownership.py exchange_policies).
+        # External tenant-VRF peers (session.external): per handoff sub-interface, the owners behind it, what it may
+        # send in and what it is announced out.
         legs = self._cloud_legs(data.get("name") or "", roots)
         config["external_policies"] = get_external_session_policies(
             data.get("interfaces"),

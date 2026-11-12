@@ -139,9 +139,8 @@ def _gp_nic(
     lag: str | None = None,
     far_role: str | None = None,
 ) -> dict:
-    """A host NIC cabled to ``switch`` ``port`` as SecurityTagPlacementFields selects it: the cable's two
-    endpoints (the near end is the NIC), the far end tagged with ``segment_ids``. A LAG member (``lag`` being
-    its port-channel, which carries the tags) is role lag; ``far_role`` overrides the far end's role."""
+    """A host NIC cabled to ``switch`` ``port`` as SecurityTagPlacementFields selects it: the cable's two endpoints
+    (the near end is the NIC), the far end tagged with ``segment_ids``."""
     tagged = [{"id": f"seg-{name}"} for name in segment_ids]
     near = {
         "id": f"if-{host}-{nic}",
@@ -222,8 +221,6 @@ def _gp_profiles() -> list[dict]:
 # ============================================================================
 
 # (name, VLAN, VNI, gateway, VRF, namespace type, L3 VNI): the five tagged tenant segments of DC10.
-# NONPROD is fully classifiable by VLAN; PROD holds a microsegmented segment whose contracts name
-# component groups, classified by the interface + VLAN of the host ports of dc1-leaf-01.
 _GPO_SEGMENTS: list[tuple[str, int, int, str, str, str, int]] = [
     ("web-np", 110, 10110, "10.10.1.1/24", "NONPROD", "non_prod", 50011),
     ("app-np", 120, 10120, "10.10.2.1/24", "NONPROD", "non_prod", 50011),
@@ -251,20 +248,8 @@ _GPO_EOS = {
 def _gpo_fleet_roots(
     *, fleet: dict[str, str], version: str, leaf_type: str | None = None, enforce: bool = True, lb: bool = False
 ) -> dict:
-    """The fleet roots of the GPO device queries: DC10's VTEPs (``leaf_type`` overrides the leaf's type)
-    next to DC12 (a legacy border leaf: never policy-aware), the bootstrap profile rows, the segments
-    and their component tags. ``enforce`` is DC10's ``group_policy_enforce`` (A6: False stages it).
-
-    NONPROD: web-np calls app-np (https and a port range, with a reverse udp row: two bidir contracts
-    on one pair), app-np calls db-np, db-np answers with any and icmp, web-np reaches the internet
-    (a service leg); db-np is stretched to DC12. PROD: portal-p calls the web component of the
-    microsegmented pay-p, whose web component calls its db component.
-
-    ``lb`` load-balances web-np on tcp/9443: app-np calls its VIP (a /32 selector: app-np ->
-    UNCLASSIFIED), and the segment-less policy lb-dc1-lb-01-NONPROD lets the leg reach web-np
-    (UNCLASSIFIED -> web-np), read from web-np's inbound_rules next to an inbound rule of app-np's own
-    policy (already a row through app-np: not counted twice).
-    """
+    """The fleet roots of the GPO device queries: DC10's VTEPs (``leaf_type`` overrides the leaf's type) next to DC12
+    (a legacy border leaf: never policy-aware), the bootstrap profile rows."""
     memory_gb = _gp_memory_gb()
     platform = fleet["platform"]
 
@@ -272,9 +257,7 @@ def _gpo_fleet_roots(
         return _gp_device(name, role, device_type, release, memory_gb, platform)
 
     legacy = _gp_device("bl-dc12-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)
-    # PROD's components sit on the leaf of DC10: the web component on the trunk host port Ethernet10 (the
-    # port of every segment), the db component, a VM, on Ethernet11 (an access port today: GPO trunks it),
-    # its host's second NIC on DC12's border leaf (another data center: not this one's to classify).
+    # PROD's components sit on the leaf of DC10
     pay_web = [
         _gp_instance(
             "srv-pay-web-01", [_gp_nic("srv-pay-web-01", "eno1", "dc1-leaf-01", "Ethernet10", _GPO_PAY_WEB_TAGS)]
@@ -390,7 +373,7 @@ def _gpo_fleet_roots(
                         [
                             device("dc1-leaf-01", "leaf", leaf_type or fleet["leaf"], version),
                             device("dc1-access-leaf-01", "access-leaf", fleet["access"], version),
-                            # Not a VTEP: the query returns every device, the transform keeps the VTEPs.
+                            # Not a VTEP: the query returns every device
                             device("dc1-spine-01", "spine", "N9K-C9336C-FX2", "10.3(3)"),
                         ]
                     ),
@@ -436,9 +419,8 @@ def build_gpo_device_data(
     enforce: bool = True,
     lb: bool = False,
 ) -> dict:
-    """A VTEP of DC10 carrying ``segments`` (names of _GPO_SEGMENTS) on Ethernet10, plus one more server port
-    per ``host_ports`` entry (name -> the segments it carries), with the fleet roots appended
-    (``enforce``: DC10's ``group_policy_enforce``, False for the staged variant; ``lb``: web-np load-balanced)."""
+    """A VTEP of DC10 carrying ``segments`` (names of _GPO_SEGMENTS) on Ethernet10, plus one more server port per
+    ``host_ports`` entry (name -> the segments it carries)"""
     data = build_device_data(
         device_name=device_name,
         role=role,
@@ -518,8 +500,7 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
             host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
         ),
     ),
-    # DC10 stages group policy (group_policy_enforce false): groups, class/policy maps and contracts are
-    # rendered, `security enforce` is not, and the VRF says why in an `! unenforced:` comment.
+    # DC10 stages group policy (group_policy_enforce false): groups
     (
         Leaf,
         "leaf_cisco_nxos_gpo_reference_staged",
@@ -531,9 +512,9 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
             enforce=False,
         ),
     ),
-    # A leaf of the same reference fabric with no tenant segment (the servers sit on the access
-    # leaves): no VRF carries a contract, but the VTEP still enables GPO, so the site never
-    # mixes policy-aware and policy-unaware nodes (spec 2.9).
+    # A leaf of the same reference fabric with no tenant segment (the servers sit on the access leaves): no VRF carries
+    # a contract, but the VTEP still enables GPO, so the site never mixes policy-aware and policy-unaware nodes (spec
+    # 2.9).
     (
         Leaf,
         "leaf_cisco_nxos_gpo_reference_no_vrf",
@@ -555,15 +536,13 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
             segments=tuple(name for name, *_rest in _GPO_SEGMENTS),
         ),
     ),
-    # The same fleet with the leaf on a type and release outside the row: DC10 is no reference
-    # fabric, so the device renders exactly the leaf_cisco_nxos_ebgp_ibgp config.
+    # The same fleet with the leaf on a type and release outside the row
     (
         Leaf,
         "leaf_cisco_nxos_gpo_non_reference",
         lambda: _gpo_golden_leaf_data(fleet=_GPO_NXOS, version="10.6(3)F", leaf_type="N9K-C9336C-FX2"),
     ),
-    # A reference site of the EOS kind (segment_security, MSS-G): the same fleet as the NX-OS ones, on 7280R3
-    # VTEPs at 4.36.2F. The leaf renders the MSS-G block (enforcing), a staged DC10 renders it shut down.
+    # A reference site of the EOS kind (segment_security, MSS-G): the same fleet as the NX-OS ones
     (
         Leaf,
         "leaf_arista_eos_gpo_reference_site",
@@ -589,8 +568,7 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
             enforce=False,
         ),
     ),
-    # web-np load-balanced (segment-less lb-<context> policy): app-np -> UNCLASSIFIED and UNCLASSIFIED -> web-np
-    # gain tcp/9443 (NX-OS: the bidir contracts; MSS-G: web-np's fallback and app-np's to_unclassified reply).
+    # web-np load-balanced (segment-less lb-<context> policy)
     (
         Leaf,
         "leaf_cisco_nxos_gpo_lb_context",

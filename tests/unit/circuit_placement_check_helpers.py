@@ -1,8 +1,4 @@
-"""Shared payload builders and the check runner for the CheckCircuitPlacement unit tests.
-
-See tests/unit/test_circuit_placement_check.py for how the payloads mirror queries/validation/circuit_placement.gql
-and data/demos/30_all.
-"""
+"""Shared payload builders and the check runner for the CheckCircuitPlacement unit tests."""
 
 from __future__ import annotations
 
@@ -42,8 +38,7 @@ def _edges(nodes: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _end(device: str, name: str, deployment: dict[str, Any] | None, owner: str | None = None) -> dict[str, Any]:
-    """An end port of a carrier circuit, with the device's deployment (id, kind and name only) and, for a router a
-    provider owns, its owner (``id-<owner>``, an OrganizationProvider)."""
+    """An end port of a carrier circuit, with the device's deployment (id, kind and name only) and."""
     deployment = {key: deployment[key] for key in ("id", "__typename", "name")} if deployment else None
     node: dict[str, Any] = {"id": f"id-{device}", "name": {"value": device}, "deployment": {"node": deployment}}
     if owner is not None:
@@ -140,8 +135,7 @@ def _carrier(circuit: dict[str, Any]) -> dict[str, Any]:
 
 
 def _deployment_of(device: str) -> dict[str, Any] | None:
-    """Where a device of the virtual-circuit fixtures is deployed: the edges and gateways in their cage or DC, every
-    party router (EXT-*) in the cloud region."""
+    """Where a device of the virtual-circuit fixtures is deployed: the edges and gateways in their cage or DC."""
     deployed = {
         "bl-dc101101": DC10,
         "bl-dc1111101": DC11,
@@ -172,16 +166,7 @@ def _vport(
     vlan_id: int | None = _FROM_NAME,
     region: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """A virtual circuit's end port: the carrier circuits on it, the parent interface (name, circuits on it) of a
-    sub-interface, and its device with its deployment and its BGP processes (one per role in ``bgp``).
-
-    ``cabled`` puts a DcimCable on a physical port, ``parent_cabled`` on the parent of a sub-interface (a
-    sub-interface itself has no ``cable``: the query selects it on the physical interface only).
-
-    ``kind`` is the port's ``__typename``, ``ip_address`` gives a physical port an address (a routed port) and
-    ``vlan_id`` a cloud peering interface or a sub-interface (one with a ``parent``) its VLAN tag, which by default
-    is the number the name ends in (None: untagged). ``region`` makes the device a cloud transport (kind
-    ``device_kind``) with no deployment, placed by that region."""
+    """A virtual circuit's end port: the carrier circuits on it, the parent interface (name."""
     port: dict[str, Any] = {
         "id": f"id-{device}:{name}",
         "name": {"value": name},
@@ -273,10 +258,7 @@ def _handoff(
     ends: list[dict[str, Any]],
     namespace: tuple[str, str | None] | None = ("PROD", "prod"),
 ) -> dict[str, Any]:
-    """A handoff in ``namespace`` (name, vrf_type).
-
-    ``locations=None`` places the handoff where its ends are deployed (what the check requires); a list states them.
-    """
+    """A handoff in ``namespace`` (name, vrf_type)."""
     if locations is None:
         devices = [end["device"]["node"] for end in ends]
         deployments = [(device.get("deployment") or device.get("region") or {}).get("node") for device in devices]

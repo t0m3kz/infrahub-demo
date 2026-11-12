@@ -1,9 +1,4 @@
-"""A switch renders every segment it has a VLAN row of, and a border leaf carries a stretched segment L2 only.
-
-The rows are the device's ``vlans`` (queries/fragments/network_segment.gql DeviceSegmentRowsFields);
-transforms/common.py turns each into an activation after the ports' segments. A stretched segment on a border leaf gets the L2-only view
-(utils/segment_addressing.py ``l2_only_on``): VLAN and VNI, no SVI, VRF, L3 VNI, ACL or PBR.
-"""
+"""A switch renders every segment it has a VLAN row of, and a border leaf carries a stretched segment L2 only."""
 
 from __future__ import annotations
 

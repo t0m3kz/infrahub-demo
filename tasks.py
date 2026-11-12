@@ -1,13 +1,4 @@
-"""Invoke tasks for the infrahub-demo project.
-
-Namespaces:
-  dev     — code quality, linting, tests
-  infra   — Docker container lifecycle
-  data    — schema, menu, and object loading
-
-Every task is also available at the top level (e.g. `invoke start` is the
-same task as `invoke start`) — use whichever you prefer.
-"""
+"""Invoke tasks: Docker lifecycle, code quality and tests, schema/menu/object loading."""
 
 import logging
 import os
@@ -35,10 +26,10 @@ INFRAHUB_API_TOKEN = os.getenv("INFRAHUB_API_TOKEN", "admin")
 _INFRAHUB_VERSION = os.getenv("VERSION", "latest")
 
 if Path("docker-compose.yml").exists():
-    # Local base file — Docker Compose auto-merges docker-compose.override.yml.
+    # Compose auto-merges docker-compose.override.yml.
     COMPOSE_COMMAND = "docker-compose -p infrahub"
 elif Path("docker-compose.override.yml").exists():
-    # No local base file; stream upstream and explicitly merge the override.
+    # No local base file: stream upstream and merge the override.
     COMPOSE_COMMAND = (
         f"curl -fsSL https://infrahub.opsmill.io/{_INFRAHUB_VERSION}"
         " | docker-compose -p infrahub -f - -f docker-compose.override.yml"
@@ -85,12 +76,7 @@ def stop(context: Context) -> None:
 
 @_task(optional=["component"])
 def restart(context: Context, component: str = "") -> None:
-    """Restart all (or a specific) container.
-
-    Example:
-        uv run invoke restart
-        uv run invoke restart --component infrahub-server
-    """
+    """Restart all (or one, with --component) container."""
     context.run(f"{COMPOSE_COMMAND} restart {component}".strip(), pty=True)
 
 
@@ -102,11 +88,7 @@ def destroy(context: Context) -> None:
 
 @_task
 def setup(context: Context) -> None:
-    """Full environment setup: start containers, load schema, menu, and bootstrap data.
-
-    Example:
-        uv run invoke setup
-    """
+    """Full environment setup: start containers, load schema, menu, and bootstrap data."""
     os.environ["INFRAHUB_ADDRESS"] = INFRAHUB_ADDRESS
     os.environ["INFRAHUB_API_TOKEN"] = INFRAHUB_API_TOKEN
     log.info("Starting Infrahub demo setup...")
@@ -144,12 +126,7 @@ def setup(context: Context) -> None:
 
 @_task(optional=["ref"])
 def register_repo(context: Context, ref: str = "routing") -> None:
-    """Register the local repository and load event actions.
-
-    Example:
-        uv run invoke register-repo
-        uv run invoke register-repo --ref main
-    """
+    """Register the local repository (--ref) and load event actions."""
     os.environ["INFRAHUB_ADDRESS"] = INFRAHUB_ADDRESS
     os.environ["INFRAHUB_API_TOKEN"] = INFRAHUB_API_TOKEN
 
@@ -207,13 +184,7 @@ def validate(context: Context) -> None:
 
 @_task(optional=["basetemp"])
 def test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
-    """Run unit tests.
-
-    Uses a repo-local basetemp to avoid bind-mount issues on macOS+Colima.
-
-    Example:
-        uv run invoke test-unit
-    """
+    """Run unit tests (repo-local basetemp avoids bind-mount issues on macOS+Colima)."""
     base = _ensure_pytest_basetemp(basetemp)
     context.run(f"uv run pytest -vv tests/unit --basetemp {base}", pty=True)
 
@@ -238,13 +209,7 @@ def test_integration(
     server_port: int = 8100,
     tests: str = "tests/integration",
 ) -> None:
-    """Run all integration tests (requires Docker).
-
-    Example:
-        uv run invoke test-integration
-        uv run invoke test-integration --server-port 8200
-        DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke test-integration --tests "tests/integration/test_01_setup.py tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py tests/integration/test_12_dc6_add_switch.py"
-    """
+    """Run integration tests (requires Docker); --tests selects files, --server-port moves the stack."""
     _run_integration_suite(context, tests=tests, basetemp=basetemp, server_port=server_port)
 
 
@@ -282,17 +247,7 @@ def test_integration_routing(
 def test_integration_all_demo(
     context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
 ) -> None:
-    """Run the 30_all demo suite: staged load, then every layer it produces.
-
-    test_59 builds the branch the rest assert against, so the modules have to
-    run together and in order: load and generator dispatch (59), the app
-    catalogue enforcement workflow (60), compute and the application graph
-    (61), interconnects and tenant services (62), colo cloud/partner/SaaS zone
-    policy check + render (64), and reruns of the security generators that
-    must leave the branch unchanged (65), and the sessions of an Interconnect and a Handoff
-    following the status of their carrier or of the circuit itself, both ways (66, mutates the
-    branch).
-    """
+    """Run the 30_all demo suite (test_59 builds the branch the rest assert against, so run in order)."""
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
@@ -314,15 +269,7 @@ def test_integration_all_demo(
 def test_integration_arista_mssg(
     context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
 ) -> None:
-    """Run the Arista EOS MSS-G suite (data/demos/32_arista_mssg): load, checks, renders, enforce, gate.
-
-    The scope is not part of 30_all, so test_71 builds its own branch and needs only the setup and
-    repository prerequisites. It proves the generators -> group tags -> transform -> EOS text path, not that
-    EOS accepts the rendered lines (custom policies and the fallback policy are AVD-documented only).
-
-    Example:
-        uv run invoke test-integration-arista-mssg
-    """
+    """Run the Arista EOS MSS-G suite (data/demos/32_arista_mssg; test_71 builds its own branch)."""
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
@@ -334,28 +281,14 @@ def test_integration_arista_mssg(
 
 @_task(optional=["increment"])
 def release(context: Context, increment: str = "") -> None:
-    """Bump version, update CHANGELOG.md, commit, and tag using commitizen.
-
-    Example:
-        uv run invoke release              # auto-detect from commits
-        uv run invoke release --increment patch
-        uv run invoke release --increment minor
-        uv run invoke release --increment major
-    """
+    """Bump version, update CHANGELOG.md, commit, and tag using commitizen (--increment patch|minor|major)."""
     bump_args = f"--increment {increment}" if increment else ""
     context.run(f"uv run cz bump {bump_args}", pty=True)
 
 
 @_task
 def upgrade(context: Context) -> None:
-    """Upgrade all Python dependencies and pre-commit hook revisions.
-
-    Runs uv lock --upgrade to update the lockfile, then prek auto-update
-    to bump the rev: pins in .pre-commit-config.yaml to the latest tags.
-
-    Example:
-        uv run invoke upgrade
-    """
+    """Upgrade Python dependencies (uv lock --upgrade) and pre-commit hook revisions (prek auto-update)."""
     log.info("Upgrading Python dependencies (uv lock --upgrade)...")
     context.run("uv lock --upgrade", pty=True)
     log.info("Upgrading pre-commit hook revisions (prek auto-update)...")
@@ -382,47 +315,26 @@ def clean_testcontainers(context: Context) -> None:
 
 @_task(optional=["schema", "branch"])
 def load_schema(context: Context, schema: str = "./schemas/", branch: str = "main") -> None:
-    """Load base and extension schemas.
-
-    Example:
-        uv run invoke load-schema
-        uv run invoke load-schema --branch my-branch
-    """
+    """Load base and extension schemas."""
     context.run(f"uv run infrahubctl schema load {schema}/base --branch {branch}", pty=True)
     context.run(f"uv run infrahubctl schema load {schema}/extensions --branch {branch}", pty=True)
 
 
 @_task(optional=["branch"])
 def load_menu(context: Context, menu: str = "menu", branch: str = "main") -> None:
-    """Load the navigation menu.
-
-    Example:
-        uv run invoke load-menu
-    """
+    """Load the navigation menu."""
     context.run(f"uv run infrahubctl menu load {menu} --branch {branch}", pty=True)
 
 
 @_task(optional=["branch"])
 def load_objects(context: Context, path: str = "data/bootstrap/", branch: str = "main") -> None:
-    """Load object YAML files from a path.
-
-    Example:
-        uv run invoke load-objects
-        uv run invoke load-objects --path data/demos/30_all/03_dc/dc10
-    """
+    """Load object YAML files from --path (default data/bootstrap/)."""
     context.run(f"uv run infrahubctl object load {path} --branch {branch}", pty=True)
 
 
 @_task
 def flatten_queries(context: Context) -> None:
-    """Write the flat copy of every registered query (queries/flat/), the form the server is fast with.
-
-    The sources under queries/ keep their fragments; .infrahub.yml registers the copies (utils/query_flatten.py).
-    Run after editing a query or a fragment: the server runs the copies, so an edit is live only once flattened.
-
-    Example:
-        uv run invoke flatten-queries
-    """
+    """Write the flat copy of every registered query (queries/flat/); run after editing a query or fragment."""
     from utils.query_flatten import ROOT, write_flat_queries  # noqa: PLC0415 - keeps graphql out of task start-up
 
     changed = write_flat_queries()
@@ -432,53 +344,19 @@ def flatten_queries(context: Context) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 30_all — staged load of the everything demo (data/demos/30_all)
-#
-# The stage list is shared with the integration suite
-# (tests/integration/test_59_all_demo_load.py imports it from tasks),
-# so `invoke load-all-demo` and the tests load the same files in the same order.
+# 30_all staged load (the stage list is shared with tests/integration/test_59_all_demo_load.py)
 # ---------------------------------------------------------------------------
 
 ALL_DEMO_DATA = "data/demos/30_all"
 ALL_DEMO_BRANCH = "all-demo-scenario"
 
-# Loading 30_all is a *staged* operation, and it has to be: the later stages
-# reference objects that only exist once an earlier stage's generators have
-# finished running.
-#
-#   - 03_dc/*/05_servers.yml puts hosts in compute racks and relies on
-#     add_endpoint finding the access-leaf pair in the network rack sharing
-#     the host's row. Those access-leafs are created by add_rack, which is
-#     dispatched asynchronously by the *same* load that declared the rack.
-#   - 08_interconnects/01_colo_onramp/03_carrier_circuits.yml lands its dark
-#     fibres on border leaves by name ("bl-dc101101"), which add_dc creates;
-#     add_circuit places them, and add_virtual_circuit then builds the DCI
-#     sessions of 03_virtual_circuits/01_dci_interconnects.yml on the overlay
-#     BGP processes add_dc and add_colocation_zone create.
-#   - 07_applications references the VMs and customer deployments declared in
-#     06_customer_boarding.
-#
-# `infrahubctl object load data/demos/30_all` in one shot therefore only works
-# against an instance whose main branch *already* holds the fabric — which is
-# exactly why it appears to work on a long-lived dev instance and fails on a
-# fresh one. Each entry is (stage_name, load_paths); the loader is given the
-# paths verbatim and the suite waits for every dispatched generator to settle
-# before moving to the next stage.
+# Staged because later stages reference objects that generators create from earlier ones (racks, border leaves, VMs); a
+# one-shot load only works on an instance whose main already holds the fabric. Each entry is (stage_name, load_paths);
+# the suite waits for every dispatched generator to settle before the next stage.
 ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
-        # Everything that depends only on bootstrap data: customers, cloud
-        # regions/zones, colocation metros/cages and racks (and the shared
-        # SD-WAN gateway and orchestrator in the FR2 cage, so an office opts in
-        # when it is boarded), the internet's ISPs (Orange's access PE is the
-        # far end of every SD-WAN office's INET circuit, so it must exist
-        # before add_sdwan_edge runs), SaaS, office buildings, and the three DC
-        # sites with their fabrics and controllers.
-        # One load, so add_colocation_metro / add_colocation_zone (one run per
-        # metro and per cage) and add_dc -> add_pod -> add_rack (per DC)
-        # generate in parallel. The
-        # loader sorts files by path, so each DC's 00_location.yml lands before
-        # its topology. By far the longest stage: 20 fabric devices per DC plus
-        # all cabling, addressing and routing.
+        # Depends only on bootstrap data; one load so metros, zones and DC fabrics generate in parallel (the longest
+        # stage).
         "foundation",
         (
             "00_customer",
@@ -499,14 +377,7 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
-        # Application hosts and the full boarding set (DC/colocation/cloud/
-        # office footprints, the cage kit, the VMs the applications are built
-        # from). None of it references anything this stage's own generators
-        # create, only declared data and the foundation stage's output, so
-        # add_endpoint (needs the access-leafs add_rack created),
-        # add_customer_deployment_* and add_sdwan_edge run in parallel. VMs pin
-        # to hosts by name; 03_dc/ sorts before 06_customer_boarding/, so the
-        # hosts exist by then.
+        # Hosts and the boarding set: only declared data and the foundation output, so the generators run in parallel.
         "compute_and_customers",
         (
             "03_dc/dc10/05_servers.yml",
@@ -517,29 +388,20 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     (
         # Segments, applications and the deployment-request catalogue.
-        # Dispatches add_vxlan_segment and add_app_application.
         "applications",
         ("07_applications",),
     ),
     (
-        # Colo on-ramp, cloud hub, the DCI and handoff circuits, the SD-WAN
-        # gateway's PROD handoff, cloud endpoints, internet, the partner tunnel.
-        # Data plus the circuit generators it dispatches (add_circuit places
-        # the carrier circuits, add_virtual_circuit builds the DCI and handoff
-        # sessions) — every generator those need has already run.
+        # Colo on-ramp, cloud hub, DCI and handoff circuits, cloud endpoints, internet, partner tunnel.
         "interconnects",
         ("08_interconnects",),
     ),
 )
 
-# The 30_all load is an order of magnitude heavier than a single-DC scenario:
-# three fabrics generate in parallel, then four more generator families fan
-# out over boarding and application data. Polling budgets scale accordingly.
+# Polling budgets: 30_all is far heavier than a single-DC scenario.
 ALL_DEMO_STAGE_MAX_ATTEMPTS = 240  # x ALL_DEMO_STAGE_POLL_INTERVAL = 40 min
 ALL_DEMO_STAGE_POLL_INTERVAL = 10  # seconds
-# A DC's pods and racks are declared in one load, so their created events are
-# dispatched independently and the queue can go briefly quiet between waves.
-# Ten consecutive quiet polls (100s) has to comfortably exceed that spread.
+# The queue goes briefly quiet between generator waves; ten quiet polls (100s) exceed that spread.
 ALL_DEMO_STAGE_STABLE_ZERO = 10
 
 # Seconds to let a load's event rules schedule their generators before polling.
@@ -550,11 +412,7 @@ ALL_DEMO_FAILURE_STATES = [TaskState.FAILED, TaskState.CRASHED, TaskState.CANCEL
 
 
 def _select_stages(from_stage: str = "") -> tuple[tuple[str, tuple[str, ...]], ...]:
-    """Return the stages to load, starting at `from_stage` (all of them when empty).
-
-    Raises:
-        ValueError: `from_stage` is not a stage name.
-    """
+    """The stages to load from `from_stage` (all when empty); ValueError for an unknown stage name."""
     if not from_stage:
         return ALL_DEMO_LOAD_STAGES
     names = [name for name, _ in ALL_DEMO_LOAD_STAGES]
@@ -581,14 +439,7 @@ def _wait_for_branch_idle(
     stable_zero: int = ALL_DEMO_STAGE_STABLE_ZERO,
     max_attempts: int = ALL_DEMO_STAGE_MAX_ATTEMPTS,
 ) -> None:
-    """Block until the branch has had no in-flight task for `stable_zero` polls in a row.
-
-    Generators fan out in waves (add_dc -> add_pod -> add_rack), so one empty
-    poll is not enough: the queue goes briefly quiet between waves.
-
-    Raises:
-        TimeoutError: tasks are still in flight after `max_attempts` polls.
-    """
+    """Block until the branch has had no in-flight task for `stable_zero` polls; TimeoutError after `max_attempts`."""
     time.sleep(initial_delay)
     quiet = 0
     for attempt in range(1, max_attempts + 1):
@@ -618,17 +469,7 @@ def _infrahub_client() -> InfrahubClientSync:
 
 @_task(optional=["branch", "from_stage"])
 def load_all_demo(context: Context, branch: str = "", from_stage: str = "") -> None:
-    """Load the 30_all demo stage by stage, waiting for generators in between.
-
-    Later stages reference objects that generators create from earlier ones,
-    so each stage is loaded with one `object load`, then the branch has to go
-    quiet before the next one starts. Stops at the first stage whose load or
-    generators fail; fix the cause and resume with --from-stage.
-
-    Example:
-        uv run invoke load-all-demo
-        uv run invoke load-all-demo --from-stage applications
-    """
+    """Load the 30_all demo stage by stage, waiting for generators between stages; resume with --from-stage."""
     branch = branch or ALL_DEMO_BRANCH
     try:
         stages = _select_stages(from_stage)
@@ -676,13 +517,8 @@ def load_all_demo(context: Context, branch: str = "", from_stage: str = "") -> N
 # Generator tracking groups — one-time migration helper
 # ---------------------------------------------------------------------------
 
-# The SDK's InfrahubGenerator.run() tracks each run in a group of one of these
-# kinds (CoreGeneratorGroup when execute_after_merge, else
-# CoreGeneratorAwareGroup), named "<definition name>-<md5 of the run params>"
-# (InfrahubGroupContextBase._generate_group_name). The bootstrap data declares
-# the *target* groups (customer_deployments_dc, ...) as CoreStandardGroup, so
-# the kind alone separates them from tracking groups; the name pattern still
-# guards against a hand-made group of a generator kind.
+# The SDK tracks each generator run in a group named "<definition name>-<md5 of the run params>"; the name pattern
+# separates it from the target groups (CoreStandardGroup) and from a hand-made group of a generator kind.
 GENERATOR_GROUP_KINDS = ("CoreGeneratorGroup", "CoreGeneratorAwareGroup")
 _TRACKING_GROUP_HASH = re.compile(r"-[0-9a-f]{32}$")
 # Peers per RelationshipRemove mutation: a DC's add_dc group holds thousands.
@@ -702,11 +538,7 @@ def _is_tracking_group(name: str, definitions: set[str]) -> bool:
 
 
 def _generator_tracking_groups(client: InfrahubClientSync, branch: str) -> list[InfrahubNodeSync]:
-    """Return the branch's generator tracking groups, with their members loaded.
-
-    Target groups (CoreStandardGroup, data/bootstrap/00_groups.yml) and lock-*
-    groups never match.
-    """
+    """The branch's generator tracking groups, with their members loaded."""
     definitions = {_node_name(d) for d in client.all(kind="CoreGeneratorDefinition", branch=branch)}
     groups: list[InfrahubNodeSync] = []
     for kind in GENERATOR_GROUP_KINDS:
@@ -743,25 +575,7 @@ def _reset_branch_generator_groups(client: InfrahubClientSync, branch: str, dry_
 def reset_generator_groups(
     context: Context, branch: str = "", all_branches: bool = False, dry_run: bool = False
 ) -> None:
-    """Empty every generator tracking group, keeping the groups themselves.
-
-    A generator run deletes `previous members - nodes saved this run`. When a
-    generator stops claiming a node it does not own (its save switched to
-    update_group_context=False), that node is still in the group from earlier
-    runs, so the next run would delete it. Emptying the groups once after
-    deploying such a fix makes the next run delete nothing and re-claim exactly
-    what it saves. The cost: nodes that were already stale are not cleaned up.
-
-    Only tracking groups ("<generator definition>-<params hash>", kind
-    CoreGeneratorGroup or CoreGeneratorAwareGroup) are touched — never target
-    groups (topologies_dc, customer_deployments_dc, ...) or lock-* groups.
-    Members are removed with RelationshipRemove; no member node is deleted.
-
-    Example:
-        uv run invoke reset-generator-groups --branch all-demo-scenario --dry-run
-        uv run invoke reset-generator-groups --branch all-demo-scenario
-        uv run invoke reset-generator-groups --all-branches
-    """
+    """Empty every generator tracking group (members only, never target or lock groups); use --dry-run first."""
     if not branch and not all_branches:
         raise Exit("Pass --branch <name> or --all-branches", code=1)
 
@@ -773,9 +587,7 @@ def reset_generator_groups(
         log.info("[%s] %s %d tracking-group member(s)", name, action, total)
         if dry_run:
             continue
-        # A node that is a member of several groups is not always released from
-        # every one in a single pass (seen on all-demo-scenario: 1223, then 187,
-        # 61, 18, 13, 6 left). Re-read and repeat until a pass finds nothing.
+        # A node in several groups is not always released in one pass; repeat until nothing is left.
         for _ in range(_RESET_MAX_PASSES):
             remaining = _reset_branch_generator_groups(client, name, dry_run=False)
             if not remaining:

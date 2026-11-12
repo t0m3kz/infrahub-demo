@@ -1,28 +1,7 @@
-"""The routed range of a cloud footprint: one slice of its pool per virtual network, written on the network's attachments.
-
-A cloud footprint (``TopologyCustomerCloud``: one account in one cloud region) has an IPv4 pool, ``{org}-{env}-cloud-ipv4``
-(``SegmentAddressingMixin.ensure_customer_pools``), a block of its tier's ``address_prefix_length`` (S /28 to XL /25).
-``ensure_cloud_ranges`` splits that pool into one ``CLOUD_RANGE_PREFIX_LENGTH`` (/29) slice per ``CloudVirtualNetwork`` of
-the footprint's account in the footprint's region (``max_virtual_networks``: S 1, M 3, L 6, XL 12, all fit the block;
-``checks/customer_quota.py`` holds it). The slice is the network's internally routed (translated) range towards the DC:
-it is written as the ``allowed_prefixes`` of the ``CloudGatewayAttachment``s whose target is that network, and
-``transforms/helpers/bgp_cloud.py`` reads it from there.
-
-Rules:
-
-- AUTHORED DATA WINS. An attachment that already has ``allowed_prefixes`` (authored, or the slice of an earlier run)
-  is left alone. A network all of whose attachments have some gets no slice.
-- A network with NO attachment gets no slice: nothing announces a range, and no address is spent. Its slice is
-  allocated the day an attachment to it exists.
-- The slice is keyed ``{account name}/{network name}`` in the pool (an account's network names are unique): the same
-  identifier returns the same prefix on a re-run. A customer pool is shared by the customer's footprints of one
-  environment, so it grows by one block when a draw does not fit (the one draw of ``_allocate_customer_slice``).
-- The edge is added to each attachment alone (RelationshipAdd), never saved as a list; the slice is written untracked.
-
-Two generators call it, so the order of the data does not matter: ``add_customer_deployment_cloud`` (the footprint is
-boarded: every attachment already loaded) and ``add_cloud_attachment_range`` (an attachment joins its group or changes
-its ``virtual_network``: the footprint of the network's account). A node rule cannot run the footprint's generator from an
-attachment event, because an event runs a generator on the node that fired it.
+"""The routed range of a cloud footprint: one ``CLOUD_RANGE_PREFIX_LENGTH`` slice of its pool per virtual network,
+written as the attachments' ``allowed_prefixes``. Authored ``allowed_prefixes`` win; the slice is keyed
+``{account}/{network}`` (re-runs return it), the edge is added per attachment, and the slice is untracked. Called by
+add_customer_deployment_cloud and add_cloud_attachment_range, so data order does not matter.
 """
 
 from __future__ import annotations
@@ -46,9 +25,8 @@ ATTACHMENT_KIND = "CloudGatewayAttachment"
 
 
 class CloudRangeMixin:
-    """Mixin: the slice of a cloud footprint's pool for each virtual network that has an attachment.
-
-    Expects the host class to provide the SegmentAddressingMixin functions below, ``client`` and ``logger``.
+    """Mixin: the pool slice for each virtual network of a cloud footprint that has an attachment; needs
+    SegmentAddressingMixin, ``client``, ``logger``.
     """
 
     client: Any
@@ -58,11 +36,7 @@ class CloudRangeMixin:
         _allocate_customer_slice = SegmentAddressingMixin._allocate_customer_slice
 
     async def ensure_cloud_ranges(self, footprint: dict[str, Any]) -> None:
-        """Board the footprint's pool, then give each virtual network of its account and region an attached slice.
-
-        ``footprint`` is the cleaned footprint: ``name``, ``environment``, ``owner.org_id``, ``design``,
-        ``account`` (``id``, ``name``) and ``parent`` (the region, ``id``).
-        """
+        """Board the footprint's pool, then give each virtual network of its account and region an attached slice."""
         design, environment = footprint.get("design") or {}, footprint["environment"]
         org_id, name = footprint["owner"]["org_id"], footprint.get("name", footprint["id"])
         await self.ensure_customer_pools(

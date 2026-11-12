@@ -1,16 +1,4 @@
-"""Unit tests for RackGenerator's l2-leaf/access-leaf role generation.
-
-Covers:
-- _create_local_leaf_role_devices: shared device-creation + local-leaf-cabling-
-  target resolution used by both _generate_l2_leafs/_generate_access_leafs.
-  MLAG pairing itself now happens inside DeviceMixin.create_devices() (see
-  DeviceOptions.mlag_create/mlag_supports_virtual, and test_rack_mlag_pairs.py
-  for the pairing logic) — this file verifies the right options reach
-  create_devices() for l2-leaf (supports_virtual=False) vs access-leaf
-  (supports_virtual=True).
-- _generate_l2_leafs / _generate_access_leafs: per-role cabling differences
-  (L2 trunk with no IP pool vs. routed link + overlay-only routing)
-"""
+"""Unit tests for RackGenerator's l2-leaf/access-leaf role generation."""
 
 from __future__ import annotations
 
@@ -94,10 +82,7 @@ _ACCESS_TEMPLATE = {"id": "tmpl-access", "interfaces": [{"name": "Eth1/1", "role
 class TestCreateLocalLeafRoleDevices:
     @pytest.mark.asyncio
     async def test_l2_leaf_passes_mlag_create_and_no_virtual_support(self) -> None:
-        """l2-leaf is L2-only (no loopback, no routing/EVPN) — virtual_peer_link
-        anchors on a loopback (mlag.py's _ensure_virtual_peer_link), which
-        l2-leaf can't use. mlag_supports_virtual=False forces create_devices()
-        to fall back to back-to-back rather than erroring out."""
+        """l2-leaf is L2-only (no loopback, no routing/EVPN)"""
         gen = _build_gen(mlag_create="virtual")
         gen.create_devices = AsyncMock(return_value=["l2-01", "l2-02"])
         gen.client.filters = AsyncMock(return_value=[])

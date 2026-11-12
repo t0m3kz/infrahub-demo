@@ -1,7 +1,4 @@
-"""An MLAG domain has two distinct members, a device is in at most one domain, peer_devices names them.
-
-The two members also hold equal VLAN ids per segment deployment, and each MLAG-attached port-channel is mirrored.
-"""
+"""MLAG domain checks M1 to M6: two distinct members, one domain per device, equal VLAN ids and port-channels."""
 
 from __future__ import annotations
 
@@ -20,12 +17,12 @@ INTERFACE_KIND = "DcimInterface"
 
 
 def _members(domain: dict[str, Any]) -> dict[str, str]:
-    """Return the distinct member devices of a domain as id -> name."""
+    """Member devices of a domain as id -> name."""
     return {str(member.get("id")): str(member.get("name")) for member in domain.get("capabilities") or []}
 
 
 def device_domain_errors(domains: list[dict[str, Any]]) -> list[str]:
-    """M1: a device is a member of at most one MLAG domain (this also makes the peer pair unique)."""
+    """M1: a device is in at most one MLAG domain."""
     in_domains: dict[str, list[str]] = defaultdict(list)
     names: dict[str, str] = {}
     for domain in domains:
@@ -41,7 +38,7 @@ def device_domain_errors(domains: list[dict[str, Any]]) -> list[str]:
 
 
 def member_count_errors(domains: list[dict[str, Any]]) -> list[str]:
-    """M2: a domain has exactly two distinct member devices (min_count is only enforced on update)."""
+    """M2: a domain has exactly two distinct members."""
     errors = []
     for domain in sorted(domains, key=lambda item: str(item.get("name"))):
         count = len(_members(domain))
@@ -54,7 +51,7 @@ def member_count_errors(domains: list[dict[str, Any]]) -> list[str]:
 
 
 def peer_devices_errors(domains: list[dict[str, Any]]) -> list[str]:
-    """M3: `peer_devices` equals the sorted member names (catches a device rename or a hand edit)."""
+    """M3: `peer_devices` equals the sorted member names."""
     errors = []
     for domain in sorted(domains, key=lambda item: str(item.get("name"))):
         expected = mlag_peer_devices(_members(domain).values())
@@ -70,16 +67,13 @@ def peer_devices_errors(domains: list[dict[str, Any]]) -> list[str]:
 
 
 def _row_label(row: dict[str, Any]) -> str:
-    """The segment (or segment deployment id) a row realizes."""
+    """The segment (or deployment id) a row realizes."""
     deployment = row.get("segment_deployment") or {}
     return str((deployment.get("segment") or {}).get("name") or deployment.get("id"))
 
 
 def pair_row_errors(domains: list[dict[str, Any]], rows: list[dict[str, Any]]) -> list[str]:
-    """M4: per MLAG and segment deployment, both members have a row and the two rows have the same vlan_id.
-
-    A deployment on which neither member has a row is fine.
-    """
+    """M4: per MLAG and segment deployment, both members have a row with the same vlan_id."""
     by_device: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
     for row in rows:
         deployment_id = (row.get("segment_deployment") or {}).get("id")
@@ -115,16 +109,12 @@ def pair_row_errors(domains: list[dict[str, Any]], rows: list[dict[str, Any]]) -
 
 
 def _listed(domain: dict[str, Any]) -> list[dict[str, Any]]:
-    """The interfaces a domain lists (its ``interfaces`` edge)."""
+    """The interfaces a domain lists."""
     return domain.get("interfaces") or []
 
 
 def listed_interface_errors(domains: list[dict[str, Any]], peer_links: list[dict[str, Any]]) -> list[str]:
-    """M6: a domain lists only interfaces of its members, each member has a peer-link listed, and none is left out.
-
-    ``peer_links`` are all interfaces with the ``mlag-peer`` role: one on a member that the domain does not list is
-    reported (the config reads only the listed ones).
-    """
+    """M6: a domain lists only its members' interfaces, each member's peer-link, and every ``mlag-peer`` one."""
     errors = []
     for domain in sorted(domains, key=lambda item: str(item.get("name"))):
         members = _members(domain)
@@ -158,10 +148,7 @@ def listed_interface_errors(domains: list[dict[str, Any]], peer_links: list[dict
 
 
 def mlag_lag_errors(domains: list[dict[str, Any]], lags: list[dict[str, Any]]) -> list[str]:
-    """M5: per MLAG and lag_id, exactly two port-channels, one per member, with equal lacp_mode and minimum_links.
-
-    The domain's own listed interfaces (the peer-link port-channel) and LAGs without an ``mlag_domain`` are skipped.
-    """
+    """M5: per MLAG and lag_id, one port-channel per member with equal lacp_mode and minimum_links."""
     listed_ids = {str(interface.get("id")) for domain in domains for interface in _listed(domain)}
     grouped: dict[tuple[str, Any], list[dict[str, Any]]] = defaultdict(list)
     for lag in lags:
@@ -192,20 +179,7 @@ def mlag_lag_errors(domains: list[dict[str, Any]], lags: list[dict[str, Any]]) -
 
 
 class CheckMlagDomains(InfrahubCheck):
-    """MLAG domains are well formed (ERRORs).
-
-    A uniqueness constraint cannot use a many relationship and the server enforces `min_count` only on update:
-
-    - a device is a member of at most one ManagedMLAG (which makes the peer pair unique across domains);
-    - a domain has exactly two distinct member devices;
-    - `peer_devices` (the unique mirror of the pair) equals the sorted member names;
-    - M4: per segment deployment, both members have a row and the two rows have the same VLAN id (the late pairing
-      of two devices that already numbered a segment differently is reported here, never renumbered);
-    - M5: each MLAG-attached port-channel (`lag_id`) exists exactly once per member with equal `lacp_mode` and
-      `minimum_links` (the peer-link port-channel, a listed interface of the domain, is skipped);
-    - M6: the interfaces a domain lists belong to its two members, each member has its peer-link listed, and a
-      member's `mlag-peer` interface the domain does not list is reported.
-    """
+    """MLAG domains are well formed (M1 to M6, ERRORs); see AGENTS.md "MLAG peer pair uniqueness"."""
 
     query = "mlag_domains"
 

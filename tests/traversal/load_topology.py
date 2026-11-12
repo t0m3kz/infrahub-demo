@@ -1,13 +1,4 @@
-"""Load the full topology (data/demos/00_full_topology) in one `infrahubctl object load` run.
-
-  INFRAHUB_ADDRESS=http://localhost:8100 INFRAHUB_API_TOKEN=... uv run python tests/traversal/load_topology.py [--branch main]
-
-The SDK loads a directory recursively, files sorted by name, one after the other. The numbered roots
-00_common, 10_topology, 20_C900, 21_C901 and 90_bindings provide the dependency order. Loading is idempotent:
-every object is upserted by its human-friendly id, including segment realizations and VLAN rows.
-
-Used by this script and `tests/integration/test_03_full_topology.py`. No Python lives under data/ (tests/unit/test_no_python_in_data.py).
-"""
+"""Load the full topology (data/demos/00_full_topology) in one `infrahubctl object load` run."""
 
 import argparse
 import asyncio

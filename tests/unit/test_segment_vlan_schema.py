@@ -1,8 +1,4 @@
-"""The schema of the VLAN rows: segment -> realization in the DC (VNI) -> realization on the switch (VLAN).
-
-A row is a child of the segment deployment its switch sits in, points at its device (no VLAN domain object), and a port
-is given a segment, never a VLAN (the row has no port).
-"""
+"""The schema of the VLAN rows"""
 
 from __future__ import annotations
 
@@ -55,9 +51,7 @@ class TestRowIsAChildOfItsSwitchUnderTheSegmentDeployment:
     def test_the_row_lists_its_ports_of_its_own_switch_only(
         self, segment_schema: dict[str, Any], root_dir: Path
     ) -> None:
-        """A port is a member of its switch's row: the row inherits the interface edge as it is (no re-declaration, no
-        ``common_parent``: checks/interface_layers.py R6 holds that a port is of the row's switch); nothing else
-        names a port."""
+        """A port is a member of its switch's row"""
         row = _node(segment_schema, "SegmentVlan")
 
         assert "ManagedGenericInterfaces" in row["inherit_from"]
@@ -101,9 +95,7 @@ class TestRowIsAChildOfItsSwitchUnderTheSegmentDeployment:
 
 class TestTheRowPointsAtItsDevice:
     def test_the_row_has_a_mandatory_device_and_no_svi_link(self, segment_schema: dict[str, Any]) -> None:
-        """The SVI is a member of its row through the row's existing interface edge, so the row has no relationship of
-        its own to it and DcimVirtualInterface is not extended (a Component under a row whose device is its Parent
-        breaks the server's object-template walk)."""
+        """The SVI is a member of its row through the row's existing interface edge"""
         row = _node(segment_schema, "SegmentVlan")
 
         device = _relationship(row, "device")

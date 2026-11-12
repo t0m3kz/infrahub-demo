@@ -1,11 +1,4 @@
-"""Unit tests for the application rules around a load balanced component.
-
-- AppApplicationGenerator: R_client replaces the direct rule (strict load
-  balancing) for an on-prem target, a cloud target keeps the direct rule,
-  errors fail the run after the rules, and a component that stops being
-  load_balanced loses its VIPs, rules and cloud load balancer to the run's
-  tracking
-"""
+"""Unit tests for the application rules around a load balanced component."""
 
 from __future__ import annotations
 
@@ -31,9 +24,7 @@ from tests.unit.lb_vip_helpers import (
 from tests.unit.query_shape_helpers import fragment_tree
 from utils.graphql_queries import load_query
 
-# ===========================================================================
 # AppApplicationGenerator: R_client and the run's errors
-# ===========================================================================
 
 
 def _app_gen(lb_vips: dict[str, Any], lb_errors: list[str] | None = None) -> Any:
@@ -124,9 +115,7 @@ class TestClientRule:
         gen._reconcile_load_balancing.assert_awaited_once()
 
 
-# ===========================================================================
 # Tracking: a component that stops being load_balanced
-# ===========================================================================
 
 
 class _Node:

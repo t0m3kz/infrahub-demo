@@ -1,11 +1,4 @@
-"""Integration test — the 30_all tenant-scoped services (continues test_62).
-
-The firewall and load-balancer contexts (shared vs dedicated, driven by the customer design blueprint), the exchange
-transit legs and SNAT addresses, the VIPs of the load_balanced components with their R_server/R_client rules, and the
-segment deployment legs, where a stretch segment must carry one leg per DC.
-
-Runs against the branch test_59 builds; it never loads data of its own.
-"""
+"""Integration test — the 30_all tenant-scoped services (continues test_62)."""
 
 import ipaddress
 import logging
@@ -80,7 +73,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 def _expected_loadbalancer_context_name(cluster: str, namespace: str, tenant: str | None) -> str:
     """`shared-{cluster}-{namespace}` for a shared context; for a dedicated one the pair's `{base}-ha-{class}` named
-    `{base}-{class}` (generators/firewall_context_spec.py _ContextTarget.context_name), all lowercase."""
+    `{base}-{class}` (generators/firewall_context_spec.py _ContextTarget.context_name)"""
     scope = namespace.lower()
     if not tenant:
         return f"shared-{cluster}-{scope}"
@@ -106,16 +99,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the firewall contexts match the customers' design blueprints.
-
-        A context with no tenant is a cluster's shared low-risk context (each
-        DC's, and the serving colocation zone's); a context with a tenant exists only
-        because that customer's design sets dedicated_firewall. Getting this wrong is how a customer silently ends
-        up sharing a security context with everyone else.
-
-        Scoped to the 30_all DCs (and every colocation): the DC6 scenario
-        chain merges its own customer footprint into main in the same session.
-        """
+        """Verify the firewall contexts match the customers' design blueprints."""
         logging.info("=== %s - Step 3: Firewall Contexts ===", SCENARIO_NAME)
 
         services = scope_tenant_services_to_dcs(
@@ -165,18 +149,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each firewall context's inter-VRF legs, exchanges and service ports.
-
-        A leg is (context, namespace): every firewall member's VLAN
-        sub-interface in that VRF, addressed from a /29 of the VRF's transit
-        pool and tagged with the context and with the leg's exchange(s). The
-        expectations come from the customers' environments and designs
-        (ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS), and the served deployments the
-        graph itself reports must agree with them. The FR2 colocation zone's
-        shared context is held to the same rules as a DC's: its legs face the
-        zone's two edges, whose firewall-role ports are tagged with it, and its
-        VLAN comes from the zone's FirewallContext pool (3000-3099).
-        """
+        """Verify each firewall context's inter-VRF legs, exchanges and service ports."""
         logging.info("=== %s - Step 3b: Exchange Transit Legs ===", SCENARIO_NAME)
 
         inventory = await fetch_transit_inventory(client=async_client_main, branch=scenario_branch)
@@ -345,13 +318,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     errors.append(
                         f"{site}: service port {port} carries {sorted(names)}, expected {contexts_in_site} context(s)"
                     )
-        # A zone's two ports sit on its two DIFFERENT edges (one per firewall member), not both on one.
+        # A zone's two ports sit on its two DIFFERENT edges (one per firewall member)
         for site in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS:
             devices = port_devices_by_site.get(site, set())
             if len(devices) != ALL_DEMO_FIREWALL_MEMBERS:
                 errors.append(f"{site}: service ports tagged on {sorted(devices)}, expected one per edge")
 
-        # Every colocation context must be a serving zone's: no stray one without legs (policy-only) is left.
+        # Every colocation context must be a serving zone's
         if colocation:
             errors.append(f"unexpected colocation firewall context(s) {sorted(str(c['name']) for c in colocation)}")
 
@@ -374,13 +347,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Each context with an INTERNET leg owns exactly one public SNAT /32.
-
-        The address is allocated in the builtin IPAM namespace (the SecurityZone, not IPAM, is the routing
-        authority), inside the FW-SNAT-INTERNET-IPv4
-        block (ALL_DEMO_SNAT_POOL_PREFIX), is a /32 and is distinct per context, the
-        FR2 colocation zone's included (it must not reuse a DC's address).
-        """
+        """Each context with an INTERNET leg owns exactly one public SNAT /32."""
         logging.info("=== %s - Step 3c: SNAT addresses ===", SCENARIO_NAME)
 
         inventory = await fetch_transit_inventory(client=async_client_main, branch=scenario_branch)
@@ -431,19 +398,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the load-balancer contexts, their one-arm leg, service ports and VIP range.
-
-        One shared context per (DC cluster, tenant namespace) a non-dedicated
-        footprint of the DC is in, `shared-{cluster}-{namespace}`, and one dedicated
-        `{owner}-{first}-{second}-{class}` per footprint whose design sets
-        dedicated_loadbalancer (ALL_DEMO_LOADBALANCER_CONTEXTS), each serving
-        exactly those footprints. Per context: a VLAN from the DC's
-        lb-context pool (3100-3199), unique in the DC; one leg in the tenant VRF,
-        a /29 of LB-Leg-<NS> with the members at .5/.6 in name order on
-        `<uplink>.<transit_vlan>` sub-interfaces of the cluster's members; both
-        members' border-leaf `load-balancer` ports tagged with it; a /26 VIP
-        range of LB-VIP-<NS> (allocated in the builtin IPAM namespace). Scoped to the 30_all DCs.
-        """
+        """Verify the load-balancer contexts, their one-arm leg, service ports and VIP range."""
         logging.info("=== %s - Step 3d: Load-balancer contexts ===", SCENARIO_NAME)
 
         contexts = await fetch_loadbalancer_inventory(client=async_client_main, branch=scenario_branch)
@@ -565,7 +520,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(
                     f"{label}: VIP prefix {vip_range} is not a /{LB_VIP_PREFIXLEN} of {ALL_DEMO_LB_VIP_RESOURCES[namespace]}"
                 )
-            # IPAM allocates in the builtin namespace; the tenant VRF of the range is its pool's (checked above).
+            # IPAM allocates in the builtin namespace
             if context["vip_prefix_namespace"] != DEFAULT_NAMESPACE:
                 errors.append(f"{label}: VIP prefix {vip_range} is in namespace '{context['vip_prefix_namespace']}'")
             if vip_range in vip_ranges:
@@ -596,21 +551,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the VIPs of the load_balanced components and the rules around them.
-
-        Exactly one LoadbalancerVIP per (load_balanced component, port, context
-        serving its instances' deployment) on the whole branch
-        (ALL_DEMO_LOAD_BALANCED_COMPONENTS), its vip_ip a /32 inside the
-        context's VIP range, fronting the component, with at least one pool
-        member inside the component's segment prefix. R_server: the context's
-        policy lb-<context> permits the leg /29 to the component's segment on
-        the port. R_client (strict load balancing): a dependency into the
-        component (ALL_DEMO_LB_CLIENT_DEPENDENCIES) is ruled from its source
-        segment to the VIP/32 on the port, and never directly to the
-        component's segment on that port. A component on cloud instances
-        (ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS) has one CloudLoadBalancer in
-        its instances' VPC instead (layer 4 or 7 by the component's lb_layer), its VIPs without an address.
-        """
+        """Verify the VIPs of the load_balanced components and the rules around them."""
         logging.info("=== %s - Step 3e: Load-balancer VIPs and rules ===", SCENARIO_NAME)
 
         contexts = await fetch_loadbalancer_inventory(client=async_client_main, branch=scenario_branch)
@@ -707,7 +648,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     f"expected the leg {sorted(map(str, legs))}"
                 )
 
-        # R_client: from each client's segment to the VIP/32, and no direct rule to the target's segment.
+        # R_client: from each client's segment to the VIP/32
         result = await async_client_main.execute_graphql(
             query=RULES_BY_SOURCE_SEGMENT_QUERY,
             variables={"names": sorted({c["source_segment"] for c in ALL_DEMO_LB_CLIENT_DEPENDENCIES.values()})},
@@ -751,9 +692,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         f"{target['segment']} on {protocol}/{port}; a load-balanced target is reached through its VIP only"
                     )
 
-        # Cloud (ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS): one CloudLoadBalancer per component in its instances'
-        # VPC and subnets; one VIP per port on it, without an address
-        # (the cloud assigns it), the instances themselves as pool members. No context, leg or rule.
+        # Cloud (ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS)
         cloud = ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS
         result = await async_client_main.execute_graphql(
             query=CLOUD_LOAD_BALANCERS_QUERY,
@@ -782,7 +721,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             ports = sorted((str(vip["protocol"]), int(vip["port"])) for vip in vips)
             if ports != sorted(component["ports"]):
                 errors.append(f"cloud load balancer {name}: VIPs on {ports}, expected {sorted(component['ports'])}")
-            # The reverse of LoadbalancerVIP.load_balancer (ManagedLoadBalancer.vips): the load balancer lists its own.
+            # The reverse of LoadbalancerVIP.load_balancer (ManagedLoadBalancer.vips)
             if len(lb.get("vips") or []) != len(vips):
                 errors.append(f"cloud load balancer {name}: lists {len(lb.get('vips') or [])} VIP(s), has {len(vips)}")
             for vip in vips:
@@ -824,14 +763,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each segment is deployed into every DC its scope names.
-
-        A ``dc_pair``-scoped segment that only materialises one leg looks fine
-        in isolation — the segment exists, the VNI is allocated — but half the
-        stretch is missing.
-
-        Scoped like test_03: legs in another suite's DC are not 30_all's.
-        """
+        """Verify each segment is deployed into every DC its scope names."""
         logging.info("=== %s - Step 4: Segment Deployment Legs ===", SCENARIO_NAME)
 
         services = scope_tenant_services_to_dcs(

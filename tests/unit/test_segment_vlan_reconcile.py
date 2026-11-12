@@ -1,16 +1,4 @@
-"""Unit tests for SegmentVlanMixin's per-segment VLAN domain reconciliation
-(generators/segment_vlan.py).
-
-ManagedSegmentVlan rows are reached by add_vxlan_segment and by
-every add_app_component_segment run of a component on the segment, so no run
-owns them: they are reconciled per SEGMENT from desired state (every
-switch with a port tagged with the segment, plus border gateways of
-a stretched segment), each under the segment deployment its switch sits in,
-written untracked, and stale ones are deleted explicitly. Covers state
-parsing, the desired device set, create/keep/delete/move, the lock, and that a
-device with no deployment of the segment is reported and leaves the rows alone.
-MLAG pairs: tests/unit/test_segment_vlan_pairs.py.
-"""
+"""Unit tests for SegmentVlanMixin's per-segment VLAN domain reconciliation (generators/segment_vlan.py)."""
 
 from __future__ import annotations
 
@@ -38,9 +26,7 @@ def _customer_dc(parent_id: str, pod_ids: list[str]) -> dict[str, Any]:
     }
 
 
-# ===========================================================================
 # State parsing
-# ===========================================================================
 
 
 class TestFetchSegmentVlanState:

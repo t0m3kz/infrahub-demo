@@ -1,7 +1,4 @@
-"""Unit tests for the security tags AppApplicationGenerator derives
-(generators/topology/application_security.py): component tags, segment tags and
-cross-segment component tags.
-"""
+"""Unit tests for the security tags AppApplicationGenerator derives (generators/topology/application_security.py)."""
 
 from __future__ import annotations
 
@@ -17,9 +14,7 @@ from tests.unit.app_application_generator_helpers import _app, _backend, _dep, _
 from tests.unit.query_shape_helpers import compact, fragment_text
 from utils.graphql_queries import load_query
 
-# ===========================================================================
 # TestComponentTags
-# ===========================================================================
 
 
 def _micro_segment(seg_id: str = "seg-m") -> dict[str, Any]:
@@ -159,14 +154,11 @@ class TestComponentTags:
         assert "vrf_type { value }" in fragment
 
 
-# ===========================================================================
 # TestSegmentTags
-# ===========================================================================
 
 
 def _tenant(segment: dict[str, Any], tag_id: str | None = None) -> dict[str, Any]:
-    """``segment`` as a routed PROD tenant segment (gateway namespace type prod), tagged (group tag and routing
-    tag) or not."""
+    """``segment`` as a routed PROD tenant segment (gateway namespace type prod), tagged."""
     return {
         **segment,
         "security_zone": {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000},
@@ -202,8 +194,7 @@ class TestSegmentTags:
         return _app(frontend)
 
     def test_component_and_edge_target_segments_are_tagged_before_rules(self) -> None:
-        """The application run gives each segment it touches its group tag and its routing tag, the edge
-        target's segment included."""
+        """The application run gives each segment it touches its group tag and its routing tag."""
         gen = self._gen()
         order: list[str] = []
         gen._reconcile_segment_rule = AsyncMock(side_effect=lambda **kw: order.append("rule") or (True, False))
@@ -267,9 +258,7 @@ class TestSegmentTags:
         gen._reconcile_segment_rule.assert_not_awaited()
 
 
-# ===========================================================================
 # TestCrossSegmentComponentTags
-# ===========================================================================
 
 
 class TestCrossSegmentComponentTags:
@@ -285,8 +274,7 @@ class TestCrossSegmentComponentTags:
         return gen
 
     def test_target_dict_of_an_own_segment_reads_the_mode_derived_in_this_run(self) -> None:
-        """web -> backend, both this application's: the target's segment dict was read as normal,
-        so the rule (apply_on_switch, tags) is planned against the mode just derived for it."""
+        """web -> backend, both this application's: the target's segment dict was read as normal, so the rule."""
         gen = self._gen()
 
         async def _derive(segment: dict[str, Any], _profile: str) -> None:
@@ -344,6 +332,6 @@ class TestCrossSegmentComponentTags:
         """The fan-out reads dependents' source application (AppApplicationGenerator._calling_application_ids)."""
         query = compact(load_query(root_dir / "queries/topology/add/application.gql"))
         dependents = query.split("dependents {", 1)[1].split("depends_on {", 1)[0]
-        # `__typename` is required: the live server cannot resolve a hierarchical parent without it
-        # ("Unable to identify the type of the instance"), which failed every add_app_application run.
+        # `__typename` is required: the live server cannot resolve a hierarchical parent without it ("Unable to identify
+        # the type of the instance"), which failed every add_app_application run.
         assert "source { node { id ... on AppComponent { parent { node { id __typename } } } } }" in dependents

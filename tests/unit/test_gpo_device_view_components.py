@@ -1,7 +1,4 @@
-"""Component groups of the NX-OS VXLAN GPO device view.
-
-Where their instances sit (component_coverage), the selectors, the gate and the host trunks.
-"""
+"""Component groups of the NX-OS VXLAN GPO device view."""
 
 from __future__ import annotations
 
@@ -81,8 +78,7 @@ class TestComponentCoverage:
     """Which (VTEP, port) pairs classify each component group of the data center, and what blocks it."""
 
     def test_the_fixtures_components_are_claimed_on_the_vtep_that_owns_their_port(self) -> None:
-        """A physical instance is its own host (trunk port Ethernet10), a VM walks its hosting device (Ethernet11);
-        the host's second NIC on DC12's border leaf is that data center's to classify."""
+        """A physical instance is its own host (trunk port Ethernet10), a VM walks its hosting device (Ethernet11);"""
         coverage = _coverage(_roots(_raw()))
         assert coverage.claims == [
             _claim(DB, "dc1-leaf-01", "Ethernet11"),
@@ -113,8 +109,7 @@ class TestComponentCoverage:
         }
 
     def test_a_port_that_does_not_carry_the_segment_is_not_claimed_and_blocks(self) -> None:
-        """The NIC is cabled to a VTEP of this data center, but the port lacks the segment: the component's traffic
-        enters unclassified there, so the group must not be enforced (it used to be silently placed)."""
+        """The NIC is cabled to a VTEP of this data center, but the port lacks the segment:"""
         web = [_server("srv-web", _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet20", ("web-np",)))]
         roots = _placed_roots(web=web)
         coverage = _coverage(roots)
@@ -162,8 +157,7 @@ class TestComponentCoverage:
         assert coverage.blockers == {WEB: ["srv-web eno1: cable has 2 far ends"]}
 
     def test_an_endpoint_without_an_id_is_no_far_end(self) -> None:
-        """An endpoint the query's inline fragment did not match comes back empty: it is neither a far end nor
-        a reason to ignore the real one."""
+        """An endpoint the query's inline fragment did not match comes back empty:"""
         nic = _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet10")
         nic["cable"]["node"]["endpoints"]["edges"].append({"node": {}})
         coverage = _coverage(_placed_roots(web=[_server("srv-web", nic)]))
@@ -317,8 +311,7 @@ class TestComponentCoverage:
             assert _coverage(roots) == expected
 
     def test_coverage_is_read_from_the_cleaned_query_response(self) -> None:
-        """clean_data keeps the typename, turns a null port-channel into None, and the cable's near end (the NIC
-        itself, whose device is the host, no VTEP) is skipped: nothing here blocks."""
+        """clean_data keeps the typename, turns a null port-channel into None, and the cable's near end."""
         raw = _raw()
         nic = raw["SecurityTag"]["edges"][1]["node"]["components"]["edges"][0]["node"]["instances"]["edges"][0]["node"]
         cleaned = clean_data(nic)
@@ -504,8 +497,7 @@ class TestComponentGate:
         assert reasons != {None}
 
     def test_a_claimed_port_this_device_lacks_unenforces_it_here_while_its_vpc_peer_enforces(self) -> None:
-        """The coverage part of the verdict is the data center's, the per-device part is not: the peer that lacks
-        a claimed port is left unenforced, the one that has all of its own ports enforces (module docstring)."""
+        """The coverage part of the verdict is the data center's, the per-device part is not:"""
         web = [
             _server(
                 "srv-web",
@@ -680,8 +672,7 @@ class TestHostTrunks:
 
     @staticmethod
     def _context(raw: dict, root_dir: Path) -> tuple[dict[str, Any], MagicMock]:
-        """The template context of ``raw`` (``_template_context``, what transform() renders) and the
-        get_interfaces spy of that one call."""
+        """The template context of ``raw``."""
         transform = Leaf.__new__(Leaf)
         transform.root_directory = str(root_dir)
         device, roots, platform = transform._device_and_platform(with_vrf_objects(transform, raw))

@@ -30,16 +30,7 @@ def routed_session_errors(
     prefixes: list[dict[str, Any]] | None,
     party: tuple[str, int] | None,
 ) -> list[str]:
-    """Why the `<name>-bgp` session of one handoff circuit is not what add_virtual_circuit plans.
-
-    ``circuit`` is the inventory entry (tests/integration/circuit_helpers.py), ``session`` the ManagedBGPPeering node of
-    SESSIONS_QUERY (None: there is none), ``pools`` the networks of the circuit's namespace pool, ``prefixes`` the
-    IpamPrefix nodes described `Handoff <name>` and ``party`` the (device, ASN)
-    declared for the far stub, None when both processes are generated.
-
-    One eBGP session (TTL 1, BFD) on the circuit's two ends, `regular`, IPv4 unicast, the circuit's key; both ends in
-    the circuit's namespace on one /31, our end taking the lower host address; processes on the two end devices, in two ASNs, the party's the data's.
-    """
+    """Why the `<name>-bgp` session of one handoff circuit is not what add_virtual_circuit plans."""
     session_label = f"{name}-bgp"
     if session is None:
         return [f"{name}: no {session_label} session"]
@@ -106,7 +97,7 @@ def routed_session_errors(
         device, asn = party
         if asns.get(device) != asn:
             errors.append(f"{session_label}: party {device} is in AS {asns.get(device)}, expected the data's AS{asn}")
-    # our end (the overlay process), else the first device by name, takes the lower address of the link prefix
+    # our end (the overlay process), else the first device by name
     ours = min(devices, key=lambda device: (processes[device]["process_role"]["value"] != "overlay", device))
     our_end = next(end for end in addresses if end[0] == ours)
     if all(addresses.values()):

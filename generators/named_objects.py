@@ -11,11 +11,7 @@ if TYPE_CHECKING:
 
 
 class GetOrCreateByNameMixin:
-    """Shared get-or-create-by-name-value idiom for policy/SG/zone-style catalog objects.
-
-    Expects the host class to provide: ``client``, ``logger`` (present on
-    ``CommonGenerator``).
-    """
+    """Get-or-create-by-name idiom for catalog objects; needs ``client`` and ``logger`` on the host class."""
 
     client: Any
     logger: logging.Logger
@@ -30,20 +26,9 @@ class GetOrCreateByNameMixin:
         created_log: str | None = None,
         track: bool = True,
     ) -> Any | None:
-        """Filter by name__value, upsert-and-return if found; else create,
-        save, and return. Shared by every policy/SG/zone lookup that used to
-        hand-roll this same try/filter/try/create dance independently.
-
-        ``track`` is the ownership decision, made per call site: True when
-        the object belongs to the target this run is for (the run's tracking
-        group claims it and a later run that stops producing it deletes it);
-        False for a catalog object several targets reach — a zone shared by
-        every segment of an environment, a source segment's policy shared by
-        every application with a component there — which is then written
-        with update_group_context=False so no single run can claim, and later
-        delete, it for everyone. Nothing cleans an untracked object up.
-        An untracked object that already exists is returned without a save.
-        """
+        """Filter by name__value and return the upserted object if found, else create and save it.
+        ``track`` True: the run's group owns the object and a later run deletes it if dropped.
+        False: a shared catalog object, saved with update_group_context=False so no run claims it."""
         try:
             existing = await self.client.filters(kind=kind, name__value=name)
             if existing:
@@ -66,10 +51,6 @@ class GetOrCreateByNameMixin:
             return None
 
     async def _find_rule_by_name(self, kind: Any, policy_id: str, rule_name: str) -> Any | None:
-        """The ``kind`` rule named ``rule_name`` in policy ``policy_id``, or None.
-
-        One read per rule: for a policy the run writes a few rules into (the proxy egress policy of
-        an owner). SegmentFirewallMixin reads a security policy's rules once instead.
-        """
+        """The ``kind`` rule named ``rule_name`` in policy ``policy_id``, or None (one read per rule)."""
         rules = await self.client.filters(kind=kind, policy__ids=[policy_id], name__value=rule_name)
         return rules[0] if rules else None

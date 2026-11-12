@@ -1,9 +1,4 @@
-"""Unit tests for the reads a context boarding run makes (generators/firewall_context.py, firewall_transit.py).
-
-Same fake client as test_customer_dc_transit.py. What is asserted here is what a run does NOT read again: the
-completeness reads a tracked context throws away, the border ports fetched a moment ago, and the context's VLAN and
-allocations that the lock-time read already holds, and the serving link the boarding query already shows.
-"""
+"""Unit tests for the reads a context boarding run makes (generators/firewall_context.py, firewall_transit.py)."""
 
 from __future__ import annotations
 
@@ -21,7 +16,7 @@ _COMPLETENESS_KINDS = ("TopologyRoutedExchange", "DcimVirtualInterface")
 
 
 def _take_leg_out_of_its_vrf(world: _World) -> tuple[Any, list[Any]]:
-    """Make the shared context incomplete: fw-2's tenant leg loses its VRF edge. Returns the leg and the removed edge."""
+    """Make the shared context incomplete: fw-2's tenant leg loses its VRF edge."""
     sub = world.sub_interfaces[("fw-2", "Ethernet1/25.3000")]
     removed = [peer for peer in sub.capabilities.peers if peer.typename == "ManagedVRF"]
     sub.capabilities.peers = [peer for peer in sub.capabilities.peers if peer.typename != "ManagedVRF"]

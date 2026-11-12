@@ -1,11 +1,4 @@
-"""THE INTERNET (TopologyInternet): a device that is a facility, with one shared interface (rules I1 to I3).
-
-Every internet attachment (an ISP router's uplink, the public side of a SaaS or cloud region) is a carrier circuit of its
-own with two ends: that port and THE INTERNET's one interface, a ``TopologyInternetInterface``. The kind of the
-interface is what lets many carriers end on it (checks/carrier_circuit_ports.py), add_circuit places its end by the
-device itself (it has no ``deployment``), checks/circuit_placement.py keeps the two-locations rule, and
-utils/internet_object.py holds I1 to I3. Payloads mirror queries/validation/circuit_placement.gql.
-"""
+"""THE INTERNET (TopologyInternet):"""
 
 from __future__ import annotations
 
@@ -32,8 +25,7 @@ BUS = "TopologyInternetInterface"
 def _device(
     name: str, place: dict[str, Any] | None, *, region: str | None = None, owner: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """A device node as the query selects it: a physical device (deployment), a transport (region or SaaS region) or
-    THE INTERNET (neither); ``owner`` makes it a provider's router (owned, placed nowhere)."""
+    """A device node as the query selects it:"""
     node: dict[str, Any] = {"id": f"id-{name}", "__typename": "X", "name": {"value": name}}
     if owner is not None:
         node["owner"] = {"node": owner}
@@ -188,8 +180,7 @@ class TestAddCircuitPlacesTheInternetEnd:
 
 class TestSharedInterface:
     def test_two_isps_a_saas_and_a_cloud_public_side_share_one_interface_and_pass(self) -> None:
-        """Four carriers end on the one interface: the placement check (INTERNET is the location of its end) and the
-        port check (the kind is exempt from one-carrier-per-port) both report nothing."""
+        """Four carriers end on the one interface:"""
         assert _run(MEETING_POINT) == []
         assert _ports_check(MEETING_POINT) == []
 

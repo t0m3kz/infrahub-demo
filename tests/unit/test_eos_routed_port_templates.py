@@ -1,8 +1,4 @@
-"""Inline renders of the Arista EOS routed-port and global-routing includes.
-
-The smoke goldens carry only physical Ethernet underlay ports, so the sub-interface parent, the routed
-Port-Channel and the pure-L2 paths are covered here.
-"""
+"""Inline renders of the Arista EOS routed-port and global-routing includes."""
 
 from __future__ import annotations
 

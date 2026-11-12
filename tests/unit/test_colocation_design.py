@@ -1,20 +1,4 @@
-"""Design-driven pool sizing and envelope handling of the zone / virtual colocation generators.
-
-A zone (TopologyColocationZone) and a virtual colocation (TopologyVirtualColocation) may state a ``design``
-(TopologyTemplateColocationZone: the most edge routers, firewalls and load balancers), and their metro may state one
-too (TopologyTemplateColocationMetro: the most zones and the zone designs they may use). The designs are the real rows
-of data/bootstrap/14c_colocation_templates.yml (tests/unit/simulators/fabric_designs.py). What these tests pin:
-
-- the prefix lengths of every pool a zone slices, derived from its design (hand-made golden table next to the sizing
-  functions), the IPv6 slices from the COLO_ZONE_*_IPV6_BITS constants, the fixed fallback without a design;
-- which pool the slice is cut from: the metro's supernet ONLY when both tiers have a design, else the bootstrap pool;
-- the warnings (never errors): kit without a design, a design the metro was not sized for, a role past the design maximum;
-- that the entries past a maximum are skipped deterministically, whatever order the query returns them in;
-- that the metro's supernet is wide enough for max_zones zones of every zone design it lists.
-
-The metro side (supernets, ASN block) is in test_colocation_generator.py, the sizing functions in
-test_colocation_sizing.py, the check in test_colocation_placement_check.py.
-"""
+"""Design-driven pool sizing and envelope handling of the zone / virtual colocation generators."""
 
 from __future__ import annotations
 
@@ -66,8 +50,8 @@ from tests.unit.simulators.fabric_designs import (
     colo_zone_design,
 )
 
-# zone design -> (loopback, management, technical) IPv4 prefix lengths, by hand from the design rows:
-# EDGE holds 2 devices and 1 link, EDGE_FW 4 and 3, EDGE_FW_LB 6 and 5 (25% headroom, see test_colocation_sizing.py).
+# zone design -> (loopback, management, technical) IPv4 prefix lengths, by hand from the design rows: EDGE holds 2
+# devices and 1 link, EDGE_FW 4 and 3, EDGE_FW_LB 6 and 5 (25% headroom, see test_colocation_sizing.py).
 _GOLDEN_ZONE_LENGTHS = {
     "EDGE": (29, 29, 30),
     "EDGE_FW": (29, 29, 29),
@@ -674,9 +658,7 @@ class TestOverMaxEntries:
 
     @pytest.mark.parametrize("order", list(itertools.permutations(range(3))), ids=lambda o: "".join(map(str, o)))
     def test_same_entries_are_kept_whatever_order_the_query_returns_them_in(self, order: tuple[int, ...]) -> None:
-        """Judged in template-id order (t-1 then t-2 then t-3) against max_edges 3: t-3 is always the one skipped.
-
-        The kept list keeps the QUERY order, so the device names (allocated in that order) stay stable."""
+        """Judged in template-id order (t-1 then t-2 then t-3) against max_edges 3: t-3 is always the one skipped."""
         design = {**colo_zone_design("EDGE_FW_LB"), "max_edges": 3}
         rows = [_entry("edge", 1, "t-3"), _entry("edge", 2, "t-1"), _entry("edge", 1, "t-2")]
         entries = [rows[i] for i in order]

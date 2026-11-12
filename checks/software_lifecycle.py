@@ -1,9 +1,5 @@
-"""Report what runs a software image that is not approved (rule SL1).
-
-A device, a cluster and a cloud instance run a ``DcimSoftwareImage`` through ``DcimSoftwareRunner``. An image that is
-``vulnerable`` or ``end_of_life`` is an ERROR for every runner (it can be both, the message says so); one that is only
-``deprecated`` is a WARNING: it is still supported and the runner is moved at the next window. The image names the
-remedy: its ``vulnerability_reason`` and its description say which release replaces it. No vulnerability is stored.
+"""Report what runs a software image that is not approved (SL1): vulnerable or end_of_life is an ERROR, deprecated a
+WARNING.
 """
 
 from __future__ import annotations
@@ -18,7 +14,7 @@ WARNING_LIFECYCLE = "deprecated"
 
 
 def image_problems(image: dict[str, Any]) -> list[str]:
-    """What is wrong with one cleaned image row, in words; empty when it is approved and not vulnerable."""
+    """What is wrong with an image, in words; empty when approved and not vulnerable."""
     problems = []
     if image.get("vulnerable"):
         reason = image.get("vulnerability_reason")
@@ -30,7 +26,7 @@ def image_problems(image: dict[str, Any]) -> list[str]:
 
 
 def lifecycle_findings(image: dict[str, Any]) -> list[tuple[str, str, dict[str, Any]]]:
-    """(severity, message, runner) for each runner of one cleaned image row; empty when it is approved."""
+    """(severity, message, runner) for each runner of an image."""
     problems = image_problems(image)
     if not problems:
         return []

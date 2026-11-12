@@ -1,12 +1,4 @@
-"""Unit tests for generators.topology.mlag.MLAGGenerator.
-
-Only reached now off the two remaining ManagedMLAG "updated" triggers
-(capabilities/virtual_peer_link changed outside the topology-generator
-flow) — domain-creation wiring is inlined into DeviceMixin._ensure_mlag_pairs.
-generate() itself fetches the domain with its capabilities in one get() and
-delegates to the shared MLAGWiringMixin.ensure_mlag_wiring with the two peer
-ids — the wiring logic itself is covered by tests/unit/test_mlag_wiring_helper.py.
-"""
+"""Unit tests for generators.topology.mlag.MLAGGenerator."""
 
 from __future__ import annotations
 
@@ -46,10 +38,7 @@ class TestMlagGeneratorGenerate:
 
     @pytest.mark.asyncio
     async def test_fetches_by_id_and_delegates_to_ensure_mlag_wiring(self) -> None:
-        """One get() selects the capabilities; their ids go to the wiring as
-        member_ids (no capabilities.fetch()). Delegates untracked: the wiring
-        belongs to the device generator that created the domain, which
-        re-tracks it on every run."""
+        """One get() selects the capabilities;"""
         gen = _gen()
         mlag_obj = _mlag("id-tor-01", "id-tor-02")
         gen.client.get = AsyncMock(return_value=mlag_obj)

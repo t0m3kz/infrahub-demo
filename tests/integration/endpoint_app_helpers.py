@@ -20,19 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 async def fetch_endpoint_cabling(client: InfrahubClient, branch: str) -> list[dict[str, Any]]:
-    """Fetch every endpoint host with its rack position and cabled peers.
-
-    The peer list a cable exposes includes the host's own interface, so the
-    local end is filtered out here — callers only ever care about what the host
-    is attached *to* (queries/get_endpoint_cabling.gql).
-
-    Returns:
-        [{"name": str, "rack": str | None, "rack_row": int | None,
-          "rack_type": str | None,
-          "links": [{"local_interface": str, "cable": str,
-                     "peer_device": str, "peer_role": str,
-                     "peer_interface": str}]}]
-    """
+    """Fetch every endpoint host with its rack position and cabled peers."""
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
 
@@ -79,16 +67,7 @@ async def fetch_endpoint_cabling(client: InfrahubClient, branch: str) -> list[di
 
 
 async def fetch_application_graph(client: InfrahubClient, branch: str) -> list[dict[str, Any]]:
-    """Fetch every application with its components, segments and instances.
-
-    Returns:
-        [{"name": str, "criticality": str,
-          "components": [{"fqdn": str, "component_type": str,
-                          "segment": str | None, "segment_kind": str | None,
-                          "instances": [{"name": str, "kind": str,
-                                         "host": str | None,
-                                         "host_role": str | None}]}]}]
-    """
+    """Fetch every application with its components, segments and instances."""
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
 

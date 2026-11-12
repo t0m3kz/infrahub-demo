@@ -1,17 +1,4 @@
-"""Consistency of the event-driven generator dispatch in data/events.
-
-A trigger rule names a CoreGeneratorAction (98_generator_action.yml), which names
-a generator definition (.infrahub.yml). A generator bootstraps on a
-CoreGroupTriggerRule (99_group_triggers.yml): the server runs it for a new member
-of the definition's target group. A CoreNodeTriggerRule (99_actions.yml) re-runs
-it on an update of a watched field. Each link fails silently: a rule naming a
-missing action never loads, a match on a field the node kind does not have never
-fires, a group trigger on another group than the target never fires for a
-member, and a node rule firing for a node outside the definition's target group
-raises inside the flow (see the endpoint note in 99_actions.yml). These checks
-read the YAML alone, so a broken link fails here instead of as a missing or
-failed run in the integration suite.
-"""
+"""Consistency of the event-driven generator dispatch in data/events."""
 
 from __future__ import annotations
 
@@ -87,16 +74,14 @@ def test_rule_matches_a_field_of_its_node_kind(rule: dict[str, Any]) -> None:
 
 
 def test_no_node_rule_bootstraps_on_created_without_a_match() -> None:
-    """A `created` node rule with no match fires for every node of its kind and fails for a non-member: a generator
-    bootstraps on its group's trigger instead (99_group_triggers.yml)."""
+    """A `created` node rule with no match fires for every node of its kind and fails for a non-member:"""
     unconditional = [r["name"] for r in trigger_rules() if r["mutation_action"] == "created" and not r.get("matches")]
     assert not unconditional
 
 
 @pytest.mark.parametrize("rule", group_trigger_rules(), ids=_rule_id)
 def test_group_rule_watches_the_target_group_of_its_generator(rule: dict[str, Any]) -> None:
-    """The server runs the generator for the new member of the group the rule names, and the run needs the member in
-    the definition's target group: any other group fires for objects the generator refuses."""
+    """The server runs the generator for the new member of the group the rule names."""
     assert rule["member_update"] == "added"
     assert rule["group"] == definition_targets()[action_generators()[rule["action"]]]
 
@@ -118,23 +103,18 @@ def _query_body(generator: str) -> str:
 
 @pytest.mark.parametrize("generator", sorted({action_generators()[rule["action"]] for rule in group_trigger_rules()}))
 def test_a_group_started_generator_does_not_read_groups_in_its_definition_query(generator: str) -> None:
-    """The server makes every node of a definition query's result a member of the run's query group, and a group
-    that becomes one is reported as a new member of THAT group: its group trigger then starts the group's generators
-    for the query group, which fail ("Target ... is not part of the group"; measured on 1.11 with the orchestrator
-    routing queries). A generator that needs the groups reads them with a query of its own."""
+    """The server makes every node of a definition query's result a member of the run's query group."""
     assert "member_of_groups" not in _query_body(generator)
 
 
-# A group that holds only SOME objects of its kind: the data directory whose objects must join it. The transit peerings
-# are the sessions of the internet topology (`06_internet`); a cloud handoff or a fabric peering is a peering too.
+# A group holding only some objects of its kind: the data directory whose objects must join it.
 _PARTIAL_GROUPS = {"transit_peerings": "06_internet"}
 # A group that holds the objects of one kind that have a role: the servers (role endpoint) are the only devices that join.
 _ROLE_GROUPS = {"endpoints": "endpoint"}
 
 
 def _is_member_candidate(group: str, obj: Any) -> bool:
-    """Whether ``obj`` must join ``group``: every object of the kind, those of the partial group's directory, or those
-    of the role group's role."""
+    """Whether ``obj`` must join ``group``:"""
     if group in _ROLE_GROUPS:
         return obj.value("role") == _ROLE_GROUPS[group]
     return group not in _PARTIAL_GROUPS or _PARTIAL_GROUPS[group] in obj.path.parts
@@ -142,8 +122,7 @@ def _is_member_candidate(group: str, obj: Any) -> bool:
 
 @pytest.mark.parametrize("group", sorted({rule["group"] for rule in group_trigger_rules()}))
 def test_declared_objects_are_target_group_members(group: str) -> None:
-    """A generator starts only for a member of its group, so every declared object of a kind the group holds joins
-    it, or the load builds nothing for it (and its `updated` rules fail for a non-member)."""
+    """A generator starts only for a member of its group."""
     outside = sorted(
         {
             f"{obj.kind} {obj.path.relative_to(ROOT)}"
@@ -155,9 +134,7 @@ def test_declared_objects_are_target_group_members(group: str) -> None:
     assert not outside, f"objects not in '{group}': {outside}"
 
 
-# ---------------------------------------------------------------------------
 # Colocation: the metro owns the site, the zone and virtual colocation own the kit
-# ---------------------------------------------------------------------------
 
 _COLOCATION_KIND_WIRING = {
     # node kind: (generator action, generator definition, target group)
@@ -198,8 +175,7 @@ def test_colocation_kind_action_definition_and_group_chain(node_kind: str, wirin
     ],
 )
 def test_colocation_kind_bootstraps_on_its_group_rule(node_kind: str, group_rule: str) -> None:
-    """A node loaded with its fabric_templates inline is a create, never an `updated` mutation: it joins its group
-    in that create, and the group's trigger runs the generator."""
+    """A node loaded with its fabric_templates inline is a create, never an `updated` mutation:"""
     action, _, group = _COLOCATION_KIND_WIRING[node_kind]
     rule = _group_rules_for(group)[group_rule]
     assert rule["action"] == action
@@ -214,8 +190,7 @@ def test_colocation_kind_bootstraps_on_its_group_rule(node_kind: str, group_rule
     ],
 )
 def test_zone_and_virtual_colocation_watch_only_fabric_templates(node_kind: str, update_rule: str) -> None:
-    """The update trigger matches fabric_templates alone: the generator writes the pool references back onto
-    the node, so watching those (or any field) would re-fire the generator from its own write."""
+    """The update trigger matches fabric_templates alone:"""
     rule = _rules_for(node_kind)[update_rule]
     assert rule["mutation_action"] == "updated"
     assert rule["action"] == _COLOCATION_KIND_WIRING[node_kind][0]
@@ -231,11 +206,7 @@ def test_metro_has_no_update_trigger() -> None:
 
 
 def test_colocation_generators_are_fired_by_exactly_the_expected_rules() -> None:
-    """Metro on its group; zone and virtual colocation on their group and updated. Nothing else fires them.
-
-    The rules are pinned by name (a missing or renamed one fails, and so does a stray one firing these three
-    generators); rules of the same kinds that run another generator (the orchestrator routing) are not in the set.
-    """
+    """Metro on its group; zone and virtual colocation on their group and updated. Nothing else fires them."""
     actions = {action for action, _, _ in _COLOCATION_KIND_WIRING.values()}
     names = {rule["name"] for rule in (*trigger_rules(), *group_trigger_rules()) if rule["action"] in actions}
     assert names == {
@@ -277,9 +248,7 @@ def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
         assert (ROOT / queries[query]).is_file()
 
 
-# ---------------------------------------------------------------------------
 # Customer footprints: boarding creates the customer's pools (data center, colocation and cloud)
-# ---------------------------------------------------------------------------
 
 _BOARDING = {
     # footprint kind: (group trigger rule, action, generator definition, target group)
@@ -308,8 +277,7 @@ _BOARDING = {
 def test_every_boarded_footprint_kind_bootstraps_its_boarding_generator_on_its_group(
     kind: str, wiring: tuple[str, str, str, str]
 ) -> None:
-    """A footprint joins its group on creation and the group trigger runs its boarding generator (which creates the
-    customer's pools): rule -> action -> definition -> target group, for the three kinds."""
+    """A footprint joins its group on creation and the group trigger runs its boarding generator."""
     rule_name, action, definition, group = wiring
     rule = _group_rules_for(group)[rule_name]
     assert rule["action"] == action and rule["member_update"] == "added"
@@ -330,22 +298,17 @@ def test_the_cloud_boarding_generator_is_registered_in_infrahub_yml() -> None:
 
 
 def test_cloud_footprints_of_the_triggered_data_declare_the_boarding_group() -> None:
-    """The cloud group trigger starts only for a member: every declared cloud footprint of the integration data joins
-    customer_deployments_cloud (the generic guard above covers it; this pins that the data has cloud footprints)."""
+    """The cloud group trigger starts only for a member:"""
     footprints = [obj for obj in declared("TopologyCustomerCloud", *_TRIGGERED_DATA_DIRS)]
     assert footprints
     assert all("customer_deployments_cloud" in obj.groups() for obj in footprints)
 
 
-# ---------------------------------------------------------------------------
 # Cloud attachments: the routed range of the virtual network an attachment targets
-# ---------------------------------------------------------------------------
 
 
 def test_a_cloud_attachment_runs_the_range_generator_on_its_group_and_on_a_retarget() -> None:
-    """The attachment is the node that fires the event, so it is the generator's target: it runs when it joins the
-    group (created with member_of_groups) and when its virtual_network changes, and on nothing else (the generator writes
-    allowed_prefixes only, so it raises no event of its own rule)."""
+    """The attachment is the node that fires the event, so it is the generator's target:"""
     group_rule = _group_rules_for("cloud_attachment_ranges")["trigger-cloud-attachment-range-on-added"]
     assert group_rule["action"] == "run-cloud-attachment-range-generator"
     assert GROUP_MEMBER_KINDS["cloud_attachment_ranges"] == ("CloudGatewayAttachment",)
@@ -375,18 +338,11 @@ def test_every_cloud_attachment_of_the_triggered_data_declares_the_group() -> No
     assert all("cloud_attachment_ranges" in obj.groups() for obj in attachments)
 
 
-# ---------------------------------------------------------------------------
 # Circuits: a carrier circuit is a pure carrier, the session kinds of a virtual circuit run add_virtual_circuit
-# ---------------------------------------------------------------------------
 
 
 def test_carrier_circuit_rules_watch_creation_ends_and_status() -> None:
-    """add_circuit runs when a circuit joins carrier_circuits, when `capabilities` change and when `status` changes.
-
-    The status rule is what lets a carrier set to decommissioned (or back to active) reach, through add_circuit's
-    fan-out, the sessions riding it. `locations` (written by add_circuit itself, so a rule would loop) and
-    `circuit_type` (read by nothing) have no rule.
-    """
+    """add_circuit runs when a circuit joins carrier_circuits, when `capabilities` change and when `status` changes."""
     rules = _rules_for("TopologyCarrierCircuit")
     assert sorted(rules) == ["trigger-circuit-on-interface-capabilities-updated", "trigger-circuit-on-status-updated"]
     assert sorted(_group_rules_for("carrier_circuits")) == ["trigger-circuit-on-added"]
@@ -425,8 +381,7 @@ def test_the_virtual_circuit_action_runs_the_session_generator_on_the_virtual_ci
 
 
 def test_the_session_kind_has_its_group_rule_and_four_update_rules() -> None:
-    """One set of rules on the one kind (a rule on a generic is unprobed): joining virtual_circuits, the ends, the
-    status, and what a handoff reads."""
+    """One set of rules on the one kind (a rule on a generic is unprobed):"""
     rules = _rules_for("TopologySessionCircuit")
     expected = {**_SESSION_COMMON_RULES, **_HANDOFF_ONLY_RULES}
     assert sorted(rules) == sorted(f"trigger-session-circuit-on-{suffix}" for suffix in expected)
@@ -470,15 +425,11 @@ def test_the_session_generator_is_registered_in_infrahub_yml() -> None:
     assert (ROOT / definition["file_path"]).is_file()
 
 
-# ---------------------------------------------------------------------------
 # Segment: it owns its port tags and its VLAN rows
-# ---------------------------------------------------------------------------
 
 
 def test_a_change_of_the_realized_segment_ports_runs_nothing() -> None:
-    """A port's VLAN row (the row's interface `capabilities`, the realization the reconcile writes) re-runs nothing,
-    so the reconcile's own writes raise no echo run; no rule sits on a port kind either (an edge edit fires `updated`
-    on both ends, measured on 1.11.9)."""
+    """A port's VLAN row re-runs nothing, so the reconcile's own writes raise no echo."""
     for rule in trigger_rules():
         assert "switched" not in str(rule), rule["name"]
         assert "segments" not in [field for _kind, field in _match_fields(rule)], rule["name"]
@@ -486,9 +437,7 @@ def test_a_change_of_the_realized_segment_ports_runs_nothing() -> None:
 
 
 def test_an_assignment_of_a_port_to_a_deployment_re_runs_the_reconcile() -> None:
-    """The request (the deployment's `capabilities`) has one `updated` rule, on the deployment, whose action runs
-    add_segment_deployment_ports on segment_deployments (a group add_vxlan_segment puts every deployment in), with no
-    group trigger: joining the group runs nothing."""
+    """The request (the deployment's `capabilities`) has one `updated` rule."""
     rules = _rules_for("ManagedSegmentDeployment")
     assert sorted(rules) == ["trigger-segment-deployment-ports-updated"]
     rule = rules["trigger-segment-deployment-ports-updated"]

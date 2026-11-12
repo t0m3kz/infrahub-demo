@@ -1,10 +1,4 @@
-"""Unit tests for CheckEvpnFabric.
-
-Every case here is a fabric that renders valid config on every device and still
-does not forward traffic — which is exactly why the check exists. The payloads are
-in post-``clean_data`` shape; ``validate`` re-runs ``clean_data``, which is
-idempotent on already-flat data.
-"""
+"""Unit tests for CheckEvpnFabric."""
 
 from __future__ import annotations
 
@@ -14,12 +8,7 @@ from checks.evpn_fabric import CheckEvpnFabric
 
 
 def _check() -> Any:
-    """CheckEvpnFabric with logging captured instead of sent to Infrahub.
-
-    ``__new__`` skips ``InfrahubCheck.__init__``, which wants a client and a
-    branch; ``validate`` needs neither. The lambdas swallow ``object_id`` /
-    ``object_type`` so the test does not have to care which calls pass them.
-    """
+    """CheckEvpnFabric with logging captured instead of sent to Infrahub."""
     check = cast(Any, CheckEvpnFabric.__new__(CheckEvpnFabric))
     errors: list[str] = []
     infos: list[str] = []

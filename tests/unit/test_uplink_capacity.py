@@ -1,20 +1,4 @@
-"""Unit tests asserting every device template has enough uplinks for its pod.
-
-``RackCablingStrategy`` dual-homes each bottom device to EVERY top device, so a
-leaf needs one uplink port per spine in its pod, and a border-leaf one per
-super-spine. Fewer ports than top devices is not a degraded fabric — a physical
-interface holds exactly one cable, so the plan double-books a port and Infrahub
-rejects the second cable with a relationship-cardinality error naming an opaque
-node id, mid-generator, after some devices are already wired.
-
-The shortfall lives in the seam between two data files that never reference each
-other: a pod's spine quantity in ``data/demos/01_data_center/*/01_topology.yml``
-and an uplink port range in ``data/bootstrap/10_physical_devices_templates_*``.
-``DCS-7050CX3-32C-R_LEAF_MIXED`` shipped with 2 uplinks while DC4's S_MIXED pod
-declared 4 spines, and nothing connected the two until the generator ran.
-``RackCablingStrategy._validate_bottom_port_count`` now raises instead of
-wrapping; this catches the same thing in the data, before anything runs.
-"""
+"""Unit tests asserting every device template has enough uplinks for its pod."""
 
 from __future__ import annotations
 
@@ -25,13 +9,10 @@ from typing import Any
 import pytest
 import yaml
 
-# Roles whose devices cable to the pod's spine tier (see rack.py's
-# _generate_spine_attached_role). "l2-leaf" is excluded: it hangs off leaf
-# downlinks via the intra_rack strategies, never off spines.
+# Roles that cable to the pod's spine tier; "l2-leaf" hangs off leaf downlinks instead.
 SPINE_ATTACHED_RACK_ROLES = ("leaf", "tor")
 
-# A pod's top tier is whichever of these the pod declares — border-spine
-# collapses spine + border-leaf into one tier (see DC7).
+# A pod's top tier is whichever of these it declares; border-spine collapses spine and border-leaf.
 POD_SPINE_ROLES = ("spine", "border-spine")
 
 
@@ -119,12 +100,7 @@ def _iter_spine_attached(
 
 
 def _iter_border_leafs(topologies: list[dict[str, Any]]) -> list[tuple[str, str, str, int]]:
-    """Same, for DC-tier border-leafs cabling up to the super-spine tier.
-
-    Skipped where a DC declares no super-spine tier (e.g. DC2, design M): there
-    is no top tier for the border-leaf to dual-home to, so no port requirement
-    follows from this data.
-    """
+    """Same, for DC-tier border-leafs cabling up to the super-spine tier."""
     cases: list[tuple[str, str, str, int]] = []
     for item in topologies:
         dc = item["dc"]

@@ -33,11 +33,7 @@ def _make_firewall_interface(
     parent_name: str | None = None,
     namespace_name: str | None = None,
 ) -> dict:
-    """A firewall sub-interface with one explicit routing/policy zone.
-
-    Virtual interfaces cannot carry ``segments``. The global zone is routing
-    identity; policies belong to an explicitly served footprint.
-    """
+    """A firewall sub-interface with one explicit routing/policy zone."""
     zone_node = {
         **routing_zone(zone_name),
         "trust_level": _v(trust_level),
@@ -130,11 +126,7 @@ def _make_segment_rule(
     description: str = "",
     security_profile: str | None = None,
 ) -> dict:
-    """A SecurityPolicyRule (SecurityPolicyRuleFields) of ``policy``, the policy of ``src_segment``.
-
-    ``dst_zone`` is the rule's own ``destination_zone`` (the internet), set instead of ``dst_segment``; ``src_zone``
-    its ``source_zone`` (the internet), set instead of ``src_segment``.
-    """
+    """A SecurityPolicyRule (SecurityPolicyRuleFields) of ``policy``, the policy of ``src_segment``."""
     return {
         "id": f"rule-{policy}-{name}",
         "index": _v(index),
@@ -171,9 +163,8 @@ def _make_policy_header(*, name: str, segment: dict) -> dict:
 
 
 def _make_rule_bearing_segments(endpoints: list[dict], policies: list[tuple[dict, list[dict]]]) -> dict[str, dict]:
-    """Segment id -> the segment as SegmentRulesFields returns it: its own
-    policy (the one whose header names it) with its rules, and the rules of
-    every policy whose destination it is, each carrying its policy."""
+    """Segment id -> the segment as SegmentRulesFields returns it: its own policy (the one whose header names it) with
+    its rules, and the rules of every policy whose destination it is."""
     segments: dict[str, dict] = {
         endpoint["id"]: {**endpoint, "security_policy": _node(None), "inbound_rules": _edges([])}
         for endpoint in endpoints
@@ -189,11 +180,7 @@ def _make_rule_bearing_segments(endpoints: list[dict], policies: list[tuple[dict
 
 
 def _attach_standalone_policy_context(device: dict, segments: list[dict]) -> None:
-    """Scope the historical /30 fixture's rules to explicit served footprints.
-
-    No base VLAN means no generated /29 transit legs, as in existing hosted
-    policy-only contexts. Keep the authored /30 addresses and VLANs intact.
-    """
+    """Scope the historical /30 fixture's rules to explicit served footprints."""
     interfaces = [edge["node"] for edge in device["interfaces"]["edges"]]
     zones = {
         interface["security_zone"]["node"]["name"]["value"]: interface["security_zone"]["node"]
@@ -288,7 +275,6 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
     )
 
     # Sub-interfaces on trunk uplink (ethernet1/1) — one /30 per zone/namespace.
-    # Leaf IP is .2, FW IP is .1 in each /30.
     fw_interfaces = [
         _make_firewall_interface(
             name="ethernet1/1.10",
@@ -373,11 +359,7 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
 
 
 def build_leaf_internet_permit_data(*, device_name: str, platform: str) -> dict:
-    """The with_acl leaf whose VXLAN segment (10.100.0.0/24) also permits https to the internet zone.
-
-    Its ACL must deny every NON_INTERNET_PREFIXES range before the `permit tcp ... any eq 443`
-    (a plain permit to any would open every same-VRF destination at the leaf).
-    """
+    """The with_acl leaf whose VXLAN segment (10.100.0.0/24) also permits https to the internet zone."""
     data = build_device_data(
         device_name=device_name,
         role="leaf",
@@ -425,13 +407,7 @@ def build_leaf_internet_permit_data(*, device_name: str, platform: str) -> dict:
 
 
 def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
-    """The internet-permit leaf plus a shared firewall context with a leg in the segment's VRF.
-
-    seg-100 (VRF_A) permits ssh to seg-200 (bypassed: normal routing) and https to the Internet
-    (never bypassed), so its PBR is: bypass 10.200.0.0/24, everything else to the context's VIP
-    (the /29 leg 100.66.0.0/29 -> .4), which the leaf holds as a local transit leg
-    (VLAN 3000, VNI 64000). seg-200 is in the default VRF and gets no PBR.
-    """
+    """The internet-permit leaf plus a shared firewall context with a leg in the segment's VRF."""
     data = build_leaf_internet_permit_data(device_name=device_name, platform=platform)
     net = ipaddress.ip_network("100.66.0.0/29")
     legs = [
@@ -511,14 +487,7 @@ def _lb_rule(
 
 
 def build_leaf_lb_client_data(*, device_name: str, platform: str) -> dict:
-    """A PBR leaf (shared firewall context, VRF_A leg) hosting both ends of a load-balanced flow.
-
-    seg-web (10.110.0.0/24) calls the VIP 100.68.0.10/32 of app on tcp/443 (R_client, its own policy: a selector
-    in its own VRF, so an ACL permit and a PBR bypass, never the firewall). seg-app (10.120.0.0/24) is the
-    backend: the segment-less policy lb-dc1-lb-01-PROD lets the leg 100.67.0.0/29 reach it on tcp/8443
-    (R_server, one of seg-app's inbound_rules), so seg-app's SVI ACL gets the established return leg to the
-    /29 and its PBR bypasses the /29. Nothing is redirected to the load balancer: it source-NATs to its leg.
-    """
+    """A PBR leaf (shared firewall context, VRF_A leg) hosting both ends of a load-balanced flow."""
     data = build_device_data(device_name=device_name, role="leaf", platform=platform, include_segments=False)
     node = data["DcimDevice"]["edges"][0]["node"]
     domain = node["id"]
@@ -543,7 +512,7 @@ def build_leaf_lb_client_data(*, device_name: str, platform: str) -> dict:
         "default_action": _v("deny"),
         "segment": _node(None),
     }
-    # A rule end is the PolicyRuleSegmentFields of the segment, never the segment node itself (no cycle).
+    # A rule end is the PolicyRuleSegmentFields of the segment
     web_end, app_end = (
         {key: seg[key] for key in ("id", "__typename", "name", "customer_name", "security_zone", "gateway")}
         for seg in (web, app)
@@ -586,10 +555,7 @@ def build_leaf_lb_client_data(*, device_name: str, platform: str) -> dict:
 
 
 def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
-    """A firewall whose internal zone (10.0.1.0/24) permits https to the internet zone.
-
-    The rule table renders it to INTERNET with destination any (the zone names no address).
-    """
+    """A firewall whose internal zone (10.0.1.0/24) permits https to the internet zone."""
     data = build_firewall_data(device_name=device_name, platform=platform)
     internal = _make_rule_segment(cidr="10.0.1.0/24", zone_name="internal")
     header = _make_policy_header(name="internal-to-internet", segment=internal)
@@ -644,11 +610,7 @@ def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
 
 
 def build_firewall_ha_data(*, device_name: str, platform: str) -> dict:
-    """Build a firewall GQL response that includes a ManagedHA capability.
-
-    Same topology as build_firewall_data() but with a ManagedHA capability node
-    so the HA template block is exercised.
-    """
+    """Build a firewall GQL response that includes a ManagedHA capability."""
     data = build_firewall_data(device_name=device_name, platform=platform)
 
     ha_cap = {
@@ -691,8 +653,7 @@ def write_fixtures() -> tuple[int, int]:
     """Write the firewall fixtures, and the leaf fixtures of the firewall-context features (permit, PBR, LB client)."""
     generated = errors = 0
 
-    # A permit to the internet zone: the leaf denies every
-    # internal range before `permit ... any`, the firewall renders INTERNET / any.
+    # A permit to the internet zone: the leaf denies every internal range before `permit ... any`
     print("\nGenerating internet-permit fixtures (leaf, firewall):")
     g, e = write_data_fixtures(
         [
@@ -711,8 +672,7 @@ def write_fixtures() -> tuple[int, int]:
     generated += g
     errors += e
 
-    # Leaf PBR (default-redirect to the context VIP, bypass for permits): NX-OS route-map, EOS policy-map type pbr,
-    # SONiC PBR ACL table. The VIP's transit leg is local to the leaf, so this also covers its EVPN filter.
+    # Leaf PBR (default-redirect to the context VIP, bypass for permits): NX-OS route-map
     print("\nGenerating leaf PBR fixtures:")
     g, e = write_data_fixtures(
         (Leaf, f"leaf_{platform}_pbr", build_leaf_pbr_data(device_name="dc1-leaf-01", platform=platform))
@@ -720,7 +680,7 @@ def write_fixtures() -> tuple[int, int]:
     )
     generated += g
     errors += e
-    # Both ends of a load-balanced flow on a PBR leaf: the VIP /32 and the LB leg /29 are bypassed, never redirected.
+    # Both ends of a load-balanced flow on a PBR leaf: the VIP /32 and the LB leg /29 are bypassed
     g, e = _write_data_fixture(
         Leaf, "leaf_cisco_nxos_lb_client", build_leaf_lb_client_data(device_name="dc1-leaf-01", platform="cisco_nxos")
     )

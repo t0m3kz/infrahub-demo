@@ -1,12 +1,4 @@
-"""Unit tests for the SONiC tenant L3 config-DB (templates/configs/common/sonic_tenant_l3.j2).
-
-Renders the real leaf / border-leaf SONiC templates through the transforms'
-own _load_template, fed a narrow context, so each case pins one rule:
-gateway SVIs, L3 VNI through its VLAN, per-VRF BGP and EVPN type-5, the
-exchange statics, and the two EVPN filters (a border's exported statics, a
-leaf's own transit /29s). The full-transform paths are the smoke fixtures
-border_leaf_*sonic_exchange_transit and leaf_*sonic_pbr.
-"""
+"""Unit tests for the SONiC tenant L3 config-DB (templates/configs/common/sonic_tenant_l3.j2)."""
 
 from __future__ import annotations
 

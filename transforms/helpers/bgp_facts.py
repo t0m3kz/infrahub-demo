@@ -1,16 +1,4 @@
-"""The model facts the BGP route protection is derived from, read off a device's query data.
-
-``transforms/common.py`` calls ``annotate_bgp_policy`` once per device after the template context is built: it turns the
-cleaned device data and the extra query roots into the plain facts of ``utils/bgp_expectation.py``, derives each
-session's expectation and composes it into ``session["policy"]`` (transforms/helpers/bgp_policy.py). The check
-(checks/bgp_expectations.py) builds the same facts with the same functions, so the two cannot read the model
-differently.
-
-What the device query must carry (queries/config/*.gql): the hosting deployment's ``loopback_pool`` and
-``routing_filter_enforce`` (queries/fragments/evpn_fabric.gql) and, as an extra root, the ``multisite-vip`` interfaces of
-the model with their devices' loopbacks. A query without them yields no pool and no far end: the families that need
-them are then not derivable and render unprotected, never as a deny-all list.
-"""
+"""The model facts the BGP route protection is derived from, read off a device's query data."""
 
 from __future__ import annotations
 
@@ -53,12 +41,7 @@ def device_addrs(interfaces: Iterable[Mapping[str, Any]] | None) -> DeviceAddrs:
 
 
 def _hosting(deployment: Any) -> dict[str, Any]:
-    """The device's hosting deployment as the query returned it: the first of its deployment and that deployment's
-    parent that carries ``routing_filter_enforce`` (only a TopologySegmentHosting does: a DC, a metro, an office).
-
-    Found by the attribute and not by ``typename``, which the device queries do not all select. {} when the query
-    selected none, so the device stages and has no pool.
-    """
+    """The device's hosting deployment as the query returned it."""
     return next((c for c in segment_hosting_candidates(deployment) if "routing_filter_enforce" in c), {})
 
 
@@ -81,11 +64,7 @@ def loopback_ranges(deployment: Any) -> tuple[str, ...]:
 
 
 def _vip_devices(vip_interfaces: Iterable[Mapping[str, Any]] | None) -> tuple[frozenset[str], dict[str, Device]]:
-    """Every VIP address of the model and the border gateways that carry them, with their loopbacks.
-
-    ``vip_interfaces`` is the cleaned ``DcimVirtualInterface(role: multisite-vip)`` root. A VIP on two devices (the
-    edge pair of a metro) is one address and both devices carry it.
-    """
+    """Every VIP address of the model and the border gateways that carry them, with their loopbacks."""
     vips: set[str] = set()
     found: dict[str, tuple[str, set[str], set[str]]] = {}
     for interface in vip_interfaces or []:
@@ -106,12 +85,7 @@ def _vip_devices(vip_interfaces: Iterable[Mapping[str, Any]] | None) -> tuple[fr
 
 
 def environment_prefixes(extra_roots: Mapping[str, Any]) -> tuple[dict[str, frozenset[str]], frozenset[str]]:
-    """The routed prefixes per environment namespace and the namespaces matched as ranges.
-
-    Read off the ``environment_prefixes_*`` roots (queries/config/*.gql): every ``IpamPrefix`` of a PROD, NON-PROD,
-    INTERNET or MANAGEMENT namespace is a prefix a VRF of that namespace may carry as an EVPN type-5 route. The
-    internet namespace is matched as ranges: the SNAT /32s ride inside the public aggregate.
-    """
+    """The routed prefixes per environment namespace and the namespaces matched as ranges."""
     found: dict[str, set[str]] = {}
     ranges: set[str] = set()
 
@@ -164,17 +138,7 @@ def environment_prefixes(extra_roots: Mapping[str, Any]) -> tuple[dict[str, froz
 
 
 def default_exits(extra_roots: Mapping[str, Any], gateways: Iterable[str]) -> dict[str, frozenset[str]]:
-    """Namespace -> the devices that originate a default route in it.
-
-    - An internet VRF instance: its border gateways (``gateways`` carry a multisite VIP; utils/vrf_demand.py
-      ``internet_exits``): the edge's upstream default enters EVPN there.
-    - A tenant (prod, non-prod) instance: its border leafs and border spines. The shared firewall context's
-      ``0.0.0.0/0`` static to its VIP is redistributed into EVPN by the border that holds it
-      (transforms/helpers/firewall.py ``get_exchange_routes``), so every VTEP of the VRF takes its default from there.
-      Every border of the VRF counts: the query does not say which one holds a shared context.
-
-    The instances are the ``ManagedVRF`` root.
-    """
+    """Namespace -> the devices that originate a default route in it."""
     border_gateways = set(gateways)
     exits: dict[str, set[str]] = {}
     for instance in extra_roots.get(VRF_KIND) or []:
@@ -222,10 +186,7 @@ def build_fabric(
 
 
 def build_device(device_data: Mapping[str, Any], local_only: Iterable[str] = ()) -> Device:
-    """The device whose sessions are derived: name, role, own loopbacks and VIPs, VRF memberships.
-
-    ``local_only``: prefixes it holds for itself and must not originate into EVPN (a leaf's transit /29s).
-    """
+    """The device whose sessions are derived: name, role, own loopbacks and VIPs, VRF memberships."""
     namespaces = {
         (membership.get("security_zone") or {}).get("name") for membership in device_memberships(dict(device_data))
     }

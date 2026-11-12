@@ -1,17 +1,4 @@
-"""The segments a firewall context terminates: the sub-interface each member renders for one.
-
-A ``ManagedVxlanSegment`` with ``terminated_on`` set is gatewayed by the firewall pair of that context: its ``gateway``
-is the pair's floating VIP (no per-member address) and the fabric only bridges it (VLAN row, L2 VNI, no SVI). The
-sub-interface is not an object. It is derived here, per member, from three facts of the query data:
-
-- the trunk: the ``parent_interface`` of the context's transit legs (every leg of a context rides on the same
-  ``uplink`` trunk, utils/exchange_transit.py);
-- the facing leaf: the device at the far end of the trunk's cable (or its physical host port's cable for a VM NIC);
-- the VLAN: the segment's VLAN row on that leaf, the tag both ends of the cable use.
-
-The result is shaped like the firewall interfaces ``transforms/config/firewall.py`` builds, with the VIP as
-``virtual_ip``, so every vendor template renders it through its existing interface path.
-"""
+"""The segments a firewall context terminates: the sub-interface each member renders for one."""
 
 from __future__ import annotations
 
@@ -60,17 +47,7 @@ def terminated_interfaces(
     device_id: str | None,
     device_name: str,
 ) -> list[dict[str, Any]]:
-    """One firewall interface per segment a context terminates, in the shape of ``_build_fw_interfaces``.
-
-    Each is ``<trunk>.<vlan>`` on the trunk, addressed with the segment's gateway as ``virtual_ip`` (a connected
-    network: no static route, see ``get_firewall_static_routes``) and in the segment's zone. A segment is skipped, with
-    a warning, when the context has no leg on this device (no trunk), the trunk has no facing device, the segment has
-    no gateway, or no VLAN row on the facing leaf yet (the segment reconcile has not converged): the next run renders it.
-
-    ``contexts`` come from ``get_firewall_contexts`` (``terminated_segments`` and ``legs``), ``interfaces`` are the
-    device's own cleaned interfaces, ``ha`` its HA pair (``get_ha``; without one there is no VIP to own) and
-    ``device_id`` its id.
-    """
+    """One firewall interface per segment a context terminates, in the shape of ``_build_fw_interfaces``."""
     found: list[dict[str, Any]] = []
     for context in contexts:
         segments = context.get("terminated_segments") or []

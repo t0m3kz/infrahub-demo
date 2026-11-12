@@ -1,20 +1,4 @@
-"""Unit tests for ColocationMetroGenerator (generators/topology/colocation.py).
-
-The metro owns no devices: its zones and virtual colocations do (see
-test_colocation_zone_generator.py). What the metro keeps is what those children
-share, the identity of the metro's one EVPN Multi-Site site:
-
-- its L2 VNI pool (``{metro}-vni-pool``, read by the segment generator off
-  TopologySegmentHosting);
-- the ASN pool (``{metro}-asn-pool``) the site's one AS is drawn from later by a
-  zone or virtual colocation.
-
-Both are created and attached on every run, kit or no kit.
-
-A metro WITH a design (TopologyTemplateColocationMetro, data/bootstrap/14c_colocation_templates.yml) is also the
-supernet holder of its zones: five prefix pools sized by generators/fabric_sizing.py for max_zones zones of the widest
-listed zone design, and an ASN block sized for max_zones. A metro without one creates none of them.
-"""
+"""Unit tests for ColocationMetroGenerator (generators/topology/colocation.py)."""
 
 from __future__ import annotations
 
@@ -158,9 +142,8 @@ class TestMetroOwnsNoKit:
         assert {c.kwargs["pool_name"] for c in gen.upsert_number_pool.await_args_list} == {"fr-vni-pool"}
 
 
-# metro design -> (loopback, management, technical) IPv4 and (loopback, technical) IPv6 prefix lengths, computed by
-# hand from data/bootstrap/14c_colocation_templates.yml: S holds 2 zones, M holds 4, of the widest zone design
-# (EDGE_FW_LB: 8 loopback, 16 management, 16 technical addresses; management holds the devices plus two spare).
+# metro design -> (loopback, management, technical) IPv4 and (loopback, technical) IPv6 prefix lengths, computed by hand
+# from data/bootstrap/14c_colocation_templates.yml: S holds 2 zones, M holds 4, of the widest zone design.
 _GOLDEN_SUPERNET_LENGTHS = {
     "S": {
         "fr-loopback-pool": 28,
@@ -333,7 +316,7 @@ class TestMetroWithDesignSupernets:
 
     @pytest.mark.asyncio
     async def test_design_arrives_as_the_cleaned_graphql_shape(self) -> None:
-        """colocation_metro.gql returns design { node { ... zone_templates { edges { node } } } }; clean_data() flattens it."""
+        """colocation_metro.gql returns design { node { ... zone_templates { edges { node } } } }."""
         gen = _make_generator()
 
         def zone(name: str, edges: int, firewalls: int, load_balancers: int) -> dict[str, Any]:

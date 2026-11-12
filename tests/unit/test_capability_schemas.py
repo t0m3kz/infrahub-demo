@@ -1,9 +1,4 @@
-"""Schema tests for the per-node count limits on the capability kinds.
-
-ManagedMLAG caps its device edge at exactly two peers; ManagedBGP and ManagedOSPF keep an
-uncapped many edge (a many relationship cannot be capped at one). The cap holds only for
-writes from the MLAG side, which is why the runtime member-count guards stay.
-"""
+"""Schema tests for the per-node count limits on the capability kinds."""
 
 from __future__ import annotations
 

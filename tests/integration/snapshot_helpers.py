@@ -35,20 +35,10 @@ async def render_device_config(
     return rendered
 
 
-# Kind -> the selection that must not change on a rerun. Generic kinds, so
-# every concrete device (DcimPhysicalDevice, DcimVirtualDevice, ...),
-# interface (DcimPhysicalInterface, DcimVirtualInterface, DcimLAGInterface,
-# ...) and pool kind is covered; a reallocated address or number shows up as a
-# changed value or a deleted-and-added id. The kinds after the generator
-# outputs are mostly data-loaded or owned by another generator: an id lost
-# there is a foreign deletion, i.e. a generator cleaned up a node it does not
-# own. A switch port's segment tags are the VLAN rows among its capabilities (the tag reconcile's output),
-# next to the circuits, VRFs and sessions on it.
+# Kind -> the selection that must not change on a rerun.
 TOPOLOGY_SNAPSHOT_KINDS = {
     "DcimDevice": "name { value }",
-    # ip_address is declared on each concrete interface kind, not on the generic: a rerun that re-pointed a port
-    # at another address object (or the same one with another value) is a diff, which is what covers the
-    # addresses add_virtual_circuit puts on the DCI ports and the handoff sub-interfaces.
+    # ip_address is declared on each concrete interface kind, not on the generic
     "DcimInterface": (
         "name { value } capabilities { edges { node { id } } } "
         "... on DcimPhysicalInterface { ip_address { node { id address { value } } } } "
@@ -56,8 +46,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
         "role { value } } "
         "... on DcimLAGInterface { ip_address { node { id address { value } } } }"
     ),
-    # cable_id, color and length_cm are derived by the cabling, HA and MLAG sites from the endpoints, the type and
-    # the suite layout: a rerun that rewrote one is a diff.
+    # cable_id, color and length_cm are derived by the cabling, HA and MLAG sites from the endpoints
     "DcimCable": "endpoints { edges { node { id } } } cable_id { value } color { value } length_cm { value }",
     "IpamIPAddress": "address { value }",
     "IpamPrefix": "prefix { value }",
@@ -66,9 +55,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "CoreIPAddressPool": "name { value }",
     "RoutingAutonomousSystem": "asn { value }",
     "ManagedBGP": "local_as { node { id } }",
-    # The <vc>-underlay / <vc>-evpn (Interconnect), <vc>-bgp (Handoff) and FABRIC-* sessions: a rerun that
-    # rebuilt one (new id), re-attached it to other processes, ports, address families or key, or rewrote its
-    # knobs is a diff here.
+    # The <vc>-underlay / <vc>-evpn (Interconnect), <vc>-bgp (Handoff) and FABRIC-* sessions
     "ManagedBGPPeering": (
         "name { value } peering_role { value } session_type { value } ttl { value } bfd_enabled { value } "
         "send_extended_community { value } password { node { id } } "
@@ -78,9 +65,8 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value }",
     "ManagedSegmentVlan": "vlan_id { value } device { node { id } }",
-    # The VRF instances (one per hosting deployment and security zone) and the segment SVIs are untracked and converged by
-    # generators/helpers/vrf.py: a rerun that rebuilt an instance (new id), moved it to another topology or zone,
-    # changed its members, or re-pointed an SVI (its address, the segment gateway, is in DcimInterface) is a diff.
+    # VRF instances and segment SVIs are untracked and converged by generators/helpers/vrf.py: any change on rerun is a
+    # diff.
     "ManagedVRF": (
         "name { value } deployment { node { id } } security_zone { node { id } } "
         "shared_devices { edges { node { id } } }"
@@ -88,8 +74,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",
     "TopologyDataCenter": "name { value }",
-    # add_circuit/add_sdwan_edge output (the carrier circuit and the tunnel); an Interconnect is data-loaded and only
-    # gains sessions, so their selection must not move.
+    # add_circuit/add_sdwan_edge output (the carrier circuit and the tunnel)
     "TopologyCarrierCircuit": (
         "name { value } locations { edges { node { id } } } capabilities { edges { node { id } } }"
     ),
@@ -109,8 +94,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "ManagedOSPF": "name { value }",
     "ManagedOSPFPeering": "name { value }",
     "RoutingOSPFInterface": "name { value }",
-    # The value is in the snapshot on purpose: a generated key (<vc>-dci-key, the fabric keys) is created once and
-    # never rotated, so a rerun that drew a new secret is a diff. (Demo secrets: a diff line prints them.)
+    # The value is in the snapshot on purpose
     "RoutingPassword": "name { value } password { value }",
     "RoutingBGPAddressFamily": "",
     "SecurityZone": "name { value }",
@@ -120,13 +104,11 @@ TOPOLOGY_SNAPSHOT_KINDS = {
 }
 
 
-# Kind -> name prefixes left out of the snapshot. Resource locks are
-# CoreStandardGroups that every run creates and deletes again.
+# Kind -> name prefixes left out of the snapshot.
 SNAPSHOT_EXCLUDED_NAME_PREFIXES = {"CoreStandardGroup": ("lock-",)}
 
 
-# Explicit GraphQL paging: the branch holds thousands of interfaces and
-# addresses, more than one unpaged query is guaranteed to return.
+# Explicit GraphQL paging: the branch holds thousands of interfaces and addresses
 SNAPSHOT_PAGE_SIZE = 1000
 
 
@@ -155,8 +137,8 @@ def snapshot_query(kind: str, selection: str, offset: int) -> str:
 async def snapshot_topology(
     client: InfrahubClient, branch: str, kinds: Iterable[str] | None = None
 ) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
-    """Kind -> {id: comparable state} for TOPOLOGY_SNAPSHOT_KINDS (or only ``kinds`` of it), paged, plus
-    id -> "<concrete kind> <display_label>" so a diff can name what moved."""
+    """Kind -> {id: comparable state} for TOPOLOGY_SNAPSHOT_KINDS (or only ``kinds`` of it), paged, plus id ->
+    "<concrete kind> <display_label>" so a diff can name what moved."""
     snapshot: dict[str, dict[str, Any]] = {}
     labels: dict[str, str] = {}
     wanted = TOPOLOGY_SNAPSHOT_KINDS if kinds is None else {kind: TOPOLOGY_SNAPSHOT_KINDS[kind] for kind in kinds}
@@ -185,8 +167,8 @@ def diff_snapshots(
     after: dict[str, dict[str, Any]],
     labels: dict[str, str] | None = None,
 ) -> list[str]:
-    """Deleted, added and changed objects per kind; `labels` (id -> kind and
-    display label, from both snapshots) names each one."""
+    """Deleted, added and changed objects per kind; `labels` (id -> kind and display label, from both snapshots) names
+    each one."""
     labels = labels or {}
 
     def _name(kind: str, node_id: str) -> str:

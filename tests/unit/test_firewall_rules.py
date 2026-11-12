@@ -1,9 +1,4 @@
-"""The rules a firewall's served segments name by id are read back in full.
-
-The registered firewall_config query selects the rules of the served segments as ids only. ``read_rules``
-(transforms/config/firewall.py) reads them and the segments they name by id; the steps around the reading are pure
-helpers (transforms/helpers/firewall_rules.py), tested here on plain data.
-"""
+"""The rules a firewall's served segments name by id are read back in full."""
 
 from __future__ import annotations
 

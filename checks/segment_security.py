@@ -27,55 +27,12 @@ from utils.segment_addressing import own_prefix
 from .base import WarningCheck
 
 _Network = ipaddress.IPv4Network | ipaddress.IPv6Network
-# (network, namespace type, owner key): the owner is None for on-prem space, the customer that registered it otherwise.
+# (network, namespace type, owner key); owner is None for on-prem space.
 _Space = list[tuple[_Network, str | None, str | None]]
 
 
 class CheckSegmentSecurity(WarningCheck):
-    """Validate zone, address and identity of every ManagedNetworkSegment kind.
-
-    Runs on settled data (gateways are allocated asynchronously, so a generator
-    cannot refuse a rule to an address-less segment; this check does):
-
-    - a tenant segment's zone follows its environment (p -> PROD, else
-      NONPROD), an exchange-zone segment is exempt (the schema makes the zone
-      mandatory, so every segment has one);
-    - a routed tenant segment's owner zone has the VRF type of its
-      environment (p -> prod, else non_prod), independently of IPAM identity;
-      exchange-zone segments are exempt from both environment rules;
-    - computed segment names are unique across kinds;
-    - a rule endpoint segment resolves to a prefix (or the rule has an explicit
-      selector): otherwise it would render as any (a warning: L2-only segments
-      have no gateway by design);
-    - a rule side with a prefix or address selector and no segment names its
-      zone (``source_zone`` / ``destination_zone``): the zone qualifies the
-      selector, the render needs it;
-    - a bare ``destination_zone`` (no selector) is the internet, INTERNET and
-      no other zone, and excludes a destination segment and group tag; next
-      to a prefix or address selector a zone only qualifies it;
-    - an app component's environment should match its segment's (warning);
-    - every component of a microsegmented segment has a group tag; a tag groups
-      exactly one component or exactly one segment, never both (an orphan is
-      a warning); its group_id is in the band of the tag pool the
-      group-policy profiles name, and no reserved group of a profile is;
-    - a rule side carries a component tag only where its segment is
-      microsegmented: inside it, or on a component dependency into or out of
-      it;
-    - every ``destination_prefixes`` entry of an enabled rule is reachable: inside an on-prem segment prefix, or
-      inside a prefix a customer registered behind an external session (an office ``lan_prefixes`` or hosted segment
-      and a tunnel's ``registered_prefixes`` behind an SD-WAN gateway, the allowed prefixes or network blocks behind a
-      cloud peering's gateway; transforms/helpers/bgp_external.py registered_by_attachment), in a namespace of the
-      source segment's environment (or an exchange peer of it); otherwise no session accepts it and the rule
-      aims at nothing. A registered destination must be the SOURCE segment's owner's: the edge announces an
-      owner's prefixes only to that owner's sessions, so the far end of another owner's session has no route back
-      to the source (on-prem space and a source with no customer owner are not compared) (a ``destination_segment`` or ``destination_zone`` rule is not checked here: the internet
-      needs no registered prefix);
-    - every permit rule between two groups is a contract row of the group
-      contract builder (transforms/helpers/group_policy.py): a rule the
-      builder dropped would be denied by group policy while L0 permits it; a
-      rule into a microsegmented segment that names no component (hand-written)
-      opens every group of it (warning).
-    """
+    """Validate zone, address and identity of every ManagedNetworkSegment kind, on settled data."""
 
     query = "segment_security"
 
@@ -102,15 +59,12 @@ class CheckSegmentSecurity(WarningCheck):
         self._validate_contracts(segments, tags)
 
     def _validate_zone(self, segment: dict[str, Any]) -> None:
-        """Tenant zone == f(environment); an exchange-zone segment is exempt.
-
-        The zone itself is mandatory in the schema (ManagedNetworkSegment.security_zone).
-        """
+        """Tenant zone follows the environment; an exchange-zone segment is exempt."""
         seg_name = segment.get("name", "<unnamed-segment>")
         kind = segment.get("typename")
         zone = segment["security_zone"]["name"]
         if is_exchange_zone(zone):
-            # A shared service segment (e.g. the DC-local MANAGEMENT services) sits in an exchange zone by design.
+            # A shared service segment sits in an exchange zone by design.
             return
         environment = segment["environment"]
         expected = zone_name_for_namespace_type(namespace_type_for_environment(environment))
@@ -175,14 +129,8 @@ class CheckSegmentSecurity(WarningCheck):
                 )
 
     def _validate_policy_rules(self, rules: list[dict[str, Any]]) -> None:
-        """What a rule must hold wherever it is rendered: the one place for these (the firewall check judged them too).
-
-        * A rule lives in its source segment's policy: a policy that names a segment holds only rules whose source is
-          that segment. A policy with no segment holds the rules the load balancer generator writes (their source is a
-          prefix), so it is not judged.
-        * A rule has a destination: a segment, the internet zone, a prefix or an address.
-        * A rule to the internet zone is not ``apply_on_switch``: the leaf ACL can only approximate it by denying the
-          internal ranges first, and it would force the whole ACL of a firewalled segment onto the switch.
+        """A rule lives in its source segment's policy, has a destination, and is not ``apply_on_switch`` to the
+        internet.
         """
         for rule in rules:
             if not rule_enabled(rule):
@@ -216,12 +164,7 @@ class CheckSegmentSecurity(WarningCheck):
                 )
 
     def _validate_environment_separation(self, rules: list[dict[str, Any]]) -> None:
-        """Prod and non-prod never connect: an enabled rule between a PROD and a NON-PROD segment is an error.
-
-        The zone decides (``vrf_type`` of the segment's ``security_zone``, the routing authority), not the
-        ``environment`` attribute; a segment in an exchange zone (INTERNET, MANAGEMENT) is not a tenant segment and a
-        rule side that is a prefix or address selector names no segment, so neither is judged here.
-        """
+        """An enabled rule between a PROD and a NON-PROD segment is an error (judged by the zone's ``vrf_type``)."""
         for rule in rules:
             if not rule_enabled(rule):
                 continue
@@ -237,11 +180,7 @@ class CheckSegmentSecurity(WarningCheck):
                 )
 
     def _validate_selector_zones(self, rules: list[dict[str, Any]]) -> None:
-        """A rule side with a prefix or address selector and no segment names its zone (``{side}_zone``).
-
-        The zone qualifies the selector: it is the routing context the transforms render the selector in
-        (transforms/helpers/policy.py ``rule_zone``), and no IPAM object carries one. Without it the render fails.
-        """
+        """A rule side with a prefix or address selector and no segment names its zone (the render needs it)."""
         for rule in rules:
             if not rule_enabled(rule):
                 continue
@@ -258,11 +197,7 @@ class CheckSegmentSecurity(WarningCheck):
                 )
 
     def _validate_rule_destinations(self, rules: list[dict[str, Any]]) -> None:
-        """A ``destination_zone`` is the internet and the rule's only destination.
-
-        The leaf ACL and the cloud security group cannot enumerate any other zone (they would render as any),
-        and a zone next to a segment, selector or tag would be read by some consumers and ignored by others.
-        """
+        """A bare ``destination_zone`` is the internet and the rule's only destination."""
         for rule in rules:
             zone = (rule.get("destination_zone") or {}).get("name")
             if not zone or not rule_enabled(rule):
@@ -376,8 +311,7 @@ class CheckSegmentSecurity(WarningCheck):
                 )
 
     def _validate_tags(self, tags: list[dict[str, Any]], profiles: list[dict[str, Any]]) -> None:
-        """A tag groups one component or one segment (a shared tag merges two groups; none is an orphan),
-        its group_id is in the pool band, and no profile's reserved group is in that band."""
+        """A tag groups one component or one segment, its group_id is in the pool band, no reserved group is."""
         pool, problem = tag_pool(profiles)
         low, high = (pool.get("start_range"), pool.get("end_range")) if pool else (None, None)
         pool_name = (pool or {}).get("name")
@@ -418,9 +352,7 @@ class CheckSegmentSecurity(WarningCheck):
     def _validate_rule_tags(
         self, rules: list[dict[str, Any]], tags: list[dict[str, Any]], segments: list[dict[str, Any]]
     ) -> None:
-        """A rule side carries a group tag only where its segment is microsegmented, and the tag
-        is of a component of that side's segment (an intra-segment rule, or a component
-        dependency into or out of a microsegmented segment)."""
+        """A rule side carries a group tag only in a microsegmented segment, and of one of its components."""
         tag_segments = {
             tag["id"]: {(component.get("network_segment") or {}).get("id") for component in tag.get("components") or []}
             for tag in tags
@@ -451,8 +383,7 @@ class CheckSegmentSecurity(WarningCheck):
                     )
 
     def _validate_contracts(self, segments: list[dict[str, Any]], tags: list[dict[str, Any]]) -> None:
-        """Every rule between two groups is a row of the contract builder, with that rule's name;
-        a rule into a microsegmented segment without its component's tag opens every group of it (warning)."""
+        """Every rule between two groups is a contract row; one into a microsegmented segment without a tag warns."""
         by_segment, by_tag = segment_groups(segments, tags)
         rows = {(row["src"], row["dst"]): set(row["rules"]) for row in get_vrf_contracts(segments, tags)}
         for segment in sorted(segments, key=lambda item: str(item.get("name"))):
@@ -500,11 +431,7 @@ def _network(cidr: str | None) -> _Network | None:
 
 
 def _reachable_types(environment: str | None) -> frozenset[str] | None:
-    """The namespace types a rule from a segment of ``environment`` may reach: its own and its exchange peers.
-
-    None when the rule names no source segment (any namespace type): a PROD segment never reaches a prefix
-    registered only in NON-PROD, and the other way round.
-    """
+    """Namespace types a rule from ``environment`` may reach (its own and exchange peers); None: any."""
     if not environment:
         return None
     own = namespace_type_for_environment(environment)
@@ -517,12 +444,8 @@ def _reachable_space(
     tunnels: list[dict[str, Any]] | None,
     legs: list[CloudLeg],
 ) -> _Space:
-    """Every (network, namespace_type, owner) a destination prefix may sit in: on-prem and registered behind a session.
-
-    On-prem: the gateway prefix of every segment (no owner compared). Registered: the prefixes a customer owner
-    registered behind an attachment point (registered_by_attachment, the edge's own reading), with that owner; a
-    prefix with no customer owner is never accepted, so it is no destination either (routing_invariants.py rule 7
-    reports it).
+    """Every (network, namespace_type, owner) a destination may sit in: on-prem, or registered by a customer behind a
+    session.
     """
     space: _Space = []
     for segment in segments:

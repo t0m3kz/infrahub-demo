@@ -1,34 +1,6 @@
-"""Validate that racks and pod designs fit the suite that hosts them.
+"""Check that racks and pod designs fit the suite that hosts them.
 
-A LocationSuite is the physical capacity: ``rows`` rows of ``racks_per_row`` rack slots. A rack sits at
-(``row_index``, ``index``) in that grid, ``index`` being the slot in the row (a network rack carries a slot such as 5
-next to a compute rack at 1). A pod's design (TopologyTemplatePod) is the envelope its racks are built within:
-``max_rows`` rows of ``max_compute_racks_per_row + max_network_racks_per_row`` slots (the same limits
-generators/topology/rack.py holds a rack to). Two rules:
-
-Rack position
-    1. ``row_index`` is at most the suite's ``rows``,
-    2. ``index`` is at most the suite's ``racks_per_row``.
-    One finding per offending rack, naming the rack, the suite and every number out of range.
-
-Pod envelope
-    The pod's design must fit every suite that hosts a rack of the pod: ``max_rows`` at most the suite's ``rows`` and
-    ``max_compute_racks_per_row + max_network_racks_per_row`` at most its ``racks_per_row``. The envelope, not the
-    racks present today, is the demand: a suite whose grid is full of the racks that exist but too small for the
-    design leaves the pod unable to grow into what it was designed for (and a design the grid cannot hold is
-    drift between the design and the room). A pod whose racks sit in several suites is judged against each one,
-    because a rack position is a coordinate of the design's grid whichever suite holds the rack. One finding per
-    offending pod, naming each suite it does not fit and the numbers.
-
-Skipped, never an error: a rack without a suite, a rack without a numeric row or slot (that coordinate is not
-compared), a rack hosted by nothing or by something without a design (a colocation zone is a ``TopologyRackHosting`` with no design), a pod
-without racks (it hosts no suite, so there is nothing to compare).
-
-Known limitations (the check sees the final state of the data, nothing more):
-
-- racks are data: no generator creates a LocationRack, so what the check sees is every rack there is,
-- a pod with no rack is not tied to a suite by the model, so a design too large for the room is only found once the
-  first rack of the pod is placed.
+Racks lie inside the suite's rows and racks_per_row; the pod design's envelope fits every hosting suite.
 """
 
 from __future__ import annotations
@@ -44,12 +16,12 @@ POD = "TopologyPod"
 
 
 def _is_number(value: Any) -> bool:
-    """A usable coordinate: a real integer (a bool is no position)."""
+    """A real integer (a bool is no position)."""
     return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _suite_label(suite: dict[str, Any]) -> str:
-    """``'name' (R rows, P racks per row)``, for a message."""
+    """``'name' (R rows, P racks per row)``."""
     name = suite.get("name") or suite.get("id") or "<unnamed-suite>"
     return f"'{name}' ({suite['rows']} rows, {suite['racks_per_row']} racks per row)"
 
@@ -113,7 +85,7 @@ class CheckSuiteCapacity(InfrahubCheck):
 
 
 def _suites_by_pod(racks: list[dict[str, Any]]) -> dict[str, tuple[dict[str, Any], list[dict[str, Any]]]]:
-    """Pod id -> (the pod, the suites hosting a rack of it, each once) for every pod that has a design and racks."""
+    """Pod id -> (pod, suites hosting its racks) for every pod with a design and racks."""
     pods: dict[str, tuple[dict[str, Any], dict[str, dict[str, Any]]]] = {}
     for rack in racks:
         pod, suite = rack.get("deployment"), rack.get("parent")

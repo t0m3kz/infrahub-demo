@@ -1,27 +1,4 @@
-"""Integration test — re-running the 30_all generators changes nothing.
-
-Every generator here tracks what it writes and deletes what a run no longer
-produces (delete_unused_nodes=True), so a run that misses an object it owns
-deletes it. This module snapshots what the generators produced on the branch
-test_59 built, runs them once more by hand over every target, and asserts
-the snapshot is unchanged: no object lost, none added, no rule renumbered,
-no relationship dropped, no number or address reallocated.
-
-Two passes: the security path (rules, policies, segment attachments, firewall
-contexts with their sub-interfaces and P2P addresses, orchestrator routing
-groups), then the topology path (devices, interfaces, cables, addressing and
-pools of DCs, pods, racks, colocation metros, endpoints, MLAG domains,
-circuits, LB next-hops, per-instance segment tagging, SD-WAN edges and office fabrics).
-
-Each pass compares both snapshots, and the topology snapshot also covers
-objects the rerun generators do not own — data-loaded devices, racks, pods,
-DCs, controllers, routing and security objects, groups and pools — so a
-generator whose cleanup deletes a node it merely touched is caught too.
-
-decommission_pod is left out: deleting a pod is what it is for.
-
-It runs last because the reruns rewrite the branch the other modules read.
-"""
+"""Integration test — re-running the 30_all generators changes nothing."""
 
 from __future__ import annotations
 
@@ -50,14 +27,10 @@ from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_ta
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 SCENARIO_NAME = "Scenario 30_all: Generator Idempotency"
-# One rerun is enough to expose a generator that deletes or re-creates what it owns; a second pass only
-# catches A -> B -> A flapping, which no history in this repo shows, and costs ~10 minutes.
+# One rerun is enough to expose a generator that deletes or re-creates what it owns
 RERUNS = 1
 
-# Generator definition -> the group it targets (.infrahub.yml). These write
-# the security path: rules and policies (applications, dependencies,
-# components), segment policy attachments (segments), serving firewall
-# contexts (deployments), orchestrator routing-group membership.
+# Generator definition -> the group it targets (.infrahub.yml).
 RERUN_GENERATORS = {
     "add_app_application": "app_applications",
     "add_app_dependency": "app_dependencies",
@@ -84,12 +57,9 @@ REQUIRED_RERUN_GENERATORS = {
     "add_customer_deployment_colocation",
 }
 
-# Generators that dispatch others without waiting (dc_pod_cascade ->
-# pod_rack_cascade -> add_rack -> row-dependent add_rack; add_app_dependency
-# and add_app_component -> add_app_application; add_circuit ->
-# add_virtual_circuit for the Interconnect and Handoff circuits riding it). The queue can go
-# quiet between waves, so their reruns wait for a longer quiet spell before
-# the next generator starts.
+# Generators that dispatch others without waiting (dc_pod_cascade -> pod_rack_cascade -> add_rack -> row-dependent
+# add_rack; add_app_dependency and add_app_component -> add_app_application; add_circuit -> add_virtual_circuit for the
+# Interconnect and Handoff circuits riding it).
 FAN_OUT_GENERATORS = {
     "dc_pod_cascade",
     "pod_rack_cascade",
@@ -222,9 +192,7 @@ query {
 }
 """
 
-# Generator definition -> target group for the topology pass, in build order:
-# a rack rerun reads the pod's pools, an endpoint the rack's leafs, a
-# component's segment tagging the endpoint's cables.
+# Generator definition -> target group for the topology pass, in build order
 TOPOLOGY_RERUN_GENERATORS = {
     "add_dc": "topologies_dc",
     "dc_pod_cascade": "topologies_dc",
@@ -236,9 +204,7 @@ TOPOLOGY_RERUN_GENERATORS = {
     "add_colocation_zone": "colocation_zones",
     "add_virtual_colocation": "virtual_colocations",
     "add_circuit": "carrier_circuits",
-    # virtual_circuits holds the Interconnect and Handoff circuits (no Tunnel: it has no session). The rerun must
-    # keep each one's /31 (/127), the addresses on its ports, its <name>-bgp or <name>-underlay/<name>-evpn
-    # peerings and a DCI's per-circuit key exactly as they were: same ids, same values (snapshot_topology).
+    # virtual_circuits holds the Interconnect and Handoff circuits (no Tunnel: it has no session).
     "add_virtual_circuit": "virtual_circuits",
     "add_endpoint": "endpoints",
     "add_app_component_segment": "app_components",
@@ -264,8 +230,8 @@ def _nodes(result: dict[str, Any], kind: str) -> list[dict[str, Any]]:
 
 
 def _context_legs(context: dict[str, Any]) -> tuple[tuple[Any, ...], ...]:
-    """The legs of a raw firewall context, (interface id, name, address id, address) sorted: the transit
-    sub-interfaces of its members, derived (utils/service_contexts.py leg_interfaces), a context has no interface edge."""
+    """The legs of a raw firewall context, (interface id, name, address id, address) sorted: the transit sub-interfaces
+    of its members, derived (utils/service_contexts.py leg_interfaces)"""
     return tuple(
         sorted(
             (
@@ -349,8 +315,7 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 async def _failed_tasks(client: InfrahubClient, branch: str) -> list[str]:
-    """Failed tasks on the branch, as report lines. Catches what a run's own
-    outcome cannot: generators a rerun dispatched without waiting."""
+    """Failed tasks on the branch, as report lines."""
     try:
         await verify_no_failed_tasks(client=client, branch=branch)
     except AssertionError as exc:
@@ -359,8 +324,8 @@ async def _failed_tasks(client: InfrahubClient, branch: str) -> list[str]:
 
 
 def _rerun_report(label: str, failed: list[str], changes: list[str]) -> str:
-    """Generator failures first: a delete the server refuses fails the run yet
-    leaves the object in place, so the diff alone would hide it."""
+    """Generator failures first: a delete the server refuses fails the run yet leaves the object in place, so the diff
+    alone would hide it."""
     parts = []
     if failed:
         parts.append(f"{len(failed)} generator run(s) failed:\n  " + "\n  ".join(failed))
@@ -411,8 +376,8 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         topology_before: dict[str, dict[str, Any]],
         labels_before: dict[str, str],
     ) -> None:
-        """Run every generator over its targets RERUNS times; after each pass
-        assert both snapshots are unchanged and no task failed."""
+        """Run every generator over its targets RERUNS times; after each pass assert both snapshots are unchanged and
+        no task failed."""
         failed: list[str] = []
         for attempt in range(1, RERUNS + 1):
             for generator, node_ids in targets.items():
@@ -442,9 +407,7 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         scenario_branch: str,
         workflow_state: dict[str, Any],
     ) -> None:
-        """Two more runs of every security generator over every target keep
-        each object, its rule index and its relationships as they were, and
-        delete nothing they do not own."""
+        """Two more runs of every security generator over every target keep each object."""
         logging.info("=== %s - Step 1: Rerun Generators ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -464,8 +427,7 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
     @pytest.mark.dependency(scope="session", depends=["all_demo_idempotent_reruns"])
     @pytest.mark.asyncio
     async def test_03_inbound_rules_mirror_destination_segment(self, workflow_state: dict[str, Any]) -> None:
-        """inbound_rules is the reverse of SecurityPolicyRule.destination_segment:
-        every rule into a segment is listed on it, and nothing else is."""
+        """inbound_rules is the reverse of SecurityPolicyRule.destination_segment."""
         logging.info("=== %s - Step 3: inbound_rules Consistency ===", SCENARIO_NAME)
 
         snapshot = workflow_state["idempotency_snapshot"]
@@ -491,10 +453,7 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Two more runs of every topology generator, in build order, keep each
-        device, port, segment tag, cable, address, prefix, pool and allocated
-        number, delete nothing they do not own, and leave the security path
-        test_01 checked untouched."""
+        """Two more runs of every topology generator, in build order, keep each device, port, segment tag."""
         logging.info("=== %s - Step 4: Rerun Topology Generators ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -504,17 +463,14 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         logging.info("Topology snapshot: %s", {kind: len(objects) for kind, objects in before.items()})
         for kind in ("DcimDevice", "DcimInterface", "DcimCable", "IpamIPAddress"):
             assert before[kind], f"No {kind} on the branch to compare"
-        # The zone edge pairs must be in the snapshot, or a second interlink cable / FABRIC session
-        # / shared-VIP address would go unnoticed (a duplicate is a new id, hence an "added" diff).
+        # The zone edge pairs must be in the snapshot
         for peering in ALL_DEMO_FABRIC_PEERINGS.values():
             held = [node_id for node_id, state in before["ManagedBGPPeering"].items() if repr(peering) in repr(state)]
             assert len(held) == 1, f"{peering} is {len(held)} ManagedBGPPeering object(s) in the snapshot, not 1"
         for vip in ALL_DEMO_ZONE_SITE_VIPS.values():
             holders = [node_id for node_id, state in before["IpamIPAddress"].items() if repr(vip) in repr(state)]
             assert len(holders) == 1, f"the shared zone VIP {vip} is {len(holders)} IpamIPAddress object(s), not 1"
-        # The sessions add_virtual_circuit builds must be in the snapshot, one object each, or a duplicate session
-        # (new id) or a re-created per-circuit key would go unnoticed: an Interconnect holds <name>-underlay,
-        # <name>-evpn and <name>-dci-key, a Handoff <name>-bgp and no key of its own (its key is data-loaded).
+        # The sessions add_virtual_circuit builds must be in the snapshot, one object each
         for circuit, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items():
             if expected["circuit_type"] == INTERCONNECT_TYPE:
                 peerings = [f"{circuit}-underlay", f"{circuit}-evpn"]

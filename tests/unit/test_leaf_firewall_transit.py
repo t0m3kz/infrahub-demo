@@ -1,12 +1,4 @@
-"""Unit tests for the leaf-local firewall transit leg (PBR next hop is a connected VIP).
-
-Covers:
-- get_exchange_transits(contexts, legs=...) — shared by the border (all legs) and the leaf (used legs)
-- get_leaf_firewall_transits() — scoped legs, determinism and the fail-closed raise
-- BaseDeviceTransform._extra_config() — leaf transits become VLANs/VXLAN, never host ports or ACL/PBR input
-- NX-OS / EOS leaf templates — the transit /29 deny, rendered only with leaf transits
-- validate_transit_vlans() on a leaf
-"""
+"""Unit tests for the leaf-local firewall transit leg (PBR next hop is a connected VIP)."""
 
 from __future__ import annotations
 
@@ -134,8 +126,7 @@ def _deployment(contexts: list[dict]) -> dict[str, Any]:
 
 
 def _services(activations: list[dict], steered: set[int] | None) -> dict[str, Any]:
-    """The switch's nested service data: one routed row per activation, whose footprint has a serving context unless
-    the VLAN is left out of ``steered`` (None steers all)."""
+    """The switch's nested service data:"""
     rows = [
         raw_row(
             f"row-{act['vlan_id']}",
@@ -236,8 +227,7 @@ class TestGetLeafFirewallTransits:
         assert [t["vlan_id"] for t in transits] == [3000]
 
     def test_two_contexts_give_two_transits_sorted_by_vlan(self) -> None:
-        """A leaf redirecting to a dedicated and a shared context holds both legs; AC7: shuffled contexts and rules
-        render the same transits."""
+        """A leaf redirecting to a dedicated and a shared context holds both legs;"""
         shared = _context()
         dedicated = _context(
             name="dc1-fw-c1", ctx_id="ctx-2", vlan=3010, tenant="dep-b", legs=(("100.66.8.5/29", _PROD_NS),)
@@ -375,8 +365,7 @@ class TestLeafExtraConfig:
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
     @pytest.mark.parametrize("role", ["leaf", "tor", "access-leaf"])
     def test_sonic_leaf_with_firewall_pbr_holds_the_transit_leg(self, platform: str, role: str) -> None:
-        """SONiC used to refuse a firewall-PBR leaf; it now gets the local leg like NX-OS/EOS
-        (rendered by templates/configs/common/sonic_tenant_l3.j2, see test_sonic_tenant_l3.py)."""
+        """SONiC used to refuse a firewall-PBR leaf;"""
         device = _device([_context()], [_activation()])
         config = _transform(role)._extra_config(device, platform)
         assert 3000 in {v["vlan_id"] for v in config["vlans"]}

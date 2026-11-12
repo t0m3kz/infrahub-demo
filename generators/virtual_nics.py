@@ -1,9 +1,5 @@
-"""Pins the NICs of a virtual instance to the ports of the physical device hosting it.
-
-A virtual machine has no cable of its own: its traffic leaves through the physical device that hosts
-it. Each base NIC the machine's template provides (a DcimVirtualInterface) therefore points, through
-``ManagedInterfaceEncapsulation`` (no tag), to the host port it rides on, and the host port carries the cable. A
-context sub-interface sits on the NIC, so border leaf -> host port -> NIC -> sub-interface is a path in the graph.
+"""Pins the NICs of a virtual instance to the ports of the physical device hosting it. Each base NIC points through
+``ManagedInterfaceEncapsulation`` (no tag) to its host port; the host port carries the cable.
 """
 
 from __future__ import annotations
@@ -36,9 +32,8 @@ def is_host_nic(interface: dict[str, Any]) -> bool:
 
 
 def pair_nics_with_host_ports(nics: list[Any], host_ports: list[Any]) -> list[tuple[Any, Any]]:
-    """(nic, host port) pairs: per role, the n-th NIC by interface order rides the n-th host port.
-
-    A NIC with no host port of its role left stays unpaired (a machine can have more uplinks than its host).
+    """(nic, host port) pairs: per role, the n-th NIC by interface order rides the n-th host port; a NIC with none left
+    stays unpaired.
     """
     pairs: list[tuple[Any, Any]] = []
     for role in PINNED_ROLES:
@@ -54,10 +49,7 @@ def pair_nics_with_host_ports(nics: list[Any], host_ports: list[Any]) -> list[tu
 
 
 class VirtualNicMixin:
-    """Mixin providing the NIC pinning for DeviceMixin.
-
-    Expects the host class to provide: ``client``, ``logger`` and ``_retry_delay``.
-    """
+    """Mixin providing the NIC pinning for DeviceMixin; the host provides ``client``, ``logger`` and ``_retry_delay``."""
 
     client: Any
     logger: logging.Logger
@@ -66,12 +58,9 @@ class VirtualNicMixin:
         _retry_delay = staticmethod(CommonGenerator._retry_delay)
 
     async def _pin_virtual_nics(self, devices: list[Any], host_id: str) -> None:
-        """Pin every base NIC of devices to a port of the device host_id: its encapsulation, with that port as parent.
-
-        The server instantiates the template's NICs after the device is saved, so the read is retried
-        until every device has some. Uplinks only ride cabled host ports. A NIC with no
-        available port is unpinned (its encapsulation deleted), including a stale generated pin from an earlier run.
-        The NICs belong to the template, not to this run, so they are saved untracked.
+        """Pin every base NIC of devices to a port of the device host_id (its encapsulation, with that port as parent),
+        untracked. Retried until the server has instantiated the template's NICs; uplinks ride cabled host ports only, a
+        NIC with no port is unpinned.
         """
         device_ids = [device.id for device in devices]
         nics: list[Any] = []
@@ -115,7 +104,7 @@ class VirtualNicMixin:
                 if getattr(getattr(pin, "parent", None), "id", None) == parent_id:
                     continue
                 if host_port is None:
-                    # The parent is mandatory: a stale pin (equal to None only when there is none) goes with its object.
+                    # The parent is mandatory: a stale pin goes with its object.
                     if pin is not None:
                         await pin.delete()
                     self.logger.info(f"  - Unpinned {device.name.value} {nic.name.value}: no available host port")

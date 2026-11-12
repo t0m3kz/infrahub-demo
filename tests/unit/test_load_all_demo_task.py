@@ -23,12 +23,7 @@ def _task(task_id: str, title: str = "Execute generator add_dc") -> SimpleNamesp
 
 
 class FakeTaskManager:
-    """Answer `client.task.filter` calls from scripted results.
-
-    In-flight queries pop from `in_flight` (empty once exhausted); failure
-    queries return `failed[stage]`, where the stage advances every time the
-    task loads a stage (tracked by the fake context).
-    """
+    """Answer `client.task.filter` calls from scripted results."""
 
     def __init__(self, in_flight: list[list[Any]] | None = None, failed: dict[int, list[Any]] | None = None) -> None:
         """Store the scripted answers."""

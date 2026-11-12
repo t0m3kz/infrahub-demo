@@ -1,11 +1,4 @@
-"""Unit tests for the ManagedCloudProxy web-gateway policy transform.
-
-Renders against the real templates/configs/proxies_cloud/*.j2 files (not mocked) to also
-exercise provider-based template selection (zscaler_zia / cloudflare_gateway / netskope /
-generic fallback) — same "one template per vendor" pattern as leaf/spine device configs.
-`service_type` (not `provider`) gates whether rendering is even supported: private_access/ZTNA
-(e.g. Zscaler ZPA) is a different, unmodeled data model regardless of vendor.
-"""
+"""Unit tests for the ManagedCloudProxy web-gateway policy transform."""
 
 from __future__ import annotations
 

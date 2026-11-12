@@ -76,8 +76,7 @@ def _vrf_zone(device: str, interface: str) -> str:
 
 
 def _bindings(deployment: str) -> list[dict[str, Any]]:
-    """The port requests of a hosting deployment (90_bindings/95b_segment_requests): one entry per segment deployment,
-    its assigned ports (equal to the members of its rows in 96_segment_ports, tests/unit/test_full_topology_segments.py)."""
+    """The port requests of a hosting deployment (90_bindings/95b_segment_requests):"""
     path = _DATA / "90_bindings/95b_segment_requests" / f"{deployment}.yml"
     return [row for doc in yaml.safe_load_all(path.read_text()) if doc for row in doc["spec"]["data"]]
 
@@ -200,11 +199,7 @@ def _raw_segment(site: str) -> dict[str, Any]:
 
 
 def render_terminated_from_query(raw_device: dict[str, Any]) -> list[dict[str, Any]]:
-    """Reusable live proof: pass a raw ``firewall_config`` query's device node (not its root/edges wrapper).
-
-    The registered query selects device capabilities/HA, interface cables, context legs and terminated-segment rows.
-    No fixture facts are added: missing cables, rows or legs are handled by the production helper.
-    """
+    """Reusable live proof:"""
     device = cast(dict[str, Any], clean_data(raw_device))
     interfaces = device.get("interfaces") or []
     ha = get_ha(device.get("capabilities"), interfaces, device.get("name"))
@@ -486,11 +481,7 @@ def _port_group_load_rows() -> list[dict[str, Any]]:
 def _upsert_port_groups(
     rows: list[dict[str, Any]], loaded: dict[str, dict[str, Any]] | None = None
 ) -> dict[str, dict[str, Any]]:
-    """Model the observed 1.11.11 inherited ``name.unique=True`` upsert, not just the composite HFID.
-
-    Reloading a group updates its supplied fields, including its Parent and NICs; a later group with the same
-    globally unique name therefore re-parents that object. Groups omitted from an upsert are not deleted.
-    """
+    """Model the observed 1.11.11 inherited ``name.unique=True`` upsert, not just the composite HFID."""
     loaded = deepcopy(loaded) if loaded is not None else {}
     for row in rows:
         loaded.setdefault(row["name"], {}).update(deepcopy(row))

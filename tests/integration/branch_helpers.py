@@ -19,15 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 async def fetch_proposed_change_diff(client: InfrahubClient, branch: str) -> dict[str, Any]:
-    """Fetch the diff tree of a proposed change and summarize object changes.
-
-    Args:
-        client: Infrahub async client
-        branch: Source branch name
-
-    Returns:
-        Dict with ``totals``, ``by_kind`` summary, and ``node_count``.
-    """
+    """Fetch the diff tree of a proposed change and summarize object changes."""
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
 
     diff_tree = await client.get_diff_tree(branch=branch)
@@ -69,25 +61,7 @@ async def fetch_artifacts(
     expected_min_total: int = 0,
     max_polls: int = 12,
 ) -> dict[str, Any]:
-    """Fetch artifacts generated for a proposed change via its validators.
-
-    Queries the CoreProposedChange by source branch, then inspects
-    CoreArtifactValidator checks to get artifact status. Polls because
-    artifact generation runs asynchronously after the proposed change is
-    created — this is waiting for async work to settle, not a business
-    assertion; ``expected_min_total`` only controls when polling stops early,
-    callers must assert on the returned counts/status themselves.
-
-    Args:
-        client: Infrahub async client
-        branch: Source branch name (used to find the proposed change)
-        expected_min_total: Minimum total artifact count to poll for
-        max_polls: Polls (10s apart) before giving up — raise it when the
-            proposed change's pipeline shares the workers with others
-
-    Returns:
-        Dict with ``total``, ``by_definition`` summary, and ``failed`` list.
-    """
+    """Fetch artifacts generated for a proposed change via its validators."""
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
 
     query = """
@@ -194,20 +168,7 @@ async def fetch_artifacts(
 
 
 async def fetch_generator_runs(client: InfrahubClient, branch: str) -> dict[str, int]:
-    """Count, per generator name, how many task runs a branch recorded.
-
-    Task titles are generic and phrased two ways depending on which layer
-    created the task ("Run generator add_rack" for the trigger-dispatched
-    flow, "Execute generator add_rack" for the run it spawns), so the
-    generator name is matched as a whole word anywhere in the title and the
-    two phrasings are deliberately counted separately — a dispatch that never
-    reached execution is the failure mode worth seeing.
-
-    Returns:
-        {"run:<generator>": int, "execute:<generator>": int, "<generator>": int}
-        where the bare key is the number of *dispatches* (the "Run generator"
-        form), which is what a trigger rule is responsible for.
-    """
+    """Count, per generator name, how many task runs a branch recorded."""
     tasks = await client.task.filter(filter=TaskFilter(branch=branch))
 
     runs: dict[str, int] = {}

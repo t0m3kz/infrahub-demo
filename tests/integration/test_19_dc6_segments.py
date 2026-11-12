@@ -1,23 +1,4 @@
-"""Integration test - Scenario 6: Network Segment Deployment in DC6.
-
-Coverage: Verifies the end-to-end segment lifecycle on the grown DC6 fabric:
-  1. Board customer C001 into DC6 (TopologyCustomerDC "C001-P-DC6": its
-     boarding generator creates the customer's IPv4 and IPv6 pools) and load
-     three local VXLAN segments (two IPv4, one IPv6) activated through that footprint
-  2. Verify the footprint resolves to DC6 — the segment generator places
-     ManagedSegmentDeployment records on the footprint's parent DC
-  3. Run the segment generator -> creates ManagedSegmentDeployment with VNI
-     (DC-wide) and ManagedSegmentVlan with local VLAN ID (per VLAN
-     domain — an MLAG pair or standalone device; IEEE 802.1Q VLAN ID has
-     only local significance, unlike VNI which stays DC-wide/fabric-wide)
-  4. Verify segment deployments exist with correct pool allocations
-  5. Merge to main
-
-Data: tests/integration/data/20_segments (see suite_constants.SCENARIO_SEGMENT_DATA
-for why it is test-local rather than data/demos/08_segments).
-
-Prerequisites: DC6 deployed and merged to main (Scenario 1), spine added (Scenario 5).
-"""
+"""Integration test - Scenario 6: Network Segment Deployment in DC6."""
 
 import logging
 from ipaddress import IPv4Network, IPv6Network, ip_interface
@@ -42,22 +23,16 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 SCENARIO_NAME = "Scenario 6: Segment Deployment"
 BRANCH_NAME = "dc6-segments"
 
-# Computed ManagedVxlanSegment names ("{org_id|lower}-{customer_name}-{env}")
-# of the three segments in tests/integration/data/20_segments/02_segments.yml.
+# Computed ManagedVxlanSegment names ("{org_id|lower}-{customer_name}-{env}") of the three segments in
+# tests/integration/data/20_segments/02_segments.yml.
 EXPECTED_SEGMENTS = frozenset({"c001-web-app-p", "c001-db-backend-p", "c001-ipv6-app-p"})
 
-# Local segments draw their L2 VNI from the DC's own {fabric}-vni-pool
-# (10001-39999, generators/topology/dc.py); 40000-49999 is GLOBAL-L2VNI and
-# reserved for stretched segments, so a local VNI there is a pool mix-up.
+# Local segments draw their L2 VNI from the DC's own {fabric}-vni-pool (10001-39999, generators/topology/dc.py);
+# 40000-49999 is GLOBAL-L2VNI and reserved for stretched segments, so a local VNI there is a pool mix-up.
 LOCAL_VNI_RANGE = (10001, 39999)
 
-# The addressing the generator gives a segment with no authored gateway (generators/topology/segment_addressing.py):
-# an IPv4 prefix length is sized from host_count (hosts + network, broadcast and gateway, a power of two, a /29 at the
-# smallest) and is the design's segment_prefix_length (/24) with none; an IPv6 segment is the design's
-# ipv6_segment_prefix_length (/64). The prefix is drawn from the customer's pool of its family, named
-# {org_id}-{environment}-{dc|colocation}-{ipv4|ipv6}. BOTH pools are created when the footprint is boarded
-# (add_customer_deployment_dc) with a block as long as the footprint's service tier says (the tier M of
-# tests/integration/data/20_segments/01_deployment.yml: address_prefix_length 21, ipv6_prefix_length 58).
+# Generator addressing of a segment with no gateway: IPv4 sized from host_count (min /29) else the design's
+# segment_prefix_length; IPv6 /64.
 EXPECTED_SEGMENT_PREFIX_LENGTH = {"c001-web-app-p": 29, "c001-db-backend-p": 24}
 IPV6_SEGMENT = "c001-ipv6-app-p"
 IPV6_SEGMENT_PREFIX_LENGTH = 64
@@ -172,11 +147,7 @@ def _assert_dc6_segment_deployments(branch: str, result: dict[str, Any]) -> None
 
 
 class TestDC6Segments(TestInfrahubDockerWithClient):
-    """Test network segment deployment in DC6.
-
-    Boards C001 into DC6, loads two VXLAN segments on that footprint, runs
-    the segment generator, and verifies SegmentDeployment records in DC6.
-    """
+    """Test network segment deployment in DC6."""
 
     @pytest.fixture(scope="class")
     def scenario_branch(self) -> str:
@@ -231,13 +202,7 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify C001-P-DC6 exists under DC6 and wait for its boarding generator.
-
-        The segment generator places ManagedSegmentDeployment on the
-        footprint's parent, so a footprint under the wrong DC (or missing the
-        customer_deployments_dc group its group trigger requires) would put
-        the segments somewhere this scenario never looks.
-        """
+        """Verify C001-P-DC6 exists under DC6 and wait for its boarding generator."""
         logging.info("=== %s - Step 2: Verify Customer Footprint ===", SCENARIO_NAME)
 
         async_client_main.default_branch = scenario_branch
@@ -260,8 +225,8 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
             f"Footprint '{SCENARIO_SEGMENT_FOOTPRINT}' is not in customer_deployments_dc (groups: {sorted(groups)})"
         )
 
-        # Drain the load's created-triggers (customer boarding, segment
-        # activation) before the explicit generator run below.
+        # Drain the load's created-triggers (customer boarding, segment activation) before the explicit generator run
+        # below.
         await wait_for_tasks_completion(async_client_main, scenario_branch)
 
         # The boarding generator (add_customer_deployment_dc) creates the customer's pools of both families when the
@@ -354,8 +319,7 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify ManagedSegmentDeployment (VNI-and-status, DC-wide), the segments' addressing (sized prefix from
-        the customer pools of both families, gateway on the first address) and ManagedSegmentVlan (local VLAN ID, per switch) records."""
+        """Verify ManagedSegmentDeployment (VNI-and-status, DC-wide)"""
         logging.info("=== %s - Step 5: Verify Segment Deployments ===", SCENARIO_NAME)
 
         result = await fetch_segment_deployments(
@@ -368,11 +332,7 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
 
         deployments = [d for d in result["deployments"] if d["segment_name"] in EXPECTED_SEGMENTS]
 
-        # Each local VXLAN segment gets an L2 VNI from the DC's own pool. The
-        # upper bound is not the 24-bit VNI maximum: the EVPN RD/RT are derived
-        # from the VNI and only have a 16-bit assigned-number field, and the
-        # range must stay disjoint from GLOBAL-L2VNI and the fixed namespace
-        # L3 VNIs because the VNI space is flat (see generators/topology/dc.py).
+        # Each local VXLAN segment gets an L2 VNI from the DC's own pool.
         low, high = LOCAL_VNI_RANGE
         vnis = [d["vni"] for d in deployments]
         assert all(vni is not None for vni in vnis), f"Segment deployment(s) without a VNI: {deployments}"
@@ -398,12 +358,8 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
         _assert_segment_addressing(scenario_branch, pools, addressing)
         logging.info("Segment addressing verified: %s", sorted(EXPECTED_SEGMENTS))
 
-        # A local VLAN ID (ManagedSegmentVlan) is realized only where an
-        # AppComponent instance is cabled to a switch (add_app_component_segment)
-        # or, for a stretched segment, on its border gateways. These two
-        # segments are local and nothing is cabled to them yet, so there must be
-        # none: the DC-wide sweep that used to tag every leaf is gone. That includes the IPv6 segment: with no row
-        # there is no SVI and no device carries it, so nothing is rendered for it (no renderer exists yet).
+        # A local VLAN ID (ManagedSegmentVlan) is realized only where a component is cabled (or on border gateways, if
+        # stretched)
         segment_vlan_result = await fetch_segment_vlans(
             client=async_client_main,
             branch=scenario_branch,

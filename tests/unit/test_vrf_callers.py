@@ -29,7 +29,7 @@ from tests.unit.simulators.circuit_fakes import (
     session_generator,
 )
 
-# --- segment reconcile --------------------------------------------------------------------------------------------
+# --- segment reconcile
 
 
 def _segment_gen() -> Any:
@@ -140,7 +140,7 @@ class TestSegmentReconcile:
         gen.reconcile_vrfs.assert_not_awaited()
 
 
-# --- context legs -------------------------------------------------------------------------------------------------
+# --- context legs
 
 
 def _dc_payload() -> dict[str, Any]:
@@ -207,7 +207,7 @@ class TestContextLegs:
         gen.reconcile_vrfs.assert_awaited_once_with({"bl-1", "bl-2"})
 
 
-# --- handoff circuits ---------------------------------------------------------------------------------------------
+# --- handoff circuits
 
 
 def _record(client: FakeClient, gen: Any) -> None:
@@ -310,7 +310,7 @@ class TestHandoffCircuit:
         assert client.writes[-1][:2] == ("vrf", "dev-EXT-AWS-DX-FR2,dev-eg-fr201")
 
 
-# --- carrier circuits --------------------------------------------------------------------------------------------
+# --- carrier circuits
 
 
 class TestCarrierCircuit:

@@ -1,15 +1,4 @@
-"""Find a field selected more than once on one object, where a later selection asks for what the first does not.
-
-Infrahub answers only the FIRST selection of a field on an object: a second selection of the same response key, from
-a fragment, an inline fragment or written twice, has its own sub-fields returned as null (measured on 1.11.9, a field
-of a context under a device's `shared_capabilities` and under an interface's `capabilities`). GraphQL validation and
-the offline smoke fixtures accept the query, so the loss is silent. The fix is one selection per object (merge the
-two, make the first a superset) or an alias for the second (`zone_capabilities: capabilities`).
-
-The walk is type-aware, like GraphQL's own field collection: for each concrete type an object can have, it collects
-the fields whose fragment or inline-fragment type condition applies to that type, so `... on A { f }` and
-`... on B { f }` with A and B disjoint are not a collision.
-"""
+"""Find a field selected more than once on one object, where a later selection asks for what the first does not."""
 
 from __future__ import annotations
 
@@ -113,7 +102,7 @@ class _Walker:
                     if lost:
                         where = "/".join((*path, f"{concrete.name}.{key}"))
                         self.found.add(Collision(self.query, where, sorted(lost)[0]))
-                # What the server returns is the first selection: only its children are walked further.
+                # What the server returns is the first selection
                 first = selected[0].selection_set
                 assert first is not None
                 self.walk(first, result_type, (*path, key))

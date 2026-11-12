@@ -1,20 +1,7 @@
-"""Gate a Proposed Change on its change request (rules CR1 to CR5).
+"""Gate a Proposed Change on its change request (CR1-CR5); a PC with none is not gated.
 
-Targetless; it judges the open PC of the branch it runs on (the PC that started it, else the open PC whose source branch
-is the check's branch; a canceled, merged or closed PC never counts) and the ``ChangeRequest``s that name it:
-
-- CR1 the PC has at most one change request (ERROR when it has several). A PC with none is not gated: a change
-  request is opt-in (made by the author or a change service), so a repository without one never blocks a merge (a
-  failing user check refuses it, measured on 1.12);
-- CR2 short_description, implementation_plan, backout_plan and test_plan are filled in, and the justification is, or
-  the PC has a description (ERROR);
-- CR3 a high effective risk (risk_override where set) or an emergency change has planned_start and planned_end (ERROR);
-- CR4 a risk_override lower than the derived risk has a risk_override_reason (ERROR);
-- CR5 the request was derived from the current artifact diff: its ``artifact_fingerprint`` equals the one of the
-  branch's artifact diff now (WARNING: re-run add_change_request).
-
-A branch with no open PC reports nothing. The artifact diff is read through utils/change_sources.py, the reader the
-generator uses, and the fingerprint is utils/change_rules.py ``artifact_fingerprint``, so the two always agree.
+CR1 one request; CR2 plans filled; CR3 high risk has a window; CR4 lowered risk has a reason; CR5 fingerprint current
+(WARNING).
 """
 
 from __future__ import annotations

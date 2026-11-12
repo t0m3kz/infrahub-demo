@@ -1,25 +1,4 @@
-"""The cloud side of an external BGP session: what a ``CloudPeeringInterface`` tells the edge and the checks.
-
-A cloud leg is a hand-written ``ManagedBGPPeering`` whose OUR end is an interface of one of our devices (a sub-interface
-or a routed port). The far end is not a device with a BGP process: it is the ``CloudPeeringInterface`` that ends the same
-``TopologySessionCircuit`` (an interface of a cloud transport, ``CloudDirectConnect`` or ``CloudVPNConnection``). This
-module reads that leg from the cleaned query roots ``CloudPeeringInterface`` and ``CloudGatewayAttachment`` into
-``CloudLeg`` records, the one reading the edge transform and ``checks/routing_invariants.py`` and
-``checks/segment_security.py`` share:
-
-- the neighbor: the peering's ``peer_ip`` and ``peer_asn``, the BGP key ``auth``;
-- the owner: the transport's, never the peering's: its account's owner, else (a SaaS has no account) its own ``owner``;
-  only an ``OrganizationCustomer`` counts (``utils/ownership.py`` customer_owner);
-- the prefixes registered behind the session, cloud to us (``registered``): for a private or saas peering the
-  ``allowed_prefixes`` of every gateway attachment reached from the peering's gateway, an attachment with none meaning
-  the CIDR blocks of its virtual network; the walk goes gateway -> attachments -> peer gateways (hubs) -> their
-  attachments, once per gateway. Entering a hub through an attachment that has an associated route table, only the
-  VPC attachments propagating into that table count. A public peering registers nothing. The attachment point of a
-  leg (``group``) is its hub chain (``attachment_point``);
-- the prefixes WE announce to the cloud (``advertised``): the peering's ``advertised_prefixes``, public or static only.
-
-The exchange rule itself stays in ``utils/ownership.py``.
-"""
+"""The cloud side of an external BGP session: what a ``CloudPeeringInterface`` tells the edge and the checks."""
 
 import logging
 from collections import deque
@@ -95,13 +74,7 @@ def _attachment_prefixes(attachment: dict[str, Any]) -> list[dict[str, Any]]:
 def reachable_prefixes(
     start: Any, attachments: Iterable[dict[str, Any]] | None, *, vrf: Mapping[str, Any] | None = None
 ) -> list[dict[str, Any]]:
-    """The prefix objects the attachments reachable from the gateway ``start`` let through, in a stable order.
-
-    ``start`` is the cleaned gateway reference of the peering; ``attachments`` the cleaned CloudGatewayAttachment
-    root. An attachment joins its ``gateway`` to one target, a ``virtual_network`` or a ``peer_gateway``: a hop goes
-    either way across the second kind. Each gateway is visited once (a loop of hubs ends), and a hub entered through
-    an attachment with an ``associated_route_table`` only lets the VPC attachments through that propagate into it.
-    """
+    """The prefix objects the attachments reachable from the gateway ``start`` let through, in a stable order."""
     start_id = _ref(start)
     if not start_id:
         return []
@@ -151,13 +124,7 @@ def reachable_prefixes(
 
 
 def attachment_point(start: Any, attachments: Iterable[dict[str, Any]] | None) -> str | None:
-    """The attachment point of a peering that lands on the gateway ``start``: its hub chain, else the gateway itself.
-
-    Gateways joined by an attachment whose target is a gateway (a Direct Connect gateway associated with a transit
-    gateway) are one cloud network reached over several transports (a transit VIF, a VPN to the hub): their sessions
-    are alternatives, not rivals for a prefix, like the primary and secondary peering of one gateway. The point is
-    the names of the chain, sorted and joined with ``+`` (the gateway's own name when it has no such neighbour).
-    """
+    """The attachment point of a peering that lands on the gateway ``start``."""
     start_id = _ref(start)
     if not start_id:
         return None
@@ -189,12 +156,7 @@ def _transport_owner(transport: dict[str, Any]) -> str | None:
 def cloud_legs(
     peerings: Iterable[dict[str, Any]] | None, attachments: Iterable[dict[str, Any]] | None
 ) -> list[CloudLeg]:
-    """Every cloud leg of the model: a BGP peering interface that ends a handoff or vpn session circuit.
-
-    ``peerings`` is the cleaned CloudPeeringInterface root (``device`` is its transport), ``attachments`` the cleaned
-    CloudGatewayAttachment root. One leg per (peering, session circuit, end of ours on that circuit). A peering with
-    static routing, or on no session circuit, is no BGP session and yields nothing.
-    """
+    """Every cloud leg of the model: a BGP peering interface that ends a handoff or vpn session circuit."""
     attachment_list = list(attachments or [])
     legs: list[CloudLeg] = []
     for peering in peerings or []:
@@ -243,11 +205,7 @@ def cloud_legs(
 
 
 def legs_by_interface(legs: Iterable[CloudLeg], device_name: str) -> dict[str, CloudLeg]:
-    """Interface name of ``device_name`` -> the cloud leg it is the end of.
-
-    An interface that ends the sessions of several legs is ambiguous: it is dropped with a WARNING and accepts
-    nothing.
-    """
+    """Interface name of ``device_name`` -> the cloud leg it is the end of."""
     found: dict[str, list[CloudLeg]] = {}
     for leg in legs:
         if leg.local[0] == device_name:
@@ -267,15 +225,7 @@ def legs_by_interface(legs: Iterable[CloudLeg], device_name: str) -> dict[str, C
 
 
 def graft_cloud_far_ends(device: dict[str, Any], legs: Mapping[str, CloudLeg]) -> None:
-    """Give each one-ended peering of the cleaned ``device`` the far end its cloud leg describes, in place.
-
-    The session builder (transforms/helpers/bgp.py) reads a peering as two ``capabilities`` ends and the remote
-    process's ASN. A cloud peering lists only our interface, so the peering interface of the leg is added as the remote
-    end (address ``peer_ip``, device the transport) and a process of the transport holding ``peer_asn``; a peering with
-    no password takes the leg's ``auth``. A missing ``peer_ip`` or ``peer_asn`` makes the session builder skip the
-    session with its usual warning. Nothing is added for a peering whose interface is no leg, which the session builder
-    then refuses as malformed. The grafted process has no role, so a cloud far end is never "ours" (external).
-    """
+    """Give each one-ended peering of the cleaned ``device`` the far end its cloud leg describes, in place."""
     device_name = device.get("name")
     for service in device.get("capabilities") or []:
         if service.get("typename") != "ManagedBGP":

@@ -32,19 +32,7 @@ def _design_name(node: dict[str, Any]) -> str | None:
 
 
 async def fetch_fabric_pools(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
-    """Fetch every data center and pod with its design and the slices of its fabric pools.
-
-    One round-trip (queries/get_fabric_pools.gql). A pool's slices are its
-    resources' prefixes; ``None`` means the pool is not set on the DC or pod.
-    The fabric-loopback pool is not referenced by the DC: its slices are the
-    children of the DC loopback slice owned by an address pool that no pod owns.
-
-    Returns:
-        {"dcs": [{"id", "name", "underlay_protocol", "design", "max_pods", "pod_templates",
-                  "pools": {"technical", "loopback", "management", "fabric_loopback"}}],
-         "pods": [{"name", "dc_id", "design", "pools": {"technical", "loopback"}}]},
-        ``underlay_protocol`` defaulted to the schema's IPv6, ``pod_templates`` sorted design names.
-    """
+    """Fetch every data center and pod with its design and the slices of its fabric pools."""
     raw = await client.execute_graphql(query=QUERY_GET_FABRIC_POOLS, branch_name=branch)
     result = clean_data(raw)
 
@@ -96,15 +84,7 @@ async def fetch_fabric_pools(client: InfrahubClient, branch: str) -> dict[str, l
 
 
 def find_fabric_design_errors(inventory: dict[str, list[dict[str, Any]]]) -> list[str]:
-    """List every design rule fetch_fabric_pools()' inventory breaks.
-
-    Every DC and pod has a design; a pod sits in a DC of the inventory, its
-    design is one of its DC design's pod_templates, and a DC holds no more
-    pods than its design's max_pods.
-
-    Returns:
-        Human-readable error lines, empty when every rule holds.
-    """
+    """List every design rule fetch_fabric_pools()' inventory breaks."""
     errors: list[str] = []
     dcs = {dc["id"]: dc for dc in inventory["dcs"]}
     pods_by_dc: dict[str, list[str]] = {dc_id: [] for dc_id in dcs}
@@ -151,18 +131,7 @@ def _slice_errors(label: str, slices: list[str] | None, expected: FabricSlice | 
 
 
 def find_fabric_pool_errors(inventory: dict[str, list[dict[str, Any]]]) -> list[str]:
-    """List every fabric pool whose slice is not the one its designs derive.
-
-    A DC's technical, loopback, management and fabric-loopback slices and a
-    pod's technical and loopback slices must each be exactly the family and
-    prefix length fabric_constants' expected_*_pool_slices() derive from the
-    bootstrap designs and the DC's underlay_protocol, and a pod's slice must
-    sit inside its DC's slice of the same pool. A DC or pod without a design
-    is skipped (find_fabric_design_errors reports it).
-
-    Returns:
-        Human-readable error lines, empty when every slice is right.
-    """
+    """List every fabric pool whose slice is not the one its designs derive."""
     errors: list[str] = []
     dcs = {dc["id"]: dc for dc in inventory["dcs"]}
     for dc in sorted(inventory["dcs"], key=lambda item: item["name"]):

@@ -3,13 +3,9 @@
 from transforms.helpers.acl import _build_acl_rule, get_acls
 from utils.internet_space import NON_INTERNET_PREFIXES
 
-# ===========================================================================
 # get_acls()
-# ===========================================================================
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_acl_activation(
@@ -179,9 +175,7 @@ class TestGetAclsRuleExtraction:
 
 
 class TestAclRuleEndpointResolver:
-    """The leaf ACL resolves a side like the firewall rule table does
-    (transforms/helpers/policy.py rule_endpoint): segment prefix, else the
-    first prefix/IP selector, else any."""
+    """The leaf ACL resolves a side like the firewall rule table does (transforms/helpers/policy.py rule_endpoint)"""
 
     def test_destination_prefix_selector_without_segment(self) -> None:
         rule = {
@@ -423,9 +417,7 @@ class TestGetAclsMultipleActivations:
         assert get_acls(activations=acts)[0]["name"] == "ACL-VLAN42-IN"
 
 
-# ===========================================================================
 # East-West return legs (inbound_rules)
-# ===========================================================================
 
 
 def _inbound(
@@ -565,9 +557,7 @@ class TestGetAclsReturnRules:
         assert [r["name"] for r in acl_b["rules"]] == ["implicit-deny-all"]
 
 
-# ===========================================================================
 # Zone support
-# ===========================================================================
 
 
 class TestGetAclsZoneSupport:
@@ -603,9 +593,9 @@ class TestGetAclsZoneSupport:
 
 
 class TestGetAclsCustomerAttribution:
-    """src_customer/src_environment/dst_customer/dst_environment let a policy
-    mixing rules from different customers' segments be attributed per-rule,
-    not just at the whole-ACL segment_name level."""
+    """src_customer/src_environment/dst_customer/dst_environment let a policy mixing rules from different customers'
+    segments be attributed per-rule, not just at the whole-ACL segment_name level.
+    """
 
     def test_customer_environment_fields_passed_through(self) -> None:
         rule = _rule(
@@ -635,9 +625,7 @@ class TestGetAclsCustomerAttribution:
         assert deny["dst_customer"] is None
 
 
-# ===========================================================================
 # isolation_mode and firewall-skip logic
-# ===========================================================================
 
 
 def _make_isolation_activation(
@@ -646,11 +634,7 @@ def _make_isolation_activation(
     policies: list | None = None,
     isolation_mode: str = "normal",
 ) -> dict:
-    """Return a single activation dict for isolation_mode tests.
-
-    The segment always has ``security_policy`` present so that the render
-    decision is exercised rather than the "field not queried" early-exit.
-    """
+    """Return a single activation dict for isolation_mode tests."""
     seg: dict = {
         "id": seg_id,
         "name": f"owner - prod - vlan{vlan_id}",

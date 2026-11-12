@@ -1,6 +1,4 @@
-"""A switch port's segment membership in test fixtures: its switch's VLAN row (ManagedSegmentVlan) of the segment among
-the port's ``capabilities``, the segment under the row's deployment (utils/segment_vlan.py ``port_segments``), cleaned
-or raw."""
+"""A switch port's segment membership in test fixtures: its switch's VLAN row."""
 
 from __future__ import annotations
 

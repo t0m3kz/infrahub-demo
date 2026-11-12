@@ -14,15 +14,7 @@ from utils.service_contexts import contexts_with_legs, port_contexts
 
 
 class CheckPbrFirewallReachability(InfrahubCheck):
-    """A PBR leaf bridges to a context's leg VIP; some border or edge must host it.
-
-    A leaf redirects to the VIP of a context's leg in its own VRF and reaches it
-    over the transit L2VNI. The VIP lives on the border-leaf or edge that carries
-    the context: a firewall-role port tagged with it. A context with a PROD or
-    NON-PROD leg that serves a deployment, and no such port, leaves that VNI
-    empty and the redirected traffic blackholes. Contexts without a tenant-VRF
-    leg or serving nothing are skipped.
-    """
+    """A PBR leaf redirects to a context's leg VIP, which a border-leaf or edge must host (else traffic blackholes)."""
 
     query = "pbr_firewall_reachability"
 
@@ -49,7 +41,7 @@ class CheckPbrFirewallReachability(InfrahubCheck):
 
     @staticmethod
     def _carried_context_ids(devices: list[dict[str, Any]]) -> set[str]:
-        """Ids of the contexts behind a firewall-role port of a border-leaf or edge (``port_contexts``)."""
+        """Ids of contexts behind a firewall-role port of a border-leaf or edge."""
         return {
             context_id
             for device in devices
@@ -61,7 +53,7 @@ class CheckPbrFirewallReachability(InfrahubCheck):
 
     @staticmethod
     def _tenant_vrfs(legs: list[dict[str, Any]]) -> list[str]:
-        """Names of the PROD/NON-PROD VRFs the context has a firewall-member leg in."""
+        """Names of the tenant VRFs the context has a firewall-member leg in."""
         return sorted(
             {
                 interface_security_zone(leg)["name"]
@@ -73,6 +65,6 @@ class CheckPbrFirewallReachability(InfrahubCheck):
 
     @staticmethod
     def _served(ctx: dict[str, Any]) -> list[str]:
-        """Labels of the deployments the context serves: its served list plus a dedicated tenant."""
+        """Labels of the deployments the context serves."""
         deployments = [*(ctx.get("served_deployments") or []), ctx.get("tenant")]
         return sorted({dep.get("display_label") or dep["id"] for dep in deployments if dep})

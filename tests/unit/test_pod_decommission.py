@@ -1,14 +1,4 @@
-"""decommission_pod (generators/decommission/pod.py) beyond tracking ownership.
-
-- a border-spine pod's border-spines are deployed to the DC: they are picked out of
-  the DC's border-spines by name and decommissioned with the pod;
-- the far end of every removed fabric cable (a super-spine, another pod's spine, a
-  border-leaf) is freed and its P2P address deleted, an endpoint's is not;
-- the pod's pools and their slices of the DC pools are deleted once nothing is left
-  in a slice, kept (warning) otherwise; a re-run without pools does nothing.
-
-The tracking-ownership side (every write untracked) is in test_generator_tracking_ownership.py.
-"""
+"""decommission_pod (generators/decommission/pod.py) beyond tracking ownership."""
 
 from __future__ import annotations
 

@@ -1,14 +1,4 @@
-"""Ownership decisions of the topology generators' tracking group.
-
-Every generator runs with delete_unused_nodes=True: each save() (and each
-append to group_context.related_node_ids) claims the node for this run's
-group, and the next run deletes what it claimed before but did not claim
-again. A run may claim only what belongs to its own target, so every node
-reachable from several targets (a shared object, data, the target itself) is
-written with update_group_context=False and never appended. A run that bails
-out must do so before its first save, or its cleanup deletes the rest of what
-it owned.
-"""
+"""Ownership decisions of the topology generators' tracking group."""
 
 from __future__ import annotations
 
@@ -79,9 +69,7 @@ def _client() -> MagicMock:
     return client
 
 
-# ---------------------------------------------------------------------------
 # Shared objects: written untracked, never appended
-# ---------------------------------------------------------------------------
 
 
 def _routing_mixin() -> Any:
@@ -102,8 +90,7 @@ def _routing_mixin() -> Any:
 class TestSharedRoutingObjects:
     @pytest.mark.asyncio
     async def test_existing_evpn_address_family_is_not_tracked(self) -> None:
-        """The global l2vpn/evpn AF is referenced by every fabric run, so no
-        run may claim it."""
+        """The global l2vpn/evpn AF is referenced by every fabric run, so no run may claim it."""
         m = _routing_mixin()
         m.client.filters = AsyncMock(return_value=[_node("af-1")])
 
@@ -124,8 +111,7 @@ class TestSharedRoutingObjects:
 
     @pytest.mark.asyncio
     async def test_routing_password_lookup_failure_fails_the_run(self) -> None:
-        """add_dc owns the shared key: a lookup it swallowed would leave the key
-        untracked this run, and the run's cleanup would delete it."""
+        """add_dc owns the shared key:"""
         m = _routing_mixin()
         m.client.get = AsyncMock(side_effect=Exception("db down"))
 
@@ -134,9 +120,7 @@ class TestSharedRoutingObjects:
         m.logger.debug.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # DeviceMixin
-# ---------------------------------------------------------------------------
 
 
 class _Batches:
@@ -190,8 +174,7 @@ def _created_kinds(gen: Any) -> list[Any]:
 class TestDeviceGroupOwnership:
     @pytest.mark.asyncio
     async def test_missing_role_group_is_created_untracked(self) -> None:
-        """The role group is shared by every generator creating that role;
-        tracked, its creator's next run (which finds it) would delete it."""
+        """The role group is shared by every generator creating that role;"""
         gen = _device_mixin()
         gen.client.get = AsyncMock(side_effect=NodeNotFoundError(identifier={"name": ["spines"]}))
         group = _node("group-new", "spines")
@@ -264,8 +247,7 @@ class TestHaSyncPortOwnership:
 
     @pytest.mark.asyncio
     async def test_template_sync_port_is_not_claimed(self) -> None:
-        """A template-provided sync port (a virtual device's own NIC)
-        belongs to the device's template: never re-upserted."""
+        """A template-provided sync port (a virtual device's own NIC) belongs to the device's template:"""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1")
         ha_obj.capabilities.peers = [MagicMock(id="dev-1")]
@@ -291,9 +273,7 @@ class TestHaSyncPortOwnership:
         template_port.save.assert_not_awaited()
 
 
-# ---------------------------------------------------------------------------
 # Pool attaches never claim the parent
-# ---------------------------------------------------------------------------
 
 
 def _pool_mixin() -> Any:
@@ -308,8 +288,7 @@ def _pool_mixin() -> Any:
 class TestPoolParentOwnership:
     @pytest.mark.asyncio
     async def test_number_pool_upsert_is_tracked_and_touches_no_parent(self) -> None:
-        """The pool is this run's output (a tracked upsert); pointing a node at
-        it is the caller's job, so the upsert itself reads and saves nothing else."""
+        """The pool is this run's output (a tracked upsert);"""
         gen = _pool_mixin()
         pool = _node("pool-1")
         gen.client.create = AsyncMock(return_value=pool)
@@ -343,9 +322,7 @@ class TestPoolParentOwnership:
         pod.save.assert_awaited_once_with(update_group_context=False)
 
 
-# ---------------------------------------------------------------------------
 # MLAG wiring: tracked by the device generator, untracked from add_mlag
-# ---------------------------------------------------------------------------
 
 
 def _wiring_mixin() -> Any:
@@ -426,9 +403,7 @@ class TestMlagWiringTrack:
         cable.save.assert_awaited_once_with(**UNTRACKED_UPSERT)
 
 
-# ---------------------------------------------------------------------------
 # Orchestrator routing owns nothing
-# ---------------------------------------------------------------------------
 
 
 class TestOrchestratorRoutingOwnership:
@@ -440,8 +415,7 @@ class TestOrchestratorRoutingOwnership:
 
     @pytest.mark.asyncio
     async def test_created_routing_group_and_target_are_untracked(self) -> None:
-        """Tracked, the auto-created routing group would be deleted by the run
-        that routes the node elsewhere, and the target node by any later run."""
+        """Tracked, the auto-created routing group would be deleted by the run that routes the node elsewhere."""
         gen = self._gen()
         gen.client.get = AsyncMock(side_effect=NodeNotFoundError(identifier={"name": ["application_ansible"]}))
         group, target = _node("grp-1", "application_ansible"), _node("app-1")
@@ -471,9 +445,7 @@ class TestOrchestratorRoutingOwnership:
         target.save.assert_awaited_once_with(**UNTRACKED_UPSERT)
 
 
-# ---------------------------------------------------------------------------
 # All-or-nothing: add_pod defers before its first save
-# ---------------------------------------------------------------------------
 
 
 def _pod_payload() -> dict[str, Any]:
@@ -512,11 +484,7 @@ def _pod_payload() -> dict[str, Any]:
 class TestPodDefersBeforeFirstSave:
     @pytest.mark.asyncio
     async def test_unready_super_spine_overlay_fails_before_any_write(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Super-spine overlay BGP that never lands fails the run, still before
-        any save: its tracking group is left as it was (returning after the
-        pools and spines were saved made its cleanup delete the cables, BGP and
-        border wiring the previous run owned), and nothing re-runs a pod that
-        returns quietly, so the failure is what makes it visible."""
+        """Super-spine overlay BGP that never lands fails the run, still before any save:"""
         monkeypatch.setattr("generators.topology.pod.asyncio.sleep", AsyncMock())
         gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
         gen.logger = MagicMock()
@@ -540,8 +508,7 @@ class TestPodDefersBeforeFirstSave:
 
     @pytest.mark.asyncio
     async def test_super_spine_overlay_waits_for_in_flight_add_dc(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """An add_dc that surfaces only after the up-front check is waited for,
-        and the pod goes on once its super-spines have their overlay BGP."""
+        """An add_dc that surfaces only after the up-front check is waited for."""
         sleep = AsyncMock()
         monkeypatch.setattr("generators.topology.pod.asyncio.sleep", sleep)
         gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
@@ -576,9 +543,7 @@ class TestPodDefersBeforeFirstSave:
         gen.allocate_resource_pools.assert_not_awaited()
 
 
-# ---------------------------------------------------------------------------
 # Pod decommission
-# ---------------------------------------------------------------------------
 
 
 def _decom_payload() -> dict[str, Any]:
@@ -668,8 +633,7 @@ class TestPodDecommission:
 
     @pytest.mark.asyncio
     async def test_device_and_interface_saves_are_untracked(self) -> None:
-        """The devices/interfaces belong to add_pod/add_rack. Tracked, the next
-        decommission run (which saves nothing) would delete them."""
+        """The devices/interfaces belong to add_pod/add_rack."""
         gen = self._gen()
 
         await gen.generate(_decom_payload())
@@ -680,8 +644,7 @@ class TestPodDecommission:
 
     @pytest.mark.asyncio
     async def test_servers_are_left_alone(self) -> None:
-        """Endpoints are data, not built by the pod: not decommissioned, their
-        addresses not deleted."""
+        """Endpoints are data, not built by the pod: not decommissioned, their addresses not deleted."""
         gen = self._gen()
 
         await gen.generate(_decom_payload())
@@ -704,8 +667,7 @@ class TestPodDecommission:
 
     @pytest.mark.asyncio
     async def test_never_filters_with_an_empty_id_list(self) -> None:
-        """filters(ids=[]) does not narrow the query; with nothing to touch,
-        no kind is queried at all."""
+        """filters(ids=[]) does not narrow the query; with nothing to touch, no kind is queried at all."""
         gen = self._gen()
         payload = _decom_payload()
         payload["TopologyPod"]["edges"][0]["node"]["devices"]["edges"] = []
@@ -715,16 +677,11 @@ class TestPodDecommission:
         assert gen.filter_calls == []
 
 
-# ---------------------------------------------------------------------------
 # Circuit generator: add_circuit owns nothing, the circuit is its target
-# ---------------------------------------------------------------------------
 
 
 class TestCircuitOwnership:
-    """add_circuit (generators/topology/circuit.py) only adds derived locations to its target circuit.
-
-    The circuit is the run's target, not its output: tracked, delete_unused_nodes could remove it.
-    """
+    """add_circuit (generators/topology/circuit.py) only adds derived locations to its target circuit."""
 
     @pytest.mark.asyncio
     async def test_adding_derived_locations_claims_and_saves_nothing(self) -> None:
@@ -739,13 +696,7 @@ class TestCircuitOwnership:
 
 
 class TestSessionCircuitOwnership:
-    """add_virtual_circuit (generators/topology/virtual_circuit.py): a session circuit owns its session, never the ports.
-
-    The prefix, its addresses and the peerings exist only because of the circuit and are tracked. The interconnect's
-    own key is untracked on purpose (a tracked one is deleted by a run that returns early, and the next run would
-    rotate it); the end interfaces come from device templates, and the devices, BGP processes and global address
-    families belong to other runs or to data.
-    """
+    """add_virtual_circuit (generators/topology/virtual_circuit.py):"""
 
     @pytest.mark.asyncio
     async def test_handoff_run_claims_prefix_addresses_and_peering_only(self) -> None:

@@ -1,14 +1,4 @@
-"""The fabric-design and pool-size expectations tests/integration/test_61 and test_71 assert.
-
-fabric_constants.expected_*_pool_slices turn the bootstrap designs (via the unit-test simulator) and a DC's
-underlay_protocol into the slice every fabric pool must have; fabric_pool_helpers.fetch_fabric_pools reads the live
-slices and find_fabric_design_errors / find_fabric_pool_errors compare them. A finder that silently returns
-no error would let a broken generator run green, so each rule is driven through a failing inventory here.
-
-The pinned slices are the ones the two scenarios build: 30_all's DCs (design L, S_MIDDLE pods, IPv6) and
-the arista scope's DC14 (design M, S_MIDDLE pods, IPv4). Their host bits are tests/unit/test_fabric_sizing.py's
-golden table; this file pins the family and prefix length each pool gets from them.
-"""
+"""The fabric-design and pool-size expectations tests/integration/test_61 and test_71 assert."""
 
 from __future__ import annotations
 
@@ -27,9 +17,7 @@ from tests.integration.fabric_constants import (
 from tests.integration.fabric_pool_helpers import fetch_fabric_pools, find_fabric_design_errors, find_fabric_pool_errors
 from tests.unit.simulators.fabric_designs import DC_DESIGN_NAMES, dc_design
 
-# ---------------------------------------------------------------------------
 # Expected slices
-# ---------------------------------------------------------------------------
 
 
 def test_30_all_dc_pools_are_the_ipv6_slices_of_design_l() -> None:
@@ -116,9 +104,7 @@ def test_a_fabric_slice_reads_as_family_and_length() -> None:
     assert str(FabricSlice(6, 121)) == "IPv6 /121"
 
 
-# ---------------------------------------------------------------------------
 # fetch_fabric_pools: the raw get_fabric_pools.gql payload
-# ---------------------------------------------------------------------------
 
 _ALL_POD_DESIGNS = ["M_MIDDLE", "M_MIXED", "S_BORDER_SPINE_POD", "S_MIDDLE", "S_MIXED", "S_TOR"]
 
@@ -266,9 +252,7 @@ async def test_fetch_fabric_pools_defaults_the_underlay_and_keeps_unset_pools_no
     assert inventory["pods"][0]["pools"]["loopback"] is None
 
 
-# ---------------------------------------------------------------------------
 # find_fabric_design_errors / find_fabric_pool_errors
-# ---------------------------------------------------------------------------
 
 
 def _dc(**overrides: Any) -> dict[str, Any]:

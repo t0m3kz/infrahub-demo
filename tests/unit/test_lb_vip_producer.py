@@ -1,11 +1,4 @@
-"""Unit tests for the VIP producer and the server rule of the load balancer.
-
-- generators/lb_vip.py (LoadbalancerVipMixin): VIPs, pool members, R_server
-- LoadbalancerVipMixin._await_lb_inputs: the bounded re-read of a segment
-  prefix or serving context another generator of the same load still writes
-- SegmentFirewallMixin._reconcile_rule_payload: the selectors and the
-  destination segment of an existing rule
-"""
+"""Unit tests for the VIP producer and the server rule of the load balancer."""
 
 from __future__ import annotations
 
@@ -428,9 +421,7 @@ class TestServerRule:
         assert "source_security_tag" not in payload
 
 
-# ===========================================================================
 # Concurrent inputs: re-read what another generator of the load still writes
-# ===========================================================================
 
 
 def _segment_read(seg_id: str, *, prefix: bool) -> dict[str, Any]:

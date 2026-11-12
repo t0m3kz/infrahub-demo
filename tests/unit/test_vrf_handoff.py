@@ -1,18 +1,4 @@
-"""Unit tests for the colocation edge's VRF handoff to the SD-WAN gateway.
-
-Covers:
-  - _build_session_from_peering()  — VRF session detection from the local address namespace
-  - _build_peer_groups()           — VRF sessions stay out of every peer group
-  - _multisite_vrf_site_asns()     — site ASNs per VRF over stretched segments
-  - get_vxlan_config()             — import_route_targets on L3 VNI mappings
-  - get_interfaces()               — dot1q tag from a plain sub-interface's name
-  - cisco_nxos_bgp.j2              — VRF neighbours under `vrf X`, not globally
-  - arista_eos / cisco_ios / sonic BGP — same split on every platform
-  - cisco_nxos_vxlan_vrf.j2 / arista_eos.j2 — remote-site RT imports
-  - sonic_vxlan.j2 — remote-site RT imports plus own RT
-  - _platform_vxlan_config()      — `feature fabric forwarding` with an anycast gateway
-  - edges/cisco_nxos.j2            — anycast SVIs and sub-interface encapsulation
-"""
+"""Unit tests for the colocation edge's VRF handoff to the SD-WAN gateway."""
 
 from __future__ import annotations
 
@@ -29,9 +15,7 @@ from transforms.helpers.vxlan import _multisite_vrf_site_asns, _platform_vxlan_c
 
 _TEMPLATES_CONFIGS_DIR = Path(__file__).parents[2] / "templates" / "configs"
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _ip(address: str) -> dict[str, Any]:
@@ -108,9 +92,7 @@ def _stretched_segment(namespace: str | None = "PROD", scope: str = "global") ->
     return segment
 
 
-# ---------------------------------------------------------------------------
 # VRF session detection
-# ---------------------------------------------------------------------------
 
 
 class TestVrfSession:
@@ -165,9 +147,7 @@ class TestVrfSession:
         assert "peer_group" not in vrf_session
 
 
-# ---------------------------------------------------------------------------
 # L3 VNI remote-site RT imports
-# ---------------------------------------------------------------------------
 
 
 class TestMultisiteVrfImports:
@@ -204,9 +184,7 @@ class TestMultisiteVrfImports:
         assert mapping["import_route_targets"] == ["65010:60000"]
 
 
-# ---------------------------------------------------------------------------
 # Sub-interface dot1q
-# ---------------------------------------------------------------------------
 
 
 class TestSubinterfaceDot1q:
@@ -251,9 +229,7 @@ class TestSubinterfaceDot1q:
         assert iface["dot1q_vlan"] is None
 
 
-# ---------------------------------------------------------------------------
 # Rendering
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture

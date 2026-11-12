@@ -1,18 +1,4 @@
-"""Unit tests for the render side of an office LISP site (access-switch and distribution-switch on cisco_xe).
-
-An office switch is a LISP device by role: there is no overlay flag on an office, so ``transforms/common.py`` gates
-on ``utils/fabric_roles.OFFICE_LISP_ROLES`` and a data center's VTEPs never take the LISP path. The renderer is
-transforms/helpers/lisp.py: map-servers are the distribution-switches of the office, the site is the office, the key
-is the office's lisp_site_key.
-
-Covers:
-  - the role gate           — office roles always LISP, whatever the deployment carries; other roles never
-  - the rendered CLI        — access-switch is an edge, distribution-switch the co-located border with the office site
-  - refusals                — no map-server / key / office name, other platform, a segment outside a VRF with an
-                              L3 instance-id (also on a data center: the fix of the global-table SVI), IPv6 gateway
-  - the registration        — .infrahub.yml artifacts, transforms, queries and the target groups of the roles
-  - the role sets           — the office roles stay out of the DC-only sets
-"""
+"""Unit tests for the render side of an office LISP site (access-switch and distribution-switch on cisco_xe)."""
 
 from __future__ import annotations
 
@@ -61,9 +47,7 @@ _MAP_SERVERS: list[dict[str, Any]] = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _raw(directory: str) -> dict[str, Any]:
@@ -140,9 +124,7 @@ def _device() -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
 # The role gate and the role sets
-# ---------------------------------------------------------------------------
 
 
 class TestRoleGate:
@@ -222,9 +204,7 @@ class TestRoleSets:
         assert role in BaseDeviceTransform._CISCO_XE_FABRIC_ROLES
 
 
-# ---------------------------------------------------------------------------
 # The renderer inputs: border role set, office reads
-# ---------------------------------------------------------------------------
 
 
 class TestBuildLispInputs:
@@ -289,9 +269,7 @@ class TestLispContext:
         assert config["l2_instances"] == [{"instance_id": 10100, "vlan_id": 100, "name": "seg-100"}]
 
 
-# ---------------------------------------------------------------------------
 # Rendered CLI
-# ---------------------------------------------------------------------------
 
 
 class TestRenderedAccessSwitch:
@@ -368,9 +346,7 @@ class TestRenderedDistributionSwitch:
         assert checked >= 4
 
 
-# ---------------------------------------------------------------------------
 # Refusals
-# ---------------------------------------------------------------------------
 
 
 class TestRefusals:
@@ -479,9 +455,7 @@ class TestSegmentsOutsideAVrf:
         assert config["l2_instances"][0]["instance_id"] == 10200 and config["l3_instances"] == []
 
 
-# ---------------------------------------------------------------------------
 # Registration
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="module")
@@ -554,9 +528,7 @@ class TestRegistration:
         assert not [line for line in template.splitlines() if line and not line.startswith(("{", "    "))]
 
 
-# ---------------------------------------------------------------------------
 # Queries (offline: syntax, spreads and the office schema fields; a live stack confirms the rest)
-# ---------------------------------------------------------------------------
 
 
 def _fragment_definitions() -> dict[str, FragmentDefinitionNode]:
@@ -592,9 +564,7 @@ class TestQueries:
 
     @pytest.mark.parametrize("directory", [ACCESS_INPUT, DISTRIBUTION_INPUT, "access_switch_cisco_xe_lisp_wan_exit"])
     def test_the_goldens_carry_every_field_the_office_fragment_selects(self, directory: str) -> None:
-        """The goldens' raw deployment has the keys LispSiteOnOfficeFields returns (alias or name), so the cleaned
-        shape the transforms read (D["name"], D["lisp_site_key"]["password"], D["lisp_map_servers"], ...) is the
-        one the query produces; a field moved to another fragment would show here."""
+        """The goldens' raw deployment has the keys LispSiteOnOfficeFields returns."""
         fragment = _fragment_definitions()["LispSiteOnOfficeFields"]
         selected = {
             (field.alias or field.name).value
@@ -625,8 +595,7 @@ class TestQueries:
         assert "overlay_control_plane" not in text and "TopologyDataCenter" not in text
 
     def test_the_office_schema_has_every_field_the_check_and_the_config_queries_read(self) -> None:
-        """The segment activations and the anycast MAC come from TopologySegmentHosting; the buildings, the opt-in,
-        the LISP site key and the devices from the footprint itself."""
+        """The segment activations and the anycast MAC come from TopologySegmentHosting;"""
         names = relationship_names("TopologyCustomerOffice")
         assert {"fabric_templates", "locations", "lisp_site_key", "devices", "segment_deployments"} <= names
         assert {"name", "evpn_anycast_gateway_mac"} <= attribute_names("TopologyCustomerOffice")

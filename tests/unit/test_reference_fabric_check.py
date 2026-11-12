@@ -295,10 +295,7 @@ def _tenant_segment(
     tag: str | None = None,
     vrf_type: str = "prod",
 ) -> dict[str, Any]:
-    """One routed tenant segment edge with explicit zone metadata, tagged or not.
-
-    A VXLAN segment is active in ``sites`` through its segment deployments.
-    """
+    """One routed tenant segment edge with explicit zone metadata, tagged or not."""
     node: dict[str, Any] = {
         "__typename": kind,
         "id": seg_id,

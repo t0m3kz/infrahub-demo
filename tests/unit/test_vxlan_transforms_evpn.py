@@ -15,20 +15,11 @@ from transforms.helpers.vxlan import (
 )
 from utils.limits import L3VNI_SVI_VLAN_BASE, L3VNI_SVI_VLAN_MAX
 
-# ===========================================================================
 # _select_evpn_bgp_process() — the EVPN discriminator
-# ===========================================================================
 
 
 class TestSelectEvpnBgpProcess:
-    """The BGP process that carries EVPN is selected by `typename` then
-    `process_role`.
-
-    The original filter was `service_type == "bgp"`. ManagedBGP has no
-    `service_type` attribute, so it matched nothing — which pinned
-    `evpn.enabled` to False and left the route-target unset on every VTEP in the
-    project while ruff, ty and the whole test suite stayed green.
-    """
+    """The BGP process that carries EVPN is selected by `typename` then `process_role`."""
 
     def test_typename_is_the_discriminator_not_service_type(self) -> None:
         """A ManagedBGP with no `service_type` key must still be found."""
@@ -91,9 +82,7 @@ class TestSelectEvpnBgpProcess:
         assert result["name"] == "bgp"
 
 
-# ===========================================================================
 # get_vxlan_config() — EVPN enablement and RD/RT derivation
-# ===========================================================================
 
 
 def _bgp_cap(
@@ -123,18 +112,7 @@ class TestGetVxlanConfigEvpn:
         }
 
     def test_evpn_disabled_without_a_bgp_process(self) -> None:
-        """No BGP process means no fabric ASN, so there is no RT to derive.
-
-        The per-mapping `route_target` must be None, NOT the literal string "auto": templates skip
-        the line when the route-target is unset, and `rd auto` / `route-target ... auto`
-        — while valid NX-OS/EOS — is a syntax error in FRR, which is what the
-        Dell SONiC templates emit.
-
-        `rd_format` still resolves, because the RD is per-VTEP and the VTEP's own
-        loopback identifies it uniquely even with no BGP process to read a
-        router-id from. It is unused in practice since `enabled` is False and the
-        templates gate the whole EVPN block on that.
-        """
+        """No BGP process means no fabric ASN, so there is no RT to derive."""
         acts = [_make_activation(vlan_id=100, vni=10100)]
         result = get_vxlan_config(self._data(), "arista_eos", device_role="leaf", activations=acts)
         assert result is not None
@@ -163,11 +141,7 @@ class TestGetVxlanConfigEvpn:
         assert result["evpn"]["rd_format"] == "10.0.0.7:{vni}"
 
     def test_rt_uses_fabric_asn_not_device_local_asn(self) -> None:
-        """The fabric-breaking case. Under ebgp-ebgp each VTEP has its own ASN,
-        so an RT derived from local_as makes two leaves advertise the same
-        segment under different route-targets and neither imports the other's
-        routes — the segment silently fails to forward between racks.
-        """
+        """The fabric-breaking case."""
         acts = [_make_activation(vlan_id=100, vni=10100)]
         result = get_vxlan_config(
             self._data([_bgp_cap(asn=4245880501)]),
@@ -228,9 +202,7 @@ class TestGetVxlanConfigEvpn:
         assert result["l2_vni_mappings"][0]["route_target"] == "4245880999:10100"
 
 
-# ===========================================================================
 # VTEP_ROLES (utils/fabric_roles.py) — role spellings must match the schema
-# ===========================================================================
 
 
 class TestVtepRoleSpellings:
@@ -246,10 +218,7 @@ class TestVtepRoleSpellings:
         assert get_vxlan_config(self._data(), "arista_eos", device_role="border-leaf", activations=acts) is not None
 
     def test_underscored_border_leaf_is_not_accepted(self) -> None:
-        """The schema role is `border-leaf`. Tolerating `border_leaf` hid the
-        fact that transforms/config/border_leaf.py was passing the underscore
-        form, which bgp.py's leaf-RR check could never match either.
-        """
+        """The schema role is `border-leaf`."""
         acts = [_make_activation(vlan_id=100, vni=10100)]
         assert get_vxlan_config(self._data(), "arista_eos", device_role="border_leaf", activations=acts) is None
 
@@ -265,16 +234,11 @@ class TestVtepRoleSpellings:
         assert get_vxlan_config(self._data(), "arista_eos", device_role="access-leaf", activations=acts) is not None
 
 
-# ===========================================================================
 # RD/RT encodability guard
-# ===========================================================================
 
 
 class TestUnencodableVniWarning:
-    """A type-1 RD is `IPv4:2-byte` and a type-2 RT with a 4-byte ASN is
-    `ASN:2-byte`. Every ASN in this project is a 4-byte private ASN, so a VNI
-    above 65535 cannot be encoded into either and the device rejects the line.
-    """
+    """A type-1 RD is `IPv4:2-byte` and a type-2 RT with a 4-byte ASN is `ASN:2-byte`."""
 
     def test_no_warning_for_encodable_vnis(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.WARNING):
@@ -298,13 +262,7 @@ class TestUnencodableVniWarning:
         assert caplog.text == ""
 
     def test_warns_when_an_l2_vni_collides_with_an_l3_vni(self, caplog: pytest.LogCaptureFixture) -> None:
-        """The VNI space is flat, not one namespace per VNI type.
-
-        An L2 segment allocated on top of a VRF's L3 VNI makes the device reject
-        the `member vni ... associate` line. This is the symptom of an L2 pool
-        range reaching a namespace's fixed l3_vni, which is why the site L2
-        pool stops at 39999 and the stretched pool at 49999.
-        """
+        """The VNI space is flat, not one namespace per VNI type."""
         with caplog.at_level(logging.WARNING):
             _warn_unencodable_vnis([{"vni": 50001}], [{"l3_vni": 50001}], device_name="leaf-1")
         assert "50001" in caplog.text
@@ -332,16 +290,11 @@ class TestUnencodableVniWarning:
         assert "both an L2 VNI and an L3 VNI" in caplog.text
 
 
-# ===========================================================================
 # _fabric_rt_asn() — reaching the fabric AS from a device's deployment
-# ===========================================================================
 
 
 class TestFabricRtAsn:
-    """Only TopologyDataCenter and TopologyColocationMetro inherit
-    TopologySegmentHosting. A border-leaf's deployment IS the DC, but a leaf's
-    deployment is the pod — one hop below it.
-    """
+    """Only TopologyDataCenter and TopologyColocationMetro inherit TopologySegmentHosting."""
 
     def test_reads_from_the_deployment_directly(self) -> None:
         """DC-level tiers: border-leaf, border-spine."""
@@ -368,15 +321,11 @@ class TestFabricRtAsn:
         assert _fabric_rt_asn({"evpn_rt_as": {"asn": "4245880999"}}) is None
 
 
-# ===========================================================================
 # _fabric_anycast_mac() — the fabric's second must-agree-everywhere constant
-# ===========================================================================
 
 
 class TestFabricAnycastMac:
-    """Same deployment/parent walk as _fabric_rt_asn, for the same reason: a
-    leaf's deployment is the pod, a border-leaf's IS the DC.
-    """
+    """Same deployment/parent walk as _fabric_rt_asn, for the same reason"""
 
     def test_reads_from_the_deployment_directly(self) -> None:
         assert _fabric_anycast_mac({"evpn_anycast_gateway_mac": "00:00:5e:00:01:01"}) == "00:00:5e:00:01:01"
@@ -435,10 +384,7 @@ class TestAnycastMacPlumbing:
         assert result["anycast_gateway"]["mac"] == _DEFAULT_ANYCAST_GATEWAY_MAC
 
     def test_two_leaves_in_one_fabric_get_the_same_mac(self) -> None:
-        """The property that matters: a host ARPs for its gateway once and keeps
-        that MAC as its flows land on a different leaf. Two different MACs
-        blackhole traffic on the leaf that did not answer.
-        """
+        """The property that matters"""
         acts = [_make_activation(vlan_id=100, vni=10100, gateway_ip="10.1.1.1/24")]
         leaf1 = get_vxlan_config(
             {**self._data(), "capabilities": [_bgp_cap(asn=4245880501, router_id="10.0.0.1/32")]},
@@ -458,9 +404,7 @@ class TestAnycastMacPlumbing:
         assert leaf1["anycast_gateway"]["mac"] == leaf2["anycast_gateway"]["mac"]
 
 
-# ===========================================================================
 # _overlay_is_ebgp() and the RT fallback it guards
-# ===========================================================================
 
 
 def _bgp_cap_with_peerings(session_types: list[str], **kwargs) -> dict:
@@ -470,9 +414,7 @@ def _bgp_cap_with_peerings(session_types: list[str], **kwargs) -> dict:
 
 
 class TestOverlayIsEbgp:
-    """Decided by session type, never by TTL: an eBGP overlay peered over
-    directly-connected links would defeat a TTL-based guess.
-    """
+    """Decided by session type, never by TTL"""
 
     def test_all_ebgp_peerings_means_a_per_device_asn(self) -> None:
         assert _overlay_is_ebgp(_bgp_cap_with_peerings(["EBGP"])) is True
@@ -498,11 +440,7 @@ class TestOverlayIsEbgp:
 
 
 class TestRtFallbackUnderEbgpOverlayIsLoudlyWrong:
-    """The fallback `rt_asn = local_as` is correct under an iBGP overlay and
-    fabric-breaking under an eBGP one. Nothing in the rendered config looks
-    wrong — sessions come up, routes are advertised, imports never match — so
-    the only way an operator finds out is if this is said out loud.
-    """
+    """The fallback `rt_asn = local_as` is correct under an iBGP overlay and fabric-breaking under an eBGP one."""
 
     def _data(self, capabilities: list) -> dict:
         return {
@@ -552,17 +490,11 @@ class TestRtFallbackUnderEbgpOverlayIsLoudlyWrong:
         assert caplog.text == ""
 
 
-# ===========================================================================
 # svi_vlan_id — the NX-OS-only local VLAN carrying each L3 VNI's transit SVI
-# ===========================================================================
 
 
 class TestL3VniSviVlanAssignment:
-    """NX-OS cannot bind a VRF to an L3 VNI without an `ip forward` SVI, and
-    that SVI needs a local VLAN. The number has local significance only — no two
-    devices need to agree on it — and is the fixed slot of the VRF's namespace type
-    (L3VNI_SVI_VLAN_BASE + TRANSIT_SLOT), so it never depends on the other VRFs of the device.
-    """
+    """NX-OS cannot bind a VRF to an L3 VNI without an `ip forward` SVI, and that SVI needs a local VLAN."""
 
     @staticmethod
     def _ns(name: str, l3_vni: int, vrf_type: str = "prod") -> dict:
@@ -601,10 +533,7 @@ class TestL3VniSviVlanAssignment:
         assert L3VNI_SVI_VLAN_MAX < 3968
 
     def test_a_type_without_a_slot_yields_none_and_warns(self, caplog: pytest.LogCaptureFixture) -> None:
-        """None, not an out-of-range VLAN: the template filters these out rather than emitting
-        `interface VlanNone`, so the VRF simply gets no symmetric IRB on NX-OS instead of a config the
-        device rejects.
-        """
+        """None, not an out-of-range VLAN"""
         with caplog.at_level(logging.WARNING):
             slots = self._slots([self._ns("odd", 50001, "lab")])
 

@@ -1,21 +1,7 @@
-"""The closure rules of the BGP route protection: what every session end may carry, compared end to end. No I/O.
+"""BGP route protection closure rules E1-E5: what both ends of every session may carry (no I/O).
 
-``checks/bgp_expectations.py`` feeds this the cleaned ``bgp_expectations`` query and reports the findings. The
-expectations are the ones the device transforms render (utils/bgp_expectation.py, facts read by
-transforms/helpers/bgp_facts.py), derived here for BOTH ends of every peering from each end's own facts, so a filter
-that disagrees with the model, or with the other end, shows up before ``routing_filter_enforce`` is turned on.
-
-- E1 `out(B)` is a subset of `in(A)` for the two ends of every underlay, fabric and DCI underlay session.
-- E2 every loopback and multisite VIP of a device is accepted by every underlay inbound of its loopback pool (a hop of
-  its path), so it is inside the pool; one outside it reaches no further than its first hop.
-- E3 every connected prefix of a device in an environment VRF is accepted by the EVPN filter that would carry its
-  type-5 route (it is a prefix of the VRF's namespace in the model).
-- E4 a device with an upstream transit session is a default exit, the only device an EVPN filter takes a default from.
-- E5 a session is rendered unprotected: a family that cannot be derived from the query data, or a platform that renders
-  no filter for it.
-
-A finding is an error where the end's hosting deployment enforces (``routing_filter_enforce``: the filter would be
-live, so the mismatch is an outage) and a warning where it stages.
+E1 out(B) in in(A); E2 loopbacks and VIPs accepted; E3 connected VRF prefixes pass EVPN; E4 transit on a default exit;
+E5 unprotected.
 """
 
 from __future__ import annotations
@@ -102,7 +88,7 @@ def build_ends(cleaned: dict[str, Any]) -> list[End]:
             try:
                 session = _build_session_from_peering(peering, name, {"asn": asn}, None, warnings=[])
             except ValueError:
-                # A peering that is not two ends (malformed data): the transform refuses it, the model checks report it.
+                # Malformed peering: the transform refuses it.
                 continue
             if session is None:
                 continue

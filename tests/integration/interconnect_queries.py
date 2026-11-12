@@ -3,9 +3,7 @@
 SCENARIO_NAME = "Scenario 30_all: Interconnects"
 
 
-# The colocation footprints, the firewalls of their metro's zones and the contexts that serve them. A context is a
-# shared capability with no HA or interface edge: its members and legs come from the transit inventory
-# (service_inventory_helpers.fetch_transit_inventory, derived by utils/service_contexts.py), matched by id.
+# The colocation footprints, the firewalls of their metro's zones and the contexts that serve them.
 COLOCATION_CONTEXTS_QUERY = """
 query {
   TopologyCustomerColocation {
@@ -46,9 +44,7 @@ query {
 
 
 # The BGP sessions by name: the <vc>-underlay / <vc>-evpn of an Interconnect and the <vc>-bgp of a Handoff (both
-# add_virtual_circuit), and the FABRIC-<a>-<b> of a zone edge pair. A session's interfaces are its `capabilities`: the
-# physical ports of the DCI underlay, the VTEP loopbacks of the DCI EVPN session, the two sub-interfaces of a Handoff.
-# A process names its device through its own `capabilities`.
+# add_virtual_circuit), and the FABRIC-<a>-<b> of a zone edge pair.
 SESSIONS_QUERY = """
 query ($names: [String]) {
   ManagedBGPPeering(name__values: $names) {
@@ -115,7 +111,7 @@ query ($names: [String]) {
 """
 
 
-# The /31 (/127) add_virtual_circuit allocates per circuit, found by its description ("DCI <name>", "Handoff <name>").
+# The /31 (/127) add_virtual_circuit allocates per circuit
 CIRCUIT_PREFIXES_QUERY = """
 query ($descriptions: [String]) {
   IpamPrefix(description__values: $descriptions) {
@@ -175,9 +171,7 @@ query ($ids: [ID]) {
 """
 
 
-# The office WAN exit sessions add_office_fabric builds toward the SD-WAN edge (the VCO describes the edge's side
-# from the same peering): processes with their AS, the key, and the two dot1q sub-interfaces with their addresses
-# and their VRF instance (the routing zone; the address itself is in the builtin IPAM namespace).
+# The office WAN exit sessions toward the SD-WAN edge: processes, key, and the two dot1q sub-interfaces with VRF.
 WAN_EXIT_SESSIONS_QUERY = """
 query ($names: [String]) {
   ManagedBGPPeering(name__values: $names) {
@@ -245,8 +239,7 @@ query ($devices: [String]) {
 """
 
 
-# The ISP transit sessions: which edge each runs on, and the routing zone of the interface's VRF instance (the
-# SecurityZone is the routing authority: IPAM allocates in the builtin `default` namespace).
+# The ISP transit sessions: which edge each runs on
 TRANSIT_SESSIONS_QUERY = """
 query ($names: [String]) {
   ManagedBGPPeering(name__values: $names) {
@@ -271,8 +264,7 @@ query ($names: [String]) {
 }
 """
 
-# A rule's match: its policy, segments, the VIP/32s it targets (R_client) and the prefixes it starts
-# from (R_server: the load-balancer context's leg).
+# A rule's match: its policy, segments
 _RULE_FIELDS = """
         name { value }
         action { value }
@@ -331,8 +323,7 @@ query ($names: [String]) {
 """
 
 
-# Every location with its reverse `circuits`: the same circuit__location edge as a circuit's `locations`. The
-# generic has no `name`: every location is a TopologyDeployment.
+# Every location with its reverse `circuits`
 CIRCUIT_LOCATIONS_QUERY = """
 query {
   TopologyConnectableLocation {

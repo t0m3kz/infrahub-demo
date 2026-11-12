@@ -23,14 +23,7 @@ logger = logging.getLogger(__name__)
 def scope_tenant_services_to_dcs(
     services: dict[str, list[dict[str, Any]]], dc_names: Iterable[str]
 ) -> dict[str, list[dict[str, Any]]]:
-    """Drop firewall contexts and segment legs that live in a DC outside ``dc_names``.
-
-    Other suites in the same session merge their own customers into main (the
-    DC6 scenario chain's test_19 boards C001 onto DC6), and a branch made from
-    main inherits that state. Scoping by DC keeps a suite's exact counts about
-    its own DCs. Anything not in a TopologyDataCenter, such as a colocation
-    metro's cluster or leg, is kept: only DCs are shared between suites.
-    """
+    """Drop firewall contexts and segment legs that live in a DC outside ``dc_names``."""
     allowed = set(dc_names)
     return {
         **services,
@@ -48,20 +41,7 @@ def scope_tenant_services_to_dcs(
 
 
 async def fetch_tenant_services(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
-    """Fetch the tenant-scoped firewall contexts and segment deployment legs.
-
-    The load-balancer contexts have their own inventory (fetch_loadbalancer_inventory).
-
-    Returns:
-        {"firewall_contexts": [{"name", "cluster", "cluster_dcs", "tenant",
-                                "tenant_design"}],
-         "segment_deployments": [{"segment", "segment_kind", "vni", "status",
-                                  "deployment", "deployment_is_dc"}]}
-
-        ``cluster_dcs`` is the sorted set of TopologyDataCenter names the
-        cluster's member firewalls are deployed in (empty for a colocation
-        metro's cluster); see scope_tenant_services_to_dcs.
-    """
+    """Fetch the tenant-scoped firewall contexts and segment deployment legs."""
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
 
@@ -132,24 +112,14 @@ def health_check_hfids(connection: dict[str, Any] | None) -> tuple[tuple[str, ..
     )
 
 
-#: Device roles whose service ports (firewall- or load-balancer-facing) a context is tagged on: a DC's border
-#: leaf, a colocation metro's edge.
+#: Device roles whose service ports (firewall- or load-balancer-facing) a context is tagged on
 _SERVICE_PORT_DEVICE_ROLES = frozenset({"border-leaf", "edge"})
 
 
 def _context_legs_and_ports(
     node: dict[str, Any], exchanges: list[dict[str, Any]] | None = None
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """A service context's legs and the service ports facing it, derived from its raw members (``shared_devices``).
-
-    A context has no interface edge (utils/service_contexts.py): a leg is a member's sub-interface of its first uplink
-    tagged with the context's transit VLAN, {"interface", "device", "device_id", "address", "namespace", "vrf_type",
-    "exchanges"}, ``exchanges`` the names of the TopologyRoutedExchanges it is a leg of: of the raw ``exchanges``, the
-    ones whose gateway is the context and one of whose VRFs is the leg's (utils/service_contexts.py ``exchange_legs``;
-    none for a load-balancer leg). The legacy ``namespace`` key holds the routing SecurityZone name, not the address's IPAM
-    namespace. A service port is the port of a border leaf (DC) or an edge (colocation metro) that a member's uplink is
-    cabled to, of the role facing the member: {"id", "interface", "device", "role"}.
-    """
+    """A service context's legs and the service ports facing it, derived from its raw members (``shared_devices``)."""
     legs: list[dict[str, Any]] = []
     border_ports: dict[str, dict[str, Any]] = {}
     context_id = str(node.get("id"))
@@ -190,13 +160,7 @@ _HA_KINDS = frozenset({"ManagedFirewallHA", "ManagedLoadbalancerHA"})
 
 
 def _context_cluster(node: dict[str, Any]) -> dict[str, Any]:
-    """The HA pair of a raw service context, {"name", "member_ids", "dcs"}, read off its members (``shared_devices``).
-
-    A context is a shared capability and holds no HA edge: its pair is the ``ManagedFirewallHA`` /
-    ``ManagedLoadbalancerHA`` among its members' own ``capabilities`` (``name`` None, ``member_ids`` empty when they
-    name none or more than one). ``member_ids`` are the pair's own members, ``dcs`` the sorted TopologyDataCenter
-    names the context's members are deployed in (empty for a colocation zone or for virtual members).
-    """
+    """The HA pair of a raw service context, {"name", "member_ids", "dcs"}, read off its members (``shared_devices``)."""
     members = _edge_nodes(node.get("shared_devices"))
     pairs = {
         str(cap["id"]): cap
@@ -228,23 +192,7 @@ def _exchange_zone(exchange: dict[str, Any], side: str) -> dict[str, Any]:
 
 
 async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
-    """Fetch every firewall context with its transit legs, plus every routed exchange.
-
-    Returns:
-        {"contexts": [{"id", "name", "vlan", "snat", "snat_namespace", "tenant", "cluster_dcs",
-                       "members", "member_ids",
-                       "served": [{"name", "environment"}],
-                       "legs": [{"interface", "device", "device_id", "address",
-                                 "namespace", "vrf_type", "exchanges"}],
-                       "border_ports": [{"id", "interface", "device", "role"}]}],
-         "exchanges": [{"id", "name", "namespace_a", "namespace_a_type",
-                        "namespace_z", "namespace_z_type", "gateway_id",
-                        "gateway_name"}]}
-
-        ``legs`` and ``border_ports`` as _context_legs_and_ports returns them; ``members`` / ``member_ids`` the names
-        and ids of the context's member devices (``shared_devices``). An exchange's ``namespace_a`` / ``namespace_z``
-        are the SecurityZone names of its ``vrf_a`` / ``vrf_z`` (the legacy key, like a leg's ``namespace``).
-    """
+    """Fetch every firewall context with its transit legs, plus every routed exchange."""
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
     raw = await client.execute_graphql(query=QUERY_GET_TRANSIT_INVENTORY, branch_name=branch)
@@ -311,18 +259,7 @@ def match_transit_contexts(
     dedicated_tenants: Iterable[str],
     colocation_sites: Mapping[str, Iterable[str]] | None = None,
 ) -> tuple[dict[tuple[str, str, str | None], dict[str, Any]], list[dict[str, Any]]]:
-    """Split the contexts into the ones the suite owns, keyed by site, and the other colocation ones.
-
-    Returns ({(site, namespace, tenant): context}, [unmatched contexts]). The namespace is the context's
-    tenant VRF (PROD or NONPROD, see _tenant_namespace): a shared context is one per (cluster, namespace). A
-    shared context is keyed (dc, namespace, None) by the DC its member firewalls are deployed in; a dedicated
-    one (its members are virtual, so carry no deployment) by the tenant's own trailing DC (`C007-P-DC10` -> DC10)
-    and the tenant name. Contexts of a DC outside ``dc_names`` (the DC6 chain's) and dedicated contexts of
-    tenants outside ``dedicated_tenants`` are dropped. A colocation context is one with neither tenant nor DC:
-    when the deployments it serves are all among those of a metro in ``colocation_sites`` (serving zone ->
-    deployment names) it is keyed (zone, namespace, None), otherwise it is returned in the list. So is a
-    context whose legs are in no single tenant namespace, or whose key another context already holds.
-    """
+    """Split the contexts into the ones the suite owns, keyed by site, and the other colocation ones."""
     allowed = set(dc_names)
     tenants = set(dedicated_tenants)
     sites = {site: frozenset(names) for site, names in (colocation_sites or {}).items()}
@@ -357,18 +294,7 @@ def match_transit_contexts(
 
 
 async def fetch_loadbalancer_inventory(client: InfrahubClient, branch: str) -> list[dict[str, Any]]:
-    """Fetch every load-balancer context with its leg, service ports, VIP range and VIPs.
-
-    Returns:
-        [{"id", "name", "vlan", "tenant", "cluster", "cluster_member_ids", "cluster_dcs",
-          "served": [names], "vip_prefix", "vip_prefix_namespace",
-          "legs": [...], "border_ports": [...],
-          "vips": [{"hostname", "protocol", "port", "address", "servers": [names],
-                    "members": [addresses], "health_checks"}]}]
-
-        ``legs`` and ``border_ports`` as _context_legs_and_ports returns them;
-        ``servers`` are the pool members (names), ``members`` their primary addresses.
-    """
+    """Fetch every load-balancer context with its leg, service ports, VIP range and VIPs."""
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
     raw = await client.execute_graphql(query=QUERY_GET_LOADBALANCER_INVENTORY, branch_name=branch)
@@ -428,16 +354,7 @@ async def fetch_loadbalancer_inventory(client: InfrahubClient, branch: str) -> l
 def match_loadbalancer_contexts(
     contexts: list[dict[str, Any]], dc_names: Iterable[str], dedicated_tenants: Iterable[str]
 ) -> tuple[dict[tuple[str, str, str | None], dict[str, Any]], list[dict[str, Any]]]:
-    """Key the load-balancer contexts the suite owns by (DC, tenant namespace, dedicated tenant or None).
-
-    The DC is found as match_transit_contexts finds it (the shared cluster's
-    members' DC, a dedicated tenant's trailing DC); contexts of another DC or of
-    a tenant outside ``dedicated_tenants`` are dropped. The namespace is not
-    stored on a context: it is the one namespace of its legs. Returns
-    (keyed, unkeyed): a shared context in no DC at all, an in-scope context
-    whose legs are in no single namespace, or one whose key another context
-    already holds, is unkeyed.
-    """
+    """Key the load-balancer contexts the suite owns by (DC, tenant namespace, dedicated tenant or None)."""
     allowed = set(dc_names)
     tenants = set(dedicated_tenants)
     by_key: dict[tuple[str, str, str | None], dict[str, Any]] = {}

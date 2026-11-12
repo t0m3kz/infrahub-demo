@@ -45,13 +45,7 @@ __all__ = [
 
 
 class BaseDeviceCheck(WarningCheck):
-    """Base class for device-role checks that just run a fixed list of
-    data-only validators against get_data(data) and log every error.
-
-    Subclasses set ``query`` (per-role config query) and ``validators``
-    (the subset of checks/common.py's validate_* functions that apply to
-    that role) — no need to override ``validate()`` itself.
-    """
+    """Run a fixed list of data-only ``validators`` against the role's ``query`` data and log every error."""
 
     validators: list[Callable[[dict[str, Any]], list[str]]] = []
 
@@ -64,13 +58,7 @@ class BaseDeviceCheck(WarningCheck):
 
 
 def deployment_scope_ids(deployment: dict[str, Any] | None) -> set[str]:
-    """Ids of a device's deployment and of that deployment's parent: the pod and its DC, a colocation zone and its metro.
-
-    A device is deployed into a pod or a zone (a border leaf or an edge into the DC itself), while a customer
-    footprint hangs off the DC or the metro; the footprint's parent being in this set puts the device in its DC.
-    ``deployment`` is cleaned query data with the parent selected as ``id`` plus another field (clean_data collapses a
-    node with only an id to the bare id).
-    """
+    """Ids of a device's deployment and of that deployment's parent (pod and DC, zone and metro)."""
     deployment = deployment or {}
     parent = deployment.get("parent")
     parent_id = parent.get("id") if isinstance(parent, dict) else None
@@ -78,9 +66,7 @@ def deployment_scope_ids(deployment: dict[str, Any] | None) -> set[str]:
 
 
 def validate_interfaces(data: dict[str, Any]) -> list[str]:
-    """
-    Validates that the device has interfaces and that loopback interfaces have IP addresses.
-    """
+    """Validate that the device has interfaces and that loopback interfaces have IP addresses."""
     errors: list[str] = []
     if len(data.get("interfaces", [])) == 0:
         errors.append("Device has no interfaces configured. At least one interface is required.")
@@ -93,17 +79,7 @@ def validate_interfaces(data: dict[str, Any]) -> list[str]:
 
 
 def validate_transit_vlans(device: dict[str, Any], transform_cls: type[BaseDeviceTransform]) -> list[str]:
-    """No transit VLAN may equal a segment VLAN on this device.
-
-    A border leaf and an edge derive one transit VLAN per leg of every firewall
-    context tagged on their service ports; a leaf derives the legs of the contexts
-    its firewall PBR redirects to (BaseDeviceTransform._firewall_pbr, the transform's
-    own derivation). Either renders them next to its segment VLANs.
-    get_vlans de-duplicates by VLAN id, so a collision would silently drop one of
-    the two. Segment VLANs are collected the way ``transform_cls`` (the device's own
-    transform) collects its activations. A leaf whose redirect has no derivable
-    transit leg is reported with the transform's own message.
-    """
+    """No transit VLAN may equal a segment VLAN on this device (get_vlans would silently drop one)."""
     transform = transform_cls.__new__(transform_cls)
     activations = transform._device_activations(device)
     if transform.device_role in BaseDeviceTransform._LEAF_ROLES:
@@ -130,11 +106,7 @@ def validate_transit_vlans(device: dict[str, Any], transform_cls: type[BaseDevic
 
 
 def validate_appliance(device: dict[str, Any]) -> list[str]:
-    """Validate a load balancer is ready for config generation.
-
-    Checks platform, active status, at least one active uplink, and membership
-    in a ManagedLoadbalancerHA domain with at least 2 members.
-    """
+    """Validate a load balancer for config generation: platform, status, an active uplink, an HA domain of 2."""
     errors: list[str] = []
     device_name = device.get("name", "Unknown")
 
@@ -166,13 +138,7 @@ def validate_appliance(device: dict[str, Any]) -> list[str]:
 
 
 def validate_routing_password(data: dict[str, Any]) -> list[str]:
-    """Validate that every BGP peering and OSPF interface has an authentication password set.
-
-    BGP: password lives on each ManagedBGP.peerings[] entry (underlay + overlay).
-    OSPF: password lives on each RoutingOSPFInterface (per-interface, in capabilities).
-    A missing password is a hardening gap, not a connectivity failure — routing works
-    without it — so this is reported as a check finding, not enforced at generation time.
-    """
+    """Validate that every BGP peering and OSPF interface has an authentication password set (hardening gap)."""
     errors: list[str] = []
 
     for capability in data.get("capabilities", []):
@@ -195,24 +161,7 @@ def validate_routing_password(data: dict[str, Any]) -> list[str]:
 
 
 def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
-    """Validate the legs of the TopologyRoutedExchanges of the firewall contexts a device is a member of.
-
-    The schema cannot say "this device holds exactly one leg per VRF of the
-    exchange, addressed in the transit /29, on the transit VLAN". An exchange's
-    legs are derived (utils/service_contexts.py exchange_legs): the device's
-    legs of the gateway context (sub-interfaces of its uplink on a transit VLAN
-    of the context) in the exchange's vrf_a or vrf_z. utils/exchange_transit.py
-    is the one rule set the generator, the border leaf transform and this check
-    share. Only firewalls hold legs; a border leaf carries the context on its
-    ports, which validate_transit_vlans covers.
-
-    Per exchange of a context the device is a member of:
-
-    - exactly one leg in each of its two VRFs, of namespace types that EXCHANGE_PEERS allows to be exchanged;
-    - each leg's address is a member address (.5 / .6) of a /29 in its namespace;
-    - the sub-interface VLAN (``<uplink>.<vlan>``) is
-      transit_vlan(context VLAN, namespace type).
-    """
+    """Validate the legs of the routed exchanges of the firewall contexts a device is a member of."""
     errors: list[str] = []
     device_name = data.get("name", "unknown")
 
@@ -263,12 +212,7 @@ def _validate_exchange(
 
 
 def validate_context_members(data: dict[str, Any]) -> list[str]:
-    """Errors in the members of the firewall contexts this device enforces.
-
-    A context holds no HA edge: its members (``shared_devices``) are the devices that enforce it, and the schema cannot
-    say they are one pair. So: a device in an HA domain enforces only contexts whose members are exactly that domain's
-    members; a standalone device (no HA domain) only contexts of which it is the one member.
-    """
+    """Errors in the members of the firewall contexts this device enforces (its HA domain's, else its own)."""
     errors: list[str] = []
     device_name = data.get("name", "unknown")
     ha = get_ha(data.get("capabilities"))
@@ -292,15 +236,7 @@ def validate_context_members(data: dict[str, Any]) -> list[str]:
 
 
 def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
-    """A firewall context with an INTERNET leg on this device must have a public SNAT address.
-
-    The leg is a sub-interface tagged with the context whose address sits in a
-    namespace of type internet. The full data of a context the device is a member of
-    takes precedence over interface-local references. The context's snat_address (one per context,
-    shared by all its tenant VRFs) must be set and lie outside the non-internet
-    space (utils/internet_space.py NON_INTERNET_PREFIXES): a private SNAT
-    address would be filtered by the edge's RM-TRANSIT-OUT and never return.
-    """
+    """A firewall context with an INTERNET leg on this device must have a public SNAT address."""
     errors: list[str] = []
     device_name = data.get("name", "unknown")
     contexts: dict[str, dict[str, Any]] = {}
@@ -340,7 +276,7 @@ def _validate_leg(
     """Address and VLAN rules of one leg of ``context`` (see validate_exchange_gateways)."""
     errors: list[str] = []
     network = ip_interface(address).network
-    # IPv4 by design: a context leg is a /29 of the IPv4 transit pools (utils/exchange_transit.py).
+    # IPv4 by design: a context leg is a /29 of the IPv4 transit pools.
     if network.version != 4 or network.prefixlen != TRANSIT_PREFIXLEN:
         errors.append(f"{label}: leg '{iface_name}' address {address} is not inside a /{TRANSIT_PREFIXLEN}.")
     elif address.split("/")[0] not in transit_addresses(str(network))["members"]:

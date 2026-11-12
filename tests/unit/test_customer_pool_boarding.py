@@ -1,11 +1,4 @@
-"""The customer's pools are created when the footprint is boarded (generators/topology/segment_addressing.py).
-
-``ensure_customer_pools`` is the one implementation, called by add_customer_deployment_dc and _colocation (through
-CustomerFacilityMixin) and by add_customer_deployment_cloud: DC and colocation get an IPv4 and an IPv6 pool, a cloud
-footprint the IPv4 pool only (its routed range; tests/unit/test_cloud_range.py draws from it). A customer's footprints of one kind and
-environment share the pools. The server side is mocked; what is held is which pools are carved, from which tenant pool
-and of which length.
-"""
+"""The customer's pools are created when the footprint is boarded (generators/topology/segment_addressing.py)."""
 
 from __future__ import annotations
 

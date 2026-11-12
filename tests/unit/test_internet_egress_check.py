@@ -1,12 +1,4 @@
-"""Unit tests for CheckInternetEgress (checks/internet_egress.py).
-
-The pure functions run on cleaned query data (``clean_data`` output), built by the helpers below: a complete shared
-context of a firewall pair (``_context``), a DC and a colocation footprint that name it, a rule from a segment on the
-footprint, and the zones / virtual colocations of a metro. A test breaks one element of a complete setup and expects
-exactly one finding that names the rule, the footprint, the context and the missing element. One test runs the check
-class on a raw GraphQL payload shaped like queries/validation/internet_egress.gql, so the wiring through
-``clean_data`` is covered too.
-"""
+"""Unit tests for CheckInternetEgress (checks/internet_egress.py)."""
 
 from __future__ import annotations
 
@@ -47,9 +39,7 @@ def _leg(
     namespace: tuple[str, str] | None = ("INTERNET", INTERNET_TYPE),
     name: str | None = None,
 ) -> dict[str, Any]:
-    """The sub-interface of a member tagged ``vlan`` (named ``<port>.<vlan>`` unless ``name`` says otherwise), with
-    an address in ``namespace`` (None: no address) and in its VRF instance: an exchange's legs are the context's legs in
-    its two VRFs (derived), so the leg names no exchange."""
+    """The sub-interface of a member tagged ``vlan``."""
     address = (
         {
             "id": f"ip-{device}-{vlan}",
@@ -83,8 +73,7 @@ def _port(port_id: str, device_role: str = "border-leaf", role: str = "firewall"
 
 
 def _member(prefix: str, member_id: str, role: str, port_index: int) -> dict[str, Any]:
-    """A member of the shared context with what its legs and border port derive from: the context it belongs to, its
-    uplink ``eth1`` cabled to a border service port, and the legs `eth1.<transit VLAN>` of the PROD and INTERNET slots."""
+    """A member of the shared context with what its legs and border port derive from:"""
     uplink_id = f"{member_id}:up"
     return {
         **_device(member_id, role),

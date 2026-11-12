@@ -1,28 +1,7 @@
-"""Validate the cloud side of a connection: gateways, transports, their interfaces and tunnels (R1 to R11).
+"""Validate the cloud side of a connection: gateways, transports, interfaces and tunnels (R1-R11).
 
-A transport (``CloudDirectConnect``, ``CloudVPNConnection``) is a device that holds interfaces: the
-``CloudPeeringInterface`` that ride on the ports and LAG of the provider's ``TopologyProviderConnect`` (or tunnels). The schema accepts what these rules refuse (measured on 1.11.9): an
-attachment with no target or with two, a transport riding on itself, a peering whose encapsulation ``parent`` is a port of a device that is no provider connect. Each rule is one method and reports ERRORs.
-
-R1  an attachment has exactly one target, ``virtual_network`` or ``peer_gateway``, and its peer gateway is not its own
-R2  a route table belongs to a ``hub`` gateway, and an attachment's route tables belong to the attachment's gateway
-R3  ``rides_on``: no loop; a physical transport rides only on a physical one; a logical transport that rides on a
-    transport of ours has no ``partner_account``
-R4  a service endpoint's segments belong to the endpoint's virtual network; a tunnel key needs an IPsec tunnel
-R5  a crypto profile belongs to an IPsec tunnel, and an IPsec tunnel has one (GRE has none, a key only with IPsec)
-R6  a VPN tunnel has the provider's ``endpoint_ip`` and is an interface of a VPN connection
-R7  retired: that every interface of a transport is on that transport is held twice already, by the server for the
-    members of a LAG (``common_parent: device``) and by ``checks/interface_parents.py`` for the encapsulation ``parent``
-    of a peering (the port of its own transport or of a provider connect)
-R8  the parent of a peering (a tunnel needs none) is a port or LAG, and the VLANs of the peerings of one parent are
-    distinct
-R9  placement: a transport has exactly one of ``region`` and ``saas_region``; with an ``account`` it has no ``owner``,
-    without one it needs ``saas_region`` and ``owner``; a peering is an interface of a transport and one of scope
-    ``saas`` is on a transport with a ``saas_region``
-R10 a public service endpoint (enabled, ``access: public``) has a ``TopologyProviderConnect`` of its provider at its
-    place (its ``saas_region``, else the region of its virtual network): nothing but provider and place links them;
-    exactly one of them is the public side (attached to THE INTERNET), a private port at the same place has no carrier
-R11 that public side has an ``internet`` carrier circuit with an end on THE INTERNET (``TopologyInternet``)
+R1-R11 cover attachment targets, route tables, rides_on, endpoints, crypto, peerings, placement and public endpoints.
+See AGENTS.md.
 """
 
 from __future__ import annotations
@@ -301,7 +280,7 @@ class CheckCloudConnection(InfrahubCheck):
 
     def _r6_tunnel(self, peering: dict[str, Any]) -> None:
         device = peering.get("device")
-        # clean_data renames the "__typename" key to "typename"
+        # clean_data renames "__typename" to "typename"
         kind = device.get("typename") if isinstance(device, dict) else None
         if peering.get("tunnel_index") is None and kind != VPN_CONNECTION:
             return

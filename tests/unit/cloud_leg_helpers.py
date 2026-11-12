@@ -1,5 +1,6 @@
 """Builders for the cloud leg tests: the ``CloudPeeringInterface`` and ``CloudGatewayAttachment`` roots in the raw
-GraphQL shape the edge, routing invariants and segment security queries return (transforms/helpers/bgp_cloud.py)."""
+GraphQL shape the edge, routing invariants and segment security queries return (transforms/helpers/bgp_cloud.py).
+"""
 
 from __future__ import annotations
 
@@ -116,11 +117,7 @@ def peering(
     zone: str = "PROD",
     deployment: str = "FR",
 ) -> dict[str, Any]:
-    """A CloudPeeringInterface of ``transport`` ending one session circuit whose other ends are ``ends`` (device, port).
-
-    ``account_owner`` None: the transport has no account (a SaaS), its own ``saas_owner`` applies. ``on`` is the
-    gateway it lands on; ``transport_gateway`` the one a CloudVPNConnection holds.
-    """
+    """A CloudPeeringInterface of ``transport`` ending one session circuit whose other ends are ``ends`` (device, port)."""
     vrf = routing_vrf(zone, deployment)
     circuit_ends = [
         {"name": v(port), "device": node({"name": v(device)}), "zone_capabilities": interface_vrf(zone, deployment)}
@@ -159,8 +156,7 @@ def peering(
 
 
 def aws_chain(vpc_block: str = "10.10.0.0/16") -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """The rule 10 chain of 30_all as (peerings, attachments), cleaned: C001's VIF on ``dxgw``, ``dxgw`` -> ``tgw`` ->
-    the VPC ``nordix-vpc-prod`` holding ``vpc_block`` (PROD)."""
+    """The rule 10 chain of 30_all as (peerings, attachments), cleaned: C001's VIF on ``dxgw``."""
     peerings = cleaned(peering("vif-nordix", "dx-nordix", ends=(("eg-fr201", "Ethernet1/13.1000"),)))
     attachments = cleaned(
         attachment("tgwa-dxgw", "tgw", peer="dxgw", table="rt-shared"),

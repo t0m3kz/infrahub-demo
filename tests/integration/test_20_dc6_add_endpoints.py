@@ -1,31 +1,4 @@
-"""Integration test - Scenario 7: Add Endpoints to DC6.
-
-Coverage: Verifies that loading endpoint servers (data/demos/06_servers) into
-DC6 racks triggers the endpoint connectivity generator automatically (the
-DcimPhysicalDevice role=endpoint created-trigger) and cables every server's
-uplink interfaces to the fabric.
-
-Data: 10 servers across DC6 POD-1 (2, in two new compute racks), POD-2 (2,
-sharing the ToR racks) and POD-3 (6), so DC6 must gain at least 10 endpoints.
-Plus one test-local AppComponent (tests/integration/data/20_endpoints) on the
-DC6 "web-app" local segment, instanced on a POD-1 server: a local segment's
-VLAN ID is realized only where a component instance is cabled to a switch.
-
-Prerequisites: DC6 deployed and merged to main (Scenario 1), segments deployed (Scenario 6).
-
-Steps:
-0.  Snapshot DC6 endpoint count on main
-1.  Create branch and load endpoint data (device type, compute racks, servers)
-2.  Wait for event-triggered generators to complete and verify no failures
-3.  Verify endpoint growth in DC6 and that every loaded server is cabled
-3b. Load the AppComponent; 3c. run add_app_component_segment over it
-3d. Verify the segment's ManagedSegmentVlan and switch-port tagging
-3e. A port a person tags by hand survives a rerun of the segment reconcile
-4.  Create proposed change
-5.  Wait for validations, verify diff and artifacts
-6.  Merge to main
-7.  Verify endpoints in main
-"""
+"""Integration test - Scenario 7: Add Endpoints to DC6."""
 
 import logging
 from pathlib import Path
@@ -82,11 +55,7 @@ def _peers(node: Any, relationship: str) -> list[Any]:
 
 
 def _load_server_names(root_dir: Path) -> list[str]:
-    """Return the names of every DcimPhysicalDevice declared under DEMO_SERVERS_DATA.
-
-    Read from the demo data itself so the expected growth cannot drift from
-    what the load actually creates.
-    """
+    """Return the names of every DcimPhysicalDevice declared under DEMO_SERVERS_DATA."""
     names: list[str] = []
     for path in sorted((root_dir / DEMO_SERVERS_DATA).rglob("*.yml")):
         for document in yaml.safe_load_all(path.read_text(encoding="utf-8")):
@@ -117,11 +86,7 @@ async def _assert_endpoint_growth(
 
 
 class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
-    """Test adding endpoint servers to DC6 racks.
-
-    Endpoint connectivity generator is triggered by event when a role=endpoint
-    device is created. Verifies cables are created automatically.
-    """
+    """Test adding endpoint servers to DC6 racks."""
 
     @pytest.fixture(scope="class")
     def scenario_branch(self) -> str:
@@ -278,8 +243,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Load an application whose one component sits on a DC6 local segment,
-        instanced on a server Step 3 found cabled."""
+        """Load an application whose one component sits on a DC6 local segment."""
         logging.info("=== %s - Step 3b: Load AppComponent ===", SCENARIO_NAME)
 
         load_result = self.execute_command(
@@ -304,9 +268,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Run add_app_component_segment over the component. The AppComponent
-        created-trigger already dispatched it; running it again by hand and
-        asserting success makes the outcome this test checks deterministic."""
+        """Run add_app_component_segment over the component."""
         logging.info("=== %s - Step 3c: Run add_app_component_segment ===", SCENARIO_NAME)
 
         component = await async_client_main.get(
@@ -332,8 +294,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """The segment gets a local VLAN ID on the server's switch VLAN
-        domain(s), and exactly the switches the server is cabled to carry it."""
+        """The segment gets a local VLAN ID on the server's switch VLAN domain(s)"""
         logging.info("=== %s - Step 3d: Verify VLAN Domain Segments ===", SCENARIO_NAME)
 
         result = await async_client_main.execute_graphql(
@@ -383,13 +344,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """A port a person assigns to the segment's deployment (the request) becomes a member of its switch's row.
-
-        Here an uncabled customer port of a switch the server is cabled to is assigned to the deployment its generated
-        ports' row is under; add_vxlan_segment runs again and the port is a member of that row, next to the generated
-        ones. The assignment is then withdrawn and the generator rerun, which removes the membership (no instance lands
-        on that port) - the branch ends as it began, before the proposed change merges it.
-        """
+        """A port a person assigns to the segment's deployment (the request) becomes a member of its switch's row."""
         logging.info("=== %s - Step 3e: A port assigned by a person is realized and withdrawn ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -417,7 +372,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         )
         assert free, f"{switch} has no uncabled customer port left to assign by hand"
         port = free[0]
-        # The deployment of the switch's row of the segment: a person assigns the port to it (the request).
+        # The deployment of the switch's row of the segment
         row_id, deployment_id = next((p["row_id"], p["deployment_id"]) for p in generated if p["device"] == switch)
 
         async def _reconcile() -> list[dict[str, Any]]:

@@ -1,29 +1,10 @@
-"""Unit tests for dual-stack support.
-
-Covers:
-  - The per-pool address family and the prefix lengths drawn from it
-    (generators/helpers/routing.py: underlay_pool_is_ipv6, p2p_prefix_length,
-    loopback_prefix_length). dc.py/pod.py/rack.py/pools.py all derive these
-    from a plain underlay_protocol string read off clean_data() output, so
-    the pool a prefix is allocated from and the prefix length requested from
-    it can never disagree.
-
-Pod/DC-fabric pool sizes are HOST-BIT widths derived from the fabric designs
-(generators/fabric_sizing.py), converted to an actual prefix length via
-fabric_sizing.host_bits_to_prefix_length(..., ipv6=...) at each call site —
-protocol-agnostic sizes, so an IPv6 DC and an IPv4 DC of the same design
-get correctly-sized (but different) prefix lengths instead of the
-IPv6 DC requesting a nonsensically large child prefix from its (deep) IPv6
-parent pool.
-"""
+"""Unit tests for dual-stack support."""
 
 import pytest
 
 from generators.helpers.routing import loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 
-# ===========================================================================
 # Per-pool address family and the prefix lengths drawn from it
-# ===========================================================================
 
 
 class TestUnderlayPoolFamily:
@@ -45,7 +26,6 @@ class TestUnderlayPoolFamily:
         [("ipv4", 31, 32), ("ipv6", 127, 128), ("dual_stack", 127, 32)],
     )
     def test_prefix_lengths_follow_the_pool_family(self, protocol: str, p2p: int, loopback: int) -> None:
-        """Dual-stack: the technical pool is IPv6 (so /127, never a /31 from an
-        IPv6 pool) while the loopback pool stays IPv4 (/32)."""
+        """Dual-stack:"""
         assert p2p_prefix_length(protocol) == p2p
         assert loopback_prefix_length(protocol) == loopback

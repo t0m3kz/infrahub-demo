@@ -1,9 +1,4 @@
-"""Unit tests for the RoutingMixin helpers the DC and the office fabric share.
-
-ensure_lisp_site_key (the office's site key, which the office generator attaches as ``lisp_site_key``) and ensure_ospf_area
-(shared with the DC's ospf-ibgp) are the helpers the office fabric generator calls; create_routing's ``no_overlay``
-option is the office-driven way to ask for an underlay-only plan.
-"""
+"""Unit tests for the RoutingMixin helpers the DC and the office fabric share."""
 
 from __future__ import annotations
 

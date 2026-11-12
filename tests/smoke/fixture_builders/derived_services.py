@@ -1,21 +1,4 @@
-"""The nested service data a fixture device's config is derived from, built from what the builders declare.
-
-A builder says WHICH service contexts a border port faces, which contexts the firewalls of the deployment hold, with
-which legs, and (through the VRF hook) which SVIs a switch has. The model stores none of it as an interface edge any
-more: a transform derives the legs of a context from its member's interfaces, the contexts behind a border port from
-the cable of the port and the steered SVIs from the segment rows (utils/service_contexts.py, utils/device_services.py).
-So this hook rewrites the declared shape into the shape the queries return, in the RAW GraphQL form:
-
-- a border port declared with context capabilities becomes a ``service_ports`` entry of a ``DeviceServices`` root: the
-  port's cable, whose far end is the uplink of a member holding the contexts and their legs;
-- the contexts of the devices of a deployment (the firewalls the leaf's PBR redirects to) become members with their
-  legs as interfaces;
-- the legs a firewall or load balancer lists on a context are already its own interfaces: the declaration is dropped;
-- the pbr policy of an SVI is dropped, and every routed segment of a leaf gets a row whose footprint has a serving
-  context (the fixtures steer all their SVIs, the transform still applies its own conditions).
-
-Idempotent: a response that already has the ``DeviceServices`` root is left as it is.
-"""
+"""The nested service data a fixture device's config is derived from, built from what the builders declare."""
 
 from __future__ import annotations
 
@@ -292,10 +275,7 @@ def _rows(activations: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def with_device_services(transform: BaseDeviceTransform, data: dict[str, Any]) -> dict[str, Any]:
-    """A copy of the raw device query response ``data`` with the nested data its services derive from (see the module).
-
-    A response that already has the ``DeviceServices`` root keeps it: only what it still declares is added (nothing, for
-    a persisted fixture) and the rows are derived again from the device's segments."""
+    """A copy of the raw device query response ``data`` with the nested data its services derive from (see the module)."""
     result = copy.deepcopy(data)
     first = next((value for key, value in result.items() if key != DEVICE_SERVICES_ROOT), None)
     if not isinstance(first, dict) or not first.get("edges"):

@@ -1,12 +1,4 @@
-"""The static routes of a device, read from its ``ManagedStaticRoute`` capabilities.
-
-The generator (generators/exchange_routes.py) writes them from the exchange of each firewall and load-balancer context;
-a person may add more (``origin: manual``). The templates take one platform-neutral list, so the transform renders
-exactly the objects, with no second derivation.
-
-A route the templates cannot render (the default table, a distance other than 1, IPv6) raises ``ValueError`` and the artifact
-is refused, so a person's route is never dropped without a word.
-"""
+"""The static routes of a device, read from its ``ManagedStaticRoute`` capabilities."""
 
 from __future__ import annotations
 
@@ -17,7 +9,7 @@ STATIC_ROUTE_KIND = "ManagedStaticRoute"
 
 
 def get_static_routes(device_capabilities: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """[{vrf, l3_vni, prefix, nexthop}] sorted, ``local_only: True`` added when the route is not exported into EVPN."""
+    """[{vrf, l3_vni, prefix, nexthop}] sorted, ``local_only."""
     routes: dict[tuple[str, str, str], dict[str, Any]] = {}
     for cap in device_capabilities or []:
         if cap.get("typename") != STATIC_ROUTE_KIND:

@@ -1,30 +1,5 @@
-"""Every fabric pool size, derived from the design envelope — pure, no I/O.
-
-A DC's ``design`` (TopologyTemplateDC) and a pod's ``design``
-(TopologyTemplatePod) state the ENVELOPE (``max_*``); the pools have to be sized
-before the racks exist, so they are sized for that envelope, never for the
-devices built so far. The inputs are the design dicts as the generator queries
-deliver them after clean_data(): attribute name -> value, and the DC design's
-``pod_templates`` as a list of pod design dicts.
-
-Every result is a protocol-agnostic HOST-BIT width. The caller converts it with
-host_bits_to_prefix_length() for the address family its parent pool is sliced
-from (an IPv4 DC asks its /32 space for what an IPv6 DC asks its /128 space).
-
-Model, per pod design and DC design:
-
-- S = pod spines, L = pod leafs (rows x network racks x leafs per network rack),
-  T = pod ToRs (rows x compute racks x ToRs per compute rack),
-  B = border-leafs one pod can host (its own cap, never more than the fabric's),
-  SS/HS = super-/hyper-spines of the fabric, P = max pods,
-  S_sib = the widest sibling pod's spine count (any pod design the DC may host).
-- A pod's links (one /31 or /127 each) are its spines' downlinks to every
-  leaf/ToR/border-leaf slot, S x (L + T + B), plus its spines' uplinks: to every
-  super-spine (S x SS), or, back-to-back, to every spine of every other pod
-  ((P - 1) x S x S_sib). Access-leaf links count inside the L/T slot budget.
-- A pool that addresses devices or links keeps 25% headroom; a pool that only
-  holds child pools is exactly as wide as its children.
-"""
+"""Every fabric pool size, derived from the design's ``max_*`` envelope (pure, no I/O), as host-bit widths.
+A pool of devices or links keeps 25% headroom; a pool of child pools is exactly as wide as its children."""
 
 from __future__ import annotations
 
@@ -34,12 +9,12 @@ from typing import Any
 PodDesign = Mapping[str, Any]
 DcDesign = Mapping[str, Any]
 
-# A pool holding devices or links is never filled beyond 75% of its addresses.
+# A pool of devices or links is never filled beyond 75%
 _FILL_NUMERATOR = 3
 _FILL_DENOMINATOR = 4
-# Spare loopbacks a pod keeps beyond its envelope (kept from the former table).
+# Spare loopbacks a pod keeps beyond its envelope
 _POD_LOOPBACK_SPARE = 2
-# Spare loopbacks the DC-tier pool keeps beyond SS + BL + HS.
+# Spare loopbacks the DC-tier pool keeps beyond SS + BL + HS
 _FABRIC_LOOPBACK_SPARE = 2
 
 
@@ -61,9 +36,7 @@ def bits_with_headroom(addresses: int) -> int:
     return bits
 
 
-# ---------------------------------------------------------------------------
 # Pod envelope
-# ---------------------------------------------------------------------------
 
 
 def pod_spines(pod: PodDesign) -> int:
@@ -87,10 +60,9 @@ def pod_border_leafs(pod: PodDesign, dc: DcDesign) -> int:
 
 
 def max_sibling_spines(dc: DcDesign) -> int:
-    """S_sib: the widest spine tier of any pod design the DC may host.
-
-    Also the per-pod stride on the super-spines' downlink ports: every pod owns
-    this many of them, whatever its own design."""
+    """S_sib: the widest spine tier of any pod design the DC may host, also the per-pod stride on the super-spines'
+    downlinks.
+    """
     return max(pod_spines(pod) for pod in _pod_templates(dc))
 
 
@@ -121,9 +93,7 @@ def pod_devices(pod: PodDesign, dc: DcDesign) -> int:
     return pod_spines(pod) + pod_leafs(pod) + pod_tors(pod) + pod_border_leafs(pod, dc)
 
 
-# ---------------------------------------------------------------------------
 # DC envelope
-# ---------------------------------------------------------------------------
 
 
 def _pod_templates(dc: DcDesign) -> list[PodDesign]:
@@ -135,8 +105,9 @@ def _pod_templates(dc: DcDesign) -> list[PodDesign]:
 
 
 def fabric_loopback_bits(dc: DcDesign) -> int | None:
-    """Host bits of the DC-tier loopback pool (super-spine, border-leaf, hyper-spine),
-    25% headroom; None when the design has none of those tiers (no pool at all)."""
+    """Host bits of the DC-tier loopback pool (super-spine, border-leaf, hyper-spine), 25% headroom; None without those
+    tiers.
+    """
     tier_devices = (
         dc["max_super_spines_per_fabric"] + dc["max_border_leafs_per_fabric"] + dc["max_hyper_spines_per_fabric"]
     )
@@ -146,16 +117,14 @@ def fabric_loopback_bits(dc: DcDesign) -> int | None:
 
 
 def dc_technical_bits(dc: DcDesign) -> int:
-    """Host bits of the DC technical pool: one widest pod technical pool per pod,
-    plus the super-spine <-> hyper-spine links, which draw from the DC pool itself."""
+    """Host bits of the DC technical pool: one widest pod pool per pod plus the super-spine <-> hyper-spine links."""
     pod_block = 2 ** max(pod_technical_bits(pod, dc) for pod in _pod_templates(dc))
     hyper_spine_links = dc["max_super_spines_per_fabric"] * dc["max_hyper_spines_per_fabric"]
     return bits_to_hold(dc["max_pods"] * pod_block + 2 * hyper_spine_links)
 
 
 def dc_loopback_bits(dc: DcDesign) -> int:
-    """Host bits of the DC loopback pool: one widest pod loopback pool per pod,
-    plus the DC-tier loopback pool when the design has one."""
+    """Host bits of the DC loopback pool: one widest pod loopback pool per pod plus the DC-tier pool."""
     pod_block = 2 ** max(pod_loopback_bits(pod) for pod in _pod_templates(dc))
     tier_bits = fabric_loopback_bits(dc)
     tier_block = 2**tier_bits if tier_bits is not None else 0
@@ -163,8 +132,7 @@ def dc_loopback_bits(dc: DcDesign) -> int:
 
 
 def dc_management_devices(dc: DcDesign) -> int:
-    """The most switches a DC of this design holds: max_pods of its largest pod
-    design, plus the super- and hyper-spines."""
+    """The most switches a DC of this design holds: max_pods of the largest pod design plus the super- and hyper-spines."""
     largest_pod = max(pod_devices(pod, dc) for pod in _pod_templates(dc))
     return dc["max_pods"] * largest_pod + dc["max_super_spines_per_fabric"] + dc["max_hyper_spines_per_fabric"]
 
@@ -174,32 +142,17 @@ def dc_management_bits(dc: DcDesign) -> int:
     return bits_with_headroom(dc_management_devices(dc))
 
 
-# ---------------------------------------------------------------------------
-# Colocation envelope
-# ---------------------------------------------------------------------------
-#
-# A zone (or virtual colocation) ``design`` (TopologyTemplateColocationZone) states
-# the most edge routers, firewalls and load balancers it holds; a metro ``design``
-# (TopologyTemplateColocationMetro) the most zones it holds and the zone designs they
-# may use. Same rules as above: sized for the envelope, never for the devices built
-# so far, 25% headroom on a pool that addresses devices or links, a pool that only
-# holds child pools exactly as wide as its children.
-#
-# Only edge routers take a loopback (firewalls and load balancers are appliances
-# off the on-ramp, outside the underlay and overlay); every device takes a
-# management address; both pools keep two spare addresses (see _COLO_ADDRESS_SPARE). The links of a zone are the interlink of its edge pair and
-# one leg per service appliance to its index-paired edge.
+# Colocation envelope: sized like the above for a zone or metro design. Only edge routers take a loopback; every device
+# takes a management address; both pools keep two spare addresses. A zone's links are its edge pair's interlink and one
+# leg per service appliance.
 
 ColoZoneDesign = Mapping[str, Any]
 ColoMetroDesign = Mapping[str, Any]
 
-# Spare addresses a zone keeps beyond its devices, loopback and management alike: on a pool this small
-# (a /30 or /29) 25% headroom is under two addresses, and an allocator that skips the network and broadcast
-# address would leave a two-device zone with none to replace a device with.
+# Spare addresses a zone keeps beyond its devices: 25% headroom is under two addresses on a /30 or /29
 _COLO_ADDRESS_SPARE = 2
-# The IPv6 slices every zone takes, fixed by what they hold rather than by the
-# design: one /128 VTEP loopback per edge (a /120, 256 addresses) and one /127 for
-# the edge pair's interlink (a /124, eight /127s). Host bits, like every size here.
+# IPv6 slices every zone takes, fixed by what they hold: a /120 for the edge VTEP loopbacks, a /124 for the interlink
+# (host bits)
 COLO_ZONE_LOOPBACK_IPV6_BITS = 8
 COLO_ZONE_TECHNICAL_IPV6_BITS = 4
 
@@ -270,8 +223,5 @@ def colo_metro_technical_ipv6_bits(metro: ColoMetroDesign) -> int:
 
 
 def colo_metro_asn_units(metro: ColoMetroDesign) -> int:
-    """The units the metro's ASN block is sized for: one per zone it may hold.
-
-    The metro uses one site AS today; the block keeps room for the per-zone ASNs a
-    later change may draw from it."""
+    """The units the metro's ASN block is sized for: one per zone it may hold (the metro uses one site AS today)."""
     return metro["max_zones"]

@@ -6,23 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# Physical location hierarchy, outermost to innermost. Every caller building
-# an `indexes` list (dc.py, pod.py, rack.py) already follows this order
-# implicitly — named here once so DeviceNameContext.from_indexes() can turn
-# a plain index list into self-describing (label, index) pairs instead of
-# leaving the position -> label mapping implicit inside the formatter.
-#
-# Position 0 ("fab") is TopologyDataCenter.index, NOT a restatement of
-# fabric_name — a DC can host multiple fabrics under the same name
-# (uniqueness_constraints: ["name__value", "index__value"], display_label
-# "{{ name }} - Fabric {{index}}" — see schemas/extensions/topology/topology_dc.yml).
-# Dropping it would collide every fabric's devices under one DC name, so it
-# stays in location_path like every other level.
+# Physical location hierarchy, outermost to innermost, for DeviceNameContext.from_indexes(). Position 0 ("fab") is
+# TopologyDataCenter.index, not fabric_name: a DC can host several fabrics under one name.
 LOCATION_HIERARCHY_LABELS: tuple[str, ...] = ("fab", "pod", "suite", "row", "rack")
 
-# Short network-engineering role codes — keeps generated names scannable at a
-# glance instead of spelling out multi-word roles like "super-spine" in full.
-# Any role without an entry here falls back to its full name unchanged.
+# Short role codes; a role without an entry keeps its full name
 ROLE_CODES: dict[str, str] = {
     "spine": "sp",
     "super-spine": "ss",
@@ -48,35 +36,24 @@ def _role_code(device_role: str) -> str:
 
 def sdwan_edge_name(office_name: str) -> str:
     """The SD-WAN branch edge of an office footprint (``C005-OFFICE`` -> ``C005-OFFICE-EDGE1``).
-
-    The one spelling of that name: add_sdwan_edge creates the device under it and add_office_fabric looks it
-    up by it to build the office's WAN exit, the two generators sharing nothing but this name.
-    """
+    add_sdwan_edge creates it and add_office_fabric looks it up by this name."""
     return f"{office_name}-EDGE1"
 
 
 class DeviceNameContext(BaseModel):
-    """Explicit inputs for one device name.
-
-    Replaces a ``**kwargs`` bag so every input is statically typed and
-    named — no need to remember which kwarg keys ``format_device_name``
-    actually reads.
-    """
+    """Explicit, statically typed inputs for one device name."""
 
     fabric_name: str
     device_role: str
     role_index: int
     location_path: list[tuple[str, int]] = Field(default_factory=list)
-    """Ordered (label, index) pairs describing where this device sits in
-    the physical hierarchy, e.g. ``[("fab", 1), ("pod", 2)]``. Empty for
-    DC-scoped devices with no fabric/pod/suite/row/rack context at all.
-    Includes the DC's own fabric index ("fab") — see the module-level note
-    on LOCATION_HIERARCHY_LABELS for why that's not optional."""
+    """Ordered (label, index) pairs of where this device sits, e.g. ``[("fab", 1), ("pod", 2)]``, including the DC's own
+    "fab" index; see LOCATION_HIERARCHY_LABELS.
+    """
 
     @classmethod
     def from_indexes(cls, fabric_name: str, device_role: str, role_index: int, indexes: list[int]) -> DeviceNameContext:
-        """Build a context from a plain index list, using the standard
-        fab/pod/suite/row/rack position ordering (see LOCATION_HIERARCHY_LABELS)."""
+        """Build a context from a plain index list in fab/pod/suite/row/rack order (LOCATION_HIERARCHY_LABELS)."""
         return cls(
             fabric_name=fabric_name,
             device_role=device_role,
@@ -86,37 +63,8 @@ class DeviceNameContext(BaseModel):
 
 
 class DeviceNamingConfig(BaseModel):
-    """Configuration for device naming strategy.
-
-    Four strategies, all built on the same idea — use short role codes
-    (see ROLE_CODES) instead of spelling roles out in full, keeping the
-    full location_path including the DC's own fabric index (a DC name can
-    host multiple fabrics, so that index is never redundant — see the
-    module-level note on LOCATION_HIERARCHY_LABELS):
-
-    - standard: role code first (most scannable when skimming a device
-      list), then fabric_name + concatenated location indexes + role
-      index, e.g. ``lf-dc11312401`` for fab=1, pod=3, suite=1, row=2,
-      rack=4, role_index=1 (DC-scoped: ``ss-dc1101``). Location indexes
-      are NOT zero-padded (only role_index is) — shortest form, at the
-      cost of two adjacent double-digit indexes being ambiguous to parse
-      back (not a concern for a cosmetic device name; use "computed" if
-      you need that guarantee).
-    - hierarchical: dot-joined numeric path, e.g. ``dc1.2.3.lf01`` — for
-      tooling that parses positions rather than labels.
-    - flat: no separators at all, e.g. ``dc123lf01`` — shortest form, for
-      systems with strict hostname-length limits.
-    - computed: location_path collapsed into a single fixed-width digit
-      run (2 digits per level) instead of concatenating labels, e.g.
-      ``dc1-lf020301`` for fab=2, pod=3, role_index=1 — a single
-      monotonically parseable number instead of separate path segments.
-
-    Attributes:
-        strategy: Naming strategy to use.
-        separator: Separator character between name parts (standard/computed).
-        zero_padded: Whether to zero-pad numeric indices. Defaults to True.
-        pad_width: Width for zero-padding. Defaults to 2.
-    """
+    """Device naming strategy: standard, hierarchical, flat or computed (examples in the strategy table of the docs).
+    Attributes: strategy, separator (standard/computed), zero_padded (default True), pad_width (default 2)."""
 
     strategy: Literal["standard", "hierarchical", "flat", "computed"] = "standard"
     separator: str = "-"
@@ -124,11 +72,7 @@ class DeviceNamingConfig(BaseModel):
     pad_width: int = 2
 
     def format_device_name(self, ctx: DeviceNameContext) -> str:
-        """Format a device name for the given context, per configured strategy.
-
-        Raises:
-            ValueError: If strategy is unknown or ctx fields are invalid.
-        """
+        """Format a device name for the given context; raises ValueError for an unknown strategy or invalid ctx fields."""
         if not ctx.fabric_name:
             raise ValueError(
                 "Device naming failed: fabric_name cannot be empty. "
@@ -165,29 +109,20 @@ class DeviceNamingConfig(BaseModel):
         return result
 
     def _build_standard_name(self, ctx: DeviceNameContext, formatted_idx: str) -> str:
-        """e.g. ``lf-dc11312401`` (DC-scoped: ``ss-dc1101``). Role code
-        first, then fabric_name with every location index concatenated
-        (unpadded), then the zero-padded role index."""
+        """e.g. ``lf-dc11312401``: role code, fabric_name with the unpadded location indexes, zero-padded role index."""
         digits = "".join(str(idx) for _, idx in ctx.location_path)
         return f"{_role_code(ctx.device_role)}{self.separator}{ctx.fabric_name}{digits}{formatted_idx}"
 
     @staticmethod
     def _path_components(ctx: DeviceNameContext, formatted_idx: str) -> list[str]:
-        """Fabric name, each location index, then role code + index. Joined
-        with "." for hierarchical (``dc1.2.3.lf01``) or "" for flat (``dc123lf01``)."""
+        """Fabric name, location indexes, role code + index; joined with "." (hierarchical) or "" (flat)."""
         components = [ctx.fabric_name]
         components.extend(str(idx) for _, idx in ctx.location_path)
         components.append(f"{_role_code(ctx.device_role)}{formatted_idx}")
         return components
 
     def _build_computed_name(self, ctx: DeviceNameContext) -> str:
-        """Collapse location_path into one fixed-width digit run (pad_width
-        digits per level) instead of separate labeled segments, e.g.
-        ``dc1-lf020301`` for fab=2, pod=3, role_index=1 (DC-scoped: ``dc1-ss0201``).
-
-        Fixed-width per level keeps this unambiguous to parse back — unlike
-        naively concatenating variable-width numbers, a 2-digit-per-level
-        run never collides (e.g. pod=1,rack=23 vs pod=12,rack=3)."""
+        """Location path as one fixed-width digit run, e.g. ``dc1-lf020301``; fixed width keeps it unambiguous to parse."""
         digits = "".join(str(idx).zfill(self.pad_width) for _, idx in ctx.location_path)
         digits += str(ctx.role_index).zfill(self.pad_width)
         return f"{ctx.fabric_name}{self.separator}{_role_code(ctx.device_role)}{digits}"

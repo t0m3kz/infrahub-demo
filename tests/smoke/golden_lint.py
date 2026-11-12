@@ -1,31 +1,4 @@
-"""Structural lint of rendered device configs (NX-OS and Arista EOS goldens).
-
-The rules are the documented (D) items of ``.claude/skills/infrahub-network-design/reference.md``. They look at the
-shape of a config, not at its content: a block parser splits the text into ``interface ...`` and ``router ...`` blocks
-and the rules inspect those blocks plus the column-0 lines around them. Nothing runs a regex over the whole file.
-
-NX-OS rules (platform ``nxos``):
-
-* ``nxos_no_switchport``: an ``interface Ethernet*`` or ``port-channel*`` block (not a sub-interface, whose name has a
-  ``.``) with an ``ip address`` / ``ipv6 address`` line has ``no switchport`` before the address.
-* ``nxos_peer_policy_preference``: every ``inherit peer-policy <name>`` is followed by a numeric preference.
-* ``nxos_features_before_bgp``: ``feature nv overlay`` and ``nv overlay evpn``, when present, come before the first
-  ``router bgp``.
-* ``nxos_references_defined``: every route-map named by a ``route-map X in|out``, ``redistribute ... route-map X``,
-  ``ip policy route-map X`` or ``neighbor ... route-map X`` line is defined by a column-0 ``route-map X permit|deny``
-  line, every ``match ip(v6) address prefix-list X`` names a column-0 ``ip(v6) prefix-list X`` definition, and every
-  ``set comm-list X delete`` / ``match community X`` names a column-0 ``ip community-list [standard|expanded] X``.
-* ``nxos_definitions_before_bgp``: a reference made inside ``router bgp`` is defined before that ``router bgp`` line.
-
-Arista EOS rules (platform ``eos``):
-
-* ``eos_ip_routing``: a global ``ip routing`` line (``ip routing vrf X`` does not count) is present when a routed
-  Ethernet, Port-Channel, Vlan or Loopback interface has an IP address, or when ``router bgp`` exists.
-* ``eos_no_switchport``: same as ``nxos_no_switchport`` for ``Ethernet*`` and ``Port-Channel*`` blocks.
-* ``eos_references_defined``: same as ``nxos_references_defined`` (no ordering requirement).
-
-Every rule takes the config text and returns a list of ``Violation``; an empty list is a pass.
-"""
+"""Structural lint of rendered device configs (NX-OS and Arista EOS goldens)."""
 
 from __future__ import annotations
 
@@ -56,10 +29,7 @@ class Violation:
 
 @dataclass
 class Block:
-    """A column-0 ``interface ...`` or ``router ...`` header with the lines that follow it.
-
-    ``body`` holds ``(line_number, stripped_text)`` pairs, without blank or comment (``!``) lines.
-    """
+    """A column-0 ``interface ...`` or ``router ...`` header with the lines that follow it."""
 
     header: str
     start: int
@@ -76,11 +46,7 @@ class Block:
 
 
 def parse_blocks(text: str) -> list[Block]:
-    """Split a config into ``interface`` and ``router`` blocks.
-
-    A block starts at a column-0 line beginning with ``interface `` or ``router `` and runs until the next column-0 line
-    that is neither blank nor a ``!`` comment (any other statement, or the next block). Indented lines belong to it.
-    """
+    """Split a config into ``interface`` and ``router`` blocks."""
     blocks: list[Block] = []
     current: Block | None = None
     for number, raw in enumerate(text.splitlines(), start=1):

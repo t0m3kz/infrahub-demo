@@ -1,27 +1,4 @@
-"""Integration test - Scenario 2: Add Switch to Existing Rack in DC6.
-
-Coverage: Verifies that re-declaring an existing DC6 rack with a larger
-fabric template (data/demos/02_switch_dc6) triggers the rack generator
-automatically (via the rack fabric_templates-updated event) and creates the
-new switches with proper cabling, while the switches already in the fabric
-keep their underlay ASN.
-
-Data: rack ktw-1-s-1-r-2-5 in DC6-1-POD-1 goes from 2 leaf + 2 l2-leaf to
-2 leaf + 4 l2-leaf, so DC6 must gain exactly the 2 extra l2-leafs and no
-other switch.
-
-Prerequisites: DC6 deployed and merged to main (Scenario 1, test_10).
-
-Steps:
-0.  Snapshot DC6 role counts and underlay ASNs on main
-1.  Create branch and load switch data (rack upsert with bigger fabric template)
-2.  Wait for tasks and verify no failures
-3.  Verify devices exist on branch
-4.  Create proposed change
-5.  Wait for validations
-6.  Merge to main
-7.  Verify devices and ASN stability in main
-"""
+"""Integration test - Scenario 2: Add Switch to Existing Rack in DC6."""
 
 import logging
 from typing import Any
@@ -52,8 +29,7 @@ BRANCH_NAME = "dc6-add-switch"
 # ktw-1-s-1-r-2-5: ["2", "l2-leaf", ...] -> ["4", "l2-leaf", ...]; leaf stays at 2.
 MIN_GROWTH_BY_ROLE = {"l2-leaf": 2}
 
-# The rack being regenerated holds leafs (underlay eBGP) next to the new
-# l2-leafs (L2 only, no BGP) — so leaf is the role whose ASNs must survive.
+# The rack being regenerated holds leafs (underlay eBGP) next to the new l2-leafs (L2 only, no BGP)
 ASN_BASELINE_ROLE = "leaf"
 
 

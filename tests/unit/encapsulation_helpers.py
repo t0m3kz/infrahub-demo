@@ -1,9 +1,4 @@
-"""Payload builders for the interface encapsulation (ManagedInterfaceEncapsulation, utils/interface_encapsulation.py).
-
-An interface that rides on a parent has its ``encapsulation_capabilities`` (queries/fragments/interface_encapsulation.gql).
-``raw_*`` builders return the GraphQL response shape (``edges``/``node``/``value``), ``cleaned_*`` the shape after
-``clean_data`` (what checks, transforms and utils read).
-"""
+"""Payload builders for the interface encapsulation (ManagedInterfaceEncapsulation, utils/interface_encapsulation.py)."""
 
 from __future__ import annotations
 

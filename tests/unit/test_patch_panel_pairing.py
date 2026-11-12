@@ -1,8 +1,4 @@
-"""Patch panels by type: the audit, add_patch_panel on a fake client, the check, and the registration.
-
-A panel names its `panel_type`; add_patch_panel builds the ports the type holds, each front port on its rear port,
-and checks/patch_panel_pairing.py reports what still differs. Both read generators/helpers/patch_panel.py audit().
-"""
+"""Patch panels by type: the audit, add_patch_panel on a fake client, the check, and the registration."""
 
 from __future__ import annotations
 

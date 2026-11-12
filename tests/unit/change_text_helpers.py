@@ -1,5 +1,4 @@
-"""Builders of the change request tests: the rows of change_request_facts.gql in the RAW GraphQL shape the server
-answers, cleaned by the same ``clean_data`` the generator runs, and the inputs of a realistic change."""
+"""Builders of the change request tests."""
 
 from __future__ import annotations
 
@@ -68,8 +67,7 @@ def raw_node(
     peers: dict[str, list[tuple[str, str]]] | None = None,
     previous: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
-    """A node of ``DiffTree`` as the server answers it: an attribute's value is its HAS_VALUE property (the previous
-    value on a removed node), an unset one the string "NULL"; a peer is its label and id with the object's status."""
+    """A node of ``DiffTree`` as the server answers it: an attribute's value is its HAS_VALUE property."""
     removed = status == "REMOVED"
     attributes = []
     for name, value in (values or {}).items():

@@ -1,8 +1,4 @@
-"""Inline renders of the NX-OS routed-port, sub-interface parent, feature and route-map includes.
-
-The smoke goldens carry only physical Ethernet underlay ports and no spine with a BGP policy, so the routed
-port-channel, the absent sub-interface parent and the per-session route-maps are covered here.
-"""
+"""Inline renders of the NX-OS routed-port, sub-interface parent, feature and route-map includes."""
 
 from __future__ import annotations
 

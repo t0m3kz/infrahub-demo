@@ -1,12 +1,4 @@
-"""Every customer footprint in the demo data and the integration data states a design that holds its use.
-
-A footprint (data center, colocation, cloud) has a REQUIRED `design`, a template of its own kind: a tier of
-data/bootstrap/21_customer_templates.yml, or (data center only) a custom template an earlier file of the same demo
-declares. These tests read the YAML and fail when a footprint has no design, names a template of another kind, two
-files disagree on the design of one footprint, or its segments (and, for a cloud footprint, the virtual networks of its
-account in its region) exceed what the tier allows (checks/customer_quota.py would put an ERROR on the demo itself).
-Sizing a tier to the data (the smallest that fits) is the author's job; the test only holds the lower bound.
-"""
+"""Every customer footprint in the demo data and the integration data states a design that holds its use."""
 
 from __future__ import annotations
 
@@ -72,8 +64,7 @@ def _cloud_use(dataset: Path) -> tuple[Counter[str], Counter[tuple[str, str]]]:
 @pytest.mark.parametrize("dataset", _DATASETS, ids=lambda path: path.name)
 @pytest.mark.parametrize("kind", _KINDS)
 def test_every_declaration_of_a_footprint_states_one_design_of_its_own_kind(kind: str, dataset: Path) -> None:
-    """No declaration without a design, none naming a template of another kind, and every declaration of one
-    footprint (the tenant file and a binding that upserts it) names the same one."""
+    """No declaration without a design, none naming a template of another kind."""
     templates = _templates(_KINDS[kind], dataset)
     problems: list[str] = []
     for footprint_name, declarations in _footprints(kind, dataset).items():
@@ -108,7 +99,8 @@ def test_the_segments_of_a_footprint_fit_its_designs_segment_quota(kind: str, da
 @pytest.mark.parametrize("dataset", _DATASETS, ids=lambda path: path.name)
 def test_the_cloud_segments_and_networks_of_a_footprint_fit_its_design(dataset: Path) -> None:
     """A cloud footprint has no more cloud segments than max_segments and its account no more virtual networks in the
-    footprint's region than max_virtual_networks."""
+    footprint's region than max_virtual_networks.
+    """
     templates = _templates(_KINDS["TopologyCustomerCloud"], dataset)
     segments, networks = _cloud_use(dataset)
     over: list[str] = []

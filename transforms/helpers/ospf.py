@@ -6,12 +6,7 @@ from utils.interface_speed import InterfaceSpeedMatcher
 
 
 def _reference_bandwidth_mbps(interfaces: list[dict[str, Any]]) -> int | None:
-    """Derive OSPF auto-cost reference-bandwidth (Mbps) from the fastest fabric interface.
-
-    interface_type (e.g. "100gbase-x-qsfp28") is the schema's source of truth for
-    speed, so reference-bandwidth tracks actual hardware instead of a static default
-    that would need manual upkeep as ports are upgraded.
-    """
+    """Derive OSPF auto-cost reference-bandwidth (Mbps) from the fastest fabric interface."""
     speeds_mbps = [
         InterfaceSpeedMatcher.extract_speed(iface.get("interface_type"))
         for iface in interfaces
@@ -21,10 +16,7 @@ def _reference_bandwidth_mbps(interfaces: list[dict[str, Any]]) -> int | None:
     return max(speeds_mbps) if speeds_mbps else None
 
 
-# The RoutingOSPFInterface.authentication_mode values each platform's OSPF partial renders
-# (templates/configs/common/<platform>_ospf.j2); no mode is a plain-text key. EOS takes SHA-1 as a
-# message-digest key (`ip ospf message-digest-key 1 sha1`); NX-OS and IOS only take HMAC-SHA
-# through a key chain the partials do not model, and SONiC renders no OSPF interface at all.
+# RoutingOSPFInterface.authentication_mode values each platform's OSPF partial renders.
 OSPF_AUTH_MODES: dict[str, frozenset[str]] = {
     "arista_eos": frozenset({"md5", "sha1"}),
     "cisco_nxos": frozenset({"md5"}),
@@ -34,13 +26,7 @@ OSPF_AUTH_MODES: dict[str, frozenset[str]] = {
 
 
 def refuse_unrenderable_ospf_auth(platform_name: str, interfaces: list[dict[str, Any]]) -> None:
-    """Raise when an OSPF interface asks for an authentication mode its platform's template cannot render.
-
-    ``interfaces`` are the template interfaces (get_interfaces). Without this the partials fell back to a
-    plain-text key, so a SHA-1 interface came up with weaker authentication than asked for and no
-    adjacency with a peer that did render it. A mode without a password renders no authentication
-    anywhere, so it is not refused here.
-    """
+    """Raise when an OSPF interface asks for an authentication mode its platform's template cannot render."""
     supported = OSPF_AUTH_MODES.get(platform_name, frozenset())
     unsupported = sorted(
         f"{iface['name']} ({ospf['authentication_mode']})"
@@ -60,13 +46,7 @@ def refuse_unrenderable_ospf_auth(platform_name: str, interfaces: list[dict[str,
 def get_ospf(
     device_capabilities: list[dict[str, Any]], interfaces: list[dict[str, Any]] | None = None
 ) -> list[dict[str, Any]]:
-    """
-    Extract OSPF configuration information.
-
-    reference_bandwidth is derived from the fastest physical interface on the
-    device when interfaces are provided, overriding the schema's static default
-    so auto-cost calculations reflect real hardware speed.
-    """
+    """Extract OSPF configuration information."""
     ospf_services = [svc for svc in device_capabilities if svc.get("typename") == "ManagedOSPF"]
     if not ospf_services:
         return []

@@ -1,11 +1,4 @@
-"""Unit tests for BaseDeviceTransform and ToR transform.
-
-Covers:
-- transform()  – data routing, platform detection, activation injection
-- _build_config() – base context keys (interfaces, bgp, ospf, capabilities)
-- _extra_config() – vlans/vxlan/acls/vrf_routes when device_role is set
-- ToR class attributes (device_role="tor", template_subdir="leafs")
-"""
+"""Unit tests for BaseDeviceTransform and ToR transform."""
 
 from __future__ import annotations
 
@@ -18,9 +11,7 @@ from tests.unit.segment_port_helpers import deployment_caps
 from transforms.common import get_capabilities
 from transforms.config.tor import ToR
 
-# ---------------------------------------------------------------------------
 # get_capabilities (already covered in test_get_capabilities.py, complementary)
-# ---------------------------------------------------------------------------
 
 
 class TestGetCapabilitiesEdgeCases:
@@ -36,9 +27,7 @@ class TestGetCapabilitiesEdgeCases:
         assert result["bgp_enabled"] is True
 
 
-# ---------------------------------------------------------------------------
 # _build_config
-# ---------------------------------------------------------------------------
 
 
 class TestBuildConfig:
@@ -85,9 +74,7 @@ class TestBuildConfig:
         assert cfg["capabilities"] == {"bgp_enabled": False, "ospf_enabled": False}
 
 
-# ---------------------------------------------------------------------------
 # _extra_config
-# ---------------------------------------------------------------------------
 
 
 class TestExtraConfig:
@@ -109,9 +96,7 @@ class TestExtraConfig:
         assert result[key] == []
 
 
-# ---------------------------------------------------------------------------
 # transform() – data routing
-# ---------------------------------------------------------------------------
 
 
 class TestTransformDataRouting:
@@ -192,14 +177,11 @@ class TestTransformDataRouting:
         assert extra_kwargs["extra_roots"].get("DcimFirewallInterface") == extra_key_value
 
 
-# ---------------------------------------------------------------------------
 # _collect_activations_from_interfaces (the domain rule itself: tests/unit/test_segment_vlan_rule.py)
-# ---------------------------------------------------------------------------
 
 
 class TestCollectActivationsOwnRow:
-    """A VXLAN segment's local vlan_id comes from the row (under a segment deployment) of THIS device
-    (``row.device.id``), and its VNI from that same deployment."""
+    """A VXLAN segment's local vlan_id comes from the row (under a segment deployment) of THIS device."""
 
     @staticmethod
     def _vxlan_iface(row_device_id: str, vlan_id: int = 100) -> dict:
@@ -252,8 +234,7 @@ class TestCollectActivationsOwnRow:
             assert [a["vlan_id"] for a in activations] == [expected]
 
     def test_vni_is_the_one_of_the_deployment_holding_the_row(self) -> None:
-        """A segment in two deployments: the row of this device sits under one of them,
-        and the VNI is that deployment's, never the first one's."""
+        """A segment in two deployments: the row of this device sits under one of them."""
         t = _make_transform("leaf")
         iface = {
             "capabilities": deployment_caps(
@@ -275,8 +256,7 @@ class TestCollectActivationsOwnRow:
         assert [(a["vlan_id"], a["vni"]) for a in activations] == [(120, 20200)]
 
     def test_segment_with_no_row_for_this_device_is_skipped(self) -> None:
-        """Allocation has not converged for this device yet. Skipping beats
-        rendering an SVI on a VLAN this device never allocated."""
+        """Allocation has not converged for this device yet."""
         t = _make_transform("leaf")
         activations = t._collect_activations_from_interfaces(
             [self._vxlan_iface("some-other-device")], device_id="dev-leaf-01"
@@ -284,9 +264,7 @@ class TestCollectActivationsOwnRow:
         assert activations == []
 
 
-# ---------------------------------------------------------------------------
 # ToR class attributes
-# ---------------------------------------------------------------------------
 
 
 class TestToRClassAttributes:

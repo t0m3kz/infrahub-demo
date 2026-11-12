@@ -19,80 +19,48 @@ from .pod_config import pod_deployment_type, pod_spine_slot_device_names, spine_
 from .protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack, TopologyDataCenter, TopologyPod
 from .types import RoutingOptions, naming_convention_of
 
-# The pod's own generators — a rack waits for an in-flight one before reading
-# pod-level data (spines, pools).
+# The pod's own generators: a rack waits for an in-flight one before reading pod-level data
 POD_GENERATORS = ("add_pod", "pod_rack_cascade")
 
-# Pod-level pools this generator cannot proceed without. The ASN pool is not
-# one of them: it is the parent DC's fabric_asn_pool, conditional — see _wait_for_pools.
+# Pod-level pools this generator needs. The ASN pool is conditional (the parent DC's fabric_asn_pool), see
+# _wait_for_pools
 _POD_POOL_FIELDS = ("loopback_pool", "prefix_pool")
 
-# Underlays that allocate a per-device ASN from the DC's fabric_asn_pool. An OSPF
-# underlay never does, so a missing pool is not worth waiting for there.
+# Underlays that allocate a per-device ASN from the DC's fabric_asn_pool (OSPF never does)
 _EBGP_UNDERLAY_STRATEGIES = frozenset({RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value})
 
 
 def spine_bgp_readiness_role(dc: Mapping[str, Any]) -> str:
-    """The ManagedBGP process role the pod's spines must own before a rack bootstraps.
-
-    The rack's leaf sessions peer with the spine process of this role, so only
-    a role the strategy actually creates may be waited for:
-
-    * eBGP underlay (ebgp-ebgp, ebgp-ibgp): ``underlay``, pre-seeded by add_pod
-      before cabling.
-    * ospf-ibgp: no underlay BGP exists (the underlay is OSPF); the spines
-      carry only the shared-AS ``overlay`` process.
+    """The ManagedBGP process role the pod's spines must own before a rack bootstraps. Only a role the strategy creates
+    may be waited for: ``underlay`` for eBGP underlays (pre-seeded by add_pod), the shared-AS ``overlay`` for ospf-ibgp.
     """
     strategy = dc.get("routing_strategy", RoutingStrategy.EBGP_EBGP.value)
     return "underlay" if strategy in _EBGP_UNDERLAY_STRATEGIES else "overlay"
 
 
-# Roles whose generation reads _spine_device_names/_spine_interfaces: "leaf"
-# and "tor" cable to the pod's spines, and "access_leaf" opens a second,
-# underlay-less overlay EVPN session straight to them. An l2-leaf-only rack
-# touches neither, so spine info it cannot derive is genuinely harmless there
-# and only there.
+# Roles that read _spine_device_names/_spine_interfaces: "leaf" and "tor" cable to the spines, "access_leaf" peers EVPN
+# to them; an l2-leaf-only rack needs neither
 _SPINE_DEPENDENT_ROLES: frozenset[str] = frozenset({"leaf", "tor", "access_leaf"})
 
-# Which fabric_templates roles a pod's deployment_type knows how to cable.
-#
-# - "tor" cables to the pod spines in both tor and mixed deployments
-#   (calculate_cabling_offsets' tor branch; in a mixed pod its block starts
-#   past the leafs and border-leafs, see pod_config.spine_downlink_layout).
-#   middle_rack reserves no spine ports for ToRs (its design has none), and
-#   _generate_tors() has no local-leaf cabling branch.
-# - "l2_leaf"/"access_leaf" always cable to a local leaf pair — in the same
-#   rack for middle_rack/network racks, or the middle rack in the same row
-#   for mixed compute racks (_resolve_local_leaf_cabling_target). tor
-#   deployment has no leafs anywhere in the pod, so neither role has a
-#   target to cable to.
-# - border-leaf/firewall/load-balancer no longer live at rack level — they're
-#   declared on TopologyDataCenter's own fabric_templates and placed/cabled
-#   by dc.py's _generate_dc_scoped_fabric_devices, split across the DC's pods.
+# fabric_templates roles a pod's deployment_type can cable: a tor pod has no leafs, so no target for
+# l2_leaf/access_leaf.
 ROLES_BY_DEPLOYMENT_TYPE: dict[str, frozenset[str]] = {
     "tor": frozenset({"tor"}),
     "mixed": frozenset({"leaf", "tor", "l2_leaf", "access_leaf"}),
     "middle_rack": frozenset({"leaf", "l2_leaf", "access_leaf"}),
 }
 
-# "tor" cables to a spine; "l2_leaf"/"access_leaf" cable to a local leaf pair.
-# No cabling strategy satisfies both on the same rack, so they're mutually
-# exclusive there regardless of deployment_type.
+# "tor" cables to a spine, "l2_leaf"/"access_leaf" to a local leaf pair: mutually exclusive on one rack
 MUTUALLY_EXCLUSIVE_ROLE_GROUPS: tuple[frozenset[str], ...] = (frozenset({"tor", "l2_leaf", "access_leaf"}),)
 
-# rack_type values for racks with no leaf template of their own — they wait
-# for, and cable to, the leaf pair in the network/middle rack that shares
-# their row. "tor" holds real ToRs (role="tor", cables to spines) and/or
-# l2-leaf/access-leaf switches (cable to the row's leaf pair); "compute" is
-# the same "no local leaf" shape used for a rack whose fabric_templates are
-# l2-leaf/access-leaf only (no role="tor" — see ROLES_BY_DEPLOYMENT_TYPE).
-# Checksum inheritance and row-ordering gates treat both identically; only
-# the per-role cabling target (spine vs. row leaf) differs.
+# rack_type values with no leaf template of their own: they wait for, and cable to, their row's leaf pair. "tor" holds
+# real ToRs and/or l2-leaf/access-leaf switches; "compute" is the same shape with l2-leaf/access-leaf only. Only the
+# cabling target (spine vs row leaf) differs.
 ROW_DEPENDENT_RACK_TYPES: frozenset[str] = frozenset({"tor", "compute"})
 
 
 class RackMixin:
-    """Mixin extracting rack-specific lifecycle checks and context setup."""
+    """Rack-specific lifecycle checks and context setup."""
 
     # Attributes provided by CommonGenerator / RackGenerator
     client: Any
@@ -101,31 +69,20 @@ class RackMixin:
     deployment_id: str
     pod_name: str | None
     fabric_name: str
-    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
-    # nothing shadows them in the MRO.
+    # Type checking only: aliases of the host's other bases, so nothing shadows them in the MRO
     if TYPE_CHECKING:
         _retry_delay = staticmethod(CommonGenerator._retry_delay)
         run_generator = CommonGenerator.run_generator
         wait_for_parent_generator_and_refetch = CommonGenerator.wait_for_parent_generator_and_refetch
 
     def _present_roles(self) -> set[str]:
-        """Implemented by RackGenerator; declared here for static type checking."""
+        """Implemented by RackGenerator; declared for static type checking."""
         raise NotImplementedError
 
     def _derive_spine_info(self) -> tuple[list[str], list[str]]:
-        """Derive spine (or border-spine, in micro-fabric mode) device names
-        and interface names from query data.
-
-        The rack.gql query already fetches pod.fabric_templates (role="spine"
-        or role="border-spine" — the two fill the same slot, see
-        generators/pod_config.py's spine_slot_templates) and all naming
-        indexes (dc.index, pod.index). The pod generator always creates
-        spine-slot devices with strategy="standard" and
-        indexes=[dc.index, pod.index], so names are deterministic - no API
-        call needed.
-
-        Returns:
-            Tuple of (device_names, interface_names) for create_cabling
+        """Spine (or border-spine) device names and interface names from query data, for create_cabling. The pod
+        generator creates them with strategy="standard" and indexes=[dc.index, pod.index], so names are deterministic.
+        Returns ``(device_names, interface_names)``.
         """
         pod = self.data["deployment"]
         spine_entries = spine_slot_templates(pod.get("fabric_templates", []))
@@ -137,9 +94,7 @@ class RackMixin:
 
         device_names = pod_spine_slot_device_names(pod)
 
-        # Interface names come from the first entry's template only — same accepted
-        # limitation as dc.py's/pod.py's super-spine/spine device creation: assumes
-        # every spine template shares consistent downlink-interface naming.
+        # Interface names come from the first template only: assumes consistent downlink naming across spine templates
         first_template_interfaces = spine_entries[0]["template"].get("interfaces", [])
         interface_names = template_interface_names_by_role(
             interfaces=first_template_interfaces,
@@ -162,12 +117,8 @@ class RackMixin:
         return device_names, interface_names
 
     async def _existing_spine_slot_names(self) -> list[str]:
-        """The pod's spine-slot devices that already exist, sorted by name.
-
-        Looked up by name (pod_spine_slot_device_names), not read off the
-        pod's devices: a border-spine is deployed to the DC, so a border-spine
-        pod lists none. Only the existing ones: spines that are not there yet
-        do not hold the rack back here (create_cabling waits for their ports).
+        """The pod's spine-slot devices that already exist, sorted by name. Looked up by name (a border-spine is
+        deployed to the DC); missing spines do not hold the rack back (create_cabling waits for their ports).
         """
         pod = self.data["deployment"]
         names = pod_spine_slot_device_names(pod)
@@ -188,22 +139,10 @@ class RackMixin:
         return missing
 
     async def _wait_for_pools(self, pod: dict[str, Any], dc: dict[str, Any], *, needs_asn_pool: bool) -> None:
-        """Retry-refetch the pod (and, if needed, the DC) until its pools are persisted; updates both in place.
-
-        The rack's query snapshot can predate the writes it depends on: racks
-        are created in the same object-load as their DC and pod, so the rack's
-        created-trigger can run before add_dc wrote ``fabric_asn_pool`` or
-        add_pod wrote the loopback/prefix pools. Checking the nodes' persisted
-        state (not the task list, which may not show the pod's task yet) closes
-        that race.
-
-        The DC's fabric_asn_pool needs no wait of its own beyond the pod's:
-        add_pod only writes the pod pools after it has seen the DC pool, so
-        visible pod pools imply a persisted DC pool. It is still refetched here
-        when the snapshot lacks it, because a rack that went on without it
-        built RoutingOptions with no pool — RoutingPlanner then only warned,
-        created no AS and no BGP process for the rack's devices, and the run
-        still reported success (DC12's second network rack in a 30_all load).
+        """Retry-refetch the pod (and, if needed, the DC) until its pools are persisted; updates both in place. The
+        rack's snapshot can predate add_dc/add_pod writes (racks load with their DC and pod), so persisted state is
+        checked, not the task list. The DC pool is refetched when the snapshot lacks it: without it RoutingPlanner only
+        warns and the rack gets no BGP process.
         """
         for attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
             missing = self._missing_pools(pod, dc, needs_asn_pool=needs_asn_pool)
@@ -220,9 +159,7 @@ class RackMixin:
             missing = self._missing_pools(pod, dc, needs_asn_pool=needs_asn_pool)
             if not missing:
                 return
-            # Under load add_pod's own task can surface only now, queued behind
-            # other fabrics' work: once it is in flight, wait for it outright
-            # rather than spending blind retries until they run out.
+            # add_pod's task may surface late behind other work: once in flight, wait for it rather than burn retries
             if await self.wait_for_parent_generator_and_refetch(POD_GENERATORS, pod["id"]) is not None:
                 continue
             if attempt < WAIT_FOR_PEER_GENERATOR.attempts - 1:
@@ -234,7 +171,7 @@ class RackMixin:
                 await asyncio.sleep(delay)
 
     async def _prepare_generation_context(self) -> None:
-        """Compute and store shared context needed by every per-role generation method."""
+        """Compute and store the shared context needed by every per-role generation method."""
         pod = self.data["deployment"]
         dc = pod["parent"]
         self.deployment_id = dc["id"]
@@ -246,15 +183,9 @@ class RackMixin:
             await self._wait_for_pools(pod, dc, needs_asn_pool=needs_asn_pool)
 
         if missing_pools := self._missing_pools(pod, dc, needs_asn_pool=needs_asn_pool):
-            # Refuse rather than carry on. There is no legitimate state in which
-            # these are absent: add_dc creates the fabric ASN pool, add_pod
-            # creates the loopback/prefix pools, and the retry loop above
-            # already covers the visibility lag. Carrying on builds a rack whose
-            # devices are cabled and addressed but have no BGP process —
-            # indistinguishable from a healthy rack unless you count processes.
-            # Raising fails this generator's task, which is how such a rack
-            # becomes visible at all. Nothing has been created at this point, so
-            # the failed run leaves no partial state.
+            # Refuse rather than carry on: these are always present (add_dc/add_pod create them, the retry loop covers
+            # lag). A rack without them has no BGP process and looks healthy; raising makes it visible, and nothing has
+            # been created yet.
             hints = []
             if any(label.startswith("pod.") for label in missing_pools):
                 hints.append(f"infrahubctl generator generate_pod name={pod['name']}")
@@ -299,11 +230,8 @@ class RackMixin:
         try:
             self._spine_device_names, self._spine_interfaces = self._derive_spine_info()
         except RuntimeError as exc:
-            # logger.error() raises GeneratorError (FailOnErrorLogger), so this
-            # already failed the task — but it failed it for every rack, including
-            # an l2-leaf-only one, which reads neither attribute and does not need
-            # a spine to exist at all. Fail only the racks that actually cable or
-            # route to a spine; tolerate the rest at INFO with the defaults above.
+            # logger.error() raises, which would fail every rack, even an l2-leaf-only one that needs no spine; fail
+            # only racks that cable or route to a spine
             if spine_dependent := self._present_roles() & _SPINE_DEPENDENT_ROLES:
                 self.logger.error(
                     f"{exc} — refusing to generate role(s) {sorted(spine_dependent)}, which cannot be "
@@ -322,54 +250,40 @@ class RackMixin:
         self._routing_options = routing_options
 
     async def _fan_out_to_row_dependent_racks(self) -> None:
-        """Fan out to the row-dependent (tor/compute) racks' own add_rack runs (mixed mode only).
-
-        Row-dependent racks have no local leaf — their l2-leaf/access-leaf
-        switches cable to this network rack's leafs, which this method only runs
-        after they exist (their ToRs cable to the spines).
-
-        wait=False, not wait=True: a row-dependent rack's own generate() waits for
-        an in-flight add_rack task on this network rack (self-nesting guard — same
-        generator name on both sides). Blocking here would keep this task RUNNING,
-        which that guard would see as "still in flight" and wait on — deadlock.
+        """Fan out to the row-dependent (tor/compute) racks' own add_rack runs (mixed mode only), after the leafs they
+        cable to exist. wait=False: a row-dependent rack waits for an in-flight add_rack on this network rack, so
+        blocking here would deadlock.
         """
         deployment_type = pod_deployment_type(self.data["deployment"]["design"])
 
-        # Only network racks in mixed deployment feed row-dependent racks.
+        # Only network racks in mixed deployment feed row-dependent racks
         if deployment_type != "mixed" or self.data["rack_type"] != "network":
             return
 
-        # Skip racks that have no leaf template — e.g. border-leaf-only racks.
-        # These are valid network racks but have no leafs to cascade from.
+        # Skip racks with no leaf template (e.g. border-leaf-only racks)
         if not self.data.get("leafs"):
             self.logger.warning(f"Rack {self.data['name']} has no leaf template — skipping row-dependent rack fan-out")
             return
 
-        # The pod projection of the query carries every rack of the pod: racks are data, never this
-        # run's output, and one created after the query ran has its own created-trigger run.
+        # The pod projection carries every rack of the pod; racks are data, and one created later has its own trigger
+        # run
         row_dependent_racks = pod_row_racks(self.data["deployment"], self.data["row_index"], ROW_DEPENDENT_RACK_TYPES)
 
         await self.run_generator("add_rack", [rack["id"] for rack in row_dependent_racks], wait=False)
 
     async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
-        """Query leaf devices in same row and their downlink interfaces, for l2-leaf/access-leaf-to-leaf cabling.
-
-        Retries: a row-dependent (compute/tor) rack's created-trigger can fire
-        and reach this before its row's network rack has created its leaf
-        devices — nesting racks under their pod in one object-load mutation
-        removed the incidental ordering that made this reliable in practice.
-        Checking the actual devices/interfaces (not a task list) closes that
-        race regardless of trigger-dispatch timing.
+        """Query leaf devices in the same row and their downlink interfaces, for l2-leaf/access-leaf-to-leaf cabling.
+        Retries: a row-dependent rack's trigger can fire before its row's network rack has created its leafs, so actual
+        devices/interfaces are checked.
         """
-        # The racks are data: the pod projection of the query has them. Only a row whose network rack
-        # is missing from it (created in the same load, after the query ran) is re-read per attempt,
-        # which is the race this loop waits out.
+        # The pod projection has the racks; only a row whose network rack is missing from it (same load) is re-read per
+        # attempt
         row_racks = pod_row_racks(self.data["deployment"], row_index)
         rack_ids = [rack["id"] for rack in row_racks]
         network_rack_known = any(rack["rack_type"] == "network" for rack in row_racks)
         leaf_devices: list[Any] = []
         leaf_interfaces: list[Any] = []
-        # A row-dependent rack waits for its row's leaf devices and their downlinks.
+        # A row-dependent rack waits for its row's leaf devices and their downlinks
         for attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
             if not network_rack_known:
                 rack_ids = [
@@ -441,10 +355,9 @@ class RackMixin:
         devices_per_rack: int,
         role_label: str,
     ) -> tuple[list[str], list[str], int, Literal["intra_rack_middle", "intra_rack_mixed"]] | None:
-        """Resolve the leaf devices/interfaces a rack's l2-leaf or access-leaf batch
-        cables to: the local leaf pair created earlier this run (network rack), or
-        the middle-rack leafs in the same row (compute rack, mixed deployment).
-        Returns None if unresolved (already logged) — caller should ``continue``.
+        """Resolve the leaf devices/interfaces a rack's l2-leaf or access-leaf batch cables to: the local leaf pair
+        (network rack) or the row's middle-rack leafs (compute rack). Returns None if unresolved (already logged); the
+        caller should ``continue``.
         """
         if created_leaf_devices:
             leaf_interfaces_objects = await self.client.filters(
@@ -460,7 +373,7 @@ class RackMixin:
             leaf_interfaces = sorted({iface.name.value for iface in leaf_interfaces_objects})
             return created_leaf_devices, leaf_interfaces, 0, "intra_rack_middle"
 
-        # Compute rack (mixed deployment): cable to middle-rack leafs in same row
+        # Compute rack (mixed deployment): cable to middle-rack leafs in the same row
         pod = self.data["deployment"]
         effective_rack_index = max(0, self.data["index"] - 1)
         cabling_offset = effective_rack_index * devices_per_rack

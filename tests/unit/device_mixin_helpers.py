@@ -48,9 +48,8 @@ def _make_generator() -> Any:
     gen.client.allocate_next_ip_address = AsyncMock(return_value={"id": "ip-1"})
     gen.client.create_batch = AsyncMock(side_effect=[_DummyBatch(), _DummyBatch()])
     gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
-    # No controllers by default — every existing test here expects normal
-    # CoreStandardGroup behavior, not controller routing (see
-    # TestCreateDevicesControllerRouting for the controller-routing path).
+    # No controllers by default — every existing test here expects normal CoreStandardGroup behavior, not controller
+    # routing (see TestCreateDevicesControllerRouting for the controller-routing path).
     gen._all_controllers = []
     # CablingMixin._cable_layouts (the cable length's rack lookup) has its own tests (test_cable_attributes_generators.py).
     gen._cable_layouts = AsyncMock(return_value={})

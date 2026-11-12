@@ -9,14 +9,11 @@ import pytest
 
 from tests.unit.endpoint_generator_helpers import _bond, _bond_data, _endpoint_data, _iface, _make_generator, _nic
 
-# ===========================================================================
 # Component segment fan-out — when generate() calls it, and what it dispatches
-# ===========================================================================
 
 
 class TestGenerateFansOutComponentSegments:
-    """generate() hands the fan-out the NICs cabled before the run, and only
-    calls it when the run had something to cable."""
+    """generate() hands the fan-out the NICs cabled before the run."""
 
     @pytest.mark.asyncio
     async def test_plain_flow_fans_out_after_cabling_with_previously_cabled_ids(self) -> None:
@@ -130,8 +127,7 @@ def _filter_calls(gen: Any, kind_name: str) -> list[dict[str, Any]]:
 
 
 class TestFanOutComponentSegments:
-    """_fan_out_component_segments: dispatch add_app_component_segment for the
-    components on an endpoint this run cabled, and for nothing else."""
+    """_fan_out_component_segments:"""
 
     @pytest.mark.asyncio
     async def test_no_newly_cabled_nic_dispatches_nothing(self) -> None:
@@ -145,8 +141,7 @@ class TestFanOutComponentSegments:
 
     @pytest.mark.asyncio
     async def test_dispatches_components_on_the_endpoint_and_its_hosted_instances(self) -> None:
-        """Components instanced on the server, its VMs or hosted controllers are
-        dispatched once each, sorted, without waiting."""
+        """Components instanced on the server."""
         gen = _fan_out_generator(
             nics=[_cabled_nic("nic-0", cabled=True), _cabled_nic("nic-1", cabled=True)],
             virtual_devices=[MagicMock(id="vm-1"), MagicMock(id="vm-2")],

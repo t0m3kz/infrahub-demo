@@ -17,21 +17,8 @@ from .all_demo_firewall_constants import (
 )
 from .demo_data import Declared, declared, name, object_templates
 
-# ---------------------------------------------------------------------------
-# 30_all — load-balancer contexts and VIPs (generators/firewall_context.py
-# LOADBALANCER_CONTEXT, generators/lb_vip.py)
-#
-# A DC customer footprint boards onto a load-balancer context too: its design's
-# dedicated one (dedicated_loadbalancer, on its own virtual pair, named
-# `{cluster}-context`), else the shared one of its tenant namespace on the DC's
-# cluster (`{cluster}-{NAMESPACE}`), created by the first footprint of that
-# namespace. One-arm: one /29 leg in the tenant VRF (LB-Leg-<NS>-IPv4), a
-# routed VIP /26 (LB-VIP-<NS>-IPv4). A colocation zone has none. A
-# load_balanced AppComponent gets one VIP per port on the context serving the
-# deployment of its instances; a dependency into it is ruled to the VIP
-# (R_client), the context's leg to the component's segment (R_server).
-# Everything is derived from the 30_all and bootstrap YAML.
-# ---------------------------------------------------------------------------
+# 30_all load-balancer contexts (dedicated or shared per tenant namespace) and VIPs (one per port of a load_balanced
+# component), derived from the 30_all and bootstrap YAML.
 
 ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS: dict[str, str] = _dedicated_tenants("dedicated_loadbalancer")
 
@@ -66,7 +53,7 @@ ALL_DEMO_SHARED_LOADBALANCER_CONTEXTS = sum(tenant is None for _, _, tenant in A
 ALL_DEMO_EXPECTED_OBJECTS["ManagedLoadbalancerContext"] = len(ALL_DEMO_LOADBALANCER_CONTEXTS)
 
 
-# A load-balancer cluster is an HA pair: one leg sub-interface and one tagged border port per member.
+# A load-balancer cluster is an HA pair
 ALL_DEMO_LOADBALANCER_MEMBERS = 2
 
 
@@ -150,9 +137,8 @@ def _on_cloud(component: Declared) -> bool:
 _LOAD_BALANCED = [component for component in _all_demo("AppComponent") if component.item.get("load_balanced")]
 
 
-# fqdn -> expectation, for every on-prem component 30_all declares
-# load_balanced (c005 web-frontend on DC10's shared PROD context, c010
-# portal-ui on DC12's shared NONPROD one).
+# fqdn -> expectation, for every on-prem component 30_all declares load_balanced (c005 web-frontend on DC10's shared
+# PROD context, c010 portal-ui on DC12's shared NONPROD one).
 ALL_DEMO_LOAD_BALANCED_COMPONENTS: dict[str, LoadBalancedComponent] = {
     str(component.item["fqdn"]): {
         "segment": str(component.item["network_segment"]),
@@ -184,7 +170,7 @@ class CloudLoadBalancedComponent(TypedDict):
     scheme: str
     #: l4_cloud or l7_cloud, by the component's lb_layer.
     lb_type: str
-    #: (protocol, port) of every listener: one VIP each, without an address (http / https at layer 7).
+    #: (protocol, port) of every listener: one VIP each
     ports: tuple[tuple[str, int], ...]
     #: The certificate of an https listener (the component's lb_certificate), else None.
     ssl_certificate: str | None
@@ -219,8 +205,7 @@ def _cloud_load_balanced(component: Declared) -> CloudLoadBalancedComponent:
     }
 
 
-# fqdn -> expectation, for every component on cloud instances 30_all declares
-# load_balanced (c003 api-frontend, on AWS).
+# fqdn -> expectation, for every component on cloud instances 30_all declares load_balanced (c003 api-frontend, on AWS).
 ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS: dict[str, CloudLoadBalancedComponent] = {
     str(component.item["fqdn"]): _cloud_load_balanced(component) for component in _LOAD_BALANCED if _on_cloud(component)
 }
@@ -253,12 +238,8 @@ ALL_DEMO_LB_CLIENT_DEPENDENCIES: dict[str, LoadBalancedClient] = {
 }
 
 
-# Every VXLAN segment -> the sites (DC, colocation metro or office) of the
-# deployments it is activated in: one ManagedSegmentDeployment record each
-# (a dc_pair "stretch" segment has two DC legs; C005's colo-services-stretch
-# one DC leg plus one colocation-metro leg, FR, reached over DF-DC10-EQXFR2
-# through the EVPN Multi-Site border gateways; C005's office-lan one leg, the
-# office itself: an office hosts its own segments, it has no site above it).
+# Every VXLAN segment -> the sites (DC, colocation metro or office) it is activated in, one ManagedSegmentDeployment
+# each.
 _FOOTPRINT_SITES = {
     **{
         name(deployment): _site(deployment)

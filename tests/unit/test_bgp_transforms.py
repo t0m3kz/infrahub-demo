@@ -1,17 +1,11 @@
-"""Unit tests for BGP transform functions.
-
-Tests verify correct BGP session building, peer group assignment,
-and route reflector client detection from peering_interfaces data.
-"""
+"""Unit tests for BGP transform functions."""
 
 import pytest
 
 from tests.unit.bgp_transforms_helpers import _make_peering
 from transforms.helpers.bgp import _build_session_from_peering, _extract_remote_asn_from_peering
 
-# ============================================================================
 # _build_session_from_peering
-# ============================================================================
 
 
 class TestBuildSessionFromPeering:
@@ -256,8 +250,9 @@ class TestBuildSessionFromPeering:
         assert session["remote_role"] is None
 
     def test_security_fields_pass_through(self):
-        """local_pref/med/send_extended_community/remove_private_as/password
-        are threaded from the peering node into the session dict verbatim."""
+        """local_pref/med/send_extended_community/remove_private_as/password are threaded from the peering node into the
+        session dict verbatim.
+        """
         peering = _make_peering(
             session_type="EBGP",
             ttl=1,
@@ -327,16 +322,11 @@ class TestBuildSessionFromPeering:
         assert session["route_reflector_client"] is False
 
 
-# ============================================================================
 # _extract_remote_asn_from_peering
-# ============================================================================
 
 
 class TestExtractRemoteAsnFromPeering:
-    """bgp_processes entries carry the owning device via `capabilities`
-    (ManagedBGP -> DcimDeviceManaged), not a `device` field. These tests pin
-    that shape down directly, independent of the higher-level session-building
-    tests, since a regression here silently drops every eBGP session."""
+    """bgp_processes entries carry the owning device via `capabilities` (ManagedBGP -> DcimDeviceManaged)."""
 
     def test_matches_remote_device(self):
         peering = {
@@ -386,16 +376,11 @@ class TestExtractRemoteAsnFromPeering:
         assert _extract_remote_asn_from_peering(peering, "spine-01") == 65000
 
 
-# ============================================================================
 # _build_session_from_peering — direct IP fallback (no cable)
-# ============================================================================
 
 
 class TestDirectIpFallback:
-    """TTL=1 underlay sessions where the peering's own capabilities
-    already carry both sides' IPs directly (e.g. a VTI/sub-interface with no
-    DcimCable and no separate TopologyCircuit object to traverse — external
-    BGP peering over a fabric/MPLS-VPN virtual circuit handoff)."""
+    """TTL=1 underlay sessions where the peering's own capabilities already carry both sides' IPs directly."""
 
     def _direct_ip_peering(
         self,
@@ -454,8 +439,7 @@ class TestDirectIpFallback:
         assert session["remote_device"] == "EXT-INET-DE-CIX-FR-01"
 
     def test_cable_still_takes_precedence_over_direct_ip(self):
-        """A cable connecting the two sides is preferred even when the peering
-        capabilities also carry an IP directly."""
+        """A cable connecting the two sides is preferred even when the peering capabilities also carry an IP directly."""
         cabled_iface = {
             "name": "Ethernet1/1",
             "ip_address": {"address": "10.0.0.1/31"},
@@ -497,8 +481,9 @@ class TestDirectIpFallback:
         assert session["remote_ip"] == {"address": "10.0.0.0/31"}
 
     def test_no_ip_anywhere_still_returns_none(self):
-        """Direct-IP fallback does not manufacture a session when the peering
-        interfaces themselves have no IP either (still a legitimate skip)."""
+        """Direct-IP fallback does not manufacture a session when the peering interfaces themselves have no IP either
+        (still a legitimate skip).
+        """
         bare_iface = {
             "name": "Ethernet1/31",
             "ip_address": {"address": "fd00::1/127"},

@@ -1,11 +1,4 @@
-"""Integration test: the full-topology sample loads on its own branch.
-
-Loads ``data/demos/00_full_topology`` with the ordinary sorted SDK loader the sample README documents
-(``tests/traversal/load_topology.py``) onto the branch ``full-topology``, never onto main: the other scenarios deploy
-and merge into main (the DC deployments, the 30_all demo builds its branch from main), and the sample is authored data
-that no generator completes, so its objects would meet their checks and counts. The branch is not merged. Part of
-``invoke test-integration-fast``; it can share a session with the other scenarios.
-"""
+"""Integration test: the full-topology sample loads on its own branch."""
 
 import logging
 
@@ -35,12 +28,7 @@ class TestFullTopology:
     @pytest.mark.order(11)
     @pytest.mark.dependency(scope="session", name="full_topology_checks", depends=["full_topology_load"])
     def test_02_the_sample_passes_its_checks(self, client_main: InfrahubClientSync) -> None:
-        """Open a proposed change for the branch and require every check to pass.
-
-        The sample is authored data no generator completes, so the checks (circuit placement, quota, patch panel
-        pairing, routing tags, interface parents...) judge it as written. A failing check raises with its messages.
-        The proposed change is not merged and is closed afterwards.
-        """
+        """Open a proposed change for the branch and require every check to pass."""
         result = create_and_validate_proposed_change(
             client=client_main, name="Full topology sample", source_branch=BRANCH
         )

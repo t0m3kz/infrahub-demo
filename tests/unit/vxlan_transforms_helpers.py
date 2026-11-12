@@ -1,9 +1,7 @@
 """Shared builders for the VXLAN transform unit tests (split from test_vxlan_transforms.py)."""
 
 
-# ---------------------------------------------------------------------------
 # Helpers: activation structures (as returned by clean_data())
-# ---------------------------------------------------------------------------
 
 
 def _make_activation(

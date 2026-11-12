@@ -1,11 +1,4 @@
-"""Unit tests for the pure planning of the load balancer VIP producer.
-
-- generators/helpers/lb_vip.py: ports, serving contexts, leg prefix, identifiers
-- queries/topology/add/application.gql: the serving context path and its re-read queries
-- load_balanced_components_in: what a deployment moving to another serving
-  context re-runs (add_customer_deployment_dc's relink fan-out)
-- instance_footprint: the context of an instance is its segment's footprint in the instance's data center
-"""
+"""Unit tests for the pure planning of the load balancer VIP producer."""
 
 from __future__ import annotations
 
@@ -30,9 +23,7 @@ from tests.unit.lb_vip_helpers import _context, _instance, _with_footprints, lb_
 from tests.unit.query_shape_helpers import fragment_text, fragment_tree, query_tree
 from utils.graphql_queries import load_query
 
-# ===========================================================================
 # Pure planning
-# ===========================================================================
 
 
 class TestVipPorts:
@@ -165,16 +156,13 @@ def test_identifiers_follow_the_contract() -> None:
     assert member_identifier("vm-1", "seg-web") == "vm-1-seg-web-lb-member"
 
 
-# ===========================================================================
 # Query
-# ===========================================================================
 
 
 def test_application_query_reads_the_serving_context_from_the_segment_and_the_data_center_from_the_instance(
     root_dir: Path,
 ) -> None:
-    """The context sits on the segment's footprints (the dependency targets read it through the same fragment); an
-    instance only names its data center, whatever its device kind."""
+    """The context sits on the segment's footprints (the dependency targets read it through the same fragment);"""
     query = load_query(root_dir / "queries/topology/add/application.gql")
     instance = fragment_text(root_dir / "queries/topology/add/application.gql", "AppInstanceFields")
     assert "serving_loadbalancer_context" not in instance
@@ -233,8 +221,7 @@ class TestLoadBalancedComponentsIn:
         return client
 
     def test_components_on_the_segments_of_the_deployment(self) -> None:
-        """The segments of the footprint, then the load_balanced components on them; sorted, unique. The
-        instances are not read: a shared physical host and a virtual machine are served the same way."""
+        """The segments of the footprint, then the load_balanced components on them;"""
         client = self._client(["seg-2", "seg-1", "seg-2"], ["comp-b", "comp-a", "comp-b"])
 
         assert asyncio.run(load_balanced_components_in(client, "dep-1")) == ["comp-a", "comp-b"]

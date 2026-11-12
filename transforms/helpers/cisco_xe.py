@@ -1,12 +1,4 @@
-"""IOS-XE (Catalyst 9000, ``cisco_xe``) rendering inputs for the segment ACLs and the VRF static routes.
-
-``get_acls`` / ``get_exchange_routes`` (transforms/helpers/acl.py, firewall.py) build one platform-neutral model that the
-NX-OS and EOS templates print as it is. IOS-XE writes the same model differently: wildcard masks instead of CIDR
-prefixes, ``host`` / ``any``, dotted masks on ``ip route``, an ``ip access-list extended`` body with its own sequence
-numbers. This module does that translation once, in Python, for ``templates/configs/common/cisco_xe_acl.j2`` and
-``cisco_xe_vrf_static.j2``, and refuses (``ValueError``, like every other cisco_xe refusal) what IOS-XE cannot express
-instead of dropping a line: a rule that quietly vanished from a zero-trust ACL would open the segment.
-"""
+"""IOS-XE (Catalyst 9000, ``cisco_xe``) rendering inputs for the segment ACLs and the VRF static routes."""
 
 import re
 from collections.abc import Iterable
@@ -21,9 +13,7 @@ _PROTOCOLS = frozenset({"ip", "ipv6", "tcp", "udp", "icmp"})
 _ACTIONS = frozenset({"permit", "deny"})
 # `eq N` or `range N M`, as _port_match (transforms/helpers/acl.py) writes it.
 _PORT = re.compile(r"^(?:eq (\d+)|range (\d+) (\d+))$")
-# The entries are renumbered 10, 20, ... in list order, remarks included: a `remark` line needs its own
-# sequence number, and the neutral model's numbers (own rules from the policy index, return legs from 5000,
-# the closing rule at 9990) can sit one apart, leaving no free number between two entries.
+# Entries are renumbered 10, 20, ... in list order, remarks included (a `remark` needs its own sequence number).
 _SEQ_STEP = 10
 
 
@@ -32,8 +22,7 @@ def _refusal(role: str, what: str) -> ValueError:
 
 
 def _address(value: str, role: str, where: str, family: str) -> str:
-    """One ACL endpoint in IOS-XE form: ``any``, ``host A``, and ``A.B.C.D W.W.W.W`` (IPv4 wildcard mask) or
-    ``prefix/len`` (IPv6, the form of ``ipv6 access-list``)."""
+    """One ACL endpoint in IOS-XE form."""
     if value == "any":
         return "any"
     try:
@@ -112,13 +101,7 @@ def _acl_entry(rule: dict[str, Any], role: str, where: str, family: str) -> dict
 
 
 def get_cisco_xe_acls(acls: Iterable[dict[str, Any]] | None, role: str) -> list[dict[str, Any]]:
-    """The segment ACLs of ``get_acls`` as IOS-XE ``ip access-list extended`` bodies.
-
-    Returns ``[{"name", "vlan_id", "lines": [...]}]``; a line is ``{"seq", "remark"}`` or ``{"seq", "action",
-    "protocol", "src", "src_port", "dst", "dst_port", "established", "log"}`` with ``src``/``dst`` already in
-    IOS-XE form. The lines keep the order of the rules (the order ``get_acls`` evaluates them in, first match
-    wins) and are numbered 10, 20, ... Raises ValueError for a rule IOS-XE cannot express.
-    """
+    """The segment ACLs of ``get_acls`` as IOS-XE ``ip access-list extended`` bodies."""
     result = []
     for acl in acls or []:
         lines: list[dict[str, Any]] = []
@@ -142,13 +125,7 @@ def get_cisco_xe_acls(acls: Iterable[dict[str, Any]] | None, role: str) -> list[
 def get_cisco_xe_vrf_routes(
     vrf_routes: Iterable[dict[str, Any]] | None, defined_vrfs: Iterable[str], role: str, *, lisp: bool
 ) -> list[dict[str, Any]]:
-    """The inter-VRF exchange statics of ``get_exchange_routes`` as ``ip route vrf`` arguments.
-
-    Returns ``[{"vrf", "prefix", "network", "mask", "nexthop", "exported"}]``. ``exported`` (not ``local_only``)
-    routes are redistributed into the EVPN VRF address family; a LISP fabric has no such redistribution, so an
-    exported route there raises, and so does a route whose VRF this device does not define (the ``ip route vrf``
-    line would be rejected) or an IPv6 route.
-    """
+    """The inter-VRF exchange statics of ``get_exchange_routes`` as ``ip route vrf`` arguments."""
     defined = set(defined_vrfs)
     result = []
     for route in vrf_routes or []:

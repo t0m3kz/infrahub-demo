@@ -1,30 +1,4 @@
-"""Integration test - the Arista EOS MSS-G demo fabric (data/demos/32_arista_mssg).
-
-DC14 is an all-7280R3 fabric on EOS 4.36.2F, the one platform / device type / release the
-``reference-arista-eos`` group-policy profile row accepts. The scope is not part of 30_all (it is a
-separate scope with its own branch, never merged to main), so this module loads it on its own branch and
-proves the whole path *generators -> group tags and contract rules -> transform -> rendered EOS text*:
-
-1. The staged fabric load settles without a failed task; DC14 has its device roles and back-to-back MLAGs.
-2. The tenant (servers, footprint, three VXLAN segments, hand-written policies, one application) loads in
-   settled stages; every segment has a gateway prefix, a group tag and an active deployment; the servers are
-   cabled to the tier the data intends.
-3. CheckReferenceFabric says DC14 is a reference fabric (and reports no error first, so a silent no-render
-   fails with the reason); CheckSegmentSecurity reports no error.
-4. Leaf, access-leaf and border-leaf render ``router segment-security`` with the live prefixes and VRF, the
-   expected ``from`` / ``fallback`` policies, the field-sets inside ``application traffic recognition``, the
-   staged comment and the final ``shutdown``; a spine and a leaf that hosts nothing render none.
-5. ``group_policy_enforce`` flips the render by exactly the staged comment and ``shutdown`` -> ``no shutdown``,
-   and starts no generator.
-6. One access-leaf on an older EOS removes the block from the whole DC; reverting brings it back.
-7. Re-running add_vxlan_segment changes no tag, no id and no render.
-
-What it does NOT prove: that EOS accepts or enforces any of the rendered lines. Custom policies, field-sets,
-application traffic recognition and the fallback policy are documented by Arista's AVD only, and the 7280R3
-port plans of the templates are approximate (see the scope README). The stored-artifact comparison against a
-proposed change is left out: the proposed-change helpers only report artifact status, they do not fetch the
-artifact content to compare with the in-process render.
-"""
+"""Integration test - the Arista EOS MSS-G demo fabric (data/demos/32_arista_mssg)."""
 
 from __future__ import annotations
 
@@ -60,10 +34,7 @@ MSSG_DATA = "data/demos/32_arista_mssg"
 MSSG_BRANCH = "arista-mssg-scenario"
 MSSG_DC = "DC14"
 
-# (stage name, load paths under MSSG_DATA). Same order as the README. The stages are separate loads because
-# each needs what the previous one's generators create: the servers need the switch ports, the footprint the
-# DC, the segments the footprint and DC14's VNI pool, the policies the segments, the application the segments
-# and the cabled servers.
+# (stage name, load paths under MSSG_DATA).
 MSSG_FABRIC_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("design", ("00_design",)),
     ("fabric", ("01_fabric",)),
@@ -81,10 +52,10 @@ MSSG_STAGE_POLL_INTERVAL = 10  # seconds
 # Pods and racks are dispatched independently, so the queue can go quiet between waves.
 MSSG_STAGE_STABLE_ZERO = 10
 
-# Pod 1: 2 spines, row 1 = leaf pair + access-leaf pair, row 2 = leaf pair; pod 2: 2 spines; DC level: 2 border-leafs.
+# Pod 1: 2 spines, row 1 = leaf pair + access-leaf pair, row 2 = leaf pair; pod 2: 2 spines
 MSSG_EXPECTED_ROLE_COUNTS = {"border-leaf": 2, "spine": 4, "leaf": 4, "access-leaf": 2}
 MSSG_VTEP_ROLES = ("border-leaf", "leaf", "access-leaf")
-# Row 1 leaf pair, row 1 access-leaf pair, row 2 leaf pair, all back-to-back (the pod is mlag_create: back-to-back).
+# Row 1 leaf pair, row 1 access-leaf pair, row 2 leaf pair
 MSSG_EXPECTED_MLAG_PAIRS = 3
 
 MSSG_ORG = "MSSG1"
@@ -156,9 +127,7 @@ query {{
 MSSG_SECTION = "router segment-security"
 STAGED_COMMENT_PREFIX = f"! data center {MSSG_DC} stages group policy (group_policy_enforce is false)"
 
-# What a clean MSS-G render of this scope's tenant has, per segment of the VRF: its own `from` (intra-segment
-# permit) and these `from` lines under the DESTINATION segment. A value of None means "a custom MSSG-POL-*
-# policy"; a string is the exact built-in policy.
+# What a clean MSS-G render of this scope's tenant has, per segment of the VRF
 FORWARD_ALL = "policy-forward-all"
 EXPECTED_FROMS: dict[str, dict[str, str | None]] = {
     SEG_APP: {SEG_APP: FORWARD_ALL, SEG_DB: FORWARD_ALL, SEG_WEB: None},
@@ -396,7 +365,7 @@ def _mssg_errors(device: str, rendered: str, segments: dict[str, dict[str, Any]]
         errors.append(f"{device}: no 'application traffic recognition' block before the section")
     if not defined_field_sets or not used_field_sets <= defined_field_sets:
         errors.append(f"{device}: field-sets {sorted(defined_field_sets)} do not cover {sorted(used_field_sets)}")
-    # field-set l4-port belongs INSIDE application traffic recognition, indented (flush-left it ends the block).
+    # field-set l4-port belongs INSIDE application traffic recognition
     if re.search(r"^field-set l4-port", rendered, re.MULTILINE):
         errors.append(f"{device}: a flush-left 'field-set l4-port' sits outside application traffic recognition")
     if not re.search(r"^      443, 8000-8010$", "\n".join(block), re.MULTILINE):
@@ -551,10 +520,7 @@ class TestAristaMssg(TestInfrahubDockerWithClient):
     async def test_03b_fabric_design_and_ipv4_pool_sizes(
         self, async_client_main: InfrahubClient, scenario_branch: str
     ) -> None:
-        """DC14 and its pods keep their design rules, and DC14's pools — an IPv4 underlay, unlike
-        30_all's IPv6 DCs — are exactly the IPv4 slices the bootstrap designs derive.
-
-        Scoped to DC14: other suites' DCs a branch from main inherits are not this scope's."""
+        """DC14 and its pods keep their design rules, and DC14's pools — an IPv4 underlay."""
         logging.info("=== %s - Step 3b: Fabric Design and IPv4 Pool Sizes ===", SCENARIO_NAME)
 
         inventory = await fetch_fabric_pools(client=async_client_main, branch=scenario_branch)
@@ -591,7 +557,7 @@ class TestAristaMssg(TestInfrahubDockerWithClient):
         await verify_no_failed_tasks(client=async_client_main, branch=scenario_branch)
         topology = await fetch_dc_topology(client=async_client_main, branch=scenario_branch, dc_name=MSSG_DC)
 
-        # add_endpoint cables a server to the access-leaf pair of its row when it has one, else to the leaf pair.
+        # add_endpoint cables a server to the access-leaf pair of its row when it has one
         hosting = await _fetch_hosting_switches(async_client_main, scenario_branch)
         access, leafs = (_devices_of_role(topology["devices"], role) for role in ("access-leaf", "leaf"))
         assert hosting.get(SERVER_ROW1), f"{SERVER_ROW1} is not cabled to any switch: {hosting}"
@@ -621,8 +587,7 @@ class TestAristaMssg(TestInfrahubDockerWithClient):
         group_ids = [segment["group_id"] for segment in segments.values()]
         assert len(set(group_ids)) == len(group_ids), f"group tags share a group_id: {group_ids}"
 
-        # The contract is exactly the hand-written rules: the application declares no dependency, so the
-        # application generator must have written none (a rule it added would change every row below).
+        # The contract is exactly the hand-written rules: the application declares no dependency
         result = await async_client_main.execute_graphql(
             query=POLICIES_QUERY.format(names=json.dumps(sorted(EXPECTED_POLICY_RULES))), branch_name=scenario_branch
         )
@@ -646,7 +611,7 @@ class TestAristaMssg(TestInfrahubDockerWithClient):
         passed = await reference.run()
         errors = [str(entry.get("message") or "") for entry in reference.logs if entry.get("level") == "ERROR"]
         messages = [str(entry.get("message") or "") for entry in reference.logs]
-        # Errors first: a fabric the gate rejects says why in an INFO line, so print every line on failure.
+        # Errors first: a fabric the gate rejects says why in an INFO line
         assert passed and not errors, "CheckReferenceFabric failed:\n" + "\n".join(f"  - {e}" for e in errors)
         verdict = f"{MSSG_DC} is a reference fabric (segment_security, {vteps} VTEPs)"
         assert verdict in messages, f"expected '{verdict}', the check said:\n" + "\n".join(f"  - {m}" for m in messages)

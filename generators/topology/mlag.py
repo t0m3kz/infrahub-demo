@@ -1,12 +1,5 @@
-"""Generator: MLAG peer-link wiring.
-
-Only reached now off the two remaining ManagedMLAG "updated" triggers:
-capabilities changed, or virtual_peer_link changed, by something outside
-the topology-generator flow (direct API/UI edit, branch merge). Domain
-*creation* wiring is inlined into DeviceMixin._ensure_mlag_pairs
-(generators/devices.py) — that trigger was removed from
-data/events/99_actions.yml. Both call the same MLAGWiringMixin.
-"""
+"""Generator: MLAG peer-link wiring, reached only off the ManagedMLAG "updated" triggers.
+Domain creation is DeviceMixin._ensure_mlag_pairs; both use MLAGWiringMixin."""
 
 from __future__ import annotations
 
@@ -35,7 +28,5 @@ class MLAGGenerator(MLAGWiringMixin, CablingMixin, PoolMixin, CommonGenerator):
         for mlag in mlag_nodes:
             mlag_obj = await self.client.get(kind=ManagedMLAG, id=mlag["id"], include=["capabilities"])
             member_ids = [peer.id for peer in getattr(mlag_obj, "capabilities").peers]
-            # track=False: the wiring belongs to the device generator that
-            # created this domain (DeviceMixin._ensure_mlag_pairs), which
-            # re-tracks it on every run. This trigger only re-wires it.
+            # track=False: the wiring belongs to the device generator (DeviceMixin._ensure_mlag_pairs).
             await self.ensure_mlag_wiring(mlag_obj, mlag["name"], member_ids=member_ids, track=False)

@@ -209,8 +209,7 @@ class TestDistinct:
         assert len(distinct(objects)) == 2
 
     def test_rack_identity_falls_back_to_the_unique_attribute_not_the_parent_pair(self) -> None:
-        """LocationRack declares no human_friendly_id and is unique on (parent, name) and on shortname (the generic's):
-        the identity is the shortname, because the parent is not a value of the object."""
+        """LocationRack declares no human_friendly_id and is unique on (parent, name) and on shortname."""
         assert human_friendly_id("LocationRack") == ("shortname__value",)
         assert human_friendly_id("LocationSuite") == ("shortname__value",)
 

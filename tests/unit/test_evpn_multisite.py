@@ -1,18 +1,4 @@
-"""Unit tests for EVPN Multi-Site (colocation edge as border gateway).
-
-Covers:
-  - _build_peer_groups()                    — DCI-UNDERLAY-PEERS / DCI-PEERS groups, peer-type fabric-external
-  - _build_session_from_peering()           — update_source of a DCI EVPN session
-  - _stretch_rt_anchor()                    — shared L2 RT admin ASN across sites
-  - _is_multisite_segment()                 — stretched across >1 deployment
-  - _l2_from_activations()                  — multisite / rt_anchor_asn on mappings
-  - _select_vtep_interface()                — loopback-vtep preference, lowercase loopback0
-  - _get_multisite_config()                 — BGW detection, dci/fabric tracking interfaces
-  - get_vxlan_config()                      — route_target and multisite keys
-  - _collect_border_gateway_activations()   — stretched segments from the site's deployment
-  - cisco_nxos_vxlan.j2 / cisco_nxos_bgp.j2 / cisco_nxos_interface_ip.j2 / cisco_nxos_dci_route_maps.j2
-                                            — NX-OS BGW rendering
-"""
+"""Unit tests for EVPN Multi-Site (colocation edge as border gateway)."""
 
 from __future__ import annotations
 
@@ -36,9 +22,7 @@ from transforms.helpers.vxlan import (
 
 _TEMPLATES_CONFIGS_DIR = Path(__file__).parents[2] / "templates" / "configs"
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _segment(
@@ -131,9 +115,7 @@ def _bgw_device(role: str = "edge", *, with_vip: bool = True) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
 # BGP DCI peer group
-# ---------------------------------------------------------------------------
 
 
 class TestDciPeerGroup:
@@ -312,9 +294,7 @@ class TestFabricPeerGroup:
         assert group["name"] == "FABRIC-PEERS"
 
 
-# ---------------------------------------------------------------------------
 # Stretched segment RT anchor / multisite flag
-# ---------------------------------------------------------------------------
 
 
 class TestStretchedSegment:
@@ -346,9 +326,7 @@ class TestStretchedSegment:
         assert mapping["rt_anchor_asn"] == 65010
 
 
-# ---------------------------------------------------------------------------
 # VTEP interface selection
-# ---------------------------------------------------------------------------
 
 
 class TestSelectVtepInterface:
@@ -369,9 +347,7 @@ class TestSelectVtepInterface:
         assert _select_vtep_interface([{"name": "Ethernet1", "role": "uplink"}]) is None
 
 
-# ---------------------------------------------------------------------------
 # Multi-Site BGW config
-# ---------------------------------------------------------------------------
 
 
 class TestGetMultisiteConfig:
@@ -456,9 +432,7 @@ class TestGetVxlanConfigMultisite:
         assert config["multisite"]["advertise_interfaces"] == ["loopback1", "loopback100"]
 
 
-# ---------------------------------------------------------------------------
 # BGW activations from the site's deployment
-# ---------------------------------------------------------------------------
 
 
 def _deployment_entry(seg_id: str, *, scope: str = "metro", vni: int | None = 10100, device: str = "dev-1") -> dict:
@@ -510,11 +484,7 @@ class TestCollectBorderGatewayActivations:
 
 
 class TestDeviceActivationsBySite:
-    """BaseDeviceTransform._device_activations: the BGW's stretched segments come from the site hosting them.
-
-    A border-leaf is deployed to the DC, which hosts the segments. A colocation edge is deployed to its ZONE (or
-    virtual colocation); the metro, one `parent` hop above, is the Multi-Site site that hosts them.
-    """
+    """BaseDeviceTransform._device_activations:"""
 
     _VIP = {"role": "multisite-vip", "name": "loopback100"}
 
@@ -620,9 +590,7 @@ class TestDeviceActivationsBySite:
         assert self._activations(device) == []
 
 
-# ---------------------------------------------------------------------------
 # NX-OS rendering
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture

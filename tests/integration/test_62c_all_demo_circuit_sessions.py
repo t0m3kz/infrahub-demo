@@ -1,10 +1,4 @@
-"""Integration test — the 30_all colocation, session and internet steps (continues test_62).
-
-The colocation serving contexts, the sessions add_virtual_circuit builds (two per DCI, one per Handoff, none for a
-Tunnel), the internet upstream, the zone edge pair and the office WAN exits.
-
-Runs against the branch test_59 builds; it never loads data of its own.
-"""
+"""Integration test — the 30_all colocation, session and internet steps (continues test_62)."""
 
 import ipaddress
 import logging
@@ -88,14 +82,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each colocation deployment is served by the firewalls of every zone of its metro.
-
-        A deployment is served by one shared context per zone of its metro that has a firewall pair (only FR2
-        in 30_all). That context sits on the zone's cluster and has a VLAN from the zone's pool and one transit
-        sub-interface per member per VRF leg (ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS; test_03b checks their
-        addresses and exchanges). A deployment whose metro has no zone with firewalls has no context:
-        pointing it at another metro's firewalls would hairpin its traffic across the WAN.
-        """
+        """Verify each colocation deployment is served by the firewalls of every zone of its metro."""
         logging.info("=== %s - Step 5: Colocation Serving Contexts ===", SCENARIO_NAME)
 
         result = await async_client_main.execute_graphql(query=COLOCATION_CONTEXTS_QUERY, branch_name=scenario_branch)
@@ -123,8 +110,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if deployment is None:
                 continue
             metro = (deployment.get("parent") or {}).get("node") or {}
-            # Zone name -> its firewall ids, for the metro's zones that have a firewall pair (a virtual colocation
-            # child arrives as an empty node).
+            # Zone name -> its firewall ids, for the metro's zones that have a firewall pair (a virtual colocation child
+            # arrives as an empty node).
             firewall_zones = {
                 zone["name"]["value"]: {edge["node"]["id"] for edge in zone["devices"]["edges"]}
                 for zone in (edge["node"] for edge in (metro.get("children") or {}).get("edges", []))
@@ -210,14 +197,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify add_virtual_circuit built two keyed sessions on each Interconnect (DCI) circuit.
-
-        Per circuit `<name>`: `<name>-underlay` (peering_role dci-underlay, eBGP, ttl 1, bfd, IPv6 unicast, 16 routes)
-        on the two physical ports, addressed from one /127 of the DCI pool (the colocation edge the lower address) and
-        MTU 9214; and `<name>-evpn` (peering_role dci, EBGP_MULTIHOP, ttl 2, extended communities, l2vpn evpn only)
-        between the two VTEP loopbacks. Both run on the ends' overlay BGP processes and carry the circuit's own key
-        `<name>-dci-key` (created once, never a fabric's overlay key). The /127 is the one prefix `DCI <name>` of the DCI pool.
-        """
+        """Verify add_virtual_circuit built two keyed sessions on each Interconnect (DCI) circuit."""
         logging.info("=== %s - Step 6: DCI Sessions ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -293,7 +273,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         f"{session['name']['value']}: runs on {_process_roles(session)}, expected {devices} overlay"
                     )
 
-            # underlay: the two physical ports, one /127 of the DCI pool, the edge the lower address, MTU 9214
+            # underlay: the two physical ports, one /127 of the DCI pool, the edge the lower address
             ports = _interfaces(underlay)
             if sorted(ports) != sorted(ends):
                 errors.append(f"{circuit}-underlay: on interfaces {sorted(ports)}, expected {sorted(ends)}")
@@ -323,7 +303,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     f"{addresses[dc_end]}: the facility end takes the lower address"
                 )
 
-            # evpn: between the two VTEP loopbacks (never the multisite VIP), /128 IPv6, one per end device
+            # evpn: between the two VTEP loopbacks (never the multisite VIP), /128 IPv6
             loopbacks = _interfaces(evpn)
             if sorted(device for device, _ in loopbacks) != devices:
                 errors.append(f"{circuit}-evpn: on devices {sorted(d for d, _ in loopbacks)}, expected {devices}")
@@ -354,15 +334,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify add_virtual_circuit built exactly one eBGP session on each Handoff circuit.
-
-        Per circuit `<name>`: one `<name>-bgp` (peering_role regular, EBGP, ttl 1, bfd, no extended communities, the
-        IPv4 unicast, the circuit's key) between the two devices' BGP processes, on the two
-        `<port>.<vlan>` sub-interfaces. Both are addressed in the circuit's namespace from one /31 of the pool
-        `Handoff-<namespace>-IPv4` (the overlay-process end the lower address, else the first device by name); the
-        prefix is the one `Handoff <name>`. The party process's `local_as` is the data's ASN, ours differs, and the
-        VLAN is the same on both ends (and the VIF's).
-        """
+        """Verify add_virtual_circuit built exactly one eBGP session on each Handoff circuit."""
         logging.info("=== %s - Step 6b: Handoff Sessions ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -372,7 +344,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         expected = {n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] == HANDOFF_TYPE}
         if set(all_handoffs) != expected:
             errors.append(f"handoff circuits {sorted(all_handoffs)}, expected {sorted(expected)}")
-        # A handoff to a cloud peering interface is authored (sub-interface address and peering): no generated session.
+        # A handoff to a cloud peering interface is authored (sub-interface address and peering)
         handoffs = {n: c for n, c in all_handoffs.items() if n not in ALL_DEMO_CLOUD_HANDOFF_PEERINGS}
 
         sessions = _sessions_by_name(
@@ -430,10 +402,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify a Tunnel circuit is an inventory record: no session of any name, ends on the gateway's public port
-        and one more port, and no port it ends on is also an end of a session circuit (one gateway port serves many
-        tunnels, but no Interconnect or Handoff).
-        """
+        """Verify a Tunnel circuit is an inventory record: no session of any name."""
         logging.info("=== %s - Step 6c: Tunnels ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -479,13 +448,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the ISP transit sessions and that each DC's DCI lands on both upstream BGWs.
-
-        The four TRANSIT-* eBGP sessions run in the INTERNET VRF (an
-        `internet`-type zone is what makes the edge filter them and
-        export 0/0 as EVPN type-5). The upstream BGW of a DC is the edge its
-        dark fibres end on: both edges of its metro, each a Multi-Site BGW with its own DCI.
-        """
+        """Verify the ISP transit sessions and that each DC's DCI lands on both upstream BGWs."""
         logging.info("=== %s - Step 7: INTERNET upstream ===", SCENARIO_NAME)
 
         errors: list[str] = []
@@ -527,7 +490,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         if transit_edges != ALL_DEMO_INTERNET_BGWS:
             errors.append(f"transit edges {sorted(transit_edges)} are not exactly the BGWs")
 
-        # Each DC's DCI underlay sessions land on BOTH BGWs of the metro it fronts, and on no other edge.
+        # Each DC's DCI underlay sessions land on BOTH BGWs of the metro it fronts
         dci = await async_client_main.execute_graphql(
             query=SESSIONS_QUERY,
             variables={"names": [f"{circuit}-underlay" for circuit in ALL_DEMO_DCI_CIRCUITS]},
@@ -565,15 +528,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each zone with exactly two physical edges (FR2, PA4) links and peers them.
-
-        Per zone: one DcimCable between Ethernet1/8 of both edges, both ports
-        role `interlink` and addressed from one /127 inside the zone slice of
-        Technical-IPv6; exactly one FABRIC-<a>-<b> iBGP session (ttl 1, role
-        fabric, IPv6 unicast + l2vpn evpn) on both overlay processes, keyed
-        with the zone's own key; and one shared Multi-Site VIP (a single
-        IpamIPAddress on loopback100 of both edges).
-        """
+        """Verify each zone with exactly two physical edges (FR2, PA4) links and peers them."""
         logging.info("=== %s - Step 8: Metro edge pair ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -714,13 +669,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each office with a fabric and an SD-WAN edge exits through it (add_office_fabric).
-
-        Per distribution-switch: one WAN-EXIT-<switch>-<edge> eBGP session (role regular, ttl 1, ipv4 unicast, keyed
-        with the office's wan-exit key) between a regular BGP process on the switch and one on the edge, over two
-        dot1q sub-interfaces <port>.<tag> in the office's tenant VRF (the tag is the VRF's wan_exit_vlan) addressed
-        from one /31. The switches of an office share one AS, the edge has another, both from the 32-bit private pool.
-        """
+        """Verify each office with a fabric and an SD-WAN edge exits through it (add_office_fabric)."""
         logging.info("=== %s - Step 9: Office WAN exit ===", SCENARIO_NAME)
 
         errors: list[str] = []

@@ -9,9 +9,7 @@ from tests.unit.integration_scenario_helpers_helpers import _no_propagation_dela
 
 
 async def test_fetch_interconnect_inventory_parses_location_and_end_placement() -> None:
-    """A circuit location keeps its kind, parent (a cage's metro, a footprint's DC) and owner, and each end
-    its device's deployment, with the metro above a zone or virtual colocation deployment: test_62 checks
-    circuit placement on exactly these fields."""
+    """A circuit location keeps its kind, parent."""
 
     def value(v: Any) -> dict:
         return {"value": v}

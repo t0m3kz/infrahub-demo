@@ -1,8 +1,4 @@
-"""Unit tests for CheckCarrierCircuitPorts (the ports a carrier circuit terminates on).
-
-The payloads are raw GraphQL responses shaped like queries/validation/carrier_circuit_ports.gql;
-``validate`` runs them through ``clean_data``.
-"""
+"""Unit tests for CheckCarrierCircuitPorts (the ports a carrier circuit terminates on)."""
 
 from __future__ import annotations
 
@@ -70,8 +66,9 @@ class TestCleanInventory:
         assert _run(_circuit("DF-DC10-EQXFR2", BL, EG)) == []
 
     def test_a_cross_connect_to_a_cloud_transport_port_is_silent(self) -> None:
-        """A port of a Direct Connect transport is a DcimPhysicalInterface of a device with no role and no
-        deployment: nothing about the device is judged, only the port kind."""
+        """A port of a Direct Connect transport is a DcimPhysicalInterface of a device with no role and no deployment:
+        nothing about the device is judged, only the port kind.
+        """
         dx = _port("p-dx", "dx-c900-fra", "Ethernet1")
         assert _run(_circuit("XC-EQXFR2-DX", EG, dx)) == []
 
@@ -188,8 +185,7 @@ class TestVirtualConnection:
 
     @pytest.mark.parametrize("other_type", ["cross_connect", "dark_fiber", "internet", "metro_ethernet"])
     def test_only_virtual_connection_is_exempt_from_the_shared_port_rule(self, other_type: str) -> None:
-        """Two circuits of any other type on one port are still one finding; a virtual_connection beside them is not
-        counted against the port."""
+        """Two circuits of any other type on one port are still one finding."""
         first = _circuit("A", FABRIC_PORT, FABRIC_PORT_2, circuit_type=other_type)
         second = _circuit("B", FABRIC_PORT, _port("p-f3", "EQX-FR2-FABRIC3", "port-1"), circuit_type=other_type)
         findings = _run(first, second)

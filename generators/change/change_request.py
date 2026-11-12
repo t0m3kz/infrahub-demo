@@ -1,14 +1,7 @@
-"""Derive the change request of a Proposed Change from what the PC changes.
-
-The target is the ``ChangeRequest`` on the PC's source branch: a request created with ``member_of_groups:
-[change_requests]`` starts the run (data/events/99_group_triggers.yml), and the change service re-runs it once the PC's
-artifacts are computed. The run reads the PC through the request's ``proposed_change``, the artifact and data diffs of
-its branch (utils/change_sources.py: the server's counts, and the segments, rules, cables, circuits, footprints and
-applications with their values, owners included, in one paged filtered read), the facts of the artifact targets in one
-query (change_request_facts.gql) and the requests of the other open PCs (change_request_peers.gql, on their branches),
-and writes what utils/change_rules.py and utils/change_text.py derive. It never writes an AUTHOR field (justification, risk_override,
-risk_override_reason, requested_by) nor the external_id. A field already equal is not written and the two edges are
-changed peer by peer, so a re-run with nothing new writes nothing. A PC that is no longer open is left alone.
+"""Derive the change request of a Proposed Change from what the PC changes. The run reads the PC, its artifact and data
+diffs, the artifact targets' facts and the other open PCs' requests, and writes what utils/change_rules.py and
+utils/change_text.py derive. It never writes an author field nor external_id; a re-run with nothing new writes nothing,
+and a PC no longer open is left alone.
 """
 
 from __future__ import annotations
@@ -61,7 +54,7 @@ def _ids(values: Any) -> set[str]:
 
 
 def changed_fields(current: Mapping[str, Any], derived: Mapping[str, Any]) -> dict[str, Any]:
-    """The derived fields whose value differs from the request's, as mutation values (datetimes in ISO UTC)."""
+    """The derived fields whose value differs from the request's, as mutation values."""
     changes: dict[str, Any] = {}
     for name, value in derived.items():
         if name in DATETIME_FIELDS:
@@ -82,8 +75,8 @@ class ChangeRequestGenerator(CommonGenerator):
         request = requests[0]
         if not request.get("id"):
             self.fail("Change request missing id: cannot proceed")
-        # The run writes no node of its own: the target keeps the run's group non-empty (the SDK skips the cleanup
-        # of an empty group).
+        # The run writes no node of its own: the target keeps the run's group non-empty (the SDK skips cleanup of an
+        # empty group)
         self.client.group_context.related_node_ids.append(request["id"])
         pc = request.get("proposed_change") or {}
         if not pc.get("id"):
@@ -129,7 +122,7 @@ class ChangeRequestGenerator(CommonGenerator):
         )
 
     async def _facts(self, branch: str, device_ids: list[str]) -> dict[str, Any]:
-        """The device rows of change_request_facts.gql in one round trip (none when there is no artifact target)."""
+        """The device rows of change_request_facts.gql in one round trip."""
         if not device_ids:
             return {}
         result = await self.client.execute_graphql(
@@ -138,7 +131,7 @@ class ChangeRequestGenerator(CommonGenerator):
         return clean_data(result)
 
     async def _conflicts(self, pc_id: str, branch: str) -> dict[str, list[str]]:
-        """``<pc name> (<branch>)`` -> the devices its request lists, for every other OPEN proposed change."""
+        """``<pc name> (<branch>)`` -> the devices its request lists, for every other open proposed change."""
         query = load_flat_query(PEERS_QUERY)
         own = clean_data(await self.client.execute_graphql(query=query, branch_name=branch))
         found: dict[str, list[str]] = {}
@@ -163,7 +156,7 @@ class ChangeRequestGenerator(CommonGenerator):
     async def _write(
         self, request: Mapping[str, Any], derived: Mapping[str, Any], device_ids: set[str], customer_ids: set[str]
     ) -> None:
-        """Write the fields that changed (one mutation) and the edge peers that changed (one add, removes one by one)."""
+        """Write the changed fields (one mutation) and the changed edge peers (one add, removes one by one)."""
         changes = changed_fields(request, derived)
         if changes:
             await self.client.execute_graphql(

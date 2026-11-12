@@ -1,10 +1,4 @@
-"""Unit tests for the carrier circuit generator (generators/topology/circuit.py).
-
-CarrierCircuitGenerator derives a circuit's facility locations from its end devices' deployments and adds the
-missing ones; a placement problem must fail the run before any write. It builds no session, but re-runs
-add_virtual_circuit for every interconnect and handoff circuit on its ports. Fakes:
-tests/unit/simulators/circuit_fakes.py.
-"""
+"""Unit tests for the carrier circuit generator (generators/topology/circuit.py)."""
 
 from __future__ import annotations
 
@@ -164,8 +158,7 @@ class TestCarrierCircuitPlacement:
 
     @pytest.mark.asyncio
     async def test_the_only_write_is_the_locations_relationship_so_the_status_trigger_cannot_loop(self) -> None:
-        """data/events/99_actions.yml fires add_circuit on a carrier circuit's status and capabilities; the run
-        writes neither (only a RelationshipAdd on `locations`), so it cannot re-trigger itself."""
+        """data/events/99_actions.yml fires add_circuit on a carrier circuit's status and capabilities."""
         client = FakeClient()
 
         await physical_generator(client).generate(carrier_payload(locations=[CAGE]))
@@ -295,7 +288,7 @@ class TestFanOutToSessionCircuits:
 
     @pytest.mark.asyncio
     async def test_sub_interfaces_of_the_ports_count_as_ends(self) -> None:
-        """A handoff ends on the VLAN sub-interface of the carrier's port: found through the encapsulations that ride on it."""
+        """A handoff ends on the VLAN sub-interface of the carrier's port."""
         client = FakeClient()
         client.sub_interfaces = ["sub-1900", "sub-1901"]
 

@@ -57,11 +57,7 @@ def _office(
     segment_owner: dict[str, Any] | None = _C2,
     namespace: str = "PROD",
 ) -> dict[str, Any]:
-    """A cleaned TopologyCustomerOffice root entry: its SD-WAN gateway, (prefix, namespace) LANs and hosted segments.
-
-    ``hosted`` are the (gateway prefix, namespace) of the segments the office hosts itself (segment_deployments),
-    all owned by ``segment_owner``; the LANs are owned by the office's ``owner``.
-    """
+    """A cleaned TopologyCustomerOffice root entry:"""
 
     def raw_owner(customer: dict[str, Any] | None) -> dict[str, Any]:
         return {
@@ -119,9 +115,7 @@ def _office(
     )
 
 
-# ---------------------------------------------------------------------------
 # Session mode
-# ---------------------------------------------------------------------------
 
 
 class TestExternalFlag:
@@ -169,9 +163,7 @@ class TestExternalFlag:
         assert "external" not in session
 
 
-# ---------------------------------------------------------------------------
 # Inbound: the far end's registered prefixes
-# ---------------------------------------------------------------------------
 
 
 class TestExternalPeerPrefixes:
@@ -410,9 +402,7 @@ class TestSdwanGatewayPrefixes:
         assert found == {}
 
 
-# ---------------------------------------------------------------------------
 # Ownership: who registered the prefix
-# ---------------------------------------------------------------------------
 
 
 class TestCustomerOwner:

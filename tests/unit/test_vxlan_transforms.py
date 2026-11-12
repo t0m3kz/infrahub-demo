@@ -11,9 +11,7 @@ from transforms.helpers.vxlan import (
     get_vxlan_config,
 )
 
-# ===========================================================================
 # get_vlans()
-# ===========================================================================
 
 
 class TestGetVlans:
@@ -43,9 +41,7 @@ class TestGetVlans:
         assert vlan["vrf"] is None
 
 
-# ===========================================================================
 # _vlans_from_activations()
-# ===========================================================================
 
 
 class TestVlansFromActivations:
@@ -104,9 +100,7 @@ class TestVlansFromActivations:
         assert result[0]["name"] == "first"
 
 
-# ===========================================================================
 # _l2_from_activations()
-# ===========================================================================
 
 
 class TestL2FromActivations:
@@ -148,9 +142,7 @@ class TestL2FromActivations:
         assert result[0]["vni"] == 10400
 
 
-# ===========================================================================
 # _l3_instances(): the realization rule
-# ===========================================================================
 
 
 def _vrf(name: str, l3_vni: int | None, vrf_type: str = "prod") -> dict:
@@ -202,9 +194,7 @@ class TestL3Instances:
         assert [i.vrf for i in result] == ["ns_a"]
 
 
-# ===========================================================================
 # _platform_vxlan_config() for arista_eos
-# ===========================================================================
 
 
 class TestTransformVxlanArista:
@@ -232,28 +222,18 @@ class TestTransformVxlanArista:
         assert "interface" not in base
 
     def test_anycast_gateway_inherited_from_base_not_recomputed(self) -> None:
-        """anycast_gateway is computed once, platform-agnostically, in
-        get_vxlan_config's base_config — _platform_vxlan_config must inherit
-        it, not recompute it (that logic moved out; see
-        TestGetVxlanConfigAnycastGateway for the real coverage)."""
+        """anycast_gateway is computed once in the base config and inherited by every platform."""
         base = self._base_config()
         base["anycast_gateway"] = {"enabled": True, "mac": "00:1c:73:00:dc:01"}
         result = _platform_vxlan_config(base, "arista_eos")
         assert result["anycast_gateway"] == {"enabled": True, "mac": "00:1c:73:00:dc:01"}
 
 
-# ===========================================================================
 # get_vxlan_config() — anycast_gateway (platform-agnostic, symmetric IRB)
-# ===========================================================================
 
 
 class TestGetVxlanConfigAnycastGateway:
-    """anycast_gateway is computed once in get_vxlan_config's base_config and
-    inherited unchanged by _platform_vxlan_config — same standard anycast
-    MAC on every leaf/border-leaf in the fabric, matching
-    .dev/scenariusze.txt's "fabric forwarding anycast-gateway-mac" /
-    "ip virtual-router mac-address" / "ip anycast-mac-address" (identical
-    value across Cisco/Arista/SONiC)."""
+    """anycast_gateway is computed once in get_vxlan_config and inherited unchanged by _platform_vxlan_config."""
 
     def _data(self) -> dict:
         return {"interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.3/32"}}], "capabilities": []}
@@ -283,15 +263,11 @@ class TestGetVxlanConfigAnycastGateway:
         assert result["anycast_gateway"]["mac"] == "00:1c:73:00:dc:01"
 
 
-# ===========================================================================
 # get_vxlan_config() — VTEP-role gate
-# ===========================================================================
 
 
 class TestGetVxlanConfigVtepGate:
-    """Spine/super-spine/hyper-spine are underlay+EVPN-route-reflector only —
-    never VTEPs — so get_vxlan_config() must return None for those roles
-    regardless of what activations/data it's given."""
+    """Spine/super-spine/hyper-spine are underlay+EVPN-route-reflector only"""
 
     def _data(self) -> dict:
         return {"interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.1/32"}}], "capabilities": []}
@@ -324,9 +300,7 @@ class TestGetVxlanConfigVtepGate:
         assert result is not None
 
 
-# ===========================================================================
 # isolation_mode propagation in _vlans_from_activations()
-# ===========================================================================
 
 
 def _make_iso_activation(vlan_id: int, isolation_mode: str | None = None) -> dict:

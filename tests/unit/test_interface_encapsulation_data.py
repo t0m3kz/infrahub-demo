@@ -1,16 +1,4 @@
-"""The sample data authors an interface's parent and VLAN tag as a ManagedInterfaceEncapsulation, never as fields.
-
-``parent_interface`` and the interface-level ``vlan_id`` are gone from the schema: an interface that rides on another
-one carries ONE nested capability object (``capabilities: [{kind: ManagedInterfaceEncapsulation, data: {name, vlan_id,
-parent: [device, interface]}}]``). This reads every object file under data/demos, data/bootstrap and
-tests/integration/data (no server, no loader) and pins that shape:
-
-* no interface object, top level or nested anywhere, still has ``parent_interface`` or a ``vlan_id`` key;
-* every authored encapsulation is named ``<owning device>:<owning interface>``, has a ``parent`` HFID of two strings
-  and an integer ``vlan_id`` when it has one;
-* an encapsulation name is unique inside a dataset (00_full_topology, 30_all), so a load upserts one object per
-  interface.
-"""
+"""The sample data authors an interface's parent and VLAN tag as a ManagedInterfaceEncapsulation, never as fields."""
 
 from __future__ import annotations
 
@@ -64,8 +52,7 @@ def _documents(root: Path) -> Iterator[tuple[Path, dict[str, Any]]]:
 
 
 def _walk(path: Path, value: Any, kind: str | None, device: str | None, interface: str | None) -> Iterator[Found]:
-    """Every object below ``value``: a list of objects, an object, a ``{kind, data}`` wrapper or a ``{data}`` wrapper
-    (the nested forms of children, interfaces, capabilities and relationships alike)."""
+    """Every object below ``value``:"""
     if isinstance(value, list):
         for entry in value:
             yield from _walk(path, entry, kind, device, interface)
@@ -126,8 +113,7 @@ def test_every_dataset_authors_encapsulations_with_a_parent(dataset: str) -> Non
 
 @pytest.mark.parametrize("root", [DEMOS, *EXTRA_ROOTS], ids=lambda root: root.name)
 def test_an_authored_encapsulation_is_named_after_its_interface_and_has_a_two_string_parent(root: Path) -> None:
-    """``<owning device>:<owning interface>``, ``parent`` an HFID ``[device, interface]`` of strings, an integer
-    ``vlan_id`` when present (a bool is no tag)."""
+    """``<owning device>:<owning interface>``."""
     problems: list[str] = []
     for obj in _encapsulations(_objects(root)):
         item = obj.item

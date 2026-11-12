@@ -1,20 +1,4 @@
-"""Unit tests for AppApplicationGenerator orchestration
-(generators/topology/application_security.py).
-
-Domain logic has its own test files mirroring the mixins it's split across:
-  - test_ztna_mixin.py              — ZtnaMixin
-  - test_segment_firewall_mixin.py  — SegmentFirewallMixin
-  - test_rules_planner.py           — RulesPlanner (generators/helpers/rules.py)
-
-This file covers only:
-  - generate()'s trigger-shape dispatch (AppDependency/AppComponent fan out
-    to add_app_application and write nothing)
-  - _reconcile_application_rules()'s per-edge dispatch: target_fqdn -> proxy,
-    every segment edge (on-prem or cloud endpoint) -> one segment rule per port,
-    and skipping of malformed/portless/targetless dependencies
-  - _reconcile_application_rules()'s unconditional per-component
-    isolation-mode derivation (SegmentFirewallMixin._ensure_segment_isolation_mode)
-"""
+"""Unit tests for AppApplicationGenerator orchestration (generators/topology/application_security.py)."""
 
 from __future__ import annotations
 
@@ -28,9 +12,7 @@ import pytest
 from generators.topology.application_security import AppApplicationGenerator
 from tests.unit.app_application_generator_helpers import _app, _backend, _dep, _frontend, _make_gen
 
-# ===========================================================================
 # TestDependencyRuleGenerator / TestComponentRuleGenerator
-# ===========================================================================
 
 
 class TestDependencyRuleGenerator:
@@ -53,8 +35,7 @@ class TestDependencyRuleGenerator:
         gen.client.filters.assert_not_awaited()
 
     def test_dependency_fans_out_to_the_source_application(self) -> None:
-        """The trigger payload only names the application; add_app_application
-        builds its rules from the full application query."""
+        """The trigger payload only names the application."""
         gen = self._gen()
 
         dep_data = {
@@ -143,8 +124,7 @@ class TestDependencyRuleGenerator:
         gen.logger.warning.assert_called_once()
 
     def test_access_profile_grant_fans_out_to_the_target_application(self) -> None:
-        """A dependency from an access profile has no source component, so the
-        target component's application is the one triggered."""
+        """A dependency from an access profile has no source component."""
         gen = self._gen()
 
         dep_data = {
@@ -284,14 +264,11 @@ class TestComponentRuleGenerator:
         gen.logger.warning.assert_called_once()
 
 
-# ===========================================================================
 # TestDependencyEdges
-# ===========================================================================
 
 
 class TestDependencyEdges:
-    """Edges are built from depends_on (or the trigger payload); a dependency
-    with neither a target component nor a target_fqdn never becomes one."""
+    """Edges are built from depends_on (or the trigger payload)."""
 
     def test_component_edges_keep_target_and_target_fqdn_dependencies(self) -> None:
         """A component target and an external fqdn are both edges."""
@@ -311,15 +288,11 @@ class TestDependencyEdges:
         assert AppApplicationGenerator._dependency_edges_from_components([frontend]) == []
 
 
-# ===========================================================================
 # TestReconcileApplicationRulesSegmentIsolationMode
-# ===========================================================================
 
 
 class TestReconcileApplicationRulesSegmentIsolationMode:
-    """isolation_mode derivation runs once per component, unconditionally —
-    not gated on the app having any depends_on edges — so every segment an
-    app uses gets classified even for apps with zero dependencies today."""
+    """isolation_mode derivation runs once per component, unconditionally."""
 
     def _make_gen_ready(self, *, components: list[dict]) -> Any:
         gen = _make_gen()
@@ -370,14 +343,13 @@ class TestReconcileApplicationRulesSegmentIsolationMode:
         gen._ensure_segment_isolation_mode.assert_awaited_once_with({}, "fintech_strict")
 
 
-# ===========================================================================
 # TestReconcileApplicationRulesCloudEndpoints
-# ===========================================================================
 
 
 class TestReconcileApplicationRulesCloudEndpoints:
-    """A dependency with a CloudNetworkSegment on either side goes through the
-    same SecurityPolicyRule path as an on-prem one."""
+    """A dependency with a CloudNetworkSegment on either side goes through the same SecurityPolicyRule path as an
+    on-prem one.
+    """
 
     def _make_gen_ready(self) -> Any:
         gen = _make_gen()
@@ -454,17 +426,11 @@ class TestReconcileApplicationRulesCloudEndpoints:
         gen._segment_policy.assert_not_awaited()
 
 
-# ===========================================================================
 # TestReconcileApplicationRulesPerPort
-# ===========================================================================
 
 
 class TestReconcileApplicationRulesPerPort:
-    """A firewall/security-group rule holds one protocol and port range, so a
-    dependency opening several ports becomes one rule per port, each named
-    after the dependency plus a port suffix. Only the SDK client and the
-    collaborators that query Infrahub are mocked; the per-port naming and
-    payload run for real."""
+    """A firewall/security-group rule holds one protocol and port range."""
 
     def _make_gen_ready(self) -> Any:
         gen = _make_gen()
@@ -671,9 +637,7 @@ class TestReconcileApplicationRulesSegmentEnvironmentGuard:
         self._run("p")._reconcile_segment_rule.assert_awaited_once()
 
 
-# ===========================================================================
 # TestReconcileApplicationRulesFailures
-# ===========================================================================
 
 
 class TestReconcileApplicationRulesFailures:

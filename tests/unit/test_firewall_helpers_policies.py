@@ -5,9 +5,7 @@ import pytest
 from tests.unit.firewall_helpers_shared import _make_segment_with_prefix
 from transforms.helpers.firewall import get_zone_policies
 
-# ---------------------------------------------------------------------------
 # Helpers — policy / rule data
-# ---------------------------------------------------------------------------
 
 
 def _make_policy(
@@ -75,9 +73,7 @@ def _make_rule(
     return rule
 
 
-# ===========================================================================
 # get_zone_policies()
-# ===========================================================================
 
 
 class TestGetZonePoliciesDefaultAction:
@@ -211,9 +207,7 @@ class TestGetZonePolicies:
         assert r["dst_port"] == "eq 443"
 
     def test_rule_exposes_raw_protocol_and_raw_ports(self) -> None:
-        """raw_protocol/port_start/port_end are the unmapped values, for
-        templates (PAN-OS, Junos) that build their own service/application
-        object instead of consuming the Cisco-ACL-style dst_port string."""
+        """raw_protocol/port_start/port_end are the unmapped values, for templates."""
         rule = _make_rule(protocol="tcp", port_start=8080, port_end=8090)
         result = get_zone_policies([_make_policy(rules=[rule])])
         r = result[0]["rules"][0]
@@ -275,9 +269,7 @@ class TestGetZonePolicies:
         assert r["dst"] is None
 
     def test_rule_dst_falls_back_to_destination_prefix(self) -> None:
-        """No destination_segment (e.g. a cloud/partner/SaaS CIDR reached over
-        an interconnect, not a customer segment) — destination_prefixes is
-        the selector instead."""
+        """Without destination_segment, destination_prefixes is the selector."""
         rule = _make_rule(
             dst_segment=None,
             dst_prefixes=[{"id": "p1", "prefix": "172.31.0.0/16"}],

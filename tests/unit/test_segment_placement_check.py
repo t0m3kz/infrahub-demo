@@ -138,8 +138,7 @@ class TestOfficeSegments:
             ]
         }
 
-    # The segment_placement query selects no parent on an office (its parent is the campus label, which hosts
-    # nothing), so the parent kind check is skipped.
+    # The query selects no parent on an office (its parent hosts nothing), so the parent kind check is skipped.
     _OFFICE = {"typename": "TopologyCustomerOffice", "name": "C005-OFFICE"}
 
     def test_local_vxlan_segment_on_an_office_passes(self) -> None:

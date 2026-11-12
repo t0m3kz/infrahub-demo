@@ -1,25 +1,4 @@
-"""Integration test — the 30_all compute layer, end to end.
-
-test_59 proves the load converged and every generator fired. This module
-proves the result is the fabric the data describes, all the way from a switch
-port to a customer application:
-
-    access-leaf port -> cable -> host NIC -> host -> VM -> component -> app
-
-That chain is how a switch-port change reaches an application, so each link
-in it gets its own assertion here. In particular the *shape* of the
-cabling matters, not just its existence: a DC host is dual-homed to two
-distinct access-leafs, and the two hosts in a DC sit in different rack rows so
-their access-leaf pairs are disjoint. A colocation cage host is dual-homed to
-one switch — deliberately, as the shared-fate counter-example.
-
-The last steps check the fabric envelope under it: every DC and pod has a
-design within its DC design's limits, every fabric pool slice is exactly the
-size generators/fabric_sizing.py derives from the bootstrap designs, and
-CheckPoolUtilization finds every pool with room to spare.
-
-Runs against the branch test_59 builds; it never loads data of its own.
-"""
+"""Integration test — the 30_all compute layer, end to end."""
 
 import logging
 
@@ -72,14 +51,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify all three DCs generated the same, complete device set.
-
-        The three topology files are deliberately identical in shape, so any
-        divergence between DC10, DC11 and DC12 is a generator bug rather than a
-        data difference — which makes an exact role count the right assertion
-        here, not a lower bound. Only the application hosts differ, by data
-        (ALL_DEMO_DC_ENDPOINTS).
-        """
+        """Verify all three DCs generated the same, complete device set."""
         logging.info("=== %s - Step 1: DC Topologies ===", SCENARIO_NAME)
 
         errors: list[str] = []
@@ -111,12 +83,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify every fabric device routes, with the right protocol mix.
-
-        All three DCs are ebgp-ebgp, so a single iBGP session anywhere means a
-        generator picked the wrong strategy — and an OSPF process means it
-        picked the wrong underlay entirely.
-        """
+        """Verify every fabric device routes, with the right protocol mix."""
         logging.info("=== %s - Step 2: DC Routing ===", SCENARIO_NAME)
 
         errors: list[str] = []
@@ -133,9 +100,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
             if routing["bgp_breakdown"]["ebgp"] == 0:
                 errors.append(f"{dc_name}: no eBGP sessions")
 
-            # Walk the *device* list, not the routing summary: a device with no
-            # routing at all never appears in device_routing, so iterating that
-            # would silently skip exactly the devices worth complaining about.
+            # Walk the *device* list, not the routing summary
             device_routing = routing["device_routing"]
             for device in sorted(topology["devices"], key=lambda d: str(d.get("name") or "")):
                 device_name = str(device.get("name") or "")
@@ -185,12 +150,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify every application host is cabled the way its site demands.
-
-        DC hosts: two links, two *distinct* access-leafs, and the pair used by
-        the row-1 host disjoint from the row-2 host's pair.
-        Cage hosts: two links onto the one cage switch, on distinct ports.
-        """
+        """Verify every application host is cabled the way its site demands."""
         logging.info("=== %s - Step 3: Endpoint Cabling ===", SCENARIO_NAME)
 
         hosts = await fetch_endpoint_cabling(client=async_client_main, branch=scenario_branch)
@@ -272,13 +232,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each application resolves to components, segments and hosts.
-
-        The assertion that matters most is the last one: every on-prem instance
-        names its hosting_device, and a component's two instances never land on
-        the same host. Without that edge the application layer is an island and
-        no amount of fabric data tells you who an outage hits.
-        """
+        """Verify each application resolves to components, segments and hosts."""
         logging.info("=== %s - Step 4: Application Graph ===", SCENARIO_NAME)
 
         applications = await fetch_application_graph(client=async_client_main, branch=scenario_branch)
@@ -353,12 +307,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Every DC and pod on the branch has a design, each pod's design is one of its DC
-        design's pod_templates, and no DC holds more pods than its design's max_pods.
-
-        Every DC on the branch, not only 30_all's three: a DC another suite merged
-        into main is built by the same generators and must keep the same rules.
-        """
+        """Every DC and pod on the branch has a design."""
         logging.info("=== %s - Step 5: Fabric Designs ===", SCENARIO_NAME)
 
         inventory = await fetch_fabric_pools(client=async_client_main, branch=scenario_branch)
@@ -381,11 +330,9 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Every DC pool and every pod pool slice has exactly the family and prefix length
-        generators/fabric_sizing.py derives for its (DC design, pod design) and the DC's
-        underlay_protocol, from the bootstrap designs (fabric_constants.expected_*_pool_slices),
-        and every pod slice sits inside its DC's slice of the same pool.
-        """
+        """Every DC pool and every pod pool slice has exactly the family and prefix length generators/fabric_sizing.py
+        derives for its (DC design, pod design) and the DC's underlay_protocol, from the bootstrap designs
+        (fabric_constants.expected_*_pool_slices), and every pod slice sits inside its DC's slice of the same pool."""
         logging.info("=== %s - Step 6: Fabric Pool Sizes ===", SCENARIO_NAME)
 
         inventory = await fetch_fabric_pools(client=async_client_main, branch=scenario_branch)
@@ -404,11 +351,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """CheckPoolUtilization, run in-process on the settled branch, reports no ERROR
-        and no WARNING: no pool is >= 80 % used and every next allocation is possible.
-
-        The check is targetless and reads every DC and pod on the branch.
-        """
+        """CheckPoolUtilization, run in-process on the settled branch, reports no ERROR and no WARNING."""
         logging.info("=== %s - Step 7: CheckPoolUtilization ===", SCENARIO_NAME)
 
         check = CheckPoolUtilization(branch=scenario_branch, client=async_client_main, params={})

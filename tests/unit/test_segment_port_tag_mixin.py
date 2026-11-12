@@ -1,12 +1,4 @@
-"""Unit tests for SegmentPortTagMixin (generators/topology/segment_ports.py): the segment owns its VLAN rows and the
-ports tagged with them, so add_vxlan_segment and add_app_component_segment run the same reconcile.
-
-The desired ports are the ones derived from the instances of the AppComponents on the segment (and the border service
-ports of a terminating firewall context) plus the ones a deployment requests (``requested_ports``). The rows come
-FIRST, for the devices of the desired ports; then each desired port joins its switch's ROW of the segment (an edge of
-the port's ``capabilities``). Every port edge of the segment is the reconcile's: a missing one is added, one no longer
-desired is removed. Both steps run under one segment lock, rows then tags.
-"""
+"""Unit tests for SegmentPortTagMixin (generators/topology/segment_ports.py)"""
 
 from __future__ import annotations
 

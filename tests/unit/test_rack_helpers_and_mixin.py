@@ -111,9 +111,7 @@ class TestRackRolesHelper:
         assert without_loopback["allocate_loopback"] is False
 
     def test_overlay_only_routing_options(self) -> None:
-        """border_leafs_per_rack() was deleted along with border-leaf's rack-level
-        generation (moved to TopologyDataCenter's fabric_templates) — only
-        overlay_only_routing_options() coverage remains relevant here."""
+        """border_leafs_per_rack() was deleted along with border-leaf's rack-level generation"""
         gen = _build_gen()
         helper = RackRolesHelper(gen)
 
@@ -123,9 +121,7 @@ class TestRackRolesHelper:
 
 
 def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None) -> MagicMock:
-    """Mirror RelatedNode.id, which returns None when unset (unlike .peer.id,
-    which raises ValueError if neither an id nor an hfid is set — see
-    RelatedNode.get()'s docstring)."""
+    """Mirror RelatedNode.id, which returns None when unset"""
     pod_obj = MagicMock()
     pod_obj.loopback_pool = MagicMock(id=loopback_id)
     pod_obj.prefix_pool = MagicMock(id=prefix_id)
@@ -169,12 +165,7 @@ class TestSpineBgpReadinessRole:
 class TestRackMixinAdditional:
     @pytest.mark.asyncio
     async def test_prepare_generation_context_missing_pools(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Pools stay missing across every retry attempt — the rack refuses to generate.
-
-        Carrying on would build devices and cabling with no routing behind them,
-        which looks healthy until you count BGP processes. Raising fails the
-        generator task instead, and nothing has been created yet at this point.
-        """
+        """Pools stay missing across every retry attempt — the rack refuses to generate."""
         gen = _build_gen()
         gen.data["deployment"]["loopback_pool"] = None
         gen.client.get = AsyncMock(return_value=_mock_pod_pools(loopback_id=None, prefix_id=None))
@@ -248,13 +239,7 @@ class TestRackMixinAdditional:
     async def test_prepare_generation_context_refetches_stale_dc_asn_pool(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A stale DC snapshot (no fabric_asn_pool yet) is refetched during the wait.
-
-        The rack can be created in the same object-load as its DC and pod, so
-        its query may predate add_dc's write. Proceeding on it produced devices
-        with no BGP process at all and no failed task to show for it. The pod
-        pools are already visible here, so only the DC is fetched.
-        """
+        """A stale DC snapshot (no fabric_asn_pool yet) is refetched during the wait."""
         gen = _build_gen()
         gen.data["deployment"]["parent"]["fabric_asn_pool"] = None
         gen.client.get = _kind_dispatch(
@@ -309,12 +294,7 @@ class TestRackMixinAdditional:
     async def test_prepare_generation_context_missing_dc_asn_pool_refuses_to_generate(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The DC's fabric_asn_pool never arrives on an eBGP rack — the whole run fails.
-
-        There is no legitimate state in which it is absent (add_dc creates it),
-        so a rack that still cannot see it must not generate devices it will be
-        unable to route. The refusal points at the DC generator, not the pod's.
-        """
+        """The DC's fabric_asn_pool never arrives on an eBGP rack — the whole run fails."""
         gen = _build_gen()
         gen.data["deployment"]["parent"]["fabric_asn_pool"] = None
         gen.client.get = _kind_dispatch(TopologyDataCenter=_mock_dc_pool(asn_id=None))
@@ -345,12 +325,7 @@ class TestRackMixinAdditional:
 
     @pytest.mark.asyncio
     async def test_prepare_generation_context_spine_failure_fails_spine_dependent_rack(self) -> None:
-        """A rack with leafs/tors/access-leafs must not proceed without spine info.
-
-        logger.error() raises GeneratorError in production (FailOnErrorLogger);
-        the mocked logger here does not, so the explicit re-raise is what this
-        asserts on.
-        """
+        """A rack with leafs/tors/access-leafs must not proceed without spine info."""
         gen = _build_gen()
         gen.data["deployment"]["fabric_templates"] = []  # makes _derive_spine_info raise
 
@@ -361,13 +336,7 @@ class TestRackMixinAdditional:
 
     @pytest.mark.asyncio
     async def test_prepare_generation_context_spine_failure_tolerated_for_l2_leaf_only(self) -> None:
-        """An l2-leaf-only rack reads no spine info, so it must not fail on it.
-
-        l2-leafs cable to the local leaf pair and never to a spine — unlike
-        access-leafs, which open an overlay EVPN session straight to the pod's
-        spines. Failing this rack was a false failure; the attributes are left
-        empty and generation continues.
-        """
+        """An l2-leaf-only rack reads no spine info, so it must not fail on it."""
         gen = _build_gen()
         gen.data["deployment"]["fabric_templates"] = []  # makes _derive_spine_info raise
         gen.data["leafs"] = []
@@ -412,9 +381,7 @@ class TestRackMixinAdditional:
         options = RackRolesHelper(gen).build_device_options(allocate_loopback=True)
         assert options["loopback_prefix_length"] == loopback
 
-    # _derive_super_spine_info() was dead code (never called) and was deleted
-    # from RackMixin — see tests/unit/test_rack_parse_and_checksum.py's
-    # TestDeriveSpineInfo for the still-live _derive_spine_info() coverage.
+    # _derive_super_spine_info() was dead code and is gone; _derive_spine_info() is covered elsewhere.
 
 
 class TestPodRowRacks:

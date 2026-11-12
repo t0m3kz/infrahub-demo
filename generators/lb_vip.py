@@ -47,9 +47,8 @@ from .protocols import (
     TopologyCustomerDC,
 )
 
-# What another generator of the same load can still be writing when this run
-# reads it is re-read at most LB_VIP_REREAD.attempts times, LB_VIP_REREAD.delay seconds apart
-# (_await_lb_inputs), after waiting for that generator's run in flight.
+# Inputs another load generator may still be writing are re-read at most LB_VIP_REREAD.attempts times,
+# LB_VIP_REREAD.delay seconds apart (_await_lb_inputs), after waiting for that generator
 _QUERIES = Path(__file__).resolve().parents[1] / "queries/topology/add"
 _SEGMENT_GATEWAYS_QUERY = _QUERIES / "lb_segment_gateways.gql"
 _SERVING_CONTEXTS_QUERY = _QUERIES / "lb_serving_contexts.gql"
@@ -64,22 +63,14 @@ if TYPE_CHECKING:
 
 Edge = tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
 
-# Re-derives a component's application and every application calling it
-# (generators/topology/application_security.py), so it is the re-run for a
-# component whose VIPs moved to another context.
+# Re-derives a component's application and its callers (generators/topology/application_security.py): the re-run when a
+# component's VIPs move to another context
 APP_COMPONENT_GENERATOR = "add_app_component"
 
 
 async def load_balanced_components_in(client: Any, deployment_id: str) -> list[str]:
     """Ids of the load_balanced AppComponents on a segment activated in the customer DC ``deployment_id``.
-
-    Their VIPs and R_server rules sit on the footprint's serving context (the one
-    of the segment in the instance's data center, helpers.lb_vip.instance_footprint).
-    A footprint lists neither its devices nor its components, so the segments
-    activated in it are read first (a segment lists its footprints), then the
-    components on them. A component also on a segment stretched
-    to another data center is re-run too: its VIPs there are idempotent.
-    """
+    A footprint lists no components, so the segments activated in it are read first, then the components on them."""
     segments = await client.filters(kind=ManagedVxlanSegment, customer_deployments__ids=[deployment_id])
     segment_ids = sorted({segment.id for segment in segments})
     if not segment_ids:
@@ -98,41 +89,9 @@ class _ServerRules:
 
 
 class LoadbalancerVipMixin:
-    """VIPs from AppComponent.load_balanced, for AppApplicationGenerator.
-
-    One LoadbalancerVIP per (load_balanced component, port, load balancer
-    context serving the customer deployment of its instances): the VIP /32
-    from the context's VIP range, one pool-member address per instance from
-    the component's segment prefix, the component's health checks. And per
-    VIP the R_server rule, leg /29 -> backend segment on the port, in the
-    context's segment-less policy lb-{context}. All of it tracked by the
-    component's own application run, so a component that is no longer
-    load_balanced (or loses a port or a context) loses its VIPs and R_server
-    rules to that run's delete_unused_nodes. The pools and allocated
-    addresses are untracked: shared by every application on the context or
-    segment, and the allocation identifier returns the same address when a
-    VIP comes back.
-
-    A component whose instances are all in the cloud (is_cloud_component)
-    gets one CloudLoadBalancer in their virtual network instead, with a VIP
-    per port without an address (the cloud assigns it) and the instances'
-    own private addresses as pool members; the load balancer and its VIPs
-    are tracked the same way, the member addresses are the instances' and
-    untracked. No context, VIP range or rule: its callers reach it directly.
-
-    A deployment that moves to another serving context after its applications
-    ran (dedicated <-> shared) re-runs them: add_customer_deployment_dc, the
-    one writer of serving_loadbalancer_context, fans out add_app_component to
-    load_balanced_components_in(deployment) on the relink (LOADBALANCER_CONTEXT
-    in generators/firewall_context.py), and that re-runs each component's
-    application and its callers, whose R_client rules name the VIPs.
-
-    Expects the host class to provide: ``client``, ``logger``,
-    ``wait_for_parent_generators`` (CommonGenerator),
-    ``resource_lock`` and ``attach_refs`` (PoolMixin), ``ensure_prefix_address_pool`` and
-    ``allocate_prefix_address`` (CablingMixin),
-    ``_get_or_create_by_name`` (GetOrCreateByNameMixin) and
-    ``_upsert_policy_rule`` (SegmentFirewallMixin).
+    """VIPs from AppComponent.load_balanced, for AppApplicationGenerator: one LoadbalancerVIP per (component, port,
+    serving context). Tracked by the component's application run; pools and addresses are untracked. A fully cloud
+    component gets a CloudLoadBalancer instead. The host provides the client, logger and helper methods.
     """
 
     client: Any
@@ -146,7 +105,7 @@ class LoadbalancerVipMixin:
         wait_for_parent_generators = CommonGenerator.wait_for_parent_generators
     _get_or_create_by_name: Callable[..., Awaitable[Any]]
 
-    # Between two re-reads (_poll_until_ready); tests replace it.
+    # Between two re-reads (_poll_until_ready); tests replace it
     lb_reread_sleep = staticmethod(asyncio.sleep)
 
     async def _reconcile_load_balancing(
@@ -157,22 +116,10 @@ class LoadbalancerVipMixin:
         *,
         security_profile: str,
     ) -> tuple[dict[str, dict[PortSpec, dict[str, str]]], list[str]]:
-        """The VIP address ids of every on-prem load_balanced component of the
-        run, by component id, port and context name, and the errors (a range,
-        no serving context, ...) of the application's own components.
-
-        The application's own components get their VIPs produced, then the
-        R_server rules of every context they use, one context at a time. An
-        edge target of another application only has its VIP addresses
-        resolved, for this run's R_client rules: the allocation identifier
-        yields the same address its own run puts on the VIP, whichever runs
-        first. What is wrong with such a target is its own run's error, never
-        its callers' (a misconfigured component would fail every one of them);
-        a caller reports only the used port that has no VIP
-        (application_security.py). A cloud component has no entry: its own
-        run writes its CloudLoadBalancer (``security_profile``, the
-        application's, decides the scheme), and nothing is resolved for a
-        cloud edge target.
+        """VIP address ids of every on-prem load_balanced component of the run, by component id, port and context name,
+        and the errors. Own components get their VIPs produced, then the R_server rules per context. An edge target of
+        another application only has its VIP addresses resolved (same identifier, same address); its misconfiguration is
+        its own run's error. A cloud component has no entry.
         """
         own_ids = {component.get("id") for component in components}
         await self._await_lb_inputs(components, edges)
@@ -199,23 +146,10 @@ class LoadbalancerVipMixin:
         return vips, errors
 
     async def _await_lb_inputs(self, components: list[dict[str, Any]], edges: list[Edge]) -> None:
-        """Re-read the segment prefixes and serving contexts a concurrent generator is still writing.
-
-        The load that triggers this run also triggers add_vxlan_segment, which
-        addresses a VXLAN segment (its gateway prefix holds the pool members),
-        and add_customer_deployment_dc, which links a customer DC to its
-        serving context before it allocates the context's VIP range and wires
-        its leg. So this run can read either before it lands. Each one still
-        missing it waits for its owner's run in flight, then all of a kind are
-        re-read together (_reread_until_ready) and the result is written into
-        every dict of them: a segment or deployment shared by two components
-        is read once. Whatever is still missing after the last read is the
-        component's error, as before.
-
-        Only the application's own components need their segment prefix (the
-        pool members); an edge target's contexts are re-read too, its VIPs
-        are this run's R_client rules. A cloud component (no prefix, no
-        context) is never re-read.
+        """Re-read the segment prefixes and serving contexts that add_vxlan_segment and add_customer_deployment_dc may
+        still be writing. Each missing one waits for its owner's run, then all of a kind are re-read together and
+        written into every dict of them. What is still missing afterwards is the component's error. Only own components
+        need the segment prefix; cloud components are never re-read.
         """
         own_ids = {component.get("id") for component in components}
         segments: dict[str, list[dict[str, Any]]] = {}
@@ -266,11 +200,8 @@ class LoadbalancerVipMixin:
         field: str,
         ready: Callable[[dict[str, Any]], bool],
     ) -> None:
-        """Wait for ``owner``'s run in flight for each node of ``dicts`` (by id), then re-read
-        their ``field`` until ``ready``, into every dict of the node.
-
-        One query per read for every node still not ready, at most
-        LB_VIP_REREAD.attempts reads LB_VIP_REREAD.delay seconds apart; no-op without a node.
+        """Wait for ``owner``'s run in flight for each node of ``dicts``, then re-read ``field`` until ``ready``. One
+        query per read, at most LB_VIP_REREAD.attempts reads LB_VIP_REREAD.delay seconds apart; no-op without a node.
         """
         if not dicts:
             return
@@ -304,12 +235,8 @@ class LoadbalancerVipMixin:
         errors: list[str],
         server_rules: dict[str, _ServerRules],
     ) -> dict[PortSpec, dict[str, str]]:
-        """The component's VIP address ids by port and serving context name; with
-        ``produce``, its LoadbalancerVIPs written and its R_server rules queued
-        on server_rules (by context id).
-
-        A VIP is a /32 in the context's tenant namespace (its VIP range's): the
-        rules match it exactly and the border's PBR bypass reads the namespace.
+        """The component's VIP address ids by port and serving context name; with ``produce``, its LoadbalancerVIPs
+        written and R_server rules queued on server_rules. A VIP is a /32 in the context's tenant namespace.
         """
         ports, port_errors = vip_ports(component)
         contexts, context_errors = serving_contexts(component)
@@ -384,12 +311,9 @@ class LoadbalancerVipMixin:
         pools: dict[str, Any],
         errors: list[str],
     ) -> list[str] | None:
-        """The ids of the servers the VIP balances across; None (an error) without a segment prefix.
-
-        A member is the server, not an address. Its address is its primary address; a server without one gets
-        the one it reserves in the component's segment prefix, keyed by (instance, segment), and keeps it as its
-        primary address, so a second component on the host and segment shares it. A server that has one already
-        keeps it, wherever it is.
+        """The ids of the servers the VIP balances across; None (an error) without a segment prefix. A member is the
+        server: its primary address, or one reserved in the segment prefix (keyed by instance and segment) and kept as
+        its primary address.
         """
         fqdn = component_ref(component)
         prefix = member_prefix(segment)
@@ -425,11 +349,8 @@ class LoadbalancerVipMixin:
     async def _cloud_component_vips(
         self, component: dict[str, Any], *, security_profile: str, errors: list[str]
     ) -> None:
-        """Upsert the component's CloudLoadBalancer and its listeners, one per port, tracked by this run.
-
-        No load balancer without its one virtual network. The targets are the instances themselves; what a
-        target is (an instance id, an address) is the provider's template to decide when it renders.
-        """
+        """Upsert the component's CloudLoadBalancer and its listeners (one per port), tracked by this run.
+        Needs its one virtual network; the targets are the instances themselves."""
         ports, port_errors = vip_ports(component)
         network, segments, placement_errors = cloud_placement(component)
         errors.extend([*port_errors, *placement_errors])
@@ -459,9 +380,8 @@ class LoadbalancerVipMixin:
         security_profile: str,
         errors: list[str],
     ) -> dict[str, str] | None:
-        """Upsert the component's CloudLoadBalancer under its name's lock, tracked by this run.
-
-        Returns its id and name, or None (an error) on failure.
+        """Upsert the component's CloudLoadBalancer under its name's lock, tracked; returns its id and name, or None (an
+        error).
         """
         name = cloud_lb_name(component)
         try:
@@ -495,12 +415,9 @@ class LoadbalancerVipMixin:
         vip_ip_id: str | None = None,
         protocol: str | None = None,
     ) -> bool:
-        """Upsert the LoadbalancerVIP of (component, port) on ``load_balancer``, tracked by this run;
-        False (logged) on failure.
-
-        ``load_balancer`` is a context or a CloudLoadBalancer (id and name); a
-        cloud VIP has no ``vip_ip_id``, the cloud assigns its address. ``protocol``
-        is the listener's (http/https on a layer 7 cloud listener), the port's own otherwise.
+        """Upsert the LoadbalancerVIP of (component, port) on ``load_balancer``, tracked; False (logged) on failure.
+        ``load_balancer`` is a context or a CloudLoadBalancer (id and name); a cloud VIP has no ``vip_ip_id``.
+        ``protocol`` is the listener's.
         """
         port_protocol, port_start, _port_end = port
         protocol = protocol or port_protocol
@@ -530,13 +447,8 @@ class LoadbalancerVipMixin:
         return True
 
     async def _reconcile_lb_server_rules(self, rules: _ServerRules, rule_indexes: dict[str, set[int]]) -> None:
-        """The run's R_server rules of one context in its policy lb-{context}, under one lock.
-
-        The policy is shared by every application the context balances, so it
-        is untracked, read once per run and context, and its rule indexes
-        ([policy, index] is unique) are read again once the lock is held; each
-        rule is tracked by this run. The lock is the policy's own, not the
-        boarding run's lb-context-{context}, which only builds the context.
+        """The run's R_server rules of one context in its policy lb-{context}, under one lock. The policy is shared and
+        untracked, read once per run and context; rule indexes are re-read under the lock; each rule is tracked.
         """
         context = rules.context
         context_name = str(context.get("name") or context["id"])

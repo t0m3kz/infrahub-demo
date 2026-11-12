@@ -1,17 +1,4 @@
-"""Unit tests for advanced cabling utilities.
-
-Covers untested classes and methods in generators/helpers/cabling.py:
-- InterfaceSpeedMatcher.extract_speed()         – type string → Gbps int
-- InterfaceSpeedMatcher.group_by_speed()         – matched speed groups
-- CableTypeDetector.detect_cable_type()          – copper/mmf/smf detection
-- ConnectionValidator.validate_plan()            – min/duplicate checks
-- PodCablingStrategy.build_plan()               – pod-to-pod with offset, overflow → CablingPlanError
-- RackCablingStrategy.build_plan()              – offset overflow → CablingPlanError
-- IntraRackMiddleCablingStrategy._create_leaf_pairs()      – even/odd counts
-- IntraRackMiddleCablingStrategy._require_leaf_pair()      – < 2 leafs → CablingPlanError
-- IntraRackMiddleCablingStrategy._connect_tor_to_leaf_pair() – insufficient intfs → CablingPlanError
-- CablingPlanner.build_cabling_plan()           – speed grouping; no groups or a strategy error → CablingPlanError
-"""
+"""Unit tests for advanced cabling utilities."""
 
 from __future__ import annotations
 
@@ -33,9 +20,7 @@ from generators.helpers import (
     RackCablingStrategy,
 )
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_interface(
@@ -79,9 +64,7 @@ def _make_connection(server_intf: str, switch_name: str, switch_intf: str) -> An
     return conn
 
 
-# ---------------------------------------------------------------------------
 # InterfaceSpeedMatcher
-# ---------------------------------------------------------------------------
 
 
 class TestInterfaceSpeedMatcher:
@@ -153,9 +136,7 @@ class TestInterfaceSpeedMatcher:
         assert InterfaceSpeedMatcher.group_by_speed(servers, switches) == {}
 
 
-# ---------------------------------------------------------------------------
 # CableTypeDetector
-# ---------------------------------------------------------------------------
 
 
 class TestCableTypeDetector:
@@ -175,9 +156,7 @@ class TestCableTypeDetector:
         assert CableTypeDetector.detect_cable_type(intf1, intf2) == expected
 
 
-# ---------------------------------------------------------------------------
 # ConnectionValidator
-# ---------------------------------------------------------------------------
 
 
 class TestConnectionValidator:
@@ -215,9 +194,7 @@ class TestConnectionValidator:
         assert "Duplicate switch" in msg
 
 
-# ---------------------------------------------------------------------------
 # PodCablingStrategy
-# ---------------------------------------------------------------------------
 
 
 class TestPodCablingStrategy:
@@ -235,13 +212,7 @@ class TestPodCablingStrategy:
         assert all(isinstance(c, tuple) and len(c) == 2 for c in plan)
 
     def test_pod_plan_with_offset(self) -> None:
-        """Offset shifts which top interface is used per bottom device.
-
-        PodCablingStrategy.build_plan appends (bottom_intf, top_intf).
-        top_intf_index = bottom_index + cabling_offset
-        offset=0: leaf-01→Eth1, leaf-02→Eth2
-        offset=1: leaf-01→Eth2, leaf-02→Eth3
-        """
+        """Offset shifts which top interface is used per bottom device."""
         planner = _make_planner(
             bottom_devices={"leaf-01": ["Eth1", "Eth2"], "leaf-02": ["Eth1", "Eth2"]},
             top_devices={"spine-01": ["Eth1", "Eth2", "Eth3"]},
@@ -256,8 +227,7 @@ class TestPodCablingStrategy:
         assert [top.name.value for _, top in plan_offset1] == ["Eth2", "Eth3"]
 
     def test_pod_offset_past_last_top_port_raises_instead_of_wrapping(self) -> None:
-        """offset=1 with 2 top ports puts leaf-02 on index 2. The old modulo wrapped
-        it back onto Eth1 — the port another pod's spine already uses."""
+        """offset=1 with 2 top ports puts leaf-02 on index 2."""
         planner = _make_planner(
             bottom_devices={"leaf-01": ["Eth1"], "leaf-02": ["Eth1"]},
             top_devices={"spine-01": ["Eth1", "Eth2"]},
@@ -286,9 +256,7 @@ class TestPodCablingStrategy:
         assert plan == []
 
 
-# ---------------------------------------------------------------------------
 # RackCablingStrategy – offset overflow
-# ---------------------------------------------------------------------------
 
 
 class TestRackCablingStrategyOverflow:
@@ -321,15 +289,12 @@ class TestRackCablingStrategyOverflow:
         assert len(plan) == 2
 
 
-# ---------------------------------------------------------------------------
 # ChainCablingStrategy
-# ---------------------------------------------------------------------------
 
 
 class TestChainCablingStrategy:
     def test_one_to_one_with_two_ports_each_creates_two_parallel_cables(self) -> None:
-        """A single index-paired pair uses every mutually available port
-        as its own parallel (redundant) cable between the SAME two devices."""
+        """A single index-paired pair uses every mutually available port as its own parallel."""
         planner = _make_planner(
             bottom_devices={"fw-01": ["eth1", "eth2"]},
             top_devices={"bl-01": ["Eth1/25", "Eth1/26"]},
@@ -344,12 +309,7 @@ class TestChainCablingStrategy:
         assert top_names == {"Eth1/25", "Eth1/26"}
 
     def test_two_by_two_pairs_by_index_not_any_to_any(self) -> None:
-        """2 bottom x 2 top devices form TWO fully independent chains —
-        fw-01<->bl-01 and fw-02<->bl-02 — never fw-01<->bl-02. This is the
-        key difference from RackCablingStrategy's any-to-any mesh: multiple
-        independent redundant paths (e.g. border-leaf<->fw1<->lb1<->...<->
-        border-leaf and border-leaf<->fw2<->lb2<->...<->border-leaf) must
-        never cross-cable between path 1's and path 2's devices."""
+        """2 bottom x 2 top devices form TWO fully independent chains — fw-01<->bl-01 and fw-02<->bl-02."""
         planner = _make_planner(
             bottom_devices={"fw-01": ["eth1", "eth2"], "fw-02": ["eth1", "eth2"]},
             top_devices={"bl-01": ["p1", "p2"], "bl-02": ["p1", "p2"]},
@@ -362,9 +322,7 @@ class TestChainCablingStrategy:
         assert pairs == {("fw-01", "bl-01"), ("fw-02", "bl-02")}
 
     def test_five_ports_each_uses_all_of_them_on_the_same_pair(self) -> None:
-        """1x1 with 5 ports each: all 5 become parallel cables between the
-        same two devices — no cap at "1 per neighbor" like RackCablingStrategy,
-        since there IS only one neighbor per side in an index-paired chain."""
+        """1x1 with 5 ports each: all 5 become parallel cables between the same two devices."""
         planner = _make_planner(
             bottom_devices={"fw-01": [f"p{i}" for i in range(1, 6)]},
             top_devices={"bl-01": [f"p{i}" for i in range(1, 6)]},
@@ -379,10 +337,7 @@ class TestChainCablingStrategy:
         assert len(top_keys) == len(set(top_keys)) == 5
 
     def test_fewer_devices_on_one_side_reused_round_robin(self) -> None:
-        """1 border-leaf shared by 2 independent firewall paths (2 firewalls,
-        each with its own dedicated port pair on the border-leaf) — the
-        border-leaf is reused round-robin (index % 1 == 0 for both pairs),
-        but each pair still gets its OWN distinct ports on the border-leaf."""
+        """1 border-leaf shared by 2 independent firewall paths (2 firewalls."""
         planner = _make_planner(
             bottom_devices={"fw-01": ["eth1", "eth2"], "fw-02": ["eth1", "eth2"]},
             top_devices={"bl-01": ["p1", "p2", "p3", "p4"]},
@@ -397,9 +352,7 @@ class TestChainCablingStrategy:
         assert pairs == {("fw-01", "bl-01"), ("fw-02", "bl-01")}
 
     def test_mismatched_port_counts_capped_by_the_smaller_side(self) -> None:
-        """1x1 pair, bottom has 3 ports but top only has 2 — only 2
-        parallel cables possible (capped by the smaller side); bottom's
-        3rd port stays unused, no error (partial connectivity is valid)."""
+        """1x1 pair, bottom has 3 ports but top only has 2 — only 2 parallel cables possible."""
         planner = _make_planner(
             bottom_devices={"fw-01": ["p1", "p2", "p3"]},
             top_devices={"bl-01": ["p1", "p2"]},
@@ -411,10 +364,7 @@ class TestChainCablingStrategy:
         assert all(b.name.value != "p3" for b, _ in plan)
 
     def test_shared_device_exhausted_by_earlier_pair_raises(self) -> None:
-        """2 firewalls (bottom) sharing 1 border-leaf (top) with only 1
-        port: the first pair (fw-01<->bl-01) consumes bl-01's only port,
-        leaving the second pair (fw-02<->bl-01) with zero free ports on
-        the border-leaf side — fw-02 would end up uncabled, so the plan fails."""
+        """2 firewalls (bottom) sharing 1 border-leaf (top) with only 1 port: the first pair."""
         planner = _make_planner(
             bottom_devices={"fw-01": ["eth1"], "fw-02": ["eth1"]},
             top_devices={"bl-01": ["Eth1/25"]},
@@ -430,9 +380,7 @@ class TestChainCablingStrategy:
         assert strategy.build_plan() == []
 
 
-# ---------------------------------------------------------------------------
 # IntraRackMiddleCablingStrategy
-# ---------------------------------------------------------------------------
 
 
 class TestIntraRackMiddleCreateLeafPairs:
@@ -521,9 +469,7 @@ def _make_speed_interface(name: str, device: str, intf_type: str) -> Any:
     return _make_interface(name, device, intf_type)
 
 
-# ---------------------------------------------------------------------------
 # CablingPlanner.build_cabling_plan (speed-aware)
-# ---------------------------------------------------------------------------
 
 
 class TestBuildSpeedAwarePlan:
@@ -536,9 +482,7 @@ class TestBuildSpeedAwarePlan:
             CablingPlanner(bottom, top).build_cabling_plan(scenario="rack")
 
     def test_strategy_error_in_a_speed_group_propagates(self) -> None:
-        """Regression: build_cabling_plan used to catch the strategy's CablingPlanError,
-        log a warning and drop the speed group, so the devices stayed uncabled on a
-        green run. Offset 2 on a 2-port spine must fail the whole plan."""
+        """Regression: build_cabling_plan used to catch the strategy's CablingPlanError."""
         bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
         top = [
             _make_speed_interface("Eth1", "spine-01", "100GBASE-LR4"),

@@ -1,30 +1,6 @@
 """Validate the colocation tree: what each zone and virtual colocation hosts, and names.
 
-The schema holds the shape (a zone and a virtual colocation are children of a metro); what it cannot hold is held
-here, on every metro, zone and virtual colocation at once. A footprint names no zone: it is served by every zone of its
-metro that has a firewall pair (generators/topology/customer_colocation.py), so there is no placement to check.
-
-Each rule is a small function over the cleaned query result that returns its findings, so a new rule is one more
-entry in ``RULES``:
-
-1. Template kind. A zone is our own hardware in our own cage, so every ``fabric_templates`` entry is a
-   TemplateDcimPhysicalDevice; a virtual colocation is a provider-hosted presence (Equinix Network Edge, Megaport
-   MCR), so every entry is a TemplateCloudNetworkAppliance (its devices are CloudNetworkAppliance, not
-   DcimVirtualDevice). The peer is CoreObjectTemplate, so the schema accepts either.
-2. Unique names. Metro, zone and virtual colocation names are unique across all three kinds: they share the
-   device-name space (a zone FR2 names ``eg-fr201``) and the pool-name space.
-
-Design rules (``design`` is optional: a zone, virtual colocation or metro without one is sized with the generator's
-fixed fallback, and is only held to these rules where the rule names the design):
-
-3. Kit needs a design. A zone or virtual colocation that declares ``fabric_templates`` has a ``design``: the design
-   is the envelope its pools are sized for.
-4. Kit within the envelope. The quantities of a role, summed over the ``fabric_templates`` entries, stay within the
-   design's ``max_edges`` (edge), ``max_firewalls`` (firewall) or ``max_load_balancers`` (load-balancer).
-5. Zone design in the metro envelope. When both the metro and the zone (or virtual colocation) have a design, the
-   zone's design is one of the metro design's ``zone_templates``.
-6. Zones within the metro envelope. A metro with a design holds at most the design's ``max_zones`` zones and
-   virtual colocations together.
+Each rule is a function over the cleaned query result; a new rule is one more entry in ``RULES``.
 """
 
 from __future__ import annotations
@@ -100,8 +76,7 @@ def template_kind_findings(cleaned: dict[str, Any]) -> list[Finding]:
 
 
 def unique_name_findings(cleaned: dict[str, Any]) -> list[Finding]:
-    """Rule 2: metro, zone and virtual colocation names are unique across the three kinds (case-insensitive: the
-    device and pool names are lower-cased)."""
+    """Rule 2: metro, zone and virtual colocation names are unique across the three kinds (case-insensitive)."""
     by_name: dict[str, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
     for kind in NAMESPACED_KINDS:
         for node in cleaned.get(kind) or []:
@@ -242,8 +217,7 @@ RULES: tuple[Callable[[dict[str, Any]], list[Finding]], ...] = (
 
 
 class CheckColocationPlacement(InfrahubCheck):
-    """Zones host physical kit, virtual colocations virtual kit; colocation names are unique; kit fits the design
-    envelope of its zone and metro."""
+    """Zones host physical kit, virtual colocations virtual kit; names are unique; kit fits the design envelope."""
 
     query = "colocation_placement"
 

@@ -1,9 +1,6 @@
-"""What a Proposed Change touches, in operator terms: the devices, the links, the firewall rules and the network
-segments, read from the data diff and the rows of change_request_facts.gql. Pure: no I/O.
-
-``build_facts`` is the one reader; utils/change_text.py caps the lists and renders them through templates/change/. A
-removed object is gone from the branch, so it is described from its diff label only. A row the diff does not list is
-not described (the ids asked for come from the diff).
+"""What a Proposed Change touches (devices, links, firewall rules, segments), from the data diff and
+change_request_facts.gql rows. Pure: no I/O; utils/change_text.py renders it. A removed object is described by its diff
+label.
 """
 
 from __future__ import annotations
@@ -118,7 +115,7 @@ class ChangeFacts:
     segments: tuple[Segment, ...] = ()
 
 
-# --- readers of cleaned rows ----------------------------------------------------------------------------------------
+# --- readers of cleaned rows ---
 
 
 def _name(value: Any) -> str:
@@ -156,11 +153,11 @@ def _config_action(artifacts: Sequence[ArtifactChange]) -> str:
     return CONFIG_UPDATED
 
 
-# --- families -------------------------------------------------------------------------------------------------------
+# --- families ---
 
 
 def _devices(rows: Iterable[Mapping[str, Any]], artifacts: Sequence[ArtifactChange]) -> tuple[DeviceChange, ...]:
-    """Every artifact target, with its place from the branch when it still exists (a removed device is not there)."""
+    """Every artifact target, with its place when it still exists on the branch."""
     by_name = {str(row.get("name")): row for row in rows if isinstance(row, Mapping)}
     configs: dict[str, list[ArtifactChange]] = defaultdict(list)
     for artifact in artifacts:
@@ -185,7 +182,7 @@ NOISE_ATTRIBUTES = frozenset({"display_label", "human_friendly_id"})
 
 
 def _changed(o: ObjectDiff) -> tuple[str, ...]:
-    """What an update changed: ``attribute previous -> new`` and the peers it dropped (nothing for the other statuses)."""
+    """What an update changed: ``attribute previous -> new`` and dropped peers."""
     if o.status != UPDATED:
         return ()
     values = [f"{n} {p or '-'} -> {v or '-'}" for n, (p, v) in sorted(o.changes.items()) if n not in NOISE_ATTRIBUTES]
@@ -198,7 +195,7 @@ def _first(object_diff: ObjectDiff, relationship: str) -> str:
 
 
 def _address(label: str) -> str:
-    """The address or prefix of an IPAM label (``10.0.0.1/24 - default``: the namespace follows)."""
+    """The address or prefix of an IPAM label (``10.0.0.1/24 - default``)."""
     return label.split(" - ", 1)[0]
 
 
@@ -289,8 +286,9 @@ def _segment(o: ObjectDiff) -> Segment:
 def build_facts(
     rows: Mapping[str, Any], artifacts: Sequence[ArtifactChange], objects: Sequence[ObjectDiff]
 ) -> ChangeFacts:
-    """The facts of the change: ``rows`` are the cleaned roots of change_request_facts.gql (the place of the devices,
-    may be empty), ``objects`` the data diff read with its values."""
+    """The facts of the change from the cleaned ``rows`` of change_request_facts.gql (may be empty) and the diff
+    ``objects``.
+    """
     ordered = sorted(objects, key=lambda o: (_order(o.status), o.kind, o.label))
     rules = (_rule(o) for o in ordered if o.kind == RULE_KIND)
     return ChangeFacts(

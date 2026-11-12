@@ -17,25 +17,9 @@ _FAILED_PARENT_STATES = [TaskState.FAILED, TaskState.CRASHED, TaskState.CANCELLE
 
 
 class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
-    """Extended InfrahubGenerator with fan-out/orchestration helpers.
-
-    deployment_id/fabric_name are required, set in generate(); pod_name is
-    optional (pod/rack generators only). ``self.logger.error()`` raises
-    GeneratorError (task fails); internal helpers raise RuntimeError for
-    missing prerequisites; pure helpers raise ValueError for bad inputs;
-    loop iterations warn+continue on one bad item unless it invalidates
-    the whole output.
-
-    Domain logic lives in dedicated mixins, each generator composing exactly
-    the ones it needs alongside CommonGenerator — PoolMixin (resource pools
-    + the lock that protects concurrent pool allocation), DeviceMixin
-    (device creation), CablingMixin (device-to-device cabling), RoutingMixin
-    (BGP/OSPF underlay+overlay). Not every generator needs all four (e.g.
-    circuit.py/segment.py need none of them; dc.py/pod.py/rack.py need all
-    four; endpoint.py needs Pool+Cabling only) — see each generator's own
-    class bases.
-    Fan-out/orchestration (run_generator, wait_for_parent_generator_and_refetch)
-    stays here since it's generator-lifecycle plumbing, not domain logic.
+    """Extended InfrahubGenerator with fan-out/orchestration helpers. deployment_id/fabric_name are set in generate();
+    pod_name is optional. ``self.logger.error()`` raises GeneratorError (task fails). Domain logic lives in mixins
+    (PoolMixin, DeviceMixin, CablingMixin, RoutingMixin) that each generator composes as needed.
     """
 
     deployment_id: str = ""
@@ -44,16 +28,11 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
     logger: Any
 
     def fail(self, message: str) -> NoReturn:
-        """Log ``message`` as an error and raise it: the run is a failed task.
-
-        self.logger.error already raises under the generator's fail-on-error
-        logger; the explicit raise keeps that true for any logger (tests use
-        MagicMock loggers) and tells the type checker the caller does not continue.
-        """
+        """Log ``message`` as an error and raise it, so the run is a failed task under any logger."""
         self.logger.error(message)
         raise GeneratorError(message)
 
-    # Shared jittered exponential backoff for generator retry loops.
+    # Shared jittered exponential backoff for generator retry loops
     _retry_delay = staticmethod(retry_delay)
 
     @staticmethod
@@ -67,18 +46,8 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
         kind: type[Any],
         fallback_name: str | None = None,
     ) -> Any:
-        """Resolve a pool reference to an SDK node object.
-
-        Accepts:
-        - SDK node object (CoreIPAddressPool/CoreIPPrefixPool) → returned as-is
-        - Pool ID string → resolved via client.get(id=...)
-        - None + fallback_name → resolved via client.get(name__value=fallback_name)
-        - None + no fallback_name → returns None (pool disabled)
-
-        This avoids redundant client.get() calls when pool IDs are already
-        available from GraphQL query data. Lives here (not PoolMixin) since
-        DeviceMixin/CablingMixin need it for device/P2P IP allocation but have
-        nothing to do with PoolMixin's own pool creation/locking logic.
+        """Resolve a pool reference to an SDK node. An SDK node is returned as-is; an id is fetched by id; None +
+        fallback_name is fetched by name; None alone returns None (pool disabled).
         """
         cache = getattr(self, "_pool_cache", None)
         if cache is None:
@@ -103,15 +72,8 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
         return provided
 
     async def run_generator(self, generator_name: str, node_ids: list[str], *, wait: bool = True) -> None:
-        """Run another generator definition for the given nodes.
-
-        Used for parent-to-child fan-out (DC -> pods, pod -> racks) instead of
-        an `updated` event trigger. wait=True blocks until the child task
-        completes, so it always sees the parent's just-written data.
-        wait=False fires without blocking (a cascade generator's terminal
-        fan-out, e.g. dc_pod_cascade -> pod_rack_cascade). No-op if node_ids
-        is empty.
-        """
+        """Run another generator definition for the given nodes (parent-to-child fan-out).
+        wait=True blocks until the child completes; wait=False fires without blocking. No-op for empty node_ids."""
         if not node_ids:
             return
 
@@ -149,26 +111,16 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
     async def wait_for_parent_generator_and_refetch(
         self, generator_names: str | Iterable[str], parent_id: str
     ) -> dict | None:
-        """If any of the parent's own bootstrap generators is currently running
-        for parent_id, wait for it and return freshly re-collected data; else None.
-
-        Used by a cascade generator that may run concurrently with the
-        parent's own bootstrap (e.g. add_dc) before its writes have landed.
-        See wait_for_parent_generators.
+        """If a parent's own bootstrap generator is running for parent_id, wait for it and return re-collected data;
+        else None.
         """
         if not await self.wait_for_parent_generators(generator_names, parent_id):
             return None
         return await self.collect_data()
 
     async def wait_for_parent_generators(self, generator_names: str | Iterable[str], parent_id: str) -> bool:
-        """Wait for every run of ``generator_names`` in flight for parent_id; True when there was one.
-
-        Checks for the parent's own generator tasks (other generator
-        definitions, by title + related_node) — never this generator's own
-        task, so it can't deadlock against itself. One task query covers
-        every name; a name with nothing in flight whose latest run failed
-        logs an error instead. For a caller that re-reads only what it
-        waited for, not the whole query (wait_for_parent_generator_and_refetch).
+        """Wait for every run of ``generator_names`` in flight for parent_id; True when there was one. Never waits on
+        this generator's own task. A name with nothing in flight whose latest run failed logs an error.
         """
         names = [generator_names] if isinstance(generator_names, str) else list(generator_names)
         tasks = await self.client.task.filter(
@@ -193,9 +145,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                 )
                 in_flight.extend(running)
                 continue
-            # Parent might have already finished in a terminal failed state.
-            # Detect a fresh failure and fail-fast with a clear error instead of
-            # continuing and surfacing secondary follow-up errors downstream.
+            # The parent may already have failed: fail fast with a clear error instead of secondary errors downstream
             latest_failed_ts = max(
                 (_task_ts(task) for task in matching if task.state in _FAILED_PARENT_STATES), default=None
             )

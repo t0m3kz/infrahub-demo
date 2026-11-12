@@ -61,8 +61,7 @@ class TestPlacementFragment:
         fragments: dict[str, FragmentDefinitionNode],
         prefix: tuple[str, ...] = (),
     ) -> set[tuple[str, ...]]:
-        """Every field path below ``selections`` as the cleaned data names it (inline fragments merged, named
-        spreads resolved from ``fragments``)."""
+        """Every field path below ``selections`` as the cleaned data names it."""
         found: set[tuple[str, ...]] = set()
         for selection in selections:
             if isinstance(selection, FragmentSpreadNode):
@@ -108,8 +107,7 @@ class TestPlacementFragment:
         return found
 
     def _recorded_reads(self, kind: str) -> set[tuple[str, ...]]:
-        """The key paths below a SecurityTag that component_coverage reads for one instance of ``kind``, host
-        cabled through a plain port and a LAG member (port-channel)."""
+        """The key paths below a SecurityTag that component_coverage reads for one instance of ``kind``."""
         nics = [
             _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet10"),
             _nic("srv-web", "eno2", "dc1-leaf-01", "Ethernet20", lag="port-channel20"),
@@ -124,8 +122,7 @@ class TestPlacementFragment:
 
     @pytest.mark.parametrize("kind", sorted(HOST_FRAGMENT))
     def test_the_fragment_selects_every_key_component_coverage_reads(self, root_dir: Path, kind: str) -> None:
-        """Every key the coverage reads below a tag must be selected: the instance's own fields and the inline
-        fragment of ITS kind (a path selected only for another kind does not count), the rest by the two fragments."""
+        """Every key the coverage reads below a tag must be selected:"""
         placement = self._fragment(root_dir, "SecurityTagPlacementFields").selection_set.selections
         shared = self._fragment(root_dir, "SecurityTagGroupPolicyFields").selection_set.selections
         instance = self._below(placement, "components", "instances")
@@ -176,8 +173,7 @@ class TestPlacementFragment:
         assert found == [list(ENDPOINT_NIC_ROLES)] * 3, "one filter per host kind"
 
     def test_the_nic_block_is_one_fragment_spread_under_a_field_in_each_host_branch(self, root_dir: Path) -> None:
-        """HostNicFields is the single NIC selection: spread as ``interfaces(...) { edges { node { ...F } } }`` of
-        each host kind, so the three branches cannot drift."""
+        """HostNicFields is the single NIC selection:"""
         placement = self._fragment(root_dir, "SecurityTagPlacementFields").selection_set.selections
         instance = self._below(placement, "components", "instances")
         spread_in: list[str] = []
@@ -195,8 +191,7 @@ class TestPlacementFragment:
         ]
 
     def test_no_named_spread_sits_directly_under_an_inline_fragment(self, root_dir: Path) -> None:
-        """``... on X { ...F }`` resolves to nulls on a live Infrahub (commit 7a38de0e); a spread under a field
-        inside the inline fragment (``node { ...F }``) works. Holds for every fragment of the file."""
+        """A named spread directly under an inline fragment resolves to nulls; under a field it works."""
         offenders = [
             f"{name}: ... on {inline.type_condition.name.value} {{ ...{spread.name.value} }}"
             for name, definition in self._fragments(root_dir).items()

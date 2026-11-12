@@ -1,15 +1,4 @@
-"""Transforms: customer deployment / application → orchestrator delivery manifest.
-
-Two query shapes, four topology kinds (TopologyCustomerDC/Colocation/Office/Cloud)
-sharing one query (topology_orchestrator_routing_data.gql) and one AppApplication
-query (application_orchestrator_routing_data.gql). Each artifact_definition targets
-one group (topology_ansible, topology_github_actions, ..., application_argocd) whose
-membership is maintained by generators/topology/orchestrator_routing.py — the
-transform itself only picks the builder for its own orchestrator, ignoring members
-whose infrastructure_orchestrator/application_orchestrator field has since changed
-(renders an empty/placeholder manifest rather than erroring, since the artifact
-target group can lag one generator run behind the field).
-"""
+"""Transforms: customer deployment / application → orchestrator delivery manifest."""
 
 from __future__ import annotations
 
@@ -53,9 +42,7 @@ def _deployment_parent_name(deployment: dict[str, Any]) -> str:
     return parent.get("name", "")
 
 
-# ---------------------------------------------------------------------------
 # Topology (customer deployment) manifest builders
-# ---------------------------------------------------------------------------
 
 
 def _topology_ansible(deployment: dict[str, Any]) -> str:
@@ -152,9 +139,7 @@ class TopologyOrchestratorGitHubActions(_TopologyOrchestratorTransform):
     orchestrator = "github_actions"
 
 
-# ---------------------------------------------------------------------------
 # Application manifest builders
-# ---------------------------------------------------------------------------
 
 
 def _application_org_id(application: dict[str, Any]) -> str:

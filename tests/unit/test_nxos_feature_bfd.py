@@ -1,9 +1,4 @@
-"""Unit tests for templates/configs/common/cisco_nxos_feature_bfd.j2.
-
-NX-OS rejects `bfd` under a BGP neighbor or peer-session template unless
-`feature bfd` is enabled, so the device templates must emit it exactly when
-cisco_nxos_bgp.j2 renders a `bfd` line.
-"""
+"""Unit tests for templates/configs/common/cisco_nxos_feature_bfd.j2."""
 
 from __future__ import annotations
 

@@ -1,24 +1,4 @@
-"""Unit tests for ColocationZoneGenerator and VirtualColocationGenerator
-(generators/topology/colocation_fabric.py).
-
-A zone (the cage, TopologyColocationZone) and a virtual colocation (a provider-hosted
-presence, TopologyVirtualColocation) declare ``fabric_templates`` and get devices,
-pools and EVPN objects. One base class holds the flow; the two subclasses differ in
-class attributes only, so the flow is tested once against the zone and each subclass
-gets its own tests for what differs (root key, node kind, template gating, no cabling).
-
-What the demo data depends on being exactly right:
-
-- which fabric_templates entries are usable, and that a bad one warns rather than
-  failing the whole run (FailOnErrorLogger turns error() into a task failure);
-- the pool names and their KINDS, since create_devices() resolves
-  "{zone}-loopback-pool" and hands it to allocate_next_ip_address(), which needs an
-  address pool, not a prefix pool;
-- the device names: data/demos/30_all/08_interconnects/ references "eg-fr201" by name,
-  and the zone (or virtual colocation) NAME is in the device name;
-- the metro stays the one EVPN Multi-Site site: the AS is shared per metro and
-  attached to the METRO, whichever zone or virtual colocation runs.
-"""
+"""Unit tests for ColocationZoneGenerator and VirtualColocationGenerator (generators/topology/colocation_fabric.py)."""
 
 from __future__ import annotations
 
@@ -195,9 +175,7 @@ class TestTemplateKindGating:
 
 
 class TestUncablableServiceEntries:
-    """_drop_uncablable_service_entries: a physical firewall/load-balancer entry is only usable if some physical
-    edge template in the same zone exposes a same-named port role, else create_devices() would build a real HA
-    pair that create_chain_cabling then fails on, with the appliance already left behind."""
+    """A service entry no edge template in the zone can cable is dropped before create_devices builds its HA pair."""
 
     def test_service_role_with_no_matching_edge_port_is_dropped(self) -> None:
         """N9K-C9316D-GX_EDGE has `firewall` ports but no `load-balancer` ports."""
@@ -374,8 +352,7 @@ class TestGenerateEntry:
 
     @pytest.mark.asyncio
     async def test_steps_run_in_dependency_order(self) -> None:
-        """Ordering is load-bearing: cabling resolves interfaces by device name, EVPN needs the edges' loopbacks,
-        and the edge pair needs the overlay processes EVPN returns."""
+        """Ordering is load-bearing: cabling resolves interfaces by device name, EVPN needs the edges' loopbacks."""
         gen = _make_generator()
         calls: list[str] = []
         gen._ensure_fabric_pools = AsyncMock(side_effect=lambda **_: calls.append("pools"))
@@ -460,8 +437,7 @@ class TestVirtualColocationFlow:
 
     @pytest.mark.asyncio
     async def test_edges_are_virtual_evpn_still_runs_and_no_pair_or_vlan_pool_is_made(self) -> None:
-        """AM-NE: virtual kit registers no physical names, so no VLAN pool and an empty edge list for the pair;
-        EVPN still runs."""
+        """AM-NE: virtual kit registers no physical names, so no VLAN pool and an empty edge list for the pair."""
         gen = _make_generator(VirtualColocationGenerator, fabric="am-ne")
         self._steps(gen)
 

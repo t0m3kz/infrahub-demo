@@ -1,8 +1,4 @@
-"""Unit tests for BGP peer group building and BGP profile lookup.
-
-Tests verify peer group assignment, route reflector client detection
-and BGP profile selection from session data.
-"""
+"""Unit tests for BGP peer group building and BGP profile lookup."""
 
 import pytest
 
@@ -10,9 +6,7 @@ from tests.unit.bgp_transforms_helpers import _make_peering
 from transforms.helpers.bgp import _build_peer_groups, get_bgp_profile
 from utils.fabric_roles import RR_ROLES
 
-# ============================================================================
 # _build_peer_groups
-# ============================================================================
 
 
 def _session(
@@ -116,14 +110,7 @@ class TestBuildPeerGroups:
 
     @pytest.mark.parametrize("role", ["spine", "super-spine", "hyper-spine", "border-spine"])
     def test_ebgp_overlay_relay_sets_next_hop_unchanged(self, role: str) -> None:
-        """A relaying tier must not rewrite the EVPN next-hop.
-
-        Under ebgp-ebgp the spine re-advertises EVPN routes, and normal eBGP
-        behaviour is to replace the next-hop with its own address. A spine has
-        no `interface nve1`, so remote VTEPs would build a VXLAN tunnel to a
-        device that cannot terminate it — sessions up, routes present, traffic
-        silently blackholed (RFC 8365 §5.1.2.1).
-        """
+        """A relaying tier must not rewrite the EVPN next-hop."""
         sessions = [
             _session(session_type="EBGP", ttl=255, name="eo1"),
             _session(session_type="EBGP", ttl=255, name="eo2"),
@@ -133,24 +120,25 @@ class TestBuildPeerGroups:
 
     @pytest.mark.parametrize("role", ["spine", "super-spine", "hyper-spine", "border-spine"])
     def test_ebgp_overlay_relay_retains_all_route_targets(self, role: str) -> None:
-        """A spine holds no VRF and no L2VNI, so it has no import route-target
-        and would otherwise discard the EVPN NLRI it exists to relay."""
+        """A spine holds no VRF and no L2VNI, so it has no import route-target and would otherwise discard the EVPN NLRI
+        it exists to relay.
+        """
         sessions = [_session(session_type="EBGP", ttl=255, name="eo1")]
         pgs = _build_peer_groups(sessions, device_role=role)
         assert pgs[0]["retain_route_target_all"] is True
 
     @pytest.mark.parametrize("role", ["leaf", "border-leaf", "tor", "access-leaf"])
     def test_ebgp_overlay_vtep_does_not_set_relay_knobs(self, role: str) -> None:
-        """A VTEP originates its own routes with itself as the next-hop, so
-        preserving an inherited next-hop there would be wrong."""
+        """A VTEP originates its own routes with itself as the next-hop."""
         sessions = [_session(session_type="EBGP", ttl=255, name="eo1")]
         pgs = _build_peer_groups(sessions, device_role=role)
         assert pgs[0]["next_hop_unchanged"] is False
         assert pgs[0]["retain_route_target_all"] is False
 
     def test_ebgp_overlay_relay_knobs_default_off_without_a_role(self) -> None:
-        """No role given (the _build_peer_groups default) must not silently
-        enable relay behaviour on a device that may be a VTEP."""
+        """No role given (the _build_peer_groups default) must not silently enable relay behaviour on a device that may
+        be a VTEP.
+        """
         sessions = [_session(session_type="EBGP", ttl=255, name="eo1")]
         pgs = _build_peer_groups(sessions)
         assert pgs[0]["next_hop_unchanged"] is False
@@ -289,9 +277,7 @@ class TestBuildPeerGroups:
         assert sessions[1].get("remote_as_from_peer_group") is True
 
 
-# ============================================================================
 # get_bgp_profile (integration)
-# ============================================================================
 
 
 class TestGetBgpProfile:

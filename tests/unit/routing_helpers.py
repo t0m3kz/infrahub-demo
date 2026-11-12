@@ -22,17 +22,12 @@ def make_vrf(zone: Mapping[str, Any], deployment: str = "fixture-deployment") ->
 
 
 def in_vrf(vrf: Mapping[str, Any], *circuits: Mapping[str, Any]) -> dict[str, Any]:
-    """The cleaned capabilities that put an interface in ``vrf`` (a ``make_vrf`` dict), with any session ``circuits``.
-
-    An interface's VRF is the ManagedVRF among its capabilities, selected under the alias ``zone_capabilities``
-    (queries/fragments/routing_zone.gql); utils/routing_domain.py ``interface_vrf`` reads it. Spread it into an
-    interface dict: ``{"name": ..., **in_vrf(make_vrf(zone))}``."""
+    """The cleaned capabilities that put an interface in ``vrf`` (a ``make_vrf`` dict), with any session ``circuits``."""
     return {"zone_capabilities": [{**vrf, "typename": "ManagedVRF"}, *circuits]}
 
 
 def svi_row(vlan_id: int) -> dict[str, Any]:
-    """The cleaned VLAN row a segment SVI is a member of (its ``zone_capabilities`` entry), for ``in_vrf``'s extras:
-    ``in_vrf(vrf, svi_row(100))``. The VLAN of the SVI is the row's, not the number in its name."""
+    """The cleaned VLAN row a segment SVI is a member of (its ``zone_capabilities`` entry), for ``in_vrf``'s extras."""
     return {"typename": "ManagedSegmentVlan", "id": f"row-{vlan_id}", "vlan_id": vlan_id}
 
 

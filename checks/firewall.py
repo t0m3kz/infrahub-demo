@@ -10,11 +10,7 @@ from .common import validate_context_members, validate_exchange_gateways, valida
 
 
 class CheckFirewall(InfrahubCheck):
-    """Validate the infrastructure of a firewall: its exchange legs (checks/common.py validate_exchange_gateways),
-    SNAT addresses (validate_snat_addresses) and the members of its contexts (validate_context_members: exactly its
-    HA pair). The policy rules it enforces are judged once, for every firewall and switch alike, by
-    ``checks/segment_security.py`` (``_validate_policy_rules``): a rule is valid or not wherever it is rendered, so
-    this check no longer reads them."""
+    """Validate a firewall pair's exchange legs, SNAT addresses and context members (policy rules: segment_security)."""
 
     query = "firewall_config"
 

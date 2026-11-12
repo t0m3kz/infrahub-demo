@@ -26,12 +26,7 @@ from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
 from utils.exchange_transit import exchange_route_specs, transit_addresses
 
-# ----------------------------------------------------------------------------
-# Inter-VRF exchange through firewall contexts (transit legs)
-# ----------------------------------------------------------------------------
-# One /29 per (context, VRF) leg: .1 border-leaf anycast, .4 firewall VIP,
-# .5/.6 members (utils/exchange_transit.py). The shared context (no tenant)
-# serves deployment dep-shared; the dedicated one (tenant) serves dep-ded.
+# Inter-VRF exchange through firewall contexts: one /29 per (context, VRF) leg (utils/exchange_transit.py).
 _XCHG_NAMESPACES: dict[str, tuple[str, int]] = {
     vrf_type: (name, l3_vni) for name, (vrf_type, l3_vni) in ZONE_CATALOG.items()
 }
@@ -139,21 +134,7 @@ def spec_vni(spec: dict[str, Any], legs: dict[str, dict[str, Any]]) -> int:
 def build_exchange_transit_bl_data(
     *, device_name: str, platform: str, role: str = "border-leaf", with_customer_port: bool = True
 ) -> dict:
-    """A border leaf whose firewall-role port is tagged with two contexts.
-
-    Shared context dc1-fw-shared (no tenant): legs in PROD, INTERNET and
-    MANAGEMENT, so PROD gets 0/0 -> VIP. Dedicated context dc1-fw-acme (tenant
-    Acme): the same three legs, no 0/0 (its tenant is steered by leaf PBR).
-    MANAGEMENT only becomes a VLAN, L2 VNI and anycast SVI in its VRF: the
-    tenants are source-NATed behind the leg's VIP, so no return route. Each context
-    serves one PROD segment (seg-shared, seg-acme), which becomes a static in
-    INTERNET towards the serving context's INTERNET VIP. seg-shared is also
-    carried on the customer port, to prove a plain segment and the transit
-    legs share the PROD VRF.
-
-    `role="edge"` (build_edge_exchange_transit_data) is the same wiring on a
-    colocation edge, minus the customer port.
-    """
+    """A border leaf whose firewall-role port is tagged with two contexts."""
     data = build_device_data(
         device_name=device_name,
         role=role,
@@ -235,12 +216,7 @@ def build_exchange_transit_bl_data(
 
 
 def build_overlay_pbr_bl_data(*, device_name: str, platform: str) -> dict:
-    """The exchange-transit border leaf with the PBR of the overlay ingress on its PROD L3 VNI SVI.
-
-    The shared context serves footprint dep-shared (segment seg-shared, 10.1.0.0/24) and the dedicated one dep-acme
-    (seg-acme, 10.2.0.0/24); both are tagged on the firewall port, so the SVI Vlan3900 of PROD carries the pbr policy of
-    each. The DC-wide contexts are those of the port (what the border leaf reads of its deployment). Each footprint is
-    steered to the VIP of its own context in PROD (100.66.0.4 and 100.66.0.12), by the prefix of its segment only."""
+    """The exchange-transit border leaf with the PBR of the overlay ingress on its PROD L3 VNI SVI."""
     data = build_exchange_transit_bl_data(device_name=device_name, platform=platform, with_customer_port=False)
     node = data["DcimDevice"]["edges"][0]["node"]
     fw_port = next(e["node"] for e in node["interfaces"]["edges"] if e["node"]["role"] == _v("firewall"))
@@ -274,14 +250,7 @@ def build_overlay_pbr_bl_data(*, device_name: str, platform: str) -> dict:
 
 
 def build_edge_exchange_transit_data(*, device_name: str, platform: str) -> dict:
-    """A colocation edge BGW whose firewall port is tagged with the shared and a dedicated context.
-
-    The border-leaf exchange-transit wiring on an edge: the firewall port is a
-    trunk of the transit VLANs, each transit leg is a VLAN + L2VNI + anycast SVI
-    in its VRF, the statics sit inside their `vrf context`, and the SNAT /32 in
-    INTERNET is redistributed to EVPN while the shared context's PROD 0/0 stays
-    local to the edge. The edge is a BGW (IPv6 VTEP loopback + multisite VIP).
-    """
+    """A colocation edge BGW whose firewall port is tagged with the shared and a dedicated context."""
     data = build_exchange_transit_bl_data(
         device_name=device_name, platform=platform, role="edge", with_customer_port=False
     )
@@ -305,10 +274,7 @@ def build_edge_exchange_transit_data(*, device_name: str, platform: str) -> dict
     return data
 
 
-# Load-balancer contexts of the pair dc1-lb-01/dc1-lb-02 (one-arm, SNAT automap): one /29 leg per context
-# in its tenant VRF (.1 border anycast, .4 floating, .5/.6 members) and a routed VIP /26 behind the floating
-# .4, the first of the bootstrap pools LB-Leg-<NS>-IPv4 / LB-VIP-<NS>-IPv4 (23_transit_pools.yml).
-# (context id, name, context VLAN, tenant namespace, leg /29, VIP /26)
+# Load-balancer contexts of the pair dc1-lb-01/dc1-lb-02 (one-arm, SNAT automap)
 _LB_CONTEXTS: list[tuple[str, str, int, str, str, str]] = [
     ("lbctx-prod", "dc1-lb-01-dc1-lb-02-ha-PROD", 3100, "PROD", "100.66.64.0/29", "100.66.96.0/26"),
     ("lbctx-nonprod", "dc1-lb-01-dc1-lb-02-ha-NONPROD", 3101, "NONPROD", "100.66.80.0/29", "100.66.112.0/26"),
@@ -318,11 +284,7 @@ _LB_CONTEXTS: list[tuple[str, str, int, str, str, str]] = [
 def _lb_context_cap(
     ctx_id: str, name: str, vlan: int, namespace: str, leg: str, vip: str, *, border_port: dict
 ) -> dict:
-    """A ManagedLoadbalancerContext declared on a border port (the fixture hook derives the member behind it).
-
-    Its capabilities are the members' leg sub-interfaces (role load-balancer devices, addressed .5/.6 in the
-    tenant VRF) and ``border_port``, the border leaf's own load-balancer port tagged with the context.
-    """
+    """A ManagedLoadbalancerContext declared on a border port (the fixture hook derives the member behind it)."""
     net = ipaddress.ip_network(leg)
     ns = _LB_CONTEXT_NAMESPACES[namespace]
     leg_vlan = vlan + _XCHG_VLAN_OFFSET[ns["vrf_type"]]
@@ -352,15 +314,8 @@ def _lb_context_cap(
 
 
 def build_lb_context_bl_data(*, device_name: str, platform: str) -> dict:
-    """A border leaf whose load-balancer port is tagged with the shared PROD and NONPROD contexts of the
-    pair dc1-lb-01/dc1-lb-02.
-
-    Each context's one leg becomes a VLAN + L2VNI + anycast .1 in its tenant VRF (LB-<context>: PROD
-    3100 / VNI 64100, NONPROD 3101 + 200 = 3301 / VNI 64301; the NONPROD name is past 32 characters,
-    so its VLAN name is cut with a digest and the SVI description keeps it whole), the port a trunk of
-    both, and the VIP /26 a static to the leg's floating .4 in that VRF, redistributed to EVPN. No
-    exchange, no SNAT route, no 0/0: the LB never leaves its VRF.
-    """
+    """A border leaf whose load-balancer port is tagged with the shared PROD and NONPROD contexts of the pair
+    dc1-lb-01/dc1-lb-02."""
     data = build_device_data(device_name=device_name, role="border-leaf", platform=platform, include_segments=False)
     border_port = {"name": _v("Ethernet21"), "device": _node({"name": _v(device_name), "role": _v("border-leaf")})}
     contexts = [_lb_context_cap(*ctx, border_port=border_port) for ctx in _LB_CONTEXTS]
@@ -389,14 +344,7 @@ def build_lb_context_bl_data(*, device_name: str, platform: str) -> dict:
 
 
 def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
-    """An HA pair member (the first) carrying two contexts' transit legs.
-
-    dc1-fw-shared holds PROD, NONPROD and INTERNET (so it renders the explicit
-    PROD<->NONPROD deny); dc1-fw-acme holds PROD and INTERNET. Served segments:
-    seg-prod 10.1.0.0/24 and seg-nonprod 10.2.0.0/24 (shared), seg-acme
-    10.3.0.0/24 (dedicated). The MANAGEMENT holds seg-infra 10.250.0.0/24,
-    the services segment: every context routes it to its MANAGEMENT leg.
-    """
+    """An HA pair member (the first) carrying two contexts' transit legs."""
     data = build_firewall_ha_data(device_name=device_name, platform=platform)
     device = data["DcimPhysicalDevice"]["edges"][0]["node"]
 
@@ -456,7 +404,7 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
                     "capabilities": _edges([]),
                 }
             )
-    # keep the HA sync port of the HA fixture, replace the zone legs by the context legs, on the trunk they ride on
+    # keep the HA sync port of the HA fixture, replace the zone legs by the context legs
     ha_port = [e for e in device["interfaces"]["edges"] if e["node"]["name"]["value"] == "ethernet1/7"]
     trunk = {
         "__typename": "DcimPhysicalInterface",
@@ -497,13 +445,7 @@ def _footprint_context(context_id: str, role: str, *, tenant: str | None, snat: 
 
 
 def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dict:
-    """An external-firewall member carrying the Internet edge context of a DC (PROD).
-
-    The context has a PROD and an INTERNET leg and serves the DC's footprints (``served_deployments``), each of which
-    lists it next to its internal context (``serving_firewall_contexts``): C005 on a shared context (seg-a, 10.1.0.0/24, a rule to the internet and one to seg-b) and C006 on a dedicated one
-    with its own public address 198.51.100.9 (seg-b, 10.2.0.0/24, a rule to the internet and one from it). The edge
-    holds the three internet rules only, both directions; the east-west rule stays on the internal pair.
-    """
+    """An external-firewall member carrying the Internet edge context of a DC (PROD)."""
     from tests.smoke.fixture_builders.firewall import (  # noqa: PLC0415 - firewall.py imports this module's package
         _make_policy_header,
         _make_rule_bearing_segments,
@@ -531,7 +473,7 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
         _make_segment_rule(
             policy="c006-b", index=10, name="b-to-internet", port_start=80, src_segment=seg_b, dst_zone="INTERNET"
         ),
-        # Inbound from the internet, held in the destination segment's own policy: the edge renders it too.
+        # Inbound from the internet, held in the destination segment's own policy
         _make_segment_rule(
             policy="c006-b",
             index=20,
@@ -624,21 +566,13 @@ def build_firewall_internet_edge_data(*, device_name: str, platform: str) -> dic
     return data
 
 
-# A segment terminated on the shared context: the border leaf the trunk is cabled to tags it 101, another leaf
-# (not at the far end of the trunk) has a row of its own with another tag, which must not be taken.
+# A segment terminated on the shared context: the border leaf the trunk is cabled to tags it 101
 _TERMINATED_VLAN = 101
 _FACING_LEAF = "dev-dc1-border-leaf-01"
 
 
 def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
-    """The exchange-transit firewall (an HA member with the shared context's legs) with a segment terminated on it.
-
-    seg-term (10.9.0.0/24, PROD, gateway 10.9.0.1 = the pair's floating VIP) is in the live query shape: the
-    footprint's ``firewall_gateway`` segment carries its gateway, zone and the VLAN rows of its deployments; the uplink trunk
-    ethernet1/1 carries the cable whose far end is the border leaf with the row to take. It is also a segment the
-    shared deployment serves (so it is a zone member and one of the context's policies' segments), which must not
-    make a static route to the border leaves.
-    """
+    """The exchange-transit firewall (an HA member with the shared context's legs) with a segment terminated on it."""
     data = build_firewall_exchange_data(device_name=device_name, platform=platform)
     device = data["DcimPhysicalDevice"]["edges"][0]["node"]
     shared_id = _XCHG_CONTEXTS["shared"]["id"]
@@ -665,7 +599,7 @@ def build_firewall_terminated_data(*, device_name: str, platform: str) -> dict:
     # The full context is fetched once through the member's shared capabilities.
     shared = next(edge["node"] for edge in device["shared_capabilities"]["edges"] if edge["node"]["id"] == shared_id)
     shared["served_deployments"]["edges"][0]["node"]["network_segments"]["edges"].append({"node": term_served})
-    # The context is the internal one its footprint lists: the footprint's segment is terminated on it.
+    # The context is the internal one its footprint lists
     shared["served_deployments"]["edges"][0]["node"]["serving_firewall_contexts"] = _edges(
         [{"id": shared_id, "shared_devices": _edges([{"role": _v("internal-firewall")}])}]
     )
@@ -691,15 +625,7 @@ _VIRTUAL_FW_MEMBERS = ("fw-dc10101-C007-p-dedicated", "fw-dc10102-C007-p-dedicat
 
 
 def build_virtual_firewall_data() -> dict:
-    """A customer's dedicated virtual firewall (DcimVirtualDevice) in the raw firewall_config shape.
-
-    queries/config/firewall.gql roots at the DcimDevice generic, so the response key is `DcimDevice`
-    whatever the kind. The device is the first member of the customer's dedicated pair (hosted on the
-    shared physical pair, generators/firewall_context.py), sourced from the CloudGuard_EDGE_CUSTOMER_*
-    template: eth0 management, eth1-6 uplinks, eth7 HA sync. It serves one dedicated context (the
-    exchange fixture's PROD, INTERNET and MANAGEMENT legs on eth1) and none of the shared one, which
-    stays on the physical pair.
-    """
+    """A customer's dedicated virtual firewall (DcimVirtualDevice) in the raw firewall_config shape."""
     device_name = _VIRTUAL_FW_MEMBERS[0]
     data = build_firewall_exchange_data(device_name=device_name, platform="checkpoint_gaia")
     physical = data.pop("DcimPhysicalDevice")
@@ -759,8 +685,7 @@ def write_fixtures() -> tuple[int, int]:
     """Write the inter-VRF exchange and load-balancer context fixtures of the border-leaf, edge and firewall."""
     generated = errors = 0
 
-    # Inter-VRF exchange through firewall contexts: border-leaf transit VLANs,
-    # VNIs, anycast gateways and statics; firewall legs, VIPs, routes, zones.
+    # Inter-VRF exchange through firewall contexts: border-leaf transit VLANs, VNIs
     print("\nGenerating exchange-transit fixtures:")
     g, e = write_data_fixtures(
         (
@@ -784,7 +709,7 @@ def write_fixtures() -> tuple[int, int]:
     generated += g
     errors += e
 
-    # Load-balancer contexts: the leg's VLAN/VNI/anycast .1 in its tenant VRF, the VIP /26 static to the floating .4.
+    # Load-balancer contexts: the leg's VLAN/VNI/anycast .1 in its tenant VRF
     print("\nGenerating load-balancer context fixtures (border-leaf):")
     g, e = write_data_fixtures(
         (
@@ -797,7 +722,7 @@ def write_fixtures() -> tuple[int, int]:
     generated += g
     errors += e
 
-    # The Internet edge context of a DC: the internet rules of its footprints and the SNAT per footprint.
+    # The Internet edge context of a DC
     print("\nGenerating Internet edge fixtures (firewall):")
     g, e = write_data_fixtures(
         (
@@ -830,8 +755,7 @@ def write_fixtures() -> tuple[int, int]:
     generated += g
     errors += e
 
-    # A segment terminated on the shared context: the sub-interface is derived from the facing border leaf's VLAN row,
-    # the segment's gateway is the pair's VIP on it, and no route is made to a connected prefix.
+    # A segment terminated on the shared context
     print("\nGenerating terminated segment fixtures (firewall):")
     g, e = write_data_fixtures(
         (
@@ -844,7 +768,7 @@ def write_fixtures() -> tuple[int, int]:
     generated += g
     errors += e
 
-    # A customer's dedicated virtual firewall: the same contexts, legs and HA pair as a physical one.
+    # A customer's dedicated virtual firewall: the same contexts
     print("\nGenerating dedicated virtual firewall fixture:")
     g, e = _write_data_fixture(Firewall, "firewall_checkpoint_gaia_virtual_dedicated", build_virtual_firewall_data())
     generated += g

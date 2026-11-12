@@ -29,20 +29,8 @@ zone, the edge. A collapsed border-spine carries them like a border-leaf."""
 OVERLAY_ROLES = RR_ROLES | RR_CLIENT_ROLES
 """Roles that run an overlay BGP process."""
 
-# Roles that terminate VXLAN. Sourced from the role dropdown descriptions in
-# schemas/base/dcim.yml: `l2-leaf` is explicitly "no VXLAN/overlay BGP" (it trunks
-# VLANs up to a leaf), while `access-leaf` is a "routed VTEP ... full VXLAN/overlay
-# BGP". `border-spine` is a collapsed spine+border-leaf for micro-fabrics, so it
-# does terminate VXLAN. Spine/super-spine/hyper-spine are underlay + EVPN route
-# reflectors only.
-#
-# NOTE: do not add role spellings with underscores here. The schema uses hyphens
-# (`border-leaf`); accepting both silently hides drift between layers.
-#
-# `edge` is a VTEP only where it is its site's EVPN Multi-Site border gateway
-# (a colocation zone or virtual colocation edge stretching DC segments into the metro); every other
-# edge has no stretched segment, so no activations, so get_vxlan_config still
-# returns None for it.
+# Roles per the dropdown in schemas/base/dcim.yml; hyphens only, underscore spellings would hide drift. `edge` is a VTEP
+# only as a Multi-Site border gateway; other edges have no activations.
 VTEP_ROLES = frozenset({"leaf", "border-leaf", "tor", "access-leaf", "border-spine", "edge"})
 """Roles that terminate VXLAN (transforms/helpers/vxlan.py)."""
 

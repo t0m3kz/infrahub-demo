@@ -1,16 +1,4 @@
-"""Integration test - the 30_all segment terminated on a firewall context (continues test_64).
-
-C005's `firewalled-dc10` segment (data/demos/30_all/07_applications/c005/00_segments.yml) sets `firewall_gateway`; DC10's shared PROD
-firewall context is the internal one of its footprint. What `firewall_gateway`. What that has to produce on the branch test_59 built:
-
-- the reconcile (add_vxlan_segment) tags the border service ports facing the pair with the segment, as generated
-  edges (an account as `source`), and only those;
-- the fabric only bridges it: each border leaf has a VLAN row and renders the VLAN with its L2 VNI and no SVI;
-- the firewall derives the segment's `<uplink trunk>.<vlan>` sub-interface from the VLAN of the border leaf its trunk
-  is cabled to, with the segment's gateway as the pair's VIP.
-
-Runs in-process like test_64 (the query and the transform, no Proposed Change), after it.
-"""
+"""Integration test - the 30_all segment terminated on a firewall context (continues test_64)."""
 
 import logging
 import re
@@ -81,11 +69,7 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
 
     @staticmethod
     async def _segment(client: InfrahubClient, branch: str, segment_name: str) -> dict[str, Any]:
-        """The segment with its gateway, its context's name, firewall members and border service ports.
-
-        A context is a shared capability with no HA or interface edge: its members are its `shared_devices` and its
-        border service ports the firewall-role ports their uplinks are cabled to, both from the transit inventory
-        (derived by utils/service_contexts.py)."""
+        """The segment with its gateway, its context's name, firewall members and border service ports."""
         result = await client.execute_graphql(
             query=TERMINATED_SEGMENT_QUERY, variables={"name": segment_name}, branch_name=branch
         )
@@ -130,10 +114,7 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
     async def test_00_the_border_service_ports_carry_the_segment(
         self, async_client_main: InfrahubClient, scenario_branch: str
     ) -> None:
-        """Exactly the border-leaf ports tagged with the context are on the segment (members of their switch's row).
-
-        Nothing tags a customer port (the segment has no component and no port is assigned to its deployments).
-        """
+        """Exactly the border-leaf ports tagged with the context are on the segment (members of their switch's row)."""
         names = _terminated_segment_names()
         assert names, "the 30_all data terminates no segment"
         for segment_name in names:
@@ -153,11 +134,7 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
     async def test_01_the_fabric_bridges_it_without_an_svi(
         self, async_client_main: InfrahubClient, scenario_branch: str
     ) -> None:
-        """Each border leaf has the segment's VLAN row, renders the VLAN with its VNI and has no `interface Vlan<id>`.
-
-        The gateway is the pair's VIP, not an anycast gateway: no SVI, so no VRF demand either (no `ip address`
-        of the gateway on the leaf).
-        """
+        """Each border leaf has the segment's VLAN row."""
         errors: list[str] = []
         rendered_count = 0
         for segment_name in _terminated_segment_names():
@@ -198,8 +175,8 @@ class TestAllDemoTerminatedSegment(TestInfrahubDockerWithClient):
     async def test_02_the_firewall_renders_the_derived_sub_interface(
         self, async_client_main: InfrahubClient, scenario_branch: str
     ) -> None:
-        """Every member of the pair renders `<trunk>.<vlan>` with the VLAN of the border leaf its trunk faces and
-        the gateway as the pair's VIP (Check Point: the member's interface and the cluster interface)."""
+        """Every member of the pair renders `<trunk>.<vlan>` with the VLAN of the border leaf its trunk faces and the
+        gateway as the pair's VIP (Check Point: the member's interface and the cluster interface)."""
         errors: list[str] = []
         rendered_count = 0
         for segment_name in _terminated_segment_names():

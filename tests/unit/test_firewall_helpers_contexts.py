@@ -5,9 +5,7 @@ from tests.unit.firewall_helpers_shared import fw_contexts
 from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.helpers.firewall_contexts import place_policies_in_contexts
 
-# ===========================================================================
 # fw_contexts()
-# ===========================================================================
 
 
 def _make_fw_context_interface(
@@ -185,9 +183,7 @@ class TestGetFirewallContextsLegs:
         assert fw_contexts([_make_fw_context_interface()])[0]["legs"] == []
 
 
-# ===========================================================================
 # place_policies_in_contexts()
-# ===========================================================================
 
 
 def _placement_rule(rule_id: str, src: str, dst: str | None = None, index: int = 10) -> dict:
@@ -203,9 +199,7 @@ def _placement_rule(rule_id: str, src: str, dst: str | None = None, index: int =
 
 
 def _segments(*rules: dict, ids: tuple[str, ...] = (), policy_names: dict[str, str] | None = None) -> dict[str, dict]:
-    """Segment id -> the segment as SegmentRulesFields returns it (cleaned):
-    its own policy holding the rules whose source it is, and the rules into
-    it carrying their policy. ``ids`` adds segments without rules."""
+    """Segment id -> the segment as SegmentRulesFields returns it (cleaned):"""
     names = policy_names or {}
     segments: dict[str, dict] = {}
 
@@ -285,9 +279,7 @@ class TestPlacePoliciesInContexts:
         assert _table(by_ctx["ctx-b"]) == [("seg-s1-egress", ["a-to-b"])]
 
     def test_lb_server_rule_into_a_served_segment_is_left_out(self) -> None:
-        """R_server of a load-balancer context (segment-less policy lb-<context>, leg /29 -> backend) is
-        an inbound rule of the backend segment, but the LB never sits behind a firewall: neither the
-        context's table nor the root table takes it."""
+        """R_server of a load-balancer context."""
         segs = _segments(_placement_rule("out", "s1", "s2"))
         r_server = {
             **_placement_rule("lb-r-server", "s1", "s1"),
@@ -344,9 +336,7 @@ class TestPlacePoliciesInContexts:
 
 
 class TestFootprintServedByTwoColocationZones:
-    """A colocation footprint is served by one shared context per zone with a firewall pair: each zone's firewall
-    renders its own context (served_deployments is the other end of serving_firewall_contexts) and places the
-    footprint's full policy in it."""
+    """A colocation footprint is served by one shared context per zone with a firewall pair:"""
 
     @staticmethod
     def _zone_firewall(context_id: str, segments: list[dict]) -> list[dict]:

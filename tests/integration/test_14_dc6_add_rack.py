@@ -1,26 +1,4 @@
-"""Integration test - Scenario 3: Add Rack to Existing DC6 Pod.
-
-Coverage: Verifies that loading a new network rack (data/demos/03_rack_dc6)
-into the existing DC6-1-POD-1 triggers the rack generator automatically (via
-the rack-created event) and creates its switches cabled to the existing
-spines, while every pre-existing underlay switch keeps its ASN.
-
-Data: rack ktw-1-s-1-r-4-5 (row 4, index 5) with 2 leaf + 2 l2-leaf, so DC6
-must gain at least 2 leafs and 2 l2-leafs.
-
-Prerequisites: DC6 deployed and merged (Scenario 1), switch added (Scenario 2).
-
-Steps:
-0.  Snapshot DC6 role counts and underlay ASNs on main
-1.  Create branch and load the new rack for DC6-1-POD-1
-2.  Verify the rack landed in the pod and in the topologies_rack group
-3.  Wait for the event-triggered rack generator and verify no failures
-4.  Verify devices created
-5.  Create proposed change
-6.  Wait for validations, verify diff and artifacts
-7.  Merge to main
-8.  Verify devices and ASN stability in main
-"""
+"""Integration test - Scenario 3: Add Rack to Existing DC6 Pod."""
 
 import logging
 from typing import Any
@@ -149,12 +127,7 @@ class TestDC6AddRack(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the new rack sits in DC6-1-POD-1 and in the topologies_rack group.
-
-        The rack-created trigger only dispatches add_rack for members of
-        topologies_rack, and add_rack resolves its spines through the pod — a
-        rack that misses either silently never generates.
-        """
+        """Verify the new rack sits in DC6-1-POD-1 and in the topologies_rack group."""
         logging.info("=== %s - Step 2: Verify Rack Loaded ===", SCENARIO_NAME)
 
         async_client_main.default_branch = scenario_branch

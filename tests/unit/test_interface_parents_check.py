@@ -1,8 +1,4 @@
-"""Unit tests for CheckInterfaceParents (checks/interface_parents.py).
-
-The payloads are raw GraphQL responses shaped like queries/validation/interface_parents.gql (rooted on
-``ManagedInterfaceEncapsulation``), run through clean_data.
-"""
+"""Unit tests for CheckInterfaceParents (checks/interface_parents.py)."""
 
 from __future__ import annotations
 
@@ -192,8 +188,7 @@ def test_nic_of_a_device_without_a_host_is_not_reported_on_its_own_device() -> N
 
 
 def test_the_fixtures_emit_only_fields_the_query_selects_and_the_parent_fields_are_selected() -> None:
-    """The builders match interface_parents.gql, which is rooted on the encapsulation and selects its parent (with
-    the cable) and the interfaces that carry it."""
+    """The builders match interface_parents.gql."""
     node = query_tree(QUERY)[ROOT]["edges"]["node"]
     assert {"parent", "capabilities", "name"} <= set(node)
     assert "cable" in node["parent"]["node"]

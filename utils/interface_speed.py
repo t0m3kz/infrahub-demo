@@ -1,14 +1,4 @@
-"""Interface speed extraction shared by generators and transforms.
-
-Interface speed is not a stored attribute — ``interface_type`` (e.g.
-``100gbase-x-qsfp28``) is the schema's source of truth, and speed is
-always derived from it so cabling/matching and config rendering can
-never drift out of sync with the chosen interface type.
-
-Speeds are in Mbps, the unit the sub-10G types are named in (``100base-tx``
-is 100, ``1000base-t`` is 1000, ``25gbase-x-sfp28`` is 25000), so a Fast
-Ethernet port has a speed like any other.
-"""
+"""Interface speed (Mbps) derived from ``interface_type``, shared by generators and transforms."""
 
 from __future__ import annotations
 
@@ -20,16 +10,12 @@ class InterfaceSpeedMatcher:
     """Extract and group interfaces by speed (Mbps) for mixed-speed deployments."""
 
     GBASE_PATTERN = re.compile(r"(\d+)gbase", re.IGNORECASE)
-    # Fast and Gigabit Ethernet types are named in Mbps (100base-tx, 1000base-x-sfp), not "<n>gbase".
+    # Fast and Gigabit Ethernet types are named in Mbps (100base-tx), not "<n>gbase".
     MBASE_PATTERN = re.compile(r"^(\d+)base", re.IGNORECASE)
 
     @classmethod
     def extract_speed(cls, interface_type: Any) -> int | None:
-        """Extract the speed in Mbps from an interface type.
-
-        None for a type that states no line rate: ``other``, and ``lte``, a cellular radio whose
-        rate depends on the carrier and which is never cabled, so speed grouping leaves it out.
-        """
+        """The speed in Mbps of an interface type, None when it states no line rate (``other``, ``lte``)."""
         if hasattr(interface_type, "value"):
             interface_type = str(interface_type.value)
 

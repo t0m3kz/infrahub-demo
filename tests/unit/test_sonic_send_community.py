@@ -1,8 +1,4 @@
-"""SONiC BGP send_community mapping (templates/configs/common/sonic_common.j2).
-
-The two model flags map to three modes: both set -> "both", extended only -> "extended", standard only ->
-"standard", neither -> no key. Checked on a peer group and on a neighbour without a peer group (a VRF session).
-"""
+"""SONiC BGP send_community mapping (templates/configs/common/sonic_common.j2)."""
 
 from __future__ import annotations
 

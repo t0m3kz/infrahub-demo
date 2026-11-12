@@ -13,9 +13,7 @@ from generators.protocols import LoadbalancerVIP
 from generators.topology.application_security import AppApplicationGenerator
 from tests.unit.encapsulation_helpers import cleaned_encapsulation
 
-# ---------------------------------------------------------------------------
 # Fixtures (cleaned application.gql shape)
-# ---------------------------------------------------------------------------
 
 
 def _context(
@@ -38,8 +36,7 @@ LB_CONTEXT_VLAN = 3100
 
 
 def lb_member(ctx_id: str, name: str, leg: str | None) -> dict[str, Any]:
-    """A load balancer member of the context (cleaned): its uplink and, with ``leg``, the leg sub-interface of the
-    uplink tagged with the context VLAN (utils/service_contexts.py ``leg_interfaces``) whose address is in ``leg``."""
+    """A load balancer member of the context (cleaned): its uplink and, with ``leg``."""
     uplink = {"typename": "DcimPhysicalInterface", "id": f"{name}-up", "name": "1.1", "role": "uplink"}
     legs = [
         {
@@ -62,13 +59,7 @@ def lb_member(ctx_id: str, name: str, leg: str | None) -> dict[str, Any]:
 
 
 def _instance(instance_id: str, context: dict[str, Any] | None, *, footprint: bool = True) -> dict[str, Any]:
-    """A virtual machine running for a customer footprint in the data center of ``context``.
-
-    The context is the one its segment's footprint in that data center serves (``_with_footprints`` builds the
-    footprint from it): None is a footprint with no context yet, and ``footprint=False`` a data center where the
-    segment is not activated at all. The default context ``ctx-1`` is the data center ``dc-c001`` of the footprint
-    ``dep-c001``.
-    """
+    """A virtual machine running for a customer footprint in the data center of ``context``."""
     key = context["id"] if context and context["id"] != "ctx-1" else "c001"
     return {
         "id": instance_id,
@@ -84,12 +75,7 @@ def _instance(instance_id: str, context: dict[str, Any] | None, *, footprint: bo
 
 
 def _with_footprints(component: dict[str, Any]) -> dict[str, Any]:
-    """Activate the component's segment in the data center of each of its instances: one footprint per data center.
-
-    The context an instance was built with becomes the context its footprint serves, so a test says "this instance
-    is served by that context" and the payload has the cleaned application.gql shape: the context sits on the
-    segment's footprint, not on the instance. A data center set apart with ``footprint=False`` gets none.
-    """
+    """Activate the component's segment in the data center of each of its instances: one footprint per data center."""
     footprints: dict[str, dict[str, Any]] = {}
     for instance in component.get("instances") or []:
         dc = instance["deployment"]["parent"]["id"]
@@ -174,9 +160,7 @@ def _dep(target: dict[str, Any], ports: list[str] | None = None) -> dict[str, An
     }
 
 
-# ===========================================================================
 # LoadbalancerVipMixin
-# ===========================================================================
 
 
 def _vip_gen() -> Any:
@@ -218,9 +202,7 @@ def _reconcile(
     return asyncio.run(gen._reconcile_load_balancing(components, edges or [], {}, security_profile=security_profile))
 
 
-# ===========================================================================
 # Cloud: a CloudLoadBalancer per load_balanced component on cloud instances
-# ===========================================================================
 
 _CLOUD_FQDN = "frontend.custody-api.c003.demo.local"
 

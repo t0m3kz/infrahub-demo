@@ -21,8 +21,7 @@ from tests.unit.device_mixin_helpers import _mock_device, _mock_group, _recordin
 
 
 class TestEnsureHaPairs:
-    """DeviceMixin._ensure_ha_pairs — used by create_devices() for firewall/
-    load-balancer roles via DeviceOptions.ha_kind."""
+    """DeviceMixin._ensure_ha_pairs."""
 
     def _gen(self) -> Any:
         gen: Any = DeviceMixin.__new__(DeviceMixin)
@@ -35,9 +34,7 @@ class TestEnsureHaPairs:
         gen.client.get = AsyncMock()
         gen.lock_events = []
         gen.resource_lock = _recording_lock(gen.lock_events)
-        # _ensure_ha_interfaces (HA sync interface/cable creation) is covered
-        # by its own TestEnsureHaInterfaces below — stub it here so these
-        # tests only exercise _ensure_ha_pairs's own domain create/lookup.
+        # _ensure_ha_interfaces is stubbed; TestEnsureHaInterfaces covers it.
         gen._ensure_ha_interfaces = AsyncMock()
         return gen
 
@@ -142,13 +139,7 @@ class TestEnsureHaPairs:
 
     @pytest.mark.asyncio
     async def test_fresh_domain_passes_its_devices_skipping_capabilities_fetch(self) -> None:
-        """A just-created ha_obj's capabilities peers only carry the id each
-        was created with, no __typename — RelatedNode.fetch() requires both
-        (raises 'Unable to fetch the peer, id and/or typename are not
-        defined' otherwise, caught live on a real run). _ensure_ha_pairs must
-        pass the already-read devices through as members so
-        _ensure_ha_interfaces neither calls capabilities.fetch() nor reads the
-        devices a second time on this path."""
+        """A just-created ha_obj's capabilities peers only carry the id each was created with, no __typename."""
         gen = self._gen()
         devices = [_mock_device("fw-01"), _mock_device("fw-02")]
         gen.client.filters = AsyncMock(side_effect=[[], devices])
@@ -166,10 +157,7 @@ class TestEnsureHaPairs:
 
     @pytest.mark.asyncio
     async def test_existing_domain_passes_no_members_so_they_come_from_its_capabilities(self) -> None:
-        """An existing ha_obj came from client.filters(..., include=[
-        "capabilities"]) — real server-side typenames, so
-        _ensure_ha_interfaces resolves the members from it itself (also covers
-        domains whose membership changed since creation)."""
+        """An existing ha_obj came from client.filters(..., include=[ "capabilities"])."""
         gen = self._gen()
         existing = MagicMock(id="existing-ha-1")
         gen.client.filters = AsyncMock(return_value=[existing])
@@ -182,9 +170,7 @@ class TestEnsureHaPairs:
 
     @pytest.mark.asyncio
     async def test_device_kind_defaults_to_physical_but_can_be_overridden(self) -> None:
-        """A customer's dedicated virtual instances pass
-        device_kind=DcimVirtualDevice — pair resolution must query that kind,
-        not the default DcimPhysicalDevice."""
+        """A customer's dedicated virtual instances pass device_kind=DcimVirtualDevice."""
         gen = self._gen()
         gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("vfw-01"), _mock_device("vfw-02")]])
         gen.client.get = AsyncMock(return_value=_mock_group())
@@ -278,10 +264,7 @@ class TestEnsureHaPairs:
 
 
 def _mock_relmgr(peer_ids: list[str]) -> MagicMock:
-    """A cardinality-many RelationshipManager stub — .fetch() is a no-op,
-    .peers is pre-populated (mirrors client.create()'s own client-side
-    initialization from the data dict passed to it, no server round-trip
-    needed to see the ids back)."""
+    """A cardinality-many RelationshipManager stub."""
     rel = MagicMock()
     rel.fetch = AsyncMock()
     rel.peers = [MagicMock(id=pid) for pid in peer_ids]
@@ -295,9 +278,7 @@ def _mock_iface(
     iface.id = iface_id
     iface.device = MagicMock(id=device_id)
     iface.name = MagicMock(value=name)
-    # `free` is DcimInterface's schema default, so that is what a sync port
-    # inherited from a device's object_template really looks like before
-    # _ensure_ha_interfaces flips it.
+    # `free` is the schema default of a port inherited from an object_template.
     iface.status = MagicMock(value=status)
     iface.save = AsyncMock()
     cable = MagicMock()
@@ -309,8 +290,7 @@ def _mock_iface(
 
 
 class _CapabilityPeer:
-    """A RelatedNode of ha_obj.capabilities read with include=["capabilities"]: ``peer`` is the stored node, or
-    raises the way the SDK does when the store has no such node."""
+    """A RelatedNode of ha_obj.capabilities read with include=["capabilities"]:"""
 
     def __init__(self, node_id: str, typename: str, node: Any | None) -> None:
         self.id = node_id
@@ -412,10 +392,7 @@ class TestHaMemberDevices:
 
 
 class TestEnsureHaInterfaces:
-    """DeviceMixin._ensure_ha_interfaces / _ensure_ha_cable — replaces the old
-    standalone add_ha generator (generators/topology/ha.py, deleted). Called
-    synchronously from _ensure_ha_pairs right after a domain is created or
-    found, so there's no separate trigger-based dispatch to race on."""
+    """DeviceMixin._ensure_ha_interfaces / _ensure_ha_cable."""
 
     def _gen(self) -> Any:
         gen = DeviceMixin.__new__(DeviceMixin)
@@ -440,11 +417,7 @@ class TestEnsureHaInterfaces:
 
     @pytest.mark.asyncio
     async def test_members_param_skips_capabilities_fetch(self) -> None:
-        """Passing members (the fresh-domain path in _ensure_ha_pairs)
-        must never touch ha_obj.capabilities.fetch() — a just-created ha_obj's
-        capabilities peers have no __typename, so fetch() would raise 'Unable
-        to fetch the peer, id and/or typename are not defined' (caught live
-        on a real add_dc run before this param existed)."""
+        """Passing members (the fresh-domain path) never touches ha_obj.capabilities.fetch()."""
         gen = self._gen()
         caps = _mock_relmgr([])
         caps.fetch = AsyncMock(side_effect=AssertionError("capabilities.fetch() must not be called"))
@@ -473,9 +446,7 @@ class TestEnsureHaInterfaces:
 
     @pytest.mark.asyncio
     async def test_physical_pair_gets_active_sync_ports_and_a_sync_cable_only(self) -> None:
-        """Physical devices already have a role=ha interface from their template:
-        no on-demand creation. The pair ends with active sync ports and the one
-        sync cable between them, and nothing else is created."""
+        """Physical devices already have a role=ha interface from their template:"""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
         dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
@@ -510,9 +481,7 @@ class TestEnsureHaInterfaces:
         [(DcimPhysicalDevice, DcimPhysicalInterface), (DcimVirtualDevice, DcimInterface)],
     )
     async def test_sync_ports_of_all_members_come_from_one_query(self, device_kind: Any, iface_kind: Any) -> None:
-        """One interface query covers both members (not one per device), and
-        each device keeps its first role=ha interface even when the other
-        member's sort ahead of its second one."""
+        """One interface query covers both members."""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
         dev_1 = MagicMock(id="dev-1")
@@ -549,10 +518,7 @@ class TestEnsureHaInterfaces:
 
     @pytest.mark.asyncio
     async def test_sync_ports_are_flipped_to_active(self) -> None:
-        """A port carrying the HA sync link must not keep DcimInterface's
-        `free` default — it is in service, exactly like both ends of any cable
-        create_connections() lays. Caught live on a colocation metro, where
-        fw-fr201:HA1 sat at `free` while cabled to fw-fr202:HA1."""
+        """A port carrying the HA sync link must not keep DcimInterface's `free` default."""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
         dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
@@ -576,8 +542,7 @@ class TestEnsureHaInterfaces:
         await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02")
 
         assert iface_1.status.value == "active"
-        # update_group_context=False: the port belongs to the device's
-        # object_template, so it must never be a delete_unused_nodes candidate.
+        # update_group_context=False: the port is the object_template's, never a delete candidate.
         iface_1.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
         iface_2.save.assert_not_awaited()
 
@@ -630,9 +595,7 @@ class TestEnsureHaInterfaces:
 
     @pytest.mark.asyncio
     async def test_virtual_device_uses_the_sync_nic_its_template_provides(self) -> None:
-        """A virtual device's HA sync port is the role=ha NIC of its template, found through the generic
-        DcimInterface kind (a NIC is a DcimVirtualInterface, a physical device's port a DcimPhysicalInterface);
-        nothing is created for it, only its status is flipped to active."""
+        """A virtual device's HA sync port is the role=ha NIC of its template."""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
         dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
@@ -658,8 +621,7 @@ class TestEnsureHaInterfaces:
 
     @pytest.mark.asyncio
     async def test_virtual_pairs_never_create_a_cable(self) -> None:
-        """No physical cabling exists between hosted virtual instances —
-        _ensure_ha_cable must never be reached for device_kind=DcimVirtualDevice."""
+        """No physical cabling exists between hosted virtual instances."""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
         dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
@@ -701,12 +663,7 @@ class TestEnsureHaCable:
 
     @pytest.mark.asyncio
     async def test_existing_named_cable_skips_create_but_stays_tracked(self) -> None:
-        """Skipping the create is only half of idempotency: the generator body
-        runs inside client.start_tracking(delete_unused_nodes=True), so a cable
-        created by an earlier run and left unregistered here is deleted as
-        "no longer required" at the end of this one — caught live on a
-        colocation metro, where the HA sync cable appeared and disappeared on
-        alternate generator runs."""
+        """Skipping the create is only half of idempotency:"""
         gen = self._gen()
         gen.client.filters = AsyncMock(return_value=[MagicMock(id="existing-cbl")])
         dev_1 = MagicMock()
@@ -723,8 +680,7 @@ class TestEnsureHaCable:
 
     @pytest.mark.asyncio
     async def test_orphan_cabled_interface_skips_create(self) -> None:
-        """Either endpoint already has a real cable (just not under the
-        expected name) — treat as already-cabled, don't create a duplicate."""
+        """Either endpoint already has a real cable (just not under the expected name)."""
         gen = self._gen()
         dev_1 = MagicMock()
         dev_1.name = MagicMock(value="fw-01")
@@ -760,10 +716,7 @@ class TestEnsureHaCable:
 
     @pytest.mark.asyncio
     async def test_pod_scoped_devices_still_get_the_dc_as_cable_deployment(self) -> None:
-        """The regression this guards against: a pod-scoped HA pair (dc7's
-        border-spine firewall/load-balancer, deployment=TopologyPod on the
-        devices themselves) must still get the enclosing DC as the CABLE's
-        deployment — DcimCable.deployment's peer type has no TopologyPod."""
+        """The regression this guards against:"""
         gen = self._gen()
         gen.deployment_id = "dc-7"
         created = MagicMock(save=AsyncMock())

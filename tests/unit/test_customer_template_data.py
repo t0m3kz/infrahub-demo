@@ -1,12 +1,4 @@
-"""The customer service tier (TopologyCustomerTemplateDC, ...Colo, ...Cloud) is one contract between schema, data and check.
-
-A footprint states `design: "M"` (required, a template of its own kind); the numbers behind the name live once, in the
-template rows of data/bootstrap/21_customer_templates.yml, or an earlier file in the same demo for a custom service
-mix. checks/customer_quota.py holds the footprint to them. These tests
-keep the three in line: the schema requires the numbers, every row sets them, the tiers are ordered and have the
-agreed values, every design a demo footprint names exists, and the demo data itself stays within its tier's segment
-quota.
-"""
+"""The customer service tier (TopologyCustomerTemplateDC, ...Colo, ...Cloud) is one contract between schema."""
 
 from __future__ import annotations
 
@@ -44,8 +36,8 @@ _TEMPLATE_KINDS = {
 }
 # tier -> (max_segments, address_prefix_length) shared by the data center and colocation kinds.
 _BLOCK_TIERS = {"S": (2, 23), "M": (6, 21), "L": (12, 20), "XL": (24, 19)}
-# tier -> (max_segments, max_virtual_networks, address_prefix_length) of the cloud kind: the length is the routed range of
-# the footprint, not a block for its segments.
+# tier -> (max_segments, max_virtual_networks, address_prefix_length) of the cloud kind: the length is the routed range
+# of the footprint, not a block for its segments.
 _CLOUD_TIERS = {"S": (2, 1, 28), "M": (6, 3, 27), "L": (12, 6, 26), "XL": (24, 12, 25)}
 
 
@@ -65,9 +57,7 @@ def _number(tier: str, column: str) -> int:
     return _ROWS[tier].item[column]
 
 
-# ---------------------------------------------------------------------------
 # Schema
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("column", _NUMBERS)
@@ -81,8 +71,7 @@ def test_schema_requires_each_number_with_no_default(column: str) -> None:
 
 @pytest.mark.parametrize("kind", [*_TEMPLATE_KINDS.values()])
 def test_the_generic_carries_the_quota_and_the_address_block_once(kind: str) -> None:
-    """max_segments and address_prefix_length are the generic's: required, no default, the block between /16 and /28,
-    and no template node redefines them (a node must not redefine a generic attribute)."""
+    """max_segments and address_prefix_length are the generic's: required, no default, the block between /16 and /28."""
     quota = attribute(kind, "max_segments") or {}
     block = attribute(kind, "address_prefix_length") or {}
     assert quota["optional"] is False and "default_value" not in quota
@@ -137,15 +126,14 @@ def test_removed_customer_kinds_are_gone_from_the_schema(kind: str) -> None:
     ]
 
 
-# ---------------------------------------------------------------------------
 # Template rows
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("kind", [*_TEMPLATE_KINDS.values()])
 def test_the_four_tiers_are_declared_for_every_kind(kind: str) -> None:
     """Bootstrap keeps exactly the four standard tiers S, M, L and XL in each kind; custom mixes belong to their own
-    demo."""
+    demo.
+    """
     assert sorted(str(row.item["name"]) for row in declared(kind, _BOOTSTRAP)) == sorted(_TIER_ORDER)
 
 
@@ -167,8 +155,7 @@ def test_the_cloud_tiers_have_the_agreed_values(tier: str) -> None:
 
 @pytest.mark.parametrize("tier", _TIER_ORDER)
 def test_a_cloud_tiers_block_holds_a_routed_range_per_virtual_network(tier: str) -> None:
-    """The footprint's pool is split into one CLOUD_RANGE_PREFIX_LENGTH slice per virtual network it allows
-    (generators/topology/cloud_range.py): 2^(29 - block) >= max_virtual_networks, as checks/customer_quota.py holds."""
+    """The footprint's pool is split into one CLOUD_RANGE_PREFIX_LENGTH slice per virtual network it allows."""
     row = next(r for r in declared("TopologyCustomerTemplateCloud", _BOOTSTRAP) if r.item["name"] == tier).item
     assert 2 ** (CLOUD_RANGE_PREFIX_LENGTH - row["address_prefix_length"]) >= row["max_virtual_networks"]
 
@@ -183,8 +170,7 @@ def test_the_sizing_tiers_have_the_agreed_values(tier: str) -> None:
 
 @pytest.mark.parametrize("kind", _BLOCK_KINDS)
 def test_the_address_blocks_hold_the_tier(kind: str) -> None:
-    """checks/customer_quota.py on the data: the IPv4 block holds max_segments segments of segment_prefix_length, the
-    IPv6 block max_segments segments of ipv6_segment_prefix_length, and a segment is never larger than its block."""
+    """checks/customer_quota.py on the data: the IPv4 block holds max_segments segments of segment_prefix_length."""
     for row in declared(kind, _BOOTSTRAP):
         item = row.item
         label = f"{kind} {item['name']}"
@@ -262,9 +248,7 @@ def test_the_shared_tiers_allow_no_100g_host_ports() -> None:
     assert [tier for tier in _SHARED if _number(tier, "ports_100g") != 0] == []
 
 
-# ---------------------------------------------------------------------------
 # Footprints name existing designs and stay within their tier
-# ---------------------------------------------------------------------------
 
 
 def _metered_footprints() -> list[Declared]:
@@ -343,8 +327,7 @@ def _segments_per_footprint() -> dict[str, set[str]]:
 
 
 def test_the_demo_segments_fit_the_segment_quota_of_their_footprint_design() -> None:
-    """The numbers are sized from the demo's own use: no 30_all DC footprint declares more segments than its
-    design allows (the check would put an ERROR on the demo itself)."""
+    """The numbers are sized from the demo's own use."""
     counted = _segments_per_footprint()
     over: list[str] = []
     for footprint in _metered_footprints():
@@ -364,9 +347,7 @@ def test_the_segment_counter_sees_the_demo_segments() -> None:
 
 
 def test_tier_names_are_unique_per_kind_not_across_the_generic() -> None:
-    """The three template kinds all name their tiers S, M, L and XL, so the name is constrained on each node and NOT on
-    the generic: a constraint or an HFID on the generic makes the server resolve an upsert by name across kinds (a
-    colocation "S" found the DC "S" and the bootstrap load failed with NODE_NOT_FOUND)."""
+    """The three template kinds all name their tiers S, M, L and XL."""
     generic = schema()["TopologyCustomerTemplate"]
     assert not generic.attributes["name"].get("unique"), "name must not be unique on the generic"
     assert not generic.uniqueness_constraints, "the generic must not constrain its kinds' names together"

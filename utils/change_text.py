@@ -1,10 +1,4 @@
-"""The text fields of a change request: the context the templates read and the rendering (templates/change/).
-
-``derive_change_request`` is the single entry of the derivation: utils/change_rules.py holds the rules (risk, type,
-window), utils/change_facts.py the facts of the four families, and this module caps them, renders one template per
-text field and returns every derived field keyed by its attribute name. The templates are plain text (the fields are
-also sent to ServiceNow as plain text); the caps and the groupings are here, the wording is in the templates.
-"""
+"""The text fields of a change request: caps the facts, renders one template per field (templates/change/)."""
 
 from __future__ import annotations
 
@@ -155,8 +149,7 @@ def _config_parts(facts: ChangeFacts) -> list[str]:
 
 
 def _others(inputs: ChangeInputs, counts: dict[str, int]) -> dict[str, int]:
-    """The changed objects the diff counts and the text does not describe, by status (none when the read of the objects
-    was cut: the difference would be wrong)."""
+    """The changed objects the diff counts but the text does not describe, by status (none when the read was cut)."""
     if inputs.objects_truncated:
         return {}
     described = Counter(o.status for o in inputs.objects)
@@ -164,7 +157,7 @@ def _others(inputs: ChangeInputs, counts: dict[str, int]) -> dict[str, int]:
 
 
 def build_context(inputs: ChangeInputs) -> dict[str, Any]:
-    """Everything the templates read (StrictUndefined: a template that asks for more fails, never prints blank)."""
+    """Everything the templates read (StrictUndefined)."""
     facts = build_facts(inputs.rows, inputs.artifacts, inputs.objects)
     counts = diff_counts(inputs)
     devices = {d.name: d for d in facts.devices}

@@ -1,9 +1,4 @@
-"""Unit tests for CheckAppDependency (checks/app_dependency.py).
-
-The check receives the raw app_dependency_validation GraphQL payload
-(queries/validation/app_dependency.gql), so the fixtures below are built in
-that edges/node/value shape and go through clean_data like the real query.
-"""
+"""Unit tests for CheckAppDependency (checks/app_dependency.py)."""
 
 from __future__ import annotations
 
@@ -14,9 +9,7 @@ import pytest
 
 from checks.app_dependency import CheckAppDependency
 
-# ---------------------------------------------------------------------------
 # Harness and payload builders (raw GraphQL shape)
-# ---------------------------------------------------------------------------
 
 _UNSET = object()
 
@@ -92,9 +85,7 @@ DB = _component("db.c001.example", ["tcp/5432"])
 CACHE = _component("cache.c001.example", ["tcp/6379", "udp/30000-30010"])
 
 
-# ===========================================================================
 # Clean payloads
-# ===========================================================================
 
 
 class TestCleanPayload:
@@ -134,9 +125,7 @@ class TestCleanPayload:
         assert _errors(*dependencies, components=[DB, CACHE]) == []
 
 
-# ===========================================================================
 # Component ports
-# ===========================================================================
 
 
 class TestComponentPorts:
@@ -161,9 +150,7 @@ class TestComponentPorts:
         assert _errors(components=[_component("worker.c001.example", None)]) == []
 
 
-# ===========================================================================
 # Source / target shape
-# ===========================================================================
 
 
 class TestSourceAndTargetShape:
@@ -217,9 +204,7 @@ class TestSourceAndTargetShape:
         assert errors == ["Dependency '<unnamed>' must set exactly one of target or target_fqdn."]
 
 
-# ===========================================================================
 # Dependency ports
-# ===========================================================================
 
 
 class TestDependencyPorts:
@@ -240,9 +225,7 @@ class TestDependencyPorts:
         assert errors[0].startswith("Dependency 'backend-to-db': invalid port 'http'")
 
 
-# ===========================================================================
 # External (target_fqdn) dependencies
-# ===========================================================================
 
 
 class TestExternalTarget:
@@ -291,9 +274,7 @@ class TestExternalTarget:
         assert "has no egress_service" in errors[1]
 
 
-# ===========================================================================
 # Component targets
-# ===========================================================================
 
 
 class TestComponentTarget:
@@ -388,9 +369,7 @@ class TestComponentTarget:
         assert errors[1].startswith("Dependency 'second' targets api.stripe.com")
 
 
-# ===========================================================================
 # Approved cross-owner dependencies: ports and decision_reason
-# ===========================================================================
 
 
 def _owned(fqdn: str, org_id: str, ports: list[str] | None = None) -> dict[str, Any]:
@@ -461,9 +440,7 @@ class TestCrossOwnerApproval:
         assert _errors(dep) == []
 
 
-# ===========================================================================
 # Load-balanced components
-# ===========================================================================
 
 
 def _load_balanced(fqdn: str, ports: list[str] | None, instances: int = 2) -> dict[str, Any]:
@@ -530,9 +507,7 @@ class TestLoadBalancedComponent:
         assert "instances { count }" in components
 
 
-# ===========================================================================
 # Prod and non-prod separation
-# ===========================================================================
 
 
 def _in_segment(component: dict[str, Any], environment: str | None, zone: str = "PROD") -> dict[str, Any]:

@@ -14,17 +14,7 @@ from .common import BaseDeviceCheck, validate_interfaces, validate_routing_passw
 
 
 def warn_transit_without_internet_bgw(device: dict[str, Any]) -> list[str]:
-    """Warnings for an edge that has an upstream transit VRF but cannot export it.
-
-    The upstream transit is the edge's instance of a namespace_type internet
-    namespace (ManagedVRF: the VRF generator creates it for the transit session's
-    address, the ``transit`` flag of transforms/helpers/bgp.py). Its default route only reaches the DCs as an
-    EVPN type-5 route when the edge is its metro's border gateway (a
-    ``multisite-vip`` interface and a fabric ``evpn_rt_as``) and the INTERNET
-    namespace has an L3 VNI. These are warnings, not errors: a guard for an edge
-    whose session renders but whose default cannot be reached from any DC (it
-    has no site VIP, or the fabric has no evpn_rt_as).
-    """
+    """Warn for an edge with an upstream transit VRF that cannot export its default route as EVPN type-5."""
     namespaces = [ns for ns in device_vrfs(device) if ns.get("vrf_type") == _INTERNET_NAMESPACE_TYPE]
     if not namespaces:
         return []

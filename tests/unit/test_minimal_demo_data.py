@@ -1,12 +1,4 @@
-"""The 30_all customer and fabric data states intent only: nothing a schema default or a generator supplies.
-
-A restated default is a second source of truth that silently diverges when the
-schema default moves: it is deleted from the data, and these tests keep it out.
-``environment`` is the deliberate exception: it must stay explicit (a silent ``p``
-means the PROD namespace, zone and firewall leg), and the schema requires it on
-footprints and applications. A segment's ``security_zone`` is mandatory too, and
-every segment in data/ names it (the zone of its environment, or its exchange zone).
-"""
+"""The 30_all customer and fabric data states intent only:"""
 
 from __future__ import annotations
 
@@ -39,8 +31,7 @@ _ALWAYS_EXPLICIT = frozenset({"environment"})
 
 
 def _restated_defaults(obj: Declared) -> list[str]:
-    """The attributes an object declares with exactly the value the server would set without them
-    (its object template's, else the schema default)."""
+    """The attributes an object declares with exactly the value the server would set without them."""
     restated = []
     for key, value in obj.item.items():
         definition = attribute(obj.kind, key)
@@ -68,8 +59,7 @@ def test_device_status_defaults_to_active() -> None:
 
 
 def test_a_template_status_overrides_the_schema_default() -> None:
-    """A host from PowerEdge-R640_SERVER would be created provisioning: its `status: active` is intent, not a
-    restated default, and stays."""
+    """A host from PowerEdge-R640_SERVER would be created provisioning:"""
     hosts = [obj for obj in declared("DcimPhysicalDevice", _ALL_DEMO) if obj.item.get("name") == "dc10-pod1-server-1"]
     assert len(hosts) == 1
     assert hosts[0].default("status") == "provisioning"
@@ -118,8 +108,7 @@ def test_security_zone_is_required_with_no_default() -> None:
 
 @pytest.mark.parametrize("kind", _SEGMENT_KINDS)
 def test_every_authored_segment_names_its_security_zone(kind: str) -> None:
-    """Every segment in data/ states its zone: a tenant segment the zone of its environment (p -> PROD, else
-    NONPROD), a shared service segment its exchange zone (MANAGEMENT services)."""
+    """Every segment in data/ states its zone:"""
     offenders = []
     for obj in declared(kind, _ALL_DATA):
         zone = obj.item.get("security_zone")

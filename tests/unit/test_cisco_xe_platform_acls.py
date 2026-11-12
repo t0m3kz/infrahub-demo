@@ -1,9 +1,4 @@
-"""Unit tests for the Catalyst 9000 / IOS-XE segment ACLs and inter-VRF statics (``cisco_xe``).
-
-The ACL translation (transforms/helpers/cisco_xe.py) and the ``cisco_xe_acl`` / ``cisco_xe_vrf_static`` templates:
-what IOS-XE cannot express in them is refused. Byte-exact rendering is covered by tests/smoke/test_configs_smoke.py;
-the platform wiring, the dialect and the refusal guard are in tests/unit/test_cisco_xe_platform.py.
-"""
+"""Unit tests for the Catalyst 9000 / IOS-XE segment ACLs and inter-VRF statics (``cisco_xe``)."""
 
 from __future__ import annotations
 
@@ -24,9 +19,8 @@ from transforms.config.leaf import Leaf
 from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes
 from utils.segment_addressing import AddressFamilyMismatchError
 
-# ---------------------------------------------------------------------------
-# 6. Segment ACLs and inter-VRF statics: transforms/helpers/cisco_xe.py + the cisco_xe_acl / cisco_xe_vrf_static templates
-# ---------------------------------------------------------------------------
+# 6. Segment ACLs and inter-VRF statics: transforms/helpers/cisco_xe.py + the cisco_xe_acl / cisco_xe_vrf_static
+# templates
 
 ACL_EVPN = "leaf_cisco_xe_with_acl"
 ACL_LISP = "access_switch_cisco_xe_lisp_with_acl"
@@ -357,7 +351,7 @@ class TestCiscoXeAclRenderingThroughTransform:
     def test_an_ipv6_rule_endpoint_is_refused_through_transform(
         self, golden: str, transform_cls: type[BaseDeviceTransform], role: str
     ) -> None:
-        """A rule whose destination is an IPv6 prefix cannot go into the IPv4 ACL of an IPv4 segment: refused, never dropped."""
+        """A rule whose destination is an IPv6 prefix cannot go into the IPv4 ACL of an IPv4 segment: refused."""
         data = _golden_input(golden)
         rule = _first_policy_rule(data)
         rule["destination_zone"] = {"node": {"name": {"value": "PROD"}}}

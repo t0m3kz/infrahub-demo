@@ -1,11 +1,6 @@
-"""Endpoint mixin for the plain uplink dual-homing flow.
-
-Split out of generators/topology/endpoint.py for size/coherence, same
-pattern as rack.py (RackMixin) and routing.py (RoutingMixin): this mixin owns
-the role="uplink" 1:1 cabling path (speed-matched, dual-homed across a switch
-pair) — everything downstream of _process_endpoint_connections — plus the
-device grouping and switch-pair selection the LAG/MLAG bond flow (role="lag",
-topology/endpoint_lag.py) shares with it.
+"""Endpoint mixin for the plain uplink dual-homing flow. Split out of generators/topology/endpoint.py: the role="uplink"
+1:1 cabling path (speed-matched, dual-homed across a switch pair) plus the device grouping and switch-pair selection the
+LAG/MLAG flow (topology/endpoint_lag.py) shares.
 """
 
 from __future__ import annotations
@@ -25,17 +20,12 @@ if TYPE_CHECKING:
 
 
 class EndpointUplinkMixin:
-    """Mixin providing the plain-uplink dual-homing flow for EndpointConnectivityGenerator.
-
-    Expects the host class to provide: ``client``, ``logger``, ``data``,
-    ``planned_connections``, ``_extract_device_name``, ``create_cabling``
-    (all present on EndpointConnectivityGenerator / CommonGenerator).
+    """Plain-uplink dual-homing flow for EndpointConnectivityGenerator. The host provides ``client``, ``logger``,
+    ``data``, ``planned_connections``, ``_extract_device_name`` and ``create_cabling``.
     """
 
-    # Attribute declarations for the type checker — provided by the host class (same convention as
-    # RackMixin/RoutingMixin). `_extract_device_name` is a plain Callable attribute: a method body defined here, even
-    # a stub, would sit ahead of the host's own in the MRO and shadow it. `create_cabling` is the real
-    # CablingMixin member, aliased for the type checker only.
+    # Attribute declarations for the type checker, provided by the host class. `_extract_device_name` is a plain
+    # Callable attribute: a method body here would shadow the host's in the MRO.
     client: Any
     logger: logging.Logger
     data: Any
@@ -58,9 +48,9 @@ class EndpointUplinkMixin:
         return by_device
 
     def _select_switch_pair(self, device_names: list[str]) -> list[str]:
-        """Up to two switches to dual-home onto: the ones this endpoint is
-        already cabled to (from a prior run) first, so additional ports land on
-        the SAME pair rather than whichever two happen to come first this time."""
+        """Up to two switches to dual-home onto: those already cabled to (prior run) first, so new ports land on the
+        same pair.
+        """
         sticky = sorted(name for name in device_names if name in self._existing_switch_names)
         remaining = [name for name in device_names if name not in self._existing_switch_names]
         return (sticky + remaining)[:2]
@@ -69,11 +59,7 @@ class EndpointUplinkMixin:
         self,
         all_target_interfaces: list[DcimPhysicalInterface],
     ) -> None:
-        """Dual-home this endpoint's free uplinks (``_free_interfaces``) onto a switch pair.
-
-        Args:
-            all_target_interfaces: List of available target interfaces
-        """
+        """Dual-home this endpoint's free uplinks (``_free_interfaces``) onto a switch pair."""
         if not all_target_interfaces:
             self.logger.error(
                 f"Endpoint {self.data['name']}: No compatible interfaces found on target devices. "
@@ -108,11 +94,7 @@ class EndpointUplinkMixin:
         all_target_interfaces: list[DcimPhysicalInterface],
         target_device_names: list[str],
     ) -> None:
-        """Process connections using speed-aware mode (group by speed first).
-
-        Current default behavior: Only connect interfaces with matching speeds.
-        """
-        # Group by speed for mixed-speed deployments
+        """Process connections speed-aware: only interfaces with matching speeds are connected."""
         speed_groups = InterfaceSpeedMatcher.group_by_speed(
             server_interfaces=available_endpoint_interfaces,
             switch_interfaces=all_target_interfaces,
@@ -127,14 +109,12 @@ class EndpointUplinkMixin:
 
         self.logger.info(f"Found {len(speed_groups)} speed group(s): {sorted(speed_groups.keys())} Mbps")
 
-        # Process each speed group independently
         for speed, (server_intfs, switch_intfs) in sorted(speed_groups.items()):
             self.logger.info(
                 f"Processing {speed} Mbps group: {len(server_intfs)} server interfaces, "
                 f"{len(switch_intfs)} switch interfaces"
             )
 
-            # Build connection plan for this speed group
             connection_plan = self._build_connection_plan(
                 server_interfaces=server_intfs,
                 switch_interfaces=switch_intfs,
@@ -145,7 +125,6 @@ class EndpointUplinkMixin:
                 self.logger.warning(f"No connection plan created for {speed} Mbps group")
                 continue
 
-            # Validate the plan (check for duplicates, no minimum requirement)
             is_valid, message = ConnectionValidator.validate_plan(connection_plan, min_connections=1)
             if not is_valid:
                 self.logger.error(f"Connection plan validation failed for {speed} Mbps: {message}")
@@ -153,10 +132,8 @@ class EndpointUplinkMixin:
 
             self.logger.info(f"Connection plan for {speed} Mbps: {len(connection_plan)} connection(s) planned")
 
-            # Add to planned connections
             self.planned_connections.update(connection_plan)
 
-            # Execute cabling
             await self._execute_cabling(connection_plan, target_device_names)
 
             self.logger.info(f"Successfully created {len(connection_plan)} connections for {speed} Mbps group")
@@ -167,7 +144,6 @@ class EndpointUplinkMixin:
         target_device_names: list[str],
     ) -> None:
         """Execute cabling for a connection plan."""
-        # Sort interfaces using netutils for proper ordering
         endpoint_intf_names = sort_interface_list([conn.server_interface for conn in connection_plan])
         target_intf_names = sort_interface_list(list({conn.switch_interface for conn in connection_plan}))
 
@@ -179,11 +155,10 @@ class EndpointUplinkMixin:
             strategy="intra_rack",
             options=CablingOptions(
                 cabling_offset=0,
-                pool=None,  # No IP allocation for endpoint connections
+                pool=None,
             ),
         )
-        # create_cabling already fails when it plans nothing; this also covers a
-        # planned connection that produced no cable.
+        # create_cabling fails when it plans nothing; this covers a planned connection that produced no cable
         if not cabled:
             self.logger.error(
                 f"Endpoint {self.data['name']}: no cable created for {endpoint_intf_names} → "
@@ -196,39 +171,25 @@ class EndpointUplinkMixin:
         switch_interfaces: list[DcimPhysicalInterface],
         target_device_names: list[str],
     ) -> list[ConnectionFingerprint]:
-        """Build connection plan with fingerprinting for idempotency.
-
-        Args:
-            server_interfaces: Server interface models
-            switch_interfaces: Switch interface models
-            target_device_names: List of target switch names for dual-homing
-
-        Returns:
-            List of ConnectionFingerprint objects representing planned connections
-        """
+        """Build the connection plan with fingerprints for idempotency."""
         plan: list[ConnectionFingerprint] = []
 
-        # Speed grouping flattened the pair's interfaces; regroup this speed's
-        # by device, each in netutils interface order.
+        # Regroup this speed's interfaces by device, in netutils interface order
         switch_by_device: dict[str, list[DcimPhysicalInterface]] = {}
         for device_name, intfs in self._group_by_device(switch_interfaces).items():
             interface_map = {intf.name.value: intf for intf in intfs}
             switch_by_device[device_name] = [interface_map[name] for name in sort_interface_list(list(interface_map))]
 
-        # Debug: log device grouping
         self.logger.info(
             f"Grouped {len(switch_interfaces)} interfaces into {len(switch_by_device)} devices: {list(switch_by_device.keys())}"
         )
         for dev_name, intfs in switch_by_device.items():
             self.logger.debug(f"  {dev_name}: {len(intfs)} interfaces")
 
-        # Sort server interfaces the same way (natural interface order, not
-        # query-return order) before truncating, so "take the first 4" picks
-        # eth0-eth3 rather than an arbitrary DB-order subset.
+        # Natural interface order, not query order, so "first 4" picks eth0-eth3
         server_intf_by_name = {intf.name.value: intf for intf in server_interfaces}
         sorted_server_names = sort_interface_list(list(server_intf_by_name.keys()))
 
-        # Take up to 4 server interfaces (2 per switch for dual-homing)
         server_intfs = [server_intf_by_name[name] for name in sorted_server_names[:4]]
 
         self.logger.info(
@@ -236,11 +197,8 @@ class EndpointUplinkMixin:
         )
         self.logger.info(f"Target devices: {target_device_names}")
 
-        # Alternate between switches for dual-homing, two server interfaces
-        # (one per switch) at a time — each such pair is chosen to land on
-        # the SAME switch port name on both switches when possible (e.g.
-        # Ethernet1/1/8 on both), falling back to each switch's own
-        # first-available port when no common free name exists.
+        # Alternate between switches, two server interfaces at a time, landing on the same port name on both switches
+        # when possible, else each switch's first free port
         switch_a_name, switch_b_name = target_device_names[0], target_device_names[1]
         for pair_start in range(0, len(server_intfs), 2):
             pair = server_intfs[pair_start : pair_start + 2]
@@ -259,16 +217,14 @@ class EndpointUplinkMixin:
                 server_intf_name = server_intf.name.value
 
                 if not available_switch_intfs:
-                    # A server NIC that should be dual-homed but has no switch port
-                    # left is a failed deployment, not a partial success.
+                    # A NIC that should be dual-homed but has no switch port left is a failed deployment
                     self.logger.error(f"No available interfaces on {switch_name} for {server_intf_name}")
                     continue
 
                 if matched_name is not None:
                     switch_intf = next(intf for intf in available_switch_intfs if intf.name.value == matched_name)
                 else:
-                    # No common free port name across the pair — fall back to
-                    # each switch's own first-available port independently.
+                    # No common free port name: fall back to each switch's first free port
                     switch_intf = available_switch_intfs[0]
                 available_switch_intfs.remove(switch_intf)
 
@@ -279,7 +235,6 @@ class EndpointUplinkMixin:
                     switch_interface=switch_intf.name.value,
                 )
 
-                # Check if already planned (idempotency within this run)
                 if fingerprint not in self.planned_connections:
                     plan.append(fingerprint)
 

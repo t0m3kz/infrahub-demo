@@ -23,30 +23,10 @@ async def fetch_segment_deployments(
     max_attempts: int = 12,
     poll_interval: int = 5,
 ) -> dict[str, Any]:
-    """Fetch ManagedSegmentDeployment records created by add_segment generator.
-
-    The segment generator runs as an asynchronous Prefect flow that is spawned
-    *after* the ``CoreGeneratorDefinitionRun`` trigger task completes, so the
-    deployment objects can appear several seconds after ``run_generator`` returns.
-    Polls until at least ``expected_count`` records exist rather than fetching
-    once, to avoid racing the generator flow — this is waiting for async work
-    to settle, not a business assertion; callers must check the returned count.
-
-    Args:
-        client: Infrahub async client
-        branch: Branch to check
-        expected_count: Minimum number of segment deployments to poll for
-        deployment_name: Optional deployment name filter (e.g., "DC4")
-        max_attempts: Max polling attempts before giving up
-        poll_interval: Seconds between polling attempts
-
-    Returns:
-        Dictionary with deployment_count and list of deployment detail dicts
-    """
+    """Fetch ManagedSegmentDeployment records created by add_segment generator."""
     client.default_branch = branch
 
-    # Build filter clause — push deployment filter to the server
-    # Declared only with its filter: GraphQL rejects an unused variable.
+    # Build filter clause — push deployment filter to the server Declared only with its filter
     var_decl = ""
     dep_filter = ""
     variables: dict[str, Any] = {}
@@ -140,26 +120,10 @@ async def fetch_segment_vlans(
     max_attempts: int = 12,
     poll_interval: int = 5,
 ) -> dict[str, Any]:
-    """Poll for ManagedSegmentVlan records — per-(segment deployment, device)
-    local VLAN ID realizations, read as the children of the segment's
-    ManagedSegmentDeployment records (the VNI of the deployment is returned with
-    each) — see schemas/extensions/service/segment.yml.
-
-    Args:
-        client: Async Infrahub client
-        branch: Branch to query
-        expected_count: Minimum record count to poll for
-        segment_id: Optional segment id to filter by
-        max_attempts: Max polling attempts
-        poll_interval: Seconds between polling attempts
-
-    Returns:
-        Dictionary with record_count and list of record detail dicts
-    """
+    """Poll for ManagedSegmentVlan records — per-(segment deployment, device) local VLAN ID realizations."""
     client.default_branch = branch
 
-    # GraphQL rejects a declared-but-unused variable, so $segment_id is only
-    # declared alongside the filter that uses it.
+    # GraphQL rejects a declared-but-unused variable
     var_decl = ""
     seg_filter = ""
     variables: dict[str, Any] = {}
@@ -260,9 +224,7 @@ async def fetch_segment_vlans(
 # Switch ports carrying a segment
 # ======================================================================
 
-# A port carries a segment as a member of its switch's VLAN ROW: the ManagedSegmentVlan among the port's interface
-# `capabilities`, an edge only the segment reconcile writes (a person assigns the port to the segment's deployment, the
-# request). Read from the port side (like the reconcile, generators/segment_vlan.py), after the segment's rows.
+# A port carries a segment as a member of its switch's VLAN ROW
 SEGMENT_ROW_IDS_QUERY = """
 query SegmentRowIds($segment_id: ID!) {
   ManagedSegmentDeployment(segment__ids: [$segment_id]) { edges { node { id vlans { edges { node { id } } } } } }
@@ -299,11 +261,7 @@ async def fetch_segment_row_ids(client: InfrahubClient, branch: str, segment_id:
 
 
 async def fetch_segment_ports(client: InfrahubClient, branch: str, segment_id: str) -> list[dict[str, Any]]:
-    """The switch ports (physical ports and port-channels) carrying the segment: the members of its VLAN rows.
-
-    Returns ``[{"id", "name", "role", "device", "device_role", "row_id", "deployment_id"}]`` sorted by device and
-    port (one entry per row edge); ``deployment_id`` is the segment deployment the row is under.
-    """
+    """The switch ports (physical ports and port-channels) carrying the segment: the members of its VLAN rows."""
     rows = await fetch_segment_row_ids(client, branch, segment_id)
     if not rows:
         return []

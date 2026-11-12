@@ -1,8 +1,4 @@
-"""The routing tag model: schema attributes, pools, generator wiring and the customer group.
-
-These read the YAML alone, so a broken link (a pool bound to a missing attribute, a customer outside the group its
-group trigger needs) fails here instead of as a failed or silent generator run in the integration suite.
-"""
+"""The routing tag model: schema attributes, pools, generator wiring and the customer group."""
 
 from __future__ import annotations
 

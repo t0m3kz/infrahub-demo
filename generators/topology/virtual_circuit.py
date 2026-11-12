@@ -1,86 +1,7 @@
-"""add_virtual_circuit: the BGP sessions of a TopologySessionCircuit of type ``dci``, ``handoff`` or ``vpn``.
-
-One generator, one flow, two circuit types. A ``tunnel`` session circuit has no session (the SD-WAN orchestrator owns
-its overlay routing); it is a member of the generator's target group like the others (its group trigger needs the
-group), and a run that reaches one logs and stops. So does a circuit with a cloud end (a CloudPeeringInterface, or a
-port of a cloud transport): its BGP peering is authored in data, and the run tracks nothing, so nothing is deleted.
-
-The flow, shared by both types (what differs is a planner per ``circuit_type``: pool, family, peerings):
-
-1. A decommissioned circuit, or one with fewer than two ends, builds nothing and CLEANS UP: the run's tracked cleanup
-   removes what an earlier run built (see "Ownership"). Two ends on one device, or more than two ends, is an error.
-2. It waits (concurrently: the carriers are independent) for add_circuit on every carrier circuit it rides
-   (``derived_underlay``: the carrier terminating on each end port, or on a sub-interface's parent). add_circuit never
-   waits for this generator, so there is no cycle. Then it decides whether the ends are carried
-   (``utils.circuit_underlay.has_carrier``: a carrier circuit of any status, or a DcimCable, at the port or its
-   parent; a hop inside one facility is a cable, not a circuit):
-
-   - dci: BOTH ends need a carrier (a DCI between two border gateways, each on its own fibre);
-   - handoff: AT LEAST ONE end needs one (the party end may be a stub, or a provider-hosted appliance, with
-     none).
-
-   Not enough carried ends (no carrier found, or one end only of an interconnect) builds nothing, is not an error and
-   KEEPS whatever an earlier run built: the run cannot tell "not linked yet / the link is not visible yet" from "the
-   link is gone", and deleting a good session on a transient read is worse than keeping a stale one (a check enforces
-   carriers; add_circuit fans back out here once a port is linked to a circuit, but nothing reruns this generator
-   when a cable is added later, so cable first, circuit after). A carrier that is wholly decommissioned circuits (at
-   least one, all decommissioned, and no cable at any end) is explicit: it builds nothing and CLEANS UP; a cable has
-   no status, so a cabled end is always live.
-3. A port that is also an end of another session circuit is an error: one port, one session.
-4. Under a lock per port (sorted, so two runs never wait on each other in a cycle) around the check of step 3 and
-   the writes, and under a lock per circuit around the writes, it allocates a /31 (/127) from the pool the circuit type names
-   (identifier ``vc-p2p__<id>``, so a re-run gets the same prefix), addresses the two ends, and
-5. upserts the peering(s), named ``<vc>-bgp`` (handoff) or ``<vc>-underlay`` and ``<vc>-evpn`` (interconnect).
-   Peerings share the ManagedGeneric name space with circuits, hence the suffix.
-
-Every precondition fails before the first write, so a refused run never returns after a partial save, which its
-tracked cleanup would turn into deletions.
-
-Link addressing of a handoff and a vpn is a /31 from the pool of the circuit's namespace (``Handoff-<NAMESPACE>-IPv4``), our
-end the lower address. The server refuses another length for an identifier it already allocated, so a changed length is
-reported with its remedy, never re-allocated silently.
-
-VPN: the two ends are tunnel interfaces (``DcimVirtualInterface``) and need no carrier of their own (the tunnel
-rides the near facility's internet carrier). One eBGP session (``regular``), TTL 1, BFD on. No IPsec or tunnel configuration is generated.
-
-Handoff: the two ends are the sub-interfaces (``<parent>.<vlan>``) of our edge and of the party-owned device,
-inside the circuit's ``ip_namespace``. The /31 comes from the pool named after that namespace (``Handoff-<NAMESPACE>-
-IPv4``, data/bootstrap/26_handoff_pools.yml): addresses on both sides come from OUR pool only. One eBGP session
-(peering_role ``regular``) between the devices' BGP processes; the party's ASN is its process's ``local_as``. The
-session sends no communities (standard or extended): there is nothing to strip yet, communities come in a later change.
-
-DCI: between two EVPN Multi-Site border gateways, both ends physical ports on a device with exactly
-one overlay ManagedBGP process. The /31 (/127) comes from the DCI pools (data/bootstrap/20_dci_pools.yml) by the DC
-end's ``underlay_protocol``; dual-stack is refused, and so is IPv4 towards a colocation edge, whose VTEP loopback is
-IPv6 only. Two sessions on the overlay processes, keyed with one generated per-circuit RoutingPassword
-(``<vc>-dci-key``, created once, never rotated): the directly connected underlay eBGP session on the /31
-(``dci-underlay``) and the loopback-to-loopback multihop eBGP session carrying only l2vpn evpn (``dci``). The two
-physical ports get MTU 9214.
-
-Ownership (the run's tracking group, delete_unused_nodes=True): the prefix, its addresses and the peerings belong to
-the circuit. The SDK's ``update_group`` returns without any cleanup when the run tracked nothing (``if not members:
-return`` precedes the deletion of the previous members that this run did not reach), and deletes every previous member
-the run did not reach otherwise. Cleanup runs for EXACTLY these reasons, and the circuit (the run's target) is added to
-the group only on them and on a run that builds:
-
-- the circuit is decommissioned,
-- it has fewer than two ends,
-- its whole carrier is decommissioned (at least one carrier circuit, all decommissioned, no cable),
-
-so the group is never empty there and everything an earlier run tracked and this one did not write is deleted; the
-circuit is a member of both sets, so it is never deleted itself. A run that builds tracks the circuit for the same
-reason (a previous member the run did not reach would be deleted, and the circuit was one). The one path that does NOT
-track it is "not enough carried ends / no carrier found" (see step 2): nothing is written before that decision (the
-waits and the refetch read only; locks are saved untracked), so the group is empty, ``update_group`` returns at once
-and the old outputs stay. Do not move the tracking back above that decision: a run that transiently sees no carrier
-(index lag) would then delete a good session.
-
-The end interfaces come from device templates and are written untracked (only when something changed);
-devices, BGP processes and the global address families are only referenced. The interconnect's key is untracked too,
-deliberately: a tracked key is deleted by any run that stops reaching it, and the next full run would then generate a
-NEW secret, rotating a key the far side may already use. Untracked, no cleanup ever touches it, so it is created once
-and never rotated. The trade-off: a deleted circuit leaves its ``<vc>-dci-key`` behind (demo data of a circuit that no
-longer exists).
+"""add_virtual_circuit: the BGP sessions of a TopologySessionCircuit of type ``dci``, ``handoff`` or ``vpn`` (a planner
+per circuit_type). A ``tunnel`` or a cloud-end circuit gets no session. Preconditions fail before the first write; too
+few carried ends keeps earlier output, a decommissioned circuit cleans up. The /31 (/127) is keyed ``vc-p2p__<id>`` (a
+changed length is reported); tracking is on cleanup and build paths only, never above the carried-ends decision.
 """
 
 from __future__ import annotations
@@ -125,11 +46,10 @@ from .circuit import CARRIER_CIRCUIT_GENERATOR
 # A handoff or vpn link: a /31 (RFC 3021), the lower address is ours.
 HANDOFF_PREFIX_LENGTH = 31
 
-# DCI P2P pools (data/bootstrap/20_dci_pools.yml) by address family, with the prefix length allocated from them.
+# DCI P2P pools (data/bootstrap/20_dci_pools.yml) by address family, with the allocated prefix length.
 _DCI_POOLS: dict[int, tuple[str, int]] = {4: (DCI_TECHNICAL_IPV4_POOL, 31), 6: (DCI_TECHNICAL_IPV6_POOL, 127)}
 _UNICAST_AF: dict[int, tuple[str, str]] = {4: IPV4_UNICAST_AF, 6: IPV6_UNICAST_AF}
-# Loopback roles an EVPN session may source from, in order of preference. Never the multisite-vip, shared by every
-# border gateway of a site (the query does not select it either).
+# Loopback roles an EVPN session may source from, in order; never the site-shared multisite-vip.
 _SESSION_LOOPBACK_ROLES = ("loopback-vtep", "loopback")
 
 # Circuit status -> the status of the interfaces it lands on (templates render a non-active interface shut).
@@ -173,11 +93,11 @@ class SessionEnd:
     deployment_kind: str
     deployment_name: str
     underlay_protocol: str | None
-    # (id, name) of every ManagedBGP process on the device, and the ids of those of process_role overlay.
+    # (id, name) of every ManagedBGP process on the device, and the ids of the overlay ones.
     processes: tuple[tuple[str, str], ...]
     overlay_ids: tuple[str, ...]
     loopbacks: tuple[Loopback, ...]
-    # The interface this port rides on (None for a port that is not a sub-interface) and its VLAN tag (None: untagged).
+    # The interface this port rides on (None: not a sub-interface) and its VLAN tag (None: untagged).
     parent_id: str | None = None
     vlan_id: int | None = None
 
@@ -299,18 +219,13 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        # Devices on the ends of a handoff circuit, now or before: their VRF instances are converged once the run's
-        # tracked cleanup has removed what the circuit no longer holds (see run()). One instance is one run.
+        # Devices on the ends of a handoff circuit, now or before: their VRF instances are converged after the run's
+        # cleanup.
         self._vrf_device_ids: set[str] = set()
 
     async def run(self, identifier: str, data: dict[str, Any] | None = None) -> None:
-        """Run the generator, then converge the VRF instances of the handoff's end devices.
-
-        The /31 a decommissioned or shrunk circuit held is deleted by the run's cleanup, after ``generate()``; only
-        then does the device no longer demand its namespace, so the pass that prunes the instance runs here. It also
-        follows a circuit whose namespace changed. An interconnect is in ``default``: no demand, no pass. Accepted
-        gap: a port taken off the circuit is no longer listed, so its device is reconciled by its next pass
-        (a segment run, or a handoff) and the check reports the leftover instance until then.
+        """Run the generator, then converge the VRF instances of the handoff's end devices (after the cleanup frees the
+        namespace demand).
         """
         await super().run(identifier, data)
         await self.reconcile_vrfs(self._vrf_device_ids)
@@ -341,8 +256,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
             self.logger.info(f"Virtual circuit {name} ({circuit_type}): no session is generated for this circuit type")
             return
         if any(is_cloud_end(port) for port in circuit.get("capabilities") or [] if isinstance(port, dict)):
-            # The provider's side has no BGP process of ours: the peering of a cloud leg is written in data. Nothing is
-            # tracked, so the run's cleanup deletes nothing (it would take the authored peering for its own).
+            # The provider's side has no BGP process of ours: a cloud leg's peering is authored. Nothing is tracked, so
+            # cleanup deletes nothing.
             self.logger.info(f"session of {name} is authored (cloud far end)")
             return
         self.logger.info(
@@ -355,8 +270,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         if ends is None:
             self._track_circuit(circuit["id"])
             return
-        # The carriers are independent: wait for all of them at once. The data built from is the last refetch, in
-        # carrier order (every refetch re-collects the whole query, so the last one is the freshest).
+        # The carriers are independent: wait for all at once; the last refetch is the freshest data.
         refetched = await asyncio.gather(
             *(
                 self.wait_for_parent_generator_and_refetch(CARRIER_CIRCUIT_GENERATOR, carrier["id"])
@@ -379,7 +293,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         carried = [has_carrier(port) for port in ports]
         # A vpn rides the near facility's internet carrier, which the tunnel interfaces do not sit on: not gated.
         if circuit_type != VPN_TYPE and not (all(carried) if circuit_type == DCI_TYPE else any(carried)):
-            # Not tracked, on purpose: see "Ownership". The run tracks nothing, so the SDK cleans nothing.
+            # Not tracked, on purpose: see "Ownership".
             self.logger.info(
                 f"  {name}: ports not linked to a physical carrier yet - nothing built, any session an earlier run "
                 "built is kept; built when they are (add_circuit reruns it for a circuit)"
@@ -406,21 +320,12 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         self.logger.info(f"Virtual circuit {name} — completed")
 
     def _track_circuit(self, circuit_id: str) -> None:
-        """Make the circuit a member of the run's group, so the SDK's cleanup runs (see "Ownership" above).
-
-        infrahub_sdk's update_group() does no cleanup when a run tracked nothing, so every path that must clean up an
-        earlier run's outputs tracks the circuit first.
-        """
+        """Make the circuit a member of the run's group so the SDK's cleanup runs (see "Ownership" above)."""
         self.client.group_context.related_node_ids.append(circuit_id)
 
     @asynccontextmanager
     async def _hold_ports(self, ends: list[SessionEnd]) -> AsyncGenerator[None]:
-        """A lock per end port, taken in sorted order, around the shared-port check AND the writes.
-
-        The check reads other circuits and the writes address the ports: two circuits created together on one port
-        must not both pass the check before either has written. Sorted keys mean two runs never hold one port each
-        while waiting for the other's.
-        """
+        """A lock per end port, in sorted order, around the shared-port check AND the writes."""
         async with AsyncExitStack() as stack:
             for port_id in sorted({end.port_id for end in ends}):
                 await stack.enter_async_context(self.resource_lock(f"vc-port-{port_id}"))
@@ -440,10 +345,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         return ", ".join([*circuits, *cables]) or "none"
 
     def _ends_or_none(self, circuit: dict[str, Any], name: str) -> list[SessionEnd] | None:
-        """The circuit's two ends, or None when there is nothing to build (decommissioned, or an end missing).
-
-        Not an error: the tracked cleanup then removes what an earlier run built. Two ends on one device, or more
-        than two ends, is.
+        """The circuit's two ends, or None when there is nothing to build (decommissioned, or an end missing); two ends
+        on one device, or more than two, is an error.
         """
         if circuit.get("status") == DECOMMISSIONED:
             self.logger.info(f"  {name} is decommissioned - no session; the one an earlier run built is cleaned up")
@@ -467,10 +370,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         return list(ends.values())
 
     async def _refuse_shared_ports(self, circuit_id: str, name: str, ends: list[SessionEnd]) -> None:
-        """One port, one session: refuse an end that is also an end of another live interconnect or handoff circuit.
-
-        The read is inside the per-port lock on purpose (race guard), only the gather of the two session kinds is
-        shared (session_circuits_on). A decommissioned circuit that kept its ports does not hold them.
+        """One port, one session: refuse an end that is also an end of another live interconnect or handoff circuit
+        (read inside the per-port lock).
         """
         port_ids = [end.port_id for end in ends]
         others = {
@@ -654,9 +555,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
             if missing:
                 self.fail(f"{name}: interface(s) {', '.join(missing)} not found")
 
-            # Every precondition holds - the writes start here. The instance comes first and its device locks are held
-            # until the addresses are saved: the transforms refuse a session in a VRF its device lacks, and a pruning
-            # pass must not see the instance without its demand.
+            # Preconditions hold, the writes start. The instance comes first, device locks held until the addresses are
+            # saved (a pruning pass must not see it without demand).
             needs = {end.device_id: {plan.namespace} for end in (plan.first, plan.second)} if plan.namespace else {}
             async with self.vrfs_held(needs):
                 local_vrfs = await self.local_vrf_ids(needs, [plan.namespace]) if plan.namespace else {}
@@ -702,11 +602,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                 )
 
     async def _link_prefix(self, name: str, circuit_id: str, plan: SessionPlan, pool: Any) -> Any:
-        """The link prefix of the session, allocated from our pool.
-
-        Allocation is idempotent per identifier (``vc-p2p__<circuit id>``) but the server refuses a different length
-        for an identifier it already allocated, so a changed prefix length is reported here with the remedy and never
-        worked around: nothing is re-allocated or deleted behind the data.
+        """The link prefix of the session, allocated from our pool (idempotent per ``vc-p2p__<circuit id>``); a changed
+        length is reported, never re-allocated.
         """
         try:
             prefix = await self.client.allocate_next_ip_prefix(
@@ -726,8 +623,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
             )
         if prefix is None:
             self.fail(f"{name}: pool '{plan.pool_name}' returned no prefix - exhausted?")
-        # Owned by this circuit. allocate_next_ip_prefix() is a pool mutation, not a save(), so the prefix joins
-        # the run's tracking group only here.
+        # Owned by this circuit: allocate_next_ip_prefix() is a pool mutation, so the prefix joins the tracking group
+        # only here.
         self.client.group_context.related_node_ids.append(prefix.id)
         self.logger.info(f"  {plan.label} prefix {prefix.prefix.value} for {name}")
         return prefix
@@ -735,12 +632,8 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
     async def _update_interface(
         self, node: Any, *, address_id: str, description: str, status: str, mtu: int | None, vrf_id: str | None = None
     ) -> None:
-        """Address an end interface, untracked, and only if something changed; put it in the VRF instance ``vrf_id``.
-
-        The interface comes from the device's template, not from this run: tracked, a later run that stopped
-        addressing it would delete the port. A plain save() on the fetched node sends only the modified fields. The
-        VRF is the instance's interface edge, added and a stale one removed edge by edge, never in a saved list
-        (generators/helpers/interface_vrf.py). The node is read with its ``capabilities``.
+        """Address an end interface, untracked, only if something changed, and put it in the VRF instance ``vrf_id``
+        (stale VRF edges removed).
         """
         changed = False
         stale_vrfs: list[str] = []

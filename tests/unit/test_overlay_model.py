@@ -1,12 +1,4 @@
-"""Unit tests for the control-plane-neutral overlay model (transforms/helpers/overlay.py).
-
-Covers:
-  - neutrality guard         — no BGP/EVPN state in any model field or in the builder signature
-  - build_overlay_node()     — role gate, instances, locator, default-exit flag, anycast gateway
-  - evpn_vxlan_context()     — get_vxlan_config is exactly the composition of builder and renderer
-  - purity                   — neither the inputs nor the model are mutated; output lists stay lists
-  - control-plane registry   — OVERLAY_RENDERERS / OVERLAY_CONFIG_KEYS pins, the two renderer layers never import each other
-"""
+"""Unit tests for the control-plane-neutral overlay model (transforms/helpers/overlay.py)."""
 
 from __future__ import annotations
 
@@ -44,8 +36,7 @@ from transforms.helpers.vxlan import (
 )
 
 _MODEL_CLASSES = (Locator, AnycastGateway, L2Instance, L3Instance, OverlayNode)
-# A name token that ties a field or parameter to BGP/EVPN. Matched per underscore-separated word,
-# so `address` or `arp_suppression` are fine but `rt_anchor` / `local_asn` / `rd_format` are not.
+# A name token tying a field to BGP/EVPN, matched per word (`rt_anchor` is one, `address` is not).
 _CONTROL_PLANE_TOKENS = {"rt", "rd", "asn", "as", "evpn", "bgp", "capabilities", "capability", "peering", "peerings"}
 _INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "vrf_type": "internet"}
 _PROD_NS = {"name": "PROD", "l3_vni": 50001, "vrf_type": "prod"}

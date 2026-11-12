@@ -1,12 +1,4 @@
-"""Unit tests for CommonGenerator.acquire_resource_lock / release_resource_lock.
-
-Covers:
-- acquire: happy path (first create() wins), retry-then-succeed on a uniqueness
-  violation, non-uniqueness GraphQLError propagates immediately, stale lock
-  reclaim, exhausting all retries raises
-- release: normal delete, and swallowing a GraphQLError if another waiter
-  already reclaimed the lock as stale
-"""
+"""Unit tests for CommonGenerator.acquire_resource_lock / release_resource_lock."""
 
 from __future__ import annotations
 
@@ -164,10 +156,7 @@ class TestReleaseResourceLock:
 
 
 class TestResourceLockContextManager:
-    """``async with self.resource_lock(key):`` is acquire_resource_lock/
-    release_resource_lock as one call — same two methods, no new locking
-    behavior, just removing the chance of a call site's manual try/finally
-    forgetting the release or misplacing the lock's actual scope."""
+    """``async with self.resource_lock(key):`` is acquire_resource_lock/ release_resource_lock as one call"""
 
     @pytest.mark.asyncio
     async def test_acquires_before_and_releases_after_the_body(self) -> None:

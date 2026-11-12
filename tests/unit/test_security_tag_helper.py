@@ -46,11 +46,7 @@ def _profile(pool_id: str | None, pool_name: str = "SGT-POOL") -> Any:
 def _client(
     *, existing_tags: list[Any] | None = None, profiles: list[Any] | None = None, lock: _Lock | None = None
 ) -> Any:
-    """A client whose tag lookup returns ``existing_tags`` and whose profile lookup returns ``profiles``.
-
-    By default the NX-OS row names SGT-POOL and the EOS row names no pool. With
-    ``lock``, every tag lookup records whether it ran under the lock.
-    """
+    """A client whose tag lookup returns ``existing_tags`` and whose profile lookup returns ``profiles``."""
     client = MagicMock()
     profile_list = [_profile("pool-sgt"), _profile(None)] if profiles is None else profiles
     client.lookups_under_lock = []

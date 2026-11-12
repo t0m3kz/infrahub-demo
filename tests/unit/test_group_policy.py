@@ -425,18 +425,13 @@ class TestQueries:
 
     @pytest.mark.parametrize("query", DEVICE_QUERIES)
     def test_device_queries_carry_the_same_fleet_roots_after_the_device_root(self, root_dir: Path, query: str) -> None:
-        """The GPO block reads the fleet roots as top-level roots, the same in every device query; DcimDevice stays first.
-
-        The SecurityTag root also spreads the placement of each component's instances
-        (``SecurityTagPlacementFields``, component_coverage).
-        """
+        """The GPO block reads the fleet roots as top-level roots, the same in every device query;"""
         reference = self._roots(load_query(root_dir / self.DEVICE_QUERIES[0]))
         device = self._roots(load_query(root_dir / query))
         assert list(device)[0] == "DcimDevice"
         fleet = len(self.FLEET_ROOTS)
         assert list(device)[1 : 1 + fleet] == list(self.FLEET_ROOTS)
-        # What follows the fleet roots is the BGP route protection's: VIPs, segment/prefix registrations, VRFs, and the
-        # nested data the device's services derive from.
+        # Past the fleet roots: the BGP route protection's data.
         assert set(list(device)[1 + fleet :]) <= {*self.BGP_ROOTS, "DeviceServices"}
         assert "environment_zones" in device
         assert not any(key.startswith("environment_prefixes_") for key in device)

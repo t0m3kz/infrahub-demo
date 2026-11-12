@@ -1,11 +1,4 @@
-"""Guard: no Python module in the repository may exceed ``MAX_LINES`` lines.
-
-A module that long is several topics in one file: it is slow to read, collides in review and hides which behaviour a
-failing test belongs to. Split it by topic: a test module into sibling ``test_<name>_<topic>.py`` modules with shared
-builders in a ``<name>_helpers.py``; a generator into a mixin or helper module; a transform helper into a sibling
-module along the topic seam. Covers ``tests/`` and the application packages ``generators/``, ``transforms/``,
-``checks/`` and ``utils/``.
-"""
+"""Guard: no Python module in the repository may exceed ``MAX_LINES`` lines."""
 
 from pathlib import Path
 

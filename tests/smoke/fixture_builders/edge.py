@@ -26,14 +26,7 @@ from transforms.config.edge import Edge
 
 
 def build_border_leaf_bgw_stretched_data(*, device_name: str, platform: str) -> dict:
-    """A DC border-leaf that is an EVPN Multi-Site BGW with two stretched, hostless segments.
-
-    The exchange-transit wiring (shared and dedicated firewall context, each serving one
-    PROD segment) minus the customer port, plus a multisite-vip loopback and
-    stretch_scope dc_pair on both segments: the BGW stitches them without any
-    customer-facing port, so it renders their VLAN, VNI and anycast SVI but no tenant
-    policy (no ACL, no PBR). Those belong to the leaves that host the segments.
-    """
+    """A DC border-leaf that is an EVPN Multi-Site BGW with two stretched, hostless segments."""
     data = build_exchange_transit_bl_data(device_name=device_name, platform=platform, with_customer_port=False)
     device_node = data["DcimDevice"]["edges"][0]["node"]
     device_node["interfaces"]["edges"].append(
@@ -51,16 +44,14 @@ def build_border_leaf_bgw_stretched_data(*, device_name: str, platform: str) -> 
     for dep in device_node["deployment"]["node"]["segment_deployments"]["edges"]:
         segment = dep["node"]["segment"]["node"]
         segment["stretch_scope"] = _v("dc_pair")
-        # Zero-trust policy on the segments, as on the leaves that host them: the ACL and PBR
-        # the BGW must not take as input.
+        # Zero-trust policy on the segments, as on the leaves that host them
         segment["security_policy"] = _node(
             _make_security_policy(
                 name="policy-bgw-seg",
                 rules=[_make_policy_rule(index=10, name="allow-https", protocol="tcp", port_start=443)],
             )
         )
-    # The DC-wide firewall contexts (what makes the leaves redirect these segments to the
-    # firewall): the same contexts the firewall-role port is tagged with.
+    # The DC-wide firewall contexts (what makes the leaves redirect these segments to the firewall)
     fw_port = next(e["node"] for e in device_node["interfaces"]["edges"] if e["node"]["role"] == _v("firewall"))
     firewall = {
         "node": {
@@ -72,13 +63,7 @@ def build_border_leaf_bgw_stretched_data(*, device_name: str, platform: str) -> 
 
 
 def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
-    """A colocation edge that is its site's EVPN Multi-Site BGW and peers an ISP in INTERNET.
-
-    ebgp_ebgp edge plus a multisite-vip loopback (what makes it a BGW) and one
-    upstream transit peering: Ethernet1/14 in namespace INTERNET (vrf_type
-    internet, l3_vni 60002) towards the ISP PE. No stretched segments, so the
-    INTERNET L3 VNI comes from the transit session alone.
-    """
+    """A colocation edge that is its site's EVPN Multi-Site BGW and peers an ISP in INTERNET."""
     data = build_device_data(
         device_name=device_name, role="edge", platform=platform, scenario="ebgp_ebgp", include_segments=False
     )
@@ -153,7 +138,7 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
             }
         }
     )
-    # The generated transit policies (generators/topology/transit_policy.py): a transit session has no other filter.
+    # The generated transit policies (generators/topology/transit_policy.py)
     from tests.smoke.fixture_builders.routing_policy import add_transit_policies  # noqa: PLC0415 - imports this module
 
     add_transit_policies(data, ["192.0.2.0/24"])
@@ -201,12 +186,8 @@ def _regular_handoff(
     far_role: str | None,
     far_kind: str | None = None,
 ) -> tuple[dict, dict]:
-    """A handoff sub-interface in a tenant namespace and its ``regular`` eBGP peering, as add_virtual_circuit writes it.
-
-    ``far_role`` is the process_role of the far end's BGP process in the peering (None: unset), ``far_kind`` the
-    ``__typename`` of the far end's device (None: not selected, as in the older fixtures). Returns the
-    (interface edge, peering) pair.
-    """
+    """A handoff sub-interface in a tenant namespace and its ``regular`` eBGP peering, as add_virtual_circuit writes
+    it."""
     interface = {
         "node": {
             **_make_interface(
@@ -251,21 +232,13 @@ def _regular_handoff(
 
 
 def build_edge_unfiltered_appliance_data(*, device_name: str) -> dict:
-    """A provider-hosted Network Edge router (CloudNetworkAppliance, cisco_xe, role edge) with two PROD handoffs.
-
-    Its base ports are DcimVirtualInterface NICs (the appliance has no hardware and no cable). The platform has
-    no external-policy renderer, and a hosted appliance must still get its artifact, so the
-    external session renders with an UNFILTERED banner comment:
-      - Ethernet1/1.1100 PROD: EXT-AWS-DX-FR2 (DcimPhysicalDevice, process_role unset): external, banner.
-      - Ethernet1/2.1200 PROD: eg-fr201 (DcimPhysicalDevice) whose BGP process in the peering has
-        process_role overlay: one of our own devices, internal, no banner.
-    """
+    """A provider-hosted Network Edge router (CloudNetworkAppliance, cisco_xe, role edge) with two PROD handoffs."""
     data = build_device_data(
         device_name=device_name, role="edge", platform="cisco_xe", scenario="ebgp_ebgp", include_segments=False
     )
     device_node = data["DcimDevice"]["edges"][0]["node"]
     device_node["__typename"] = "CloudNetworkAppliance"
-    # A hosted appliance has no hardware: its base ports are virtual NICs (no cable, no interface type, no MTU).
+    # A hosted appliance has no hardware
     for edge in device_node["interfaces"]["edges"]:
         port = edge["node"]
         if port["__typename"] == "DcimPhysicalInterface":
@@ -323,31 +296,7 @@ def build_edge_unfiltered_appliance_data(*, device_name: str) -> dict:
 
 
 def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> dict:
-    """A colocation edge with external eBGP peers inside the tenant VRFs.
-
-    ebgp_ebgp edge (no VTEP) plus five peering_role regular sessions, as add_virtual_circuit writes a
-    handoff (send_community and send_extended_community both False), on sub-interfaces:
-      - Ethernet1/13.1000 PROD and Ethernet1/13.1001 NONPROD: the AWS VIFs. The far end registers no
-        prefix (a cloud gateway registers nothing on the edge), so the session has no owner: deny-all
-        both ways, with a comment.
-      - Ethernet1/13.1900 PROD: the SD-WAN gateway handoff. It accepts what the offices behind
-        EQX-FR2-SDWAN-GW1 register: C002's PROD lan_prefixes (10.210.2.0/24), C003's (10.210.3.0/24)
-        and C005's hosted office-lan segment (10.176.5.0/24). A NONPROD LAN, an office owned by a provider, an office registering nothing, an office behind another
-        gateway and an office without a gateway are not accepted.
-      - Ethernet1/13.1300 PROD: EXT-MEGAPORT-MCR1, no far end registers a prefix, so the session has
-        no owner: deny-all both ways, with a comment.
-      - Ethernet1/12.1200 PROD: eg-am-ne01, a CloudNetworkAppliance (provider-hosted Network Edge) whose
-        BGP process in the peering has process_role overlay. An appliance is never ours, so the hop is
-        external; nothing is registered behind it: deny-all both ways, with a comment.
-    Out (the same-owner exchange, utils/ownership.py): per session, for each of its owners, that owner's
-    on-prem segments in the namespace plus what it registered behind another session of the namespace,
-    minus the session's own IN (C005's office-hosted segment is registered behind GW1, so it is never
-    announced back to it). Never another owner's prefix. Segments of C003, C015,
-    C002 and C005 in PROD and NONPROD; C001's segment is behind no session and never announced, a
-    segment without a customer owner, a PROD container, a MANAGEMENT segment and
-    a segment without a gateway are never announced. A VIF on another device with the same VLAN is
-    ignored.
-    """
+    """A colocation edge with external eBGP peers inside the tenant VRFs."""
     data = build_device_data(
         device_name=device_name, role="edge", platform=platform, scenario="ebgp_ebgp", include_segments=False
     )
@@ -359,7 +308,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     }
     handoffs = [
         # (sub-interface, namespace, local ip, remote ip, remote device, remote iface, remote asn, peering, bfd,
-        #  process_role of the far end's BGP process, kind of the far end's device)
+        # process_role of the far end's BGP process, kind of the far end's device)
         ("Ethernet1/13.1000", "PROD", "10.255.5.5/30", "10.255.5.6/30", "EXT-AWS-DX-FR2", "et-0/0/0.1000", 64512,
          "VRF-PROD-EQXFR2-AWS-EUC1", True, "regular", None),
         ("Ethernet1/13.1001", "NONPROD", "10.255.6.5/30", "10.255.6.6/30", "EXT-AWS-DX-FR2", "et-0/0/0.1001", 64512,
@@ -455,10 +404,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         *lans: str,
         hosted: tuple[tuple[str, str, dict], ...] = (),
     ) -> dict:
-        """A footprint's gateway and owner, its lan_prefixes and (``hosted``) the segments it hosts itself.
-
-        ``hosted`` entries are (gateway prefix, namespace, segment owner).
-        """
+        """A footprint's gateway and owner, its lan_prefixes and (``hosted``) the segments it hosts itself."""
         return {
             "owner": owner,
             "sdwan_gateway": _node(
@@ -530,8 +476,8 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
     )
 
     def tunnel(owner: dict, zone_name: str, prefixes: tuple[str, ...], *ends: str) -> dict:
-        """A tunnel circuit: the office (of ``owner``) in its locations, the neutral prefixes it registers
-        and the device of each end port. The tunnel stores no owner: it is the office's."""
+        """A tunnel circuit: the office (of ``owner``) in its locations, the neutral prefixes it registers and the
+        device of each end port."""
         return {
             "vrf": _node(routing_vrf(zone_name)),
             "locations": _edges([{"owner": owner}]),
@@ -539,9 +485,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
             "capabilities": _edges([{"device": _node({"name": _v(end)})} for end in ends]),
         }
 
-    # The tunnels registering space behind a gateway: C001's partner range behind GW1 (accepted from GW1's
-    # session, announced to C001's other sessions), a provider-owned one (never accepted), a NONPROD one
-    # (not the PROD session's) and the office's own inventory tunnel, which registers nothing.
+    # The tunnels registering space behind a gateway
     data["TopologySessionCircuit"] = _edges(
         [
             tunnel(_customer("C001"), "PROD", ("198.18.0.0/24",), gw1, "EXT-ACME-EDGE1"),
@@ -558,17 +502,7 @@ _BGW_SEGMENT_KWARGS: dict[str, Any] = {"vlan_id": 150, "vni": 10150, "seg_name":
 
 
 def build_edge_bgw_pair_data(*, device_name: str, platform: str, enforce: bool = True) -> dict:
-    """A colocation metro edge that is one of two BGWs sharing a site VIP.
-
-    BGW edge (Loopback1 IPv6 VTEP, Loopback100 multisite-vip) with two DCI dark
-    fibres (Ethernet1/10 and 1/11, MTU 9214), each carrying two sessions with one
-    per-circuit key: the underlay (peering_role dci-underlay, ttl 1, bfd, on the
-    port /127) and the EVPN session (peering_role dci, ttl 2 multihop, no bfd,
-    Loopback1 to the remote loopback), and an interlink
-    (Ethernet1/8, role interlink) cabled to its sibling edge, with a FABRIC iBGP
-    session (ttl 1, ipv6 unicast + l2vpn evpn) in the shared site AS on that /127.
-    Ethernet1/13 and 1/14 (uplinks to an ISP / cross-connect) carry nothing.
-    """
+    """A colocation metro edge that is one of two BGWs sharing a site VIP."""
     data = build_device_data(
         device_name=device_name, role="edge", platform=platform, scenario="ebgp_ebgp", include_segments=False
     )
@@ -599,8 +533,8 @@ def build_edge_bgw_pair_data(*, device_name: str, platform: str, enforce: bool =
             )
         }
     )
-    # One segment on a firewall-role port gives the BGW its VXLAN block (an edge
-    # without a stretched segment or an INTERNET session renders none).
+    # One segment on a firewall-role port gives the BGW its VXLAN block (an edge without a stretched segment or an
+    # INTERNET session renders none).
     seg = _make_segment_node(**_BGW_SEGMENT_KWARGS, row_device_id=device_node["id"])
     interfaces.append(
         {
@@ -738,11 +672,8 @@ def _vip_interface(device: str, role: str, vip: str, loopback: str) -> dict:
 
 
 def _add_route_protection(data: dict, *, device_name: str, sibling: str, enforce: bool) -> None:
-    """Give the BGW pair fixture the route protection facts: the metro stages or enforces and names its loopback supernet.
-
-    The remote border gateways (one per DC) and the sibling edge carry their VIPs on the ``DcimVirtualInterface``
-    root, which is what a DCI or fabric session derives its far-end addresses from (transforms/helpers/bgp_facts.py).
-    """
+    """Give the BGW pair fixture the route protection facts: the metro stages or enforces and names its loopback
+    supernet."""
     deployment = data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]
     deployment["routing_filter_enforce"] = _v(enforce)
     deployment["loopback_pool"] = _node({"resources": _edges([{"prefix": _v("2001:db8:100::/120")}])})
@@ -791,15 +722,14 @@ def write_fixtures() -> tuple[int, int]:
             "external tenant-VRF peers edge",
             Edge,
             "edge_cisco_nxos_external_vrf_peers",
-            # External eBGP peers in the tenant VRFs (cloud VIFs, SD-WAN gateway): per-peer
-            # inbound prefix-list of the far end's registered prefixes, per-VRF on-prem outbound.
+            # External eBGP peers in the tenant VRFs (cloud VIFs, SD-WAN gateway)
             build_edge_external_vrf_peers_data(device_name="dc1-edge-01", platform="cisco_nxos"),
         ),
         (
             "unfiltered hosted appliance edge",
             Edge,
             "edge_cisco_xe_unfiltered_appliance",
-            # A hosted appliance (cisco_xe) has no external-policy renderer: its external session renders with a banner.
+            # A hosted appliance (cisco_xe) has no external-policy renderer
             build_edge_unfiltered_appliance_data(device_name="eg-am-ne02"),
         ),
         (
@@ -813,7 +743,7 @@ def write_fixtures() -> tuple[int, int]:
             "metro edge pair BGW, route protection staged",
             Edge,
             "edge_cisco_nxos_bgw_pair_staged",
-            # The same pair with routing_filter_enforce false: the objects exist, RM-FABRIC-OUT and RM-DCI-IN stay attached.
+            # The same pair with routing_filter_enforce false: the objects exist
             build_edge_bgw_pair_data(device_name="dc1-edge-01", platform="cisco_nxos", enforce=False),
         ),
     )

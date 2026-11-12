@@ -1,6 +1,5 @@
-"""Growth and ASN-stability comparisons, and the DC topology and routing fetchers (test_10, test_12 - test_20, test_61).
-
-Fetch-only: a helper runs a query and returns parsed data; the test asserts on it."""
+"""Growth and ASN-stability comparisons, and the DC topology and routing fetchers (test_10, test_12 - test_20,
+test_61)."""
 
 import asyncio
 import logging
@@ -26,15 +25,7 @@ def find_min_growth_shortfalls(
     baseline: dict[str, int],
     min_growth: dict[str, int],
 ) -> list[str]:
-    """List every role whose growth (current - baseline) is below its minimum.
-
-    Roles missing from ``min_growth`` must not shrink (minimum 0). Roles
-    missing from ``current`` count as 0 devices, so a role that disappeared
-    entirely is reported rather than raising a KeyError.
-
-    Returns:
-        One human-readable line per shortfall, empty when every role grew enough.
-    """
+    """List every role whose growth (current - baseline) is below its minimum."""
     shortfalls: list[str] = []
     for role in sorted(baseline):
         delta = current.get(role, 0) - baseline[role]
@@ -47,16 +38,7 @@ def find_min_growth_shortfalls(
 
 
 def find_underlay_asn_drift(role: str, current: dict[str, int], baseline: dict[str, int]) -> list[str]:
-    """List baseline devices of ``role`` that lost or changed their underlay ASN.
-
-    Args:
-        role: Device role the snapshots were taken for (only used in messages)
-        current: device name -> underlay ASN now
-        baseline: device name -> underlay ASN before the scenario
-
-    Returns:
-        Human-readable error lines, empty when every baseline device kept its ASN.
-    """
+    """List baseline devices of ``role`` that lost or changed their underlay ASN."""
     missing = sorted(name for name in baseline if name not in current)
     changed = sorted(
         (name, baseline[name], current[name])
@@ -73,11 +55,7 @@ def find_underlay_asn_drift(role: str, current: dict[str, int], baseline: dict[s
 
 
 def _peering_participants(peering: dict[str, Any]) -> set[tuple[str, str]]:
-    """Return {(device_name, device_role)} for both ends of a peering.
-
-    Each entry in ``bgp_processes`` carries its owning device via the process's
-    own (outbound) ``capabilities`` relationship — a single device per process.
-    """
+    """Return {(device_name, device_role)} for both ends of a peering."""
     participants: set[tuple[str, str]] = set()
     for participant in peering.get("bgp_processes", []) or []:
         for dev in participant.get("capabilities", []) or []:
@@ -88,17 +66,7 @@ def _peering_participants(peering: dict[str, Any]) -> set[tuple[str, str]]:
 
 
 async def fetch_dc_topology(client: InfrahubClient, branch: str, dc_name: str) -> dict[str, Any]:
-    """Fetch every device in a DC's topology with its role and full routing state.
-
-    Includes DC-level devices (super-spines) via TopologyDataCenter.devices and
-    rack devices (spines, leafs, tors) via pods -> racks -> devices, in one
-    round-trip (queries/get_dc_devices.gql), along with a DC-wide cable count.
-
-    Returns:
-        {"devices": [{"name": str, "role": str, "capabilities": [...]}], "cable_count": int}.
-        Each capability dict has a "typename" key of "ManagedBGP" or "ManagedOSPF"
-        (clean_data() strips GraphQL's leading "__" from "__typename").
-    """
+    """Fetch every device in a DC's topology with its role and full routing state."""
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
 
@@ -143,15 +111,7 @@ async def snapshot_dc_device_counts_by_role(
     dc_name: str,
     roles: list[str],
 ) -> dict[str, int]:
-    """Snapshot device counts by role, scoped to one DC's topology.
-
-    Only devices reachable from the DC itself, its pods, and their racks are
-    counted (see fetch_dc_topology()), so another DC's deployment cannot mask
-    or fake the growth a scenario expects.
-
-    Returns:
-        Mapping role -> count (0 for roles with no device in the DC)
-    """
+    """Snapshot device counts by role, scoped to one DC's topology."""
     topo = await fetch_dc_topology(client=client, branch=branch, dc_name=dc_name)
     counts = compute_role_counts(topo["devices"])
     snapshot = {role: counts.get(role, 0) for role in roles}
@@ -160,20 +120,7 @@ async def snapshot_dc_device_counts_by_role(
 
 
 def compute_routing_summary(devices: list[dict[str, Any]]) -> dict[str, Any]:
-    """Compute BGP/OSPF process, session, and per-device routing details.
-
-    Returns:
-        {
-            "bgp_count": int, "ospf_count": int,
-            "bgp_session_count": int, "bgp_breakdown": {"ebgp": int, "ibgp": int},
-            "device_routing": {device_name: {"role", "underlay_process", "overlay_process",
-                                              "ospf_process", "underlay_peerings", "overlay_peerings"}},
-            "role_summary": {role: {"count", "with_underlay_process", "with_overlay_process",
-                                     "with_ospf_process", "total_underlay_peerings",
-                                     "total_overlay_peerings", "min_underlay_peerings",
-                                     "min_overlay_peerings", "devices"}},
-        }
-    """
+    """Compute BGP/OSPF process, session, and per-device routing details."""
     device_names = {str(dev.get("name", "")) for dev in devices if dev.get("name")}
     role_by_name = {str(dev.get("name", "")): str(dev.get("role") or "unknown") for dev in devices}
 
@@ -313,11 +260,7 @@ async def snapshot_underlay_asn_by_roles(
     dc_name: str,
     roles: list[str],
 ) -> dict[str, dict[str, int]]:
-    """Per-role underlay ASN snapshots for one DC from a single topology fetch.
-
-    Returns:
-        Mapping role -> {device name: underlay ASN}
-    """
+    """Per-role underlay ASN snapshots for one DC from a single topology fetch."""
     topo = await fetch_dc_topology(client=client, branch=branch, dc_name=dc_name)
     snapshots = {role: compute_underlay_asn_by_role(topo["devices"], role) for role in roles}
     logger.info(
@@ -335,14 +278,7 @@ async def fetch_underlay_asn_drift(
     dc_name: str,
     baseline: dict[str, dict[str, int]],
 ) -> list[str]:
-    """Re-snapshot the baseline's roles and list every device that lost or changed its underlay ASN.
-
-    Args:
-        baseline: Output of snapshot_underlay_asn_by_roles() taken before the scenario
-
-    Returns:
-        find_underlay_asn_drift() lines for every role, empty when all ASNs are stable
-    """
+    """Re-snapshot the baseline's roles and list every device that lost or changed its underlay ASN."""
     current = await snapshot_underlay_asn_by_roles(client=client, branch=branch, dc_name=dc_name, roles=list(baseline))
     return [
         error

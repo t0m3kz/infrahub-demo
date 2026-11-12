@@ -1,12 +1,4 @@
-"""Pytest smoke tests for config transforms.
-
-Each configs/{name}/input.json + output.txt pair becomes one parametrized test.
-The directory name prefix determines which transform class to use.
-
-Usage:
-    uv run pytest tests/smoke/ -v
-    uv run pytest tests/smoke/ -k arista_eos  # filter by platform
-"""
+"""Pytest smoke tests for config transforms."""
 
 from __future__ import annotations
 
@@ -48,8 +40,7 @@ def _raw_vrf(interface: dict) -> dict | None:
 
 CONFIGS_DIR = Path(__file__).resolve().parent / "configs"
 
-# Sorted longest-first so "super_spine" matches before "spine", "border_leaf" before "leaf",
-# "l2_leaf"/"access_leaf" before "leaf"
+# Sorted longest-first so "super_spine" matches before "spine", "border_leaf" before "leaf"
 _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
     [
         ("super_spine", SuperSpine),
@@ -107,8 +98,7 @@ def test_config_transform_matches_fixture(transform_cls: type, fixture_dir: Path
             assert domain["source_ip"] == "10.254.0.0"
             assert domain["peer_ip"] == "10.254.0.1"
             assert domain["peer_link"] == "PortChannel100"
-            # The control SVI is merged into the shared VLAN tables, not
-            # rendered as a routed INTERFACE.
+            # The control SVI is merged into the shared VLAN tables
             assert configdb["VLAN"]["Vlan4094"]["vlanid"] == "4094"
             assert "Vlan4094|10.254.0.0/31" in configdb["VLAN_INTERFACE"]
             assert "Vlan4094|PortChannel100" in configdb["VLAN_MEMBER"]
@@ -116,8 +106,7 @@ def test_config_transform_matches_fixture(transform_cls: type, fixture_dir: Path
             assert "1|PortChannel101" in configdb["MCLAG_INTERFACE"]
             assert "PortChannel100|Ethernet33" in configdb["PORTCHANNEL_MEMBER"]
             assert "PortChannel101|Ethernet10" in configdb["PORTCHANNEL_MEMBER"]
-        # Every VLAN_MEMBER names a VLAN the device defines; a port carrying VLANs in the
-        # input (a host port) is a member of each, tagged on a trunk, untagged on an access port.
+        # Every VLAN_MEMBER names a VLAN the device defines
         members = configdb.get("VLAN_MEMBER", {})
         assert all(key.split("|")[0] in configdb["VLAN"] for key in members)
         assert all(entry["tagging_mode"] in {"tagged", "untagged"} for entry in members.values())
@@ -231,9 +220,7 @@ def test_standalone_firewall_context_preserves_ordered_rules(platform: str) -> N
 def test_standalone_firewall_fixture_keeps_authored_interfaces_and_routes_at_the_root(
     fixture_name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The policy-only context (no VLAN, so no legs) owns no interface: the authored /30 interfaces and their return
-    routes are the firewall's own. A context owns the legs derived from its VLAN (utils/service_contexts.py), nothing
-    else is stored on an interface to bind it."""
+    """The policy-only context (no VLAN, so no legs) owns no interface."""
     data = json.loads((CONFIGS_DIR / fixture_name / "input.json").read_text())
     instance = make_transform(Firewall)
     render = MagicMock(wraps=instance._render)

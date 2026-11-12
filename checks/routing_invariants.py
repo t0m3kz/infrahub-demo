@@ -1,77 +1,7 @@
-"""Validate the routing invariants that hold between topologies.
+"""Check the routing invariants that hold between topologies (none is visible in one rendered config).
 
-PROD and NON-PROD never meet, and the INTERNET VRF carries both environments'
-SNAT /32s, so it must stay transit-only. None of these is visible in a
-rendered config; each is a property of data that spans topologies.
-
-1. L3 VNI sharing. Two namespaces of different namespace_types sharing an
-   l3_vni would also share a route-target, an implicit import.
-2. The INTERNET VRF has no host-facing interface: no segment gateway and no
-   address on a host, a customer port or any device other than a transit
-   edge, a provider or a firewall.
-4. A cloud hub route table is environment-pure: every gateway attachment
-   associated with or propagating into it resolves to one namespace type,
-   through its network's account environment (a peer-gateway attachment
-   through its owner account's).
-
-5. Cloud VPC aggregates. Each `CloudVirtualNetwork.cidr_blocks` prefix is
-   registered in the namespace whose type matches its account's environment
-   (the four shared environment VRFs, never a per-customer one); every cloud
-   subnet `cidr_block` (Text) lies inside one of its VPC's blocks; and inside
-   one namespace no VPC block overlaps another VPC's block or an on-prem
-   prefix (a non-container prefix behind a segment gateway). A prefix object
-   referenced by both a VPC and an on-prem segment is flagged on its own: an
-   object-file upsert of an identical CIDR silently adopts the on-prem object.
-6. Office LAN prefixes. Each `TopologyCustomerOffice.lan_prefixes` prefix is
-   registered in the PROD namespace (an office is always production), and is
-   held to the same overlap rule as a VPC block: inside one namespace it
-   overlaps no VPC block, no other office's LAN and no on-prem prefix. These
-   are the routes an office may announce into its VRF over SD-WAN. The same
-   holds for a tunnel's `TopologySessionCircuit.registered_prefixes` (a B2B
-   partner's range reached through the SD-WAN gateway): PROD, no overlap.
-7. Registered-prefix owners. The colocation edge announces to and accepts from
-   an external BGP peer only prefixes whose owner is an OrganizationCustomer,
-   and the owner belongs to the object that registers the prefix: a VPC block's
-   owner is `CloudVirtualNetwork.account.owner`, an office LAN's (and that of
-   the segments the office hosts) is `TopologyCustomerOffice.owner`. So every
-   VPC with at least one `cidr_blocks` entry needs an account owned by a
-   customer, every office that registers `lan_prefixes` or hosts a segment
-   (`network_segments`) needs a customer owner, and so does every tunnel with
-   `registered_prefixes` (the tunnel's owner is derived: the owner of the
-   single office among its `locations`, utils/ownership.py circuit_owner; two
-   offices of different owners is reported here); a provider-owned (or
-   ownerless) account, office or tunnel is silently never accepted or announced
-   at the border.
-   This covers every registered block and LAN, not only those currently
-   behind a handoff: that is cheaper, and any of them can be put behind one.
-   A segment needs no check: `ManagedNetworkSegment.owner` is a required
-   OrganizationCustomer in the schema.
-8. Ownership of what sits behind the border. The edge passes routes between two
-   external sessions of the SAME owner and never across owners
-   (utils/ownership.py exchange_policies), which only holds if a prefix has one
-   owner and one attachment point. Per namespace this rule runs
-   ownership_conflicts over the registrations: the on-prem segments (owner as
-   on the edge), the offices' `lan_prefixes` and
-   hosted segments grouped by their `sdwan_gateway` (one attachment point per
-   gateway) together with the `registered_prefixes` of the tunnels ending on
-   that gateway, and what a cloud peering registers behind its gateway (the
-   transport's owner; one attachment point per cloud gateway)
-   (transforms/helpers/bgp_external.py registered_by_attachment: the
-   very walk the edge uses). It reports a prefix registered by more than one
-   owner (it would be announced to another owner's session) and an owner's
-   prefix reachable behind more than one attachment point (local or through
-   exactly one session).
-9. Every office behind an SD-WAN gateway registers something. An office with an
-   `sdwan_gateway` needs at least one `lan_prefixes` entry or a segment it
-   hosts (the same registrations as the edge reads, office_registered):
-   otherwise the gateway session accepts nothing of it and the office is
-   unreachable from the rest of its owner's network.
-
-A missing evpn_rt_as on an eBGP-overlay fabric is checked by CheckEvpnFabric.
-9. On-prem segments. Inside one namespace the routed prefixes behind the gateways of two segments overlap
-   whoever owns them: customer networks are never translated, so two overlapping ranges cannot both be routed in a
-   shared VRF. A container prefix (the pool a segment's subnet is allocated from) may contain a segment's prefix, and
-   a segment stretched over several sites is one object.
+Rules 1-10: namespaces and l3_vni, INTERNET transit-only, cloud and office prefix registration, ownership. See AGENTS.md
+"Border policy".
 """
 
 from __future__ import annotations
@@ -97,8 +27,7 @@ from utils.segment_addressing import segment_namespace
 
 from .base import WarningCheck
 
-# Devices that may legitimately hold an address in the INTERNET VRF: the transit
-# edge, the ISP side, and firewall legs.
+# Roles that may hold an address in the INTERNET VRF: transit edge, ISP side, firewall legs.
 _INTERNET_DEVICE_ROLES = frozenset({"edge", "core", "border-leaf", "provider"}) | FIREWALL_ROLES
 
 _INTERNET_INTERFACE_KEYS = ("InternetPhysicalInterfaces", "InternetVirtualInterfaces", "InternetLagInterfaces")
@@ -109,7 +38,7 @@ def _type_for_environment(environment: str | None) -> str | None:
 
 
 class _Aggregate(NamedTuple):
-    """A routed prefix a VPC or an office owns, with the namespace type its owner's environment implies."""
+    """A routed prefix a VPC, office or tunnel owns, with its expected namespace type."""
 
     owner: str  # "VPC 'name'" / "office 'name'"
     noun: str  # what the prefix is to its owner: "block" / "LAN prefix"
@@ -146,9 +75,7 @@ class CheckRoutingInvariants(WarningCheck):
         self._validate_ownership_conflicts(cleaned.get("ManagedNetworkSegment") or [], offices, tunnels, legs)
         self._validate_offices_register(offices)
 
-    # ------------------------------------------------------------------
     # 1. L3 VNI sharing
-    # ------------------------------------------------------------------
 
     def _validate_l3_vni_sharing(self, namespaces: list[dict[str, Any]]) -> None:
         by_vni: dict[int, list[dict[str, Any]]] = {}
@@ -166,9 +93,7 @@ class CheckRoutingInvariants(WarningCheck):
                     )
                 )
 
-    # ------------------------------------------------------------------
     # 2. INTERNET VRF is transit-only
-    # ------------------------------------------------------------------
 
     def _validate_internet_vrf(self, segments: list[dict[str, Any]], interfaces: list[dict[str, Any]]) -> None:
         for segment in segments:
@@ -195,9 +120,7 @@ class CheckRoutingInvariants(WarningCheck):
                     )
                 )
 
-    # ------------------------------------------------------------------
     # 4. Hub route-table environment purity
-    # ------------------------------------------------------------------
 
     def _validate_hub_route_tables(self, attachments: list[dict[str, Any]]) -> None:
         members: dict[str, dict[str, Any]] = {}
@@ -229,15 +152,13 @@ class CheckRoutingInvariants(WarningCheck):
 
     @staticmethod
     def _attachment_type(att: dict[str, Any]) -> str | None:
-        """A network attachment -> its network's account environment; a gateway one -> the owner account's."""
+        """Namespace type of a network attachment (its account's environment) or a gateway one (its owner account's)."""
         owner_environment = (att.get("owner_account") or {}).get("environment")
         if att.get("virtual_network"):
             return _type_for_environment(_account_environment(att.get("virtual_network")) or owner_environment)
         return _type_for_environment(owner_environment)
 
-    # ------------------------------------------------------------------
     # 5-6. VPC and office aggregates
-    # ------------------------------------------------------------------
 
     def _validate_aggregate_namespaces(self, aggregates: list[_Aggregate]) -> None:
         for agg in aggregates:
@@ -275,12 +196,7 @@ class CheckRoutingInvariants(WarningCheck):
                 )
 
     def _validate_segment_overlaps(self, segments: list[dict[str, Any]]) -> None:
-        """Within one namespace the routed prefixes of two on-prem segments never overlap, whoever owns them.
-
-        Customer networks are not translated, so two segments with overlapping prefixes cannot both be routed in a
-        shared VRF. Only a container prefix (the pool a segment's /24 is allocated from) may contain another; a
-        segment stretched over several sites is one object and appears once.
-        """
+        """Routed prefixes of two on-prem segments never overlap in one namespace (customer networks are not NATed)."""
         routed = _onprem_prefixes(segments)
         for index, (name, owner, prefix, net, zone) in enumerate(routed):
             namespace = _namespace_key(zone)
@@ -329,9 +245,7 @@ class CheckRoutingInvariants(WarningCheck):
                         )
                     )
 
-    # ------------------------------------------------------------------
     # 7. Registered-prefix owners are customers
-    # ------------------------------------------------------------------
 
     def _validate_registered_prefix_owners(
         self,
@@ -385,9 +299,7 @@ class CheckRoutingInvariants(WarningCheck):
                     )
                 )
 
-    # ------------------------------------------------------------------
     # 8. One owner and one attachment point per registered prefix
-    # ------------------------------------------------------------------
 
     def _validate_ownership_conflicts(
         self,
@@ -409,9 +321,7 @@ class CheckRoutingInvariants(WarningCheck):
             for conflict in ownership_conflicts(onprem.get(namespace, {}), learned.get(namespace, {})):
                 self.log_error(message=f"Namespace '{namespace}': {conflict.message}")
 
-    # ------------------------------------------------------------------
     # 9. An office behind an SD-WAN gateway registers something
-    # ------------------------------------------------------------------
 
     def _validate_offices_register(self, offices: list[dict[str, Any]]) -> None:
         for office in offices:
@@ -471,7 +381,7 @@ def _vpc_aggregates(networks: list[dict[str, Any]], legs: list[CloudLeg]) -> lis
 
 
 def _office_aggregates(offices: list[dict[str, Any]]) -> list[_Aggregate]:
-    """Each office footprint's lan_prefixes entry, expected in the PROD namespace (an office has no environment)."""
+    """Each office lan_prefixes entry, expected in PROD."""
     return [
         _Aggregate(
             owner=f"office '{office.get('name')}'",
@@ -488,7 +398,7 @@ def _office_aggregates(offices: list[dict[str, Any]]) -> list[_Aggregate]:
 
 
 def _tunnel_aggregates(tunnels: list[dict[str, Any]]) -> list[_Aggregate]:
-    """Each tunnel registered_prefixes entry, expected in the PROD namespace (a tunnel is production)."""
+    """Each tunnel registered_prefixes entry, expected in PROD."""
     return [
         _Aggregate(
             owner=f"tunnel '{tunnel.get('name')}'",
@@ -504,7 +414,7 @@ def _tunnel_aggregates(tunnels: list[dict[str, Any]]) -> list[_Aggregate]:
 
 
 def _describe_owner(owner: dict[str, Any] | None) -> str:
-    """'no owner' or the owner's org_id (display_label) and kind, for a message."""
+    """'no owner' or the owner's org_id and kind."""
     if not owner:
         return "no owner"
     return f"owner {owner.get('org_id')} ({owner.get('display_label')}, {owner.get('typename')})"

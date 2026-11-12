@@ -1,5 +1,4 @@
-"""Unit tests for utils/device_services.py: the PBR bindings derived from one switch's nested data (the shape of
-fragments/device_services.gql)."""
+"""Unit tests for utils/device_services.py:"""
 
 from __future__ import annotations
 

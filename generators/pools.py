@@ -1,15 +1,5 @@
-"""Resource pool and lock mixin for CommonGenerator.
-
-Locking exists to protect concurrent pool allocation — two generator runs
-racing to allocate from the same parent pool need to serialize, not to
-create two divergent pools — so the two concerns live together here.
-
-``_resolve_pool`` (pure pool-reference resolution: SDK object / ID string /
-name fallback, with caching) lives on CommonGenerator itself instead of here
-— DeviceMixin/CablingMixin need it for device/P2P IP allocation but have
-nothing to do with the pool creation/locking logic in this file, so pulling
-it in would force every device- or cabling-only generator to carry PoolMixin
-too.
+"""Resource pool and lock mixin for CommonGenerator. Locking protects concurrent pool allocation, so both live here.
+``_resolve_pool`` stays on CommonGenerator because DeviceMixin/CablingMixin need it without PoolMixin.
 """
 
 from __future__ import annotations
@@ -37,40 +27,25 @@ from .protocols import TopologyPod
 
 
 class PoolMixin:
-    """Mixin providing resource pool and lock methods for CommonGenerator.
+    """Resource pool and lock methods for CommonGenerator.
+    The host provides ``client``, ``logger``, ``branch_name``, ``fabric_name``, ``pod_name`` and ``_retry_delay``."""
 
-    Expects the host class to provide: ``client``, ``logger``, ``branch_name``,
-    ``fabric_name``, ``pod_name``, and ``_retry_delay`` (all present on
-    ``CommonGenerator``).
-    """
-
-    # Attribute declarations for the type checker — provided by CommonGenerator / InfrahubGenerator
+    # Attribute declarations for the type checker, provided by CommonGenerator / InfrahubGenerator
     client: Any
     logger: logging.Logger
     branch_name: str
     fabric_name: str
     pod_name: str | None
-    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
-    # nothing shadows them in the MRO.
+    # Type checking only: aliases of the host's other bases, so nothing shadows them in the MRO
     if TYPE_CHECKING:
         _retry_delay = staticmethod(CommonGenerator._retry_delay)
-    # Set on first use by _parent_pools, one per generator instance (= per run).
+    # Set on first use by _parent_pools, one per run
     _parent_pool_cache: dict[tuple[type[Any], str], Any] | None
 
     async def acquire_resource_lock(self, resource_key: str) -> str:
-        """Serialize concurrent generator runs racing for the same shared
-        resource (e.g. two endpoints cabling into the same rack/row with no
-        per-device offset). Sibling instances of the same generator can run
-        truly concurrently, so a check-then-act guard isn't safe here.
-
-        Uses CoreStandardGroup's uniqueness_constraint on name as a
-        server-side mutex — two concurrent create() calls with the same name
-        serialize; the loser gets a uniqueness-violation GraphQLError and
-        retries with backoff. A lock older than
-        RESOURCE_LOCK.stale_after is treated as abandoned and
-        reclaimed.
-
-        Returns the acquired lock's id — pass to release_resource_lock when done.
+        """Serialize concurrent generator runs racing for the same shared resource. CoreStandardGroup's name uniqueness
+        is the server-side mutex: the loser of a concurrent create retries with backoff. A lock older than
+        RESOURCE_LOCK.stale_after is reclaimed. Returns the lock's id for release_resource_lock.
         """
         lock_name = f"lock-{resource_key}"
         for attempt in range(RESOURCE_LOCK.attempts):
@@ -93,12 +68,8 @@ class PoolMixin:
         )
 
     async def _reclaim_stale_lock(self, lock_name: str) -> None:
-        """Delete an abandoned lock (owner crashed before release_resource_lock ran).
-
-        Hand-written query instead of client.get(..., include_metadata=True):
-        the SDK's auto version also requests node_metadata on CoreGroup's
-        `parent` edge, which 500s server-side for any CoreStandardGroup on
-        this Infrahub version. Skipping `parent` avoids that path.
+        """Delete an abandoned lock (owner crashed before release). Hand-written query: the SDK's include_metadata read
+        requests node_metadata on CoreGroup's `parent`, which 500s on this version.
         """
         query = """
         query($name: String!) {
@@ -128,8 +99,7 @@ class PoolMixin:
             pass  # another waiter already reclaimed it
 
     async def release_resource_lock(self, lock_id: str) -> None:
-        """Release a lock acquired via acquire_resource_lock. Safe to call even if
-        the lock was already reclaimed as stale by another waiter."""
+        """Release a lock from acquire_resource_lock; safe if another waiter already reclaimed it as stale."""
         try:
             await self.client.delete(kind=CoreStandardGroup, id=lock_id)
         except GraphQLError:
@@ -137,13 +107,7 @@ class PoolMixin:
 
     @asynccontextmanager
     async def resource_lock(self, resource_key: str) -> AsyncGenerator[None]:
-        """``async with self.resource_lock(key):`` — acquire_resource_lock/
-        release_resource_lock as a single call instead of a manual
-        acquire-try-finally-release triplet at every call site. Same
-        semantics, same lock; this only removes the chance of a call site
-        forgetting the ``finally`` (or the lock scope not actually matching
-        what it wraps, which is easy to miss on review in a long ``try``
-        block)."""
+        """``async with self.resource_lock(key):`` wraps acquire/release so no call site can forget the ``finally``."""
         lock_id = await self.acquire_resource_lock(resource_key)
         try:
             yield
@@ -158,35 +122,9 @@ class PoolMixin:
         refs: Mapping[str, str | None],
         current: Mapping[str, str | None] | None = None,
     ) -> None:
-        """Point attributes of an existing node at pools or shared objects: one fetch, one save.
-
-        ``refs`` maps relationship name -> peer id; a ``None`` id means "nothing
-        to attach" and is skipped. ``current`` maps relationship name -> the peer
-        id the generator's own query already read off the node: a ref whose id
-        equals it is already attached and is skipped, so a re-run whose refs are
-        all in place costs no fetch and no save (nor, with the node read by the
-        query, a missing-node check). Without ``current`` every ref is written. The one place a generator writes pool (or
-        ``evpn_rt_as``) references onto a node it does not upsert itself (its
-        target: DC, pod, colocation metro, zone or virtual colocation, office). A node the run upserts
-        anyway (an MLAG or standalone VLAN domain) carries the reference in
-        that upsert's data instead.
-
-        Missing-node policy: the node MUST exist. Every caller attaches to the
-        generator's own target (DC, pod, metro, zone, virtual colocation, office), and it is fetched by id, never by HFID, so
-        neither a trigger race nor HFID index lag can hide it. A missing node
-        is therefore a real fault: logged as an error (fatal under
-        FailOnErrorLogger) and raised as GeneratorError — never skipped.
-
-        Idempotent: the same ids are written on every run (compared only against
-        ``current``, when given). The save is not delete_unused_nodes bookkeeping (it is
-        update_group_context=False, so it never adds the node to the run's
-        group). Plain save(), not allow_upsert=True: the node was just
-        fetched, so update() sends only the changed fields; the Upsert
-        mutation would resend every attribute
-        and relationship and spuriously re-fire unrelated ``updated`` triggers
-        (index/fabric_templates/mlag_create/connectivity_mode/status) and
-        double-fire dc_pod_cascade. Untracked: attaching a pool does not make
-        this run the node's owner — the node is the run's target.
+        """Point attributes of an existing node at pools or shared objects: one fetch, one save. ``refs`` maps
+        relationship -> peer id; refs equal to ``current`` are skipped. Plain untracked save() (no upsert); the node
+        must exist.
         """
         known = current or {}
         attach = {attribute: ref_id for attribute, ref_id in refs.items() if ref_id and known.get(attribute) != ref_id}
@@ -212,21 +150,9 @@ class PoolMixin:
         node: str,
         node_attribute: str,
     ) -> Any:
-        """Create or update a CoreNumberPool.
-
-        Pointing a node at the pool is the caller's job: put ``{"id": pool.id}``
-        into the node's own upsert, or use attach_refs for a node the run does not upsert.
-
-        Args:
-            pool_name: Name for the pool
-            description: Pool description
-            start_range: First value in range
-            end_range: Last value in range
-            node: Infrahub node kind for allocation (e.g. "RoutingAutonomousSystem")
-            node_attribute: Attribute on the node (e.g. "asn", "vlan_id", "vni")
-
-        Returns:
-            The created/upserted CoreNumberPool SDK object
+        """Create or update a CoreNumberPool and return it. Pointing a node at the pool is the caller's job (the node's
+        own upsert, or attach_refs). Args: pool_name, description, start_range/end_range, node (kind for allocation,
+        e.g. "RoutingAutonomousSystem"), node_attribute (e.g. "asn", "vlan_id", "vni").
         """
         pool = await self.client.create(
             kind=CoreNumberPool,
@@ -256,7 +182,7 @@ class PoolMixin:
         start_range: int,
         end_range: int,
     ) -> Any:
-        """Create or update an ASN CoreNumberPool. Convenience wrapper around upsert_number_pool."""
+        """Create or update an ASN CoreNumberPool (wrapper around upsert_number_pool)."""
         return await self.upsert_number_pool(
             pool_name=pool_name,
             description=description,
@@ -267,11 +193,8 @@ class PoolMixin:
         )
 
     async def preload_parent_pools(self, names: Iterable[str]) -> None:
-        """Read the parent prefix pools ``names`` in one query for _get_parent_pool_with_retry to find.
-
-        A generator that slices several pools out of parent pools it knows up front (a colocation zone's five)
-        reads them here once instead of one get per slice. A name the query does not return is simply not
-        cached: its lookup keeps the retry that waits for another generator to create it.
+        """Read the parent prefix pools ``names`` in one query for _get_parent_pool_with_retry. A name the query does
+        not return is not cached, so its lookup keeps the retry that waits for another generator to create it.
         """
         wanted = sorted({name for name in names if (CoreIPPrefixPool, name) not in self._parent_pools()})
         if not wanted:
@@ -287,15 +210,10 @@ class PoolMixin:
         return cache
 
     async def _get_parent_pool_with_retry(self, parent_pool_name: str, kind: type[Any] = CoreIPPrefixPool) -> Any:
-        """Fetch a parent pool of ``kind`` (a CoreIPPrefixPool unless told otherwise) by
-        name, retrying if it doesn't exist yet — closes the race where a
-        pod-level call needs a DC-level pool that add_dc's own
-        allocate_resource_pools() may not have created yet (add_pod's trigger can
-        fire before add_dc's task is even visible in the task list), and where a
-        colocation zone needs its metro's ASN pool (a CoreNumberPool) before
-        add_colocation_metro has created it.
-
-        A pool read by preload_parent_pools() is returned from there, without a query."""
+        """Fetch a parent pool of ``kind`` (a CoreIPPrefixPool by default) by name, retrying until it exists. Closes the
+        race where add_pod needs a DC pool add_dc has not created yet, or a zone needs its metro's ASN pool. A preloaded
+        pool is returned without a query.
+        """
         if (cached := self._parent_pools().get((kind, parent_pool_name))) is not None:
             return cached
         for attempt in range(WAIT_FOR_PEER_GENERATOR.attempts):
@@ -317,20 +235,9 @@ class PoolMixin:
         )
 
     async def ensure_context_vlan_pool(self, *, name: str, spec: ContextSpec) -> None:
-        """Create a fabric's VLAN pool for the service contexts of spec's kind, `{name}-{spec.key}-vlan-pool`.
-
-        Read by generators/firewall_context.py's _ensure_context_vlan, which
-        gives each DC and colocation-zone context the VLAN its legs derive
-        from (utils/exchange_transit.py); spec.vlan_range keeps the firewall
-        and load-balancer bands apart. Per-fabric (not global) so each DC's or
-        colocation zone's context VLANs stay within its own numbering. The legs'
-        addresses come from the per-VRF bootstrap pools (FW-Transit-*,
-        LB-Leg-*, LB-VIP-*), not from a fabric pool.
-
-        upsert_number_pool is idempotent for sequential re-runs only; two
-        overlapping calls for the same `name` could both create a pool of that
-        name (the race allocate_resource_pools() locks against), so the
-        upsert runs under a per-(`name`, kind) lock for every caller.
+        """Create a fabric's VLAN pool for the service contexts of spec's kind, `{name}-{spec.key}-vlan-pool`. Read by
+        firewall_context.py's _ensure_context_vlan; spec.vlan_range keeps the firewall and load-balancer bands apart.
+        Runs under a per-(`name`, kind) lock because upsert_number_pool is idempotent only for sequential runs.
         """
         async with self.resource_lock(f"{spec.key}-pools-{name}"):
             await self.upsert_number_pool(
@@ -355,19 +262,9 @@ class PoolMixin:
         is_pool: bool = False,
         track: bool = True,
     ) -> Any:
-        """Slice one prefix out of a bootstrap parent pool and upsert a pool around it.
-
-        The slice is keyed by pool_name, so re-runs get the same prefix back.
-        The pool hands out the slice's own length unless a caller names one,
-        and its own identifier is pool_name. ``member_type`` and ``is_pool`` are
-        set on the slice when a caller states them (a block that is itself
-        carved into prefixes: ``member_type="prefix"``, ``is_pool``). ``track=False``
-        saves the pool outside the run's tracking group, for a pool several runs
-        share (a customer's, drawn from by every footprint and segment of it), so no
-        run's delete_unused_nodes can reclaim it.
-
-        The upsert REPLACES the pool's resources with the slice: call it for a pool
-        that does not exist yet, never to re-run one that was grown with more resources.
+        """Slice one prefix out of a bootstrap parent pool and upsert a pool around it, keyed by pool_name (re-runs get
+        the same prefix). ``track=False`` saves outside the run's tracking group. The upsert REPLACES the pool's
+        resources: never re-run it on a grown pool.
         """
         parent_pool = await self._get_parent_pool_with_retry(parent_pool_name)
         allocated_prefix = await self.client.allocate_next_ip_prefix(
@@ -404,40 +301,13 @@ class PoolMixin:
         id: str,
         underlay_protocol: str = "ipv4",
     ) -> dict[str, Any]:
-        """Ensure required per-pod / fabric pools exist.
-
-        Args:
-            strategy: "fabric" for DC-level pools, "pod" for pod-level pools
-            pools: Dictionary of explicit pool sizes {pool_name: prefix_length}
-            id: DC or Pod ID
-            underlay_protocol: "ipv4", "ipv6" or "dual_stack" — which address family each
-                fabric pool is sliced from (helpers.routing.underlay_pool_is_ipv6);
-                only read by the fabric strategy, a pod slices its DC's pools
-
-        Returns:
-            Dictionary mapping pool names to pool objects: {"loopback": pool_obj, "technical": pool_obj}
-
-        Notes:
-        - Requires explicit pool sizes like {"technical": 24, "loopback": 28}
-        - Fabric strategy also requires "management" and "super-spine-loopback" pools
+        """Ensure the per-pod / fabric pools exist; returns {pool name: pool object}. Args: strategy ("fabric" or
+        "pod"), pools ({name: prefix_length}), id (DC or pod), underlay_protocol (family of fabric pools).
         """
         self.logger.info("Implementing resource pools")
 
-        # Two overlapping generator runs for the SAME dc_id/pod_id (this
-        # module's own docstring: "two generator runs racing to allocate from
-        # the same parent pool need to serialize, not to create two divergent
-        # pools") can otherwise both check "does a pool named X exist?", both
-        # see nothing yet, and both client.create()+save(allow_upsert=True) a
-        # NEW CoreIPPrefixPool/CoreIPAddressPool with the identical name —
-        # Upsert only converges on an existing match, it does not prevent two
-        # concurrent creates from succeeding as two separate nodes. Both
-        # duplicates then draw from the SAME parent prefix (allocate_next_ip_
-        # prefix against it IS idempotent per identifier) but each tracks its
-        # OWN "next free" state independently, so both hand out the identical
-        # first few addresses to whichever caller happens to reference it —
-        # reproduced on DC4's hyper-spine mesh technical pool. Serialize on
-        # (strategy, id) so only one caller ever creates this fabric's/pod's
-        # pools; the other waits and then finds them already there.
+        # Serialize on (strategy, id): two overlapping runs could both create a same-named pool, and the duplicates
+        # would hand out identical addresses from the same parent prefix
         async with self.resource_lock(f"pool-alloc-{strategy}-{id}"):
             return await self._allocate_resource_pools_locked(
                 strategy=strategy, pools=pools, id=id, underlay_protocol=underlay_protocol
@@ -450,16 +320,13 @@ class PoolMixin:
         id: str,
         underlay_protocol: str = "ipv4",
     ) -> dict[str, Any]:
-        """The actual pool-creation body of allocate_resource_pools(), run
-        under that method's per-(strategy, id) lock."""
+        """The pool-creation body of allocate_resource_pools(), run under its per-(strategy, id) lock."""
         fabric_name = self.fabric_name
         pod_name = self.pod_name
         pool_prefix = pod_name if pod_name else fabric_name
 
-        # Store created pools to return
         created_pools = {}
 
-        # Use explicit pool sizes (all callers now provide explicit sizes)
         for pool_name, pool_size in pools.items():
             if strategy == "fabric" and pool_name in [
                 "management",
@@ -479,10 +346,8 @@ class PoolMixin:
             is_prefix_pool = (strategy == "fabric" and pool_name in ["technical", "loopback"]) or (
                 strategy == "pod" and pool_name == "technical"
             )
-            # "management" here is true OOB (mgmt0/console/ZTP) — it gets the
-            # MANAGEMENT VRF. "technical" (fabric P2P) and "loopback" stay in
-            # `default` (the global table): EVPN-VXLAN VTEP loopbacks and
-            # underlay BGP peering can't depend on a VRF being provisioned.
+            # "management" is OOB and gets the MANAGEMENT VRF; "technical" and "loopback" stay in `default` (VTEP
+            # loopbacks and underlay BGP cannot depend on a VRF)
             new_pool = await self.ensure_sliced_pool(
                 pool_name=f"{pool_prefix}-{pool_name}-pool",
                 parent_pool_name=parent_pool_name,
@@ -493,7 +358,6 @@ class PoolMixin:
             )
             created_pools[pool_name] = new_pool
 
-        # Update the pod with all its pool references in a single save
         if pod_name:
             pool_attribute_map = {"loopback": "loopback_pool", "technical": "prefix_pool"}
             await self.attach_refs(

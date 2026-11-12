@@ -43,10 +43,9 @@ class DeviceOptions(TypedDict, total=False):
     rack: str
     """Rack ID for device placement."""
     ha_kind: str
-    """When set, create_devices() pairs the created devices two-at-a-time
-    (sorted names, odd one left unpaired) into this HA node kind — e.g.
-    "ManagedFirewallHA"/"ManagedLoadbalancerHA". Mirrors mlag_create's
-    pairing behavior but for firewall/load-balancer roles."""
+    """When set, create_devices() pairs the created devices two-at-a-time into this HA node kind
+    ("ManagedFirewallHA"/"ManagedLoadbalancerHA").
+    """
     mlag_create: Literal["no", "back-to-back", "virtual"]
     """Pod-wide MLAG pairing mode for leaf/tor/l2-leaf/access-leaf roles —
     passed through from TopologyPod.mlag_create. "no" (default) never pairs."""
@@ -55,18 +54,14 @@ class DeviceOptions(TypedDict, total=False):
     only L3/routed roles). False forces back-to-back instead of erroring out.
     Default: True."""
     name_override: str
-    """Explicit device name, bypassing the naming_convention-generated
-    role-index name — only valid with quantity=1. Used for devices whose
-    name doesn't fit the standard fabric/pod/role/index scheme, e.g. a
-    customer's dedicated virtual firewall/load-balancer instances."""
+    """Explicit device name, bypassing the naming convention; only valid with quantity=1 (e.g. a customer's dedicated
+    virtual firewall).
+    """
 
 
 class ChainHop(TypedDict, total=False):
-    """One stop in a ``CommonGenerator.create_chain_cabling()`` chain — e.g. border-leaf,
-    firewall, load-balancer, each cabled to its neighbor(s) on dedicated ports.
-
-    An endpoint hop (first/last in the chain) only needs the role facing its
-    single neighbor; an interior hop (has a neighbor on both sides) needs both.
+    """One stop in a ``CommonGenerator.create_chain_cabling()`` chain; an endpoint hop needs the role facing its one
+    neighbor, an interior hop needs both.
     """
 
     devices: list[str]
@@ -115,20 +110,14 @@ class RoutingOptions(TypedDict, total=False):
     overlay_password_id: str | None
     """Pre-resolved shared overlay BGP auth key (RoutingPassword) ID."""
     shared_underlay_as_id: str | None
-    """Pre-resolved AS ID shared by EVERY bottom device in this call — bypasses
-    the ASN pool and MLAG-pair grouping entirely. Used for spine (one ASN per
-    pod) and super-spine (one ASN fabric-wide) underlay in eBGP-eBGP, where
-    the caller (pod.py/dc.py) already resolved a single shared AS before
-    calling create_routing()."""
+    """Pre-resolved AS ID shared by EVERY bottom device in this call, bypassing the ASN pool and MLAG grouping (pod
+    spines, fabric super-spines).
+    """
 
 
 @dataclass(frozen=True)
 class ConnectionFingerprint:
-    """Unique identifier for a server-to-switch connection.
-
-    Provides idempotency by uniquely identifying each connection regardless
-    of execution order or multiple generator runs.
-    """
+    """Unique identifier for a server-to-switch connection, so cabling is idempotent across runs."""
 
     server_name: str
     server_interface: str

@@ -1,8 +1,4 @@
-"""Firewall context helpers: the per-vsys/context list of a firewall and where its policies are placed.
-
-Split out of ``transforms.helpers.firewall`` (zones, static routes and exchange transits stay there). The customer
-PBR rules that resolve their nexthop through a context live in ``transforms.helpers.firewall_pbr``.
-"""
+"""Firewall context helpers: the per-vsys/context list of a firewall and where its policies are placed."""
 
 from ipaddress import ip_interface
 from typing import Any
@@ -31,8 +27,7 @@ def member_firewall_contexts(shared_capabilities: list[dict[str, Any]] | None) -
 
 
 def _served_footprint(deployment: dict[str, Any], external: bool) -> dict[str, Any]:
-    """One footprint a context serves: its segments and the share of its rules the context holds (a context of the
-    Internet edge when ``external``), from the footprint's own list of contexts (utils/firewall_split.py)."""
+    """One footprint a context serves."""
     contexts = footprint_contexts(deployment)
     return {
         "name": deployment.get("name"),
@@ -44,7 +39,7 @@ def _served_footprint(deployment: dict[str, Any], external: bool) -> dict[str, A
 
 def _terminated_segments(cap: dict[str, Any], footprints: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The segments of the footprints this context is the internal one of that the pair gateways itself
-    (``firewall_gateway``): the Internet edge context never terminates one."""
+    (``firewall_gateway``)."""
     found: dict[str, dict[str, Any]] = {}
     for footprint in footprints:
         if cap.get("id") not in {context.get("id") for context in steering_contexts(footprint["contexts"])}:
@@ -79,27 +74,7 @@ def _new_context(cap: dict[str, Any], legs: list[dict[str, Any]]) -> dict[str, A
 
 
 def get_firewall_contexts(device: dict[str, Any], ha: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """Build the per-vsys/context list of a firewall: the firewall contexts it is a member of, with their legs.
-
-    The legs of a context are the device's sub-interfaces ``<uplink>.<transit VLAN>``
-    (utils/service_contexts.py ``context_legs``) that generators/topology/customer_dc.py created for it on the
-    "uplink"-role trunk. A colocation context has no legs at all: it lists with its policies and no legs.
-
-    ``legs`` are the context's exchange transit legs on this device: the
-    sub-interfaces whose address is in a VRF namespace of a known type
-    (utils/exchange_transit.py ZONE_BY_NS_TYPE), ordered prod, non_prod,
-    internet, management. A leg is {interface, parent_interface, vlan (the
-    transit VLAN), own_ip, virtual_ip (the HA pair's VIP, None
-    without ``ha``), anycast / vip (the border leaves' gateway
-    and the firewall VIP, plain IPs of the /29), vrf, ns_type, zone, nameif}. A context holding none renders only its
-    policies.
-
-    ``segments`` are the segments terminating on the context: every segment
-    of a deployment it serves (served_deployments, written by each
-    deployment's own boarding run), de-duplicated by id. ``terminated_segments`` are the ones among them the pair
-    gateways itself (``ManagedVxlanSegment.firewall_gateway`` of a segment of the footprint this is the internal context of;
-    transforms/helpers/firewall_terminated.py).
-    """
+    """Build the per-vsys/context list of a firewall: the firewall contexts it is a member of, with their legs."""
     contexts: dict[str, dict[str, Any]] = {}
     legs_by_context: dict[str, list[dict[str, Any]]] = {}
     for cap in member_firewall_contexts(device.get("shared_capabilities")):
@@ -184,12 +159,7 @@ def firewall_context_zone_data(
 
 
 def _edge_customers(footprints: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The footprints an Internet edge context serves, by name, each with its prefixes and its public address.
-
-    A footprint whose internal context is a dedicated one (``tenant`` set) is translated to that context's
-    ``snat_address`` here; a footprint on a shared context (or with no internal context) has no address of its own
-    and takes the edge's.
-    """
+    """The footprints an Internet edge context serves, by name, each with its prefixes and its public address."""
     customers = []
     for footprint in sorted(footprints, key=lambda f: str(f.get("name"))):
         dedicated = next(
@@ -214,22 +184,14 @@ def _edge_customers(footprints: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _zone_member_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Every segment in a zone one of `segments` (those on this firewall's
-    interfaces) belongs to: the firewall routes that zone's CIDRs through the
-    leg (get_firewall_static_routes), so it is where their rules hold."""
+    """Every segment in a zone one of `segments` (those on this firewall's interfaces) belongs to."""
     return [
         member for segment in segments for member in (segment.get("security_zone") or {}).get("network_segments") or []
     ]
 
 
 def _context_policies(context: dict[str, Any]) -> list[dict[str, Any]]:
-    """The policies of one context's table: its segments' rules, each footprint's share of them.
-
-    Each served footprint places on this context the share of its rules its list of contexts gives it
-    (utils/firewall_split.py ``rule_share``): on an Internet edge context only the rules that cross the internet (to
-    it or from it, ``is_internet_rule``) of a footprint that also has an internal context, on an internal context the
-    rest of them; a footprint with one kind of context places every rule on it. The table is the union of the shares.
-    """
+    """The policies of one context's table: its segments' rules, each footprint's share of them."""
     policies = segment_rule_policies(context.get("segments") or [])
     footprints = context.get("footprints") or []
     if all(footprint["share"] is RuleShare.ALL for footprint in footprints):
@@ -252,20 +214,7 @@ def place_policies_in_contexts(
     contexts: list[dict[str, Any]],
     segments: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
-    """This firewall's policies: the rules of the segments it serves, per table.
-
-    Each context's table holds its segments' own policies (their egress
-    rules) and the rules into them (the ingress leg: traffic between two
-    tenants crosses both contexts and each one denies by default), see
-    segment_rule_policies. The root table holds the rules of the segments
-    the firewall carries on its interfaces (``segments``) that no context
-    already holds; a firewall with no contexts also takes the rules of every
-    segment in a zone bound on one of its interfaces. A rule of a segment
-    served nowhere here is on the firewall serving it, not on this one.
-
-    Returns (root policies, context id -> policies), each policy holding
-    only the rules placed in that table.
-    """
+    """This firewall's policies: the rules of the segments it serves, per table."""
     by_context = {ctx["id"]: _context_policies(ctx) for ctx in contexts}
     placed = {
         str(rule.get("id"))
@@ -281,21 +230,7 @@ def place_policies_in_contexts(
 
 
 def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Flatten the device-scoped FirewallContext traversal into the flat
-    list get_customer_pbr_rules() expects.
-
-    `deployment` is this device's own `deployment` field (already cleaned),
-    shaped by queries/fragments/firewall_contexts.gql's
-    SwitchDeploymentFields fragment: deployment.devices
-    (pre-filtered to the firewall roles) -> each device's shared capabilities
-    of typename ManagedFirewallContext (the contexts it is a member of), each with the ``legs`` its members hold
-    (utils/service_contexts.py contexts_with_legs).
-    Pod-tier devices (leaf/tor/access-leaf) have their deployment set to the
-    POD, not the DC — deployment_id=self.data["deployment"]["id"] in
-    generators/topology/rack.py vs deployment_id=dc_id in
-    generators/topology/dc.py — so the fragment also nests one `parent` hop
-    for that case; both paths are flattened here, deduped by context id.
-    """
+    """Flatten the device-scoped FirewallContext traversal into the flat list get_customer_pbr_rules() expects."""
     if not deployment:
         return []
 
@@ -317,13 +252,7 @@ def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> 
 
 
 def _steering_only(contexts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The contexts as the leaf PBR steers to them: each footprint to its internal context, else to its external one
-    (utils/firewall_split.py ``steering_contexts``, per footprint).
-
-    An internal context is kept as it is. An external (Internet edge) context keeps only the footprints it is the
-    steering context of (they have no internal context here), under ``served_deployments``, and goes when none is left:
-    the edge is then no PBR next hop of any segment.
-    """
+    """The contexts as the leaf PBR steers to them."""
     by_footprint: dict[str, list[dict[str, Any]]] = {}
     for ctx in contexts:
         for footprint in ctx.get("served_deployments") or []:

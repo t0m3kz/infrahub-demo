@@ -1,15 +1,4 @@
-"""Unit tests for EndpointConnectivityGenerator (generators/topology/endpoint.py).
-
-Covers generate() dispatch/guards, deployment-type target resolution
-(_connect_middle_rack_deployment/_connect_tor_deployment/_connect_mixed_deployment),
-_query_interfaces_by_location, _query_l2_aggregation_layer, _extract_device_name,
-_extract_cabled_switch_names, _process_lag_endpoint_connections, and _next_free_lag_id.
-
-The plain-uplink cabling algorithm itself (_process_endpoint_connections and
-everything downstream) lives in EndpointUplinkMixin and is covered by
-tests/unit/test_endpoint_uplink_mixin.py — here it's only exercised at the
-generate()/_resolve_target_interfaces boundary via mocks.
-"""
+"""Unit tests for EndpointConnectivityGenerator (generators/topology/endpoint.py)."""
 
 from __future__ import annotations
 
@@ -20,16 +9,11 @@ import pytest
 from generators.topology.endpoint import EndpointConnectivityGenerator
 from tests.unit.endpoint_generator_helpers import _bond, _bond_data, _endpoint_data, _iface, _make_generator, _nic
 
-# ===========================================================================
 # generate() — guard clauses and dispatch
-# ===========================================================================
 
 
 class TestInit:
-    """__init__ delegates to super().__init__(*args, **kwargs) first (real
-    InfrahubGenerator construction, requiring query/client/infrahub_node —
-    exercised by the framework, not here) before setting this class's own
-    defaults — patch the super() call out to isolate that tail behavior."""
+    """__init__ delegates to super().__init__(*args, **kwargs) first."""
 
     def test_defaults(self) -> None:
         gen = EndpointConnectivityGenerator.__new__(EndpointConnectivityGenerator)
@@ -72,16 +56,7 @@ class TestGenerateGuardClauses:
 
     @pytest.mark.asyncio
     async def test_colocation_rack_returns_without_touching_the_device(self) -> None:
-        """A host in a rack that does not hang off a DC-fabric pod is a no-op.
-
-        endpoint.gql's EndpointPodFields fragment is on TopologyPod, so a colocation cage
-        rack (pod = TopologyColocationZone) arrives as an empty pod dict. There is
-        no fabric to dual-home into — that kit is cabled explicitly in the object
-        data. The guard must fire before pod["design"] is read, which sits
-        outside the try/except and would otherwise raise KeyError and fail the task.
-        Those hosts do reach this generator: trigger-endpoint-generator-on-created
-        matches on role=endpoint, not on the site.
-        """
+        """A host in a rack that does not hang off a DC-fabric pod is a no-op."""
         gen = _make_generator()
 
         await gen.generate(_endpoint_data(rack={"id": "rack-1", "name": "NY1-NY1-R1-1", "deployment": {}}))
@@ -103,9 +78,7 @@ class TestGenerateGuardClauses:
 
     @pytest.mark.asyncio
     async def test_filters_empty_interface_nodes(self) -> None:
-        """Empty {} entries in `interfaces` (virtual interfaces matching neither the
-        EndpointInterfaceFields nor the BondFields fragment) must be dropped before the
-        data is used."""
+        """Empty {} entries in `interfaces`."""
         gen = _make_generator()
         gen.client.filters = AsyncMock(side_effect=[[]])  # no uplink interfaces
 
@@ -160,9 +133,7 @@ class TestGenerateDeploymentUpdate:
 
     @pytest.mark.asyncio
     async def test_deployment_already_correct_needs_neither_read_nor_write(self) -> None:
-        """The server is never tracked, so a deployment that already matches
-        (read from the query payload) needs no write at all, nor a get() of the
-        device (a tracked server would be deleted by the first run that skipped the save)."""
+        """The server is never tracked, so a deployment that already matches."""
         gen = _make_generator()
         gen.client.filters = AsyncMock(side_effect=[[]])
 
@@ -254,9 +225,7 @@ class TestGenerateUplinkFlow:
 
     @pytest.mark.asyncio
     async def test_existing_cables_resaved_on_rerun(self) -> None:
-        """A rerun that finds every uplink cabled still saves each cable once:
-        the run tracks only what it saves, and delete_unused_nodes would
-        otherwise delete the cables the first run made."""
+        """A rerun that finds every uplink cabled still saves each cable once:"""
         gen = _make_generator()
         first = _iface("eth0", device="server-1", cabled=True)
         second = _iface("eth1", device="server-1", cabled=True)
@@ -278,9 +247,7 @@ class TestGenerateUplinkFlow:
 
     @pytest.mark.asyncio
     async def test_data_loaded_uplink_cable_is_not_claimed(self) -> None:
-        """A cable on an uplink that create_cabling did not make (a hand-loaded
-        CBL-... cable) is not this run's output: never re-saved, so never
-        tracked and never deleted by this run's cleanup."""
+        """A data-loaded cable on an uplink is never re-saved, tracked or deleted by this run."""
         gen = _make_generator()
         first = _iface("eth0", device="server-1", cabled=True)
         second = _iface("eth1", device="server-1", cabled=True)

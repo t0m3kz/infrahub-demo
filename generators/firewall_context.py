@@ -1,25 +1,6 @@
-"""Service context provisioning (FirewallContext, LoadbalancerContext) shared
-by the customer boarding generators of every facility that owns a firewall or
-load-balancer pair.
-
-generators/topology/customer_dc.py (TopologyCustomerDC on a DataCenter) and
-generators/topology/customer_colocation.py (TopologyCustomerColocation, on every
-ColocationZone of its metro that has firewalls) board a customer the same way: a
-shared or dedicated context on the hosting facility's HA cluster, a VLAN-tagged sub-interface per member, a leg per
-VRF the context serves (utils/exchange_transit.py), and the deployment's
-serving link. One implementation for both kinds of context; a ContextSpec
-(FIREWALL_CONTEXT, EDGE_CONTEXT, LOADBALANCER_CONTEXT) holds what differs:
-
-* firewall: a leg in the tenant VRF and in each of its EXCHANGE_PEERS
-  (INTERNET, MANAGEMENT), joined by a TopologyRoutedExchange per pair, one
-  public SNAT /32 per context; one shared context per (cluster, tenant namespace).
-* load balancer (one-arm): a single leg in the tenant VRF, no exchanges, no
-  SNAT, a routed VIP /26 behind the leg's .4; one shared context per (cluster,
-  tenant namespace) as well. Neither kind ever joins PROD and NON-PROD.
-
-The legs face the border leaf on a DC and the edge on a colocation zone. The
-customer kind, the parent's label and the specs to run are class attributes
-of the host.
+"""Service context provisioning (FirewallContext, LoadbalancerContext) shared by the customer boarding generators. A
+ContextSpec holds what differs between kinds; legs, exchanges, SNAT and VIP rules are in AGENTS.md. The host sets
+customer kind, parent label and specs.
 """
 
 from __future__ import annotations
@@ -70,22 +51,15 @@ _VIP_POOL_KEY = "vip"  # _prefix_pools key of the VIP range pool, next to the le
 
 
 def _physical_devices(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The parent's physical devices of a role, by name.
-
-    devices(role__value: ...) also returns the virtual instances hosted on
-    them (the customers' dedicated pairs share the parent deployment and the
-    role), so the shared cluster and the dedicated pair's hosts are resolved
-    from the physical ones only, in a stable order.
+    """The parent's physical devices of a role, by name. devices(role__value: ...) also returns hosted virtual
+    instances, so the shared cluster and the dedicated pair's hosts come from the physical ones in a stable order.
     """
     return sorted((d for d in devices if d.get("kind") == DcimPhysicalDevice.__name__), key=_dev_name)
 
 
 def _dedicated_name_parts(customer: dict[str, Any], customer_id: str) -> tuple[str, str]:
-    """(owner, environment class) a dedicated device, HA and context are named from: ("c009", "prod").
-
-    The owner's org_id opens the name and the class of the footprint's namespace (prod / non-prod, as
-    namespace_type_for_environment) closes it, both lowercase. The parent is not part of it:
-    the physical device names already say which cluster a dedicated pair belongs to.
+    """(owner, environment class) a dedicated device, HA and context are named from, e.g. ("c009", "prod"): owner org_id
+    first, namespace class last, lowercase.
     """
     owner = customer.get("owner") or {}
     org_id = owner.get("org_id") or customer.get("name", customer_id)
@@ -93,29 +67,23 @@ def _dedicated_name_parts(customer: dict[str, Any], customer_id: str) -> tuple[s
 
 
 class FirewallContextMixin(TransitLegsMixin):
-    """Shared/dedicated service context provisioning, one flow per ContextSpec.
-
-    The host class sets ``_customer_kind``, ``_parent_label``,
-    ``_parent_generators`` and ``_context_specs``, and mixes in PoolMixin
-    (``resource_lock``), DeviceMixin (``create_devices``, ``_ensure_ha_pairs``)
-    and CablingMixin (``ensure_vlan_subinterface``, ``upsert_prefix_addresses``).
-    The legs of a context are TransitLegsMixin's (generators/firewall_transit.py).
+    """Shared/dedicated service context provisioning, one flow per ContextSpec. The host sets ``_customer_kind``,
+    ``_parent_label``, ``_parent_generators`` and ``_context_specs`` and mixes in PoolMixin, DeviceMixin and
+    CablingMixin; the legs are TransitLegsMixin's (generators/firewall_transit.py).
     """
 
-    # Per-facility configuration, set by the host class. _parent_generators
-    # names the parent's own generator definitions — the ONLY owners of the
-    # parent's physical HA pairs (see _resolve_parent_cluster).
+    # Per-facility configuration set by the host class; _parent_generators are the ONLY owners of the parent's physical
+    # HA pairs (_resolve_parent_cluster)
     _customer_kind: str
     _parent_label: str
     _parent_generators: tuple[str, ...]
     _context_specs: tuple[ContextSpec, ...]
 
-    # Provided by the host class and its other mixins.
+    # Provided by the host class and its other mixins
     client: Any
     logger: logging.Logger
     fabric_name: str
-    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
-    # nothing shadows them in the MRO.
+    # Type checking only: aliases of the host's other bases, so nothing shadows them in the MRO
     if TYPE_CHECKING:
         vrfs_held = VrfMixin.vrfs_held
         local_vrf_ids = VrfMixin.local_vrf_ids
@@ -131,9 +99,9 @@ class FirewallContextMixin(TransitLegsMixin):
     async def resolve_virtual_template(
         self, *, platform: str | None, role: str, size_suffix: str
     ) -> dict[str, Any] | None:
-        """The {id, device_type, platform} reference of the virtual template
-        "{prefix}_{size_suffix}" matching a physical platform/role, or None
-        (logged as an error) when there is no mapping or no such template."""
+        """The {id, device_type, platform} reference of the virtual template "{prefix}_{size_suffix}" matching a
+        physical platform/role, or None (logged) when none.
+        """
         prefix = _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE.get((platform or "", role))
         if not prefix:
             self.logger.error(f"No virtual template mapping for platform={platform} role={role}.")
@@ -155,11 +123,9 @@ class FirewallContextMixin(TransitLegsMixin):
         }
 
     def serving_context_ids(self, customer: dict[str, Any], spec: ContextSpec) -> list[str]:
-        """The ids of the contexts of spec's kind the boarding query found the customer linked to, none when unset.
-
-        The firewall contexts of a footprint are one list, internal and Internet edge alike: a spec owns the ones of
-        its own role (utils/firewall_split.py ``is_external``), so the internal run never drops the edge link and
-        the other way round.
+        """The ids of the contexts of spec's kind the boarding query found the customer linked to. The firewall contexts
+        of a footprint are one list; a spec owns those of its own role (utils/firewall_split.py ``is_external``), so the
+        internal run never drops the edge link.
         """
         linked = customer.get(spec.serving_field) or []
         peers = [peer for peer in (linked if isinstance(linked, list) else [linked]) if peer.get("id")]
@@ -171,30 +137,9 @@ class FirewallContextMixin(TransitLegsMixin):
     async def link_serving_context(
         self, spec: ContextSpec, *, customer_id: str, context_id: str, current_ids: list[str]
     ) -> None:
-        """Point this deployment at the context of spec's kind that serves it (spec.serving_field).
-
-        The firewall transform reads the contexts' served_deployments (the other
-        end of serving_firewall_contexts) to place each rule in the contexts of
-        its two segments; the VIP producer reads serving_loadbalancer_context to
-        place a VIP. Only this deployment's own run writes it, so boardings onto
-        one shared context never race. Not tracked: the deployment is the
-        generator's target, not its output, and tracking it would let
-        delete_unused_nodes remove it.
-
-        current_ids are the contexts the boarding query (customer_dc.gql,
-        customer_colocation.gql) found the deployment linked to. When
-        context_id is among them nothing is read or written. A many field
-        (``spec.serving_many``: the firewall contexts) gets context_id added to the ones it has (a DC footprint lists
-        its internal and its Internet edge context, a colocation footprint one per zone of its metro), and a stale one
-        is removed by unlink_stale_serving_contexts once every facility is done. A one field replaces its context; the deployment is read first
-        to take the previous context from the server before the move.
-
-        A move from one context to another (a re-run after the design switched
-        dedicated <-> shared) leaves what other runs generated on the previous
-        one stale, so it re-runs spec.relink_generator for spec.relink_consumers
-        without waiting. A first link re-runs nothing: the application runs of
-        the same load wait for this run before they read the context
-        (generators/lb_vip.py, _await_lb_inputs).
+        """Point this deployment at the context of spec's kind that serves it (spec.serving_field); untracked. Nothing
+        is read or written when ``context_id`` is in ``current_ids``; a move re-runs spec.relink_generator for
+        spec.relink_consumers.
         """
         if context_id in current_ids:
             return
@@ -233,13 +178,9 @@ class FirewallContextMixin(TransitLegsMixin):
     async def unlink_stale_serving_contexts(
         self, spec: ContextSpec, *, customer_id: str, current_ids: list[str], served_ids: list[str]
     ) -> None:
-        """Drop the links of a many serving field to contexts this run did not serve the deployment from.
-
-        A re-run converges the set: a colocation zone that no longer has firewalls, a DC footprint moved between its
-        dedicated and the shared context, or a DC that lost its Internet edge pair would leave a context linked
-        otherwise, and the firewall transform would keep placing the deployment's rules in it. Only the link goes.
-        The context itself is a shared one, written untracked, so delete_unused_nodes never reclaims it: it stays,
-        with its legs, on its cluster. (A single serving field needs no pruning: link_serving_context replaces it.)
+        """Drop the links of a many serving field to contexts this run did not serve the deployment from. A re-run
+        converges the set (a zone that lost firewalls, a footprint moved dedicated <-> shared, a DC that lost its edge
+        pair). Only the link goes; the shared context stays.
         """
         stale = [context_id for context_id in current_ids if context_id not in served_ids]
         if not stale:
@@ -254,10 +195,8 @@ class FirewallContextMixin(TransitLegsMixin):
     async def _resolve_context_target(
         self, spec: ContextSpec, customer: dict[str, Any], customer_id: str, parent: dict[str, Any]
     ) -> _ContextTarget | None:
-        """The cluster and ownership of this customer's context of spec's kind on parent, the hosting facility
-        (the DC, or one zone of the metro); None (logged) when there is none.
-
-        The caller guarantees parent.id (CustomerFacilityMixin.generate).
+        """The cluster and ownership of this customer's context of spec's kind on parent (the DC or one zone of the
+        metro); None (logged) when none. The caller guarantees parent.id.
         """
         parent_id: str = parent.get("id", "")
         parent_name: str = parent.get("name", parent_id)
@@ -268,8 +207,7 @@ class FirewallContextMixin(TransitLegsMixin):
             self.logger.info(f"{parent_name}: {skip_reason} — skipping {spec.label} provisioning")
             return None
 
-        # The devices arrive with the deployment's own GraphQL response
-        # (customer.parent.<devices_key>) — no separate filters() round-trip.
+        # The devices arrive with the deployment's own GraphQL response, no separate filters()
         devices: list[Any] = _physical_devices(parent.get(spec.devices_key) or [])
         if not devices:
             self.logger.info(f"{parent_name} has no {spec.role} devices — skipping {spec.label} provisioning")
@@ -279,10 +217,8 @@ class FirewallContextMixin(TransitLegsMixin):
         if cluster is None:
             return None
 
-        # The parent can have several independent HA clusters of the role,
-        # and devices is a flat, role-filtered list that can span them. A
-        # context belongs to exactly one cluster, so its sub-interfaces must
-        # only be created on that cluster's own members.
+        # The parent can have several HA clusters of the role; a context belongs to exactly one, so create
+        # sub-interfaces only on its members
         member_ids = {peer.id for peer in cluster.capabilities.peers}
         devices = [d for d in devices if _dev_id(d) in member_ids]
         if not devices:
@@ -292,15 +228,9 @@ class FirewallContextMixin(TransitLegsMixin):
             return None
 
         dedicated = bool((customer.get("design") or {}).get(spec.dedicated_flag))
-        # Ownership decides tracking. A dedicated context (on this customer's
-        # own dedicated cluster, tenant = this customer) is reached by this
-        # customer's run only, so the run owns it and tracks every write. A
-        # shared context and its legs are reached by EVERY customer boarding
-        # onto the cluster, so they belong to none of them: written untracked,
-        # or one customer moving to dedicated (or being removed) would delete
-        # what every other customer still uses. A dedicated request whose
-        # dedicated pair cannot be provisioned is an error, never a silent
-        # move onto the shared context.
+        # Ownership decides tracking. A dedicated context is reached by this customer's run only, so it is tracked. A
+        # shared context and its legs are reached by EVERY customer, so they are written untracked. A dedicated request
+        # whose pair cannot be provisioned is an error, never a move onto the shared context.
         if not dedicated:
             return _ContextTarget(
                 spec=spec,
@@ -325,8 +255,8 @@ class FirewallContextMixin(TransitLegsMixin):
         if dedicated_result is None:
             return None
         cluster, devices = dedicated_result
-        # The dedicated cluster's name is `{owner}-{first}-{second}-ha-{class}` (see _ensure_dedicated_device_pair):
-        # the context name takes it without `-ha-{class}`, and _ContextTarget.context_name puts the class last.
+        # The dedicated cluster is `{owner}-{first}-{second}-ha-{class}` (_ensure_dedicated_device_pair); the context
+        # name drops `-ha-{class}` and _ContextTarget.context_name puts the class last
         _, env_class = name_parts
         return _ContextTarget(
             spec=spec,
@@ -346,45 +276,16 @@ class FirewallContextMixin(TransitLegsMixin):
         customer_id: str,
         target: _ContextTarget,
     ) -> str | None:
-        """The context and its legs for the VRFs this customer is in; the context's id, None when there is none.
-
-        A leg is (context, namespace): every member's VLAN sub-interface
-        `<uplink>.<transit_vlan>` addressed from a /29 in that VRF
-        (utils/exchange_transit.py), in the VRF instance of the leg (an exchange's legs
-        are derived from that, never linked). The tenant namespace (from the customer's
-        environment) is the first of spec.leg_types; a firewall context's
-        other legs (EXCHANGE_PEERS: INTERNET, MANAGEMENT) are joined to it by
-        one TopologyRoutedExchange `{context}-{A}-{Z}` per pair, so PROD is
-        never paired with NON-PROD. A load-balancer context has the tenant leg
-        only. Legs and exchanges are created lazily: a shared context is per
-        tenant namespace, so the first NON-PROD customer of a cluster creates
-        its own context.
-
-        Shared context (track=False): a re-run, or a second customer on a
-        context that is already complete, finds that out by reads alone
-        (_transit_state) and writes nothing but its own serving link. Dedicated
-        context (track=True): the run owns every write and must re-save them
-        all, or delete_unused_nodes reclaims what it merely found.
-
-        A context with an INTERNET leg also gets ONE public SNAT /32 from
-        FW-SNAT-INTERNET-IPv4 (context.snat_address), shared by every tenant
-        VRF the context serves; no other peer gets one (MANAGEMENT is
-        translated to its own leg's VIP). A load-balancer context gets its
-        routed VIP /26 (context.vip_prefix) instead. The completeness check
-        includes both, so a run heals a context that lacks one.
-
-        Writes run under the context's lock; the completeness check repeats
-        inside it, so the run that waited on the lock finds the work done. The
-        lock is per context, so the zones of one colocation metro, which have
-        one context each, are built one after the other with no lock held
-        across them, and two footprints boarding at once serialise per zone.
+        """The context and its legs for the VRFs this customer is in; the context's id, None when none. A leg is each
+        member's `<uplink>.<transit_vlan>` sub-interface from a /29 in that VRF; firewall legs are joined by one
+        TopologyRoutedExchange per pair. Shared (track=False) is found by reads alone; dedicated (track=True) is
+        re-saved. Writes run under the context's lock, rechecked inside it.
         """
         spec = target.spec
         tenant_type = namespace_type_for_environment(customer.get("environment") or "")
         leg_types = spec.leg_types(tenant_type)
-        # A DC with an external-firewall pair sends its Internet traffic through the Internet edge context: its customer
-        # contexts keep no INTERNET leg or exchange, and only a dedicated one the public address its traffic is
-        # translated to there.
+        # With an external-firewall pair, customer contexts keep no INTERNET leg or exchange (the Internet edge context
+        # has it), a dedicated one only its own public address
         if target.edge_hosted:
             leg_types = tuple(leg_type for leg_type in leg_types if leg_type != INTERNET_TYPE)
         needs_snat = INTERNET_TYPE in leg_types or (target.edge_hosted and target.tenant_id is not None)
@@ -397,7 +298,7 @@ class FirewallContextMixin(TransitLegsMixin):
         if not members:
             self.logger.error(f"{context_name}: no {spec.role} member has an uplink cabled to a border service port")
             return
-        # (exchange name, A type, Z type): the tenant namespace to each peer.
+        # (exchange name, A type, Z type): the tenant namespace to each peer
         exchange_specs = [
             (f"{context_name}-{tenant_namespace.name.value}-{namespaces[peer].name.value}", tenant_type, peer)
             for peer in leg_types[1:]
@@ -459,8 +360,8 @@ class FirewallContextMixin(TransitLegsMixin):
                 return state.context.id
 
         async with self.resource_lock(f"{spec.key}-{context_name}"):
-            # Re-read under the lock: a concurrent run may have completed it. A dedicated (tracked) context
-            # re-saves every leg whatever it finds, so it needs only the context.
+            # Re-read under the lock: a concurrent run may have completed it. A dedicated context re-saves every leg, so
+            # it needs only the context
             if track:
                 state = await self._context_named(spec, context_name)
             else:
@@ -504,9 +405,8 @@ class FirewallContextMixin(TransitLegsMixin):
                 return
             context_id: str = context_obj.id
             await self.link_serving_context(spec, customer_id=customer_id, context_id=context_id, current_ids=served_by)
-            # The saved node knows only what it wrote. The context read under the lock (the same node, by name)
-            # also carries its VLAN, SNAT address and VIP prefix: the steps below then find them done, with no
-            # pool lookup, save or re-read. A context that does not exist yet has nothing to find.
+            # The saved node knows only what it wrote; the context read under the lock also carries VLAN, SNAT address
+            # and VIP prefix, so the steps below find them done
             if state.context is not None and state.context.id == context_obj.id:
                 context_obj = state.context
             context_obj = await self._ensure_context_vlan(spec, context_obj, target.parent_name, track=track)
@@ -579,8 +479,7 @@ class FirewallContextMixin(TransitLegsMixin):
                     self.logger.error(f"Failed to upsert exchange '{exchange_name}': {exc}")
                     return context_id
 
-            # The legs of an exchange are derived (utils/service_contexts.py exchange_legs): the context's legs in its
-            # two VRFs. Nothing links a leg to its exchange.
+            # Exchange legs are derived (utils/service_contexts.py exchange_legs); nothing links a leg to its exchange
             for leg_type in leg_types:
                 for member in members:
                     await self.ensure_vlan_subinterface(
@@ -609,16 +508,10 @@ class FirewallContextMixin(TransitLegsMixin):
     async def _resolve_parent_cluster(
         self, spec: ContextSpec, devices: list[Any], *, parent_id: str, parent_name: str
     ) -> Any | None:
-        """The parent's spec.ha_kind cluster holding devices[0], the first physical device of the role by name.
-
-        Never pairs the devices itself. The parent's own generator
-        (_parent_generators) is the only owner of that HA pair, its HA
-        interfaces and sync cable: a customer run that paired them would claim
-        all three for ITS tracking group, and its next run — finding the cluster
-        and skipping the pairing — would delete the parent's HA. So an unpaired
-        parent means the parent generator has not finished: wait for an
-        in-flight run, re-query, and fail loudly (logger.error raises) if the
-        devices are still unpaired, leaving this run's group untouched.
+        """The parent's spec.ha_kind cluster holding devices[0], the first physical device of the role by name. Never
+        pairs the devices: the parent's own generator (_parent_generators) owns the HA pair, or a customer run would
+        claim it and delete it next run. An unpaired parent means that generator has not finished: wait for it,
+        re-query, and fail loudly if still unpaired.
         """
         cluster = await self._find_parent_cluster(spec, devices, parent_name=parent_name)
         if cluster is not None:
@@ -659,23 +552,8 @@ class FirewallContextMixin(TransitLegsMixin):
         dc_design: str | None,
         name_parts: tuple[str, str],
     ) -> tuple[Any, list[Any]] | None:
-        """Provision a dedicated virtual HA pair (firewall or load-balancer)
-        for this customer, one virtual instance hosted on each of the shared
-        cluster's physical peers, sourced from the *_CUSTOMER_* template
-        variant (data/bootstrap's 09_virtual_device_templates_*.yaml). The
-        pair itself carries no tenant: the customer is recorded on the
-        dedicated context on it (_get_or_create_context).
-
-        Returns (dedicated_cluster, dedicated_devices) on success. Returns
-        None (logged as an error, never a fallback to shared capacity) when
-        the parent has no design, does not have exactly 2 physical peers, the
-        physical template's platform has no dedicated variant mapped, or the
-        *_CUSTOMER_* template itself doesn't exist.
-
-        name_parts is (owner, environment class), see _dedicated_name_parts: a member is
-        `{owner}-{physical}-{class}` and the HA domain `{owner}-{first physical}-{second physical}-ha-{class}`,
-        the owner once, in front. The context on it is `{owner}-{first physical}-{second physical}-{class}`
-        (_ContextTarget.context_name); the HA domain is the one with `ha`, as the two cannot share a name.
+        """Provision a dedicated virtual HA pair for this customer from the *_CUSTOMER_* template; returns (cluster,
+        devices) or None (logged, no fallback). ``name_parts`` is (owner, class), see _dedicated_name_parts.
         """
         owner, env_class = name_parts
         customer_name = f"{owner}-{env_class}"
@@ -683,8 +561,7 @@ class FirewallContextMixin(TransitLegsMixin):
             self.logger.error(f"{parent_name}: no design set — cannot resolve dedicated {role} template size")
             return None
 
-        # physical_devices already carries platform (customer.parent.
-        # firewall_devices/loadbalancer_devices in the boarding query).
+        # physical_devices already carries platform (boarding query)
         physical_pair = physical_devices
         if len(physical_pair) != 2:
             self.logger.error(
@@ -709,8 +586,7 @@ class FirewallContextMixin(TransitLegsMixin):
         self.fabric_name = parent_name.lower()
         for physical_device in sorted(physical_pair, key=_dev_name):
             physical_name = _dev_name(physical_device)
-            # physical_name alone keeps this unique — it's already the
-            # specific host device in the pair.
+            # physical_name alone keeps this unique
             instance_name = f"{owner}-{physical_name}-{env_class}"
             names = await self.create_devices(
                 deployment_id=parent_id,
@@ -746,10 +622,9 @@ class FirewallContextMixin(TransitLegsMixin):
         return dedicated_clusters[0], virtual_devices
 
     async def _join_service_contexts(self, context_obj: Any) -> None:
-        """Add the context to the target group of add_context_routes once its legs are written: joining starts that
-        generator, which needs the whole context (a context has no interface edge whose change could re-run it).
-        Additive: a tracked context is also a member of this run's group, which a list written here would drop; a
-        context already in the group fires nothing again."""
+        """Add the context to the target group of add_context_routes once its legs are written; joining starts that
+        generator. Additive: a list written here would drop a tracked context's membership of this run's group.
+        """
         group = await self._standard_group(GROUP_SERVICE_CONTEXTS)
         await context_obj.add_relationships(relation_to_update="member_of_groups", related_nodes=[group.id])
 
@@ -763,14 +638,10 @@ class FirewallContextMixin(TransitLegsMixin):
         *,
         track: bool = True,
     ) -> Any | None:
-        # Always create+upsert, never pre-check-and-skip — both context kinds'
-        # uniqueness_constraints on name__value (schemas/extensions/capabilities/
-        # ha.yml) make allow_upsert=True match the existing node by name. A
-        # pre-check-then-return would silently skip reconciling deployment/members/tenant.
-        # The members are the devices of the one pair that enforces the context, written as the whole list: this
-        # generator is their only writer, and a re-run after a member swap converges on the current pair.
-        # track=False (a shared context): written, never claimed by this
-        # customer's tracking group — see _resolve_context_target.
+        # Always upsert, never pre-check-and-skip: allow_upsert matches the existing node by name
+        # (uniqueness_constraints), so deployment/members/tenant are reconciled. Members are the one pair that enforces
+        # the context, written as the whole list (this generator is their only writer). track=False (shared): written,
+        # never claimed by this customer's group (_resolve_context_target).
         try:
             context_obj = await self.client.create(
                 kind=spec.context_kind,
@@ -791,11 +662,8 @@ class FirewallContextMixin(TransitLegsMixin):
     async def _ensure_context_vlan(
         self, spec: ContextSpec, context_obj: Any, parent_name: str, *, track: bool
     ) -> Any | None:
-        """context_obj with its vlan_id allocated from the parent's `{key}-vlan-pool`; None (logged) when that fails.
-
-        Number-pool allocation is idempotent per consumer node id, so a context
-        that already has its VLAN is returned untouched and never re-saved.
-        """
+        """context_obj with its vlan_id allocated from the parent's `{key}-vlan-pool`; None (logged) on failure.
+        Number-pool allocation is idempotent per consumer node id, so a context that has its VLAN is not re-saved."""
         vlan_id = getattr(context_obj, "vlan_id", None)
         if vlan_id is not None and getattr(vlan_id, "value", None):
             return context_obj

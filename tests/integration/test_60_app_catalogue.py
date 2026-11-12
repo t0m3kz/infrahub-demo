@@ -1,25 +1,4 @@
-"""Integration test — App catalogue enforcement against the 30_all demo.
-
-Runs against the branch test_59 builds; it never loads data of its own. Where
-test_61-test_63 assert on what the load *produced*, this module drives the two
-enforcement paths the catalogue is for:
-
-  1. Enforce the directly-authored C001 checkout application's external
-     payment-gateway dependency through the customer egress proxy.
-  2. Enforce the predeclared C005 payment-core web-to-backend dependency
-     through a firewall policy between its provisioned VXLAN segments.
-  3. Publish C001's checkout frontend through the ZTNA broker, because an
-     access profile is the source of a dependency into it.
-  4. Find, for every other AppDependency on the branch, the rule the
-     triggers generated for it.
-
-Both applications are loaded straight from data files (no request/approval
-object graph — a branch + proposed-change review is the approval step for
-anything declared here). The two generator runs here are invoked by hand to
-pin down task success/failure for these specific enforcement paths and assert
-on their output deterministically, rather than relying on the trigger
-dispatch that test_59 already counts for every other application.
-"""
+"""Integration test — App catalogue enforcement against the 30_all demo."""
 
 import logging
 from typing import Any
@@ -266,16 +245,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Every AppDependency on the branch produced the rules named after it.
-
-        Steps 4-6 pin three hand-run paths. This one covers the rest, which only
-        the AppApplication and AppDependency triggers reconcile, so a dependency
-        loaded after its application still ends up enforced. A grant publishes
-        its target component (publish-{fqdn}); a target_fqdn dependency gets one
-        proxy rule named after itself carrying its ports; every other dependency
-        gets one SecurityPolicyRule per port it opens (cloud endpoints included),
-        named {dependency}-{protocol}-{port} (a load-balanced target: {dependency}-{protocol}-{port}-vip-{context}, to its VIP).
-        """
+        """Every AppDependency on the branch produced the rules named after it."""
         logging.info("=== %s - Step 7: Every Dependency Has Its Rule ===", SCENARIO_NAME)
 
         result = await async_client_main.execute_graphql(query=DEPENDENCY_RULES_QUERY, branch_name=scenario_branch)
@@ -314,8 +284,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
             else:
                 for port in PortProfileHelper.resolve_dependency_ports(dep_ports, {"ports": value(target, "ports")}):
                     rule_name = f"{name}-{PortProfileHelper.format_port_spec(port).replace('/', '-')}"
-                    # A load-balanced target is reached through its VIP: the client's rule is
-                    # {rule_name}-vip-{context} (to the VIP /32) and replaces the direct one.
+                    # A load-balanced target is reached through its VIP
                     via_vip = any(
                         name.startswith(f"{rule_name}-vip-") and rule == port for name, rule in port_rules.items()
                     )

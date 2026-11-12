@@ -1,14 +1,4 @@
-"""Offline data tests: every destination of C001's egress policy in 30_all is reachable.
-
-The rules of ``seg-c001-nordix-prod-p-egress`` (07_zone_policies/05_security_policy.yml) aim at three far-side
-destinations. The border policy accepts and announces only prefixes REGISTERED by an owned object, so a destination
-is reachable only when it is one of:
-
-- a VPC block of an account owned by the source segment's owner, whose attachment propagates into the route table the
-  hybrid (transit VIF) attachment is associated with (what ``vif_registered_blocks`` reads off the AWS handoff session),
-- a prefix in the ``registered_prefixes`` of a tunnel circuit owned by that owner (the Acme extranet), or
-- the internet zone, ``destination_zone: INTERNET`` (a SaaS PoP is public space and registers nothing).
-"""
+"""Offline data tests: every destination of C001's egress policy in 30_all is reachable."""
 
 from __future__ import annotations
 
@@ -47,11 +37,7 @@ def _owner_of_segment(segment: str) -> str:
 
 
 def _hub_registered_blocks(owner: str) -> set[tuple[str, str]]:
-    """(prefix, namespace) of the VPC blocks ``owner`` registers behind the transit VIF session.
-
-    The chain of transforms/helpers/bgp_external.py ``vif_registered_blocks``: every VPC attachment propagating into the
-    table the hybrid attachment is associated with, its virtual network's blocks, owned by the account's owner.
-    """
+    """(prefix, namespace) of the VPC blocks ``owner`` registers behind the transit VIF session."""
     attachments = list(_by_name("CloudGatewayAttachment").values())
     (hybrid,) = [a for a in attachments if "peer_gateway" in a.item]
     accounts = _by_name("CloudAccount")
@@ -71,10 +57,7 @@ def _hub_registered_blocks(owner: str) -> set[tuple[str, str]]:
 
 
 def _tunnel_registered_prefixes(owner: str) -> set[tuple[str, str]]:
-    """(prefix, namespace) of the ``registered_prefixes`` of every tunnel circuit owned by ``owner``.
-
-    A circuit has no owner field: a tunnel's owner is the owner of the office among its locations.
-    """
+    """(prefix, namespace) of the ``registered_prefixes`` of every tunnel circuit owned by ``owner``."""
     offices = {name(o): o.item["owner"] for o in declared("TopologyCustomerOffice", _ALL)}
     return {
         (prefix[0], prefix[1])
@@ -89,9 +72,7 @@ def _declared_prefixes() -> set[tuple[str, str]]:
     return {(p.item["prefix"], p.item.get("ip_namespace", "default")) for p in declared("IpamPrefix", _ALL)}
 
 
-# ---------------------------------------------------------------------------
 # The AWS side
-# ---------------------------------------------------------------------------
 
 
 def test_nordix_is_boarded_into_aws_like_the_other_hub_tenants() -> None:
@@ -142,9 +123,7 @@ def test_no_two_hub_tenants_share_a_block() -> None:
     assert len(blocks) == len(set(blocks))
 
 
-# ---------------------------------------------------------------------------
 # The egress rules
-# ---------------------------------------------------------------------------
 
 
 def test_the_source_segment_of_the_policy_is_owned_by_c001() -> None:

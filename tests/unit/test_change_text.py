@@ -184,8 +184,7 @@ class TestPlans:
         assert render_field(_bare(), "implementation_plan").startswith("No device configuration changes")
 
     def test_backout_returns_to_the_previous_config_and_warns_on_removals(self) -> None:
-        """The previous checksum and storage id, a new device's config removed, the allocation warning and the
-        removed objects by name; no warning when nothing is removed."""
+        """The previous checksum and storage id, a new device's config removed."""
         plan = render_field(realistic_inputs(), "backout_plan")
         assert "Revoking the approval rolls every device back automatically." in plan
         assert "dc10-leaf-01 leaf_config: back to p1 (storage st-p1)" in plan

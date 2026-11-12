@@ -1,29 +1,4 @@
-"""Unit tests for VxlanSegmentGenerator.
-
-A VXLAN segment needs generator-driven per-deployment realization
-(SegmentDeployment) since it can stretch across multiple sites.
-
-VxlanSegmentGenerator.generate() cleans GraphQL data, guards on missing
-id/name/customer_deployments, resolves each customer footprint to its
-hosting parent (TopologyDataCenter or TopologyColocationMetro) via
-_resolve_hosting_parent(), then calls _activate_segment_in_deployment()
-for each resolved parent (VNI-and-status only), followed by border-gateway
-realization for a stretched segment (_realize_border_gateways —
-customer-facing interface assignment is driven by AppComponent.instances
-instead, see generators/topology/app_instance_segment.py and
-tests/unit/test_app_instance_segment_generator.py).
-
-For a local segment vni_pool is read straight from the vxlan_segment query's
-TopologySegmentHosting parent fragment (queries/topology/add/vxlan_segment.gql)
-— no separate client.get() round-trip per deployment. A stretched segment
-instead gets the global GLOBAL-L2VNI pool, looked up once per run.
-generate() reads the segment's existing deployments once (idempotency and the
-stretched VNI to reuse; a failed read is fatal); _activate_segment_in_deployment()
-then allocates VNI from the pool dict (or reuses the stretched segment's VNI)
-and calls client.create() / save().
-
-Tests use asyncio.run() directly — same pattern as test_circuit_generators.py.
-"""
+"""Unit tests for VxlanSegmentGenerator."""
 
 from __future__ import annotations
 
@@ -42,9 +17,7 @@ from tests.unit.segment_generators_helpers import _DEP_1, _DEP_2, _make_gen, _se
 from utils.graphql_queries import load_query
 from utils.limits import STRETCHED_VNI_POOL
 
-# ===========================================================================
 # TestVxlanSegmentGeneratorGenerate
-# ===========================================================================
 
 
 class TestVxlanSegmentGeneratorGenerate:
@@ -210,9 +183,7 @@ class TestVxlanSegmentGeneratorGenerate:
         gen.reconcile_vxlan_segment.assert_awaited_once_with("seg-3", "vxlan-2000")
 
     def test_missing_vni_pool_waits_on_parent_dc_generators(self):
-        """A target deployment with no vni_pool (its own add_dc/dc_pod_cascade,
-        or add_colocation_metro for a metro, hasn't run yet) triggers a wait on
-        every parent generator before _resolve_target_deployments is retried."""
+        """A target deployment with no vni_pool"""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
 
@@ -258,9 +229,7 @@ class TestVxlanSegmentGeneratorGenerate:
         assert call.kwargs["vni_pool"] == {"id": "pool-office", "name": "c005-office-vni-pool"}
 
     def test_refetched_data_is_reparsed_when_parent_was_in_flight(self):
-        """If add_dc was in-flight, the refreshed data (now carrying the
-        vni_pool that was missing the first time) replaces the segment
-        before target deployments are re-resolved."""
+        """If add_dc was in-flight, the refreshed data"""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
 
@@ -355,9 +324,7 @@ class TestVxlanSegmentGeneratorGenerate:
         )
 
 
-# ===========================================================================
 # TestResolveHostingParent
-# ===========================================================================
 
 
 class TestResolveHostingParent:
@@ -408,9 +375,7 @@ class TestResolveHostingParent:
         gen.client.get.assert_not_called()
 
 
-# ===========================================================================
 # TestActivateSegmentInDeployment
-# ===========================================================================
 
 
 def _activation_node(*groups: str) -> MagicMock:
@@ -423,14 +388,7 @@ def _activation_node(*groups: str) -> MagicMock:
 
 
 class TestActivateSegmentInDeployment:
-    """Tests for _activate_segment_in_deployment on VxlanSegmentGenerator.
-
-    VNI-and-status only now — LOCAL VLAN ID realization moved to a separate
-    per-VLAN-domain mechanism (ManagedSegmentVlan), tested in
-    TestAssignSegmentToDcInterfaces below. The method does no reads of its
-    own: generate() hands it the deployment's existing record and the VNI to
-    reuse.
-    """
+    """Tests for _activate_segment_in_deployment on VxlanSegmentGenerator."""
 
     # Common invocation kwargs used in every test
     _CALL = dict(
@@ -521,9 +479,7 @@ class TestActivateSegmentInDeployment:
         assert "Failed to create" in gen.logger.error.call_args[0][0]
 
 
-# ===========================================================================
 # TestVxlanVniAllocation
-# ===========================================================================
 
 
 class TestVxlanVniAllocation:

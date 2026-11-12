@@ -1,24 +1,4 @@
-"""Corpus test: every rendered config declares exactly ONE BGP ASN.
-
-A router runs one BGP ASN per routing instance. Under ``ebgp-ibgp`` the underlay
-is eBGP on a per-device ASN and the overlay is iBGP on the fabric-wide ASN, so two
-BGP configs survive the merge and a naive template emits two ``router bgp``
-stanzas with DIFFERENT ASNs. The device rejects the second — or, worse, accepts
-the first and ignores the rest, and half the routing disappears with no error.
-
-``transforms/helpers/bgp.py``'s ``_collapse_to_single_instance`` prevents that by
-anchoring on the overlay ASN and re-asserting the underlay ASN per session
-(``local-as … no-prepend replace-as``). ``tests/unit/test_bgp_single_instance.py``
-tests that function directly; this test asserts the property actually holds in the
-rendered output, for every device role × platform × routing strategy the fixture
-corpus covers. A template that reopens ``router bgp`` to add address-family
-config is fine — same ASN, config-mode re-entry — so the assertion is on the
-number of DISTINCT ASNs, not on the number of stanzas.
-
-Per-neighbor ``local-as`` overrides are deliberately excluded: they are how the
-single instance presents the underlay ASN to an eBGP peer, so counting them would
-flag the fix as the bug.
-"""
+"""Corpus test: every rendered config declares exactly ONE BGP ASN."""
 
 from __future__ import annotations
 
@@ -36,8 +16,7 @@ def _asns_in_config(text: str) -> set[int]:
     """Every distinct BGP instance ASN declared in one rendered config."""
     stripped = text.lstrip()
     if stripped.startswith("{"):
-        # SONiC ConfigDB is JSON, not CLI. BGP_GLOBALS holds the instance ASN per
-        # VRF; per-neighbor overrides live under BGP_NEIGHBOR and are not read here.
+        # SONiC ConfigDB is JSON: BGP_GLOBALS holds the instance ASN per VRF; neighbor overrides are not read.
         try:
             config = json.loads(text)
         except json.JSONDecodeError:  # pragma: no cover - a corrupt fixture
@@ -54,21 +33,14 @@ def _config_fixtures(root_dir: Path) -> list[Path]:
 
 @pytest.fixture(scope="module")
 def routed_fixtures(root_dir: Path) -> list[Path]:
-    """Fixtures that declare a BGP instance at all.
-
-    Firewalls, proxies and load-balancers render no ``router bgp``; they are not
-    exempted by name, just filtered out by having no ASN to disagree about.
-    """
+    """Fixtures that declare a BGP instance at all."""
     fixtures = _config_fixtures(root_dir)
     assert fixtures, "no config fixtures found — run tests/smoke/generate_config_fixtures.py"
     return [path for path in fixtures if _asns_in_config(path.read_text())]
 
 
 class TestAsnExtraction:
-    """The corpus assertions are only as good as the extractor. A regex that
-    quietly stopped matching would turn every test below into a no-op, so each
-    syntax is checked against a config that MUST be flagged and one that must not.
-    """
+    """The corpus assertions are only as good as the extractor."""
 
     @pytest.mark.parametrize(
         ("label", "text"),
@@ -118,14 +90,7 @@ def test_every_config_declares_exactly_one_bgp_asn(routed_fixtures: list[Path]) 
 
 
 def test_ebgp_ibgp_configs_anchor_on_the_overlay_asn(root_dir: Path) -> None:
-    """The direction of the collapse, checked in the rendered output.
-
-    Anchoring on the underlay ASN instead would still produce one instance and
-    still pass the test above, while turning every EVPN session into eBGP and
-    breaking route reflection. Under ebgp-ibgp the fixtures use overlay 65000 /
-    underlay 65001, so the instance must be 65000 and 65001 must appear only as a
-    per-neighbor override.
-    """
+    """The direction of the collapse, checked in the rendered output."""
     overlay_asn, underlay_asn = 65000, 65001
     checked = 0
 

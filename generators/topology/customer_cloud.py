@@ -1,25 +1,6 @@
-"""Customer boarding generator for TopologyCustomerCloud.
-
-Triggered on TopologyCustomerCloud creation (see data/events/99_group_triggers.yml's
-trigger-customer-deployment-cloud-on-added rule: the footprint joins customer_deployments_cloud).
-
-It creates the customer's cloud pool, ``{org_id}-{environment}-cloud-ipv4``: a block of the design's
-``address_prefix_length`` (the routed range of the footprint, S /28 to XL /25) carved from the environment's global
-tenant pool (``Tenant-PROD-IPv4`` or ``Tenant-NONPROD-IPv4``) by the same function that boards a data center or a
-colocation footprint (``SegmentAddressingMixin.ensure_customer_pools``). IPv4 only: a cloud footprint has no IPv6
-pool, and its segments are IPv4 (checks/customer_quota.py). A customer's cloud footprints of one environment share the
-pool, so the second finds it.
-
-It then splits the pool into one /29 routed range per virtual network of the footprint's account in its region, written
-as the ``allowed_prefixes`` of the network's gateway attachments that have none (``CloudRangeMixin.ensure_cloud_ranges``,
-generators/topology/cloud_range.py: authored prefixes win, a network with no attachment gets none). Attachments loaded
-AFTER the footprint are handled by ``add_cloud_attachment_range``, which runs when an attachment joins its group or
-changes its ``virtual_network`` (an event runs a generator on the node that fired it, so no rule on an attachment can run
-THIS generator on the footprint). Re-running this generator by hand converges everything. A footprint carries no firewall
-context, load balancer or circuit of its own, so there is nothing else to provision.
-
-Registered as add_customer_deployment_cloud in .infrahub.yml, targeting the customer_deployments_cloud group and
-querying customer_cloud.gql.
+"""Customer boarding generator for TopologyCustomerCloud (add_customer_deployment_cloud). Creates the cloud pool through
+``ensure_customer_pools``, then a /29 range per virtual network (``ensure_cloud_ranges``); later attachments go to
+add_cloud_attachment_range.
 """
 
 from __future__ import annotations

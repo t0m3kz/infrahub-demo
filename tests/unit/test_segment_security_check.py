@@ -38,11 +38,7 @@ def _segment(
     vrf_type: Any = _UNSET,
     **extra: Any,
 ) -> dict[str, Any]:
-    """One ManagedNetworkSegment edge in the raw query shape.
-
-    The gateway prefix sits in a namespace of the environment's type unless
-    ``vrf_type`` says otherwise (None: a namespace without a type).
-    """
+    """One ManagedNetworkSegment edge in the raw query shape."""
     if vrf_type is _UNSET:
         vrf_type = namespace_type_for_environment(env) if env else None
     gateway = (
@@ -538,9 +534,7 @@ class TestComponentEnvironment:
         assert check._captured_infos[0].startswith("WARNING:")
 
 
-# ---------------------------------------------------------------------------
 # Component group tags
-# ---------------------------------------------------------------------------
 
 
 def _tag(tag_id: str, group_id: int, *components: tuple[str, str]) -> dict[str, Any]:
@@ -739,9 +733,7 @@ class TestRuleTags:
         ]
 
 
-# ---------------------------------------------------------------------------
 # Segment group tags and the contract builder consistency
-# ---------------------------------------------------------------------------
 
 
 def _segment_tag(tag_id: str, group_id: int, *segments: str, components: tuple[tuple[str, str], ...] = ()) -> dict:

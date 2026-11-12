@@ -15,20 +15,7 @@ CUSTOMER_KIND = "OrganizationCustomer"
 
 
 class CheckRoutingTags(InfrahubCheck):
-    """The routing tags behind the customer and segment communities are complete and unique (ERRORs).
-
-    A community is a tag for reading the routing table, never a filter (utils/routing_identity.py), but an
-    untagged segment renders no community and a tag given twice reads as the wrong customer or segment:
-
-    - a routed VXLAN tenant segment (utils/exchange_transit.is_routed_tenant_segment) has a tag;
-    - the customer owning such a segment has a tag;
-    - a tag is on one customer at most, and on one segment at most.
-
-    The range of a tag (1..65534, the 16-bit community value; 65535 is reserved) is the schema's: the server refuses
-    a tag outside it when the customer or segment is written.
-
-    The community each tagged object renders is reported as an info line.
-    """
+    """Routed tenant segments and their owners have a routing tag, unique per kind (ERRORs)."""
 
     query = "routing_tags"
 
@@ -40,7 +27,7 @@ class CheckRoutingTags(InfrahubCheck):
         self._validate_customers(customers, owned)
 
     def _validate_segments(self, segments: list[dict[str, Any]]) -> dict[str, list[str]]:
-        """Check every segment; return owner id -> names of the live routed tenant segments it owns."""
+        """Check every segment; return owner id -> names of the routed tenant segments it owns."""
         owned: dict[str, list[str]] = defaultdict(list)
         by_tag: dict[int, list[str]] = defaultdict(list)
         for segment in sorted(segments, key=lambda item: str(item.get("name"))):

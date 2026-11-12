@@ -1,5 +1,4 @@
-"""Conventions and the firewall/load-balancer step shared by the fabric generators
-that own a DC-scoped or pod-scoped service chain (dc.py, pod.py)."""
+"""Conventions and the firewall/load-balancer step shared by dc.py and pod.py."""
 
 from __future__ import annotations
 
@@ -13,8 +12,7 @@ from ..types import NamingConvention
 if TYPE_CHECKING:
     from ..devices import DeviceMixin
 
-# The generator definitions (.infrahub.yml) that write a DC's own data — the ones
-# a consumer of DC-level data (a pod, a customer boarding) waits out.
+# The generator definitions that write a DC's own data; consumers (pod, customer boarding) wait them out.
 DC_GENERATORS = ("add_dc", "dc_pod_cascade")
 
 _SERVICE_ROLES: tuple[Literal["internal-firewall", "load-balancer"], ...] = ("internal-firewall", "load-balancer")
@@ -35,11 +33,8 @@ class ServiceDevicesMixin:
         naming_convention: NamingConvention,
         indexes: list[int],
     ) -> tuple[list[str], list[str]]:
-        """Create the HA-paired firewall and load-balancer devices a fabric_templates
-        list declares (DeviceMixin.create_ha_role_devices, one call per role).
-
-        Returns the created (firewall names, load-balancer names), flattened over
-        the template entries.
+        """Create the HA-paired firewall and load-balancer devices a fabric_templates list declares; returns (firewall
+        names, load-balancer names).
         """
         names_by_role: dict[str, list[str]] = {}
         for role in _SERVICE_ROLES:
@@ -61,10 +56,8 @@ class ServiceDevicesMixin:
         naming_convention: NamingConvention,
         indexes: list[int],
     ) -> list[str]:
-        """Create the HA-paired external-firewall devices (the Internet edge pair) a fabric_templates list declares.
-
-        Apart from the internal pair: its names, its HA domain and its cabling are its own, and a DC without such
-        an entry gets nothing. Returns the created names, flattened over the entries.
+        """Create the HA-paired external-firewall devices (the Internet edge pair) a fabric_templates list declares;
+        returns the names.
         """
         results = await self.create_ha_role_devices(
             role=EXTERNAL_FIREWALL_ROLE,

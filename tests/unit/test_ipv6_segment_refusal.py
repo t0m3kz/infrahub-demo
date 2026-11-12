@@ -1,11 +1,4 @@
-"""What a transform still refuses for an IPv6 segment (utils/segment_addressing.py).
-
-A segment has ONE gateway of ONE family. The fabric switches (all five leaf platforms) render it completely: SVI, the
-VRF's IPv6 family, the IPv6 ACL, the origination (tests/unit/test_ipv6_switch_rendering.py and the smoke goldens
-``*_ipv6_segments``). What stays refused with ``Ipv6SegmentNotRenderedError``, one gate per consumer: the PBR to a firewall
-context and the transit legs of a firewall context (their pools, VIPs and anycast next hops are IPv4). The firewall
-zones, rules and the office policy render IPv6 through the address table (transforms/helpers/address_table.py). No demo segment is IPv6, so the pre-existing goldens do not change (tests/smoke).
-"""
+"""What a transform still refuses for an IPv6 segment (utils/segment_addressing.py)."""
 
 from __future__ import annotations
 

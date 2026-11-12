@@ -1,9 +1,4 @@
-"""Unit tests for MLAG configuration helpers.
-
-Covers:
-- get_mlag() — domain extraction, peer-link detection, missing-capability path
-- Integration with device data shapes used by BaseDeviceTransform
-"""
+"""Unit tests for MLAG configuration helpers."""
 
 from __future__ import annotations
 
@@ -15,9 +10,7 @@ import pytest
 
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _mlag_cap(
@@ -58,9 +51,7 @@ def _uplink_iface(name: str = "Ethernet1/1") -> dict:
     return {"name": name, "role": "uplink"}
 
 
-# ---------------------------------------------------------------------------
 # get_mlag — core scenarios
-# ---------------------------------------------------------------------------
 
 
 class TestGetMlagNoDomain:
@@ -354,8 +345,7 @@ class TestSonicMlagConfig:
         ],
     )
     def test_an_unrenderable_domain_is_refused(self, config: dict, error: type[Exception], match: str | None) -> None:
-        """An IPv6 control address, missing control addresses, a virtual peer-link, identical peer IPs and an
-        out-of-range domain ID are rejected."""
+        """An IPv6 control address, missing control addresses."""
         with pytest.raises(error, match=match):
             get_sonic_mlag_config(config)
 
@@ -490,9 +480,7 @@ class TestGetMlagFirstCapabilityWins:
         assert result["name"] == "MY-MLAG"
 
 
-# ---------------------------------------------------------------------------
 # Real pod topology: DC1-POD1 L1-L2 MLAG pair
-# ---------------------------------------------------------------------------
 
 
 def test_dc1_pod1_mlag_scenario() -> None:

@@ -19,12 +19,7 @@ def _make_pbr_rule(*, action: str = "permit", dst_prefix: str | None = "10.0.2.0
 def _make_context_leg(
     *, fw_ip: str = "10.65.0.5/29", tenant_id: str | None = None, served: list[str] | None = None
 ) -> dict:
-    """A ManagedFirewallContext dict as returned by
-    _flatten_deployment_firewall_contexts() — device-scoped (this device's
-    own deployment's firewall-role devices), not the rendered device's own
-    interfaces. The firewall's OWN leg is what provides the nexthop, found
-    by filtering the context's legs to the one on a device with
-    role="firewall"."""
+    """A ManagedFirewallContext dict as returned by _flatten_deployment_firewall_contexts()."""
     ctx: dict = {
         "legs": [
             {
@@ -41,9 +36,7 @@ def _make_context_leg(
     return ctx
 
 
-# ===========================================================================
 # _flatten_deployment_firewall_contexts()
-# ===========================================================================
 
 
 def _fw_context(context_id: str) -> dict:
@@ -52,8 +45,7 @@ def _fw_context(context_id: str) -> dict:
 
 
 def _flattened(context: dict) -> dict:
-    """The context as ``_flatten_deployment_firewall_contexts`` returns it: with its served footprints, (no) legs and
-    the role of the member that holds it."""
+    """The context as ``_flatten_deployment_firewall_contexts`` returns it:"""
     return {**context, "served_deployments": [], "legs": [], "shared_devices": [{"role": "internal-firewall"}]}
 
 
@@ -70,15 +62,13 @@ class TestFlattenDeploymentFirewallContexts:
         assert _flatten_deployment_firewall_contexts(None) == []
 
     def test_dc_tier_device_contexts_extracted(self) -> None:
-        """DC-tier devices (border-leaf, firewall, spine) have contexts directly
-        under deployment.devices — no parent hop needed."""
+        """DC-tier devices (border-leaf, firewall, spine) have contexts directly under deployment.devices."""
         ctx = _fw_context("ctx-1")
         deployment = {"devices": [_make_fw_device(contexts=[ctx])]}
         assert _flatten_deployment_firewall_contexts(deployment) == [_flattened(ctx)]
 
     def test_pod_tier_device_contexts_extracted_via_parent(self) -> None:
-        """Pod-tier devices (leaf/tor/access-leaf) have their deployment set to
-        the POD, so contexts live under deployment.parent.devices instead."""
+        """Pod-tier devices (leaf/tor/access-leaf) have their deployment set to the POD."""
         ctx = _fw_context("ctx-1")
         deployment = {"devices": [], "parent": {"devices": [_make_fw_device(contexts=[ctx])]}}
         assert _flatten_deployment_firewall_contexts(deployment) == [_flattened(ctx)]
@@ -121,8 +111,7 @@ class TestGetCustomerPbrRules:
         assert get_customer_pbr_rules(activations, []) == []
 
     def test_segment_without_security_policies_key_is_skipped(self) -> None:
-        """Missing 'security_policy' key (not queried) means no PBR rule — same
-        gate get_acls() uses."""
+        """Missing 'security_policy' key (not queried) means no PBR rule — same gate get_acls() uses."""
         activations = [_make_pbr_activation(security_policies=None)]
         contexts = [_make_context_leg()]
         assert get_customer_pbr_rules(activations, contexts) == []
@@ -156,16 +145,13 @@ class TestGetCustomerPbrRules:
         assert result[0]["fw_nexthop"] == "10.66.0.4"
 
     def test_dedicated_context_for_other_tenant_not_used(self) -> None:
-        """A dedicated context for a DIFFERENT deployment must not leak as this
-        segment's nexthop — falls back to shared (or nothing) instead."""
+        """A dedicated context for a DIFFERENT deployment must not leak as this segment's nexthop."""
         activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
         contexts = [_make_context_leg(fw_ip="10.66.0.5/29", tenant_id="dep-b")]
         assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_stretched_vxlan_segment_matches_by_any_of_its_deployments(self) -> None:
-        """VxlanSegment.customer_deployments is cardinality many (stretch across
-        DCs) — a dedicated context keyed to ANY one of them must match, not
-        just the first."""
+        """VxlanSegment.customer_deployments is cardinality many (stretch across DCs)."""
         activations = [
             {
                 "vlan_id": 100,
@@ -191,9 +177,7 @@ class TestGetCustomerPbrRules:
         assert result[0]["fw_nexthop"] == "10.66.0.4"
 
     def test_owner_org_id_never_matches_tenant_deployment_id(self) -> None:
-        """Regression: FirewallContext.tenant peers TopologyCustomer (a
-        deployment footprint), not OrganizationCustomer (the org) — segment.owner
-        must never be used for this match even if it happens to look like an id."""
+        """Regression:"""
         activations = [
             {
                 "vlan_id": 100,
@@ -212,8 +196,7 @@ class TestGetCustomerPbrRules:
         assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_context_without_firewall_leg_is_skipped(self) -> None:
-        """inline connectivity_mode never allocates an IP on the firewall leg —
-        a context with no addressed firewall-role leg contributes no nexthop."""
+        """inline connectivity_mode never allocates an IP on the firewall leg."""
         activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
         contexts = [{"legs": [{"device": {"role": "internal-firewall"}, "ip_address": {}}]}]
         assert get_customer_pbr_rules(activations, contexts) == []
@@ -256,8 +239,7 @@ class TestGetCustomerPbrRules:
         assert result[0]["bypass_prefixes"] == []
 
     def test_permit_to_a_terminated_segment_is_no_bypass(self) -> None:
-        """A segment a firewall context terminates has no SVI and no route on the fabric: a bypass would drop the flow,
-        so the leaf keeps redirecting it to the firewall, like a permit to a peer that is not terminated is bypassed."""
+        """A segment a firewall context terminates has no SVI and no route on the fabric:"""
         terminated = _make_pbr_rule(dst_prefix="10.9.0.0/24")
         terminated["destination_segment"]["firewall_gateway"] = True
         policies = [{"enabled": True, "rules": [terminated, _make_pbr_rule(dst_prefix="10.0.2.0/24")]}]
@@ -273,8 +255,7 @@ class TestGetCustomerPbrRules:
         assert result[0]["bypass_prefixes"] == ["10.0.1.0/24"]
 
     def test_cross_owner_permit_still_bypasses(self) -> None:
-        """A permit rule bypasses PBR regardless of whether source/destination
-        share an owner — intra- and inter-customer traffic use one model."""
+        """A permit rule bypasses PBR regardless of whether source/destination share an owner."""
         policies = [{"enabled": True, "rules": [_make_pbr_rule(dst_prefix="10.9.0.0/24")]}]
         activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=policies)]
         contexts = [_make_context_leg()]
@@ -463,8 +444,7 @@ class TestCustomerPbrPrefixSelectorBypass:
 
 
 class TestCustomerPbrInspectedFlows:
-    """Option 1: a profiled permit inside one context crosses the firewall
-    both ways; every other permit stays on the fabric."""
+    """Option 1:"""
 
     SHARED = "10.65.0.5/29"
     DEDICATED = "10.66.0.5/29"

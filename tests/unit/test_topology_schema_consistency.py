@@ -1,18 +1,4 @@
-"""Consistency of the topology schema files that the colocation redesign touched.
-
-The schema is the single source of truth, and several generators, queries and checks rely on facts the YAML alone
-states and Infrahub only rejects at load time (or never):
-
-- every touched schema file parses as a SchemaRoot;
-- ``infrastructure_orchestrator`` is defined once, on the generic TopologyOrchestratorScoped, and every kind
-  an orchestrator-routing generator routes by it inherits that generic (a generic cannot inherit a generic, so each
-  node lists it);
-- the zone and the virtual colocation get the colocation kit from the one generic TopologyColocationFabric, the
-  metro does not;
-- relationship identifiers are unique within topology_colocation.yml (two relationships sharing one are the two ends
-  of a single relationship, which is never what a copy-pasted block means), and a colocation footprint has no
-  ``serving_zone`` (it is served by every zone of its metro with firewalls).
-"""
+"""Consistency of the topology schema files that the colocation redesign touched."""
 
 from __future__ import annotations
 
@@ -284,9 +270,7 @@ class TestRelationshipIdentifiers:
         assert "serving_zone" not in _relationship_names("TopologyCustomerColocation")
 
     def test_every_footprint_with_a_firewall_service_lists_its_firewall_contexts(self) -> None:
-        """Declared per kind, never on ManagedTenantScoped: a DC and a colocation footprint list every firewall
-        context that enforces their policy, internal and Internet edge alike (many), on the identifier of the
-        context's served_deployments. No hosting names an Internet edge any more."""
+        """Declared per kind, never on ManagedTenantScoped"""
         ha = _document(_SCHEMAS / "extensions" / "capabilities" / "ha.yml")
         extensions = {e["kind"]: e for e in ha["extensions"]["nodes"]}
         served = next(r for r in _kind("ManagedFirewallContext")["relationships"] if r["name"] == "served_deployments")
@@ -311,8 +295,8 @@ class TestRelationshipIdentifiers:
 
     def test_footprint_segments_are_declared_per_kind_with_a_concrete_peer(self) -> None:
         """The segments of a DC, colocation and office footprint are VXLAN only and a cloud footprint's are
-        CloudNetworkSegment: one network_segments per kind, none on the TopologyCustomer generic (a narrowed
-        peer next to a generic one would make `id` nullable in one kind and not in the other)."""
+        CloudNetworkSegment
+        """
         segment = _document(_SCHEMAS / "extensions" / "service" / "segment.yml")
         declared: dict[str, list[dict[str, Any]]] = {}
         for extension in segment["extensions"]["nodes"]:
@@ -407,12 +391,7 @@ class TestCloudNetworkAppliance:
     def test_its_deployment_peers_the_provider_hosting_generic_under_the_identifier_of_the_other_device_kinds(
         self,
     ) -> None:
-        """TopologyApplianceHosting.appliances lists the appliances through the identifier of their own. The peer is the
-        generic TopologyApplianceHosting (the virtual colocation, the SaaS region or the cloud region a provider
-        function is rented in), so the schema refuses any other deployment and the picker offers nothing else. A query that selects
-        `deployment` across the device kinds spreads fragments per kind, and a fragment for a kind that peer cannot
-        be (a zone) is a schema error. A physical device (and a physical controller) is deployed to a
-        TopologyDeviceHosting; a virtual one runs for a footprint, so its peer stays the TopologyDeployment generic."""
+        """TopologyApplianceHosting.appliances lists the appliances through the identifier of their own."""
         extensions = _document(_TOPOLOGY / "topology.yml")["extensions"]["nodes"]
         device_kinds = {
             "DcimPhysicalDevice",
@@ -560,11 +539,7 @@ class TestCloudNetworkAppliance:
 
 
 def test_every_schema_kind_fits_the_infrahub_profile_name_limit() -> None:
-    """Infrahub derives a ProfileSchema from every node and generic and caps its name at 32 characters.
-
-    A longer kind passes SchemaRoot parsing and only fails at `infrahubctl schema load`, which is how
-    TopologyInfrastructureOrchestrated (34) broke the integration setup.
-    """
+    """Infrahub derives a ProfileSchema from every node and generic and caps its name at 32 characters."""
     too_long = sorted(
         entry["kind"] for path in _SCHEMAS.glob("**/*.y*ml") for entry in _entries(path) if len(entry["kind"]) > 32
     )

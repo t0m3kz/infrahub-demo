@@ -1,9 +1,4 @@
-"""A cloud footprint has exactly one cloud account (schema shape and the 30_all data, read from the YAML).
-
-``TopologyCustomerCloud.account`` is a mandatory relationship, unique (one footprint per account). The owner stays on the
-footprint and must be the account's owner; the footprint's segments use virtual networks of that account. The two rules
-are checks at run time; here the demo data is held to them without a server.
-"""
+"""A cloud footprint has exactly one cloud account (schema shape and the 30_all data, read from the YAML)."""
 
 from __future__ import annotations
 

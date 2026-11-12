@@ -27,8 +27,7 @@ def test_firewall_query_has_scoped_roots_and_shared_interface_fragment() -> None
     assert argument.name.value == "name__value"
     assert isinstance(argument.value, StringValueNode)
     assert argument.value.value == "MANAGEMENT"
-    # The contexts are the device's own shared capabilities: the query spreads the one device fragment that
-    # selects them, once, and selects no context edge of its own (no HA `contexts`, no `cluster`).
+    # Contexts are the device's shared capabilities: no context edge of its own in the query.
     fragment = (root / "queries/fragments/device_capabilities.gql").read_text()
     assert fragment.count("...FirewallContextConfigFields") == 1
     assert "...FirewallContextConfigFields" not in query

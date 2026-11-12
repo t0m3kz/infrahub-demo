@@ -1,27 +1,4 @@
-"""Integration test - Scenario 4: Add Pod to DC6.
-
-Coverage: Verifies that loading a new pod (data/demos/04_pod_dc6) with its
-suite and racks into DC6 and running the DC generator drives the full cascade
-(add_dc -> add_pod -> add_rack) and creates spines, leafs, access-leafs,
-cabling and routing, while every pre-existing underlay switch keeps its ASN.
-
-Data: pod DC6-1-POD-4 (M_MIDDLE, 2 spines) in suite ktw-1-s-4 with two
-network racks, each 2 leaf + 2 access-leaf, so DC6 must gain at least
-2 spines, 4 leafs and 4 access-leafs.
-
-Prerequisites: DC6 merged (Scenario 1), rack added (Scenario 3).
-
-Steps:
-0.  Snapshot DC6 role counts and underlay ASNs on main
-1.  Create branch and load new pod + suite + rack data
-2.  Run add_dc generator (cascades to pod and rack generators)
-3.  Wait for tasks to complete and verify no failures
-4.  Verify devices created
-5.  Create proposed change
-6.  Wait for validations, verify diff and artifacts
-7.  Merge to main
-8.  Verify in main
-"""
+"""Integration test - Scenario 4: Add Pod to DC6."""
 
 import logging
 from typing import Any
@@ -145,12 +122,7 @@ class TestDC6AddPod(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Run add_dc generator which cascades to pod and rack generators.
-
-        The load itself already fires the pod- and rack-created triggers, so
-        those runs are drained first: add_dc then re-runs on settled data
-        instead of racing the event-driven generators for the same objects.
-        """
+        """Run add_dc generator which cascades to pod and rack generators."""
         logging.info("=== %s - Step 2: Run DC Generator ===", SCENARIO_NAME)
 
         await wait_for_tasks_completion(async_client_main, scenario_branch)

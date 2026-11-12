@@ -15,20 +15,7 @@ async def wait_for_condition(
     poll_interval: int = 10,
     description: str = "condition",
 ) -> T:
-    """Poll until condition is met or max attempts reached.
-
-    Args:
-        check_fn: Async function that returns (done, result) tuple.
-        max_attempts: Maximum number of polling attempts.
-        poll_interval: Seconds between polling attempts.
-        description: Human-readable description for logging.
-
-    Returns:
-        The result from check_fn when condition is met.
-
-    Raises:
-        TimeoutError: If condition not met within max_attempts.
-    """
+    """Poll until condition is met or max attempts reached."""
     for attempt in range(1, max_attempts + 1):
         done, result = await check_fn()
         if done:
@@ -52,20 +39,7 @@ def wait_for_condition_sync(
     poll_interval: int = 10,
     description: str = "condition",
 ) -> T:
-    """Poll synchronously until condition is met or max attempts reached.
-
-    Args:
-        check_fn: Function returning (done, result).
-        max_attempts: Maximum number of polling attempts.
-        poll_interval: Seconds between polling attempts.
-        description: Human-readable description for logging.
-
-    Returns:
-        The result from check_fn when condition is met.
-
-    Raises:
-        TimeoutError: If condition is not met within max_attempts.
-    """
+    """Poll synchronously until condition is met or max attempts reached."""
     for attempt in range(1, max_attempts + 1):
         done, result = check_fn()
         if done:

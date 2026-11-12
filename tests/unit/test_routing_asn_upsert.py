@@ -1,12 +1,4 @@
-"""Unit tests for ASN allocation and upsert idempotency.
-
-Tests verify:
-- Existing AS path: preserved as _existing_id in autonomous_systems
-- New device path: from_pool allocation for genuinely new devices
-- Mixed scenarios: existing + new devices in same plan
-- Rerun idempotency: identical plans from identical inputs
-- BGP process references: existing AS by id, new AS by PendingASRef
-"""
+"""Unit tests for ASN allocation and upsert idempotency."""
 
 from typing import Any
 from unittest.mock import MagicMock
@@ -15,9 +7,7 @@ from generators.helpers.routing import PendingASRef, RoutingPlanInput, RoutingPl
 from generators.types import RoutingOptions
 from tests.unit.routing_helpers import make_loopback, make_p2p_interface
 
-# ================================================================
 # Helpers
-# ================================================================
 
 
 def _make_pool(pool_id: str = "pool-1") -> str:
@@ -101,9 +91,7 @@ def _make_plan_input(
     )
 
 
-# ================================================================
 # Existing AS Preservation Tests
-# ================================================================
 
 
 class TestExistingASPreservation:
@@ -256,9 +244,7 @@ class TestExistingASPreservation:
         assert plan.autonomous_systems == []
 
 
-# ================================================================
 # eBGP Overlay Process Tests (existing AS by id)
-# ================================================================
 
 
 class TestEbgpOverlayWithExistingAS:
@@ -328,9 +314,7 @@ class TestEbgpOverlayWithExistingAS:
         assert overlay_procs["leaf-1-bgp-overlay"] == PendingASRef(device="leaf-1")
 
 
-# ================================================================
 # Mixed Scenario: 2 existing ToRs + 2 new ToRs (the 02_switch case)
-# ================================================================
 
 
 class TestMixedExistingNewToRs:
@@ -413,9 +397,7 @@ class TestMixedExistingNewToRs:
         assert len(_existing_as(plan)) == 5  # all devices have existing AS
 
 
-# ================================================================
 # Rerun Idempotency Tests
-# ================================================================
 
 
 class TestRoutingPlanIdempotency:

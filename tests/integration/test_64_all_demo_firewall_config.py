@@ -1,48 +1,5 @@
-"""Integration test — validate and render the colo cloud/partner/SaaS zone
-policy rules (data/demos/30_all/08_interconnects/07_zone_policies/) against a
-real loaded branch.
-
-Runs the check and the transform in-process against the branch test_59
-built, rather than creating a Proposed Change. `.infrahub.yml` declares a
-firewall_config artifact definition targeting every firewall in the
-"firewalls" group, so a PC over the full 30_all branch would fan out artifact
-generation across a hundred-odd devices to prove something one device's worth
-of query+check+render already proves.
-
-CheckFirewall (checks/firewall.py) validates the rules one firewall enforces —
-the same ones its config renders (Firewall.collect_policies): the policies of
-the segments it serves and the rules into them. The render is not
-device-agnostic: place_policies_in_contexts() (transforms/helpers/firewall_contexts.py)
-gives a context only the rules of the segments of the deployments it serves,
-so the render runs on every member of the cluster serving the policy's source
-segment (c001-nordix-prod-p, deployment C001-P-FR — the FR2 zone's firewall
-pair), whose rules are in that segment's own policy
-(seg-c001-nordix-prod-p-egress), and once on a firewall outside it that must
-not carry the rules.
-
-The same module then covers the inter-VRF exchange legs the customer boarding
-generators build through each firewall context (utils/exchange_transit.py), a
-DC's and the FR2 colocation zone's alike:
-CheckFirewall on a DC10 (Check Point), DC11 and FR2 (PAN-OS) member, the rendered
-firewall config of every site (leg interface, VIP, default route via the INTERNET
-leg, PROD/NONPROD isolation), a DC11 border-leaf config carrying the
-transit VRF routes, and the FR edges' config carrying the zone's transit legs. Everything is derived from the loaded graph and from
-all_demo_firewall_constants' environment-driven expectations.
-
-A last step runs CheckLispFabric and renders every switch of the offices' LISP fabrics (add_office_fabric): the
-distribution-switches as map-servers and the access-switches as edges, with the WAN exit where the office has an
-SD-WAN edge.
-
-The load-balancer steps close the one-arm LB path of the two load_balanced components
-(ALL_DEMO_LOAD_BALANCED_COMPONENTS): CheckLoadBalancer on the members of the contexts holding
-their VIPs, the F5 render of those contexts (partition, strict route domain = namespace l3_vni,
-leg, virtual servers with SNAT automap), the border leafs' leg VLAN/VNI/anycast and VIP /26
-static, and the client leaf's PBR bypass of the VIP/32.
-
-This module holds the steps up to the border-leaf and edge transit renders. The management exchange, the office
-fabric LISP render and the load-balancer steps follow in test_64b_all_demo_management_lb_config.py; the queries and
-rules of both are in firewall_config_helpers.py.
-"""
+"""Integration test — validate and render the colo cloud/partner/SaaS zone policy rules
+(data/demos/30_all/08_interconnects/07_zone_policies/) against a real loaded branch."""
 
 import ipaddress
 import logging
@@ -120,13 +77,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> dict[str, Any]:
-        """The firewall cluster whose context serves the policy's source
-        segment: {"members", "zone_firewalls", "outsider", "context"}, names sorted.
-        zone_firewalls are the firewalls of the metro's zones (30_all: FR2 is the one zone with a pair).
-        outsider is a firewall outside the cluster on the members' platform,
-        so its template renders rule names too. Function-scoped: an async
-        fixture can't be class-scoped under this suite's function-scoped
-        asyncio fixture loop (pytest-asyncio ScopeMismatch)."""
+        """The firewall cluster whose context serves the policy's source segment: {"members", "zone_firewalls",
+        "outsider", "context"}."""
         result = await async_client_main.execute_graphql(
             query=SERVING_CLUSTER_QUERY, variables={"segment": SOURCE_SEGMENT}, branch_name=scenario_branch
         )
@@ -171,8 +123,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
     @pytest.mark.dependency(scope="session", name="all_demo_firewall_cluster", depends=["all_demo_inventory"])
     @pytest.mark.asyncio
     async def test_00_serving_cluster_is_the_zone_pair(self, serving_cluster: dict[str, Any]) -> None:
-        """The context serving a colocation deployment lives on the firewall
-        pair of its metro's zone, not on some DC's cluster."""
+        """The context serving a colocation deployment lives on the firewall pair of its metro's zone."""
         logging.info("=== %s - Step 0: Serving Cluster ===", SCENARIO_NAME)
 
         assert len(serving_cluster["members"]) == 2, f"serving cluster is not a pair: {serving_cluster['members']}"
@@ -191,9 +142,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         scenario_branch: str,
         serving_cluster: dict[str, Any],
     ) -> None:
-        """CheckFirewall must find no errors in the rules the serving firewall
-        enforces — including seg-c001-nordix-prod-p-egress's rules, whose
-        destination is a prefix only (no destination segment/zone)."""
+        """CheckFirewall must find no errors in the rules the serving firewall enforces."""
         logging.info("=== %s - Step 1: CheckFirewall ===", SCENARIO_NAME)
         serving_firewall_device_name = serving_cluster["members"][0]
 
@@ -224,19 +173,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         scenario_branch: str,
         serving_cluster: dict[str, Any],
     ) -> None:
-        """Render the real firewall_config transform against live data on
-        every member of the serving cluster and confirm the policy's rules and
-        destination CIDRs made it all the way from the object files through
-        the generator-populated graph, the firewall_config query, and
-        get_zone_policies() into real device config text. A firewall outside
-        the cluster on the same platform must not carry the rules: strict
-        placement puts a rule only where its segment is served.
-
-        The colocation context also carries transit legs, like a DC's: the FR
-        pair is PAN-OS, so each member renders its layer3 sub-interfaces,
-        vsys imports, zones, the vsys's own virtual router with the 0/0 via the
-        INTERNET leg, the SNAT rules and the MANAGEMENT denies
-        (_panos_context_leg_errors, the same wording as the DC11 steps)."""
+        """Render the real firewall_config transform against live data on every member of the serving cluster and
+        confirm the policy's rules and destination CIDRs made it all the way from the object files through the
+        generator-populated graph, the firewall_config query, and get_zone_policies() into real device config text."""
         logging.info("=== %s - Step 2: Render firewall_config ===", SCENARIO_NAME)
 
         context = serving_cluster["context"]
@@ -296,10 +235,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         scenario_branch: str,
         dc: str,
     ) -> None:
-        """CheckFirewall (incl. validate_exchange_gateways) passes on a member of
-        DC10's Check Point pair, DC11's PAN-OS pair and the FR2 zone's PAN-OS
-        pair: one local leg per exchange namespace, in a /29, tagged with the
-        transit VLAN."""
+        """CheckFirewall (incl. validate_exchange_gateways) passes on a member of DC10's Check Point pair."""
         logging.info("=== %s - Step 3: CheckFirewall (%s transit legs) ===", SCENARIO_NAME, dc)
 
         (shared, *_) = _shared_contexts(
@@ -325,14 +261,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Every physical member of each site's shared contexts renders their legs.
-
-        Per leg: the sub-interface, the firewall VIP (/29 .4) and, per vendor,
-        the member address (Check Point) and the default route 0.0.0.0/0 via the
-        INTERNET leg's border-leaf anycast (/29 .1). No context holds both PROD and
-        NONPROD (each tenant namespace has its own), so no PROD<->NONPROD deny
-        is rendered anywhere.
-        """
+        """Every physical member of each site's shared contexts renders their legs."""
         logging.info("=== %s - Step 4: Render transit legs ===", SCENARIO_NAME)
 
         contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
@@ -342,7 +271,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         rendered_count = 0
         for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
             if expected["tenant"] is not None:
-                continue  # a dedicated context's members are virtual: not a firewall_config device
+                continue  # a dedicated context's members are virtual
             dc = expected["site"]
             context = contexts.get((dc, expected["namespace"], None))
             if context is None:
@@ -400,15 +329,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Each DC11 border leaf carries the transit VRFs of its tagged contexts.
-
-        The shared context (no tenant) is the default-route owner, so inside
-        `vrf context PROD` there must be `ip route 0.0.0.0/0 <PROD leg VIP>`
-        (inside the VRF, not a global `nh vrf`), every leg's transit VNI as a
-        `vn-segment`, and the static routes redistributed into EVPN. `vrf context
-        INTERNET` routes each context's SNAT /32 to its INTERNET leg VIP and carries
-        no tenant (non-public) prefix.
-        """
+        """Each DC11 border leaf carries the transit VRFs of its tagged contexts."""
         logging.info("=== %s - Step 5: Render border-leaf transit routes ===", SCENARIO_NAME)
 
         contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
@@ -450,7 +371,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 )
             if internet_block is None:
                 continue
-            # Return path: each served context's SNAT /32 -> its INTERNET leg VIP, and no tenant prefix.
+            # Return path: each served context's SNAT /32 -> its INTERNET leg VIP
             internet_routes = re.findall(r"^\s+ip route (\S+) (\S+)", internet_block.group(1), re.MULTILINE)
             for context in dc_contexts:
                 snat = ipaddress.IPv4Interface(str(context["snat"])).ip
@@ -477,15 +398,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """A permit to the internet zone (destination_zone, ALL_DEMO_INTERNET_EGRESS_RULES).
-
-        Firewall: every member of the DC's shared context renders the rule in
-        that context's vsys from the source's zone to INTERNET, source the
-        segment's prefix, destination any. Leaf: the ACL of the source segment's
-        VLAN denies every NON_INTERNET_PREFIXES range from the segment before
-        the `permit ... any`, and has no `permit <proto> <src> any` ahead of
-        the last of those denies.
-        """
+        """A permit to the internet zone (destination_zone, ALL_DEMO_INTERNET_EGRESS_RULES)."""
         logging.info("=== %s - Step 6: Internet egress rule ===", SCENARIO_NAME)
 
         contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
@@ -591,14 +504,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Every member of each DC's shared context source-NATs its tenant zones to its SNAT address.
-
-        PAN-OS (DC11): one `rulebase nat rules snat-<zone>` per tenant zone with
-        `source-translation dynamic-ip-and-port translated-address <snat>`, and the
-        SNAT address as secondary IP on the INTERNET unit. Check Point (DC10, DC12):
-        the SNAT host object and a `mgmt_cli add nat-rule ... translated-source
-        "SNAT-<context>"` line per tenant zone.
-        """
+        """Every member of each DC's shared context source-NATs its tenant zones to its SNAT address."""
         logging.info("=== %s - Step 6: Render firewall SNAT ===", SCENARIO_NAME)
 
         contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
@@ -608,7 +514,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         rendered_by_platform: dict[str, int] = {}
         for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
             if expected["tenant"] is not None:
-                continue  # a dedicated context's members are virtual: not a firewall_config device
+                continue  # a dedicated context's members are virtual
             dc = expected["site"]
             context = contexts.get((dc, expected["namespace"], None))
             if context is None or not context["snat"]:
@@ -666,20 +572,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """All four colocation edges are BGWs: INTERNET type-5 upstream, and the FABRIC pair session.
-
-        Every edge (ALL_DEMO_INTERNET_BGWS: eg-fr201/202, eg-pa401/402) carries the
-        INTERNET L3 VNI and the global route-target in `vrf context INTERNET`,
-        advertises it into EVPN under `vrf INTERNET`, and filters the transit
-        session (default-only in). What the edge announces upstream is the
-        explicitly originated public space (`originated_prefixes` of INTERNET
-        session circuits), which 30_all does not author: not asserted here. Each edge also peers its zone partner over the
-        interlink: one `FABRIC-PEERS` neighbour (iBGP, remote-as = the site AS,
-        no peer-type, no update-source, an `out` route-map), `evpn multisite
-        fabric-tracking` on the interlink port only and `dci-tracking` on the
-        dark-fibre ports. The two sessions add_virtual_circuit builds per DCI circuit render as one
-        DCI-UNDERLAY-PEERS and one DCI-PEERS neighbour each (_dci_session_errors).
-        """
+        """All four colocation edges are BGWs: INTERNET type-5 upstream, and the FABRIC pair session."""
         logging.info("=== %s - Step 6: Render edge INTERNET upstream ===", SCENARIO_NAME)
 
         errors: list[str] = []
@@ -731,14 +624,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Each FR2 edge renders the shared context's transit legs; the PA edges render none.
-
-        The edges are the border leafs' counterpart for a colocation context (a trunk of the
-        transit VLANs on the firewall-role port, transit L2VNI, anycast SVI per VRF, the 0/0 and SNAT
-        /32 statics inside their `vrf context`); see _edge_transit_errors. The statics stay local:
-        INTERNET's SNAT /32 is redistributed into EVPN, PROD's 0/0 is not. The edges of a zone
-        without a firewall pair carry no transit VLAN, SVI or static-route map.
-        """
+        """Each FR2 edge renders the shared context's transit legs; the PA edges render none."""
         logging.info("=== %s - Step 6: Render edge firewall transit legs ===", SCENARIO_NAME)
 
         contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))

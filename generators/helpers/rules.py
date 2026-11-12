@@ -9,12 +9,8 @@ from utils.ports import PortProfileHelper, PortSpec
 
 
 def zone_ref(zone_name: str | None) -> dict[str, Any]:
-    """``{side}_zone`` of a rule side that has a selector and no segment, as a SecurityZone HFID reference.
-
-    A zone qualifies a prefix or address selector (transforms/helpers/policy.py ``rule_zone``): a side with a
-    selector and no segment must name it. Empty when the zone is not known: checks/segment_security.py reports
-    the rule then.
-    """
+    """``{side}_zone`` of a rule side with a selector and no segment, as a SecurityZone HFID reference.
+    Empty when the zone is not known (checks/segment_security.py reports the rule)."""
     return {"hfid": [zone_name]} if zone_name else {}
 
 
@@ -34,12 +30,8 @@ class RulesPlanner:
         dep: dict[str, Any] | None = None,
         port: PortSpec | None = None,
     ) -> str:
-        """One rule per dependency and port, named after the dependency.
-
-        A firewall rule holds one protocol and port range, so a dependency
-        on tcp/6379 and udp/30000-30010 becomes two rules; the port suffix
-        keeps the second from being skipped as already existing. The
-        component pair is the fallback for a dependency without a name.
+        """One rule per dependency and port, named after the dependency. A rule holds one protocol and port range, so
+        tcp/6379 plus udp/30000-30010 are two rules; the component pair names a dependency without a name.
         """
         dep_name = str((dep or {}).get("name") or "").strip()
         if dep_name:
@@ -67,11 +59,8 @@ class RulesPlanner:
 
     @staticmethod
     def segment_policy_name(segment: dict[str, Any]) -> str:
-        """Deterministic egress policy name for a source segment.
-
-        A segment with a parent virtual network (cloud) is qualified by it: the
-        computed segment name is only unique within one network, so two
-        networks may hold the same one. On-prem names carry no qualifier.
+        """Deterministic egress policy name for a source segment, qualified by its parent virtual network for a cloud
+        segment.
         """
         seg_name = segment.get("name") or segment.get("id") or "unknown-segment"
         vnet_name = (segment.get("virtual_network") or {}).get("name")
@@ -93,13 +82,9 @@ class RulesPlanner:
 
     @classmethod
     def cross_environment_reason(cls, src_comp: dict[str, Any], dst_comp: dict[str, Any]) -> str | None:
-        """Why the flow between two components is never allowed because it joins prod and non-prod, else None.
-
-        Prod and non-prod are never connected, so no approval opens that flow. The decision is made from each
-        segment's own environment (the namespace it lives in), not the application's, which is governance input only.
-        A flow without two segments (proxy to an FQDN) has nothing to join, and an exchange-zone segment
-        (INTERNET/MANAGEMENT) is governed by EXCHANGE_PEERS instead. Used by the planner and by
-        ``checks/app_dependency.py``, which reports the refusal on the proposed change.
+        """Why the flow between two components is never allowed because it joins prod and non-prod, else None. Decided
+        from each segment's own environment; flows without two segments, and exchange-zone segments (EXCHANGE_PEERS),
+        are not judged. Used by the planner and ``checks/app_dependency.py``.
         """
         src_seg = src_comp.get("network_segment") or {}
         dst_seg = dst_comp.get("network_segment") or {}
@@ -127,10 +112,8 @@ class RulesPlanner:
         if reason := cls.cross_environment_reason(src_comp, dst_comp):
             return False, reason
 
-        # Inside one owner every flow is auto-approved, across applications
-        # and non-prod environments too. Another owner's endpoint opens only
-        # once its owner approves; the dependency-updated trigger then
-        # reconciles the calling application, which creates the rule.
+        # Inside one owner every flow is auto-approved; another owner's endpoint opens once its owner approves, then the
+        # dependency-updated trigger creates the rule
         if crosses_owners(src_comp, dst_comp) and status != "approved":
             return (
                 False,
@@ -159,13 +142,8 @@ class RulesPlanner:
 
     @staticmethod
     def pick_profile_name(app_security_profile: str, cross_zone: bool) -> str | None:
-        """Threat-inspection profile for a generated SecurityPolicyRule.
-
-        `fintech_strict` always gets full inspection (antivirus/DLP) — that's
-        a data-sensitivity/compliance requirement independent of where the
-        traffic goes, unlike `internet_exposed`, whose "strict" handling is
-        specifically about the perimeter/exposure boundary and so only
-        applies when the flow actually crosses zones.
+        """Threat-inspection profile for a generated SecurityPolicyRule. `fintech_strict` always gets full inspection
+        (compliance); `internet_exposed` only when the flow crosses zones.
         """
         if app_security_profile == "fintech_strict":
             return "strict"
@@ -179,11 +157,9 @@ class RulesPlanner:
 
     @staticmethod
     def pick_isolation_mode(app_security_profile: str) -> str:
-        """Intra-segment enforcement for a segment, derived from the
-        security_profile of the application using it. fintech_strict is a
-        data-sensitivity/compliance requirement (per-flow ACL enforcement
-        even between hosts in the same segment) independent of network
-        topology; every other profile stays at the schema default."""
+        """Intra-segment enforcement for a segment, from the security_profile of its application (fintech_strict
+        enforces per-flow ACLs inside the segment).
+        """
         return MICROSEGMENTED if app_security_profile == "fintech_strict" else "normal"
 
     @classmethod
@@ -203,14 +179,9 @@ class RulesPlanner:
         cross_zone: bool,
         vip_id: str | None = None,
     ) -> dict[str, Any]:
-        """The rule of one dependency port: into the destination segment, or,
-        with ``vip_id``, R_client — into one VIP of a load-balanced target (one
-        rule per VIP: the leaf ACL and the firewall render one address selector).
-
-        The VIPs are UNCLASSIFIED service addresses (never a segment or a
-        group), so R_client names no destination segment, carries no
-        destination tag and is not forced onto the switch by the target's
-        isolation mode; the source side is the same as a direct rule's.
+        """The rule of one dependency port: into the destination segment, or with ``vip_id`` R_client into one VIP of a
+        load-balanced target. VIPs are unclassified service addresses, so R_client names no destination segment or tag
+        and is not forced onto the switch.
         """
         reached_seg = {} if vip_id else dst_seg
         payload: dict[str, Any] = {
@@ -226,8 +197,8 @@ class RulesPlanner:
         }
         if vip_id:
             payload["destination_ip_addresses"] = [{"id": vip_id}]
-            # The VIP is a /32 of the context serving the target, in the target's tenant zone (the context's VIP
-            # range and legs are in the backend's own VRF): the zone that qualifies the address selector.
+            # The VIP is a /32 of the serving context, in the target's tenant zone: that zone qualifies the address
+            # selector
             if zone := zone_ref((dst_seg.get("security_zone") or {}).get("name")):
                 payload["destination_zone"] = zone
         else:
@@ -265,13 +236,9 @@ class RulesPlanner:
         leg_zone: str | None,
         port: PortSpec,
     ) -> dict[str, Any]:
-        """R_server: the context's leg /29 (the SNAT automap source of every
-        balanced connection) to the backend segment on the VIP port.
-
-        The leg is an UNCLASSIFIED service leg, so only the destination side
-        carries a component tag, where its segment is microsegmented. Its
-        ``leg_zone`` (the zone of the leg's VLAN slot) qualifies the source
-        selector. Never expires: it lives exactly as long as its VIP.
+        """R_server: the context's leg /29 (the SNAT source) to the backend segment on the VIP port. The leg is
+        unclassified, so only the destination carries a component tag; ``leg_zone`` qualifies the source. Lives as long
+        as its VIP.
         """
         protocol, port_start, _port_end = port
         return {
@@ -302,18 +269,9 @@ class RulesPlanner:
         src_seg: dict[str, Any],
         dst_seg: dict[str, Any],
     ) -> dict[str, Any]:
-        """The component group tags a rule carries: one per side whose segment is microsegmented.
-
-        A side's tag is its component's (in memory, from
-        AppApplicationGenerator._ensure_component_tags). Inside a
-        microsegmented segment it is the intra-segment contract between two
-        components; on a side of a cross-segment rule it narrows the
-        contract to that component, instead of every group of its segment
-        (transforms/helpers/group_policy.rule_groups): a dependency on one
-        component opens that component, not its neighbours. A side whose
-        segment is not microsegmented carries no tag (the segment tag is the
-        group there), and a side left out is cleared on an existing rule
-        (_reconcile_rule_payload).
+        """The component group tags a rule carries: one per side whose segment is microsegmented. A side's tag is its
+        component's (from AppApplicationGenerator._ensure_component_tags); a side left out is cleared on an existing
+        rule.
         """
         return {
             f"{side}_security_tag": {"id": tag_id}

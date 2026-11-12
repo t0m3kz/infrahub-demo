@@ -12,18 +12,11 @@ from generators.logger import GeneratorError
 from generators.protocols import ManagedSegmentDeployment
 from tests.unit.segment_generators_helpers import _DEP_1, _DEP_2, _make_gen, _seg_response
 
-# ===========================================================================
 # TestSegmentVniInvariant — behaviour of generate() against a stateful fake
-# ===========================================================================
 
 
 class _FakeSegmentDeploymentStore:
-    """In-memory ManagedSegmentDeployment store behind client.filters/create.
-
-    A node created with a pool request gets the next pool number (a new
-    consumer id draws a new number, as on a real Number pool); a literal VNI is
-    stored as written. ``pool_draws`` counts pool allocations.
-    """
+    """In-memory ManagedSegmentDeployment store behind client.filters/create."""
 
     def __init__(self, first_vni: int = 10100) -> None:
         self.records: list[MagicMock] = []

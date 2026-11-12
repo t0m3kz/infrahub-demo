@@ -1,10 +1,4 @@
-"""generators/change/change_request.py: what add_change_request reads, what it writes, and what it never touches.
-
-The server is a recording fake: the artifact diff is the REST shape measured on 1.12, the data diff and the facts are
-raw GraphQL, and every mutation is recorded. Held: the derived fields and the edges are written, an author field never
-is, a re-run with nothing new writes nothing, a PC that is not open is left alone, and the conflicts come from the
-other open PCs' branches.
-"""
+"""generators/change/change_request.py: what add_change_request reads, what it writes, and what it never touches."""
 
 from __future__ import annotations
 
@@ -284,8 +278,7 @@ def test_conflicts_are_read_from_the_other_open_pcs_branches(monkeypatch: pytest
 
 
 def test_the_reads_of_a_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The artifact targets in one facts call (nothing else is asked of the devices); the data diff is read once, in
-    pages of the kinds the description names; the other open PCs' requests are read on their branches."""
+    """The artifact targets in one facts call (nothing else is asked of the devices); the data diff is read once."""
     client = FakeClient()
 
     _run(client, request_row(), monkeypatch)

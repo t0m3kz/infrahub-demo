@@ -1,7 +1,4 @@
-"""Shared builders of the EndpointConnectivityGenerator tests (test_endpoint_generator*.py).
-
-The rack and endpoint rows, the generator factory and the mocked endpoint devices.
-"""
+"""Shared builders of the EndpointConnectivityGenerator tests (test_endpoint_generator*.py)."""
 
 from __future__ import annotations
 
@@ -79,8 +76,8 @@ def _make_generator() -> Any:
     gen.release_resource_lock = AsyncMock()
     gen._process_endpoint_connections = AsyncMock()
     gen._process_lag_endpoint_connections = AsyncMock()
-    # Covered on its own in TestFanOutComponentSegments; mocked here so the
-    # generate() tests' filters side_effect lists stay the cabling queries only.
+    # Covered on its own in TestFanOutComponentSegments; mocked here so the generate() tests' filters side_effect lists
+    # stay the cabling queries only.
     gen._fan_out_component_segments = AsyncMock()
     gen.run_generator = AsyncMock()
     gen.create_cabling = AsyncMock(return_value=[("server-port", "switch-port")])

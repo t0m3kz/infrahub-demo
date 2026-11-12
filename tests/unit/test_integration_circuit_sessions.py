@@ -1,22 +1,4 @@
-"""The test_62 session tests (DCI, handoff, tunnel, group), run offline against a stack that behaves like the generator.
-
-test_06, test_06b, test_06c and test_02a of tests/integration/test_62 read what add_virtual_circuit wrote: sessions,
-addresses, prefixes, keys. That output exists only on a stack, so a typo in a query path or a rule that the generator's
-real output would break shows up first in a 55-minute run. ``FakeStack`` answers the queries of those tests with what
-the REAL generator (generators/topology/virtual_circuit.py) writes when it runs over the shipped 30_all circuits: its
-planners decide the pool, the address family, the peerings (ttl, route limit, role, key) and which end takes the lower
-address, its write path addresses the ports and creates the peerings. Only the server is simulated: it hands out the
-next /31 (/127) of the bootstrap pool, keeps what the generator saves, and resolves ids when a test query reads it back.
-What the generator reads (the circuits' ports and carriers, the devices' BGP processes with their ASNs, their
-loopbacks) is the state of the shipped data, not a decision of the generator, and is set up here.
-
-The tests then run the real test methods: they must pass on that output, and they must fail, naming the field, when
-one thing of it is wrong. A drift guard changes what a planner decides and shows the same methods then fail, so the
-fake cannot keep a rule the generator no longer has.
-
-What the generator really writes is proven by its own unit tests (test_virtual_circuit_session.py) and, on a stack, by
-the integration run.
-"""
+"""The test_62 session tests."""
 
 from __future__ import annotations
 
@@ -166,10 +148,7 @@ class _Template:
 
 @dataclass
 class _Devices:
-    """The BGP processes, loopbacks and port templates the generator reads, keyed by the ids it is given.
-
-    The ASN of a process is data: a declared party stub has the ASN of the data, every other process its own.
-    """
+    """The BGP processes, loopbacks and port templates the generator reads, keyed by the ids it is given."""
 
     party_asns: dict[str, int] = field(default_factory=lambda: dict(ALL_DEMO_HANDOFF_PARTY_ASNS.values()))
     processes: dict[str, tuple[str, str, str, int]] = field(default_factory=dict)
@@ -291,10 +270,7 @@ def _bootstrap_pools() -> dict[str, tuple[str, str]]:
 
 
 class _ServerClient(FakeClient):
-    """The recording client of the generator tests, plus the server's part: the next free /31 (/127) of a pool.
-
-    It also remembers what a test query needs to resolve later: the address families by id, the prefixes allocated.
-    """
+    """The recording client of the generator tests, plus the server's part:"""
 
     def __init__(self) -> None:
         """Pools from data/bootstrap; allocations are idempotent per identifier, as on the server."""
@@ -419,8 +395,7 @@ class FakeStack:
                     if (end["node"].get("zone_capabilities") or {}).get("edges"):
                         nodes[interface_id]["zone_capabilities"] = end["node"]["zone_capabilities"]
                     elif interface_id in devices.interfaces and (circuit.get("vrf") or {}).get("node"):
-                        # The generator gives the end it writes its device's instance of the circuit's zone
-                        # (local_vrf_ids); the fake VRF provisioning is stubbed, so the circuit's instance stands in.
+                        # The fake VRF provisioning is stubbed, so the circuit's instance stands in (local_vrf_ids).
                         nodes[interface_id]["zone_capabilities"] = _in_vrf(circuit["vrf"]["node"])
         for data, _ in client.created_of("ManagedBGPPeering"):
             self.sessions[data["name"]] = _session(
@@ -638,8 +613,7 @@ async def test_a_tunnel_with_a_session_of_any_name_fails(stack: FakeStack, suffi
 
 
 async def test_the_group_holds_exactly_the_session_circuits(stack: FakeStack) -> None:
-    """The virtual-circuits group has every session circuit: the DCIs, the handoffs and the tunnels (a non-member
-    starts no run, and its updated rules fail)."""
+    """The virtual-circuits group has every session circuit:"""
     await interconnects.TestAllDemoInterconnects().test_02a_verify_virtual_circuits_group(_client(stack), "main")
     assert len(stack.group_members) == len(ALL_DEMO_VIRTUAL_CIRCUITS)
 
@@ -732,11 +706,7 @@ def _drift_plan(kind: str, rewrite: Callable[[SessionPlan], SessionPlan]) -> Cal
 async def test_a_changed_planner_decision_reaches_the_test_62_methods(
     monkeypatch: pytest.MonkeyPatch, drift: Callable[[pytest.MonkeyPatch], None], method: str, message: str
 ) -> None:
-    """The fake is the generator's output, not a copy of its rules: when a planner decides differently, test_62 fails.
-
-    Each case first passes on the unchanged generator (the tests above), then rebuilds the stack with one planner
-    constant or decision changed and expects the real test method to name the field.
-    """
+    """The fake is the generator's output, not a copy of its rules:"""
     drift(monkeypatch)
     stack = await FakeStack.build()
     with pytest.raises(AssertionError, match=message):

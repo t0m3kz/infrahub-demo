@@ -1,15 +1,4 @@
-"""Offline guards for the Arista MSS-G demo scope (data/demos/32_arista_mssg) and its integration test.
-
-tests/integration/test_71_arista_mssg.py can only run against a live stack, so everything it assumes about the data
-and about the render text is checked here first, without one:
-
-- the scope's references resolve (templates, design elements, software image, racks, servers, segments, policies);
-- every VTEP the DC declares passes the reference-fabric gate (utils.group_policy.fabric_reason) and the port plans
-  satisfy the cabling rules the generators enforce (one uplink per spine, speed matches, mlag-peer ports);
-- the real Leaf transform, fed the scope's hand-written policies (through the smoke fixture of a reference-fabric EOS
-  leaf), renders what test_71's ``_mssg_errors`` expects, staged and enforced, and ``_mssg_errors`` catches the
-  mistakes it exists for.
-"""
+"""Offline guards for the Arista MSS-G demo scope (data/demos/32_arista_mssg) and its integration test."""
 
 from __future__ import annotations
 
@@ -106,9 +95,7 @@ def _vtep_templates(topology: dict[str, Any]) -> dict[str, str]:
     return found
 
 
-# ---------------------------------------------------------------------------
 # The data
-# ---------------------------------------------------------------------------
 
 
 class TestReferenceGate:
@@ -282,9 +269,7 @@ class TestPortPlans:
             assert len(template_names) == len(set(template_names)), f"{name}: duplicate template_name"
 
 
-# ---------------------------------------------------------------------------
 # The render
-# ---------------------------------------------------------------------------
 
 LIVE_PREFIXES = {
     scenario.SEG_WEB: "10.10.1.0/24",

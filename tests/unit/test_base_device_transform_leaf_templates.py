@@ -16,9 +16,7 @@ from transforms.common import _loopback_name
 from transforms.config.border_spine import BorderSpine
 from utils.fabric_roles import BORDER_ROLES
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 class TestLeafPbrRules:

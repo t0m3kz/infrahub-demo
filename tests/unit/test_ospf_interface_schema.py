@@ -1,9 +1,4 @@
-"""The OSPF objects and the interface capabilities edge (schemas/extensions/capabilities/ospf.yml).
-
-``RoutingOSPFInterface`` is an interface-side object on the standard interface edge of ``ManagedGenericInterfaces``:
-no device field, no re-declared edge, no same-device rule in the schema (checks/interface_layers.py R7 holds it).
-``ManagedOSPFPeering`` is not on the interface edge: its interfaces are those of its ``ospf_interface`` settings.
-"""
+"""The OSPF objects and the interface capabilities edge (schemas/extensions/capabilities/ospf.yml)."""
 
 from __future__ import annotations
 

@@ -8,7 +8,7 @@ from generators.helpers.naming import sdwan_edge_name
 from .all_demo_constants import ALL_DEMO_DC_NAMES, _all_demo
 from .demo_data import Declared, name, parent_name, render, schema
 
-#: The `circuit_type` values of a TopologySessionCircuit (its role); the constants are used by every consumer.
+#: The `circuit_type` values of a TopologySessionCircuit (its role)
 TUNNEL_TYPE = "tunnel"
 INTERCONNECT_TYPE = "dci"
 HANDOFF_TYPE = "handoff"
@@ -23,22 +23,13 @@ def _session_circuits(circuit_type: str) -> list[Declared]:
 # 30_all — interconnect and tenant-service expectations (test_62)
 # ---------------------------------------------------------------------------
 
-# The offices that opt into add_sdwan_edge (generators/topology/sdwan_edge.py)
-# by naming a gateway in sdwan_gateway. Each gets an `INET-<office>` internet
-# underlay and an `<office>-SDWAN-<gateway zone>` tunnel from the generator;
-# none of that is declared.
+# The offices that opt into add_sdwan_edge (generators/topology/sdwan_edge.py) by naming a gateway in sdwan_gateway.
 _SDWAN_OFFICES: list[Declared] = [
     office for office in _all_demo("TopologyCustomerOffice") if office.item.get("sdwan_gateway")
 ]
 
 
-# Carrier circuits are pure carriers, all declared in the data except the office underlays: the dark fibres and
-# cross-connects of 08_interconnects/01_colo_onramp (each DC has one fibre to each of its metro's two border gateways:
-# DC10/DC11 -> EQX FR2 (eg-fr201 and eg-fr202), DC12 -> EQX PA4 (eg-pa401 and eg-pa402); one cross-connect: the
-# Megaport MCR; five `virtual_connection`s: the Direct Connect of eu-central-1 and the two Azure westeurope
-# ExpressRoute legs (each ends on a port of the region's cloud transport, a CloudDirectConnect) and the two Equinix
-# Fabric connections cage -> Network Edge and Network Edge -> AWS), the shared transit circuits of 06_internet, the shared gateway's own
-# access (08_gateway_access) and the partner's access (07_zone_policies), plus one generated underlay per SD-WAN office.
+# Carrier circuits are pure carriers, all declared in the data except the office underlays
 _DECLARED_CIRCUIT_TYPE_COUNTS: dict[str, int] = {
     circuit_type: len([c for c in _all_demo("TopologyCarrierCircuit") if c.value("circuit_type") == circuit_type])
     for circuit_type in ("dark_fiber", "cross_connect", "virtual_connection", "internet")
@@ -50,10 +41,7 @@ ALL_DEMO_CARRIER_CIRCUIT_TYPES: dict[str, int] = {
 }
 
 
-# The DCI Interconnect circuits (08_interconnects/03_virtual_circuits/01_dci_interconnects.yml), one per dark fibre:
-# circuit name -> (the DC end, the two (device, interface) ends). add_virtual_circuit builds two sessions on each,
-# `<name>-underlay` (the directly connected eBGP session) and `<name>-evpn` (the loopback-to-loopback EVPN session), keyed
-# with the per-circuit key `<name>-dci-key`. The DC end is the DC among the circuit's two facility locations.
+# The DCI Interconnect circuits (08_interconnects/03_virtual_circuits/01_dci_interconnects.yml)
 ALL_DEMO_DCI_CIRCUITS: dict[str, tuple[str, tuple[tuple[str, str], tuple[str, str]]]] = {
     name(circuit): (
         next(location for location in circuit.item["locations"] if location in ALL_DEMO_DC_NAMES),
@@ -67,15 +55,12 @@ ALL_DEMO_DCI_CIRCUITS: dict[str, tuple[str, tuple[tuple[str, str], tuple[str, st
 
 
 # Shared ISP transit (08_interconnects/06_internet): colo edges -> ISP PEs.
-# Unowned, unlike a customer's own internet underlay.
 ALL_DEMO_INTERNET_TRANSIT_CIRCUITS: frozenset[str] = frozenset(
     {"INET-LUMEN-EQXFR2", "INET-COGENT-EQXFR2", "INET-LUMEN-EQXPA4", "INET-COGENT-EQXPA4"}
 )
 
 
-# The shared SD-WAN gateway's own internet access (08_interconnects/08_gateway_access): its eth1 to a free `customer`
-# port of Lumen's Frankfurt provider edge. Unowned like the transit, but not transit: no peering, no address, and it
-# ends on the gateway, not a cage edge. circuit_id -> its two (device, interface) ends.
+# The shared SD-WAN gateway's own internet access (08_interconnects/08_gateway_access)
 ALL_DEMO_GATEWAY_ACCESS_CIRCUITS: dict[str, frozenset[tuple[str, str]]] = {
     "INET-LUMEN-EQXFR2-GW": frozenset({("EQX-FR2-SDWAN-GW1", "eth1"), ("EXT-LUMEN-FRA1", "et-0/0/1")}),
 }
@@ -84,18 +69,13 @@ ALL_DEMO_GATEWAY_ACCESS_CIRCUITS: dict[str, frozenset[tuple[str, str]]] = {
 ALL_DEMO_GATEWAY_ACCESS_LOCATIONS: tuple[str, ...] = ("FR2",)
 
 
-# The partner's own internet access (08_interconnects/07_zone_policies/01_partner_tunnel.yml): the stub router
-# EXT-ACME-EDGE1 (owned by ACME, no deployment) to a free `customer` port of Cogent's Frankfurt edge (also placed
-# nowhere). Unowned shared underlay: the carrier of the partner end of the tunnel C001-PARTNER-ACME-FR2. Both ends are
-# provider routers, so the circuit has no location.
+# The partner's own internet access (08_interconnects/07_zone_policies/01_partner_tunnel.yml)
 ALL_DEMO_PARTNER_ACCESS_CIRCUITS: dict[str, frozenset[tuple[str, str]]] = {
     "INET-ACME-COGENT": frozenset({("EXT-ACME-EDGE1", "et-0/0/0"), ("EXT-COGENT-FRA1", "et-0/0/1")}),
 }
 
 
-# The uplink of every ISP router to THE INTERNET (data/bootstrap/03b_internet.yml, rule I3): the four transit provider edges
-# (08_interconnects/06_internet/04_circuits.yml) and Orange's access PE (04_internet/02_access_edge.yml), each from its
-# uplink port to INTERNET:bus. Unowned shared underlay; the data lists INTERNET as the one location.
+# The uplink of every ISP router to THE INTERNET (data/bootstrap/03b_internet.yml, rule I3)
 ALL_DEMO_ISP_UPLINK_CIRCUITS: dict[str, tuple[str, str]] = {
     "UPL-EXT-LUMEN-FRA1": ("EXT-LUMEN-FRA1", "xe-0/1/0"),
     "UPL-EXT-LUMEN-PAR1": ("EXT-LUMEN-PAR1", "xe-0/1/0"),
@@ -104,7 +84,7 @@ ALL_DEMO_ISP_UPLINK_CIRCUITS: dict[str, tuple[str, str]] = {
     "UPL-EXT-ORANGE": ("EXT-ORANGE", "et-0/0/0"),
 }
 
-#: The one end every uplink shares: THE INTERNET's interface (exempt from "a port is an end of one carrier" by its kind).
+#: The one end every uplink shares
 ALL_DEMO_INTERNET_BUS: tuple[str, str] = ("INTERNET", "bus")
 
 
@@ -117,9 +97,7 @@ ALL_DEMO_SHARED_INTERNET_CIRCUITS: frozenset[str] = (
 )
 
 
-# The SD-WAN offices' internet access (add_sdwan_edge): INET-<office> runs from the office edge's GE1 to a free
-# `customer` port of the one ISP access PE (30_all/04_internet); the office is the one location. The offices board in one load and
-# take the first free port in natural order under a lock, so together they hold xe-0/1/[0..n-1] exactly.
+# The SD-WAN offices' internet access (add_sdwan_edge)
 ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS: dict[str, str] = {f"INET-{name(office)}": name(office) for office in _SDWAN_OFFICES}
 
 ALL_DEMO_SDWAN_EDGE_UPLINK = "GE1"
@@ -130,16 +108,11 @@ ALL_DEMO_ISP_ACCESS_DEVICE = "EXT-ORANGE"
 ALL_DEMO_ISP_ACCESS_PORTS: frozenset[str] = frozenset(f"xe-0/1/{n}" for n in range(len(_SDWAN_OFFICES)))
 
 
-# INTERNET upstream (PR 4c, extended by the zone edge pair): the colo edges are
-# their metro's EVPN Multi-Site border gateways and export the ISP default route
-# as an EVPN type-5 route (L3 VNI 60002, one global route-target for the
-# INTERNET namespace). Both edges of each metro share the site VIP and have their
-# own dark fibre to every DC the metro fronts (ALL_DEMO_DCI_CIRCUITS).
+# INTERNET upstream (PR 4c, extended by the zone edge pair)
 ALL_DEMO_INTERNET_BGWS: frozenset[str] = frozenset({"eg-fr201", "eg-fr202", "eg-pa401", "eg-pa402"})
 
 
-# DC -> the BGWs its DCI sessions land on, i.e. where that DC learns 0/0 from:
-# both edges of the metro it fronts.
+# DC -> the BGWs its DCI sessions land on, i.e. where that DC learns 0/0 from
 ALL_DEMO_INTERNET_UPSTREAM_BY_DC: dict[str, frozenset[str]] = {
     "DC10": frozenset({"eg-fr201", "eg-fr202"}),
     "DC11": frozenset({"eg-fr201", "eg-fr202"}),
@@ -148,11 +121,7 @@ ALL_DEMO_INTERNET_UPSTREAM_BY_DC: dict[str, frozenset[str]] = {
 
 
 def _zone_edge_pair(zone: Declared) -> tuple[str, str] | None:
-    """The two edge names a zone's fabric_templates declare (``eg-<zone>01``, ``eg-<zone>02``), else None.
-
-    A zone name is in the device name (the standard naming strategy with no location path), so the pair is
-    read from the data. Zones hold physical templates only, so every edge row of a zone is a physical edge.
-    """
+    """The two edge names a zone's fabric_templates declare (``eg-<zone>01``, ``eg-<zone>02``), else None."""
     quantity = sum(int(row[0]) for row in zone.item.get("fabric_templates") or [] if row[1] == "edge")
     if quantity != 2:
         return None
@@ -160,12 +129,8 @@ def _zone_edge_pair(zone: Declared) -> tuple[str, str] | None:
     return f"{prefix}01", f"{prefix}02"
 
 
-# Zones with exactly two PHYSICAL edges in 30_all (generators/topology/colocation_fabric.py
-# _ensure_edge_pair; a virtual colocation's edges are never paired). Keyed by the lowercase zone name the
-# generator uses for its pool and key names (`fr2-technical-ipv6-pool`, `fr2-fabric-key`). Derived from
-# data/demos/30_all/02_colo/equinix/{fr,pa}/02_topology.yml: FR2 and PA4 declare
-# `["2", "edge", "N9K-C9316D-GX_EDGE"]`; the other zones and the metros declare none. The virtual colocation AM-NE
-# declares `["2", "edge", "C8000V_EDGE"]` but is never paired (virtual edges have no port to cable).
+# Zones with exactly two PHYSICAL edges in 30_all (generators/topology/colocation_fabric.py _ensure_edge_pair; a virtual
+# colocation's edges are never paired).
 ALL_DEMO_EDGE_PAIR_ZONES: dict[str, tuple[str, str]] = {
     name(zone).lower(): pair for zone in _all_demo("TopologyColocationZone") if (pair := _zone_edge_pair(zone))
 }
@@ -188,9 +153,7 @@ ALL_DEMO_FABRIC_PEERINGS: dict[str, str] = {
 }
 
 
-# The offices with a fabric (add_office_fabric): office -> role -> the switch names the generator derives (a flat office
-# is named `<prefix>-<office>NN`: `ds-` for the distribution-switches, `as-` for the access-switches). Declared nowhere:
-# a fabric_templates line is the whole input.
+# The offices with a fabric (add_office_fabric)
 _OFFICE_SWITCH_PREFIXES = {"distribution-switch": "ds", "access-switch": "as"}
 
 ALL_DEMO_OFFICE_FABRICS: dict[str, dict[str, tuple[str, ...]]] = {
@@ -214,9 +177,7 @@ ALL_DEMO_OFFICE_FABRICS: dict[str, dict[str, tuple[str, ...]]] = {
 }
 
 
-# The WAN exit of an office with both a fabric and an SD-WAN edge (add_office_fabric): office -> its
-# distribution-switches, each peered to `<office>-EDGE1` by one `WAN-EXIT-<switch>-<edge>` eBGP session in the
-# office's tenant VRF, over a dot1q sub-interface tagged utils.exchange_transit.wan_exit_vlan.
+# The WAN exit of an office with both a fabric and an SD-WAN edge (add_office_fabric)
 ALL_DEMO_OFFICE_WAN_EXITS: dict[str, tuple[str, ...]] = {
     name(office): ALL_DEMO_OFFICE_FABRICS[name(office)]["distribution-switch"]
     for office in _SDWAN_OFFICES
@@ -224,7 +185,7 @@ ALL_DEMO_OFFICE_WAN_EXITS: dict[str, tuple[str, ...]] = {
 }
 
 
-# The zone-owned slice of Technical-IPv6 the interlink /127 comes from: `{zone}-technical-ipv6-pool`.
+# The zone-owned slice of Technical-IPv6 the interlink /127 comes from
 ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE = "{zone}-technical-ipv6-pool"
 
 
@@ -254,18 +215,14 @@ class VirtualCircuitExpectation(TypedDict):
 
     #: The `circuit_type` of the TopologySessionCircuit: tunnel, dci or handoff.
     circuit_type: str
-    #: The circuit's locations, sorted. Authored for a declared circuit, `(office, the gateway's zone)` for the tunnel
-    #: add_sdwan_edge builds.
+    #: The circuit's locations, sorted.
     locations: tuple[str, ...]
-    #: The (device, interface) ends in `capabilities`, sorted. A Handoff end is the `<port>.<vlan>` sub-interface, a
-    #: Tunnel's the gateway's public port and the other device's uplink.
+    #: The (device, interface) ends in `capabilities`, sorted.
     ends: tuple[tuple[str, str], ...]
-    #: circuit_ids of the carrier circuits derived from the ends (on the end port, or on its parent interface when it
-    #: is a sub-interface), in end order, each once; never declared. Empty when the carrier is a cable or there is none.
-    #: The derived list is compared sorted in test_02 (declared ones only: the generated INET-<office> is in no row).
+    #: circuit_ids of the carrier circuits derived from the ends (on the end port, or on its parent interface when it is
+    #: a sub-interface), in end order, each once; never declared.
     carrier: tuple[str, ...]
-    #: The routing zone of the circuit's `vrf`: a Handoff's, and the partner tunnel's (the data names its VRF, the
-    #: zone its registered range is routed in); None for the others.
+    #: The routing zone of the circuit's `vrf`: a Handoff's
     security_zone: str | None
 
 
@@ -282,12 +239,7 @@ ALL_DEMO_SDWAN_GATEWAY_ACCESS = "INET-LUMEN-EQXFR2-GW"
 
 
 def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
-    """The tunnel add_sdwan_edge builds for one opted-in office, named as the generator names it.
-
-    `<office>-SDWAN-<the gateway's zone>`, a tunnel TopologySessionCircuit owned by the office's customer, located at the
-    office and the gateway's zone, ending on the gateway's public port and the edge uplink. Each end rides its own
-    internet access: the edge uplink `INET-<office>`, the gateway's port the shared `INET-LUMEN-EQXFR2-GW`.
-    """
+    """The tunnel add_sdwan_edge builds for one opted-in office, named as the generator names it."""
     office_name = name(office)
     gateway = str(office.item["sdwan_gateway"])
     zone = _DEVICE_DEPLOYMENTS[gateway]
@@ -307,16 +259,11 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
     }
 
 
-# The virtual-circuit fabric test_62 compares with the inventory: the generated tunnels (one per SD-WAN office), the
-# partner tunnel, the six DCI Interconnects (one per dark fibre, carrier = the fibre) and the two Handoffs (the
-# gateway's and C001's AWS one), all PROD.
-# A circuit has no owner of its own: its derived owner is in ALL_DEMO_TUNNEL_OWNERS. `carrier` is the expected derived underlay: the carrier circuits on the circuit's own ports, or on the parent
-# of a sub-interface; the data declares none.
+# The virtual-circuit fabric test_62 compares with the inventory
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     # One generated tunnel per SD-WAN office (_sdwan_tunnel).
     **dict(_sdwan_tunnel(office) for office in _SDWAN_OFFICES),
-    # C001's partner extranet (08_interconnects/07_zone_policies/01_partner_tunnel.yml): the gateway's public port to
-    # the partner stub router, each end on its own internet access; located at C001's office and the gateway's zone.
+    # C001's partner extranet (08_interconnects/07_zone_policies/01_partner_tunnel.yml)
     "C001-PARTNER-ACME-FR2": {
         "circuit_type": TUNNEL_TYPE,
         "locations": ("C001-OFFICE", "FR2"),
@@ -372,7 +319,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
             ),
         )
     },
-    # The SD-WAN gateway's LAN handoff (04_sdwan/06_vrf_handoff.yml): both ends in one cage, carried by a cable. Unowned.
+    # The SD-WAN gateway's LAN handoff (04_sdwan/06_vrf_handoff.yml): both ends in one cage
     "HANDOFF-FR2-SDWAN-GW1-PROD": {
         "circuit_type": HANDOFF_TYPE,
         "locations": ("FR2",),
@@ -380,9 +327,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "carrier": (),
         "security_zone": "PROD",
     },
-    # C001's AWS handoff (08_interconnects/03_virtual_circuits/02_aws_prod_handoff.yml): the cage router's sub-interface
-    # to the private virtual interface of the Direct Connect transport, authored by hand (a cloud end: no generated
-    # session), carried by the cable on the sub-interface's parent port to the provider's port in the cage.
+    # C001's AWS handoff (08_interconnects/03_virtual_circuits/02_aws_prod_handoff.yml)
     "HANDOFF-FR2-AWS-EUC1-PROD": {
         "circuit_type": HANDOFF_TYPE,
         "locations": ("FR2", "eu-central-1"),
@@ -393,16 +338,14 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
 }
 
 
-# A circuit has no owner of its own: it is derived (utils.ownership.circuit_owner) from the office among its locations.
-# The tunnel -> the org_id of its office's customer; every other circuit is unowned.
+# A circuit has no owner of its own
 ALL_DEMO_TUNNEL_OWNERS: dict[str, str] = {
     **{_sdwan_tunnel(office)[0]: render(office, "{{ owner__org_id__value }}") for office in _SDWAN_OFFICES},
     "C001-PARTNER-ACME-FR2": "C001",
 }
 
 
-# Circuit placement (test_62 test_01/test_02). A carrier circuit terminates on two facilities: the kinds that inherit
-# TopologyFacility (read from schemas/); a virtual circuit's locations are facilities too.
+# Circuit placement (test_62 test_01/test_02).
 ALL_DEMO_FACILITY_KINDS: frozenset[str] = frozenset(
     kind for kind, definition in schema().items() if "TopologyFacility" in definition.inherit_from
 )
@@ -417,9 +360,7 @@ _DECLARED_VIRTUAL_CIRCUITS = {
 }
 
 
-# circuit_id / name -> the locations the 30_all data authors. A carrier circuit's other end is derived by add_circuit
-# from its end devices' deployments, so the data lists only one place: the cage for the on-ramp circuits (add_circuit also
-# derives the zone from the edge's deployment, so an authored cage must be that zone), the ISP for the partner's access.
+# circuit_id / name -> the locations the 30_all data authors.
 ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS: dict[str, tuple[str, ...]] = {
     circuit_id: tuple(circuit.item.get("locations") or ()) for circuit_id, circuit in _DECLARED_CARRIER_CIRCUITS.items()
 }
@@ -430,8 +371,7 @@ ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS: dict[str, tuple[str, ...]] = {
 }
 
 
-# circuit_id / name -> the (device, interface) ports the data declares in `capabilities`. A virtual circuit's underlay is
-# derived from them: the carrier circuits that terminate on its own ports.
+# circuit_id / name -> the (device, interface) ports the data declares in `capabilities`.
 ALL_DEMO_DECLARED_PHYSICAL_PORTS: dict[str, frozenset[tuple[str, str]]] = {
     circuit_id: frozenset((str(device), str(port)) for device, port in circuit.item.get("capabilities") or ())
     for circuit_id, circuit in _DECLARED_CARRIER_CIRCUITS.items()
@@ -443,10 +383,7 @@ ALL_DEMO_DECLARED_VIRTUAL_PORTS: dict[str, frozenset[tuple[str, str]]] = {
 }
 
 
-# Handoff circuit -> (the party device, its ASN): the ASN is the `local_as` of the ManagedBGP process the data declares on
-# the party stub (EQX-FR2-SDWAN-GW1 AS65028, EXT-MEGAPORT-MCR1 AS133937), which add_virtual_circuit
-# makes the session's remote process. A handoff whose both ends are devices whose processes are generated has no declared
-# party and is absent; so is a cloud handoff (its far end is a cloud peering interface: no process, `peer_asn`).
+# Handoff circuit -> (the party device, its ASN)
 _DECLARED_PROCESS_ASNS: dict[str, int] = {
     str(device): int(str(process.item["local_as"]).removeprefix("AS"))
     for process in _all_demo("ManagedBGP")
@@ -467,9 +404,8 @@ ALL_DEMO_HANDOFF_PARTY_ASNS: dict[str, tuple[str, int]] = {
 }
 
 
-# The handoffs whose far end is a cloud peering interface (a CloudPeeringInterface the data declares): add_virtual_circuit
-# builds no session for them, the data authors the sub-interface address and the ManagedBGPPeering. Circuit name -> the
-# name of its authored peering (the one holding the near sub-interface).
+# The handoffs whose far end is a cloud peering interface (a CloudPeeringInterface the data declares):
+# add_virtual_circuit builds no session for them, the data authors the sub-interface address and the ManagedBGPPeering.
 _CLOUD_PEERING_ENDS: frozenset[tuple[str, str]] = frozenset(
     (str(peering.item["device"]), name(peering)) for peering in _all_demo("CloudPeeringInterface")
 )
@@ -493,8 +429,7 @@ def _zone_has_firewalls(zone: Declared) -> bool:
     return any(template[1] == "internal-firewall" for template in zone.item.get("fabric_templates") or [])
 
 
-# Metro -> its zones that declare a firewall pair (a virtual colocation is never one). A colocation footprint is named
-# after its metro (`C001-P-FR`), names no zone, and is served by every such zone of its metro: one shared context each.
+# Metro -> its zones that declare a firewall pair (a virtual colocation is never one).
 def _firewall_zones_by_metro() -> dict[str, tuple[str, ...]]:
     by_metro: dict[str, list[str]] = {}
     for zone in _all_demo("TopologyColocationZone"):
@@ -506,22 +441,19 @@ def _firewall_zones_by_metro() -> dict[str, tuple[str, ...]]:
 _FIREWALL_ZONES_BY_METRO = _firewall_zones_by_metro()
 
 
-# Every 30_all colocation deployment -> the zones whose firewall pair serve it, none when its metro has no firewall
-# zone (the footprint then has no context: an info log, not an error).
+# Every 30_all colocation deployment -> the zones whose firewall pair serve it
 ALL_DEMO_COLOCATION_SERVING_ZONES: dict[str, tuple[str, ...]] = {
     name(deployment): _FIREWALL_ZONES_BY_METRO.get(_site(deployment), ())
     for deployment in _all_demo("TopologyCustomerColocation")
 }
 
 
-# Every 30_all colocation deployment -> whether it has a serving context: its metro has a zone with a firewall pair
-# (FR2, 02_colo/equinix/fr). Footprints of a metro whose zones have no firewalls must stay unserved.
+# Every 30_all colocation deployment -> whether it has a serving context
 ALL_DEMO_COLOCATION_SERVED: dict[str, bool] = {
     deployment: bool(zones) for deployment, zones in ALL_DEMO_COLOCATION_SERVING_ZONES.items()
 }
 
-# Serving zone -> the deployments its shared context serves, keyed by zone name (`FR2`): the zone is the site of
-# a colocation firewall context (its pair, its VLAN pool `fr2-fw-context-vlan-pool`).
+# Serving zone -> the deployments its shared context serves, keyed by zone name (`FR2`)
 ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
     zone: tuple(deployment for deployment, serving in ALL_DEMO_COLOCATION_SERVING_ZONES.items() if zone in serving)
     for zone in sorted({z for zones in _FIREWALL_ZONES_BY_METRO.values() for z in zones})

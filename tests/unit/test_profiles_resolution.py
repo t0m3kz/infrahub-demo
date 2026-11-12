@@ -1,7 +1,4 @@
-"""generators/pod_config.py: a pod's deployment type and rack-grid profile, derived from its design.
-
-The designs are the bootstrap rows (data/bootstrap/14b_fabric_templates.yml).
-"""
+"""generators/pod_config.py: a pod's deployment type and rack-grid profile, derived from its design."""
 
 from __future__ import annotations
 

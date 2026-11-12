@@ -1,14 +1,4 @@
-"""Load-balancer contexts on the border, the leaf and the group contracts (one-arm, SNAT automap).
-
-- transforms/helpers/firewall.py: a load-balancer context tagged on a load-balancer port yields the pseudo segment
-  activation of its one leg (``LB-<context>``, a VLAN name cut to 32 characters) and the VIP /26 static to the
-  leg's floating .4;
-- transforms/helpers/vxlan.py get_interfaces: that port trunks the leg VLAN;
-- the leaf: a rule to a VIP /32 and the segment-less ``lb-<context>`` rule from the leg /29 are bypassed and
-  answered by the existing ACL/PBR code, never redirected;
-- transforms/helpers/group_policy/model.py: the segment-less rule is UNCLASSIFIED -> backend;
-- the queries select what these read.
-"""
+"""Load-balancer contexts on the border, the leaf and the group contracts (one-arm, SNAT automap)."""
 
 from __future__ import annotations
 
@@ -45,8 +35,7 @@ def _lb_context(
     vip_prefix: str | None = "100.68.0.0/26",
     extra_legs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """A cleaned ManagedLoadbalancerContext with the two members' leg sub-interfaces (.5/.6) as its ``legs``
-    (utils/service_contexts.py ``contexts_with_legs``)."""
+    """A cleaned ManagedLoadbalancerContext with the two members' leg sub-interfaces."""
     net = ipaddress.ip_network(leg)
     members = [
         {

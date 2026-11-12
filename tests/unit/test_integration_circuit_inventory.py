@@ -1,15 +1,4 @@
-"""The circuit inventory parser and the test_62 circuit rules, offline over the shipped 30_all data.
-
-tests/integration/test_62 asserts, on a live stack, the virtual-circuit expectations of all_demo_circuit_constants and the
-per-kind placement rules. Nothing there can run without Infrahub, so a rule that cannot hold on the shipped data (or an
-inventory field the parser drops) would first show on a stack run. Here the same data is shaped like the response of
-``tests/integration/queries/get_interconnect_inventory.gql`` (the simulator of the placement check, completed with what
-the inventory query selects on top: tests/unit/simulators/circuit_inventory_payloads.py), parsed by the real ``fetch_interconnect_inventory`` and run through the real test_62
-functions: ``_expectation_errors`` and ``_virtual_placement_errors`` must report nothing. The tests that break the data on
-purpose show the proof is not vacuous.
-
-Not covered: what a generator writes at run time (addresses, sessions, prefixes), which exists only on a stack.
-"""
+"""The circuit inventory parser and the test_62 circuit rules, offline over the shipped 30_all data."""
 
 from __future__ import annotations
 
@@ -100,8 +89,7 @@ async def test_every_kind_is_in_the_inventory_with_its_own_fields(monkeypatch: p
 async def test_without_the_internet_underlay_a_tunnel_rides_no_internet_circuit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Dropping INET-C001-OFFICE leaves the C001 tunnel's edge uplink on no circuit: the carrier differs and the
-    tunnel rule reports it."""
+    """Dropping INET-C001-OFFICE leaves the C001 tunnel's edge uplink on no circuit:"""
     data = await inventory(monkeypatch, without_circuits=("INET-C001-OFFICE",))
     assert any("C001-OFFICE-SDWAN-FR2" in e and "rides no live internet carrier circuit" in e for e in _placement(data))
     assert any("C001-OFFICE-SDWAN-FR2: carrier" in e for e in interconnect_rules._expectation_errors(data["virtual"]))

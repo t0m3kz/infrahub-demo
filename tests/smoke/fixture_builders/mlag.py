@@ -26,17 +26,11 @@ def build_mlag_device_data(
     domain_id: int = 1,
     domain_name: str | None = None,
 ) -> dict:
-    """Build GQL response for a device with ManagedMLAG and Port-Channel peer-link.
-
-    Generates: Loopback0, 2 uplink P2P interfaces, Port-Channel100 (mlag-peer),
-    and 2 member physical interfaces (Ethernet1/33 + Ethernet1/34).
-    No BGP/OSPF capabilities — MLAG-only scenario.
-    """
+    """Build GQL response for a device with ManagedMLAG and Port-Channel peer-link."""
     if domain_name is None:
         domain_name = f"POD1-{device_name.split('-')[-1].upper()}-{peer_name.split('-')[-1].upper()}-MLAG"
 
-    # MLAG control session addressing mirrors generators/mlag.py: SONiC gets an
-    # IPv4 /31 (ICCP), vPC has none (keepalive over mgmt0), others an IPv6 /127.
+    # MLAG control session addressing mirrors generators/mlag.py: SONiC gets an IPv4 /31 (ICCP)
     if platform in {"sonic", "dell_sonic"}:
         control_addresses: tuple[str, str] | None = ("10.254.0.0/31", "10.254.0.1/31")
     elif platform == "cisco_nxos":
@@ -66,8 +60,8 @@ def build_mlag_device_data(
         ),
     }
 
-    # Determine interface names and LAG interface shape by platform
-    # cisco_nxos uses Ethernet1/N format; others use EthernetN
+    # Determine interface names and LAG interface shape by platform cisco_nxos uses Ethernet1/N format; others use
+    # EthernetN
     if platform == "cisco_nxos":
         uplink1, uplink2, member1, member2 = "Ethernet1/1", "Ethernet1/2", "Ethernet1/33", "Ethernet1/34"
         lag_name, lag_id_val = "port-channel100", 100
@@ -175,8 +169,7 @@ def build_mlag_device_data(
 
     device_interfaces = [loopback, up1, up2, lag_iface, mem1, mem2]
     if control_addresses:
-        # Rendered by the MLAG include only — the transform must keep it out of
-        # the generic interface list.
+        # Rendered by the MLAG include only
         device_interfaces.append(
             _make_interface(
                 name="Vlan4094",
@@ -187,9 +180,7 @@ def build_mlag_device_data(
                 typename="DcimVirtualInterface",
             )
         )
-    # The host-facing dual-homed port-channel of a bond, in the shape generators/topology/endpoint_lag.py creates
-    # (role lag, one lag_id on both peers, the domain's mlag_domain, one member port). SONiC names it by its
-    # lag_id (get_lag_name); the others get a segment so it is a switchport.
+    # The host-facing dual-homed port-channel of a bond
     host_member = member1.replace("33", "10")
     if platform in {"sonic", "dell_sonic"}:
         host_lag_name, host_lag_id, host_segments = "PortChannel101", 101, []
@@ -247,9 +238,7 @@ def build_mlag_device_data(
 
 
 def build_mlag_virtual_peer_link_data(*, device_name: str, peer_name: str, role: str, platform: str) -> dict:
-    """A pod with ``mlag_create: virtual``: the peer-link is a member-less ``loopback100``
-    DcimVirtualInterface (role mlag-peer, no IP on NX-OS) instead of a port-channel
-    (generators/mlag.py _ensure_virtual_peer_link), so no physical peer-link exists to bind."""
+    """A pod with ``mlag_create: virtual``"""
     data = build_mlag_device_data(
         device_name=device_name,
         peer_name=peer_name,
@@ -296,8 +285,6 @@ def write_fixtures() -> tuple[int, int]:
     # MLAG/VPC scenarios: leaf, border_leaf, tor — platforms with MLAG templates
     mlag_platforms = ["arista_eos", "cisco_nxos", "dell_sonic", "sonic"]
     # (transform, dir_prefix, role) — note the order differs from DEVICE_CONFIGS.
-    # `role` is the schema dropdown value (hyphenated); dir_prefix keeps the
-    # underscore so fixture directory names are unchanged.
     mlag_device_types: list[tuple[type, str, str]] = [
         (Leaf, "leaf", "leaf"),
         (BorderLeaf, "border_leaf", "border-leaf"),
@@ -321,8 +308,7 @@ def write_fixtures() -> tuple[int, int]:
         for platform in mlag_platforms
     )
 
-    # vPC on a pod with a virtual peer-link: NX-OS cannot bind `vpc peer-link` to loopback100, so the
-    # whole vPC block is a comment (no `interface loopback100 ... vpc peer-link`).
+    # vPC on a pod with a virtual peer-link: NX-OS cannot bind `vpc peer-link` to loopback100
     print("\nGenerating the NX-OS virtual peer-link vPC fixture:")
     g, e = _write_data_fixture(
         Leaf,

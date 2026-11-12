@@ -1,29 +1,6 @@
-"""Measure how full every fabric pool is: warn before a design is outgrown, fail when allocation is impossible.
+"""Measure how full every fabric pool is, per DC and per pod.
 
-Pools, all reached through the deployments (a pool is branch-agnostic, its allocations are not), so only this
-branch's allocations count:
-
-    data center  technical and loopback (container pools: the pods' slices are their children), management, and
-                 the fabric-loopback pool (an address-pool child of the loopback slice that no pod owns)
-    pod          technical (its fabric links) and loopback
-
-Used and capacity, in addresses:
-
-    prefix pool   used = the slice's direct children by size (a /127 or /31 link is 2, a sub-pool its own size);
-                  capacity = every address of the slice
-    address pool  used = the addresses under the slice (a management pool's sit in MANAGEMENT, outside its
-                  `default` slice, and are matched by containment); capacity = the assignable hosts, as the
-                  allocator hands them out: IPv4 skips network and broadcast, IPv6 the subnet-router anycast,
-                  a /31, /32, /127 or /128 skips nothing
-
-Severity:
-
-    WARNING  >= 80 % used. The sizing leaves >= 25 % headroom at a design's envelope, so a pool this full has
-             outgrown its design or is about to.
-    ERROR    more used than the pool holds (overlapping or out-of-range allocations), a pool with no slice, or
-             allocation impossible: a link or device pool with no free address, a DC pool with no room for
-             another pod while its design allows more pods. A DC pool full at max_pods is the design's envelope
-             reached: a WARNING.
+WARNING at >= 80 % used; ERROR when more is used than held, a pool has no slice, or allocation is impossible.
 """
 
 from __future__ import annotations
@@ -71,7 +48,7 @@ def _name(node: Any) -> str:
 
 
 def _assignable(net: IPNetwork) -> int:
-    """Addresses an address pool hands out of ``net`` (family-aware: IPv4 and IPv6 are both counted)."""
+    """Addresses an address pool hands out of ``net`` (IPv4 skips network and broadcast, IPv6 the anycast)."""
     reserved = (2 if net.prefixlen < 31 else 0) if net.version == 4 else (1 if net.prefixlen < 127 else 0)
     return net.num_addresses - reserved
 
@@ -105,8 +82,7 @@ def _children(resource: dict[str, Any]) -> list[tuple[IPNetwork, dict[str, Any]]
 
 
 def _address_used(pool: dict[str, Any], net: IPNetwork, resource: dict[str, Any], foreign: dict[str, list]) -> int:
-    """Addresses of the pool's namespace inside ``net``: the IPAM hierarchy when the slice is in that namespace,
-    containment over the namespace's addresses when it is not (a management pool)."""
+    """Addresses of the pool's namespace inside ``net`` (by containment when the slice is in another namespace)."""
     namespace = _name(pool.get("ip_namespace"))
     if _name(resource.get("ip_namespace")) == namespace:
         return int(resource.get("ip_addresses") or 0)
@@ -217,7 +193,7 @@ def _container_usages(
     pods: int,
     pod_of_pool: dict[str, str],
 ) -> list[PoolUsage]:
-    """A DC prefix pool (the pods' slices are its children) and the DC-level address pools sliced from it."""
+    """A DC prefix pool and the DC-level address pools sliced from it."""
     resources = _resources(pool)
     sub_pools: list[PoolUsage] = []
     pod_slices: list[tuple[IPNetwork, str]] = []
@@ -274,7 +250,7 @@ def _container_usages(
 
 
 class CheckPoolUtilization(WarningCheck):
-    """Every fabric pool has room: WARNING at >= 80 % used, ERROR when the next allocation is impossible."""
+    """Every fabric pool has room: WARNING at >= 80 % used, ERROR when allocation is impossible."""
 
     query = "pool_utilization"
 

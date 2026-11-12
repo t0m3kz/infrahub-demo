@@ -1,8 +1,6 @@
 """Read what a Proposed Change changes: its artifact diff (REST) and its data diff (GraphQL ``DiffTree``).
 
-The one reader for add_change_request (generators/change/change_request.py) and checks/change_request.py, so the
-fingerprint the generator writes and the one the check recomputes come from the same call. Raises on a failed read
-(a layer below the generator or check, which decides what the run does); the parsing is utils/change_rules.py.
+Raises on a failed read; parsing is in utils/change_rules.py.
 """
 
 from __future__ import annotations
@@ -35,7 +33,7 @@ _DIFF_QUERY = Path(__file__).resolve().parents[1] / "queries" / "change" / "chan
 
 
 async def fetch_artifact_diff(client: Any, branch: str) -> list[ArtifactChange]:
-    """The artifact diff of ``branch`` (``GET /api/diff/artifacts?branch=``), through the SDK's authenticated GET."""
+    """The artifact diff of ``branch`` (``GET /api/diff/artifacts``) through the SDK's authenticated GET."""
     response = await client._get(url=f"{client.address}{ARTIFACT_DIFF_PATH}?branch={quote(branch, safe='')}")
     response.raise_for_status()
     return parse_artifact_diff(response.json())
@@ -53,8 +51,7 @@ class DataDiff:
 
 
 async def fetch_data_diff(client: Any, branch: str) -> DataDiff:
-    """The counts (``DiffTreeSummary``: all changed objects, those of a non-standard kind, those of a routing kind)
-    and, in pages of OBJECT_PAGE_SIZE up to OBJECT_MAX, the objects of OBJECT_DIFF_KINDS with their values."""
+    """The ``DiffTreeSummary`` counts and, in pages up to OBJECT_MAX, the objects of OBJECT_DIFF_KINDS with values."""
     query = load_flat_query(_DIFF_QUERY)
     raw: list[dict[str, Any]] = []
     summaries: dict[str, Any] = {}

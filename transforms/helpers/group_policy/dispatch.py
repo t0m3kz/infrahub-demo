@@ -27,12 +27,8 @@ GPO_CONFIG_KEYS: dict[str, str] = {"vxlan_gpo": "group_policy", "segment_securit
 def _gpo_data_center(
     roots: dict[str, Any], device_name: str, platform: str
 ) -> tuple[str, str, dict[str, list[dict[str, Any]]], Profiles] | None:
-    """(data center id, group-policy kind, the fleet's VTEPs by data center, the profiles) of a device that sits in a
-    reference fabric whose kind this platform renders, else None.
-
-    The cheap gate, before the contracts are built: a fleet of old fixtures has no profile rows, and most
-    data centers are no reference fabric. The device must be a VTEP of exactly one data center.
-    """
+    """(data center id, group-policy kind, the fleet's VTEPs by data center, the profiles) of a device that sits in
+    a reference fabric whose kind this platform renders, else None."""
     profiles, _problems = profiles_by_platform(roots.get("DcimGroupPolicyProfile") or [])
     if not profiles:
         return None
@@ -60,14 +56,7 @@ def group_policy_device_view(
     vrfs: Iterable[str],
     interfaces: Iterable[dict[str, Any]] = (),
 ) -> tuple[str, dict[str, Any]] | None:
-    """(group-policy kind, its device view) of a VTEP that renders group policy, else None.
-
-    The one gate of every renderer: the role is a data-center VTEP, the device sits in exactly one data
-    center, that data center is a reference fabric (utils/group_policy) and its kind has a renderer for the
-    platform (``GPO_RENDERERS``). Then the data center's contracts are built once and the kind's builder
-    cuts them to this device: ``_vxlan_gpo_build`` (NX-OS) or ``_segment_security_build`` (EOS).
-    A refusal (``... refusing unprotected config``) can only come from a device that does render.
-    """
+    """(group-policy kind, its device view) of a VTEP that renders group policy, else None."""
     found = _gpo_data_center(roots, device_name, platform) if role in DC_VTEP_ROLES else None
     if found is None:
         return None

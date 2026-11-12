@@ -1,11 +1,4 @@
-"""Unit tests for RulesPlanner (generators/helpers/rules.py) — pure logic,
-no generator instance needed.
-
-Covers rule naming (one rule per dependency and port), rule descriptions
-(including target_fqdn external targets), dependency authorization (owner
-approval, prod/nonprod separation),
-rule-payload building, zone context, and the security_profile-driven mappings.
-"""
+"""Unit tests for RulesPlanner (generators/helpers/rules.py) — pure logic, no generator instance needed."""
 
 from __future__ import annotations
 
@@ -13,9 +6,7 @@ import pytest
 
 from generators.helpers.rules import RulesPlanner
 
-# ===========================================================================
 # TestRuleName
-# ===========================================================================
 
 
 class TestRuleName:
@@ -87,9 +78,7 @@ class TestRuleName:
         assert RulesPlanner.rule_name("app", self.SRC, {}, {"name": "backend-to-stripe"}) == "backend-to-stripe"
 
 
-# ===========================================================================
 # TestRuleDescription
-# ===========================================================================
 
 
 class TestRuleDescription:
@@ -119,9 +108,7 @@ class TestRuleDescription:
         assert RulesPlanner.rule_description({}, self.SRC, {}) == "Auto-generated: backend (backend) -> ? (backend)"
 
 
-# ===========================================================================
 # TestOwnerAuthorization
-# ===========================================================================
 
 
 def _comp(app: str, owner: str, environment: str | None = None, *, segment: dict | None = None) -> dict:
@@ -197,9 +184,7 @@ class TestOwnerAuthorization:
         assert reason == "explicitly denied"
 
 
-# ===========================================================================
 # TestCrossEnvironmentAuthorization
-# ===========================================================================
 
 
 class TestCrossEnvironmentAuthorization:
@@ -306,9 +291,7 @@ class TestCrossEnvironmentAuthorization:
         assert reason is None
 
 
-# ===========================================================================
 # TestBuildRulePayload / TestZoneContext
-# ===========================================================================
 
 
 class TestBuildRulePayload:
@@ -421,21 +404,14 @@ class TestZoneContext:
         assert cross_zone is True
 
 
-# ===========================================================================
 # TestZoneSeed
-# ===========================================================================
 
 
-# ===========================================================================
 # TestPickProfileName
-# ===========================================================================
 
 
 class TestPickProfileName:
-    """fintech_strict is a data-sensitivity/compliance requirement (always
-    scan for malware/DLP) independent of network topology, unlike
-    internet_exposed's "strict" handling, which is specifically about the
-    perimeter/exposure boundary and so stays gated on cross_zone."""
+    """fintech_strict is a data-sensitivity/compliance requirement"""
 
     def test_fintech_strict_is_always_strict_even_same_zone(self):
         assert RulesPlanner.pick_profile_name("fintech_strict", cross_zone=False) == "strict"
@@ -456,9 +432,7 @@ class TestPickProfileName:
         assert RulesPlanner.pick_profile_name("unknown", cross_zone=False) is None
 
 
-# ===========================================================================
 # TestPickIsolationMode
-# ===========================================================================
 
 
 class TestPickIsolationMode:

@@ -12,12 +12,7 @@ from .common import validate_appliance
 
 
 def validate_loadbalancer_contexts(device: dict[str, Any]) -> list[str]:
-    """Errors in the contexts the device is a member of: leg, VIP range, VIPs and their pool members.
-
-    A context is complete when it has its VLAN and VIP range, this device has a leg of it (a sub-interface with an
-    address), and every VIP sits inside the range and balances across at least one member. A context with no VIP
-    is fine: a shared context exists as soon as the first customer of its namespace boards.
-    """
+    """Errors in the device's contexts: VLAN, VIP range, a leg with an address, VIPs inside the range with members."""
     errors: list[str] = []
     device_name = device.get("name", "Unknown")
     members_of = device.get("shared_capabilities") or []
@@ -61,8 +56,7 @@ class CheckLoadBalancer(InfrahubCheck):
             return
 
         device = devices[0]
-        # A dedicated virtual instance has no platform readiness of its own (its uplinks stay planned; the
-        # physical host carries the cabling), so only its contexts are validated.
+        # A virtual instance has no platform readiness of its own: only its contexts are validated.
         errors = validate_appliance(device) if physical else []
         errors.extend(validate_loadbalancer_contexts(device))
         for error in errors:

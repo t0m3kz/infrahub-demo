@@ -1,9 +1,4 @@
-"""The segment SVI is a member of the VLAN row it realizes (the row's interface edge), never found by its name.
-
-Covers utils/segment_vlan.py ``svi_rows``, ``DeviceVrfFacts.svi_row`` and the writer generators/helpers/svi.py: the row
-edge is added after the SVI is saved, once (idempotent), removed when the SVI is a member of a row it does not
-realize, and an SVI of no wanted row is deleted.
-"""
+"""The segment SVI is a member of the VLAN row it realizes (the row's interface edge), never found by its name."""
 
 from __future__ import annotations
 

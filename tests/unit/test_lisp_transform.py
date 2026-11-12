@@ -1,20 +1,4 @@
-"""Unit tests for the LISP renderer (transforms/helpers/lisp.py and templates/configs/common/cisco_xe_lisp.j2).
-
-The renderer serves an office's LISP site: its access-switches (edges) and distribution-switches (borders).
-tests/unit/test_office_lisp_transform.py covers the office end to end (registration, queries, goldens); this module
-covers the renderer's own behaviour.
-
-Covers:
-  - the ``lisp`` template context  — edge and border content, map-server set, EID prefixes, site records
-  - refusals                       — IPv6 gateway, gateway outside a VRF, missing key / map-server / site name
-  - role gate                      — an office role replaces ``vxlan`` with ``lisp``; a DC VTEP never takes the LISP path
-  - purity                         — inputs are not mutated, collections are lists
-  - rendered CLI                   — a hostless edge, the SVIs' mobility binding, every LISP stanza under an
-                                     ``unverified-no-lab`` marker, no EVPN leftovers
-
-The rendered text goes through the real transforms on the office smoke inputs (tests/smoke/configs). All IOS-XE LISP
-syntax is unlabbed.
-"""
+"""Unit tests for the LISP renderer (transforms/helpers/lisp.py and templates/configs/common/cisco_xe_lisp.j2)."""
 
 from __future__ import annotations
 
@@ -44,9 +28,7 @@ _MAP_SERVERS: list[dict[str, Any]] = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _raw(directory: str) -> dict[str, Any]:
@@ -138,9 +120,7 @@ def _lisp_lines(text: str) -> list[str]:
     return lines[start:end]
 
 
-# ---------------------------------------------------------------------------
 # Rendered edge
-# ---------------------------------------------------------------------------
 
 
 class TestRenderedEdge:
@@ -195,9 +175,7 @@ class TestRenderedEdge:
         assert MARKER in lines[router + 1]
 
 
-# ---------------------------------------------------------------------------
 # Refusals
-# ---------------------------------------------------------------------------
 
 
 class TestContentRefusals:
@@ -241,9 +219,7 @@ class TestContentRefusals:
             build_lisp_inputs(deployment, "distribution-switch")
 
 
-# ---------------------------------------------------------------------------
 # Context content
-# ---------------------------------------------------------------------------
 
 
 class TestLispContext:
@@ -426,9 +402,7 @@ class TestBuildLispInputs:
         assert build_lisp_inputs({"lisp_wan_edges": []}, "access-switch").wan_exit is False
 
 
-# ---------------------------------------------------------------------------
 # Role gate in BaseDeviceTransform
-# ---------------------------------------------------------------------------
 
 
 class TestRoleGate:
@@ -474,9 +448,7 @@ class TestRoleGate:
         assert config["lisp"]["l2_instances"] == [] and config["lisp"]["l3_instances"] == []
 
 
-# ---------------------------------------------------------------------------
 # Purity and shape
-# ---------------------------------------------------------------------------
 
 
 class TestPurityAndShape:

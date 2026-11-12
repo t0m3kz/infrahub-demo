@@ -1,7 +1,4 @@
-"""The neutral group-policy model: groups, permit rows per VRF and one data center's contracts.
-
-See the package docstring (``transforms.helpers.group_policy``) for the model.
-"""
+"""The neutral group-policy model: groups, permit rows per VRF and one data center's contracts."""
 
 from __future__ import annotations
 
@@ -70,13 +67,7 @@ def segment_vrf(segment: dict[str, Any]) -> str | None:
 def segment_groups(
     segments: Iterable[dict[str, Any]], tags: Iterable[dict[str, Any]]
 ) -> tuple[dict[str, list[Group]], dict[str, Group]]:
-    """(segment id -> its groups, segment group first; component tag id -> its group).
-
-    Only a routed tenant segment with a security_tag is classified; its
-    component groups exist only while it is microsegmented. ``segments`` are
-    cleaned SegmentGroupPolicyFields, ``tags`` cleaned SecurityTags with their
-    components' segment.
-    """
+    """(segment id -> its groups, segment group first; component tag id -> its group)."""
     components_of = tags_by_segment(tags)
     by_segment: dict[str, list[Group]] = {}
     by_component_tag: dict[str, Group] = {}
@@ -163,11 +154,7 @@ def rule_groups(
 ) -> list[Group]:
     """The groups one rule side ("source"/"destination") matches ([] when its segment is not classified).
 
-    The side's component group when the rule names one of that segment's
-    component tags (an intra-segment contract, or a component dependency into
-    or out of a microsegmented segment: RulesPlanner.rule_tags), else every
-    group of its segment: a hand-written rule into a microsegmented segment
-    opens all of it (checks/segment_security.py warns).
+    The component group when the rule names one of the segment's component tags, else every group of the segment.
     """
     groups = by_segment.get(segment_id or "", [])
     tagged = by_tag.get(str((rule.get(f"{side}_security_tag") or {}).get("id")))
@@ -175,13 +162,7 @@ def rule_groups(
 
 
 def _contract_rules(segment: dict[str, Any]) -> list[tuple[dict[str, Any], str]]:
-    """(rule, id of its default source segment) for the rules ``segment`` contributes rows for.
-
-    Its own rules, sourced by the segment unless a rule names another; and the
-    rules into it of a policy with no segment (a load-balancer context's
-    ``lb-<context>``: the leg /29 -> this segment), which no segment's own policy
-    holds. Such a rule has no source segment: its source is UNCLASSIFIED.
-    """
+    """(rule, id of its default source segment) for the rules ``segment`` contributes rows for."""
     egress, ingress = segment_flows(segment)
     own = [(rule, str(segment.get("id") or "")) for rule in egress["rules"]]
     return own + [(rule, "") for rule in ingress if not (rule.get("policy") or {}).get("segment")]
@@ -194,17 +175,7 @@ def get_vrf_contracts(
     local: set[str] | None = None,
     groups: tuple[dict[str, list[Group]], dict[str, Group]] | None = None,
 ) -> list[dict[str, Any]]:
-    """The permit rows of every VRF (module docstring), sorted by (vrf, src, dst).
-
-    ``segments`` are every segment of the fleet whose rules may name a
-    classified segment (cleaned SegmentGroupPolicyFields: a rule lives in its
-    source segment's policy, or in a segment-less one and then is read from its
-    destination's inbound_rules, so the rules of all segments are all rules);
-    ``tags`` every SecurityTag with its components. ``local`` (group names)
-    keeps the rows with at least one local end: a data center or a device
-    scope; None keeps all, and the local rows of any partition of the groups
-    add up to all of them. ``groups``: the ``segment_groups(segments, tags)`` the caller already has.
-    """
+    """The permit rows of every VRF (module docstring), sorted by (vrf, src, dst)."""
     segments = list(segments)
     by_segment, by_tag = groups if groups is not None else segment_groups(segments, tags)
     rows = _Rows()
@@ -241,14 +212,7 @@ def get_vrf_contracts(
 
 @dataclass(frozen=True)
 class DataCenterContracts:
-    """One data center's group contracts, from the fleet-wide query roots.
-
-    The one composition of the device renderers. ``reference_sites`` is the fleet
-    as it is (every site whose VTEPs are all in their platform's profile row).
-
-    ``enforce`` is the data center's staging switch (``group_policy_enforce``, A6): False renders the
-    contracts but not ``security enforce``. ``name`` is the data center's, for that reason's text.
-    """
+    """One data center's group contracts, from the fleet-wide query roots."""
 
     name: str | None
     enforce: bool
@@ -273,11 +237,7 @@ def data_center_contracts(
     fleet: dict[str, list[dict[str, Any]]] | None = None,
     profiles: Profiles | None = None,
 ) -> DataCenterContracts:
-    """The groups and contract rows of one data center (``roots``: cleaned query data).
-
-    ``fleet`` is the fleet's VTEPs by data center (``vteps_by_data_center``) and ``profiles`` the
-    ``profiles_by_platform`` of ``roots`` when the caller has already derived them.
-    """
+    """The groups and contract rows of one data center (``roots``: cleaned query data)."""
     if profiles is None:
         profiles, _problems = profiles_by_platform(roots.get("DcimGroupPolicyProfile") or [])
     vteps_of = (

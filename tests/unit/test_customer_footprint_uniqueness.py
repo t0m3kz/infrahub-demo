@@ -1,12 +1,4 @@
-"""Uniqueness of customer footprints (schemas/extensions/topology/topology_customer.yml).
-
-Infrahub enforces a generic's uniqueness constraint across every kind that
-inherits it, so a constraint on TopologyCustomer without `parent` would allow
-a customer only one footprint per environment in total — a DC and a
-colocation footprint in the same environment (C005-P-DC10 + C005-P-FR in
-data/demos/30_all) would then collide on upsert. Cloud and Office have no environment,
-so their constraints are [name, parent] and [name].
-"""
+"""Uniqueness of customer footprints (schemas/extensions/topology/topology_customer.yml)."""
 
 from __future__ import annotations
 
@@ -41,7 +33,5 @@ def test_cloud_footprint_is_unique_per_parent_and_per_account_without_an_environ
 
 
 def test_office_is_unique_on_its_name_parent_and_owner() -> None:
-    """One office per customer: the name embeds the owner's org_id but is computed once the office exists, so the
-    parent label and the owner (which an object file names) are in the constraint, as the parent and the environment
-    are in the other footprints': a second load finds the office instead of creating it again."""
+    """One office per customer: the name embeds the owner's org_id but is computed once the office exists."""
     assert _entries()["TopologyCustomerOffice"]["uniqueness_constraints"] == [["name__value", "parent", "owner"]]

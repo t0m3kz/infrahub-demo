@@ -1,9 +1,4 @@
-"""The pure readers and judges of test_66's segment lifecycle (test_04), split out so unit tests import them.
-
-They read the raw GraphQL results of ``_HOST_CABLES_QUERY`` and ``_SWITCH_VRF_QUERY`` and say why the switches are not
-in the state the test expects. No stack, no fixtures: tests/unit/test_integration_circuit_lifecycle.py runs them on
-canned payloads.
-"""
+"""The pure readers and judges of test_66's segment lifecycle (test_04), split out so unit tests import them."""
 
 from __future__ import annotations
 
@@ -114,8 +109,7 @@ def switches_of_host(result: dict[str, Any], host: str) -> set[str]:
 
 def parse_switch_vrf_state(result: dict[str, Any], devices: list[str]) -> dict[str, dict[str, Any]]:
     """device -> {vrf: id of the instance of the segment's namespace it is a member of or None, svis: {name: {id, vrf}}
-    of the segment's SVIs, foreign: what else on the device demands the namespace (an SVI of another segment, an
-    address on another interface; not the instance's own role-l3vni SVI)}."""
+    of the segment's SVIs, foreign."""
     state: dict[str, dict[str, Any]] = {device: {"vrf": None, "svis": {}, "foreign": []} for device in devices}
     gateways = {
         gateway["id"]
@@ -139,8 +133,7 @@ def parse_switch_vrf_state(result: dict[str, Any], devices: list[str]) -> dict[s
             state[device]["svis"][name] = {"id": node["id"], "vrf": vrf.get("id")}
             continue
         if _value(node, "role") == L3VNI_ROLE:
-            # The instance's own L3 VNI SVI (VRF pass, VlanNNNN): it exists because the device is a member, it is
-            # not demand of another segment, and it goes with the membership.
+            # The instance's own L3 VNI SVI (VRF pass, VlanNNNN)
             continue
         if SEGMENT_NAMESPACE in (_address_namespace(node), _namespace_name(vrf, "security_zone")):
             state[device]["foreign"].append(f"{name} (virtual)")

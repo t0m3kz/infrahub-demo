@@ -1,14 +1,6 @@
-"""Validate the virtual switches of the hypervisor clusters (rules VS1 to VS4).
+"""Validate the virtual switches of the hypervisor clusters (VS1-VS4).
 
-A ``ManagedVirtualSwitch`` is the L2 element between the VM NICs and the host ports of a cluster; its port groups are the
-VLANs of it and the fabric segments those are (schemas/extensions/service/virtual_switch.yml). What the schema cannot hold:
-
-VS1  the uplinks are ports (or bonds) of the hosts of the switch's own cluster, and every host of the cluster has one
-VS2  a VLAN id is used by one port group of a switch only
-VS3  the segment of every port group is realized (a segment deployment) in the hosting deployment of every uplink's
-     host: the uplinks trunk the port groups' VLANs (``vlan_id``; a server port carries no segment membership, its
-     allowed VLAN list is the port groups), so a VM in the port group reaches the fabric whichever host it runs on
-VS4  a VM NIC is in one port group, and the VM stands on a host of the switch's cluster
+VS1 uplinks on cluster hosts; VS2 VLAN once per switch; VS3 segment deployed at the uplinks; VS4 NIC in one port group.
 """
 
 from __future__ import annotations
@@ -26,7 +18,7 @@ SWITCH = "ManagedVirtualSwitch"
 
 
 def _ref(value: Any) -> str | None:
-    """The id of a cleaned reference (clean_data collapses an object with only an ``id`` to the bare id)."""
+    """The id of a cleaned reference (a bare id or a dict)."""
     if isinstance(value, dict):
         value = value.get("id")
     return str(value) if value else None
@@ -43,7 +35,7 @@ def _dicts(values: Any) -> list[dict[str, Any]]:
 
 
 class CheckVirtualSwitch(InfrahubCheck):
-    """The uplinks, the VLANs and the NICs of a virtual switch agree with its cluster and the fabric (rules VS1 to VS4)."""
+    """Uplinks, VLANs and NICs of a virtual switch agree with its cluster and the fabric (VS1 to VS4)."""
 
     query = "virtual_switch"
 

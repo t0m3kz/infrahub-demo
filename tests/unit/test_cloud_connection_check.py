@@ -108,8 +108,7 @@ def _peering(
     vlan_id: dict[str, Any] | None = None,
     **overrides: Any,
 ) -> dict[str, Any]:
-    """A peering; ``parent_interface`` (a ``_port``) and ``vlan_id`` (a ``_v``) make its encapsulation, none makes it a
-    peering that rides on nothing."""
+    """A peering; ``parent_interface`` (a ``_port``) and ``vlan_id`` (a ``_v``) make its encapsulation."""
     peering = {
         "id": name,
         "name": _v(name),
@@ -359,8 +358,7 @@ class TestR8VlanPeerings:
         assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering]) == []
 
     def test_a_peering_with_no_encapsulation_passes(self) -> None:
-        """A tunnel or a peering on a bare transport rides on nothing: R8 has no parent to judge (a VLAN always has one,
-        it lives in the encapsulation)."""
+        """A tunnel or a peering on a bare transport rides on nothing: R8 has no parent to judge."""
         assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[_peering()]) == []
 
     def test_a_parent_that_is_no_port_or_lag_fails(self) -> None:

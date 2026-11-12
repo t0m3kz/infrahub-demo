@@ -1,16 +1,4 @@
-"""Unit tests for the Catalyst 9000 / IOS-XE EVPN-VXLAN platform (``cisco_xe``).
-
-There is no platform allow-list: the template ``templates/configs/<template_subdir>/<platform>.j2`` is the gate
-(``BaseDeviceTransform._load_template``), so a role without a cisco_xe template raises ``jinja2.TemplateNotFound``.
-The leaf, access-leaf and border-leaf roles have one, and ``BaseDeviceTransform._refuse_cisco_xe_unrendered``
-refuses what those templates do not render (PBR, MLAG, Multi-Site, non-EVPN VXLAN). The segment ACLs and the inter-VRF
-statics are rendered (section 6, transforms/helpers/cisco_xe.py); what IOS-XE cannot express in them is refused there.
-
-Byte-exact rendering is covered by tests/smoke/test_configs_smoke.py (the ``*_cisco_xe_*`` goldens); this file
-covers the wiring, the IOS-XE-versus-NX-OS dialect, the refusal guard and the unchanged behaviour of the other
-roles and platforms. The office switches' LISP goldens (``access_switch_/distribution_switch_cisco_xe_lisp_*``) are
-covered in section 5: the guard's refusals that still apply there; their rendering is tests/unit/test_office_lisp_transform.py.
-"""
+"""Unit tests for the Catalyst 9000 / IOS-XE EVPN-VXLAN platform (``cisco_xe``)."""
 
 from __future__ import annotations
 
@@ -87,9 +75,7 @@ REFUSED_KEYS = ["leaf_pbr_rules", "mlag"]
 RENDERED_KEYS = ["acls", "vrf_routes"]
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 @cache
@@ -137,9 +123,7 @@ def _with_platform(data: dict[str, Any], platform: str) -> dict[str, Any]:
     return data
 
 
-# ---------------------------------------------------------------------------
 # 1. Platform wiring: _PLATFORM_VXLAN_KEYS
-# ---------------------------------------------------------------------------
 
 
 class TestPlatformVxlanKeys:
@@ -193,9 +177,7 @@ class TestPlatformVxlanKeys:
         assert {key: value for key, value in xe.items() if key in base} == base
 
 
-# ---------------------------------------------------------------------------
 # 2. Rendering: the IOS-XE dialect of the leaf, access-leaf and border-leaf golden inputs
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("variant", BGP_VARIANTS)
@@ -285,9 +267,7 @@ def test_access_and_border_leaf_render_the_leaf_config_but_for_the_header(prefix
     assert leaf[6:] == other[6:]
 
 
-# ---------------------------------------------------------------------------
 # 3. Refusal path: BaseDeviceTransform._refuse_cisco_xe_unrendered
-# ---------------------------------------------------------------------------
 
 
 class TestRefuseCiscoXeUnrendered:
@@ -377,9 +357,7 @@ class TestRefuseCiscoXeUnrendered:
         _make_transform(role)._refuse_cisco_xe_unrendered("cisco_xe", config)
 
     def test_lists_every_unsupported_feature_in_a_fixed_order(self) -> None:
-        """Several problems at once: all reported, services first, then multisite, then the EVPN gap.
-
-        The rendered acls and vrf_routes are in the context too and are not reported."""
+        """Several problems at once: all reported, services first, then multisite, then the EVPN gap."""
         config = {
             "acls": [{"vlan_id": 100}],
             "leaf_pbr_rules": [{"vlan_id": 100}],
@@ -461,9 +439,7 @@ class TestCiscoXeRefusalThroughTransform:
         assert "interface nve1" in output
 
 
-# ---------------------------------------------------------------------------
 # 4. Unsupported platform / role unchanged: the template file is the gate
-# ---------------------------------------------------------------------------
 
 
 class TestUnsupportedCombinationsUnchanged:
@@ -536,9 +512,7 @@ class TestUnsupportedCombinationsUnchanged:
             run_transform(BorderSpine, _golden_input("leaf_cisco_xe_ebgp_ibgp"))
 
 
-# ---------------------------------------------------------------------------
 # 5. Office LISP site: the guard still runs on the access-switch / distribution-switch goldens
-# ---------------------------------------------------------------------------
 
 OFFICE_LISP_VARIANT = "lisp_ospf"
 

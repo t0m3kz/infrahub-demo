@@ -1,10 +1,4 @@
-"""Unit tests for the segments a firewall context terminates (transforms/helpers/firewall_terminated.py).
-
-The sub-interface of a terminated segment is derived, not stored: ``<uplink trunk>.<vlan>`` on the trunk the
-context's legs ride on, the VLAN from the segment's row on the border leaf at the far end of the trunk's cable,
-addressed with the segment's gateway as the pair's ``virtual_ip`` (VIP only, no per-member address) and in the
-segment's zone. A segment with no such row yet is left out with a warning, never rendered with a guessed tag.
-"""
+"""Unit tests for the segments a firewall context terminates (transforms/helpers/firewall_terminated.py)."""
 
 from __future__ import annotations
 
@@ -68,8 +62,7 @@ def _trunk(name: str = "eth1", *, far: list[str | None] | None = None) -> dict[s
 
 class TestTerminatedInterfaces:
     def test_the_interface_is_derived_from_the_facing_leafs_row(self) -> None:
-        """Trunk from the legs, VLAN from the row of the device at the far end, VIP from the gateway, zone from the
-        segment: the shape the vendor templates render for any firewall interface."""
+        """Trunk from the legs, VLAN from the row of the device at the far end."""
         segment = _segment(rows=[(LEAF_ID, 101), ("other-leaf", 202)])
 
         (iface,) = terminated_interfaces([_context(segment)], [_trunk()], HA, DEVICE_ID, "fw-1")
@@ -161,8 +154,7 @@ class TestTerminatedInterfaces:
 
 class TestContextShape:
     def test_the_context_carries_its_terminated_segments(self) -> None:
-        """get_firewall_contexts finds the terminated segments among the served ones: a ``firewall_gateway`` segment
-        of a footprint this context is the internal one of."""
+        """get_firewall_contexts finds the terminated segments among the served ones:"""
         segment = {**_segment(rows=[(LEAF_ID, 101)]), "firewall_gateway": True}
         capability = {
             "typename": "ManagedFirewallContext",

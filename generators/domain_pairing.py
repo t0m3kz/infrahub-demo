@@ -34,34 +34,23 @@ from .protocols import (
 
 
 class DomainPairingMixin(MLAGWiringMixin):
-    """Mixin providing HA (firewall / load-balancer) and MLAG pairing for DeviceMixin.
+    """HA (firewall / load-balancer) and MLAG pairing for DeviceMixin.
+    The host provides ``client``, ``logger``, ``deployment_id``, ``_resolve_pool`` and PoolMixin's ``resource_lock``."""
 
-    Expects the host class to provide: ``client``, ``logger``, ``deployment_id``,
-    ``_resolve_pool`` and PoolMixin's ``resource_lock``.
-    """
-
-    # Attribute declarations for the type checker — provided by CommonGenerator / InfrahubGenerator / PoolMixin
+    # Attribute declarations for the type checker, provided by CommonGenerator / InfrahubGenerator / PoolMixin
     client: Any
     logger: logging.Logger
-    # Set once per generator run (dc.py/pod.py/rack.py/colocation_fabric.py/endpoint.py's generate()) to the
-    # enclosing physical facility's id (TopologyDataCenter/TopologyColocationZone — never a Pod or Rack).
-    # _ensure_ha_cable reads this for the HA-sync cable's own `deployment`, deliberately NOT the HA member
-    # device's own `deployment` relationship: pod.py's border-spine pods scope their firewall/load-balancer
-    # *devices* to the pod on purpose (see test_pod_border_services.py), but DcimCable.deployment's peer
-    # type has no TopologyPod — confirmed live on DC7.
+    # Set per run to the enclosing physical facility id (never a Pod or Rack). _ensure_ha_cable uses it for the HA-sync
+    # cable's `deployment`, not the member's own, because DcimCable.deployment cannot be a TopologyPod and border-spine
+    # pods scope their devices to the pod.
     deployment_id: str
-    # Type checking only: the real members of the host's other bases, aliased so nothing is defined at runtime and
-    # nothing shadows them in the MRO.
+    # Type checking only: aliases of the host's other bases, so nothing shadows them in the MRO
     if TYPE_CHECKING:
         resource_lock = PoolMixin.resource_lock
 
     async def _standard_group(self, name: str, *, create_description: str | None = None) -> Any:
         """The CoreStandardGroup called ``name``, read once per run.
-
-        ``create_description``: create the group when it is missing (a branch whose
-        bootstrap groups were not loaded yet, e.g. an ad-hoc test branch); without
-        it a missing group raises NodeNotFoundError.
-        """
+        ``create_description``: create the group when missing; otherwise a missing group raises NodeNotFoundError."""
         memo: dict[str, Any] = self.__dict__.setdefault("_standard_group_memo", {})
         if name not in memo:
             try:
@@ -72,9 +61,7 @@ class DomainPairingMixin(MLAGWiringMixin):
                 group = await self.client.create(
                     kind=CoreStandardGroup, data={"name": name, "description": create_description}
                 )
-                # Untracked: the role group is shared by every generator that
-                # creates this role. Tracked, the creating run would delete it
-                # on its next run, which finds it and does not save it again.
+                # Untracked: the role group is shared by every generator that creates this role
                 await group.save(allow_upsert=True, update_group_context=False)
                 self.logger.info(f"Created missing group '{name}'")
                 memo[name] = group
@@ -89,35 +76,16 @@ class DomainPairingMixin(MLAGWiringMixin):
         device_kind: type[Any] = DcimPhysicalDevice,
         ha_name: str | None = None,
     ) -> None:
-        """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into
-        HA domains, then ensure each pair's HA sync interfaces/cable in the
-        same call — no separate add_ha generator/trigger round-trip
-        (that used to run async off a ManagedFirewallHA/LoadbalancerHA "updated"
-        mutation, and re-fired 2-3x per domain whenever two concurrent callers
-        raced on the filter-then-create check below, since every racer's
-        allow_upsert=True save was itself an "updated" mutation). Shared by
-        dc.py (DC-wide firewall/load-balancer) and pod.py (a border-spine pod's
-        own firewall/load-balancer) — never pairs across pods/DCs, both members
-        must sit in front of the same fabric to mean anything physically.
-        device_kind is CloudNetworkAppliance for a virtual colocation's provider-hosted firewall
-        pair (the provider wires it, so it gets no sync interface and no cable)
-        and DcimVirtualDevice for the shared production/
-        non-production virtual instances dc.py provisions per physical HA
-        pair — same pairing logic, no physical cabling involved (mirrors the
-        skip _ensure_ha_interfaces itself applies for non-physical devices).
-        ha_name overrides the default `{first}-{second}` for a single pair (a customer's dedicated pair is named
-        from the owner, not from its two member names).
-        An HA domain carries no tenant, not even a customer's dedicated pair:
-        the tenant is recorded one level down, on the dedicated
-        ManagedFirewallContext/ManagedLoadbalancerContext on it."""
+        """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into HA domains and ensure each pair's sync
+        interfaces and cable. ``device_kind`` CloudNetworkAppliance means no sync interface or cable; ``ha_name``
+        overrides `{first}-{second}`.
+        """
         pairs = pair_device_names(device_names)
         if ha_name is not None and len(pairs) != 1:
             raise ValueError(f"ha_name {ha_name!r} names one pair, got {len(pairs)} from {device_names}")
         for first, second in pairs:
             name = ha_name or f"{first}-{second}"
-            # Two overlapping runs (e.g. add_dc and dc_pod_cascade) can both
-            # find no pair and both create it: the lookup and the create sit
-            # inside one per-pair lock, so the second finds the first's domain.
+            # The lookup and create sit in one per-pair lock, so overlapping runs do not both create the pair
             async with self.resource_lock(f"ha-domain-{name}"):
                 existing = await self.client.filters(kind=ha_kind, name__value=name, include=["capabilities"])
                 members: list[Any] | None = None
@@ -157,11 +125,8 @@ class DomainPairingMixin(MLAGWiringMixin):
                 await self._ensure_ha_interfaces(ha_obj, name, device_kind=device_kind, members=members)
 
     async def _firewall_ha_group_data(self) -> dict[str, Any]:
-        """Allocate missing firewall HA IDs natively; existing authored IDs are never rewritten.
-
-        The pool indexes authored values too, so a new virtual pair cannot reuse
-        a shared physical pair's ID. The lazy fallback supports older bootstraps.
-        """
+        """Allocate missing firewall HA IDs natively; authored IDs are never rewritten.
+        The pool indexes authored values too, so a new virtual pair cannot reuse a physical pair's ID."""
         async with self.resource_lock("firewall-ha-group-pool"):
             try:
                 pool = await self.client.get(kind=CoreNumberPool, name__value=FIREWALL_HA_GROUP_POOL)
@@ -187,16 +152,10 @@ class DomainPairingMixin(MLAGWiringMixin):
         device_kind: type[Any] = DcimPhysicalDevice,
         members: list[Any] | None = None,
     ) -> None:
-        """Ensure each member device has an active HA sync interface, and (for
-        physical pairs only) a DcimCable between the two sync interfaces.
-        Idempotent (see _ensure_ha_pairs's docstring for why that matters —
-        this used to be a separate generator invoked via trigger,
-        unconditionally create()-ing on every run).
-
-        members lets a caller that already holds the two device nodes (the
-        freshly-created-domain path in _ensure_ha_pairs) skip reading them
-        again; otherwise they come from ha_obj's capabilities
-        (_ha_member_devices)."""
+        """Ensure each member has an active HA sync interface and, for physical pairs, a DcimCable between them
+        (idempotent). ``members`` lets a caller skip re-reading devices it holds; otherwise they come from ha_obj's
+        capabilities.
+        """
         member_devices = members if members is not None else await self._ha_member_devices(ha_obj, device_kind)
         if not member_devices:
             return
@@ -204,20 +163,17 @@ class DomainPairingMixin(MLAGWiringMixin):
 
         is_physical = device_kind is DcimPhysicalDevice
 
-        # One query for every member's sync interfaces, grouped by device. The
-        # result keeps one sort order, so each device's first one is the same
-        # as a per-device query's.
+        # One query for every member's sync interfaces, grouped by device
         if is_physical:
             ha_ifaces = await self.client.filters(
                 kind=DcimPhysicalInterface, device__ids=member_ids, role__value="ha", include=["cable"]
             )
         else:
-            # The generic kind: a virtual device's NICs are DcimVirtualInterface, a physical one's
-            # DcimPhysicalInterface.
+            # The generic kind: a virtual device's NICs are DcimVirtualInterface, a physical one's DcimPhysicalInterface
             ha_ifaces = await self.client.filters(kind=DcimInterface, device__ids=member_ids, role__value="ha")
         first_ha_iface_by_device: dict[str, Any] = {}
         for iface in ha_ifaces:
-            # device is a mandatory Parent relationship (schemas/base/dcim.yml).
+            # device is a mandatory Parent relationship (schemas/base/dcim.yml)
             first_ha_iface_by_device.setdefault(iface.device.id, iface)
 
         sync_ifaces: list[Any] = []
@@ -228,16 +184,9 @@ class DomainPairingMixin(MLAGWiringMixin):
                 continue
             sync_ifaces.append((device_obj, sync_iface))
 
-            # A port carrying an HA domain's sync link is in service, so it must
-            # not stay at DcimInterface's `free` default — same flip, and same
-            # reason, as create_connections() applies to both ends of every cable
-            # it lays and _ensure_mlag_pairs applies to the peer-link members.
-            # Runs on every call, so a pair created before this was fixed
-            # self-heals on its next run.
-            #
-            # update_group_context=False: a physical sync port belongs to the
-            # device's object_template, not to this generator run — it must never
-            # become a delete_unused_nodes candidate.
+            # A sync port is in service, so it must not stay at the `free` default (as create_connections() does for
+            # cable ends); runs every call so older pairs self-heal. update_group_context=False: the port belongs to the
+            # device's object_template, not this run.
             if getattr(sync_iface, "status").value != "active":
                 getattr(sync_iface, "status").value = "active"
                 await sync_iface.save(allow_upsert=True, update_group_context=False)
@@ -246,13 +195,8 @@ class DomainPairingMixin(MLAGWiringMixin):
             await self._ensure_ha_cable(ha_name, sync_ifaces)
 
     async def _ha_member_devices(self, ha_obj: Any, device_kind: type[Any]) -> list[Any]:
-        """The ``device_kind`` members of an HA domain read with ``include=["capabilities"]``.
-
-        That query puts each peer, with its attributes, in the client store, so
-        the peers resolve with no read. When any peer cannot be resolved there (no
-        typename, not in the store, no name) or is not a ``device_kind``, one
-        ``filters`` by id returns the members instead.
-        """
+        """The ``device_kind`` members of an HA domain, read with ``include=["capabilities"]``.
+        Peers resolve from the client store; if any cannot, one ``filters`` by id returns the members instead."""
         peers = list(getattr(ha_obj, "capabilities").peers)
         if not peers:
             return []
@@ -265,18 +209,13 @@ class DomainPairingMixin(MLAGWiringMixin):
         return await self.client.filters(kind=device_kind, ids=[peer.id for peer in peers])
 
     async def _ensure_ha_cable(self, ha_name: str, sync_ifaces: list[tuple[Any, Any]]) -> None:
-        """Create the DcimCable between two peer devices' HA sync interfaces —
-        physical HA pairs only, called once both member interfaces are known."""
+        """Create the DcimCable between two peer devices' HA sync interfaces (physical HA pairs only)."""
         (dev_a, iface_a), (dev_b, iface_b) = sorted(sync_ifaces, key=lambda pair: pair[0].name.value)
         cable_name = f"CBL-{ha_name}-SYNC"
 
         existing = await self.client.filters(kind=DcimCable, name__value=cable_name)
         if existing:
-            # Keep it in this run's tracking group: a generator body runs inside
-            # client.start_tracking(delete_unused_nodes=True), so a node from an
-            # earlier run that this run does not touch is deleted as unused.
-            # Returning without registering made the cable oscillate: created on
-            # one run, deleted as unused at the end of the next.
+            # Keep it in this run's tracking group, or the next run deletes it as unused and the cable oscillates
             self.client.group_context.related_node_ids.append(existing[0].id)
             return
 
@@ -285,18 +224,11 @@ class DomainPairingMixin(MLAGWiringMixin):
         if (existing_cable_a is not None and existing_cable_a.initialized) or (
             existing_cable_b is not None and existing_cable_b.initialized
         ):
-            # Orphan from a partial run — the sync interfaces are already
-            # cabled (just not under this expected name). Leave it as-is
-            # rather than creating a second, conflicting cable.
+            # Orphan from a partial run: the sync interfaces are already cabled under another name, so leave it
             return
 
-        # self.deployment_id, not dev_a's own `deployment` relationship — see
-        # the attribute declaration above for why. This happened to give the
-        # right answer for every DC-scoped HA pair (dc.py's firewall/
-        # load-balancer devices are DC-scoped, so the two ids coincide) but
-        # broke on DC7's border-spine pods, whose devices are deliberately
-        # pod-scoped: "TopologyPod ... cannot be added to relationship, must
-        # be of type: [...TopologyDataCenter]".
+        # self.deployment_id, not dev_a's own `deployment`: border-spine pods scope devices to the pod, which the
+        # cable's relationship refuses
         deployment_id = getattr(self, "deployment_id", None)
 
         self.logger.info(
@@ -333,35 +265,9 @@ class DomainPairingMixin(MLAGWiringMixin):
         mlag_create: Literal["back-to-back", "virtual"],
         supports_virtual: bool = True,
     ) -> None:
-        """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into MLAG
-        domains, per pod.mlag_create ("back-to-back" / "virtual"), then ensure
-        each pair's peer-link interfaces/cable in the same call — no separate
-        add_mlag generator/trigger round-trip for domain creation (that used
-        to run async off a ManagedMLAG "created" mutation and fired once per
-        domain from every concurrently-created ManagedMLAG — ~14 under a bulk
-        topology regen — overloading the server). Mirrors
-        _ensure_ha_pairs/_ensure_ha_interfaces exactly. MLAGGenerator/mlag.py
-        still exists and delegates to the same ensure_mlag_wiring — it's only
-        reached now by the two remaining ManagedMLAG "updated" triggers
-        (capabilities/virtual_peer_link changed outside this flow, e.g. a
-        direct API/UI edit or branch merge).
-
-        devices_by_name is create_devices()'s own created_devices batch,
-        keyed by name — every device in device_names was just created/
-        upserted there unconditionally, so a fresh MLAG domain's
-        capabilities never need a second client.filters() round-trip to
-        re-resolve devices already sitting in hand.
-
-        back-to-back needs a role=mlag-peer interface on the template.
-        virtual anchors on a loopback (ensure_mlag_wiring's
-        _ensure_virtual_peer_link) — only L3/routed roles (leaf, access-leaf)
-        can use it. supports_virtual=False (l2-leaf: no loopback, L2-only by
-        design) forces back-to-back instead of erroring out — mlag_create is
-        one pod-wide setting shared by every role, so a pod with both leaf
-        (L3) and l2-leaf (L2-only) roles must fall back for the L2-only ones
-        regardless of what's configured for the pod.
-
-        A device left unpaired is its own VLAN domain (no record is created for it).
+        """Pair same-role devices two-at-a-time into MLAG domains per pod.mlag_create, then ensure the peer-link
+        interfaces and cable. ``supports_virtual=False`` (l2-leaf) forces back-to-back; an unpaired device is its own
+        VLAN domain. Mirrors _ensure_ha_pairs.
         """
         if len(device_names) < 2:
             return
@@ -391,14 +297,10 @@ class DomainPairingMixin(MLAGWiringMixin):
 
             mlag_group = await self._standard_group(GROUP_MLAG_DOMAINS)
 
-            # Two overlapping runs (a rack's inline run and its own trigger) can
-            # both find no domain and both create it: the lookup and the create
-            # sit inside one per-domain lock, like _ensure_ha_pairs. Released
-            # before ensure_mlag_wiring takes its own mlag-wiring-{id} lock, so
-            # the two are never held together.
+            # The lookup and create sit in one per-domain lock (released before ensure_mlag_wiring takes its own), as in
+            # _ensure_ha_pairs
             async with self.resource_lock(f"mlag-domain-{mlag_name}"):
-                # Pass existing id so upsert matches by ID, not hfid lookup — mirrors
-                # create_devices()'s own upsert pattern.
+                # Pass the existing id so the upsert matches by ID, not HFID
                 existing = await self.client.filters(kind=ManagedMLAG, name__value=mlag_name)
                 existing_mlag = existing[0] if existing else None
                 mlag_obj = await self.client.create(

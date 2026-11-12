@@ -1,9 +1,4 @@
-"""The readers and judges of test_66 (the circuit lifecycle), run offline on canned GraphQL payloads.
-
-test_66 decommissions a circuit on a live stack and polls until its session is gone, then back. What it polls on and
-asserts are pure functions of a GraphQL result, so a typo in a query path, a predicate that is true too early (peerings
-still active "after" a decommission) or a key check that cannot fail shows up here instead of in a 55-minute run.
-"""
+"""The readers and judges of test_66 (the circuit lifecycle), run offline on canned GraphQL payloads."""
 
 from __future__ import annotations
 
@@ -117,9 +112,7 @@ def _torn_down(subject: Subject = DCI, **kwargs: Any) -> State:
     return _state(subject, **{**defaults, **kwargs})
 
 
-# ---------------------------------------------------------------------------
 # The subjects come from the 30_all expectations
-# ---------------------------------------------------------------------------
 
 
 def test_the_interconnect_subject_is_the_dci_and_its_ports() -> None:
@@ -162,9 +155,7 @@ def test_a_tunnel_has_no_subject() -> None:
         subject_for(tunnel)
 
 
-# ---------------------------------------------------------------------------
 # The queries
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("port_kind", ["DcimPhysicalInterface", "DcimVirtualInterface"])
@@ -194,9 +185,7 @@ def test_the_processes_query_parses() -> None:
     parse(lifecycle.PROCESSES_QUERY)
 
 
-# ---------------------------------------------------------------------------
 # Reading the state
-# ---------------------------------------------------------------------------
 
 
 def test_parse_state_reads_a_complete_session() -> None:
@@ -233,9 +222,7 @@ def test_parse_state_of_an_empty_result_has_nothing() -> None:
     }
 
 
-# ---------------------------------------------------------------------------
 # The polling predicates
-# ---------------------------------------------------------------------------
 
 
 def test_a_complete_session_is_rebuilt_and_not_torn_down() -> None:
@@ -304,8 +291,7 @@ def test_each_leftover_of_the_session_keeps_the_teardown_predicate_false(kwargs:
     ],
 )
 def test_an_incomplete_rebuild_keeps_the_rebuilt_predicate_false(kwargs: dict[str, Any], fragment: str) -> None:
-    """Missing or half-active peerings, a duplicate prefix, a missing address, shared or absent addresses, an unkeyed
-    session: each leaves the polling predicate false and says why."""
+    """Missing or half-active peerings."""
     errors = lifecycle.rebuilt_errors(_state(**kwargs), DCI)
     assert any(fragment in e for e in errors), errors
 
@@ -337,9 +323,7 @@ def test_the_handoff_session_is_judged_like_the_dci() -> None:
     assert lifecycle.survivor_errors(state, gone, HANDOFF) == []
 
 
-# ---------------------------------------------------------------------------
 # What must survive
-# ---------------------------------------------------------------------------
 
 
 def test_survivors_hold_when_ports_and_key_are_as_before() -> None:
@@ -410,9 +394,7 @@ def test_process_errors_compare_the_surviving_processes(alive: int, ok: bool) ->
     assert (errors == []) is ok
 
 
-# ---------------------------------------------------------------------------
 # Driving the stack
-# ---------------------------------------------------------------------------
 
 
 def _node(status: str) -> MagicMock:
@@ -537,9 +519,7 @@ async def test_a_lifecycle_that_starts_without_a_session_refuses_to_run(monkeypa
     stack.node.save.assert_not_awaited()
 
 
-# ---------------------------------------------------------------------------
 # Registration
-# ---------------------------------------------------------------------------
 
 
 def test_the_module_runs_after_test_65_in_the_30_all_task() -> None:
@@ -551,9 +531,7 @@ def test_the_module_runs_after_test_65_in_the_30_all_task() -> None:
     assert tasks.index("test_65_all_demo_idempotency.py") < tasks.index("test_66_all_demo_circuit_lifecycle.py")
 
 
-# ---------------------------------------------------------------------------
 # The VRF memberships of the end devices
-# ---------------------------------------------------------------------------
 
 AM_PROD = "fr-vrf-prod"
 OTHER_PROD = "dc10-vrf-prod"
@@ -566,9 +544,7 @@ def _vrf_result(
     namespace: str = "PROD",
     demand: tuple[str, ...] | list[str] = (),
 ) -> dict[str, Any]:
-    """A ``state_query`` result reduced to the VRF part: ``instances`` is {name: (id, member device names)}, all in
-    ``namespace``; ``demand`` lists the devices with an address in the circuit's namespace on an interface that is not
-    the circuit's own port."""
+    """A ``state_query`` result reduced to the VRF part:"""
     return {
         "vrfs": {
             "edges": [

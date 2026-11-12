@@ -1,19 +1,4 @@
-"""Integration test — load the 30_all demo and verify what it dispatches.
-
-30_all is the everything demo: three DC fabrics, six colocation operators'
-cages, three clouds, a SaaS edge, four offices, sixteen customers' footprints
-across all four deployment kinds, seven applications with their instances, and
-the interconnect layer tying them together. Every later test_6x module asserts
-against the branch this one builds, so this module owns:
-
-1. The staged load itself (see ALL_DEMO_LOAD_STAGES for why it is staged).
-2. That no task failed on any stage.
-3. That Infrahub dispatched every generator the data is supposed to trigger.
-   This is the assertion with teeth: the trigger rules in data/events are the
-   only thing standing between "the objects got generated" and "the objects
-   silently did not". A regressed rule fails nothing — it just stops firing.
-4. That every declared object actually landed.
-"""
+"""Integration test — load the 30_all demo and verify what it dispatches."""
 
 import logging
 from typing import Any
@@ -30,7 +15,7 @@ from tasks import (
     ALL_DEMO_STAGE_STABLE_ZERO,
 )
 
-# Importing these adds the firewall, routed-exchange and load-balancer floors to ALL_DEMO_EXPECTED_OBJECTS.
+# Importing these adds the firewall
 from . import all_demo_firewall_constants  # noqa: F401
 from .all_demo_constants import ALL_DEMO_CUSTOMER_ORG_IDS, ALL_DEMO_EXPECTED_GENERATORS, ALL_DEMO_EXPECTED_OBJECTS
 from .branch_helpers import fetch_generator_runs, fetch_object_counts
@@ -60,11 +45,7 @@ class TestAllDemoLoad(TestInfrahubDockerWithClient):
         client_main: InfrahubClientSync,
         scenario_branch: str,
     ) -> None:
-        """Create the branch every 30_all test shares.
-
-        Demo data is never loaded into main: the whole point of the exercise is
-        that it arrives as a reviewable branch.
-        """
+        """Create the branch every 30_all test shares."""
         logging.info("=== %s - Step 1: Create Branch ===", SCENARIO_NAME)
 
         existing_branches = client_main.branch.all()
@@ -88,12 +69,7 @@ class TestAllDemoLoad(TestInfrahubDockerWithClient):
         scenario_branch: str,
         workflow_state: dict[str, Any],
     ) -> None:
-        """Load 30_all stage by stage, letting each stage's generators settle.
-
-        Each stage is checked for failed tasks before the next one starts. A
-        failure in, say, the fabric stage would otherwise cascade into dozens
-        of misleading reference errors in the stages that build on it.
-        """
+        """Load 30_all stage by stage, letting each stage's generators settle."""
         logging.info("=== %s - Step 2: Staged Load ===", SCENARIO_NAME)
 
         for stage_name, paths in ALL_DEMO_LOAD_STAGES:
@@ -159,15 +135,7 @@ class TestAllDemoLoad(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify every event-driven generator ran, at least once per target.
-
-        Nothing in this suite invokes these: they are dispatched by the
-        group trigger rules in data/events/99_group_triggers.yml when the loader
-        creates a node in a generator's target group. Counting the dispatches is the only way to
-        tell "the rule fired for all seven applications" from "the rule fired
-        for one and the other six were never generated" — both look identical
-        in a failed-task sweep, because neither produces a failed task.
-        """
+        """Verify every event-driven generator ran, at least once per target."""
         logging.info("=== %s - Step 4: Verify Generators Dispatched ===", SCENARIO_NAME)
 
         runs = await fetch_generator_runs(client=async_client_main, branch=scenario_branch)
@@ -236,12 +204,7 @@ class TestAllDemoLoad(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify every customer 30_all declares drew its routing tag, and no tag is given twice.
-
-        The customer tag comes from add_customer_routing_tag (a created-trigger on the `customers` group), the
-        segment tag from the segment and application generators; both are Number pool draws, so a duplicate
-        would mean the pool was bypassed. Every declared customer is in the group, so every one is held to it.
-        """
+        """Verify every customer 30_all declares drew its routing tag, and no tag is given twice."""
         logging.info("=== %s - Step 6: Routing Tags ===", SCENARIO_NAME)
 
         result = await async_client_main.execute_graphql(

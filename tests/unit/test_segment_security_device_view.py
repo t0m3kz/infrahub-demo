@@ -1,11 +1,4 @@
-"""Unit tests for the EOS MSS-G device view (transforms/helpers/group_policy/ _segment_security_build),
-its dispatcher (group_policy_device_view) and the EOS leaf / border-leaf templates that render it.
-
-The fleet is the smoke fixture's (tests/smoke/fixture_builders/group_policy.py ``_gpo_fleet_roots``) on 7280R3 VTEPs at
-4.36.2F: DC10 (enforcing) with a leaf, an access leaf and a border leaf in the EOS row, a legacy DC12, NONPROD
-(web-np, app-np, db-np; web-np reaches the internet, db-np is stretched to DC12) and PROD (pay-p, microsegmented,
-whose contracts name component groups, and portal-p).
-"""
+"""Unit tests for the EOS MSS-G device view"""
 
 from __future__ import annotations
 

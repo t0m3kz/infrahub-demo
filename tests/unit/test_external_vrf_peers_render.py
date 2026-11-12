@@ -55,9 +55,7 @@ def _set_far_end_kind(data: dict[str, Any], peering_name: str, kind: str) -> dic
 _NE_HOP = "HANDOFF-FR2-AMNE-PROD"
 
 
-# ---------------------------------------------------------------------------
 # Rendering (edges/cisco_nxos.j2 + common/cisco_nxos_bgp.j2)
-# ---------------------------------------------------------------------------
 
 
 def _prefix_list(output: str, name: str) -> list[str]:
@@ -81,8 +79,7 @@ class TestEdgeRender:
         assert "EXTERNAL-OUT" not in output
 
     def test_sdwan_peer_accepts_what_the_offices_behind_its_gateway_registered(self) -> None:
-        """C005's hosted segment, C002's and C003's LANs and C001's tunnel range: not the provider's LAN, another
-        gateway's, the provider-owned and the NONPROD tunnel's."""
+        """C005's hosted segment, C002's and C003's LANs and C001's tunnel range:"""
         output = _run_edge(_fixture())
         assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-IN") == [
             "10.176.5.0/24",
@@ -115,8 +112,7 @@ class TestEdgeRender:
         )
 
     def test_outbound_is_per_session_and_only_its_owners_prefixes(self) -> None:
-        """Each session announces its owners' space in its own namespace (their segments and what they registered
-        behind another session), nobody else's, and never what it learned itself."""
+        """Each session announces its owners' space in its own namespace."""
         output = _run_edge(_fixture())
         assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT") == []
         assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-OUT") == [
@@ -217,8 +213,7 @@ class TestEdgeRender:
         assert "        route-map RM-VRF-PROD-EQXFR2-SDWAN-IN in\n" in _neighbor_block(output, "10.255.5.1")
 
     def test_session_with_no_onprem_prefixes_announces_only_what_its_owners_registered_elsewhere(self) -> None:
-        """No segment at all: the owners behind GW1 have nothing on-prem and nothing registered behind another
-        session, so its OUT map is a bare deny."""
+        """No segment at all:"""
         data = _fixture()
         data["ManagedNetworkSegment"] = {"edges": []}
         output = _run_edge(data)
@@ -243,8 +238,7 @@ class TestEdgeRender:
         assert not set(sdwan_out) & set(_prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-IN"))
 
     def test_an_owner_behind_one_session_only_announces_its_local_segments_there(self) -> None:
-        """C002 sits behind GW1 alone: GW1 is announced its segment 10.8.2.0/24, and neither that segment nor its
-        office LAN reaches another session."""
+        """C002 sits behind GW1 alone:"""
         output = _run_edge(_fixture())
         assert "10.8.2.0/24" in _prefix_list(output, "PL-VRF-PROD-EQXFR2-SDWAN-OUT")
         for session in ("AWS-EUC1", "MEGAPORT"):
@@ -264,9 +258,7 @@ class TestEdgeRender:
         assert "maximum-prefix" not in _neighbor_block(output, "10.255.5.6")
 
 
-# ---------------------------------------------------------------------------
 # Refusal: a platform without the owner prefix filters
-# ---------------------------------------------------------------------------
 
 
 def _run_transform(transform: type, data: dict[str, Any]) -> str:
@@ -316,11 +308,7 @@ class TestRefusalWithoutOwnerFilters:
         assert "route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT out" in _run_edge(_fixture())
 
     def test_an_edge_with_only_internal_sessions_is_not_refused(self) -> None:
-        """Drop every external session from the peerings: nothing to filter, nothing to refuse.
-
-        cisco_xe is the only other platform that has an edge template (the others are refused before a
-        template is looked up, whatever the sessions).
-        """
+        """Drop every external session from the peerings: nothing to filter, nothing to refuse."""
         data = _on_platform(_fixture(), "cisco_xe")
         bgp = _bgp_node(data)
         bgp["peerings"]["edges"] = [

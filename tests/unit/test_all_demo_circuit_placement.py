@@ -1,11 +1,4 @@
-"""The real CheckCircuitPlacement rules over payloads built from the 30_all object files.
-
-``tests/unit/simulators/circuit_data_payloads.py`` shapes the YAML the demo loads like the response of
-``queries/validation/circuit_placement.gql`` (ports with the carrier circuits and cables found on them, devices
-with their BGP processes, places, namespaces, VIF VLANs), adding what the generators build at load time. The check
-then runs unchanged: this is the offline proof that the rules and the shipped data agree. The tests that break the
-data on purpose show the proof is not vacuous.
-"""
+"""The real CheckCircuitPlacement rules over payloads built from the 30_all object files."""
 
 from __future__ import annotations
 
@@ -75,8 +68,7 @@ def test_each_circuit_has_the_expected_kind_ends_locations_and_derived_carrier(c
     "circuit_name", sorted(n for n, e in ALL_DEMO_VIRTUAL_CIRCUITS.items() if e["circuit_type"] != TUNNEL)
 )
 def test_a_session_circuit_has_the_carried_ends_the_generator_requires(circuit_name: str) -> None:
-    """add_virtual_circuit builds a session only when BOTH ends of an Interconnect, or AT LEAST ONE end of a Handoff,
-    have a carrier (a carrier circuit, or a cable at the port or its parent): the same rule, over the same ports."""
+    """add_virtual_circuit builds a session only when BOTH ends of an Interconnect, or AT LEAST ONE end of a Handoff."""
     kind, circuit = _virtual_circuits(build_payloads())[circuit_name]
     carried = [has_carrier(port) for port in circuit["capabilities"]]
     assert len(carried) == 2

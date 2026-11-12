@@ -1,10 +1,4 @@
-"""Unit tests for SegmentFirewallMixin (generators/segment_firewall.py).
-
-Covers on-prem segment-to-segment SecurityPolicy/SecurityPolicyRule
-handling: segment policy naming, dependency-authorization delegation,
-indexed rule create/update (retry-on-collision), the segment's one policy,
-and that a microsegmented rule gets no generated return rule.
-"""
+"""Unit tests for SegmentFirewallMixin (generators/segment_firewall.py)."""
 
 from __future__ import annotations
 
@@ -30,9 +24,7 @@ def _make_gen() -> Any:
     return gen
 
 
-# ===========================================================================
 # TestSharedPolicyIsUntracked
-# ===========================================================================
 
 
 class TestEnsureSegmentPolicy:
@@ -68,9 +60,7 @@ class TestEnsureSegmentPolicy:
 
 
 class TestSegmentPolicy:
-    """The source segment's one SecurityPolicy, shared by every application
-    with a component on it and by its hand-written rules: written untracked,
-    never a second one."""
+    """The source segment's one SecurityPolicy"""
 
     def test_existing_segment_policy_is_used_without_reading_it(self) -> None:
         """A segment that already has its policy (generated or hand-written) keeps it: the id from the
@@ -125,15 +115,11 @@ class TestSegmentPolicy:
         assert data["default_action"] == "deny"
 
 
-# ===========================================================================
 # TestEnsureSegmentIsolationMode
-# ===========================================================================
 
 
 class TestEnsureSegmentIsolationMode:
-    """isolation_mode used to be hand-authored per segment (only one demo
-    example, data/demos/30_all/07_applications/c005/00_segments.yml); this
-    derives it from the segment's owning application's security_profile."""
+    """isolation_mode used to be hand-authored per segment"""
 
     def test_derives_microsegmented_for_fintech_strict(self):
         gen = _make_gen()
@@ -224,9 +210,7 @@ class TestEnsureSegmentIsolationMode:
         gen.client.create.assert_not_awaited()
 
 
-# ===========================================================================
 # TestSegmentPolicyName
-# ===========================================================================
 
 
 class TestSegmentPolicyName:
@@ -255,9 +239,7 @@ class TestSegmentPolicyName:
         assert RulesPlanner.segment_policy_name({"name": "web", "virtual_network": {"id": "vn-1"}}) == "seg-web-egress"
 
 
-# ===========================================================================
 # TestCreateOrUpdatePolicyRule
-# ===========================================================================
 
 
 def _stored_rule(name: str, index: int, *, rule_id: str | None = None, expires_at: str = "") -> MagicMock:
@@ -408,16 +390,11 @@ class TestCreateOrUpdatePolicyRule:
         gen.client.create.assert_awaited_once()
 
 
-# ===========================================================================
 # TestMicrosegmentedRuleHasNoReturnRule
-# ===========================================================================
 
 
 class TestMicrosegmentedRuleHasNoReturnRule:
-    """A generated B->A rule on the destination port let B initiate to A
-    instead of answering it. The stateless return leg now comes from the
-    destination segment's inbound_rules in the leaf ACL transform, so a
-    microsegmented (apply_on_switch) dependency creates exactly one rule."""
+    """A generated B->A rule on the destination port let B initiate to A instead of answering it."""
 
     @staticmethod
     def _seg(seg_id: str) -> dict[str, Any]:
@@ -524,9 +501,7 @@ class TestMicrosegmentedRuleHasNoReturnRule:
 
 
 class TestExistingRuleReconciliation:
-    """A rule made before its segments were zoned carries a stale profile/log/
-    apply_on_switch: it is brought to what the planner derives now, and only
-    when it differs, so a second pass leaves the rule's data untouched."""
+    """A rule made before its segments were zoned carries a stale profile/log/ apply_on_switch"""
 
     @staticmethod
     def _rule(

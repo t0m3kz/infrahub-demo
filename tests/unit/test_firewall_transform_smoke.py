@@ -1,11 +1,4 @@
-"""Unit + smoke tests for transforms/firewall.py.
-
-Covers:
-  - Firewall.transform()         — no-platform early-exit path
-  - Firewall.transform()         — full Jinja2 render smoke tests (all vendors)
-  - Firewall.transform()         — rules come from the served segments only
-                                   (own policy, inbound rules)
-"""
+"""Unit + smoke tests for transforms/firewall.py."""
 
 from __future__ import annotations
 
@@ -22,9 +15,7 @@ from tests.unit.firewall_transform_helpers import (
     _smoke_segment,
 )
 
-# ===========================================================================
 # Raw-data builder (for Firewall.transform() tests)
-# ===========================================================================
 
 
 def _make_raw_data(
@@ -33,12 +24,7 @@ def _make_raw_data(
     interfaces: list[dict] | None = None,
     zones: list[dict] | None = None,
 ) -> dict[str, Any]:
-    """Build a minimal raw GraphQL response dict for the firewall_config query.
-
-    The Firewall transform calls clean_data() itself (not the base-class
-    transform()), so the input must be in the raw {"edges": [{"node": ...}]}
-    GQL shape.
-    """
+    """Build a minimal raw GraphQL response dict for the firewall_config query."""
     platform: dict[str, Any] = {}
     if platform_name is not None:
         platform = {"name": {"value": platform_name}}
@@ -67,14 +53,8 @@ def _make_raw_data(
 
 
 def _zone_to_raw(zone: dict) -> dict:
-    """Convert a cleaned zone dict to a minimal raw GQL node dict.
-
-    clean_data() unwraps {"value": x} wrappers — we just pass through dicts
-    and lists as-is so clean_data() can recurse without changing them.
-    The keys that clean_data() doesn't touch (plain strings, ints) are fine.
-    """
-    # For smoke tests the zone dict is already "clean" — wrap scalar fields
-    # in {"value": ...} so clean_data produces the right output.
+    """Convert a cleaned zone dict to a minimal raw GQL node dict."""
+    # Wrap scalar fields in {"value": ...} so clean_data works.
     raw: dict[str, Any] = {}
     for k, v in zone.items():
         if isinstance(v, (str, int, float, bool)) or v is None:
@@ -84,9 +64,7 @@ def _zone_to_raw(zone: dict) -> dict:
     return raw
 
 
-# ===========================================================================
 # Class 1 — Firewall.transform() — no-platform early exit
-# ===========================================================================
 
 
 class TestFirewallTransformNoPlatform:
@@ -152,9 +130,7 @@ def _make_destination_prefix_policy_data(platform: str) -> dict[str, Any]:
 def _make_protocol_port_policy_data(
     platform: str, *, protocol: str, port_start: int | None, port_end: int | None
 ) -> dict[str, Any]:
-    """Smoke data for one rule with an arbitrary protocol/port combination —
-    used to check PAN-OS/Junos service/application object rendering across
-    single-port, port-range, and no-port (icmp/any) cases."""
+    """Smoke data for one rule with an arbitrary protocol/port combination."""
     base = _make_smoke_data(platform)
 
     rule_node: dict[str, Any] = {
@@ -221,9 +197,7 @@ def _inbound_rule_node(name: str, *, policy: str, enabled: bool = True) -> dict[
     }
 
 
-# ===========================================================================
 # Class 2 — Firewall.transform() — full render smoke tests
-# ===========================================================================
 
 
 class TestFirewallTransformSmoke:
@@ -233,14 +207,12 @@ class TestFirewallTransformSmoke:
         fw = _make_fw()
         data = _make_smoke_data("paloalto_panos")
         result = await fw.transform(data)
-        # paloalto_panos.j2 emits: set rulebase security rules <rule_name> ...
-        # The rule name is "smoke-permit-rule" (spaces → dashes in the template)
+        # paloalto_panos.j2: `set rulebase security rules <rule_name>`, spaces become dashes.
         assert "smoke-permit-rule" in result
 
     @pytest.mark.asyncio
     async def test_inbound_rule_of_a_carried_segment_renders(self) -> None:
-        """The ingress leg: a rule of another segment's policy INTO the carried
-        segment renders here, under its own policy, after the egress policy."""
+        """The ingress leg:"""
         data = _make_smoke_data("paloalto_panos")
         _smoke_segment(data)["inbound_rules"]["edges"].append(
             {"node": _inbound_rule_node("peer-to-db", policy="zz-peer")}
@@ -259,8 +231,7 @@ class TestFirewallTransformSmoke:
 
     @pytest.mark.asyncio
     async def test_rule_reached_twice_renders_once(self) -> None:
-        """A rule from the carried segment to itself is its egress rule and its
-        inbound rule: de-duplicated by id, one rulebase entry."""
+        """A rule from the carried segment to itself is its egress rule and its inbound rule:"""
         data = _make_smoke_data("paloalto_panos")
         segment = _smoke_segment(data)
         egress = segment["security_policy"]["node"]["rules"]["edges"][0]["node"]
@@ -284,9 +255,7 @@ class TestFirewallTransformSmoke:
 
     @pytest.mark.asyncio
     async def test_destination_prefix_rule_renders_cidr_on_paloalto(self) -> None:
-        """A rule with only destination_prefixes (no zone/segment) — the shape
-        used for colocation-hosted cloud/partner/SaaS interconnects — must
-        still render a real destination match, not 'any'."""
+        """A rule with only destination_prefixes (no zone/segment)."""
         fw = _make_fw()
         data = _make_destination_prefix_policy_data("paloalto_panos")
         result = await fw.transform(data)
@@ -309,9 +278,7 @@ class TestFirewallTransformSmoke:
     )
     @pytest.mark.asyncio
     async def test_destination_prefix_rule_renders_cidr_all_platforms(self, platform: str) -> None:
-        """Same coverage as the PAN-OS-specific test above, across every
-        vendor template — each renders the CIDR as a literal destination
-        match rather than silently falling back to 'any'/'Any'."""
+        """Same coverage as the PAN-OS-specific test above, across every vendor template."""
         fw = _make_fw()
         data = _make_destination_prefix_policy_data(platform)
         result = await fw.transform(data)
@@ -319,8 +286,7 @@ class TestFirewallTransformSmoke:
 
     @pytest.mark.asyncio
     async def test_single_port_renders_service_object_on_paloalto(self) -> None:
-        """PAN-OS has no vendor-neutral dst_port string to fall back on — it
-        builds its own named service object from raw_protocol/port_start."""
+        """PAN-OS has no vendor-neutral dst_port string to fall back on."""
         fw = _make_fw()
         data = _make_protocol_port_policy_data("paloalto_panos", protocol="tcp", port_start=443, port_end=None)
         result = await fw.transform(data)
@@ -337,12 +303,7 @@ class TestFirewallTransformSmoke:
 
     @pytest.mark.asyncio
     async def test_icmp_falls_back_to_service_any_on_paloalto(self) -> None:
-        """No port-based service makes sense for ICMP/any — must not emit a
-        malformed service object with a missing port. The base smoke fixture
-        carries its own unrelated tcp/443 segment rule, so this checks the
-        proto-port-rule's own service line specifically, not the whole
-        output — a global 'svc-' absence check would false-fail on that
-        other rule's legitimate service object."""
+        """No port-based service makes sense for ICMP/any."""
         fw = _make_fw()
         data = _make_protocol_port_policy_data("paloalto_panos", protocol="icmp", port_start=None, port_end=None)
         result = await fw.transform(data)
@@ -369,8 +330,7 @@ class TestFirewallTransformSmoke:
 
     @pytest.mark.asyncio
     async def test_icmp_falls_back_to_application_any_on_juniper(self) -> None:
-        """See test_icmp_falls_back_to_service_any_on_paloalto's docstring —
-        same base-fixture caveat applies here."""
+        """See test_icmp_falls_back_to_service_any_on_paloalto's docstring — same base-fixture caveat applies here."""
         fw = _make_fw()
         data = _make_protocol_port_policy_data("juniper_junos", protocol="icmp", port_start=None, port_end=None)
         result = await fw.transform(data)
@@ -381,10 +341,7 @@ class TestFirewallTransformSmoke:
 
     @pytest.mark.asyncio
     async def test_single_port_renders_service_object_on_checkpoint(self) -> None:
-        """Check Point's `service` parameter takes a service OBJECT NAME, not
-        the Cisco-ACL-style dst_port string ('eq 443') — it needs its own
-        named service, defined via `add service-tcp`, same shape as PAN-OS's
-        `set service`."""
+        """Check Point's `service` parameter takes a service OBJECT NAME."""
         fw = _make_fw()
         data = _make_protocol_port_policy_data("checkpoint_gaia", protocol="tcp", port_start=443, port_end=None)
         result = await fw.transform(data)

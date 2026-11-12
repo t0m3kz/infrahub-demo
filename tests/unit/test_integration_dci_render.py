@@ -1,10 +1,4 @@
-"""test_64's DCI render rule, proven on the golden edge config instead of a live render.
-
-``_dci_session_errors`` reads the NX-OS config an edge renders for its DCI circuits (two neighbours per circuit: the
-underlay eBGP and the loopback-to-loopback EVPN session). The smoke fixture ``edge_cisco_nxos_bgw_pair`` is a rendered
-border gateway with two DCI circuits, so the rule must find nothing wrong with it, and name what is missing when the
-render loses a line.
-"""
+"""test_64's DCI render rule, proven on the golden edge config instead of a live render."""
 
 from __future__ import annotations
 

@@ -1,10 +1,4 @@
-"""Unit tests for BGP session planning.
-
-Tests verify correct BGP session creation for different:
-- Session types (ibgp, ebgp)
-- Deployment scenarios (standard, mixed, middle_rack)
-- Device role combinations (spine-leaf, leaf-tor relationships)
-"""
+"""Unit tests for BGP session planning."""
 
 import pytest
 
@@ -157,7 +151,7 @@ class TestRouteReflectorTopology:
             assert sess_type == "ibgp"
 
     def test_route_reflector_with_tors_middle_rack_deployment(self) -> None:
-        """In middle_rack, ToR-role devices are replaced by l2-leaf. Remaining tors→spines."""
+        """In middle_rack, ToR-role devices are replaced by l2-leaf."""
         devices = [
             _BGPDevice("spine-1", "s1", "spine"),
             _BGPDevice("leaf-1", "l1", "leaf"),
@@ -271,12 +265,7 @@ class TestEdgeCases:
         assert sessions == []
 
     def test_no_leafs_route_reflector(self) -> None:
-        """Spines without clients create full-mesh sessions with each other.
-
-        This supports the back-to-back design mode where spines from different pods
-        peer directly as equals (no super-spine tier).
-        This mirrors super-spines-only behavior (see test_super_spines_only_peer_together).
-        """
+        """Spines without clients create full-mesh sessions with each other."""
         devices = [
             _BGPDevice("spine-1", "s1", "spine"),
             _BGPDevice("spine-2", "s2", "spine"),
@@ -320,10 +309,7 @@ class TestEdgeCases:
         assert sessions[0][4] == "ebgp"
 
     def test_super_spines_only_peer_together(self) -> None:
-        """Super-spines without clients DO peer with each other.
-        This is the DC-level scenario: DC generator seeds super-spine overlay BGP
-        before any pod exists, so the planner receives only super-spines.
-        """
+        """Super-spines without clients DO peer with each other."""
         devices = [
             _BGPDevice("dc1-super-spine-01", "ss1", "super-spine"),
             _BGPDevice("dc1-super-spine-02", "ss2", "super-spine"),
@@ -377,7 +363,7 @@ class TestMixedDeploymentScenarios:
         assert len(leaf_sessions) == 8
 
     def test_middle_rack_deployment_single_rack(self) -> None:
-        """Middle-rack: l2-leafs replace tors. Only leafs get overlay BGP."""
+        """Middle-rack: l2-leafs replace tors."""
         devices = [
             _BGPDevice("spine-1", "s1", "spine"),
             _BGPDevice("leaf-1", "l1", "leaf"),

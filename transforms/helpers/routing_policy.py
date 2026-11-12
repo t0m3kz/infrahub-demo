@@ -1,27 +1,4 @@
-"""Routing policies of a BGP session, composed with the guard derived from the model (neutral, no vendor syntax).
-
-A person or a generator attaches ``RoutingPolicy`` objects to a peering, one set per direction. This module turns them
-into the maps the templates render, under one rule that no policy can break: **a policy sets and tightens, it never
-widens.** The prefix filter derived by ``utils/bgp_expectation.py`` (``session["policy"]["filters"]``) is the guard of
-its direction and family. The first term of a user map denies everything OUTSIDE the guard, so the terms after it only
-ever see a route the model allows (a route-map is evaluated in order; two matches of one type in a term are an OR on
-every platform, so the guard cannot be a second match of a term).
-
-``normalize_policies`` reads the cleaned ``import_policies`` / ``export_policies`` of a peering. ``compose_user_maps``
-makes, per direction, one map per address family that has a guard (a map names one address family's lists), or a
-single map when the direction has none:
-
-- when there is a guard, the term ``outside_guard`` (deny) first;
-- the terms of the attached policies in order (priority, name, seq), renumbered in the map;
-- a permit term inherits the session's own sets (local-preference inbound, MED outbound, no-export) unless it sets its own;
-- a closing term, a permit with the session's sets, when the policies' combined default is ``permit`` (``deny`` as soon
-  as one policy says so, then nothing: a route-map ends in an implicit deny).
-
-A term whose prefix list is of another family than the map's is left out of that map; a term with no prefix list
-belongs to every family map. A direction that already names a map a template defines (``RM-FABRIC-OUT``, ``RM-DCI-IN``:
-the internal fabric) cannot name a second one, and an EVPN-only session has no policy match on any platform, so their policies are
-reported in ``skipped`` and not composed.
-"""
+"""Routing policies of a BGP session, composed with the guard derived from the model (neutral, no vendor syntax)."""
 
 from __future__ import annotations
 
@@ -168,12 +145,7 @@ def _family_map(
 def compose_user_maps(
     session: dict[str, Any], direction: str, policies: list[dict[str, Any]], filters: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
-    """The user maps of one direction of a session, None when no policy is attached.
-
-    ``policies`` are normalized; ``filters`` the derived filters of ``session["policy"]``. A filter is a guard only when
-    it is attached (``attached``): while the deployment stages the protection the guard is not enforced, so it is not
-    put in the terms either.
-    """
+    """The user maps of one direction of a session, None when no policy is attached."""
     if not policies:
         return None
     if session.get(SHARED_MAP_FLAGS[direction]):

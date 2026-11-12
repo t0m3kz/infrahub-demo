@@ -1,43 +1,6 @@
-"""VRF instances (ManagedVRF) match what each device routes in, and its segment SVIs match its VLAN-domain rows.
+"""VRF instances (ManagedVRF) match what each device routes in, and its segment SVIs match its VLAN rows.
 
-A device has an instance exactly for the non-``default`` namespaces it routes in (utils/vrf_demand.py is the one
-derivation, shared with the generator that writes them). The generator converges them on every run, but a device
-edit (role, deployment, an MLAG formed) re-runs nothing, so the check reports what drifted. Every rule is a pure
-function over ``DeviceVrfFacts``; the check class only logs.
-
-An instance is one namespace in one topology (its ``deployment``: the DC, colocation metro or office that hosts the
-device, ``hosting_deployment``); every device of that topology that routes in the namespace is a member
-(``device.shared_capabilities`` of kind ManagedVRF). Instances:
-
-- (a) ERROR: a namespace the device needs has no instance of its hosting deployment it is a member of;
-- (b) WARNING: a membership in an instance of a namespace the device does not need (the next reconcile drops it);
-- (c) ERROR: a membership in an instance of another deployment than the device's hosting one, or in two instances
-  of one namespace;
-- (d) ERROR: an instance whose namespace has no ``l3_vni`` or ``namespace_type``, or is ``default``;
-- (e) ERROR: an instance on a device that never carries one (spine, L2 leaf, firewall, load balancer, party device;
-  not a decommissioned device: its leftover membership is the (b) WARNING);
-- (f) WARNING: an instance with no member (the reconcile sweep missed it);
-- (g) ERROR: the device needs an instance but has no hosting deployment (its ``deployment`` is neither a DC, a metro
-  or an office, nor a pod or zone of one);
-- (h) ERROR: an interface is in more than one VRF instance (two ``ManagedVRF`` list it in their ``capabilities``):
-  its routing table is ambiguous, and the transforms refuse it;
-- (i) ERROR: the device steers a tenant SVI to a firewall (``DeviceVrfFacts.steers``) but has no ``ManagedPBR``: its
-  config renders no PBR; WARNING: it has one and steers nothing (the next reconcile deletes it).
-
-Segment SVIs (``DcimVirtualInterface`` with role ``svi``, one per routed row of the device). An SVI is a member of the
-row it realizes (the row's interface edge, ``ManagedSegmentVlan.capabilities``): the row behind it is the routed row of
-its device it is a member of, never the one whose VLAN its name ``Vlan<vlan_id>`` bears. That the SVI is on the row's
-own switch and that a row has one SVI is checks/interface_layers.py (R6, R10).
-
-- S1 ERROR: each routed row of the device has an SVI that is a member of it;
-- S2 WARNING: an SVI that is a member of no routed row of its device (the row is gone, not routed, or the SVI joined
-  none), or any SVI left on a decommissioned device (the VRF pass deletes it on its next run; S1, S3, S4 and S5 do not
-  report a decommissioned device);
-- S3 ERROR: its VRF (the instance that lists it) is the instance of (the device's hosting deployment, the row's
-  namespace) and the device is one of its members (it may be in none only for a ``default`` row);
-- S4 ERROR: it has no capability but its VRF and its row;
-- S5 WARNING: its address is its segment's anycast gateway (``segment.gateway``, the one address every SVI of the
-  segment carries; the VRF pass sets it and follows a change of the gateway).
+Pure rules (a)-(i) and S1-S5 over ``DeviceVrfFacts``; see utils/vrf_demand.py and AGENTS.md "VRF instances".
 """
 
 from __future__ import annotations
@@ -55,7 +18,7 @@ _Rule = Callable[[DeviceVrfFacts], list[str]]
 
 
 def _why(facts: DeviceVrfFacts, namespace: str) -> str:
-    """Why the device needs an instance of ``namespace``: the sources that name it."""
+    """The sources that make the device need an instance of ``namespace``."""
     inputs = facts.inputs
     sources = (
         ("a routed segment row of its VLAN domain", inputs.row_namespaces),
@@ -67,12 +30,12 @@ def _why(facts: DeviceVrfFacts, namespace: str) -> str:
 
 
 def _decommissioned(facts: DeviceVrfFacts) -> bool:
-    """Whether the device is out of service: it has no demand and no desired SVI, so only leftovers are reported."""
+    """Whether the device is out of service, so only leftovers are reported."""
     return facts.inputs.status == DECOMMISSIONED_STATUS
 
 
 def _hosted(facts: DeviceVrfFacts, namespace: str | None) -> InstanceFacts | None:
-    """The device's membership in the instance of (its hosting deployment, ``namespace``), None when it has none."""
+    """The device's membership in the instance of (hosting deployment, ``namespace``), or None."""
     return next(
         (
             i
@@ -108,8 +71,7 @@ def no_hosting_errors(facts: DeviceVrfFacts) -> list[str]:
 
 
 def unneeded_instance_warnings(facts: DeviceVrfFacts) -> list[str]:
-    """(b) a membership in an instance of a namespace the device does not need (only a device that can carry one:
-    (e) covers the rest). A decommissioned device is a member of nothing it needs: every membership is stale."""
+    """(b) a membership in an instance of a namespace the device does not need; all are stale when decommissioned."""
     if _decommissioned(facts):
         return [
             f"VRF (b): decommissioned device '{facts.name}' is still a member of ManagedVRF '{instance.name}'. "
@@ -241,8 +203,7 @@ def unneeded_pbr_warnings(facts: DeviceVrfFacts) -> list[str]:
 
 
 def svi_vrf_errors(facts: DeviceVrfFacts) -> list[str]:
-    """S3 the SVI is in a VRF (unless the row is ``default``), the instance of (the device's hosting deployment, the
-    row's namespace), which the device is a member of."""
+    """S3 the SVI is in the instance of (hosting deployment, row namespace) that the device is a member of."""
     errors = []
     for svi in () if _decommissioned(facts) else facts.svis:
         row = facts.svi_row(svi)
@@ -274,7 +235,7 @@ def svi_vrf_errors(facts: DeviceVrfFacts) -> list[str]:
 
 
 def svi_content_errors(facts: DeviceVrfFacts) -> list[str]:
-    """S4 an SVI has no capability but its VRF and its row (a decommissioned device's leftovers are S2's warning)."""
+    """S4 an SVI has no capability but its VRF and its row."""
     if _decommissioned(facts):
         return []
     return [
@@ -286,7 +247,7 @@ def svi_content_errors(facts: DeviceVrfFacts) -> list[str]:
 
 
 def svi_address_warnings(facts: DeviceVrfFacts) -> list[str]:
-    """S5 an SVI carries its segment's anycast gateway (an SVI with no row behind it is S2's warning)."""
+    """S5 an SVI carries its segment's anycast gateway."""
     if _decommissioned(facts):
         return []
     return [
@@ -320,7 +281,7 @@ WARNING_RULES: tuple[_Rule, ...] = (
 
 
 class CheckVrfInstances(WarningCheck):
-    """Every device's ManagedVRF instances and segment SVIs match what the fabric says it routes (rules above)."""
+    """Every device's ManagedVRF instances and segment SVIs match what it routes (rules above)."""
 
     query = "vrf_instances"
 

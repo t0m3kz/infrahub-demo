@@ -1,8 +1,4 @@
-"""The merge retry of the integration harness runs the checks again for a validator that is not green.
-
-The platform refuses a merge while a validator has not concluded or says failure; a repeated merge changes nothing, so
-``_rerun_unfinished_validators`` runs the checks again (the GUI's "run checks"), but only when no check itself failed.
-"""
+"""The merge retry of the integration harness runs the checks again for a validator that is not green."""
 
 from __future__ import annotations
 

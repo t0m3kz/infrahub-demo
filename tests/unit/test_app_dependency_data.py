@@ -1,17 +1,4 @@
-"""Consistency of the application data: components list ports, dependencies open them.
-
-An AppComponent is addressed by its fqdn (also its HFID) and lists the ports
-it listens on. An AppDependency comes from a component or an access profile
-and goes to a component (opening all of its ports, or the subset it lists) or
-to an external target_fqdn (listing the ports it needs).
-
-The loader resolves every HFID, but only against a running Infrahub and only
-in load order, and checks/app_dependency.py only runs on a proposed change.
-These checks read the YAML alone, so a dependency with two sources, a target
-that is never declared, a port the target does not listen on, or a prod
-component calling a dev one fails here instead of halfway through a staged
-load.
-"""
+"""Consistency of the application data: components list ports, dependencies open them."""
 
 from __future__ import annotations
 
@@ -149,8 +136,7 @@ def test_component_fqdns_are_unique(directory: Path) -> None:
 
 
 def test_shared_fqdn_across_data_sets_is_the_same_component() -> None:
-    """A component declared in two data sets (c001 checkout) must be the same
-    component in both, or one load would rename the other's tier."""
+    """A component declared in two data sets (c001 checkout) must be the same component in both."""
     seen: dict[str, _Component] = {}
     for component in _COMPONENTS:
         first = seen.setdefault(component.fqdn, component)
@@ -159,10 +145,7 @@ def test_shared_fqdn_across_data_sets_is_the_same_component() -> None:
 
 @pytest.mark.parametrize("component", _COMPONENTS, ids=_COMPONENT_IDS)
 def test_component_declares_ports(component: _Component) -> None:
-    """ports is mandatory (schemas/extensions/application/01_application_base.yml):
-    a component with none gets no firewall/ZTNA rule (generators/topology/
-    application_security.py, generators/ztna.py) and no customer-port VLAN
-    tagging from any dependent (generators/topology/app_instance_segment.py)."""
+    """ports is mandatory (schemas/extensions/application/01_application_base.yml)."""
     assert component.raw.get("ports"), component.identity
 
 
@@ -257,15 +240,13 @@ def test_dependency_stays_inside_one_environment(directory: Path, dep: dict[str,
 
 @pytest.mark.parametrize(("directory", "dep"), _DEPENDENCIES, ids=_DEPENDENCY_IDS)
 def test_dependency_is_a_generator_target(directory: Path, dep: dict[str, Any]) -> None:
-    """add_app_dependency only runs for a dependency in its target group, so
-    one outside it never reconciles its application's rules."""
+    """add_app_dependency only runs for a dependency in its target group."""
     assert "app_dependencies" in (dep.get("member_of_groups") or []), dep["name"]
 
 
 @pytest.mark.parametrize("directory", _APP_DATA_DIRS, ids=lambda d: d.name)
 def test_applications_and_components_are_generator_targets(directory: Path) -> None:
-    """add_app_application and add_app_component only run for members of
-    their target groups; the component run fans out to calling applications."""
+    """add_app_application and add_app_component only run for members of their target groups."""
     for app in _entries(directory, "AppApplication"):
         assert "app_applications" in (app.get("member_of_groups") or []), app["label"]
     for component in _components(directory):
@@ -293,8 +274,7 @@ def test_the_scan_finds_the_approved_cross_owner_flow() -> None:
 
 @pytest.mark.parametrize("directory", _APP_DATA_DIRS, ids=lambda d: d.name)
 def test_approved_cross_owner_flow_lists_ports_and_reason(directory: Path) -> None:
-    """checks/app_dependency.py: an approved flow into another owner's component says
-    exactly what it opens and why."""
+    """checks/app_dependency.py: an approved flow into another owner's component says exactly what it opens and why."""
     for dep in _approved_cross_owner(directory):
         assert dep.get("ports"), dep["name"]
         assert str(dep.get("decision_reason") or "").strip(), dep["name"]

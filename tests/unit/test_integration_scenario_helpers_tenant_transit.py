@@ -15,14 +15,11 @@ from tests.integration.service_inventory_helpers import (
 from tests.unit.integration_scenario_helpers_helpers import _no_propagation_delay  # noqa: F401 (autouse fixture)
 from tests.unit.integration_scenario_helpers_helpers import _deployment
 
-# ---------------------------------------------------------------------------
 # Tenant services scoping (test_62 shares main with the DC6 chain)
-# ---------------------------------------------------------------------------
 
 
 def _firewall_context(name: str, dc: str, kind: str = "TopologyDataCenter", tenant: str | None = None) -> dict:
-    """A raw ManagedFirewallContext edge whose two member firewalls (``shared_devices``) sit in ``dc``, both in
-    the HA pair ``<name>-ha`` (a context holds no HA edge: the pair is among the members' own capabilities)."""
+    """A raw ManagedFirewallContext edge whose two member firewalls."""
     ha = {
         "__typename": "ManagedFirewallHA",
         "id": f"{name}-ha",
@@ -132,9 +129,7 @@ def test_scope_tenant_services_keeps_unresolved_cluster() -> None:
     assert [c["name"] for c in scoped["firewall_contexts"]] == ["orphan"]
 
 
-# ---------------------------------------------------------------------------
 # segment VLANs query (test_19)
-# ---------------------------------------------------------------------------
 
 
 def _segment_vlan_client() -> MagicMock:
@@ -279,8 +274,7 @@ def test_match_transit_contexts_leaves_an_unmatched_colocation_context_in_the_li
 
 
 async def test_fetch_transit_inventory_tags_edge_service_ports_like_border_leaf_ones() -> None:
-    """The firewall ports on an edge (colocation metro) a member's uplink is cabled to are border_ports, like a border
-    leaf's; a port on a device of another role is not."""
+    """The firewall ports on an edge."""
 
     def member(member_id: str, port_id: str, device: str, role: str) -> dict:
         far = {

@@ -9,12 +9,7 @@ from .all_demo_circuit_constants import ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS, _s
 from .all_demo_constants import _ALL_DEMO_ROOT, ALL_DEMO_DC_NAMES, ALL_DEMO_EXPECTED_OBJECTS, _all_demo
 from .demo_data import ROOT, declared, name
 
-# One shared (tenant-less) firewall context per (firewall cluster, tenant namespace): per DC and per serving
-# colocation zone with a firewall pair, which every footprint of the zone's metro shares (a colocation footprint never gets a
-# dedicated context), one for each of PROD and NONPROD that has a footprint. PROD and NONPROD never meet
-# on one context (`shared-{cluster}-prod`, `shared-{cluster}-nonprod`). The colocation context carries transit
-# legs like a DC one (its legs face the zone's two edges, whose firewall ports are tagged with the context) ...
-# The count, ALL_DEMO_SHARED_FIREWALL_CONTEXTS, is derived below from ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS.
+# One shared (tenant-less) firewall context per (firewall cluster, tenant namespace)
 
 
 _BOOTSTRAP_ROOT = ROOT / "data" / "bootstrap"
@@ -30,20 +25,12 @@ def _dedicated_tenants(flag: str) -> dict[str, str]:
     }
 
 
-# ... plus one dedicated context per customer whose design blueprint sets
-# dedicated_firewall (data/bootstrap/21_customer_templates.yml: L and XL
-# do, S and M do not). Maps tenant deployment -> design.
+# ... plus one dedicated context per customer whose design blueprint sets dedicated_firewall
+# (data/bootstrap/21_customer_templates.yml: L and XL do, S and M do not).
 ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = _dedicated_tenants("dedicated_firewall")
 
 
-# ---------------------------------------------------------------------------
-# 30_all — internet egress rules (07_zone_policies/05_security_policy.yml)
-#
-# A hand-written permit from a tenant segment to the internet: a rule whose
-# destination_zone is INTERNET (no segment, no prefix). The
-# firewall renders it to INTERNET with destination any; the source leaf's
-# ACL denies every NON_INTERNET_PREFIXES range before the permit to any.
-# ---------------------------------------------------------------------------
+# 30_all internet egress rules (07_zone_policies/05_security_policy.yml): permits with destination_zone INTERNET.
 
 
 class InternetEgressRule(TypedDict):
@@ -68,20 +55,8 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# 30_all — inter-VRF exchange legs through the firewall contexts (PR 3)
-#
-# Everything below is DERIVED, not hand-counted. A context's legs are its
-# tenant VRFs plus INTERNET and MANAGEMENT (EXCHANGE_PEERS): a dedicated context serves its one
-# tenant, a shared context serves every customer deployment of its DC that has
-# no dedicated context. A serving colocation zone
-# (ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS, FR) has one shared context serving
-# all its deployments, on the same rules. A deployment's VRF follows its
-# environment (`p` is PROD, every other value NONPROD); an office has no
-# environment and is always PROD (OFFICE_NAMESPACE). The deployments are
-# the TopologyCustomerDC footprints 30_all declares (06_customer_boarding,
-# <customer>/dc/01_deployments.yml).
-# ---------------------------------------------------------------------------
+# 30_all inter-VRF exchange legs, derived from the YAML: a context has one leg per tenant VRF plus INTERNET and
+# MANAGEMENT (EXCHANGE_PEERS); dedicated contexts serve one tenant, shared ones the rest of their DC or colocation zone.
 
 ALL_DEMO_TRANSIT_NAMESPACES = ("PROD", "NONPROD", "INTERNET", "MANAGEMENT")
 
@@ -107,9 +82,7 @@ ALL_DEMO_TRANSIT_RESOURCES: dict[str, str] = {
 
 MANAGEMENT_NAMESPACE = "MANAGEMENT"
 
-# DC11's core-services segment (07_applications/infra/00_segment.yml): INFRA-owned, in VRF MANAGEMENT,
-# its ports and VLAN come from the instances of the INFRA application (07_applications/infra/01_application.yml), reached
-# by the c006 udp/53 and udp/123 rules (05_security_policy.yml).
+# DC11's core-services segment (07_applications/infra/00_segment.yml): INFRA-owned
 MANAGEMENT_SERVICES_PREFIX = "10.250.0.0/24"
 
 MANAGEMENT_SERVICES_GATEWAY = "10.250.0.1/24"
@@ -125,10 +98,6 @@ ALL_DEMO_MANAGEMENT_RULES: dict[str, tuple[str, int]] = {
 }
 
 # The tenant segment those rules start from, read from 05_security_policy.yml.
-# Its prefix and its local VLAN on each switch are derived (add_vxlan_segment:
-# a prefix from its customer's pool, a /24 without a host_count, one VLAN per VLAN domain), so
-# test_64 reads both from the graph.
-# Exactly one (the unpacking raises otherwise).
 (MANAGEMENT_CLIENT_SEGMENT,) = sorted(
     {
         str(rule.item["source_segment"])
@@ -149,7 +118,7 @@ class ExpectedTransitContext(TypedDict):
     site: str
     #: Tenant deployment of a dedicated context, None for the site's shared one.
     tenant: str | None
-    #: The tenant namespace (PROD or NONPROD) the context's tenant leg is in: a shared context is one per namespace.
+    #: The tenant namespace (PROD or NONPROD) the context's tenant leg is in
     namespace: str
     #: Deployments the context serves.
     deployments: tuple[str, ...]
@@ -212,8 +181,7 @@ def _expected_transit_context(site: str, tenant: str | None, deployments: tuple[
 
 def expected_transit_contexts() -> list[ExpectedTransitContext]:
     """The shared contexts of every 30_all DC (one per tenant namespace), then its dedicated ones
-    (ALL_DEMO_DEDICATED_FIREWALL_TENANTS), then the shared contexts of every serving colocation zone (never a
-    dedicated one)."""
+    (ALL_DEMO_DEDICATED_FIREWALL_TENANTS)"""
     contexts: list[ExpectedTransitContext] = []
     for dc, deployments in ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS.items():
         dedicated = tuple(d for d in deployments if d in ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
@@ -228,8 +196,7 @@ def expected_transit_contexts() -> list[ExpectedTransitContext]:
 ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS = expected_transit_contexts()
 
 # PR 4d: every context with an INTERNET leg owns one SNAT /32 (FW-SNAT-INTERNET-IPv4,
-# data/bootstrap/23_transit_pools.yml). EXCHANGE_PEERS gives every tenant VRF an INTERNET
-# leg, so that is every context, the serving colocation zone's included.
+# data/bootstrap/23_transit_pools.yml).
 ALL_DEMO_SNAT_POOL_PREFIX = "192.0.2.0/24"
 
 ALL_DEMO_SNAT_ADDRESSES = sum("INTERNET" in c["namespaces"] for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
@@ -247,17 +214,14 @@ ALL_DEMO_TRANSIT_PREFIXES: dict[str, int] = {
 
 ALL_DEMO_TRANSIT_SUBINTERFACES = ALL_DEMO_TRANSIT_LEGS * ALL_DEMO_FIREWALL_MEMBERS
 
-# Each site's member uplinks reach 2 service ports (dedicated virtual members follow
-# their hosting firewall): a DC's border leafs, a serving colocation zone's two edges
-# (firewall-role ports Ethernet1/15-16). Every context of the site tags both.
+# Each site's member uplinks reach 2 service ports (dedicated virtual members follow their hosting firewall): a DC's
+# border leafs, a serving colocation zone's two edges (firewall-role ports Ethernet1/15-16).
 ALL_DEMO_BORDER_FIREWALL_PORTS = (
     len(ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS) + len(ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS)
 ) * ALL_DEMO_FIREWALL_MEMBERS
 
 
-# Declared nowhere: the customer boarding generators create them, so the floors
-# join ALL_DEMO_EXPECTED_OBJECTS here. Contexts = the shared ones + one per
-# dedicated tenant; `>=` because the DC6 chain's own boarding merges into main.
+# Declared nowhere: the customer boarding generators create them
 ALL_DEMO_SHARED_FIREWALL_CONTEXTS = sum(e["tenant"] is None for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 
 ALL_DEMO_EXPECTED_OBJECTS["ManagedFirewallContext"] = ALL_DEMO_SHARED_FIREWALL_CONTEXTS + len(
