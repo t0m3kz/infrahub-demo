@@ -16,7 +16,6 @@ _ROOT = Path(__file__).parents[2]
 _APP_DATA_DIRS = (
     _ROOT / "data" / "demos" / "30_all" / "07_applications",
     _ROOT / "data" / "demos" / "13_applications",
-    _ROOT / "tests" / "integration" / "data" / "60_app_catalogue",
 )
 
 

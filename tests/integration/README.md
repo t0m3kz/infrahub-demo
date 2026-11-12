@@ -82,8 +82,7 @@ data/
 ├── 20_endpoints/              # C001's application on a DC6 server (dc6-suite, stage application)
 ├── 20_port_assign/            # A port assigned to c001-web-app-p in DC6 (stage port-assign)
 ├── 20_port_withdraw/          # The same assignment withdrawn (stage port-withdraw)
-├── 20_segments/               # C001's DC6 footprint and three VXLAN segments (stage segments)
-└── 60_app_catalogue/          # Application catalogue and deployment requests (read by a unit test)
+└── 20_segments/               # C001's DC6 footprint and three VXLAN segments (stage segments)
 ```
 
 `dc6-suite` loads its fabric, switch, rack, pod, spine and server data straight from `data/demos/`, so the demos
