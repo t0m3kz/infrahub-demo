@@ -252,14 +252,14 @@ def test_the_shared_tiers_allow_no_100g_host_ports() -> None:
 
 
 def _metered_footprints() -> list[Declared]:
-    """Every DC footprint under data/demos that states a design (the 30_all, 07_customers and 32_arista_mssg sets)."""
+    """Every DC footprint under data/demos that states a design (the 30_all and 07_customers sets)."""
     return [footprint for footprint in declared("TopologyCustomerDC", _DEMOS) if footprint.item.get("design")]
 
 
 def test_the_scan_finds_designed_footprints_in_every_demo_set() -> None:
     """Guard against the walker silently finding nothing in a set."""
     sets = {footprint.path.relative_to(_DEMOS).parts[0] for footprint in _metered_footprints()}
-    assert {"07_customers", "30_all", "32_arista_mssg"} <= sets
+    assert {"07_customers", "30_all"} <= sets
 
 
 def _design_row(footprint: Declared) -> Declared:

@@ -3,15 +3,18 @@
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass, field
 from typing import Any, cast
 
-from infrahub_sdk import InfrahubClient, InfrahubClientSync
+from infrahub_sdk import Config, InfrahubClient, InfrahubClientSync
 from infrahub_sdk.exceptions import NodeNotFoundError
 from infrahub_sdk.graphql import Mutation
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
 from generators.protocols import TopologyDataCenter
 
+from .branch_helpers import fetch_artifacts
 from .dc_topology_helpers import fetch_underlay_asn_drift
 from .suite_constants import (
     DATA_PROPAGATION_DELAY,
@@ -638,6 +641,98 @@ def create_and_validate_proposed_change(
         "pc_id": pc_id,
         "validations": validations,
     }
+
+
+@dataclass
+class DeployedChange:
+    """A change that reached a validated proposed change: its id and the seconds each phase took."""
+
+    pc_id: str
+    timings: dict[str, float] = field(default_factory=dict)
+
+
+async def deploy_change(
+    *,
+    config: Config,
+    execute_command: Callable[..., Any],
+    name: str,
+    branch: str,
+    paths: Sequence[str],
+    dispatched_generator: str | None = None,
+    verify: Callable[[InfrahubClient, str], Awaitable[None]] | None = None,
+    min_artifacts: int = 1,
+    max_polls: int = 240,
+) -> DeployedChange:
+    """Load a change on a fresh branch, settle, ``verify``, open the proposed change and check its artifacts."""
+    client = InfrahubClient(config=Config(**config.model_dump()))
+    sync_client = InfrahubClientSync(config=Config(**config.model_dump()))
+    timings: dict[str, float] = {}
+    started = time.monotonic()
+
+    def _lap(phase: str) -> None:
+        nonlocal started
+        now = time.monotonic()
+        timings[phase] = round(now - started, 1)
+        started = now
+
+    logger.info("=== %s - load %s into '%s' ===", name, ", ".join(paths), branch)
+    if branch in sync_client.branch.all():
+        sync_client.branch.delete(branch_name=branch)
+        logger.info("Deleted stale branch: %s", branch)
+    sync_client.branch.create(branch_name=branch, sync_with_git=False, wait_until_completion=True)
+    load_result = await asyncio.to_thread(
+        execute_command, f"infrahubctl object load {' '.join(paths)} --branch {branch}", address=config.address
+    )
+    assert load_result.returncode == 0, (
+        f"Failed to load {name}.\n  stdout: {load_result.stdout}\n  stderr: {load_result.stderr}"
+    )
+    _lap("load")
+
+    logger.info("=== %s - triggered generators ===", name)
+    if dispatched_generator:
+        title = f"Run generator {dispatched_generator}"
+
+        async def _dispatched() -> tuple[bool, None]:
+            tasks = await client.task.filter(filter=TaskFilter(branch=branch))
+            return any(task.title == title for task in tasks), None
+
+        await wait_for_condition(
+            check_fn=_dispatched, max_attempts=max_polls, poll_interval=5, description=f"{title} on '{branch}'"
+        )
+    # Cascades are not dispatched together (add_dc -> add_pod -> add_rack), so the queue can go quiet between waves:
+    # 10 empty polls (50 s) comfortably exceed that spread before "settled" is trusted.
+    await wait_for_tasks_completion(client, branch, initial_delay=10, stable_zero_count=10, max_wait_attempts=max_polls)
+    await verify_no_failed_tasks(client=client, branch=branch)
+    _lap("generators")
+
+    if verify:
+        logger.info("=== %s - verify ===", name)
+        await verify(client, branch)
+        _lap("verify")
+
+    logger.info("=== %s - proposed change and validations ===", name)
+    pc_result = await asyncio.to_thread(
+        create_and_validate_proposed_change, client=sync_client, name=name, source_branch=branch
+    )
+    logger.info("%s PC %s: %d validations", name, pc_result["pc_id"], len(pc_result["validations"]))
+    _lap("proposed_change")
+
+    logger.info("=== %s - artifacts ===", name)
+    # The artifact validator appears late and queues behind other changes: settle first, then wait longer.
+    await wait_for_tasks_completion(client, branch, stable_zero_count=3, max_wait_attempts=max_polls)
+    artifacts = await fetch_artifacts(
+        client=client, branch=branch, expected_min_total=min_artifacts, max_polls=max_polls // 2
+    )
+    assert artifacts["total"] >= min_artifacts, (
+        f"Expected >= {min_artifacts} artifact(s) for {name}, got {artifacts['total']}"
+    )
+    for artifact in artifacts["failed"]:
+        raise AssertionError(
+            f"Artifact '{artifact['name']}' for {artifact['object']} has status '{artifact['status']}'"
+        )
+    _lap("artifacts")
+    logger.info("%s: %d artifact(s); timings %s", name, artifacts["total"], timings)
+    return DeployedChange(pc_id=pc_result["pc_id"], timings=timings)
 
 
 async def run_full_dc_pipeline(

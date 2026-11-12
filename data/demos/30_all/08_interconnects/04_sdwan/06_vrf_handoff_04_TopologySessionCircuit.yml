@@ -1,6 +1,6 @@
 # The handoff circuit, in PROD. Unowned shared on-ramp: both ends are in the FR2 cage (the
 # gateway and the cage router), so the one location is the cage, and the carrier is the cable
-# of ../01_colo_onramp/05_cage_cabling.yml. Provider: VeloCloud (P035), the SD-WAN
+# of ../01_colo_onramp/10_cage_cabling.yml. Provider: VeloCloud (P035), the SD-WAN
 # service provider, who operates the gateway.
 #
 # The session is the generated HANDOFF-FR2-SDWAN-GW1-PROD-bgp, peering_role regular on a

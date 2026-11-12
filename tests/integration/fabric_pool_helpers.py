@@ -1,4 +1,4 @@
-"""Fabric designs and the slices of the fabric pools (test_61, test_71)."""
+"""Fabric designs and the slices of the fabric pools (test_61)."""
 
 import ipaddress
 from typing import Any
@@ -10,9 +10,7 @@ from utils.data_cleaning import clean_data
 from .fabric_constants import DEFAULT_UNDERLAY_PROTOCOL, FabricSlice, expected_dc_pool_slices, expected_pod_pool_slices
 from .query_files import QUERY_GET_FABRIC_POOLS
 
-# ======================================================================
-# Fabric designs and the slices of the fabric pools (test_61, test_71)
-# ======================================================================
+# Fabric designs and the slices of the fabric pools (test_61)
 
 
 def _pool_slices(pool: Any) -> list[str] | None:

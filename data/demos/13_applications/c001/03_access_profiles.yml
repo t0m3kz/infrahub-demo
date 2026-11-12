@@ -1,0 +1,10 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityAccessProfile
+  data:
+    - name: c001-private-access-standard
+      description: "C001 standard private-access controls"
+      allowed_groups:
+        - c001-engineering

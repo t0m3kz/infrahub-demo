@@ -19,7 +19,6 @@ DEMO_SETS: dict[str, tuple[str, ...]] = {
     "dc6_build_up": ("01_data_center", "02_switch_dc6", "03_rack_dc6", "04_pod_dc6", "06_servers"),
     "10_colocation": ("10_colocation",),
     "30_all": ("30_all",),
-    "32_arista_mssg": ("32_arista_mssg",),
     "00_full_topology": ("00_full_topology",),
 }
 QUERY = _QUERIES / "validation" / "suite_capacity.gql"
@@ -85,7 +84,6 @@ def test_the_dc_demos_have_pods_with_a_design_to_judge() -> None:
         ("30_all", "fra-1-s-1", "rows"),
         ("30_all", "fra-1-s-1", "racks_per_row"),
         ("30_all", "fr2-s1", "racks_per_row"),
-        ("32_arista_mssg", "rom-1-s-1", "rows"),
         ("10_colocation", "mcr-ams1-s1", "rows"),
     ],
 )

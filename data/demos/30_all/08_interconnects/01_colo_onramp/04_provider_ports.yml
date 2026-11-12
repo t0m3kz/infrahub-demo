@@ -1,0 +1,37 @@
+---
+# Provider ports: Equinix Fabric in FR2, AWS and Azure connect ports.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnect
+  data:
+    - name: "EXT-EQX-FABRIC-FR2"
+      description: "Equinix Fabric ports of the metro FR, in the FR2 IBX (cabled to eg-fr201 and eg-fr202)"
+      status: active
+      provider: "P016"
+      location: "FR2"
+      bandwidth: 10000
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderConnect
+  data:
+    - name: "EXT-AWS-DX-FR2"
+      description: "AWS Direct Connect location in the FR2 cage (the dedicated 10G port)"
+      status: active
+      provider: "P004"
+      location: "FR2"
+      bandwidth: 10000
+    - name: "EXT-AWS-DX-EUC1"
+      description: "AWS Direct Connect edge of eu-central-1 (the hosted connection port)"
+      status: active
+      provider: "P004"
+      location: "eu-central-1"
+      bandwidth: 1000
+    - name: "EXT-AZURE-ER-WEU"
+      description: "Microsoft Enterprise Edge of westeurope for ExpressRoute (primary and secondary link)"
+      status: active
+      provider: "P005"
+      location: "westeurope"
+      bandwidth: 10000

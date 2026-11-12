@@ -1,4 +1,4 @@
-"""In-process renders and graph snapshots (shared by test_64, test_65, test_71)."""
+"""In-process renders and graph snapshots (shared by test_64, test_65)."""
 
 from collections.abc import Iterable
 from pathlib import Path
@@ -10,9 +10,7 @@ from transforms.config.firewall import Firewall
 
 from .service_inventory_helpers import _value
 
-# ======================================================================
-# In-process renders and graph snapshots (shared by test_64, test_65, test_71)
-# ======================================================================
+# In-process renders and graph snapshots (shared by test_64, test_65)
 
 _REPO_ROOT = str(Path(__file__).parent.parent.parent)
 

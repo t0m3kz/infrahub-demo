@@ -1,24 +1,22 @@
-# DC3 - Brexit, Large Scale, Every Vendor Invited
+# DC3 - Large Scale, Multi-Vendor Pods
 
 Four vendors, four CLIs, one queue for the kettle.
 
 ## Overview
 
-**Location:** London 🇬🇧 | **Size:** Large | **Design:** `L` + `ebgp-ebgp` routing
+**Location:** London, United Kingdom | **Size:** Large | **Design:** `L` + `ebgp-ebgp` routing
 
 **Fabric Design:** `L` + `ebgp-ebgp` routing — classic 3-tier Clos (leaf → spine → super-spine), pure eBGP
 underlay + eBGP overlay, IPv6 P2P links, DC-level border-leaf fronted by firewall/load-balancer.
 This is DC1's pattern scaled up to Large — 4 pods instead of 2, 4 super-spines instead of 2 —
-except this time Brexit-flavoured London decided one vendor wasn't dramatic enough (and that a trade deal between four vendors would be simple; it was not).
+with a different vendor in each pod.
 
-**Philosophy:** "Every pod, a different vendor." Cisco, Arista, Dell, and Edgecore each get their
-own pod, all peering happily into the same Dell-flavoured super-spine/border-leaf tier. Because
-nothing says "we definitely did not standardize procurement" like four device platforms in one
-fabric, four CLIs, four sets of release notes and exactly one engineer who remembers all of them.
+**Design Principle:** One vendor per pod. Cisco, Arista, Dell, and Edgecore each get their
+own pod, all peering into the same Dell super-spine/border-leaf tier.
 
 ## Architecture
 
-- **Super-Spines:** 4 (Dell PowerSwitch S5232F-ON) — the one thing everyone agrees to peer with, which is more than Parliament managed
+- **Super-Spines:** 4 (Dell PowerSwitch S5232F-ON)
 - **Border-Leaf:** 2 (Dell PowerSwitch S5232F-ON), own firewall + load-balancer pair
 - **Pods:** 4 | **Spines:** 8 (2 per pod) | **Racks:** 4
 
@@ -35,9 +33,6 @@ fabric, four CLIs, four sets of release notes and exactly one engineer who remem
 # See Deployment Steps below for the current load and generator commands.
 ```
 
-**Warning:** Spine port consumption rates may cause existential dread. Multi-vendor peace of
-mind not included, and please do not ask the vendors who is responsible for the interop bug; they will all politely blame each other.
-
 ---
 
 ## Deployment Strategy (Middle Rack, Every Vendor)
@@ -53,28 +48,22 @@ Server → ToR/L2-Leaf → Leaf → Spine → Super-Spine
 ## Alternative Quick Start
 
 ```bash
-# really quick
+# Quick path
 # See the manual commands below, or use the automatic created-object trigger.
 
-# I'm the control nerd
+# Manual path
 uv run infrahubctl branch create you_branch
 
-# Load topology (this is the point of no return)
+# Load topology
 uv run infrahubctl object load data/demos/01_data_center/dc3/ --branch you_branch
 
-# Generate fabric (grab coffee, this might take a while)
+# Generate fabric (this might take a while)
 uv run infrahubctl generator add_dc name=DC3 --branch you_branch
 
 ```
 
-The UI works too, if you enjoy tea and clicking: trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC3.
+Alternatively, trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC3.
 
 ## Validation
 
-Use `uv run invoke test-integration-routing` for automatic routing changes and `uv run invoke test-integration` for the full multi-DC matrix. More vendors do not make the test faster; they merely diversify the excuses.
-
-## Fun Fact
-
-The author still uses the mug he bought 25 years ago in London—proof that some British imports last longer than most celebrity marriages, and definitely longer than any network outage (the mug, to be fair, has never needed a maintenance window).
-
-Unlike certain monarchs, this mug has never abdicated, and it's still on the throne of morning coffee—no royal drama, just reliable caffeine delivery. If only the four vendors in this fabric were as dependable.
+Use `uv run invoke test-integration-routing` for automatic routing changes and `uv run invoke test-integration` for the full multi-DC matrix.

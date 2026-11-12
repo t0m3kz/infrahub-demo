@@ -1,0 +1,25 @@
+---
+# C001 checkout application: a private-access frontend calling an external payment gateway.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: checkout
+      environment: p
+      criticality: high
+      security_profile: internet_exposed
+      fqdn: checkout.c001.demo.local
+      owner: C001
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: frontend
+            fqdn: checkout.internal.c001.demo.local
+            component_type: frontend
+            ports:
+              - tcp/443
+            member_of_groups:
+              - app_components

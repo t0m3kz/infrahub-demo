@@ -1,13 +1,5 @@
 ---
-# C001 (Nordix Ltd.) — "storefront" application: portfolio + frontend/backend
-# components, wired to the segments (data/demos/07_customers/c001/
-# 01_network_segments.yml) and to the shared DC6 servers boarded in
-# data/demos/06_servers/ (bonds shared across customers:
-# ktw-pod1-server-1/bond0 = web, ktw-pod2-server-1/bond0 = app,
-# ktw-pod3-server-3 = db, ktw-pod3-server-1/bond1 = cache).
-#
-# Each component is addressed by its fqdn (also its HFID) and lists the ports
-# it listens on; the dependencies in 02_dependencies.yml open them.
+# C001 storefront application and its components on the DC6 servers.
 
 apiVersion: infrahub.app/v1
 kind: Object

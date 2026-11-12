@@ -1,4 +1,4 @@
-"""The fabric-design and pool-size expectations tests/integration/test_61 and test_71 assert."""
+"""The fabric-design and pool-size expectations tests/integration/test_61 asserts."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def test_30_all_pod_pools_are_the_ipv6_slices_of_s_middle_in_design_l() -> None:
     }
 
 
-def test_dc14_pools_are_the_ipv4_slices_of_design_m() -> None:
+def test_ipv4_pools_are_the_slices_of_design_m() -> None:
     assert expected_dc_pool_slices("M", "ipv4") == {
         "technical": FabricSlice(4, 20),
         "loopback": FabricSlice(4, 22),
@@ -299,7 +299,7 @@ def test_a_settled_inventory_breaks_no_rule() -> None:
     assert find_fabric_pool_errors(inventory) == []
 
 
-def test_a_dc14_like_ipv4_inventory_breaks_no_rule() -> None:
+def test_an_ipv4_inventory_of_design_m_breaks_no_rule() -> None:
     dc = _dc(
         name="DC14",
         underlay_protocol="ipv4",

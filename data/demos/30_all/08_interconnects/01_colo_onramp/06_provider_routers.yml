@@ -1,0 +1,13 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "EXT-MEGAPORT-MCR1"
+      object_template: MX204_ISP_PE
+      owner: "P033"
+      description: "Megaport Cloud Router (MCR) in Paris (far end of XC-EQXPA4-MEGAPORT)"
+      deployment: "MCR-PAR1"
+      member_of_groups:
+        - provider_stubs

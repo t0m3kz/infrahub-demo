@@ -10,7 +10,7 @@
 # gateway has no backhaul circuit into the cloud: a cloud leg is a handoff of its own, not the gateway's.
 #
 # GW1 reaches eg-fr201 over its own cage port: eth0 <-> Ethernet1/12, a cable in one
-# cage (../01_colo_onramp/05_cage_cabling.yml, loaded earlier on purpose), and a dot1q
+# cage (../01_colo_onramp/10_cage_cabling.yml, loaded earlier on purpose), and a dot1q
 # sub-interface on each side (VLAN 1900). Ethernet1/13 is the AWS cross-connect and is not shared.
 #
 # The circuit is the handoff and nothing else is authored for the session. The two

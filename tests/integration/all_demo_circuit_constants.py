@@ -190,7 +190,7 @@ ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE = "{zone}-technical-ipv6-pool"
 
 
 # The shared Multi-Site VIP: both edges of a zone's pair carry ONE /128 on loopback100
-# (data/demos/30_all/08_interconnects/01_colo_onramp/04_multisite_vips.yml).
+# (data/demos/30_all/08_interconnects/01_colo_onramp/09_multisite_vips.yml).
 ALL_DEMO_ZONE_SITE_VIPS: dict[str, str] = {"fr2": "fd00:2500:ff::f1/128", "pa4": "fd00:2500:ff::f2/128"}
 
 

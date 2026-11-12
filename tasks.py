@@ -5,7 +5,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import cast
+from typing import NamedTuple, cast
 
 from infrahub_sdk import Config, InfrahubClientSync
 from infrahub_sdk.node import InfrahubNodeSync
@@ -266,14 +266,14 @@ def test_integration_all_demo(
 
 
 @_task(optional=["basetemp", "server_port"])
-def test_integration_arista_mssg(
+def test_integration_all_demo_chain(
     context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
 ) -> None:
-    """Run the Arista EOS MSS-G suite (data/demos/32_arista_mssg; test_71 builds its own branch)."""
+    """Run the 30_all chain prototype: each ALL_DEMO_CHAIN step on its own branch, validated and merged into main."""
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
-        "tests/integration/test_71_arista_mssg.py",
+        "tests/integration/test_58_all_demo_chain.py",
         basetemp=basetemp,
         server_port=server_port,
     )
@@ -350,9 +350,26 @@ def flatten_queries(context: Context) -> None:
 ALL_DEMO_DATA = "data/demos/30_all"
 ALL_DEMO_BRANCH = "all-demo-scenario"
 
-# Staged because later stages reference objects that generators create from earlier ones (racks, border leaves, VMs); a
-# one-shot load only works on an instance whose main already holds the fabric. Each entry is (stage_name, load_paths);
-# the suite waits for every dispatched generator to settle before the next stage.
+
+class ChainStep(NamedTuple):
+    """One 30_all chain step: load ``paths``, wait for ``generator``, expect ``min_artifacts`` artifacts."""
+
+    name: str
+    paths: tuple[str, ...]
+    generator: str | None
+    min_artifacts: int
+
+
+# 30_all as a chain of changes (test_58): each step is loaded, validated and merged on its own branch from main.
+ALL_DEMO_CHAIN: tuple[ChainStep, ...] = (
+    # Customers (add_customer_routing_tag draws their routing tags) and the ISP access PE of the offices.
+    ChainStep("foundation", ("00_customer", "04_internet"), "add_customer_routing_tag", 0),
+    # The first fabric: add_dc -> add_pod -> add_rack.
+    ChainStep("dc10", ("03_dc/dc10/00_location.yml", "03_dc/dc10/01_topology.yml"), "add_dc", 1),
+)
+ALL_DEMO_CHAIN_BRANCH_PREFIX = "chain-"
+
+# 30_all loads in stages: later stages reference objects an earlier stage's generators create.
 ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         # Depends only on bootstrap data; one load so metros, zones and DC fabrics generate in parallel (the longest
@@ -615,7 +632,7 @@ ns.add_task(cast(Task, test_integration), name="test-integration")
 ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
 ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
 ns.add_task(cast(Task, test_integration_all_demo), name="test-integration-all-demo")
-ns.add_task(cast(Task, test_integration_arista_mssg), name="test-integration-arista-mssg")
+ns.add_task(cast(Task, test_integration_all_demo_chain), name="test-integration-all-demo-chain")
 ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
 ns.add_task(cast(Task, upgrade))
 ns.add_task(cast(Task, release))

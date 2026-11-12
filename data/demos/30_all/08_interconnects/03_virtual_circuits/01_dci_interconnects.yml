@@ -1,6 +1,6 @@
 ---
 # The DCI of the colo on-ramp: one Interconnect circuit per dark fibre of
-# ../01_colo_onramp/03_carrier_circuits.yml (six: each DC lands one fibre on each of
+# ../01_colo_onramp/08_carrier_circuits.yml (six: each DC lands one fibre on each of
 # its metro's two border gateways).
 #
 # The fibre is a pure carrier; this circuit is the DCI that rides it, unowned like the

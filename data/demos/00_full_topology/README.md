@@ -11,7 +11,7 @@ The folder names are the plan, so nobody has to remember a load sequence at 2am.
 
 ## Folder map
 
-One kind per file, because mixing them is how weekends get cancelled: the top-level `spec.kind` of a file is the object a reader looks for (a device, a circuit, a
+One kind per file: the top-level `spec.kind` of a file is the object a reader looks for (a device, a circuit, a
 segment, a BGP process). What exists only for that object is nested under it: the interfaces, LAG and peerings of a
 device or transport (`interfaces:`), the front ports of a patch panel (`front_ports:`), the gateway address and prefix of
 a segment, the loopback that is a BGP process's router id, the provider's `peer_ip` of a peering. What cannot be nested
@@ -112,7 +112,7 @@ remain separate work (separate in the enterprise sense: a future quarter, owner 
 
 ## Names and places
 
-A name says where and what, which is more than can be said for most production networks: `<place>-<role>-<number>` for devices (`ktw1-leaf-01`, `par-colo1-edge-01`,
+A name says where and what: `<place>-<role>-<number>` for devices (`ktw1-leaf-01`, `par-colo1-edge-01`,
 `bcn-office-edge-01`), `<end A>-<id>-<end B>` for circuits, lowercase. An end is a site (`ktw1`, `par1`,
 `bcn-office`), an ISP (`isp-a`), `internet`, a SaaS region (`webex-fra`, `zscaler-muc`) or a cloud as
 `<provider>-<account id>` (`aws-900000000001`, `azure-90000000-0000-0000-0000-000000000002`, `gcp-c900-prod-project`).
@@ -122,13 +122,13 @@ cross-connect `XC21450001` (a cable in the cage, `CBL-PAR1-EDGE-AWS-A`), a Fabri
 circuit has no `circuit_id`: its middle part is the type and a leg (`ktw1-dci-a-waw1` on the first fibre pair,
 `ktw1-dci-b-waw1` on the second, `bcn-office-tunnel-ktw1`) or the cloud side's own id (the VIF
 `par1-dxvif-fgt1a2b3-aws-900000000001`, the ExpressRoute peering `par1-er-pri-azure-...`, the VPN tunnel
-`ktw1-vpn-tun1-aws-900000000001`). Every site is a city (geography is data here, not a feeling): the DCs in Katowice (`DC-KTW1`, metro `ktw`), Warsaw (`DC-WAW1`, `waw`)
+`ktw1-vpn-tun1-aws-900000000001`). Every site is a city: the DCs in Katowice (`DC-KTW1`, metro `ktw`), Warsaw (`DC-WAW1`, `waw`)
 and Gdansk (`DC-GDN1`, `gdn`) under Poland, the cages in Paris (`PAR-COLO1`, `par` under France,
 `10_topology/COLO-PAR/00_site/00_metro.yml`), Frankfurt (`FRA-COLO1`, `fra` under Germany) and Amsterdam (`AMS-COLO1`, `ams`
 under the Netherlands), the office in Barcelona (metro `bcn` under Spain, `00_common/03_geography/C900/00_metro.yml`). The cloud regions
-stay `eu-central-1` and `westeurope`: a Direct Connect from a Paris cage to a Frankfurt region is valid (clouds have never respected geography); the cloud and
+stay `eu-central-1` and `westeurope`: a Direct Connect from a Paris cage to a Frankfurt region is valid; the cloud and
 SaaS legs stay in PAR-COLO1 (FRA-COLO1 and AMS-COLO1 are DCI transit only). The EVPN session of a DCI circuit is
-`BGP-<end>-<end>-DCI-EVPN` (the cage edge first). Some names are computed from their parent and cannot be chosen (the schema has decided and it does not take feedback): the pod
+`BGP-<end>-<end>-DCI-EVPN` (the cage edge first). Some names are computed from their parent and cannot be chosen: the pod
 `DC-KTW1-9-POD-1` is `{DC}-{DC index}-POD-{index}`, the tenant footprint `C900-P-DC-KTW1` is
 `{owner}-{environment}-{DC}`, the VRF of a topology is `{deployment lower}-vrf-{security_zone lower}` (`dc-ktw1-vrf-prod`,
 `par-vrf-prod`).
@@ -150,11 +150,11 @@ their original CIDRs. Two demos, one /24 and no appetite for renumbering: the mo
 The sample has three sites from which a path can be traced to every other one, to INTERNET and to the cloud or SaaS:
 the office in Barcelona (`bcn-office-edge-01`), the colocation cage in Paris (`par-colo1-edge-01`) and the DC in Katowice
 (the segment `c900-web-p` in the pod, the edge `ktw1-edge-01`). The cloud and SaaS do NOT hang on the DC edge: Direct
-Connect, ExpressRoute and Webex end in the cage, as in reality (a rare moment when the demo and the real world agree).
+Connect, ExpressRoute and Webex end in the cage, as in reality.
 
-The connections between the topologies, without devices (the part of the diagram nobody wants to draw by hand): an edge per pair of locations with the circuits between
+The connections between the topologies, without devices: an edge per pair of locations with the circuits between
 them (a solid line has a carrier, a dashed one only session circuits). It is drawn from the data and
-`tests/unit/test_full_topology_diagram.py` fails when it goes stale, so the diagram cannot quietly lie to you like most diagrams do (`uv run python -m tests.unit.test_full_topology_diagram`
+`tests/unit/test_full_topology_diagram.py` fails when it goes stale, so the diagram cannot go stale (`uv run python -m tests.unit.test_full_topology_diagram`
 prints it):
 
 <!-- topology-diagram:start -->
@@ -214,7 +214,7 @@ flowchart LR
 
 Links between the sites, the cloud and SaaS (a solid line is a cable or a carrier, a dashed line is a tunnel or a
 session; the label is the name of the carrier, circuit or cable from the data; the pod and racks of the DC are in the
-second diagram below; yes, there are several diagrams, one was never going to be enough):
+second diagram below):
 
 ```mermaid
 flowchart LR
@@ -299,12 +299,12 @@ flowchart LR
   VWAN --- VNET
 ```
 
-The diagram shows that the cloud and SaaS (Direct Connect, ExpressRoute, GCP, Webex) end in the cage and, thankfully, not on the DC
+The diagram shows that the cloud and SaaS (Direct Connect, ExpressRoute, GCP, Webex) end in the cage and not on the DC
 edge; the DC edge has only the internet access, the tunnels (office, AWS VPN) and the dark fibres to the cage through
-the border leaves. Simple, boring and correct, the three adjectives every design review hopes for.
+the border leaves.
 
 Inside DC-KTW1 (suite `KTW1-SUITE-1`, row 1; the pod `DC-KTW1-9-POD-1` spans racks 2-5, rack 1 is the border rack and
-belongs to the DC; a cable label is its name from the data, so nobody has to squint at a printed sticker):
+belongs to the DC; a cable label is its name from the data):
 
 ```mermaid
 flowchart LR
@@ -349,7 +349,7 @@ flowchart LR
   BL2 ---|"CBL-KTW1-BL02-EDGE01"| EDGE
 ```
 
-Internet access of each site, the one thing every user notices when it is missing (every ISP router has an uplink to `INTERNET:bus`, rule I3):
+Internet access of each site (every ISP router has an uplink to `INTERNET:bus`, rule I3):
 
 ```text
                          THE INTERNET (INTERNET:bus)
@@ -363,7 +363,7 @@ Internet access of each site, the one thing every user notices when it is missin
     ktw1-edge-01 Eth1/2   bcn-office-edge-01 GE1   ktw1-edge-01 Eth1/1   par-colo1-edge-01 Eth1/14
 ```
 
-The shortest paths between the sites, for people who like their packets to arrive (L1 = cables and carriers, L3 = BGP, session circuits, tunnels):
+The shortest paths between the sites (L1 = cables and carriers, L3 = BGP, session circuits, tunnels):
 
 | Pair | L1 | L3 |
 | ---- | -- | -- |
@@ -380,12 +380,12 @@ The shortest paths between the sites, for people who like their packets to arriv
 
 ## The DCI mesh
 
-Three DCs and three cages, every site joined to every other one (15 pairs: a full mesh, the design that looks great until somebody counts the cables): over each dark fibre a `dci` session
+Three DCs and three cages, every site joined to every other one (15 pairs: a full mesh): over each dark fibre a `dci` session
 circuit whose capabilities are the fibre's two ports, and the EVPN session (`peering_role: dci`) between the overlay
 processes of its two ends, with their actual Loopback0 endpoints bound in `90_bindings/80_fabric/`.
 Connected underlay sessions are not yet authored: this remains a model, not proof of packet forwarding.
 A DC has two border leaves, so every pair with a DC has two fibres (`-A` on border leaf 1,
-`-B` on border leaf 2); a cage has one edge, so a cage - cage pair has one (redundancy is whatever the ports allow).
+`-B` on border leaf 2); a cage has one edge, so a cage - cage pair has one.
 
 ```mermaid
 flowchart LR
@@ -416,7 +416,7 @@ flowchart LR
   FRA ---|"1"| AMS
 ```
 
-27 fibres (6 DC - DC, 18 DC - cage, 3 cage - cage), as many `dci` circuits and EVPN sessions. Yes, 27, somebody counted. The ports:
+27 fibres (6 DC - DC, 18 DC - cage, 3 cage - cage), as many `dci` circuits and EVPN sessions. The ports:
 
 | Device | Port | To |
 | ------ | ---- | -- |
@@ -426,14 +426,14 @@ flowchart LR
 | `fra-colo1-edge-01`, `ams-colo1-edge-01` | `1/9`-`10` KTW1, `1/11`-`12` WAW1, `1/13`-`14` GDN1, `1/15`-`16` the other two cages | |
 
 A port outside the template's `dci` range (edge `1/9`-`12`) is nested under its device with role `dci`. The cage
-PAR-COLO1 had 8 free ports, which is why a cage - cage pair has one fibre and not two (ports are finite, a fact vendors keep in the footnotes). A trace from a site takes the
+PAR-COLO1 had 8 free ports, which is why a cage - cage pair has one fibre and not two. A trace from a site takes the
 direct fibre to the other site: through a third site a path is longer, so it is never in the equal-cost set, and the
-pairs of the first sample keep their chains, which is the whole point of not breaking things.
+pairs of the first sample keep their chains.
 
 ## Virtual machines and the application
 
 Each DC server hosts C900 VMs (`DcimVirtualDevice`, template `LINUX-SVC`, `hosting_device` the server): `ktw1-vm-01` and
-`ktw1-vm-02` in DC-KTW1, `waw1-vm-01`, `gdn1-vm-01`. A VM has no cable (it is a VM, that is rather the point): its NIC `eth0` rides on the host port of its
+`ktw1-vm-02` in DC-KTW1, `waw1-vm-01`, `gdn1-vm-01`. A VM has no cable: its NIC `eth0` rides on the host port of its
 role (its encapsulation `parent`, the first uplink `eno1`, the rule of `generators/virtual_nics.py`), and its address is in the
 segment of its DC. The application `c900-web-shop-p` (`90_bindings/98_applications/C900/`) names the VMs as the instances of its
 components: frontend (`c900-web-p`, the KTW1 VMs), backend (`c900-app-p`, WAW1), database (`c900-db-p`, GDN1).
@@ -446,7 +446,7 @@ components: frontend (`c900-web-p`, the KTW1 VMs), backend (`c900-app-p`, WAW1),
 
 ## Shared vocabulary for all clouds
 
-Operators differ in vocabulary, not in structure (every cloud reinvents the word "circuit" and then bills you for it). The model has shared elements; the operator's word (VIF, peering,
+Operators differ in vocabulary, not in structure. The model has shared elements; the operator's word (VIF, peering,
 VLAN attachment, tunnel) appears only in object names, descriptions and in the table below.
 
 | Shared element | Kind | What it is |
@@ -459,10 +459,10 @@ VLAN attachment, tunnel) appears only in object names, descriptions and in the t
 | virtual network | `CloudVirtualNetwork` | VPC / VNet; `peers` (symmetric) is network peering |
 | service endpoint | `CloudServiceEndpoint` | a private network path to a service (`access`: `address` or `route`) |
 
-Our side is always a sub-interface of a device and our BGP process; it is not in the cloud objects (what happens inside the cloud stays in the cloud).
+Our side is always a sub-interface of a device and our BGP process; it is not in the cloud objects.
 
 `CloudPeeringInterface` (HFID: `[transport, interface]`, for example `[dx-c900-fra-lag, lag1.1000]`): it is a
-`DcimInterface`, so it has `device` (the transport), `name`, `mtu` (9000 by default) and `capabilities` like any port (no special treatment, whatever the marketing says).
+`DcimInterface`, so it has `device` (the transport), `name`, `mtu` (9000 by default) and `capabilities` like any port.
 Its own fields: `scope` (private, public, saas), `routing` (bgp, static), the tag (`vlan_id` of its encapsulation) or `tunnel_index`, `bfd`,
 `service_id`; a tunnel: `endpoint_ip`, `tunnel_mode` (ipsec, gre), `crypto_profile` (`SecurityIPsecProfile`),
 `tunnel_key` (`RoutingPassword`, the IPsec key; BGP uses `auth`); relationships: its `ManagedInterfaceEncapsulation` (`parent` a port or bundle of
@@ -473,12 +473,12 @@ tunnel: it lands through `transport.gateway`), `auth` (`RoutingPassword`), `adve
 
 Prefixes have one list per direction: `peering.advertised_prefixes` (US -> cloud; public only, verified by the
 provider, and static; empty for `private`) and `attachment.allowed_prefixes` (cloud -> US; empty = the CIDR blocks of
-the network). `Gateway.announced_prefixes` does not exist: allowed prefixes are per association, not per gateway (do not go looking for it, we already did).
+the network). `Gateway.announced_prefixes` does not exist: allowed prefixes are per association, not per gateway.
 
 ## Blueprint table per operator
 
 `OrganizationProvider.connection_profile` (aws, azure, gcp, oci, ibm, alibaba, ...) says which blueprint applies. A
-cell: the shared element, with the operator's word in parentheses (a translation table from marketing to engineering).
+cell: the shared element, with the operator's word in parentheses.
 
 Whatever the operator, the same rule holds: a port or bundle is the provider's own and sits on a `TopologyProviderConnect` where
 it physically is (the cage for a cross-connect, the region for a Fabric connection); the transport holds only the peerings.
@@ -529,25 +529,25 @@ it physically is (the cage for a cross-connect, the region for a Fabric connecti
 
 Removed: `CloudVirtualInterface`, `TopologySaasConnection` (their facts are in `CloudPeeringInterface`),
 `TopologyProviderConnection` (owner's decision: the service request is ignored for now; nothing binds a leg, because
-the circuits and their `capabilities` do) and `CloudTransitGateway` (it is a `CloudGateway` of type `hub`; fewer kinds, fewer arguments).
+the circuits and their `capabilities` do) and `CloudTransitGateway` (it is a `CloudGateway` of type `hub`).
 
 A circuit ends on interfaces through ONE edge, `capabilities` (the shared edge `ManagedGenericInterfaces.capabilities`,
 peer `DcimInterface`, min 1, max 2 on every circuit). An interface has only `capabilities` as a circuit edge; there is
-no `endpoints` field, no `TopologyCircuitEnd` generic and no `far_end` (we deleted them, it felt great). An end in an object file is the HFID of the
+no `endpoints` field, no `TopologyCircuitEnd` generic and no `far_end` (they were deleted). An end in an object file is the HFID of the
 interface `[device, interface]`: `["par-colo1-edge-01", "Ethernet1/3"]`, `["dx-c900-fra-lag", "lag1.1100"]`. So the objects must
 exist earlier, and the files load alphabetically and in order: `20_C900/Cloud/01_network` (accounts, gateways) ->
 `20_C900/Cloud/03_transport` (transports with ports, bundle and peerings nested) ->
 `90_bindings/50_connections/Cloud` (carriers, session circuits, hand-written BGP sessions).
 The SaaS transports are in `20_C900/SaaS`, their sessions in `90_bindings/50_connections/SaaS`. Dependent objects are in a later
-file because the HFID index of objects from the same run can lag (eventual consistency, now in your YAML).
+file because the HFID index of objects from the same run can lag (eventual consistency).
 
 The BGP sessions of the cloud legs are hand-written (`90_bindings/50_connections/Cloud/01_sessions/02_bgp_sessions.yml`,
 `90_bindings/50_connections/SaaS/05_bgp_sessions.yml`: our
-sub-interface or routed port in `capabilities`, our process); no generator builds them (type them by hand, like it is 2009), and `add_virtual_circuit` is not
+sub-interface or routed port in `capabilities`, our process); no generator builds them, and `add_virtual_circuit` is not
 to build sessions for a circuit whose end is a cloud peering.
 
 The check `checks/cloud_connection.py` (`validate_cloud_connection`, query `cloud_connection`) holds what the schema
-cannot (the server cheerfully accepts an attachment without a target, with two targets, a `rides_on` loop and a peering riding on
+cannot (the server accepts an attachment without a target, with two targets, a `rides_on` loop and a peering riding on
 the port of another device): R1 an attachment has exactly one target, R2 a routing table belongs to the hub and to the
 attachment's gateway, R3 `rides_on` without a loop, physical only on physical, logical on our transport without
 `partner_account`, R4 the segments of a service endpoint are from its network and a tunnel key requires IPsec, R5 a
@@ -560,16 +560,16 @@ peering is an interface of the transport, and `scope: saas` lies on a transport 
 
 ## Pools (a convention, no fields)
 
-There are no pool fields (a convention, not a feature, in the grand tradition of "we agreed on it once"). The convention: our address is a /31 (a /30 for a tunnel pair) from `Handoff-<SecurityZone.name>-IPv4`
+There are no pool fields. The convention: our address is a /31 (a /30 for a tunnel pair) from `Handoff-<SecurityZone.name>-IPv4`
 (the `security_zone` of the session circuit), our private AS from `PRIVATE-ASN32`; a provider that assigns the range
 itself (Azure /30, GCP /29, AWS VPN 169.254/30) gives it as the circuit's `link_prefix`. An object file cannot draw from
-a pool, so the allocated values are hard-coded (yes, hard-coded, we know): our address in the sub-interface (`10_topology/COLO-PAR/02_routing/01_virtual_interfaces.yml`), our AS in the
+a pool, so the allocated values are hard-coded: our address in the sub-interface (`10_topology/COLO-PAR/02_routing/01_virtual_interfaces.yml`), our AS in the
 BGP process's `local_as`, the provider's address and AS in the peering's `peer_ip` and `peer_asn`
 (nested in the transport, `20_C900/Cloud/03_transport/00_direct_connects.yml`).
 
 ## Scenario coverage
 
-Full = in the model and in the data; partial = a field exists but simplified; none = not modelled (we admit it, which is more than most vendors do).
+Full = in the model and in the data; partial = a field exists but simplified; none = not modelled.
 
 | Scenario | Coverage | Notes |
 | -------- | -------- | ----- |
@@ -631,14 +631,14 @@ deployment of `c900-web-p` in DC-KTW1, one authored `ManagedMLAG`), the leaves t
 border leaves, border leaf 1 to the edge through jack 2 of the panel, border leaf 2 on a direct cable. The VLAN row of
 leaf-02 has the same `vlan_id` 100 as leaf-01. EVPN overlay: leaf-01/02 - spine - BL - edge. There are 5 L1 paths
 server -> edge: 4 through the spine and a border leaf (2 leaves x 1 spine x 2 BL) and 1 old direct connection
-leaf-01 -> panel -> edge from the base sample (every network has one legacy link nobody dares to remove). The leaves, spine and server are deployed to the pod `DC-KTW1-9-POD-1`
+leaf-01 -> panel -> edge from the base sample. The leaves, spine and server are deployed to the pod `DC-KTW1-9-POD-1`
 (`TopologyPod`, design `S_MIDDLE`), the border leaves and the edge to DC-KTW1. DC-WAW1
 and DC-GDN1 have the same pod without the old direct link: 4 L1 paths server
 -> edge, all through the spine, and both leaves peer only upwards (`leaves_to_edge` is empty).
 
 **DC hall** (suite `KTW1-SUITE-1`, 2 rows x 9 slots: the `S_MIDDLE` envelope, which `checks/suite_capacity.py` holds
 for every pod that has racks; rows and slots are data, nothing generates them, the racks are not in the group
-`topologies_rack`). Every device stands in a rack (`rack`, `position` in U, `rack_face`), every rack in row 1 (a very short hall, but a tidy one):
+`topologies_rack`). Every device stands in a rack (`rack`, `position` in U, `rack_face`), every rack in row 1:
 
 | Rack (slot) | Kind | Pod | Devices (U) | Panel |
 | ----------- | ---- | --- | ----------- | ----- |
@@ -652,7 +652,7 @@ The panels are of type `lc-24`, each at U 42 on the front of its rack (above the
 device); the data declares only the used jacks (front n -> rear n): `PP-KTW1-01` 1 and 2, `PP-KTW1-02` 1
 and 2, `PP-KTW1-03` 1, `PP-KTW1-04` 1, and `add_patch_panel` builds the other ports of the type where it runs (the
 sample alone runs no generator, so there a panel holds only its used jacks). The server's cable goes through two panels (port, cable, front and rear, cable, front
-and rear, cable, port), the other uplinks stay on direct cables (a panel everywhere would be art, not networking):
+and rear, cable, port), the other uplinks stay on direct cables:
 
 ```text
  rack 2 (compute)            rack 3 (leaf 1)                  rack 4 (leaf 2)
@@ -667,7 +667,7 @@ and rear, cable, port), the other uplinks stay on direct cables (a panel everywh
                       bl-02 Eth1/1   -- edge Eth1/10                                        (direct cable)
 ```
 
-16 DC cables in total (there were 12: the two server cables were replaced by six; panels are how two cables become six). The leaf - spine - border leaf uplinks
+16 DC cables in total (there were 12: the two server cables were replaced by six). The leaf - spine - border leaf uplinks
 deliberately do not go through panels: an extra panel (3 nodes of depth) would level the shortest path leaf - spine - BL
 with the detour leaf-01 - panel - edge - BL.
 
@@ -675,9 +675,9 @@ Every physical device of ours stands in a rack with its unit: the DC devices as 
 layout), the cage `PAR-COLO1-RACK-01` holds the panel (U 42) and `par-colo1-edge-01` (U 40), the FRA and AMS cages
 their edge (U 40), the office rack `BCN-OFFICE-RACK-01` the SD-WAN edge
 (U 40), and the same rack holds the campus switches (U 39 to U 36). The Lisbon rack `LIS-OFFICE-RACK-01` holds two edges (U 40, U 39) and the campus (U 38 to U 35). Only the ISP routers (`EXT-ISP-*`) have no rack: they stand at the providers, whose buildings the sample does
-not model (somewhere out there, in a rack nobody documents).
+not model.
 
-**Internet through the ISP** (`90_bindings/90_internet`): INTERNET is one shared object (the whole internet as a single device; ambition has limits) that every internet connection goes
+**Internet through the ISP** (`90_bindings/90_internet`): INTERNET is one shared object (the whole internet as a single device) that every internet connection goes
 through, "a kind of cable or switch for everyone". `TopologyInternet` (the singleton `INTERNET`, with the interface `bus`
 in the startup data: `data/bootstrap/03b_internet.yml`, because it does not change) sits in the topology tree under the
 label "Internet" (the label is a grouping place and INTERNET is the meeting point under it). The ISPs have no place
@@ -697,7 +697,7 @@ ktw1-edge-01:Ethernet1/2 | ktw1-ispa-48211-isp-a | EXT-ISP-A-PE1:et-0/0/0 | (dev
   | isp-a-upl-48001-internet | INTERNET:bus | webex-fra-pub-13445-internet | EXT-WEBEX-FRA:pub-1
 ```
 
-The same path through `EXT-ISP-B-PE1` and `ktw1-ispb-77301-isp-b` ends in the same place: two ISPs, one INTERNET (competition, as the market intended). L3
+The same path through `EXT-ISP-B-PE1` and `ktw1-ispb-77301-isp-b` ends in the same place: two ISPs, one INTERNET. L3
 (only the first ISP, the second is L1 only): both ends of the access carrier have a /31 in the `INTERNET` space, the
 edge is a member of `dc-ktw1-vrf-internet`, one eBGP session (`BGP-KTW1-EDGE01-ISP-A`, two AS) on two physical ports:
 no tunnel and no session circuit. Targets: `s3-public` (`192.0.2.0/24`) and `webex-public` (`203.0.113.0/24`), both
@@ -706,9 +706,9 @@ no tunnel and no session circuit. Targets: `s3-public` (`192.0.2.0/24`) and `web
 `saas_region`, and `s3-public` stays in the network `vpc-c900-prod`. The rules (`utils/internet_object.py`, called from
 `checks/circuit_placement.py`): I1 one INTERNET with one interface of that kind, I2 an attachment is an `internet`
 circuit whose `bus` is on the INTERNET device and whose other end is an ISP router or a port of a cloud or SaaS
-transport (never a DC or a cage), I3 an ISP router with internet access has an attachment. Gaps (we admit them upfront): the PROD -> INTERNET
+transport (never a DC or a cage), I3 an ISP router with internet access has an attachment. Gaps: the PROD -> INTERNET
 exchange through a firewall is not in the sample (the internet egress from the cloud and the office is a known gap of
-`checks/internet_egress.py`); the second ISP has no L3 (it is there to be a second ISP and nothing more).
+`checks/internet_egress.py`); the second ISP has no L3.
 
 **Cage and office access** (`90_bindings/90_internet/02_circuits`): the cage and the office have their own ISP access next to
 the DC's, following the pattern `INET-LUMEN-EQXFR2` of 30_all and `INET-<office>` of `add_sdwan_edge`:
@@ -739,8 +739,7 @@ Edge nodes, so none is listed), and the CNIs of the managed clusters, `eks-c900-
 with ranges of its own). It is one kind for all of them (`ManagedClusterSdn`). Not modelled: the Tier-0 and Tier-1 gateways
 of NSX and their BGP towards the fabric (a story for another sprint, and probably another support case).
 
-**Campus below the edges** (`20_C900/Office`, `21_C901/Office`): both offices have the same hand-written campus, because a
-branch with one box and a prayer is not "full infra". The SD-WAN edge goes (GE3, and GE4 in Barcelona) to a distribution pair
+**Campus below the edges** (`20_C900/Office`, `21_C901/Office`): both offices have the same hand-written campus. The SD-WAN edge goes (GE3, and GE4 in Barcelona) to a distribution pair
 (`C9500-32C_DISTRIBUTION`, role `distribution-switch`), the pair is joined by its interlink and cabled in a square to an access
 pair (`C9300-48UXM_ACCESS_SWITCH`, role `access-switch`), and every access switch feeds two access points
 (`C9130AXI-B_AP`, role `access-point`, `eth0` to `TenGigabitEthernet1/0/1-2`). The role `access-point` is new in the
@@ -754,7 +753,7 @@ below the edge (U 39 down in Barcelona, U 38 down in Lisbon); the access points 
 
 **The second office, Lisbon** (`21_C901/Office`): the customer is C901
 (`Lusitana Retail Lda`, `21_C901/00_identity/01_customers_00_01_OrganizationCustomer.yml`),
-because the name of an office is `{OWNER}-OFFICE` and unique, so C900 can have exactly one (the model has an opinion on this).
+because the name of an office is `{OWNER}-OFFICE` and unique, so C900 can have exactly one.
 Portugal is declared next to its metro, since the bootstrap countries stop at Spain. The two SD-WAN edges (`lis-office-edge-01/02`,
 `VCE-610_EDGE`, owner C901) are a pair with different providers: edge 1 has `lis-office-ispa-48213-isp-a` to `EXT-ISP-A-PE1:et-0/0/2`,
 edge 2 has `lis-office-ispb-77303-isp-b` to `EXT-ISP-B-PE1:et-0/0/2`. Each edge has `Tunnel1` on `GE1` and a `tunnel` circuit to the
@@ -772,22 +771,22 @@ tunnel rule in `checks/circuit_placement.py`). A tunnel is L3 only (a session ci
 by the row about tunnel interfaces. So from the DC to Zscaler, L3 goes through the DC - office tunnel and then through the
 office - Zscaler tunnel: a packet with a passport full of stamps.
 
-## What the model does not express (honestly)
+## What the model does not express
 
 - L1 in the DC: between the port `Ethernet1/13` of the edge (the panel end) and the carrier's port (`Ethernet1/2`) there
-  is no cable: it is a transition inside the device, and the script marks it so (the packet does not mind, the auditor might).
+  is no cable: it is a transition inside the device, and the script marks it so.
 - The cable goes from the leaf's segment port to the patch panel, while the carrier starts on another port of the edge.
-  A physically consistent path would need additional devices (and a budget). The first hop of the tenant segment is the leaf port in
+  A physically consistent path would need additional devices. The first hop of the tenant segment is the leaf port in
   the segment's deployment.
 - The cage has ONE panel pair (`PP-PAR-COLO1-01`, jack 1): only the `virtual_connection` carriers from the Fabric port go
   through it (ExpressRoute and Partner Interconnect, three VLANs on `Ethernet1/1`: 200, 201, 400), each ending on its own `TopologyProviderInterface` of the Fabric port (S-tags 1101, 1102, 1201, with the bandwidth of the connection). The cross-connects
   (AWS, Dedicated Interconnect, Webex) end directly on edge ports, without a panel. The L1 path cage - cloud through the
   panel is physically consistent: edge - cable - panel - cable - Fabric port - carrier - transport port.
-- An office has no server and no generator runs on it (the office is more of a state of mind): its campus below the
-  SD-WAN edge is written by hand (see **Campus below the edges**). The first L1 hop of the office is the edge.
+- The office is one SD-WAN edge: no switches, no LAN and no server (no generator runs). The first L1 hop of the office is
+  the edge.
 - The DCI is two dark fibres, two `dci` circuits and two EVPN sessions between the overlay processes; there is no
   underlay subnet (a /31 from the DCI pool) and no underlay eBGP session (the L3 path set from the segment would exceed
-  100, the server limit), and no VTEP loopback interfaces (some things are best left unbuilt).
+  100, the server limit), and no VTEP loopback interfaces.
 - The provider side of a peering has no BGP process: a BGP peering has one process (ours), the other side is the
   `peer_ip` and `peer_asn` of the cloud peering, found through the session circuit that has the same interface
   (sub-interface or routed port) in `capabilities`.
@@ -795,7 +794,7 @@ office - Zscaler tunnel: a packet with a passport full of stamps.
   not know which tunnels ride on it.
 - There is no service request (`TopologyProviderConnection`): nothing says "I want to connect A to B for customer X"; the
   legs are made of circuits and their ends. Pools, `near_port` and primary/secondary redundancy have no fields.
-- The shared core does not express operator-specific elements (each operator is a special snowflake): Microsoft peering route filters, ExpressRoute SKU,
+- The shared core does not express operator-specific elements: Microsoft peering route filters, ExpressRoute SKU,
   FastPath, GatewaySubnet, OCI import-distribution, Global Reach, IKE proposal lists, NAT-T, certificates, DNS, prefix
   limits, BFD timers, route entries. They will come in the generator of a given operator (`connection_profile`) from the
   constants in `utils/limits.py`.
@@ -806,8 +805,8 @@ office - Zscaler tunnel: a packet with a passport full of stamps.
 - The encapsulation `parent` of a peering (the same object as a device sub-interface) has no
   `common_parent`, so the server does not hold that the parent is on the same transport (the bundle and its members:
   the server holds them): that is `checks/interface_parents.py` (rule 1). The first peering on a partner transport's port
-  passes the schema (the schema was not asked to look).
-- The BGP sessions of the cloud legs are manual (artisanal, small batch); nothing allocates a /31 or an AS for a circuit whose end is a cloud
+  passes the schema.
+- The BGP sessions of the cloud legs are manual; nothing allocates a /31 or an AS for a circuit whose end is a cloud
   peering.
 - A port is asked for on the segment's deployment (`90_bindings/95b_segment_requests`, one list per deployment) and
   carries the segment as a member of its switch's VLAN row (`90_bindings/96_segment_ports`, one list per row); no

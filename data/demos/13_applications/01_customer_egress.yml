@@ -1,0 +1,12 @@
+---
+# C001 sends its outbound application traffic through the shared proxy.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "Nordix Ltd."
+      org_id: "C001"
+      member_of_groups:
+        - customers
+      egress_service: shared-cloud-proxy

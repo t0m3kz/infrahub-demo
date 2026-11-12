@@ -7,19 +7,12 @@ from typing import Any, Literal
 
 import pytest
 from infrahub_sdk import Config, InfrahubClient, InfrahubClientSync
-from infrahub_sdk.task.models import TaskFilter
 
-from .branch_helpers import fetch_artifacts
 from .conftest import TestInfrahubDockerWithClient
 from .dc_topology_helpers import compute_role_counts, compute_routing_summary, fetch_dc_topology
 from .suite_constants import DEMO_DC_DATA_ROOT
 from .wait_helpers import wait_for_condition
-from .workflow_helpers import (
-    create_and_validate_proposed_change,
-    merge_proposed_change,
-    verify_no_failed_tasks,
-    wait_for_tasks_completion,
-)
+from .workflow_helpers import deploy_change, merge_proposed_change
 
 # Per-DC configuration: data_path, dc_name, routing_strategy, naming_convention, branch.
 
@@ -345,76 +338,29 @@ def _check_routing(
 
 
 async def _deploy_dc(dc_key: str, config: Config, execute_command: Any) -> str:
-    """Steps 1-7 for one DC on its own clients (the deploys run concurrently): load, let the triggered generators
-    settle, verify, open and validate the proposed change, check artifacts."""
+    """Deploy one DC through a validated proposed change (load, settle, verify, artifacts); returns the PC id."""
     cfg = DC_CONFIGS[dc_key]
-    branch = cfg["branch"]
     dc_name = cfg["dc_name"]
-    client = InfrahubClient(config=Config(**config.model_dump()))
-    sync_client = InfrahubClientSync(config=Config(**config.model_dump()))
 
-    logging.info("=== %s — Step 1: Load Data ===", dc_name)
-    if branch in sync_client.branch.all():
-        sync_client.branch.delete(branch_name=branch)
-        logging.info("Deleted stale branch: %s", branch)
-    sync_client.branch.create(branch_name=branch, sync_with_git=False, wait_until_completion=True)
-    load_result = await asyncio.to_thread(
-        execute_command, f"infrahubctl object load {cfg['data_path']} --branch {branch}", address=config.address
-    )
-    assert load_result.returncode == 0, (
-        f"Failed to load {dc_name} data.\n  stdout: {load_result.stdout}\n  stderr: {load_result.stderr}"
-    )
-    logging.info("%s data loaded", dc_name)
+    async def _verify(client: InfrahubClient, branch: str) -> None:
+        topo, routing = await _fetch_topology_and_routing_when_settled(
+            client=client, branch=branch, dc_name=dc_name, cfg=cfg
+        )
+        _check_topology(topo, compute_role_counts(topo["devices"]), dc_name, branch, cfg, exact_roles=False)
+        _check_routing(routing, dc_name, branch, cfg)
+        logging.info("%s verified: %d devices, %d cables", dc_name, len(topo["devices"]), topo["cable_count"])
 
-    # Loading the DC fires trigger-dc-generator-on-created (add_dc)
-    logging.info("=== %s — Step 2-3: Triggered Generators + No Failed Tasks ===", dc_name)
-    # A busy event queue can hold the trigger back for longer than the quiet window below
-
-    async def _add_dc_dispatched() -> tuple[bool, None]:
-        tasks = await client.task.filter(filter=TaskFilter(branch=branch))
-        return any(task.title == "Run generator add_dc" for task in tasks), None
-
-    await wait_for_condition(
-        check_fn=_add_dc_dispatched,
-        max_attempts=DC_CASCADE_MAX_POLLS,
-        poll_interval=5,
-        description=f"add_dc dispatched on branch '{branch}'",
-    )
-    await wait_for_tasks_completion(
-        client, branch, initial_delay=10, stable_zero_count=10, max_wait_attempts=DC_CASCADE_MAX_POLLS
-    )
-    await verify_no_failed_tasks(client=client, branch=branch)
-
-    logging.info("=== %s — Step 4: Verify Topology ===", dc_name)
-    topo, routing = await _fetch_topology_and_routing_when_settled(
-        client=client, branch=branch, dc_name=dc_name, cfg=cfg
-    )
-    _check_topology(topo, compute_role_counts(topo["devices"]), dc_name, branch, cfg, exact_roles=False)
-    _check_routing(routing, dc_name, branch, cfg)
-    logging.info("%s verified: %d devices, %d cables", dc_name, len(topo["devices"]), topo["cable_count"])
-
-    logging.info("=== %s — Step 5-6: Proposed Change + Validations ===", dc_name)
-    pc_result = await asyncio.to_thread(
-        create_and_validate_proposed_change,
-        client=sync_client,
+    deployed = await deploy_change(
+        config=config,
+        execute_command=execute_command,
         name=f"deploy-{dc_key}",
-        source_branch=branch,
-        destination_branch="main",
+        branch=cfg["branch"],
+        paths=[cfg["data_path"]],
+        dispatched_generator="add_dc",
+        verify=_verify,
+        max_polls=DC_CASCADE_MAX_POLLS,
     )
-    logging.info("%s PC %s: %d validations", dc_name, pc_result["pc_id"], len(pc_result["validations"]))
-
-    logging.info("=== %s — Step 7: Verify Artifacts ===", dc_name)
-    # The artifact validator appears late and queues behind other DCs' tasks: let the branch settle, widen
-    # fetch_artifacts' window.
-    await wait_for_tasks_completion(client, branch, stable_zero_count=3, max_wait_attempts=DC_CASCADE_MAX_POLLS)
-    artifacts_result = await fetch_artifacts(
-        client=client, branch=branch, expected_min_total=1, max_polls=DC_CASCADE_MAX_POLLS // 2
-    )
-    assert artifacts_result["total"] >= 1, f"Expected >= 1 artifact for {dc_name}, got {artifacts_result['total']}"
-    for art in artifacts_result["failed"]:
-        raise AssertionError(f"Artifact '{art['name']}' for {art['object']} has status '{art['status']}'")
-    logging.info("%s artifacts: %d", dc_name, artifacts_result["total"])
-    return pc_result["pc_id"]
+    return deployed.pc_id
 
 
 class TestDCDeployment(TestInfrahubDockerWithClient):

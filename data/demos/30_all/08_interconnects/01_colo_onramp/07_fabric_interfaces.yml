@@ -1,0 +1,18 @@
+---
+# Equinix Fabric connection ends on port et-0/0/0, named <port>.<S-tag>.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyProviderInterface
+  data:
+    - device: "EXT-EQX-FABRIC-FR2"
+      name: "et-0/0/0.1301"
+      description: "Fabric connection FABRIC-FR2-AMNE01 to the Network Edge router eg-am-ne01"
+      status: active
+      capabilities:
+        - kind: ManagedInterfaceEncapsulation
+          data:
+            name: "EXT-EQX-FABRIC-FR2:et-0/0/0.1301"
+            vlan_id: 1301
+            parent: ["EXT-EQX-FABRIC-FR2", "et-0/0/0"]
+      bandwidth: 1000

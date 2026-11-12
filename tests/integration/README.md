@@ -42,7 +42,6 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `test_19_dc6_segments.py` - **Scenario 6:** Board C001 into DC6 and deploy two VXLAN segments (`data/20_segments`)
 - `test_20_dc6_add_endpoints.py` - **Scenario 7:** Endpoint servers across DC6's pods (`data/demos/06_servers`)
 - `test_59` - `test_66` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across eleven modules, and does not merge to main.
-- `test_71` - **Scenario 9:** The Arista EOS MSS-G demo fabric (`data/demos/32_arista_mssg`), on its own branch (see [The Arista MSS-G Suite](#the-arista-mss-g-suite)).
 
 Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
 later module depends on the previous one's merge. Every growth check is scoped to DC6 (devices reachable from
@@ -70,8 +69,8 @@ The fetch helpers live in topic modules that tests import from directly: `wait_h
 sleeps `DATA_PROPAGATION_DELAY` in the module that defines it, so a unit test that skips the sleep patches that module.
 
 - `wait_for_condition()` - Polling utility for async conditions
-- `render_device_config()` - Run a device-config query and its transform in-process (test_64, test_71)
-- `snapshot_topology()` / `diff_snapshots()` - Snapshot the graph's topology kinds and diff two snapshots (test_65, test_71)
+- `render_device_config()` - Run a device-config query and its transform in-process (test_64)
+- `snapshot_topology()` / `diff_snapshots()` - Snapshot the graph's topology kinds and diff two snapshots (test_65)
 
 #### Scenario helpers of test_62 and test_64
 
@@ -145,7 +144,7 @@ docker run --rm -v /tmp/somefile:/x --entrypoint sh haproxy:3.1-alpine \
 `~/.pytest-tmp` sits under `/Users`, which Docker Desktop shares out of the box. Use the tasks, or add your
 basetemp to Docker Desktop → Settings → Resources → File sharing.
 
-The focused profiles reuse one Docker stack per command and keep the feedback loop from becoming a small infrastructure project of its own:
+The focused profiles reuse one Docker stack per command:
 
 ```bash
 # Setup and repository prerequisites
@@ -153,9 +152,6 @@ uv run invoke test-integration-fast
 
 # The 30_all demo, end to end
 uv run invoke test-integration-all-demo
-
-# The Arista EOS MSS-G demo fabric (setup, repository, test_71)
-uv run invoke test-integration-arista-mssg
 
 # Automatic DC/POD/rack routing regression
 uv run invoke test-integration-routing
@@ -185,32 +181,6 @@ The fast profile intentionally stops after setup, repository synchronization and
 | `test_66_all_demo_circuit_lifecycle.py` | Runs after `test_65` because it mutates the branch. Decommissioning an Interconnect's carrier, and the SD-WAN gateway's Handoff, removes its BGP sessions, its `/31` (`/127`) and the port addresses (ports, key and other circuits' sessions untouched); setting it active again rebuilds them on the same key. Each test restores the status it changed |
 
 Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, imported from `tasks` by the tests) documents which stage needs what. Running `test_60`-`test_66` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
-
-### The Arista MSS-G Suite
-
-`test_71_arista_mssg.py` loads `data/demos/32_arista_mssg` (DC14: an all-7280R3 fabric on EOS 4.36.2F, the one
-platform, device type and release the `reference-arista-eos` group-policy profile row accepts) on its own branch
-(`arista-mssg-scenario`). It is not in `30_all` and is never merged to main;
-`invoke test-integration-arista-mssg` runs `test_01`, `test_02` and `test_71` only. The constants (branch, stages,
-segment names, expected roles) are local to the module. It proves the path *generators -> group tags and contract
-rules -> transform -> rendered EOS Segment Security (MSS-G) text*:
-
-| Step | What it checks |
-| --- | --- |
-| Fabric load | design and fabric stages settle with no failed task; the expected roles; three back-to-back MLAG pairs, none virtual |
-| Tenant load | servers, footprint, three VXLAN segments, hand-written policies and one application, each stage settled |
-| Tenant state | each server cabled to the intended tier; every segment has a gateway prefix, a group tag and one active deployment in DC14; the policies hold exactly the hand-written rules |
-| Checks | `CheckReferenceFabric` reports no error and `DC14 is a reference fabric (segment_security, N VTEPs)`; `CheckSegmentSecurity` reports no error |
-| Renders | leaf, access-leaf and border-leaf: `router segment-security` with the live match-lists and VRF, the expected `from` / `fallback policy` lines, `field-set l4-port` indented inside `application traffic recognition`, the staged comment and a final `shutdown`, no `policy-drop-all default`; a spine and a leaf that hosts no segment render none |
-| Enforce | `group_policy_enforce` starts no generator and changes each render by the staged comment and `shutdown` -> `no shutdown` |
-| Negative gate | one access-leaf on EOS 4.32.1F makes DC14 no reference fabric and removes the block from every device; restoring the image brings it back |
-| Rerun | a second `add_vxlan_segment` run changes no tag, prefix or id and no render |
-
-Not covered: that EOS accepts or enforces any rendered line (custom policies, field-sets, application traffic
-recognition and the fallback policy are documented by Arista's AVD only), and a stored proposed-change artifact
-compared with the in-process render (the proposed-change helpers report artifact status, not content). The 7280R3 port
-plans of the scope's templates are approximate. See `data/demos/32_arista_mssg/README.md`. Until a lab says
-otherwise, the rendered text is a very well-documented hope.
 
 ### Run Setup Only
 
@@ -359,14 +329,14 @@ class TestScenarioName(TestInfrahubDockerWithClient):
 
 ## Best Practices
 
-1. **✅ Use Dedicated Scenario Branches** - Each scenario creates its own branch to isolate changes
-2. **✅ Verify Artifacts Before PC** - Always verify devices/cables before creating proposed change
-3. **✅ Wait for Validations** - Ensure all validation checks complete successfully
-4. **✅ Verify Main After Merge** - Confirm objects exist in main branch post-merge
-5. **✅ Use Workflow Helpers** - Leverage shared functions for consistency
-6. **✅ Sequence with Order Marks** - Use `@pytest.mark.order()` for execution order
-7. **✅ Declare Dependencies** - Use `@pytest.mark.dependency()` to track test relationships
-8. **✅ Log Progress Clearly** - Use structured logging with scenario markers
+1. **Use Dedicated Scenario Branches** - Each scenario creates its own branch to isolate changes
+2. **Verify Artifacts Before PC** - Always verify devices/cables before creating proposed change
+3. **Wait for Validations** - Ensure all validation checks complete successfully
+4. **Verify Main After Merge** - Confirm objects exist in main branch post-merge
+5. **Use Workflow Helpers** - Leverage shared functions for consistency
+6. **Sequence with Order Marks** - Use `@pytest.mark.order()` for execution order
+7. **Declare Dependencies** - Use `@pytest.mark.dependency()` to track test relationships
+8. **Log Progress Clearly** - Use structured logging with scenario markers
 
 ## Troubleshooting
 
@@ -411,9 +381,6 @@ uv run invoke test-integration-fast
 
 # The 30_all demo
 uv run invoke test-integration-all-demo
-
-# The Arista EOS MSS-G demo fabric
-uv run invoke test-integration-arista-mssg
 
 # One scenario, with its prerequisites in front
 uv run invoke test-integration --tests "tests/integration/test_01_setup.py \

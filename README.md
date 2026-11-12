@@ -1,346 +1,223 @@
-# Infrahub demo
+# Infrahub Demo: Design-Driven Network Automation
 
-[![Ruff][ruff-badge]][ruff-link]
-[![Python][python-badge]][python-link]
-[![Actions status][github-badge]][github-link]
-[![Latest release][release-badge]][release-link]
-[![License][license-badge]][license-link]
-[![Contributors][contributors-badge]][contributors-link]
-[![Coverage Status][coverage-badge]][coverage-link]
-[![GitHub Discussion][github-discussions-badge]][github-discussions-link]
+This repository models data center, colocation, cloud, SaaS and office networks in
+[Infrahub](https://docs.infrahub.app) and generates them from design data. Schemas define the data model,
+generators build the topology, transforms render device configurations, and checks validate the result before a
+change is merged.
 
----
+Two ideas drive the project:
 
-## Why Infrahub Demo?
+- **Design-driven topology.** A fabric is described by its design (size, pod layout, routing strategy, naming
+  convention). Generators derive the devices, cabling, addressing and routing from it, so a new pod, rack or switch
+  is a data change, not a manual build.
+- **Application-driven infrastructure.** An application team declares what its application needs (for example
+  "checkout talks to payment on tcp/443"). Generators derive the firewall rules, proxy configuration, security policy
+  and routing from that one declaration, consistently, on a branch that is reviewed before it is merged.
 
-> "The machine cannot be blamed. It is doing precisely what it was instructed to do.
-> The real culprits are those who sit idly by, awaiting some miraculous vendor contraption
-> that will magically satisfy all their peculiar requirements—instead of rolling up their sleeves
-> and constructing it themselves."
->
-> — *Inspired by Stanisław Lem's "Memoirs Found in a Bathtub"*
+## Contents
 
-**My Journey:**
-I was exhausted. Exhausted by vendor tools that promised the moon but delivered a handful of dust.
-
-Exhausted by being herded into their GUI labyrinths—click here, click there, click everywhere—imprisoned in their rigid schemas, held hostage by their glacial update cycles.
-
-These so-called "solutions" arrived festooned with monitoring dashboards and deployment wizards that turned your controller into a wheezing, resource-gobbling behemoth requiring constant massage and sweet-talking just to stay upright.
-
-And don't even get me started on YAML files so deeply nested and interdependent that changing one variable requires a PhD in archaeology to trace what will explode three modules away.
-
-Infrastructure as Code was supposed to mean freedom—not just shuffling YAML incantations into some vendor's inscrutable black box and praying to the Cloud Gods for mercy.
-
-I wanted *absolute sovereignty over my data model*, the liberty to forge my own relationships, the power to orchestrate everything through code—no "Wizard Step 3 of 47" required, no integration hell spanning multiple vendor portals where you need a Rosetta Stone just to make two systems talk to each other.
-
-And I was especially done with external vendor developers who treat automation like a YOLO sport—deploying untested code straight into production, using customer company as their personal test lab, and only realizing what went wrong when the alarms go off. If you dare to question their approach, they escalate to the highest level, as if basic testing is an outrageous demand.
-
-For those blissfully unaware, "YOLO" means "You Only Live Once"—in this context, it’s developer-speak for "deploy now, worry never," and a total disregard for actual results.
-
-Infrahub changed that. It's not another tool forcing strict data definitions or telling me how to think about infrastructure. Instead, it lets me define my own data structures—a new approach that puts me in control of how my infrastructure is modeled and managed. Design-driven automation means I own the schemas, I own the logic, I own the destiny of my network. No more vendor lock-in, no more GUI dependency, no more compromise. And best of all, it delivers an easy-to-use approach for unit testing and integration testing—so you can actually trust your automation before it hits production.
-
-This demo is trying prove it: from topology design to device generation, from configuration templates to validation checks—all driven by my data structures, all automated through my code. That's the infrastructure revolution I was waiting for.
-
-But topology is just the appetizer. The main course—the part that makes seasoned network engineers put down their coffee and stare into the middle distance—is turning the whole request process inside out. No more filing a ticket, waiting three sprints, and getting back a firewall rule that's subtly wrong. Instead, an application team declares *what their application actually needs*: "checkout-service talks to payment-gateway on 443, full stop." That single declaration is the source of truth, and Infrahub's generators do the tedious, error-prone plumbing on your behalf—the firewall rule, the proxy config, the security policy, the routing, all derived from the same intent, all consistent with each other, all versioned in a branch you can review before it touches anything real.
-
-This is application-driven infrastructure: the network exists to serve the application, not the other way around. No more "just open a change request and we'll get to it eventually." No more hand-carved ACLs that nobody dares touch because nobody remembers why they're there. You declare intent, the generators do the honest work, and the humans get their Friday afternoons back.
-
-**Special thanks to [OpsMill](https://opsmill.com) for making this happen** – they built Infrahub with the vision that infrastructure teams should have complete control, not be prisoners to vendor constraints. (And yes, I'm bloody jealous I didn't have the power and motivation to come up with such a brilliant idea myself – like Prometheus watching others steal the fire of the gods!)
-
-**To companies/vendors** who may borrow ideas from this repo for your customer environments: please sponsor at least 3 open source communities. Odds are, open source powers half your commercial products anyway. The volunteers who build these tools deserve more than just a "thanks" and a GitHub star. And if you’ve ever filed a bug report and then complained about how long it takes to fix, remember: a few dollars a month for open source won’t even dent your coffee budget—so go ahead, give back and help keep these communities caffeinated and strong.
-
----
+- [Requirements](#requirements)
+- [Repository Structure](#repository-structure)
+- [Quick Start](#quick-start)
+- [Scenarios](#scenarios)
+- [Loading a Scenario](#loading-a-scenario)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Further Documentation](#further-documentation)
+- [License](#license)
 
 ## Requirements
 
-- Python 3.11, 3.12, 3.13, or 3.14
-- [uv](https://github.com/astral-sh/uv) for dependency management
-- Docker (for containerlab and some integration tests)
-- **Infrahub 1.5** (or higher) - See note below
+- Python 3.11 to 3.14
+- [uv](https://docs.astral.sh/uv/) for dependency management
+- Docker (Infrahub stack and integration tests)
+- Infrahub 1.10 or later (the registered flattened queries need 1.12; see [AGENTS.md](AGENTS.md))
 
-> **Version Compatibility Note**: This demo is designed for Infrahub 1.5. The data models and generators can be modified to work with previous versions of Infrahub if needed.
-> Who does the modifying is traditionally settled by whoever missed the upgrade planning meeting.
+## Repository Structure
 
-## Features
+| Path | Content |
+| ---- | ------- |
+| [`schemas/`](schemas/) | Data model: base schemas (`base/`) and domain extensions (`extensions/`) |
+| [`data/bootstrap/`](data/bootstrap/) | Reference data every scenario needs: locations, providers, platforms, device types, templates, pools, designs |
+| [`data/events/`](data/events/) | Event rules and actions that start generators |
+| [`data/demos/`](data/demos/) | Demo scenarios (see [Scenarios](#scenarios)) |
+| [`generators/`](generators/) | Topology and service generators (DC, pod, rack, segments, circuits, applications, change requests) |
+| [`transforms/`](transforms/) | Python transforms that build device configuration payloads |
+| [`templates/`](templates/) | Jinja2 configuration templates, one per role and platform (`templates/configs/<role>/<platform>.j2`) |
+| [`checks/`](checks/) | Validation checks run on proposed changes |
+| [`queries/`](queries/) | GraphQL queries; `queries/flat/` holds the generated flattened copies that are registered |
+| [`menu/`](menu/) | Infrahub navigation menu |
+| [`utils/`](utils/) | Shared helpers and limits (`utils/limits.py`) |
+| [`tests/`](tests/) | Unit, smoke and integration tests |
+| [`.infrahub.yml`](.infrahub.yml) | Registry of generators, transforms, checks, artifacts and queries |
+| [`tasks.py`](tasks.py) | Invoke tasks for setup, loading and testing |
 
-- Design-driven network automation demo using [Infrahub](https://docs.infrahub.app)
-- Application-driven infrastructure: declare app dependencies once ("app A talks to app B on 443") and let generators materialize the firewall rules, proxy config, security policy, and routing—no three-sprint change request required
-- Change requests: a Proposed Change can carry a ServiceNow-style change request whose description, risk, rollout,
-  backout and test plans are derived from its own diff, gated by a check and rendered as a ServiceNow payload
-  ([docs/change_requests.md](docs/change_requests.md))
-- Example data, schemas, and menu for rapid onboarding
-- Scripts for bootstrapping, demo use cases, and CI integration
-- Modular structure for easy extension and experimentation
+## Quick Start
 
-## Project Structure
+A preconfigured development container is available in [`.devcontainer/`](.devcontainer/).
 
-- [`checks/`](checks/) – Custom validation logic
-- [`data/`](data/) – Example data for bootstrapping
-- [`generators/`](generators/) – Topology and config generators
-- [`menu/`](menu/) – Example menu definition
-- [`queries/`](queries/) – GraphQL queries for Infrahub
-- [`schemas/`](schemas/) – Base and extension schemas
-- [`templates/`](templates/) – Jinja2 templates for device configs
-- [`tests/`](tests/) – Unit, integration, and smoke tests
-- [`transforms/`](transforms/) – Python transforms for Infrahub
-- [`utils/`](utils/) – Commonly used helpers
+### 1. Install dependencies
 
-## Quickstart
+```bash
+uv sync --group dev
+```
 
-### Use GitHub Codespaces
-
-Deploy demo using Codespaces:
-[![Launch in GitHub Codespaces](https://img.shields.io/badge/Launch%20Infrahub%20Demo-0B6581?logo=github)](https://codespaces.new/t0m3kz/infrahub-demo?devcontainer_path=.devcontainer%2Fdevcontainer.json&ref=stable)
-
-### Setup environment variables
+### 2. Set the environment
 
 ```bash
 export INFRAHUB_ADDRESS="http://localhost:8000"
 export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
 ```
 
-### Install the Infrahub SDK
+The token is the default admin token of a local Infrahub demo stack. Do not use it outside a local environment.
 
-```bash
-uv sync
-```
-
-### Quick Setup (Recommended)
-
-One command to setup everything:
+### 3. Start Infrahub and load the base data
 
 ```bash
 uv run invoke setup
 ```
 
-This starts containers, loads schemas, menu, and bootstrap data. Then explore at <http://localhost:8000>
+This starts the containers, loads the schemas, the menu and the bootstrap data. The UI is available at
+<http://localhost:8000>.
 
-### Manual Setup (Alternative)
-
-Load schemas
-
-```bash
-uv run invoke load-schema
-```
-
-Load menu
+The same steps can be run individually:
 
 ```bash
-uv run invoke load-menu
+uv run invoke start          # start the Infrahub containers
+uv run invoke load-schema    # schemas/base and schemas/extensions
+uv run invoke load-menu      # navigation menu
+uv run invoke load-objects   # data/bootstrap
 ```
 
-Load demo data
+### 4. Register the repository
 
 ```bash
-uv run invoke load-objects
+uv run invoke register-repo --ref <branch>
 ```
 
-Register repository and load event actions
+This registers the repository with Infrahub (generators, transforms, checks and queries from `.infrahub.yml`) and
+loads the event rules in `data/events/`. Without it, loading a scenario creates objects but no generator runs.
+
+## Scenarios
+
+Each scenario lives in [`data/demos/`](data/demos/) and has its own README with the architecture, the load steps
+and what to verify.
+
+### Data center fabrics
+
+Each DC scenario loads one complete fabric. Generators build the pods, racks, devices, cabling, addressing and
+routing from the design.
+
+| Scenario | Location | Platform | DC design | Routing | Pods (design) | Naming | Demonstrates |
+| -------- | -------- | -------- | --------- | ------- | ------------- | ------ | ------------ |
+| [DC1](data/demos/01_data_center/dc1/) | Munich | Cisco Nexus 9K | `L` | `ebgp-ebgp` | 2 (`S_MIDDLE`) | standard | Reference 3-tier Clos: leaf, spine, super-spine, DC border-leafs with a firewall and load-balancer pair |
+| [DC2](data/demos/01_data_center/dc2/) | Paris | Arista EOS | `M` | `ebgp-ebgp` | 4 (`S_MIDDLE`) | hierarchical | No super-spine tier (pod spines meshed back-to-back) while keeping a DC border-leaf tier |
+| [DC3](data/demos/01_data_center/dc3/) | London | Cisco, Arista, Dell, Edgecore | `L` | `ebgp-ebgp` | 4 (`M_MIDDLE`) | flat | DC1 pattern at large scale, one vendor per pod under a Dell super-spine and border-leaf tier |
+| [DC4](data/demos/01_data_center/dc4/) | Berlin | Arista EOS | `XL` | `ebgp-ebgp` | 3 (`S_MIDDLE`, `S_MIXED`, `S_TOR`) | hierarchical | Hyper-spine tier above the super-spines; all three pod deployment types in one DC |
+| [DC5](data/demos/01_data_center/dc5/) | New York | Cisco, Arista, Dell, Edgecore | `L` | `ebgp-ebgp` | 4 (`S_MIDDLE`) | flat | Pod-level vendor diversity in one eBGP fabric with Cisco super-spines |
+| [DC6](data/demos/01_data_center/dc6/) | Katowice | Cisco, Arista, Dell SONiC, Edgecore SONiC | `L` | `ebgp-ibgp` | 3 (`M_MIDDLE`, `S_TOR`, `M_MIXED`) | standard | Mixed vendors within pods, eBGP underlay with iBGP overlay (super-spines as route reflectors); base for the expansion scenarios |
+| [DC7](data/demos/01_data_center/dc7/) | Amsterdam | Arista EOS | `S` | `ebgp-ebgp` | 2 (`S_BORDER_SPINE_POD`) | hierarchical | Micro-fabric: spine and border-leaf collapsed into a border-spine, no super-spine or DC border-leaf tier, a firewall and load-balancer pair per pod |
+
+The designs, deployment types, port allocation and naming conventions are explained in
+[IMPLEMENTATION.md](IMPLEMENTATION.md).
+
+### Incremental changes
+
+These scenarios change an existing fabric and show that the generators extend it without rebuilding it. The DC6
+scenarios need DC6 loaded first.
+
+| Scenario | Base | Change | Demonstrates |
+| -------- | ---- | ------ | ------------ |
+| [02_switch_dc6](data/demos/02_switch_dc6/) | DC6, Pod 1 | Rack `ktw-1-s-1-r-2-5` grows from 2 to 4 Dell L2 leafs | The rack generator re-runs on a `fabric_templates` change and adds only the new switches |
+| [03_rack_dc6](data/demos/03_rack_dc6/) | DC6, Pod 1 | New network rack `ktw-1-s-1-r-4-5`: 2 leafs to the pod spines, 2 L2 leafs as a back-to-back MLAG | Adding one rack: cabling, MLAG and underlay ASN allocation |
+| [04_pod_dc6](data/demos/04_pod_dc6/) | DC6 | New POD-4 (`M_MIDDLE`, Cisco NX-OS, vPC) in a new suite, with 2 network racks | The `add_pod` generator: new spines cabled to the existing super-spines, idempotent on re-run |
+| [05_llm_time](data/demos/05_llm_time/) | DC1, Pod 1 | Spine count raised from 2 to 4 | Spine scale-out through a pod parameter change (described only; no data files) |
+
+### Tenants, servers and applications (on DC6)
+
+Load these in order on a branch where DC6 is already deployed.
+
+| Scenario | Content | Demonstrates |
+| -------- | ------- | ------------ |
+| [06_servers](data/demos/06_servers/) | Server device type, compute racks and servers for DC6 pods 1 to 3, with bonded 25G interfaces | Endpoint cabling: servers are attached to the leaf or ToR pair of their row by the endpoint generator |
+| [07_customers](data/demos/07_customers/) | Customers C001 (Nordix Ltd.), C002 (SwiftGo GmbH), C003 (Vaultex Inc.) and their DC6 footprints per environment | Customer boarding: footprint, service tier and customer address pools |
+| [08_segments](data/demos/08_segments/) | VXLAN segments of the three customers, per environment and security zone | Segment generation: VNI, VLAN rows per switch, anycast gateway, VRF instances |
+| [13_applications](data/demos/13_applications/) | Applications `storefront`, `checkout`, `dispatch-hub` and `custody-ledger`, their components, dependencies and a shared SASE egress proxy | Application-driven policy: firewall rules, ACLs and load-balancer VIPs derived from the declared dependencies |
+
+### Colocation, cloud and SaaS
+
+| Scenario | Content | Demonstrates |
+| -------- | ------- | ------------ |
+| [10_colocation](data/demos/10_colocation/) | Colocation points of presence at Equinix, Megaport and CoreSite in Europe and the United States | Colocation metros, zones and cage devices; loads on its own without data centers |
+| [11_cloud](data/demos/11_cloud/) | AWS `eu-central-1`, Azure `westeurope` and GCP `europe-west4` with their availability zones | Cloud regions and zones as topology locations |
+| [12_saas](data/demos/12_saas/) | Zscaler points of presence, a cloud security policy and the SaaS regions | SaaS security service modelled as topology, with explicit rule destinations |
+
+### Complete topologies
+
+| Scenario | Content | Demonstrates |
+| -------- | ------- | ------------ |
+| [00_full_topology](data/demos/00_full_topology/) | Hand-written sample: DCs Katowice, Warsaw and Gdansk, a Paris colocation cage, clouds, SaaS, an office with SD-WAN, and the internet | The complete data model end to end, with no generator involved; loaded by the fast integration test on its own branch |
+| [30_all](data/demos/30_all/) | Three DC fabrics, colocation cages from three operators, three clouds, a SaaS edge, five offices, sixteen customers' footprints, nine applications and the interconnects between them | Every generator together on one branch; must be loaded stage by stage (`uv run invoke load-all-demo`) |
+
+## Loading a Scenario
+
+Load scenarios on a branch, never directly on `main`:
 
 ```bash
-uv run invoke register-repo
+uv run infrahubctl branch create my-branch
+uv run infrahubctl object load data/demos/01_data_center/dc6/ --branch my-branch
 ```
 
-### Deploy Data Center Scenarios
+The generators start automatically when the loaded objects join their target groups (see
+[`data/events/`](data/events/)). Follow progress in the Infrahub UI under Tasks; open a Proposed Change from the
+branch to see the diff, the artifacts and the check results.
 
-**6 strategic scenarios** demonstrating vendor platforms, naming strategies, multi-vendor architectures.
+`30_all` references objects that generators create from earlier stages, so it has its own loader that waits for the
+generators between stages:
 
-#### Single-Vendor Deployments (DC1-DC4)
-
-| Scenario | Location | Vendor | Deployment | Description |
-| ---------- | ---------- | -------- | ------------ | ------------- |
-| **[DC1](data/demos/01_data_center/dc1/)** | Munich 🇩🇪 | Cisco | All (MR+Mixed+ToR) | Hierarchy Overkill: All the racks, all the drama. |
-| **[DC2](data/demos/01_data_center/dc2/)** | Paris 🇫🇷 | Arista | Middle Rack | Croissants & Cheap Packets: Small, efficient, and CFO-approved. |
-| **[DC3](data/demos/01_data_center/dc3/)** | London 🇬🇧 | Dell/SONiC | Flat ToR | Brexit, No Middle Management, Maximum Sass. |
-| **[DC4](data/demos/01_data_center/dc4/)** | Berlin 🇩🇪 | Edgecore/SONiC | Mixed + ToR | Maximum Chaos, Minimum Rules. |
-
-#### Multi-Vendor Deployments (DC5-DC6)
-
-| Scenario | Location | Architecture | Description |
-| ---------- | ---------- | ------------- | ------------- |
-| **[DC5](data/demos/01_data_center/dc5/)** | New York 🇺🇸 | Different vendor per pod | Eurovision for Switches: 4 pods, 4 vendors, 0 peace. |
-| **[DC6](data/demos/01_data_center/dc6/)** | Katowice 🇵🇱 | Mixed vendors within pods | Silesian Buffet, Vendor Bingo, Debug & Dine. |
-
-#### Expansion & Incremental Deployment Scenarios
-
-Explore LLM upgrades and organic growth patterns—all in one place. The switch, rack and pod demos grow DC6, so
-make sure DC6 is already deployed; llm time works on DC1:
-
-| Scenario | Location | Type/Architecture | Description |
-| ---------- | ---------- | ------------------- | ------------- |
-| **[switch](data/demos/02_switch_dc6/)** | Katowice 🇵🇱 | Rack Expansion | "Just TWO more switches"—organic chaos. |
-| **[rack](data/demos/03_rack_dc6/)** | Katowice 🇵🇱 | Leaf + Access-Leaf Rack | Minimalist rack: started as a test, now it's critical. |
-| **[pod](data/demos/04_pod_dc6/)** | Katowice 🇵🇱 | Pod Expansion | Pod 4: because 3 wasn't enough. |
-| **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
-
-#### Everything at Once
-
-**[30_all](data/demos/30_all/)** loads every fabric, colocation, cloud, office, customer and application into
-one branch. It has to be loaded stage by stage, so use `uv run invoke load-all-demo`, which loads the stages in
-order and waits for the generators in between. The demo README explains why and how to do it by hand.
-
-Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
-
-## Change requests
-
-A Proposed Change can carry a ServiceNow-style **change request**: its description, risk, rollout, backout and test
-plans are derived from the change's own diff by the `add_change_request` generator, the `validate_change_request` check
-gates the merge on it, and `change_request_servicenow` renders it as a ServiceNow payload. It is opt-in. See
-[docs/change_requests.md](docs/change_requests.md). The change advisory board still meets, but most of its
-paperwork now writes itself from the diff instead of from someone's optimism at 4:55pm on a Friday.
-
-## CI/CD
-
-This project uses GitHub Actions for continuous integration. All pushes and pull requests are tested for lint, type checks, and unit tests.
-A robot notices a broken commit long before a customer does, and it never asks for a meeting about it.
-
-## Security & Secrets
-
-- Do not commit real API tokens. Use `.env` or GitHub secrets for sensitive data in production.
-- Example tokens in this README are for demo purposes only (they open a local demo stack, not the procurement vault).
-
-## Troubleshooting
-
-- If you encounter port conflicts, ensure no other service is running on port 8000
-  (usually a stack you forgot you started last Tuesday).
-- For dependency issues, run `uv sync` again.
-- For Docker/infrahub issues, ensure Docker is running and you have the correct permissions.
-- **macOS + Colima + integration tests**: Colima often does not share the system temp folder (e.g. `/var/folders/...`) into the VM.
-Some integration tests start Docker Compose stacks from a pytest temp directory, and missing file sharing can break bind mounts (notably `haproxy.cfg`), causing the stack to fail with `Failed to start docker compose`.
-Use a repo-local pytest temp directory via `--basetemp` (see Testing below).
+```bash
+uv run invoke load-all-demo                         # branch all-demo-scenario
+uv run invoke load-all-demo --from-stage applications  # resume after a failed stage
+```
 
 ## Testing
 
-Run all tests using (before the Friday deploy, not after it):
-
 ```bash
-uv run inv validate
+uv run invoke validate              # pre-commit hooks, smoke and unit tests with coverage
+uv run invoke test-unit             # unit tests only
+uv run invoke test-integration-fast # setup, repository sync and the 00_full_topology sample (Docker)
 ```
 
-Or run specific test scripts in the [`tests/`](tests/) directory.
+Integration profiles, the choice of profile for a given change, and macOS notes are described in
+[CONTRIBUTING.md](CONTRIBUTING.md#testing) and [tests/integration/README.md](tests/integration/README.md).
 
-### macOS + Colima
+## Troubleshooting
 
-If you run Docker via Colima, prefer a repo-local pytest temp directory so Docker bind mounts always come from a shared path:
+- **Port conflict:** make sure no other service uses port 8000 (the test stack uses 8100).
+- **Dependency errors:** run `uv sync --group dev` again.
+- **Containers do not start:** check that Docker is running and that your user may access it.
+- **No generator runs after a load:** the repository is not registered, or the event rules are not loaded; run
+  `uv run invoke register-repo`.
+- **macOS with Colima:** Colima does not share the system temporary folder (`/var/folders/...`) with the VM, so
+  integration stacks started from a pytest temporary directory fail with `Failed to start docker compose`. The invoke
+  test tasks already use a repository-local `--basetemp`. Alternatively, start Colima with the folder mounted:
 
-```bash
-uv run invoke test-unit
-uv run invoke test-integration
-```
+  ```bash
+  colima stop
+  colima start --mount type=virtiofs,source=/var/folders,destination=/var/folders
+  ```
 
-These tasks run pytest with `--basetemp .pytest-tmp`.
+## Further Documentation
 
-### Integration Test Profiles
-
-The integration suite shares one Docker stack per pytest invocation. Running several scenarios in one command is therefore much cheaper than starting a fresh small universe for every file.
-
-Use the focused profiles when you want useful feedback before the full topology marathon:
-
-```bash
-# Setup and repository prerequisites only
-uv run invoke test-integration-fast
-
-# The 30_all demo end to end: staged load, app catalogue, compute,
-# interconnects, zone policies
-uv run invoke test-integration-all-demo
-
-# Automatic DC/POD/rack trigger and routing regression
-uv run invoke test-integration-routing
-
-# Everything, including the full DC matrix
-uv run invoke test-integration
-```
-
-All profiles load the shared setup and repository prerequisites first. `all-demo` then builds one branch holding the whole `30_all` data set and asserts against it: that the staged load converged, that Infrahub dispatched every generator the trigger rules promise, that each fabric, its host cabling and the application graph came out as declared, that the circuit layer reaches both clouds, and that the colocation zone policies pass the firewall check and render. The full profile is deliberately heavier still: it exercises the long-running DC lifecycle and all dependent workflows. It is excellent at finding trouble and less excellent at respecting your afternoon.
-
-Integration task waits now fail with the active branch task titles and states when the queue does not settle within the timeout. That is intentional: a later assertion against half-generated infrastructure is rarely the thrilling plot twist anyone requested.
-
-Alternative (manual):
-
-```bash
-INFRAHUB_TESTING_ENABLE_INTEGRATION=1 uv run pytest -vv tests/integration --basetemp .pytest-tmp
-```
-
-If you want a VM-wide fix instead, start Colima with `/var/folders` mounted (heavier/less portable):
-
-```bash
-colima stop
-colima start --mount type=virtiofs,source=/var/folders,destination=/var/folders
-```
-
-## 🙏 A Note from a Highly Fallible Carbon-Based Life Form
-
-> Look, I'm just a human who occasionally writes code between coffee breaks and existential crises.
-> If something explodes, catches fire, or simply refuses to work as advertised — like that one switch
-> that's been "temporarily" in your rack since 2019 — please
-> [open an issue](https://github.com/t0m3kz/infrahub-demo/issues).
-> I promise to investigate with the same determination I use to debug production on a Friday afternoon.
-> Your feedback is invaluable, unlike my initial variable naming choices!
-
-## ⚠️ A Word About the Jokes
-
-All sarcastic remarks, vendor opinions, city stereotypes, procurement committee jokes,
-AI commentary, and observations about cloud billing scattered throughout this project
-and its demo READMEs are drawn entirely from personal experience surviving real enterprise
-infrastructure projects over many years.
-
-They are meant to be funny. They are absolutely not meant to insult anyone —
-vendors, cities, ISPs, hypervisor platforms, cloud providers, users, managers,
-consultants, or the three people who still believe the monolithic controller was a good idea.
-
-If you recognise your organisation, your network, your Friday-afternoon architecture decision,
-or your specific brand of procurement committee in any of this: welcome.
-You are among friends. We have all been there.
-
-Enterprise infrastructure is a universal human experience that transcends company, country,
-and technology stack. The chaos is the same everywhere. The YAML just has different names.
-
-> *"Any sufficiently complex infrastructure is indistinguishable from something a junior engineer
-> built at 2am before a product launch. The difference is only detectable in the git log."*
-> — Not a real quote, but truer than most real ones
-
-## Contributing
-
-Contributions, questions, and feedback are welcome! Please use [GitHub Discussions][github-discussions-link].
-
-## References
-
-- [Infrahub Documentation](https://docs.infrahub.app)
-- [Project Discussions](https://github.com/t0m3kz/infrahub-demo/discussions/)
+| Document | Content |
+| -------- | ------- |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow, quality checks, tests, commits and releases |
+| [IMPLEMENTATION.md](IMPLEMENTATION.md) | Fabric designs, pod deployment types, port allocation, naming and cabling |
+| [AGENTS.md](AGENTS.md) | Data model rules and conventions in full (also the guidance for AI coding assistants) |
+| [tests/integration/README.md](tests/integration/README.md) | Integration test suite |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+| [Infrahub documentation](https://docs.infrahub.app) | Infrahub and its Python SDK |
 
 ## License
 
-This project is licensed under the MIT License.
-
-[ruff-badge]:
-<https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json>
-[ruff-link]:
-(<https://github.com/astral-sh/ruff>)
-[github-discussions-link]:
-<https://github.com/t0m3kz/infrahub-demo/discussions/>
-[github-discussions-badge]:
-<https://img.shields.io/static/v1?label=Discussions&message=Ask&color=blue&logo=github>
-[github-badge]:
-<https://github.com/t0m3kz/infrahub-demo/actions/workflows/main.yml/badge.svg>
-[github-link]:
-<https://github.com/t0m3kz/infrahub-demo/actions/workflows/main.yml>
-[coverage-badge]:
-<https://img.shields.io/codecov/c/github/t0m3kz/infrahub-demo?label=coverage>
-[coverage-link]:
-<https://codecov.io/gh/t0m3kz/infrahub-demo>
-[python-badge]:
-<https://img.shields.io/badge/python-3.11%7C3.12%7C3.13%7C3.14-000000?logo=python>
-[python-link]:
-<https://www.python.org>
-[release-badge]:
-<https://img.shields.io/github/v/release/t0m3kz/infrahub-demo>
-[release-link]:
-<https://github.com/t0m3kz/infrahub-demo/releases/latest>
-[license-badge]:
-<https://img.shields.io/github/license/t0m3kz/infrahub-demo>
-[license-link]:
-<https://github.com/t0m3kz/infrahub-demo/blob/main/LICENSE>
-[contributors-badge]:
-<https://img.shields.io/github/contributors/t0m3kz/infrahub-demo>
-[contributors-link]:
-<https://github.com/t0m3kz/infrahub-demo/graphs/contributors>
+Licensed under the Apache License 2.0. See [LICENSE](LICENSE).

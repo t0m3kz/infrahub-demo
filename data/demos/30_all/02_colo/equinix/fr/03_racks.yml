@@ -1,9 +1,5 @@
 ---
-# Frankfurt Equinix racks: FR2 and FR6
-#
-# topologies_rack membership is not about DC fabrics: it is what keeps the
-# created-rack trigger from failing on a colocation rack — see
-# ../../coresite/03_racks.yml for the full why.
+# Racks of the Frankfurt cages FR2 and FR6.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

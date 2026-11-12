@@ -1,0 +1,16 @@
+---
+# SD-WAN orchestrator managing the gateway and every office edge.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerVirtual
+  data:
+    - name: "EQX-FR2-SDWAN-VCO1"
+      object_template: VCO-VA_ORCHESTRATOR
+      owner: "P028"
+      description: "Shared SD-WAN orchestrator managing the FR2 gateway and every office edge"
+      deployment: "FR2"
+      member_of_groups:
+        - sdwan_orchestrators
+      managed_devices:
+        - "EQX-FR2-SDWAN-GW1"

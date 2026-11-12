@@ -1,0 +1,10 @@
+---
+# Engineering group reaching the checkout frontend through an access profile.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityIdentityGroup
+  data:
+    - name: c001-engineering
+      description: "C001 engineering users"
+      source: manual

@@ -1,0 +1,14 @@
+---
+# IPv6 prefixes of the EVPN Multi-Site VIPs (09_multisite_vips.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "fd00:2500::/48"
+      description: "DC <-> colocation DCI (Multi-Site VIPs)"
+      status: active
+    - prefix: "fd00:2500:ff::/64"
+      description: "EVPN Multi-Site border-gateway VIPs, one /128 per site"
+      status: active
+      role: loopback
