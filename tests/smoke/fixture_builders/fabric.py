@@ -589,7 +589,7 @@ DEVICE_CONFIGS: list[tuple[type, str, str, list[str]]] = [
     (ToR, "tor", "tor", FABRIC_PLATFORMS),
     (L2Leaf, "l2-leaf", "l2_leaf", L2_LEAF_PLATFORMS),
     (AccessLeaf, "access-leaf", "access_leaf", FABRIC_PLATFORMS),
-    (Edge, "edge", "edge", ["cisco_nxos", "cisco_ios"]),
+    (Edge, "edge", "edge", ["cisco_nxos", "cisco_ios", "linux"]),
 ]
 
 

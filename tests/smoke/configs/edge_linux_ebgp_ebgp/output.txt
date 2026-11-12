@@ -1,0 +1,57 @@
+frr version 8
+frr defaults datacenter
+!
+! dc1-edge-01 Configuration
+!
+hostname dc1-edge-01
+service integrated-vtysh-config
+!
+! Interfaces (U)
+interface Ethernet1
+ description to spine-01
+ ip address 10.1.0.1/31
+exit
+!
+interface Ethernet2
+ description to spine-02
+ ip address 10.1.0.3/31
+exit
+!
+interface Loopback0
+ description Router ID
+ ip address 10.0.0.1/32
+exit
+!
+! BGP Configuration (U)
+!
+route-map RM-CONN-2-BGP permit 10
+ match interface lo
+exit
+!
+router bgp 65001
+ bgp router-id 10.0.0.1
+ maximum-paths 4
+ neighbor 10.1.0.0 remote-as 65100
+ neighbor 10.1.0.0 description spine-01
+ neighbor 10.1.0.0 bfd
+ neighbor 10.1.0.2 remote-as 65101
+ neighbor 10.1.0.2 description spine-02
+ neighbor 10.1.0.2 bfd
+ neighbor 10.0.0.100 remote-as 65100
+ neighbor 10.0.0.100 description spine-01
+ neighbor 10.0.0.100 ebgp-multihop 2
+ neighbor 10.0.0.100 bfd
+ neighbor 10.0.0.101 remote-as 65101
+ neighbor 10.0.0.101 description spine-02
+ neighbor 10.0.0.101 ebgp-multihop 2
+ neighbor 10.0.0.101 bfd
+ !
+ address-family ipv4 unicast
+  redistribute connected route-map RM-CONN-2-BGP
+  neighbor 10.1.0.0 activate
+  neighbor 10.1.0.2 activate
+ exit-address-family
+exit
+!
+line vty
+!
