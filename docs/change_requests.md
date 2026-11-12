@@ -1,5 +1,7 @@
 # Change requests
 
+*Paperwork for the change advisory board, written by the one participant who actually read the diff.*
+
 A **change request** (`ChangeRequest`) is the ServiceNow-style record of one Proposed Change. It describes the change
 in the terms a change advisory board reads: what changes, how risky it is, how it is rolled out and rolled back, how it
 is tested, and who is notified. Almost all of it is derived from the Proposed Change itself, so the record cannot
@@ -19,11 +21,13 @@ merges into `main` with the change as its history. Create it on that branch:
 | `member of groups` | `change_requests` |
 | `justification` | why the change is needed (yours to write) |
 
-Joining the `change_requests` group starts the `add_change_request` generator, which fills in everything else.
+Joining the `change_requests` group starts the `add_change_request` generator, which fills in everything else
+(the "why" stays yours: no generator has yet been brave enough to invent a business justification).
 
 Run it again (**Run generator** on `add_change_request`, on the source branch) once the PC's pipeline has built the
 artifacts, and after every push to the branch. A change request derived before the artifacts exist lists no devices,
-and the gate warns that it is stale (CR5 below).
+and the gate warns that it is stale (CR5 below). Like a CAB slide written before the design, it is confident and
+empty.
 
 ## What is filled in
 
@@ -33,7 +37,8 @@ The generator reads only what the Proposed Change holds, plus the role, pair and
   and applications;
 - the PC's **artifact diff**: every device configuration with its old and new checksum.
 
-The text fields are rendered from the templates in `templates/change/`.
+The text fields are rendered from the templates in `templates/change/`, so nobody types "low risk, tested in lab"
+from memory ever again.
 
 | Field | Derived from |
 | --- | --- |
@@ -56,6 +61,8 @@ The generator never writes the fields that belong to people:
 - `external_id`, the ticket number in ServiceNow;
 - `requested_by`.
 
+Somebody still has to sign it, after all.
+
 ## The gate
 
 The check `validate_change_request` runs in the PC's pipeline. It judges a Proposed Change only when it has a change
@@ -69,7 +76,8 @@ request:
 | CR4 | error | `risk_override` is lower than the derived risk without a `risk_override_reason` |
 | CR5 | warning | the change request was derived from another artifact diff than the current one: run `add_change_request` again |
 
-A failing check refuses the merge, the same way any other check does.
+A failing check refuses the merge, the same way any other check does. Escalating to a vice president does not change
+its mind.
 
 ## ServiceNow
 
@@ -81,10 +89,11 @@ curl -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" \
   "$INFRAHUB_ADDRESS/api/transform/python/change_request_servicenow?branch=<source branch>&name=CHG-<pc name>"
 ```
 
-The transform is not an artifact: it is rendered on demand, so it always reflects the change request as it is.
+The transform is not an artifact: it is rendered on demand, so it always reflects the change request as it is,
+which is more than most tickets can say six months in.
 
 ## What is not automated
 
 Nothing in the repository re-runs `add_change_request` when a PC's pipeline finishes, raises the ServiceNow ticket,
 or deploys the change. A change service listening to Infrahub's events does that. Without one, re-run the generator
-by hand after the pipeline.
+by hand after the pipeline: the classic enterprise integration of a person and a calendar reminder.

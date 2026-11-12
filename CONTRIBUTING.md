@@ -1,5 +1,7 @@
 # Contributing
 
+*How to get a change into `main` without it starring in next week's post-mortem.*
+
 ## Prerequisites
 
 - Python 3.11 – 3.14
@@ -22,6 +24,8 @@ uv sync
 | `chore/` | Maintenance, deps, tooling |
 | `docs/` | Documentation only |
 | `refactor/` | Code restructuring |
+
+Pick the honest prefix: a `chore/` that changes behaviour is a `feat/` wearing a fake moustache.
 
 ### Commit Messages
 
@@ -49,7 +53,8 @@ enforced by `commitizen`. Every commit must follow this format:
 | `feat!` / `BREAKING CHANGE:` footer | Breaking change | major |
 
 **Scope** (optional) narrows the area: `schema`, `generator`, `template`,
-`check`, `transform`, `data`, `ci`, `deps`.
+`check`, `transform`, `data`, `ci`, `deps`. A commit called `final-final-v2` does not get past `commitizen`,
+however late it is.
 
 Examples:
 
@@ -62,7 +67,7 @@ feat(generator)!: rename add_pod generator parameters
 
 ### Pre-commit hooks
 
-Hooks run automatically on commit. To run manually:
+Hooks run automatically on commit (the colleague who reads your diff before you do). To run manually:
 
 ```bash
 uv run prek run --all-files
@@ -81,7 +86,7 @@ uv run pytest tests/integration -v
 ## Pull Requests
 
 - Target `main`
-- Keep PRs focused — one concern per PR
+- Keep PRs focused — one concern per PR (a 4,000-line PR titled "small cleanup" is reviewed by nobody)
 - Ensure all CI checks pass before requesting review
 - Squash merge is preferred to keep `main` history clean
 
@@ -92,7 +97,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 ### Normal PRs — no version bump
 
 Bug fixes, features, and dependabot updates are merged without touching the
-version. Just write proper conventional commits and merge.
+version. Just write proper conventional commits and merge. No change advisory board, no version committee.
 
 ### Release PR — when you want to ship
 
@@ -116,3 +121,4 @@ in sync with the `pyproject.toml` version because `invoke release` creates both
 from the same `cz bump` run.
 
 **Never edit `pyproject.toml` version by hand** — always use `invoke release`.
+A hand-edited version is how a tag and a package end up disagreeing in public.

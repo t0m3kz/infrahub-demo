@@ -1,5 +1,7 @@
 # 30_all: The Everything Demo
 
+Everything, everywhere, all on one branch. Bring snacks.
+
 Every other demo shows one piece. This one loads all of them into one branch (subtle, it is not): three DC fabrics, colocation
 cages from three operators, three clouds, a SaaS edge, five offices, sixteen customers' footprints, nine
 applications, and the interconnect layer that ties them together.
@@ -78,6 +80,7 @@ All IPAM objects use the built-in `default` namespace. Routing belongs to the bo
 (`PROD`, `NONPROD`, `INTERNET`, `MANAGEMENT`), realized per deployment as a `ManagedVRF`, rather than to
 an IPAM namespace. Circuits, routed interfaces and standalone cloud/office prefix registrations retain their
 explicit routing zones; segment-owned prefixes use their segment's zone.
+(A VRF here is a security zone with a job, not an IPAM namespace with ambitions.)
 
 Load this scenario separately from `00_full_topology`: both author `198.18.0.0/24`, for the Acme partner in
 PROD here and for the public blob endpoint in INTERNET there. Neither CIDR is renumbered to make the scenarios coexist.
@@ -183,6 +186,7 @@ parent interface of a sub-interface.
 
 Related routed objects are split into one-kind files with the same basename and an ordered suffix; loading the
 directory still applies prefixes, interfaces, circuits and sessions in their original dependency order.
+Tidier for the reader, longer for `ls`; a trade every data folder eventually makes.
 
 `add_virtual_circuit` builds the sessions of the `dci`, `handoff` and `vpn` session circuits; `add_circuit` only places the
 carrier circuits and fans out to it when a carrier changes. The only role that is an output is the peering's
@@ -248,7 +252,7 @@ three transports and three provider connects (`02_cloud_provider_edges.yml`):
 
 The two AWS legs are two transports: they are different kinds of connection that share no LAG. The dedicated Direct
 Connect is a cable inside the FR2 cage, the others are `virtual_connection` carriers that list the cage and place the
-region by the `location` of the provider connect (`add_circuit`).
+region by the `location` of the provider connect (`add_circuit`). One cloud, two ways in, two sets of paperwork.
 
 C001's PROD connection to AWS is the one leg authored end to end, so the edge policy can be derived from the cloud model:
 `HANDOFF-FR2-AWS-EUC1-PROD` joins `eg-fr201` `Ethernet1/13.1000` (address `10.255.143.254/31`, the last link of
@@ -273,7 +277,8 @@ THE INTERNET itself (`INTERNET` and its one interface `bus`) is bootstrap data (
 rule I3 (`checks/circuit_placement.py`) applies here: every ISP router that serves internet access has an uplink carrier
 to `INTERNET:bus`. `08_interconnects/06_internet_uplinks` declares them for the four provider edges (`xe-0/1/0`) and
 Orange's access PE (`et-0/0/0`), unowned, with only the ISP listed (`add_circuit` derives INTERNET). The partner's
-router `EXT-ACME-EDGE1` needs none: it buys access from Cogent, whose router is attached.
+router `EXT-ACME-EDGE1` needs none: it buys access from Cogent, whose router is attached (somebody else's uplink,
+somebody else's problem).
 
 The shared SD-WAN gateway `EQX-FR2-SDWAN-GW1` (template `VCG-VA_GATEWAY`) has two physical ports: `eth0`, role
 `uplink`, cabled to the cage router (`Ethernet1/12`) and carrying the PROD handoff sub-interface `eth0.1900`, and

@@ -1,5 +1,7 @@
 # 32_arista_mssg: An Arista EOS Reference Fabric With Segment Security (MSS-G)
 
+One vendor, one release, one very exclusive guest list, and not a single switch that has actually seen it.
+
 One fabric, DC14, built only from Arista 7280R3 switches on EOS 4.36.2F: the one platform, device type and release
 the `reference-arista-eos` group-policy profile row accepts (a very exclusive guest list, and yes, the bouncer checks the version). A tenant with three VXLAN segments and a hand-written
 contract runs on it, and the leaf, access-leaf and border-leaf configs carry EOS **Segment Security (MSS-G,

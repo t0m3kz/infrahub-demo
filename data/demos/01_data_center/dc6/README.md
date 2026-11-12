@@ -1,5 +1,7 @@
 # DC6 - Mixed Vendors: Silesian Buffet, Vendor Bingo, Debug & Dine
 
+One kitchen, four vendors, and a second helping of support contracts nobody ordered.
+
 ## Overview
 
 **Location:** Katowice 🇵🇱 (Poland's and Silesian industrial powerhouse turned tech hub, where the only thing faster than the fiber is the coffee. Half the cost of Western Europe, double the sarcasm, and the rolada-modro-kapusta-gumiklyjzy-to-latency ratio is unbeatable, as the committee of one that measured it will confirm.)

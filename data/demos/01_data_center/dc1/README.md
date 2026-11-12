@@ -1,5 +1,7 @@
 # DC1 - The Textbook: Classic 3-Tier, Small Size
 
+The fabric your auditor dreams about, and the one your architect calls "a bit boring" in every meeting.
+
 ## Overview
 
 **Location:** Munich 🇩🇪 (home to Oktoberfest and BMW, where beer gardens meet precision engineering and nobody is allowed to be late)

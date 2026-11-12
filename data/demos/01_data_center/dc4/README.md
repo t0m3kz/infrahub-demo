@@ -1,5 +1,7 @@
 # DC4 - Extra Large: When Super-Spine Isn't Enough
 
+"Super" was already taken, so the fabric reached for "hyper", as one does in Berlin after midnight.
+
 ## Overview
 
 **Location:** Berlin 🇩🇪 (the hipster capital: your infrastructure is as edgy as the local techno scene, and it also only starts working after midnight)

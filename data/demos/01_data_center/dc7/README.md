@@ -1,5 +1,7 @@
 # DC7 - Micro-Fabric: One Device, No Excuses
 
+Two jobs, one box, and a bike parked outside the rack.
+
 ## Overview
 
 **Location:** Amsterdam 🇳🇱 (Canals, bikes, and a fabric small enough to fit in a houseboat, though we do not recommend testing that)

@@ -1,5 +1,7 @@
 # DC2 - Back-to-Back: No Super-Spine, Still Grown-Up
 
+Flat like a crêpe where it counts, layered like a mille-feuille where it matters.
+
 ## Overview
 
 **Location:** Paris 🇫🇷 (the City of Light, where your packets enjoy croissants, romantic latency and the occasional strike)

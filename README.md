@@ -59,6 +59,7 @@ This is application-driven infrastructure: the network exists to serve the appli
 - **Infrahub 1.5** (or higher) - See note below
 
 > **Version Compatibility Note**: This demo is designed for Infrahub 1.5. The data models and generators can be modified to work with previous versions of Infrahub if needed.
+> Who does the modifying is traditionally settled by whoever missed the upgrade planning meeting.
 
 ## Features
 
@@ -185,20 +186,23 @@ Brace yourself: even more questionable use cases, wild topologies, and vendor dr
 A Proposed Change can carry a ServiceNow-style **change request**: its description, risk, rollout, backout and test
 plans are derived from the change's own diff by the `add_change_request` generator, the `validate_change_request` check
 gates the merge on it, and `change_request_servicenow` renders it as a ServiceNow payload. It is opt-in. See
-[docs/change_requests.md](docs/change_requests.md).
+[docs/change_requests.md](docs/change_requests.md). The change advisory board still meets, but most of its
+paperwork now writes itself from the diff instead of from someone's optimism at 4:55pm on a Friday.
 
 ## CI/CD
 
 This project uses GitHub Actions for continuous integration. All pushes and pull requests are tested for lint, type checks, and unit tests.
+A robot notices a broken commit long before a customer does, and it never asks for a meeting about it.
 
 ## Security & Secrets
 
 - Do not commit real API tokens. Use `.env` or GitHub secrets for sensitive data in production.
-- Example tokens in this README are for demo purposes only.
+- Example tokens in this README are for demo purposes only (they open a local demo stack, not the procurement vault).
 
 ## Troubleshooting
 
-- If you encounter port conflicts, ensure no other service is running on port 8000.
+- If you encounter port conflicts, ensure no other service is running on port 8000
+  (usually a stack you forgot you started last Tuesday).
 - For dependency issues, run `uv sync` again.
 - For Docker/infrahub issues, ensure Docker is running and you have the correct permissions.
 - **macOS + Colima + integration tests**: Colima often does not share the system temp folder (e.g. `/var/folders/...`) into the VM.
@@ -207,7 +211,7 @@ Use a repo-local pytest temp directory via `--basetemp` (see Testing below).
 
 ## Testing
 
-Run all tests using:
+Run all tests using (before the Friday deploy, not after it):
 
 ```bash
 uv run inv validate

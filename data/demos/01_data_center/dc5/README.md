@@ -1,5 +1,7 @@
 # DC5 - Multi-Vendor: Four Vendors, One Fabric, Infinite Support Tickets
 
+Four vendors walk into a fabric. Their support hotlines are still arguing about who walked in first.
+
 ## Overview
 
 **Location:** New York 🇺🇸 (The city that never sleeps, and after a week of on-call, neither will you. Rack space is still cheaper

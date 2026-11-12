@@ -1,5 +1,7 @@
 # Test Scenario 4: Add New Pod to Existing Data Center
 
+Three pods were plenty, right up until the fourth one was approved.
+
 This scenario demonstrates adding a new pod (POD-4) to the existing DC6 data center, the networking equivalent of adding a room to a house without asking the neighbours.
 
 ## Purpose

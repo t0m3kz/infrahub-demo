@@ -1,5 +1,7 @@
 # 12 - Zscaler Secure Internet Breakout Demo
 
+Trust nobody, inspect everything, and let somebody else's POP do the worrying.
+
 A quick sample that models Zscaler POPs, underlay tunnels, web policies and where they sit in the topology via SaaS regions. Think of it as a polite way to send your traffic through somebody else's data center before it reaches the internet it was going to visit anyway.
 
 ## What it shows

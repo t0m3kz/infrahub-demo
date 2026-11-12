@@ -1,5 +1,7 @@
 # DC3 - Brexit, Large Scale, Every Vendor Invited
 
+Four vendors, four CLIs, one queue for the kettle.
+
 ## Overview
 
 **Location:** London 🇬🇧 | **Size:** Large | **Design:** `L` + `ebgp-ebgp` routing

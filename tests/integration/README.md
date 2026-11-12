@@ -1,10 +1,13 @@
 # Integration Tests
 
+*Where every generator proves it works before production gets the chance to prove otherwise.*
+
 This directory contains integration tests that validate the complete Infrahub workflow for datacenter infrastructure management.
 
 ## Test Structure
 
-The integration tests follow an **incremental scenario-based approach** that mirrors real-world operations:
+The integration tests follow an **incremental scenario-based approach** that mirrors real-world operations
+(minus the change advisory board and the coffee):
 
 ### Test Phases
 
@@ -43,7 +46,8 @@ Each scenario creates infrastructure incrementally and merges to main:
 
 Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
 later module depends on the previous one's merge. Every growth check is scoped to DC6 (devices reachable from
-the DC, its pods and their racks), and every pre-existing underlay switch must keep its ASN. Only DC6 has to be
+the DC, its pods and their racks), and every pre-existing underlay switch must keep its ASN
+(renumbering a fabric is not a growth strategy). Only DC6 has to be
 deployed for the chain, so `DC_DEPLOYMENT_TEST_DCS=dc6` cuts `test_10` down to that one DC (see
 [Run Specific Scenario](#run-specific-scenario)).
 
@@ -121,13 +125,16 @@ things bare `pytest` does not, and each one fails in a way that does not look li
 | `INFRAHUB_TESTING_ENABLE_INTEGRATION=1` | Every test is **silently skipped**. A run reporting `16 skipped` tested nothing, and exits 0. |
 | `--basetemp ~/.pytest-tmp/infrahub-demo` | On Docker Desktop the stack dies ~20s in, before collection. See below. |
 
+A green run that tested nothing is the most dangerous kind of green.
+
 **The basetemp trap.** `InfrahubDockerCompose.init()` writes `docker-compose.yml` and `haproxy.cfg` into pytest's
 basetemp, and the `infrahub-server-lb` service bind-mounts `./haproxy.cfg`. pytest's default basetemp is under
 `/private/var/folders/...`, which Docker Desktop does not share with its VM by default. Docker answers an
 unshareable bind source by creating an **empty directory** at the mount point, so HAProxy is handed a directory
 where its config should be, prints its usage text and exits 1 — and `up --wait` then aborts the whole stack with
 every other service healthy. The symptom is `Failed to start docker compose ... returned non-zero exit status 1`
-plus `infrahub-server-lb-1 exited (1)`, which reads like a port conflict and is not one. Confirm a path is
+plus `infrahub-server-lb-1 exited (1)`, which reads like a port conflict and is not one
+(many an afternoon has gone to it). Confirm a path is
 shareable with:
 
 ```bash
@@ -202,7 +209,8 @@ rules -> transform -> rendered EOS Segment Security (MSS-G) text*:
 Not covered: that EOS accepts or enforces any rendered line (custom policies, field-sets, application traffic
 recognition and the fallback policy are documented by Arista's AVD only), and a stored proposed-change artifact
 compared with the in-process render (the proposed-change helpers report artifact status, not content). The 7280R3 port
-plans of the scope's templates are approximate. See `data/demos/32_arista_mssg/README.md`.
+plans of the scope's templates are approximate. See `data/demos/32_arista_mssg/README.md`. Until a lab says
+otherwise, the rendered text is a very well-documented hope.
 
 ### Run Setup Only
 
@@ -221,7 +229,8 @@ uv run invoke test-integration-fast
 ```
 
 Its `test_03` loads the full-topology sample on main and walks it (L1/L3 traversal asserts); its repository sync (`test_02`) registers every query of `.infrahub.yml` against the live schema, so a field the schema
-rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there in minutes; the task worker log
+rejects (`Cannot query field`, `Unknown type`, a "Fields ... conflict") fails there in minutes,
+not tens of minutes into the full subset; the task worker log
 (`docker logs <project>-task-worker-1`) names the field. A query under `tests/` is not registered: the test that runs
 it is its check.
 
@@ -375,11 +384,13 @@ class TestScenarioName(TestInfrahubDockerWithClient):
 
 ### Branch Cleanup
 
-Failed tests automatically trigger branch cleanup via the `cleanup_on_failure` fixture.
+Failed tests automatically trigger branch cleanup via the `cleanup_on_failure` fixture, so no half-built branch
+lingers like a "temporary" rack switch.
 
 ### Timeout Adjustments
 
-Modify constants in `suite_constants.py`:
+Modify constants in `suite_constants.py` (a longer timeout fixes nothing; it lets a stuck queue fail at a more
+leisurely pace):
 
 ```python
 GENERATOR_TASK_TIMEOUT = 1800  # 30 minutes

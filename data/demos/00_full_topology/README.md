@@ -1,10 +1,13 @@
 # Full topology: sample data (DC, colocation, cloud, SaaS, office, internet)
 
+Every kind of place a packet can get lost, in one sample, typed out by hand.
+
 Load onto an isolated Infrahub branch with the repository schema and bootstrap already installed.
 The data is hand-written: no generator, transform or check runs automatically. It loads on the bootstrap data alone
 (it does not depend on `30_all`). Numbered roots provide the dependency order: `00_common/`, `10_topology/`,
 `20_C900/`, `21_C901/`, then `90_bindings/`. Ordinary recursive alphabetical `infrahubctl object load` is supported;
 `tests/traversal/load_topology.py` is the shared wrapper. There is no external ordering manifest.
+The folder names are the plan, so nobody has to remember a load sequence at 2am.
 
 ## Folder map
 
@@ -49,7 +52,8 @@ The numbered reorganization preserved the original objects; subsequent WAW servi
 changes protected by the current exact snapshot. Existing names/HFIDs remain. `21_C901/Office` is the Lisbon office,
 not a new C901 DC deployment.
 Late trunk upserts retain both the original routed segment and the firewall-terminated segment; moving an older
-one-segment tag after them would silently remove the firewall VLAN, so their relative order is tested explicitly.
+one-segment tag after them would silently remove the firewall VLAN, so their relative order is tested explicitly
+(alphabetical order, now load-bearing).
 The pod `DC-KTW1-9-POD-1` still holds the spine, leaves and servers; border leaves and edge remain at DC level.
 
 ### C900 Warsaw dedicated internal firewall: declarative service
@@ -57,6 +61,7 @@ The pod `DC-KTW1-9-POD-1` still holds the spine, leaves and servers; border leav
 `C900-P-DC-WAW1` requests `M_INTERNAL`: dedicated **internal** firewall appliances, not a dedicated load balancer.
 The network entitlement allows six segments, twelve 25G and four 100G host ports (the existing WAW workload uses
 three 100G ports). The physical chassis and their existing shared HA/context remain authored and are never deleted.
+Nobody throws away a firewall chassis; it just gets a second job.
 
 The standard bootstrap tiers (S, M, L and XL, in each of the data center, colocation and cloud template kinds) are
 unchanged; every footprint states one as its required `design`, the smallest that holds its segments, its host-facing ports
@@ -75,12 +80,13 @@ Check availability before loading onto another populated branch. Context VLAN ba
 shared context's 3000. The existing `PA-VM_EDGE_CUSTOMER_S` template matches WAW's PAN-OS chassis and DC design.
 `00_common/05_transit_reservations` gives each previously bare legacy transit leg an explicit /29 prefix.
 The prefix allocator reserves prefix objects, not bare interface addresses: without these definitions a new context
-could reuse an existing shared pair's addresses and incorrectly claim them as generated outputs.
+could reuse an existing shared pair's addresses and incorrectly claim them as generated outputs (two firewalls
+quarrelling over one /29 is a ticket nobody wants to own).
 
 Ordinary YAML loading alone creates `c900-waw1-fw-01-prod` and `c900-waw1-fw-02-prod`, each hosted on its corresponding
 physical firewall, plus their HA, dedicated context, complete transit legs and required environment VRF associations.
 These are authored demo objects matching the verified production model, not a new generator or loader hook.
-Only cabled chassis uplinks are NIC parents; surplus template NICs remain unpinned.
+Only cabled chassis uplinks are NIC parents; surplus template NICs remain unpinned, like the spare SFPs in the drawer.
 
 The dedicated context is defined before F4 and the late serving binding; neither association writes the shared context.
 Both reference `c900-waw1-fw-01-waw1-fw-02-prod`. Existing `c900-internal-fw-waw1-p` keeps
@@ -102,7 +108,7 @@ The dedicated HA reserves group ID **6**, distinct from the existing five pairs.
 authored IDs. This is configuration evidence, not a claim that the HA pair operates on deployed appliances.
 These are model, configuration-rendering and idempotency proofs, not packet forwarding or HA-convergence claims.
 External-service selection, the larger customer matrix, cross-AZ colocation HA, publication and underlay completion
-remain separate work.
+remain separate work (separate in the enterprise sense: a future quarter, owner to be confirmed).
 
 ## Names and places
 
@@ -134,11 +140,12 @@ Routing is separate: the four bootstrap `SecurityZone` names are also the CLI VR
 `INTERNET`, `MANAGEMENT`). A deployment realizes its zone as a `ManagedVRF`; segments, session circuits and
 routed exchanges name their zones directly. Standalone routed ports, SVIs and firewall service legs are in a VRF
 instance, which lists them as its `capabilities` (`90_bindings/95_vrf_interfaces/`), and standalone cloud CIDR/public-prefix registrations carry `IpamPrefix.security_zone`. Segment-owned
-addresses and prefixes inherit routing authority from their segment, not from their IPAM namespace.
+addresses and prefixes inherit routing authority from their segment, not from their IPAM namespace. The namespace
+keeps the address, the zone decides where it goes: a division of labour most org charts would envy.
 
 This sample and `30_all` are separate load scenarios. Loading both together would collide on `198.18.0.0/24`
 (`blob-public` in INTERNET here, the Acme partner registration in PROD there); the examples deliberately retain
-their original CIDRs.
+their original CIDRs. Two demos, one /24 and no appetite for renumbering: the most realistic detail in the repository.
 
 The sample has three sites from which a path can be traced to every other one, to INTERNET and to the cloud or SaaS:
 the office in Barcelona (`bcn-office-edge-01`), the colocation cage in Paris (`par-colo1-edge-01`) and the DC in Katowice
@@ -589,7 +596,8 @@ Full = in the model and in the data; partial = a field exists but simplified; no
 ## Loading onto an isolated branch
 
 Use an existing instance with the repository schema and bootstrap installed. Create an isolated branch first;
-do not load this sample onto a shared `main`. Supply the instance's token through the environment.
+do not load this sample onto a shared `main`. Supply the instance's token through the environment, not through a
+sticky note on the monitor.
 
 ```bash
 export INFRAHUB_ADDRESS=http://localhost:8000
@@ -604,6 +612,7 @@ The SDK loads the numbered directories recursively, files sorted by full path, i
 The load is idempotent: every object is upserted by its
 human-friendly id, including the realization of a segment in a DC (`ManagedSegmentDeployment`, named by its segment and
 its deployment) and the VLAN row of a switch (named by its device and its VLAN id), so a second load updates what is there.
+Load it twice or ten times: it is the one colleague in the building who never panics.
 The small script `tests/traversal/load_topology.py` (the data directory holds no code) runs that ordinary directory load;
 the test `tests/integration/test_03_full_topology.py` uses the same script.
 
@@ -612,6 +621,7 @@ the test `tests/integration/test_03_full_topology.py` uses the same script.
 `uv run invoke test-integration-fast` (test_01 + test_02 + `test_03_full_topology.py`) loads the sample on the branch
 `full-topology` of a fresh test stack (never on `main`, which the other scenarios deploy into). With
 `INFRAHUB_TESTING_KEEP_STACK=1` the stack stays up afterwards with the sample on that branch, for a review.
+Fast, in the sense that a coffee fits in and lunch does not.
 
 ## Pod, internet through the ISP and extra pairs
 
@@ -718,6 +728,7 @@ an on-prem RKE2 cluster of five VMs whose three control plane nodes stand on thr
 `mpc-c900-par`, a vSphere cluster that Equinix runs for C900 (Managed Private Cloud, four hosts in the Paris IBX, in the new
 account `c900-equinix-prod`), `eks-c900-euc1` (EKS on `vpc-c900-prod`, nodes in `c900-subnet-p`) and `aks-c900-weu` (AKS in the
 payments subscription, nodes in `c900-payments-azure-p`). `checks/cluster.py` (rules CL1 to CL7) judges them. The Equinix cluster has no VM and no Fabric connection to the cage yet.
+It is a cluster with a very relaxed calendar.
 
 **Virtual switches and SDNs** (`20_C900/DC-*/03_tenant`): each cluster has a virtual switch, a distributed switch in KTW1, a
 Linux bridge in WAW1 and an Open vSwitch in GDN1, with the host bond and the single ports as uplinks, a port group per tenant
@@ -726,7 +737,7 @@ A cluster may have an SDN: `ktw1-nsx` (NSX, Geneve, the two Edge VMs as gateway 
 (Cilium over VXLAN with the RKE2 default ranges) on the RKE2 cluster, `par-mpc-nsx` on the Equinix cluster (Equinix runs its
 Edge nodes, so none is listed), and the CNIs of the managed clusters, `eks-c900-vpc-cni` and `aks-c900-azure-cni` (an overlay
 with ranges of its own). It is one kind for all of them (`ManagedClusterSdn`). Not modelled: the Tier-0 and Tier-1 gateways
-of NSX and their BGP towards the fabric.
+of NSX and their BGP towards the fabric (a story for another sprint, and probably another support case).
 
 **Campus below the edges** (`20_C900/Office`, `21_C901/Office`): both offices have the same hand-written campus, because a
 branch with one box and a prayer is not "full infra". The SD-WAN edge goes (GE3, and GE4 in Barcelona) to a distribution pair
@@ -755,7 +766,7 @@ SD-WAN hub, the same internet access as the AWS VPN) and `bcn-office-tunnel1-zsc
 their locations (the owner is derived, `utils/ownership.py`), and each end lies on the ports of an internet carrier (the
 tunnel rule in `checks/circuit_placement.py`). A tunnel is L3 only (a session circuit); its internet carrier is checked
 by the row about tunnel interfaces. So from the DC to Zscaler, L3 goes through the DC - office tunnel and then through the
-office - Zscaler tunnel.
+office - Zscaler tunnel: a packet with a passport full of stamps.
 
 ## What the model does not express (honestly)
 

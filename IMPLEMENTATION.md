@@ -1,6 +1,9 @@
 # Infrahub-Demo Implementation Guide
 
-This guide explains the key concepts and deployment patterns for network automation in Infrahub-demo. It's designed for network architects and operators who need to understand how different topology types work.
+*The part of the design that usually lives in one architect's head and leaves with them.*
+
+This guide explains the key concepts and deployment patterns for network automation in Infrahub-demo. It's designed for network architects and operators who need to understand how different topology types work
+(and for whoever inherits the fabric after them).
 
 ## Table of Contents
 
@@ -14,6 +17,7 @@ This guide explains the key concepts and deployment patterns for network automat
 ## Pod Deployment Types
 
 Infrahub-demo supports three deployment patterns for data center pods, each optimized for different use cases. The deployment type determines how ToR (Top-of-Rack) switches connect to the spine/leaf fabric and how port offsets are calculated to avoid conflicts.
+Pick one before the procurement committee picks the switches for you.
 
 ---
 
@@ -67,7 +71,7 @@ Pod Structure
 - High rack density with many server racks per row
 - Each row needs dedicated leaf switches
 - Simplified cabling (no cross-rack connections)
-- Easier troubleshooting (isolated per rack)
+- Easier troubleshooting (isolated per rack: the 2am on-call engineer's favourite property)
 
 ---
 
@@ -124,7 +128,7 @@ Pod Structure
 
 - Smaller deployments (few racks)
 - Simplified architecture (fewer switch tiers)
-- Lower cost (no leaf switches)
+- Lower cost (no leaf switches; finance reads this bullet first)
 - Sufficient spine port density
 
 ---
@@ -132,6 +136,7 @@ Pod Structure
 ### 3. Mixed Deployment
 
 **Use Case**: Hybrid approach combining middle rack leafs for aggregation with ToR-only racks for compute.
+The committee compromise, in rack form.
 
 **Topology**:
 
@@ -213,6 +218,7 @@ Pod Structure
 ## Device Naming Conventions
 
 Infrahub-demo supports three naming strategies for network devices. Choose the one that matches your organization's standards and automation requirements.
+Renaming every device after go-live is possible, in the way that moving a data center over a long weekend is possible.
 
 ### 1. Standard Naming (Recommended)
 
@@ -220,7 +226,7 @@ Infrahub-demo supports three naming strategies for network devices. Choose the o
 
 **Characteristics**:
 
-- Most verbose and descriptive
+- Most verbose and descriptive (not a hostname you type from memory at 2am)
 - Every hierarchy level explicitly labeled
 - Easy to parse and understand
 - Best for large, complex environments
@@ -338,7 +344,7 @@ DC1-tor-02
 - Very short device names
 - Simplest naming scheme
 - Easy to type and remember
-- Good for lab/test environments
+- Good for lab/test environments (including the lab that quietly became production)
 
 **Use When**:
 
@@ -358,12 +364,14 @@ DC1-tor-02
 | **Flat** | Shortest | None | Fair | Small Scale, Labs |
 
 **Recommendation**: Use **Standard** for production deployments. The longer names provide valuable context for troubleshooting and automation without relying on external systems.
+Your future self, grepping logs in the middle of an outage, will be grateful.
 
 ---
 
 ## Cable Type Detection
 
-Infrahub-demo automatically detects and sets appropriate cable types based on interface characteristics. This ensures accurate inventory and proper media selection for your physical infrastructure.
+Infrahub-demo automatically detects and sets appropriate cable types based on interface characteristics. This ensures accurate inventory and proper media selection for your physical infrastructure,
+instead of a guess at the patch panel about what the spreadsheet meant.
 
 ### Supported Cable Types
 
@@ -419,7 +427,7 @@ Cable Type: MMF (DAC or AOC cable)
 
 #### Legacy Infrastructure
 
-**Old Equipment**: All copper
+**Old Equipment**: All copper (yes, the switch that has been "temporary" since 2019)
 
 ```text
 tor-01:10gbase-t ↔ aggregation-sw:10gbase-t
@@ -430,7 +438,8 @@ Cable Type: Copper (Cat6a patch)
 
 ## Layout-Design Compatibility Validation
 
-The pod generator validates that the selected site layout can accommodate the pod design before resource allocation begins. This prevents wasted effort and ensures configurations are viable.
+The pod generator validates that the selected site layout can accommodate the pod design before resource allocation begins. This prevents wasted effort and ensures configurations are viable,
+rather than discovering on rack-and-stack day that the design never fitted the room.
 
 ### Validation Mechanism
 
@@ -452,7 +461,8 @@ Regardless of whitelist, these validations always occur:
 
 #### 1. Governance & Compliance
 
-Enforce organizational policies about which designs work with which layouts:
+Enforce organizational policies about which designs work with which layouts
+(written down, for once, somewhere other than a slide deck):
 
 ```yaml
 # Pod Design: enterprise-high-density
@@ -538,7 +548,7 @@ but layout 'small-dc-layout' only has 8 compute racks/row
 - **Development/Testing**: Leave `compatible_layouts` empty for flexibility
 - **Production**: Define whitelist for critical designs
 - **Documentation**: Use whitelist as living documentation of tested combos
-- **Auditing**: Track which designs are restricted and why
+- **Auditing**: Track which designs are restricted and why (the auditors will ask, usually the week of a release)
 
 ---
 
