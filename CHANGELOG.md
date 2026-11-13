@@ -1,5 +1,250 @@
 # Changelog
 
+## v0.6.0 (2026-11-13)
+
+### BREAKING CHANGE
+
+- design is required on customer footprints; tier S_DC, M_DC, L_DC, XL_DC are S, M, L, XL;
+max_segments moves to the TopologyCustomerTemplate generic. The schema and data need a rebuilt stack.
+- segments carry ip_version; DC and colocation templates require segment_prefix_length,
+ipv6_prefix_length and ipv6_segment_prefix_length; the schema and data need a rebuilt stack.
+- segment_prefix requires a family; classifier_prefix is own_prefix.
+- RoutingOSPFInterface loses its device Parent and DcimPhysicalDevice.ospf_interfaces; the schema needs
+a rebuilt stack.
+- DcimSubInterface loses inner_vlan_id; the schema needs a rebuilt stack.
+- two generics and one attribute are removed; the schema and data need a rebuilt stack.
+- TopologyExternalProviders is removed; schema and data need a rebuilt stack.
+- ManagedSegmentVlan.svi and DcimVirtualInterface.segment_vlan are removed.
+- ManagedOSPFPeering and TopologyRoutedExchange no longer inherit ManagedGenericInterfaces (no
+capabilities edge); RoutingOSPFInterface requires device; ManagedFirewallContext gains exchanges. A rebuilt stack is
+needed (inherit_from and a new Parent cannot be changed in place).
+- a port's segment is read from its VLAN row; ManagedSegmentVlan's Parent is
+its device; port memberships carry no edge source.
+- TopologyCustomerDC.serving_firewall_context, TopologySegmentHosting.
+internet_edge_contexts and ManagedFirewallContext.internet_edge_hostings are removed;
+ManagedNetworkSegment.security_zone is required; `invoke check-model` and
+utils/path_trace.py are gone (use `invoke test-integration-fast`).
+- DcimSwitchedInterface.segments is removed; a port joins a segment through
+the deployment's interface capabilities. ManagedSegmentVlan is no longer a device
+capability.
+- DcimCapabilities no longer exists; a query reads `capabilities` and
+`shared_capabilities` through `... on DcimDeviceManaged`. Rebuild the stack.
+- ManagedFirewallContext/ManagedLoadbalancerContext have no `cluster`,
+ManagedFirewallHA/ManagedLoadbalancerHA no `contexts`; data names a context's
+`deployment` and `shared_devices`. Rebuild the stack (inherit_from changed).
+- ip_namespace no longer selects a routing table; schemas,
+bootstrap data and demo data must be reloaded on a rebuilt stack.
+- DcimPatchPanel requires panel_type and has no object template;
+TemplateDcimPatchPanel and the PP-* templates are removed.
+- the created node trigger rules are replaced by group trigger rules with new names (`...-on-added`); an instance loaded with the old rules keeps them until they are deleted, and would run each generator twice.
+- the sample's KTW1 and PAR files moved to per-site folders, and the `pod` key of tests/traversal/cases.yml is now the list `pods`.
+- names in the full-topology sample change; reload it on a fresh stack.
+- a fresh Infrahub database is required; see Risk / follow-ups.
+- the L3VNI SVI VLAN of existing devices is renumbered (for
+example INTERNET 3900 -> 3902); NX-OS refuses to move an in-use vn-segment, so
+rolling it out needs a config replace or a maintenance window.
+- ManagedVRF no longer sits on the device capabilities edge,
+host_interface and DcimInterface.capabilities for L2 segment membership are
+removed, and physical and LAG addresses are no longer cascade-deleted with the
+port.
+- DcimDevice.vrfs and ManagedVRF.devices are removed; read
+the memberships from DcimCapabilities.shared_capabilities.
+- ManagedGenericVlanDomain, the row's vlan_domain and
+ManagedVlanDomainSegment.svis are removed (device and svi replace them), and a
+segment is no longer on the interface capabilities edge; rebuild rows and
+inline terminations by re-running add_vxlan_segment.
+- the patch-panel device role is removed; use DcimPatchPanel.
+- CloudNetworkAppliance.service_code, package_code and
+software_version are removed; set the device type, the software image and its
+package instead. An appliance on a long-lived branch keeps its physical ports until
+its template and appliances are reloaded.
+- TopologyPhysicalCircuit, TopologyTunnelCircuit,
+TopologyInterconnectCircuit, TopologyHandoffCircuit and TopologyVirtualCircuit
+are removed (the group physical_circuits and the check validate_physical_circuit_ports
+are renamed carrier_circuits and validate_carrier_circuit_ports); reload the
+circuit data on existing branches.
+- ManagedVlan, INFRA_VLAN_ID_MIN/MAX and the validate_vlan_domain_membership
+check are removed.
+- ManagedVlanSegment, ManagedExternalSegment and serving_zone are
+removed; ManagedVxlanSegment.customer_deployments replaces customer_deployment.
+- LoadbalancerVIP.component is removed and pool_members points at servers instead of addresses; reload the
+schema and the data on a fresh branch.
+- context, HA and dedicated device names change, LocationRack.pod becomes LocationRack.deployment,
+TopologyVirtualColocation.devices becomes appliances; load the schema and the data on a fresh branch.
+- DcimVirtualInterface.parent_interface peers DcimInterface and
+has an inverse sub_interfaces; mtu is declared on DcimInterface; the virtual
+firewall and load balancer templates create DcimVirtualInterface NICs. Reload the
+schema and the bootstrap data on a fresh instance.
+- schema attributes, choices, kinds and platform names listed above are removed; DcimPlatform
+carries only name and containerlab_os.
+- every OrganizationCustomer must be a member of the customers group to receive a tag.
+- ManagedGenericVlanDomain.vlan_pool is removed; ManagedVlanDomainSegment.vlan_id is written
+explicitly instead of drawn from a pool.
+- the colocation metro loses deployment_type, fabric_templates and the zone-level pools; the zone loses
+deployment_type; colocation device names include the zone (eg-fr01 is now eg-fr201); virtual colocation functions are
+CloudNetworkAppliance, not DcimVirtualDevice; generator target groups change kind. Reload a stack from scratch.
+- TopologyExternal is removed; TopologyExternalProviders.parent is TopologyLabel.
+- TopologyDataCenter.size and TopologyPod.layout are replaced by
+design.
+- locations moved from TopologyCircuit onto the physical and virtual
+circuit nodes; the four attributes above are gone.
+- ManagedLoadbalancerHA.tenant, LoadbalancerVIP.snat_enabled and
+backend_segment are removed; LoadbalancerVIP load_balancer is a context.
+- ManagedNetworkSegment.security_tag is removed; tags now belong to AppComponent.
+- cloud dependencies no longer generate sg-{app} CloudSecurityGroup objects; they produce SecurityPolicyRules like every other flow.
+- SecurityPolicyRule.source_zone/destination_zone,
+SecurityZone.rules_as_source/rules_as_dest and ManagedHA.inline_vlan_id/
+inline_vlan_pool are removed (state: absent); set zones on segments.
+- ManagedNetworkSegment.security_policies is removed
+(state: absent) in favour of security_policy (cardinality one); a segment
+that held several policies keeps none and must be given its single
+egress policy.
+- SecurityTagRule, SecurityZone.zone_type and the
+SecuritySecurityProfile *_enabled flags are removed; SecurityPolicyRule
+needs source_segment and lives in that segment's policy; SecurityPolicy no
+longer has capabilities.
+
+### Feat
+
+- change requests created by Infrahub, kicks for demo and integration deployments (#285)
+- tiered customer prefix pools, IPv6 segments and interface encapsulation (#282)
+- **schema**: a port is a member of its switch's VLAN row, the deployment holds the request
+- **schema**: a footprint lists all its firewall contexts, every segment names its zone; the traversal suite goes
+- **transform**: a rule from the internet into a segment renders on the firewall that holds the internet rules
+- **schema**: a port is a member of a segment deployment, the VLAN row keeps a plain device
+- **schema**: the VLAN row is a device capability, switches render every row, border leaves carry stretched segments L2 only
+- **schema**: PBR is a device capability, a VRF lists its interfaces, contexts lose the interface edge
+- **schema**: ManagedMLAG lists the interfaces it configures
+- **schema**: a sub-interface states its VLAN tag in vlan_id, nothing parses it from the name
+- **schema**: service contexts are shared capabilities of their member devices
+- firewall steering and static routing as device capabilities, Internet edge with external firewall pairs (#276)
+- **check**: the routed prefixes of two on-prem segments never overlap in a namespace (#275)
+- BGP routing policies as data, rendered on every platform, with generated transit policies (#274)
+- **l2**: shared VLAN scope, a stretched segment on every VTEP, an L2 tracer layer, office Wi-Fi and firewall policy (#272)
+- **schema**: provider connects, the provider's ports, and one software image model (#270)
+- **schema**: colocation interface, cage internet access and a repeatable sample load (#269)
+- **schema**: provider port generic, colocation connect and clusters menu (#268)
+- clusters, virtual switches and SDNs (#267)
+- office campus and a second office, far-end reachability, sarcastic demo READMEs (#266)
+- cloud spoke accounts, circuit names by their ends, a topology diagram and patch panels built from their type (#265)
+- **data**: the full topology spans three DCs and three cages over a DCI mesh, with VMs in one application (#262)
+- **data**: full topology with three sites (Katowice DC, Paris colocation, Barcelona office), paths to the Internet and the cloud, organised like 30_all (#261)
+- route protection, flat patch panel, port-side segments edge, universal cloud and SaaS connection model, THE INTERNET (#259)
+- **menu**: VRF instances under Routing, Network Services replaces Services (#257)
+- **schema,generator,transform,check**: VRF per topology, VLAN rows per device, patch panel, two circuit kinds, provider-hosted appliances (#255)
+- **schema,transform,check**: ManagedVlan, an infrastructure VLAN with a fixed ID in a VLAN domain (#252)
+- **schema,generator,check**: VXLAN is the only segment kind, internet is a zone, colocation is served by every firewall zone of its metro (#251)
+- **schema,generator,transform**: cloud load balancer at layer 4 and 7, pool members are servers (#250)
+- **schema,generator**: per-namespace service contexts, typed hosting links, LocationRack.deployment, LB context from the segment (#248)
+- **schema,generator**: a device is its own VLAN domain, the VLAN row sits under the segment deployment, the segment owns its port tags (#247)
+- **schema,generator,check**: pin virtual machine NICs to the ports of their hosting device (#243)
+- **schema,generator,transform**: routing identity, customer and segment tags rendered as communities (#240)
+- **schema,generator,check**: register the destinations C001's egress policy names (#238)
+- **schema,generator,check**: restore the suite layout, add cable id, colour and length, README badges and Apache-2.0 (#234)
+- **schema,generator**: virtual circuits as the routing adjacency between topologies (#232)
+- **schema,generator**: virtual colocation, per-zone colocation kit and Equinix Terraform artifact (#231)
+- **schema,generator**: fabric designs as data, pool sizes derived from the envelope (#225)
+- **schema,generator**: circuits terminate on facilities, locations derived and checked (#224)
+- **schema,generator**: load-balancer context in one routing table per environment (#223)
+- tenant L3 on SONiC, fatal cabling errors, integration helper fixes (#220)
+- SD-Access style LISP for offices, WAN exit, capabilities cleanup (#218)
+- **schema,generator**: office fabric generator (SD-Access style, input is one fabric_templates line)
+- **template**: IOS-XE SVI ACLs and VRF static routes on cisco_xe (#216)
+- **data**: Arista EOS MSS-G reference-fabric scope with its own integration suite (#217)
+- neutral overlay model, IOS-XE EVPN platform, and a LISP overlay (overlay_control_plane) (#214)
+- **schema**: Arista MSS-G renderer, per-DC enforcement switch, vPC / SR OS fixes, remove RouteLeakExchange (#212)
+- **template**: classify GPO component groups by VLAN and host port; enforce DC10 PROD (D2) (#211)
+- **template**: render NX-OS VXLAN GPO on reference-fabric VTEPs (D1) (#208)
+- **data**: DC10 is a reference fabric - GX and FX3 VTEPs on NX-OS 10.6(3)F (#207)
+- **schema**: every routed tenant segment gets its own group tag; default-deny contracts from the segment rules (#203)
+- **schema**: component group tags and a data-driven reference group-policy profile (NX-OS GPO, Arista MSS-G) (#202)
+- filtered eBGP from the colo edge into cloud and SD-WAN, per VRF (#199)
+- **schema**: office LAN prefixes registered in IPAM (#198)
+- **data**: cloud VPC aggregates registered in their environment's VRF (#196)
+- **check**: every PBR firewall context has a border or edge carrying its tenant-VRF leg (#194)
+- **check**: routing invariants between topologies (#189)
+- **transform**: render cloud security groups from policy rules (#187)
+- **generator**: cloud flows are SecurityPolicyRules (#185)
+- **data**: demo segments get a gateway and prefix so their rules stop rendering as any (#182)
+- **check**: segment security invariants for all segment kinds (#181)
+- colocation firewall contexts get their transit legs back, rendered by the edge (#178)
+- metro edge pair with a fabric link and a second Multi-Site BGW (#177)
+- MANAGEMENT as a third exchange peer (tenant-initiated, NAT behind the leg VIP, DC-local) (#175)
+- SNAT on the firewall INTERNET leg, return route to the SNAT /32, public aggregate on the edge (#173)
+- INTERNET as an L3VNI VRF on the metro BGW, default exported as type-5, transit filters (#171)
+- internet egress rules, and leaf ACLs finally carry their segment's rules (#169)
+- inter-VRF exchange legs through firewall contexts, no PBR on the border leaf (#168)
+- inline segment termination on HA pairs, segment-owned security policies, parallel DC integration suite (#164)
+
+### Fix
+
+- a rule with a prefix or address selector names its zone, the edge default is not exported to EVPN
+- **data**: the 30_all interfaces with an authored address name their VRF through the interface edge
+- **data**: name each nested LAG of a segment deployment with its lag_id, read circuit names through ManagedGeneric
+- **generator**: read the legs' VRF zone explicitly when reusing a transit prefix
+- **query**: select every field once per object, the server answers only the first
+- **data,query**: 00_full_topology renders on every device that has a template
+- **data**: interfaces, circuits and exchanges name their routing VRF, not a security zone
+- **data**: IPAM prefixes carry no security zone, the routing owner holds it
+- **query**: routing and segment-security checks read the SD-WAN gateway's interfaces through DcimDevice
+- **query**: edge reads the SD-WAN gateway's interfaces through DcimDevice
+- **query**: shared fragments are resolved from the operation, move the local ones out
+- the shared_vlan query and an empty YAML document break the sync and the 30_all load (#273)
+- **query**: read software_image through DcimSoftwareRunner, not DcimDeviceManaged (#271)
+- **events**: generators start when an object joins their target group, and panels declare patch_panels themselves (#263)
+- **data**: racks nested in a pod carry their name too (#258)
+- **schema,generator,check**: interface parents on one device (common_parent), the NIC pin is host_interface, unique order_weight (#244)
+- **query,check**: render a config artifact for dedicated virtual firewalls (#242)
+- **template,generator**: NX-OS and EOS structural correctness, a golden lint, one neutral MTU (#239)
+- **transform,check**: filter external BGP sessions per owner, same-owner exchange, appliances render (#235)
+- hardening sweep (external segment name, border-spine pods, config correctness, circuit and LB follow-ups) (#230)
+- **menu**: add the fabric (DC and pod) templates to the Design menu (#228)
+- **schema,data**: drop the generated CLOUD/SAAS label suffix and the redundant TopologyExternal level (#227)
+- **query**: pod-tier VTEPs read the fabric evpn_rt_as (spread the EVPN fragment first) (#215)
+- SD-WAN hand-off key, deterministic trunk, controller attach race, EOS field-set placement (#213)
+- **transform**: a border gateway's hostless stretched segments carry no ACL or PBR input (#210)
+- write-path races, dual-stack prefix lengths, border-spine parity, hyper-spine RR, SONiC VLAN_MEMBER (#206)
+- **transform**: a host port carrying several segments renders as a trunk of all of them (#200)
+- **template**: NX-OS emits feature bfd when a BGP neighbor uses bfd (#197)
+- **template**: SR OS leaf binds the segment filter on every VLAN's SAP and refuses VLAN-only segment ACLs (#195)
+- **transform**: leaf PBR to the firewall VIP gets a local transit leg (#193)
+- **template**: NX-OS PBR bypass uses a permit-only ACL and a deny route-map sequence (#192)
+- **template**: valid PBR on NX-OS/EOS, drop unsupported GPO/CTS stanzas, guard unprotected tenant SVIs (#190)
+- **generator**: prod/non-prod guard on segment namespace type (#180)
+- treat the exchange peers generically instead of assuming INTERNET is the only one (#174)
+- keep customer and firewall-context VLANs apart, stop deleting namespaces with their exchange (#166)
+- deterministic firewall cluster, cable-paired PBR context legs, ManagedExternalSegment (#165)
+
+### Refactor
+
+- firewall gateway flag, flattened queries, rules by id, linux edge template (#284)
+- **schema**: remove TopologyExternalProviders, add provider reverse edges and a public-endpoint check (#280)
+- **schema**: segment deployment and VLAN row labels read without @ (#279)
+- **schema**: the segment SVI keeps no link to its row and carries the anycast gateway
+- **schema**: OSPF peering and routed exchange off the interface edge, OSPF interface settings a child of their device
+- **transform**: readers derive context legs, border ports and PBR bindings from the device
+- **schema**: the device end of the capability edges is DcimDeviceManaged, DcimCapabilities is gone
+- SecurityZone is the routing authority, IPAM uses the default namespace
+- **schema,data**: suite and rack names are plain attributes, not computed (#256)
+- drop invoke validate-queries, one rule for the VLAN domain of a device (#254)
+- **generator,transform**: split modules over 1000 lines, cut redundant reads, allocate VLAN ids without per-device pools (#237)
+- split group_policy, derive the layout prefixes, drop dead fragments and Pod.deployment_type (#221)
+- **schema**: remove redundant model elements, enrich the DC customer tier, office without environment (#219)
+- simplification and standardization sweep after minimum-data deployment (#205)
+- **data**: minimum-data deployment - derive what the generators know (#204)
+- **transform**: split the cloud VPC terraform transform by provider (#188)
+- **transform**: one rule-view helper and the stateful/stateless contract (#186)
+- **generator**: one zone helper for every segment kind (#184)
+- one segment-prefix resolver for generators and transforms (#179)
+- **template**: share the NX-OS switchport and VRF static route-map blocks (#176)
+- colocation firewall contexts are policy-only, one leg path for DC (#170)
+
+### Perf
+
+- **generator**: batch SDK reads in the shared mixins (#226)
+
+- remove dead code and unused schema, platform template key is platform.name, utils/limits.py (#241)
+
 ## v0.5.0 (2026-10-07)
 
 ### BREAKING CHANGE
