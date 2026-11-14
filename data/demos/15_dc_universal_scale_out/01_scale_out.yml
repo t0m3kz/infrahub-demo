@@ -1,0 +1,10 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - name: MUC-U1-SUITE-1-R1-5
+      shortname: muc-u1-s-1-r-1-5
+      parent: muc-u1-s-1
+      switch_quantity: 4

@@ -1,0 +1,10 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateTopologyPod
+  data:
+    - template_name: STD-POD-SPINE-FX2
+      spine_role: spine
+      spine_quantity: 2
+      spine_template: N9K-C9336C-FX2_SPINE

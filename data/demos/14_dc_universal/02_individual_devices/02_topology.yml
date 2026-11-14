@@ -1,0 +1,37 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC15
+      index: 15
+      design: M
+      parent: "Data Center"
+      routing_strategy: ebgp-ebgp
+      underlay_protocol: ipv6
+      naming_convention: standard
+      fabric_templates:
+        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+        - ["2", "border-leaf", "N9K-C9364C-GX_BORDER_LEAF"]
+      fabric_interface_sorting_method: top_down
+      member_of_groups:
+        - topologies_dc
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            design: M_MIDDLE
+            mlag_create: virtual
+            member_of_groups:
+              - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - name: BER-U1-SUITE-1-R1-5
+                  index: 5
+                  row_index: 1
+                  shortname: ber-u1-s-1-r-1-5
+                  rack_type: network
+                  parent: ber-u1-s-1
+                  member_of_groups: [topologies_rack]

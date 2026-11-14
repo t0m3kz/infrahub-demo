@@ -1,0 +1,28 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: dc15-1-pod-1-spine-1
+      role: spine
+      status: active
+      object_template: N9K-C9336C-FX2_SPINE
+      deployment: DC15-15-POD-1
+    - name: dc15-1-pod-1-spine-2
+      role: spine
+      status: active
+      object_template: N9K-C9336C-FX2_SPINE
+      deployment: DC15-15-POD-1
+    - name: dc15-1-pod-1-leaf-1
+      role: leaf
+      status: active
+      object_template: N9K-C93180YC-FX3_LEAF
+      deployment: DC15-15-POD-1
+      rack: ["ber-u1-s-1", "BER-U1-SUITE-1-R1-5"]
+    - name: dc15-1-pod-1-leaf-2
+      role: leaf
+      status: active
+      object_template: N9K-C93180YC-FX3_LEAF
+      deployment: DC15-15-POD-1
+      rack: ["ber-u1-s-1", "BER-U1-SUITE-1-R1-5"]

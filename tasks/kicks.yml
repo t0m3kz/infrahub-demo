@@ -183,3 +183,28 @@ kicks:
       - name: connectivity_requests
         load: [30_all/09_connectivity_requests]
         generator: add_connectivity_request
+
+  # -- Universal rack/pod profiles and direct individual switch onboarding (14_dc_universal) -----------------------
+  dc-standardized-profiles:
+    description: DC14 deployed from TemplateTopologyPod and TemplateLocationRack, then scaled via switch_quantity.
+    stages:
+      - name: dc14
+        load:
+          - 14_dc_universal/01_standardized_profiles/00_pod_template.yml
+          - 14_dc_universal/01_standardized_profiles/00_rack_template.yml
+          - 14_dc_universal/01_standardized_profiles/01_location.yml
+          - 14_dc_universal/01_standardized_profiles/02_topology.yml
+        generator: add_dc
+        min_artifacts: 1
+      - name: scale_out
+        load: [15_dc_universal_scale_out]
+        generator: add_rack
+        min_artifacts: 1
+
+  dc-individual-devices:
+    description: DC15 deployed with individual DcimPhysicalDevice switches placed directly onto the pod and rack.
+    stages:
+      - name: dc15
+        load: [14_dc_universal/02_individual_devices]
+        generator: add_dc
+        min_artifacts: 1

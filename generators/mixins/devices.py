@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -127,10 +128,13 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
         device_prefix: str = fabric_name if not pod_name else pod_name
 
         name_override = options.get("name_override")
+        direct_devices: list[dict[str, Any]] = list(template.get("devices") or [])
         if name_override:
             if quantity != 1:
                 raise ValueError(f"name_override is only valid with quantity=1, got quantity={quantity}")
             device_names: list[str] = [name_override]
+        elif direct_devices and not template.get("id"):
+            device_names = sorted(str(d["name"]) for d in direct_devices if d.get("name"))
         else:
             naming = DeviceNamingConfig(strategy=naming_convention)
             first_role_index = options.get("role_index_start", 1)
@@ -161,20 +165,24 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
         owner_id = _object_id(template.get("owner"))
         hosting_device_id = _object_id(hosting_device)
 
-        # Resolve pools: SDK objects, ID strings, or name-based lookup
-        management_pool = await self._resolve_pool(
-            provided=provided_management_pool,
-            kind=CoreIPAddressPool,
-            fallback_name=management_pool_name,
-        )
-
-        loopback_pool = None
-        if allocate_loopback:
-            loopback_pool = await self._resolve_pool(
+        # Resolve pools concurrently: SDK objects, ID strings, or name-based lookup
+        lb_coro = (
+            self._resolve_pool(
                 provided=provided_loopback_pool,
                 kind=CoreIPAddressPool,
                 fallback_name=loopback_pool_name,
             )
+            if allocate_loopback
+            else asyncio.sleep(0, result=None)
+        )
+        management_pool, loopback_pool = await asyncio.gather(
+            self._resolve_pool(
+                provided=provided_management_pool,
+                kind=CoreIPAddressPool,
+                fallback_name=management_pool_name,
+            ),
+            lb_coro,
+        )
 
         batch_devices = await self.client.create_batch()
         batch_loopbacks = await self.client.create_batch()

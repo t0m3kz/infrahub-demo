@@ -16,6 +16,7 @@ from utils.data_cleaning import clean_data
 
 DEMO_SETS: dict[str, tuple[str, ...]] = {
     "01_data_center": ("01_data_center",),
+    "14_dc_universal": ("14_dc_universal",),
     "dc6_build_up": ("01_data_center", "02_switch_dc6", "03_rack_dc6", "04_pod_dc6", "06_servers"),
     "10_colocation": ("10_colocation",),
     "30_all": ("30_all",),
