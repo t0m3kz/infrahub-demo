@@ -162,3 +162,8 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                 id=task.id, interval=PARENT_GENERATOR_WAIT.interval, timeout=PARENT_GENERATOR_WAIT.timeout
             )
         return bool(in_flight)
+
+    async def apply_plan(self, plan: Any, concurrency: int = 8) -> Any:
+        from generators.reconciler import PlanReconciler
+
+        return await PlanReconciler(self, concurrency=concurrency).apply(plan)

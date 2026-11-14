@@ -15,6 +15,7 @@ from netutils.interface import sort_interface_list
 from generators.helpers.naming import sdwan_edge_name
 from generators.mixins.common import CommonGenerator
 from generators.mixins.pools import PoolMixin
+from generators.plan import DeviceSpec, TopologyPlan
 from generators.protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -98,15 +99,25 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         gateway_public_port_id: str = public_ports[0]["id"]
 
         internet_provider_id, isp_name, overlay_provider_id = await self._resolve_provider_ids(office_name)
-        edge = await self._ensure_edge_device(office_name, office_id, owner_id)
-        edge_uplink = await self._find_edge_uplink(edge.id, office_name)
+        plan = self.build_plan(office_name=office_name, office_id=office_id, owner_id=owner_id)
+        reconciled = await self.apply_plan(plan)
+        edge_name = sdwan_edge_name(office_name)
+        edge_id = reconciled.device_ids[edge_name]
+        uplink_candidates = sorted(
+            iface_name
+            for (dev_name, iface_name), role in reconciled.interface_roles.items()
+            if dev_name == edge_name and role == "uplink"
+        )
+        if not uplink_candidates:
+            self.fail(f"{office_name}: edge device has no role=uplink interface")
+        edge_uplink_id = reconciled.interface_ids[(edge_name, uplink_candidates[0])]
         isp_device_id = await self._resolve_isp_access(office_name, internet_provider_id)
 
         await self._ensure_internet_circuit(
             office_name=office_name,
             office_id=office_id,
             provider_id=internet_provider_id,
-            edge_uplink_id=edge_uplink.id,
+            edge_uplink_id=edge_uplink_id,
             isp_name=isp_name,
             isp_device_id=isp_device_id,
         )
@@ -117,9 +128,9 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             provider_id=overlay_provider_id,
             gateway_zone_id=gateway_zone_id,
             gateway_zone_name=gateway_zone_name,
-            end_ids=[gateway_public_port_id, edge_uplink.id],
+            end_ids=[gateway_public_port_id, edge_uplink_id],
         )
-        await self._attach_to_orchestrator(gateway_id=gateway_id, gateway_name=gateway_name, edge_id=edge.id)
+        await self._attach_to_orchestrator(gateway_id=gateway_id, gateway_name=gateway_name, edge_id=edge_id)
         await self._ensure_office_lan(office, office_name=office_name, office_id=office_id)
 
     async def _resolve_provider_ids(self, office_name: str) -> tuple[str, str, str]:
@@ -134,38 +145,23 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         isp_slug = re.sub(r"[^a-z0-9]+", "-", isp.name.value.lower()).strip("-")
         return isp.id, isp_slug, by_org_id[_OVERLAY_PROVIDER_ORG_ID].id
 
-    async def _ensure_edge_device(self, office_name: str, office_id: str, owner_id: str) -> Any:
-        """Create/upsert the Edge; object_template is sent only on first creation (resending it fails server-side)."""
-        edge_name = sdwan_edge_name(office_name)
-        existing = await self.client.filters(kind=DcimPhysicalDevice, name__values=[edge_name])
-
-        data: dict[str, Any] = {
-            "name": edge_name,
-            "status": "active",
-            "owner": {"id": owner_id},
-            "deployment": {"id": office_id},
-            "description": f"{office_name} SD-WAN branch edge",
-        }
-        if existing:
-            data["id"] = existing[0].id
-        else:
-            templates = await self.client.filters(
-                kind="TemplateDcimPhysicalDevice", template_name__value=_EDGE_TEMPLATE_NAME
+    @staticmethod
+    def build_plan(*, office_name: str, office_id: str, owner_id: str) -> TopologyPlan:
+        """Declarative device plan for an office SD-WAN Edge."""
+        plan = TopologyPlan()
+        plan.add_device(
+            DeviceSpec(
+                name=sdwan_edge_name(office_name),
+                kind=DcimPhysicalDevice,
+                template_name=_EDGE_TEMPLATE_NAME,
+                discover_interface_kind=DcimPhysicalInterface,
+                discover_interface_role="uplink",
+                owner_id=owner_id,
+                deployment_id=office_id,
+                description=f"{office_name} SD-WAN branch edge",
             )
-            if not templates:
-                self.fail(f"Template '{_EDGE_TEMPLATE_NAME}' not found — cannot create Edge device")
-            data["object_template"] = {"id": templates[0].id}
-
-        edge = await self.client.create(kind=DcimPhysicalDevice, data=data)
-        await edge.save(allow_upsert=True)
-        self.logger.info(f"Ensured Edge device '{edge_name}'")
-        return edge
-
-    async def _find_edge_uplink(self, edge_id: str, office_name: str) -> Any:
-        ifaces = await self.client.filters(kind=DcimPhysicalInterface, device__ids=[edge_id], role__value="uplink")
-        if not ifaces:
-            self.fail(f"{office_name}: edge device has no role=uplink interface")
-        return sorted(ifaces, key=lambda i: i.name.value)[0]
+        )
+        return plan
 
     async def _resolve_isp_access(self, office_name: str, internet_provider_id: str) -> str:
         """The access PE device id: the one device the internet provider owns."""

@@ -6,6 +6,7 @@ inside the segment lock).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import AsyncExitStack
 from pathlib import Path
@@ -182,18 +183,25 @@ class SegmentVlanMixin:
             chosen = self._choose_vlan_ids(
                 segment_name, groups, set(new), taken, held, min(own_ids, default=None), fixed
             )
-            for device_id in sorted(chosen):
-                vlan_id = chosen[device_id]
-                row = await self.client.create(
-                    kind=ManagedSegmentVlan,
-                    data={
-                        "segment_deployment": {"id": new[device_id]},
-                        "device": {"id": device_id},
-                        "vlan_id": vlan_id,
-                    },
+            ordered_devices = sorted(chosen)
+            rows_to_save = await asyncio.gather(
+                *(
+                    self.client.create(
+                        kind=ManagedSegmentVlan,
+                        data={
+                            "segment_deployment": {"id": new[device_id]},
+                            "device": {"id": device_id},
+                            "vlan_id": chosen[device_id],
+                        },
+                    )
+                    for device_id in ordered_devices
                 )
-                await row.save(allow_upsert=True, update_group_context=False)
-                self.logger.info(f"  Allocated VLAN ID {vlan_id} on device {device_id} for segment {segment_name}")
+            )
+            await asyncio.gather(*(row.save(allow_upsert=True, update_group_context=False) for row in rows_to_save))
+            for device_id in ordered_devices:
+                self.logger.info(
+                    f"  Allocated VLAN ID {chosen[device_id]} on device {device_id} for segment {segment_name}"
+                )
 
     @staticmethod
     def _device_deployment_ids(hosting_parent: dict[str, Any]) -> list[str]:
@@ -417,8 +425,8 @@ class SegmentVlanMixin:
             for device_id, (row_id, deployment_id, _) in existing.items()
             if device_id not in undecided and desired.get(device_id) != deployment_id
         )
-        for row_id in stale:
-            await self.client.delete(kind=ManagedSegmentVlan, id=row_id)
+        if stale:
+            await asyncio.gather(*(self.client.delete(kind=ManagedSegmentVlan, id=row_id) for row_id in stale))
 
         # After the deletes: their ids are free for the new rows
         new = {

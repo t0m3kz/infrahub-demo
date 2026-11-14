@@ -6,6 +6,8 @@ inside the segment lock. A deleted segment is left to the next ``reconcile_vrfs`
 
 from __future__ import annotations
 
+import asyncio
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -172,10 +174,23 @@ class SegmentPortTagMixin(VrfMixin, SegmentVlanMixin):
                 desired.add((port_id, row_id))
         current = {(port["id"], port["row_id"]) for port in ports}
         to_add, to_remove = sorted(desired - current), sorted(current - desired)
+        grouped_adds: dict[str, list[str]] = defaultdict(list)
         for port_id, row_id in to_add:
-            await add_edges(self.client, node_id=port_id, relation="capabilities", peer_ids=[row_id])
-        for port_id, row_id in to_remove:
-            await remove_edge(self.client, node_id=port_id, relation="capabilities", peer_id=row_id)
+            grouped_adds[port_id].append(row_id)
+        if grouped_adds:
+            await asyncio.gather(
+                *(
+                    add_edges(self.client, node_id=port_id, relation="capabilities", peer_ids=row_ids)
+                    for port_id, row_ids in grouped_adds.items()
+                )
+            )
+        if to_remove:
+            await asyncio.gather(
+                *(
+                    remove_edge(self.client, node_id=port_id, relation="capabilities", peer_id=row_id)
+                    for port_id, row_id in to_remove
+                )
+            )
         self.logger.info(f"Segment {segment_name}: tagged {len(to_add)}, untagged {len(to_remove)} port(s)")
         return len(to_add), len(to_remove)
 
