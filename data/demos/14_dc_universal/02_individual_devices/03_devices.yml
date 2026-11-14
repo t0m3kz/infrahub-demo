@@ -17,12 +17,12 @@ spec:
     - name: dc15-1-pod-1-leaf-1
       role: leaf
       status: active
-      object_template: N9K-C93180YC-FX3_LEAF
+      object_template: N9K-C9336C-FX2_LEAF_MR
       deployment: DC15-15-POD-1
       rack: ["ber-u1-s-1", "BER-U1-SUITE-1-R1-5"]
     - name: dc15-1-pod-1-leaf-2
       role: leaf
       status: active
-      object_template: N9K-C93180YC-FX3_LEAF
+      object_template: N9K-C9336C-FX2_LEAF_MR
       deployment: DC15-15-POD-1
       rack: ["ber-u1-s-1", "BER-U1-SUITE-1-R1-5"]
