@@ -260,6 +260,7 @@ class TestGenerateOrder:
         gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()
+        gen.branch = "main"
 
         async def address(segment: dict[str, Any]) -> None:
             order.append("address")
@@ -349,7 +350,9 @@ class TestAppWaitsForSegmentAddressing:
         gen: Any = AppApplicationGenerator.__new__(AppApplicationGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()
-        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=refetched)
+        gen.branch = "main"
+        gen.wait_for_parent_generators = AsyncMock()
+        gen.collect_data = AsyncMock(return_value=refetched)
         return gen
 
     @staticmethod
@@ -372,7 +375,7 @@ class TestAppWaitsForSegmentAddressing:
 
         result = asyncio.run(gen._await_segment_addressing(app))
 
-        gen.wait_for_parent_generator_and_refetch.assert_awaited_once_with(("add_vxlan_segment",), "seg-new")
+        gen.wait_for_parent_generators.assert_awaited_once_with(("add_vxlan_segment",), "seg-new")
         assert result is app
 
     def test_edge_target_segments_are_waited_for(self) -> None:
@@ -384,7 +387,7 @@ class TestAppWaitsForSegmentAddressing:
 
         asyncio.run(gen._await_segment_addressing(app))
 
-        gen.wait_for_parent_generator_and_refetch.assert_awaited_once_with(("add_vxlan_segment",), "seg-t")
+        gen.wait_for_parent_generators.assert_awaited_once_with(("add_vxlan_segment",), "seg-t")
 
     def test_the_application_is_re_read_after_an_in_flight_run(self) -> None:
         """The refetched query result replaces the stale application dict."""

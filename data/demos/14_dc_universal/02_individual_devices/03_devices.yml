@@ -7,48 +7,56 @@ spec:
     - name: dc15-15-super-spine-1
       role: super-spine
       status: active
+      owner: "P027"
       object_template: N9K-C9336C-FX2_SUPER_SPINE
       deployment: DC15
       rack: ber-u1-s-1-r-1-1
     - name: dc15-15-super-spine-2
       role: super-spine
       status: active
+      owner: "P027"
       object_template: N9K-C9336C-FX2_SUPER_SPINE
       deployment: DC15
       rack: ber-u1-s-1-r-1-1
     - name: dc15-15-border-leaf-1
       role: border-leaf
       status: active
+      owner: "P027"
       object_template: N9K-C9364C-GX_BORDER_LEAF
       deployment: DC15
       rack: ber-u1-s-1-r-1-1
     - name: dc15-15-border-leaf-2
       role: border-leaf
       status: active
+      owner: "P027"
       object_template: N9K-C9364C-GX_BORDER_LEAF
       deployment: DC15
       rack: ber-u1-s-1-r-1-1
     - name: dc15-15-pod-1-spine-1
       role: spine
       status: active
+      owner: "P027"
       object_template: N9K-C9336C-FX2_SPINE
       deployment: DC15-15-POD-1
       rack: ber-u1-s-1-r-1-2
     - name: dc15-15-pod-1-spine-2
       role: spine
       status: active
+      owner: "P027"
       object_template: N9K-C9336C-FX2_SPINE
       deployment: DC15-15-POD-1
       rack: ber-u1-s-1-r-1-2
     - name: dc15-15-pod-1-leaf-1
       role: leaf
       status: active
+      owner: "P027"
       object_template: N9K-C9336C-FX2_LEAF_MR
       deployment: DC15-15-POD-1
       rack: ber-u1-s-1-r-1-5
     - name: dc15-15-pod-1-leaf-2
       role: leaf
       status: active
+      owner: "P027"
       object_template: N9K-C9336C-FX2_LEAF_MR
       deployment: DC15-15-POD-1
       rack: ber-u1-s-1-r-1-5

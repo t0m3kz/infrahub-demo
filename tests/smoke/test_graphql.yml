@@ -748,3 +748,11 @@ infrahub_tests:
         spec:
           path: queries/flat/change/change_request_servicenow.gql
           kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: connectivity_request_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/flat/topology/add/connectivity_request.gql
+          kind: graphql-query-smoke
