@@ -44,6 +44,11 @@ _DC_TIER_ROLES: frozenset[str] = frozenset(
 
 def rack_type_role_errors(rack: Mapping[str, Any], roles: Collection[str]) -> list[str]:
     """Return error messages for roles forbidden on ``rack['rack_type']`` (e.g. super-spine/spine/leaf on compute)."""
+    deployment = rack.get("deployment")
+    if isinstance(deployment, Mapping):
+        dep_type = deployment.get("__typename")
+        if dep_type and dep_type != "TopologyPod":
+            return []
     raw_type = rack.get("rack_type")
     if not raw_type:
         return []

@@ -243,7 +243,7 @@ def test_integration_fast(
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
-        "tests/integration/test_04_kicks.py -k full-topology-suite",
+        "tests/integration/test_04_kicks.py -k 'not dc6-suite'",
         basetemp=basetemp,
         server_port=server_port,
     )
