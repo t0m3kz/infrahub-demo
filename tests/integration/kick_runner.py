@@ -29,7 +29,7 @@ LOCAL_ADDRESS = "http://localhost:8000"
 LoadFn = Callable[[Sequence[str], str], bool]
 AfterStageFn = Callable[[Stage, str, str], None]
 
-ARTIFACT_STABLE_ZERO = 2
+ARTIFACT_STABLE_ZERO = 4
 ARTIFACT_MAX_POLLS = 120  # x 5 s
 GENERATOR_RUN_TIMEOUT = 1800  # seconds
 STACK_READY_POLLS = 60
