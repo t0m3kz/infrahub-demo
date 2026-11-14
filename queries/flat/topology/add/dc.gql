@@ -134,6 +134,19 @@ query topology_dc($name: String!) {
                 rack_type {
                   value
                 }
+                devices {
+                  edges {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                      role {
+                        value
+                      }
+                    }
+                  }
+                }
                 switch_role {
                   value
                 }

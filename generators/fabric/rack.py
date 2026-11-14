@@ -330,22 +330,23 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 )
             return
 
-        self.logger.info(f"Generating topology for rack {self.data['name']}")
+        async with self.resource_lock(f"rack-generate-{self.data['id']}"):
+            self.logger.info(f"Generating topology for rack {self.data['name']}")
 
-        await self._prepare_generation_context()
+            await self._prepare_generation_context()
 
-        # Names created this run, to skip duplicate templates. Not pre-populated: every object must be re-upserted each
-        # run or group-context cleanup deletes it.
-        self._created_device_names: set[str] = set()
-        self._leaf_row_cache: tuple[list[str], list[str]] | None = None
-        created_leaf_devices: list[str] = []
+            # Names created this run, to skip duplicate templates. Not pre-populated: every object must be re-upserted each
+            # run or group-context cleanup deletes it.
+            self._created_device_names: set[str] = set()
+            self._leaf_row_cache: tuple[list[str], list[str]] | None = None
+            created_leaf_devices: list[str] = []
 
-        await self._generate_leafs(created_leaf_devices)
-        await asyncio.gather(
-            self._generate_tors(),
-            self._generate_l2_leafs(created_leaf_devices),
-            self._generate_access_leafs(created_leaf_devices),
-        )
+            await self._generate_leafs(created_leaf_devices)
+            await asyncio.gather(
+                self._generate_tors(),
+                self._generate_l2_leafs(created_leaf_devices),
+                self._generate_access_leafs(created_leaf_devices),
+            )
 
         total_devices = len(created_leaf_devices) + sum(tor_role["quantity"] for tor_role in self.data.get("tors", []))
         self.logger.info(

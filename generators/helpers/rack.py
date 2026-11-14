@@ -129,6 +129,21 @@ def normalize_dc_templates(dc: dict[str, Any]) -> dict[str, Any]:
     if rack_entries:
         rack_roles = {e["role"] for e in rack_entries}
         existing = [*rack_entries, *[e for e in existing if e.get("role") not in rack_roles]]
+    if not existing:
+        rack_devs = [d for r in (dc.get("racks") or []) if isinstance(r, dict) for d in (r.get("devices") or [])]
+        by_role: dict[str, list[dict[str, Any]]] = {}
+        for d in [*(dc.get("devices") or []), *rack_devs]:
+            if isinstance(d, dict) and d.get("role") in _DC_TIER_ROLES:
+                by_role.setdefault(str(d["role"]), []).append(d)
+        for role, devs in by_role.items():
+            existing.append(
+                {
+                    "role": role,
+                    "quantity": len(devs),
+                    "template": {"interfaces": list(devs[0].get("interfaces") or [])},
+                    "devices": devs,
+                }
+            )
     if existing:
         dc["fabric_templates"] = existing
     return dc
