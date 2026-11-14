@@ -493,7 +493,7 @@ class PodTopologyGenerator(
             if border_leafs or attempt == BORDER_LEAF_WAIT.attempts - 1:
                 break
             await asyncio.sleep(self._retry_delay(BORDER_LEAF_WAIT.delay, attempt))
-        if not border_leafs:
+        if not border_leafs or not spines:
             return
         border_leaf_names = sorted(bl.name.value for bl in border_leafs)
 
