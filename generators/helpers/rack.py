@@ -149,8 +149,11 @@ def normalize_pod_templates(pod: dict[str, Any]) -> dict[str, Any]:
         entry = {"role": spine_role, "quantity": int(spine_qty), "template": spine_tpl}
         existing = [entry, *[e for e in existing if e.get("role") not in _POD_SPINE_ROLES]]
     elif not existing:
+        rack_devices = [d for r in (pod.get("racks") or []) if isinstance(r, dict) for d in (r.get("devices") or [])]
         direct_spines = [
-            d for d in (pod.get("devices") or []) if isinstance(d, dict) and d.get("role") in _POD_SPINE_ROLES
+            d
+            for d in [*(pod.get("devices") or []), *rack_devices]
+            if isinstance(d, dict) and d.get("role") in _POD_SPINE_ROLES
         ]
         if direct_spines:
             role = str(direct_spines[0]["role"])
