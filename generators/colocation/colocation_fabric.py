@@ -29,6 +29,7 @@ from generators.mixins.firewall_context import FIREWALL_CONTEXT
 from generators.mixins.pools import PoolMixin
 from generators.mixins.routing import RoutingMixin
 from generators.mixins.types import DeviceOptions
+from generators.model import ColocationFabricModel, ColocationFlavor
 from generators.protocols import TopologyColocationZone, TopologyVirtualColocation
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
@@ -122,42 +123,20 @@ class ColocationFabricGenerator(
             physical_edge_names=physical_names_by_role.get("edge", []), overlay_process_ids=overlay_process_ids
         )
 
+    @property
+    def _flavor(self) -> ColocationFlavor:
+        if self._template_kind == _COLO_TEMPLATE_KIND_APPLIANCE:
+            return "virtual"
+        if self._template_kind == _COLO_TEMPLATE_KIND_PHYSICAL:
+            return "physical"
+        return "mixed"
+
     def _valid_fabric_templates(self) -> list[dict[str, Any]]:
-        """Drop entries this generator cannot act on, warning per entry (warning, not error, so other roles are still
-        created).
-        """
-        usable: list[dict[str, Any]] = []
-        for entry in self.data.get("fabric_templates", []):
-            role = entry.get("role")
-            if role not in _COLO_VALID_FABRIC_ROLES:
-                self.logger.warning(
-                    f"Colocation {self._label} {self.fabric_name}: fabric_templates entry with role={role!r} is not "
-                    f"valid here (expected one of {sorted(_COLO_VALID_FABRIC_ROLES)}) — skipping this entry."
-                )
-                continue
-            if not entry.get("quantity", 0) > 0:
-                self.logger.warning(
-                    f"Colocation {self._label} {self.fabric_name}: fabric_templates entry for role={role!r} has "
-                    f"quantity {entry.get('quantity')!r} — skipping this entry."
-                )
-                continue
-            template = entry.get("template")
-            if not template:
-                self.logger.warning(
-                    f"Colocation {self._label} {self.fabric_name}: fabric_templates entry for role={role!r} has "
-                    "no template — skipping this entry."
-                )
-                continue
-            template_kind = template.get("template_kind")
-            if template_kind != self._template_kind:
-                self.logger.warning(
-                    f"Colocation {self._label} {self.fabric_name}: fabric_templates entry for role={role!r} uses a "
-                    f"{template_kind or 'unknown'} template, which a {self._label} cannot host (expected "
-                    f"{self._template_kind}) — skipping this entry."
-                )
-                continue
-            usable.append(entry)
-        return self._within_design(self._drop_uncablable_service_entries(usable))
+        """Validate colocation fabric_templates via ColocationFabricModel (supports physical, virtual, and mixed)."""
+        model = ColocationFabricModel.compile(self.data, flavor=self._flavor, label=self._label)
+        for warning in model.warnings:
+            self.logger.warning(warning)
+        return list(model.usable_templates)
 
     @property
     def _design(self) -> dict[str, Any] | None:
