@@ -549,7 +549,7 @@ class TestEnsurePeerLinkCables:
         assert "id" not in first_call["data"]
         assert first_call["data"]["name"] == "CBL-tor-01-tor-02-mlag-PL1"
         assert first_call["data"]["endpoints"] == [iface_a1.id, iface_b1.id]
-        names = [c.kwargs["name__value"] for c in gen.client.filters.call_args_list]
+        names = gen.client.filters.call_args.kwargs["name__values"]
         assert names == ["CBL-tor-01-tor-02-mlag-PL1", "CBL-tor-01-tor-02-mlag-PL2"]
 
     @pytest.mark.asyncio

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from infrahub_sdk.protocols import CoreIPPrefixPool
@@ -103,46 +104,48 @@ class MLAGWiringMixin:
         peer_link_kind, stale_kind = (
             (DcimVirtualInterface, DcimLAGInterface) if virtual_peer_link else (DcimLAGInterface, DcimVirtualInterface)
         )
-        stale_peer_links = await self._interfaces_by_device(stale_kind, device_ids, "mlag-peer")
-        existing_peer_links = await self._interfaces_by_device(peer_link_kind, device_ids, "mlag-peer")
-        peer_ports = await self._interfaces_by_device(DcimPhysicalInterface, device_ids, "mlag-peer", include=["cable"])
-        existing_svis = (
-            await self._interfaces_by_device(DcimVirtualInterface, device_ids, "mlag-control")
+        svi_coro = (
+            self._interfaces_by_device(DcimVirtualInterface, device_ids, "mlag-control")
             if control_ip_ids and not virtual_peer_link
-            else {}
+            else asyncio.sleep(0, result={})
         )
-
-        peer_link_ifaces: list[Any] = []
-        # The domain lists every interface it configures: the peer-link, the physical mlag-peer ports and the control
-        # SVIs
+        stale_peer_links, existing_peer_links, peer_ports, existing_svis = await asyncio.gather(
+            self._interfaces_by_device(stale_kind, device_ids, "mlag-peer"),
+            self._interfaces_by_device(peer_link_kind, device_ids, "mlag-peer"),
+            self._interfaces_by_device(DcimPhysicalInterface, device_ids, "mlag-peer", include=["cable"]),
+            svi_coro,
+        )
         domain_ifaces: list[Any] = [port for ports in peer_ports.values() for port in ports]
-        for device_obj in member_devices:
+
+        async def _wire_member(device_obj: Any) -> tuple[Any | None, Any | None]:
             await self._disconnect_stale_peer_link(
                 device_obj, stale_peer_links[device_obj.id], mlag_name, virtual_peer_link
             )
-
             platform_name = platform_by_id[device_obj.id]
             control_ip_id = control_ip_ids.get(device_obj.id)
             existing_peer_link = next(iter(existing_peer_links[device_obj.id]), None)
             if virtual_peer_link:
-                iface = await self._ensure_virtual_peer_link(
+                return await self._ensure_virtual_peer_link(
                     device_obj, mlag_name, platform_name, existing_peer_link, control_ip_id, track=track
+                ), None
+            iface = await self._ensure_lag_peer_link(
+                device_obj, mlag_obj, platform_name, peer_ports[device_obj.id], existing_peer_link, track=track
+            )
+            svi = (
+                await self._ensure_control_svi(
+                    device_obj, mlag_name, control_ip_id, next(iter(existing_svis[device_obj.id]), None), track=track
                 )
-            else:
-                iface = await self._ensure_lag_peer_link(
-                    device_obj, mlag_obj, platform_name, peer_ports[device_obj.id], existing_peer_link, track=track
-                )
-                if control_ip_id:
-                    control_svi = await self._ensure_control_svi(
-                        device_obj,
-                        mlag_name,
-                        control_ip_id,
-                        next(iter(existing_svis[device_obj.id]), None),
-                        track=track,
-                    )
-                    domain_ifaces.append(control_svi)
+                if control_ip_id
+                else None
+            )
+            return iface, svi
+
+        results = await asyncio.gather(*(_wire_member(dev) for dev in member_devices))
+        peer_link_ifaces = [iface for iface, _ in results if iface is not None]
+        for iface, control_svi in results:
+            if control_svi is not None:
+                domain_ifaces.append(control_svi)
             if iface is not None:
-                peer_link_ifaces.append(iface)
                 domain_ifaces.append(iface)
 
         await self._list_domain_interfaces(mlag_obj, mlag_name, domain_ifaces)
@@ -215,12 +218,11 @@ class MLAGWiringMixin:
             )
             return None
 
-        for iface in member_ifaces:
-            if getattr(iface, "status").value == "active":
-                continue
+        inactive = [iface for iface in member_ifaces if getattr(iface, "status").value != "active"]
+        for iface in inactive:
             getattr(iface, "status").value = "active"
-            # update_group_context=False: a physical interface belongs to the object_template, not this run
-            await iface.save(allow_upsert=True, update_group_context=False)
+        if inactive:
+            await asyncio.gather(*(i.save(allow_upsert=True, update_group_context=False) for i in inactive))
 
         lag_obj = await self.client.create(
             kind=DcimLAGInterface,
@@ -367,12 +369,11 @@ class MLAGWiringMixin:
         stale = await self._interfaces_by_device(
             DcimVirtualInterface, [device_obj.id for device_obj in member_devices], "mlag-control"
         )
-        for device_obj in member_devices:
-            for stale_obj in stale[device_obj.id]:
-                self.logger.info(
-                    f"  [{device_obj.name.value}] Removing stale MLAG control SVI {stale_obj.name.value} ({mlag_name})"
-                )
-                await self.client.delete(kind=DcimVirtualInterface, id=stale_obj.id)
+        stale_items = [(dev, s) for dev in member_devices for s in stale[dev.id]]
+        for dev, s in stale_items:
+            self.logger.info(f"  [{dev.name.value}] Removing stale MLAG control SVI {s.name.value} ({mlag_name})")
+        if stale_items:
+            await asyncio.gather(*(self.client.delete(kind=DcimVirtualInterface, id=s.id) for _, s in stale_items))
 
     async def _resolve_peer_link_deployment_id(self, device_obj: Any) -> str | None:
         """Peer-link cables are filed against the PARENT of the device's deployment when that is a TopologyPod, else the
@@ -415,12 +416,20 @@ class MLAGWiringMixin:
         if not ifaces_a or not ifaces_b:
             return
 
-        layouts = await self._cable_layouts([dev_a.id, dev_b.id])
-        for idx, (iface_a, iface_b) in enumerate(zip(ifaces_a, ifaces_b), start=1):
+        pairs = list(enumerate(zip(ifaces_a, ifaces_b), start=1))
+        cable_names = [f"CBL-{mlag_name}-PL{idx}" for idx, _ in pairs]
+        layouts, existing_list = await asyncio.gather(
+            self._cable_layouts([dev_a.id, dev_b.id]),
+            self.client.filters(kind=DcimCable, name__values=cable_names),
+        )
+        existing_by_name = (
+            {cable_names[0]: existing_list[0].id}
+            if len(cable_names) == 1 and len(existing_list) == 1
+            else {c.name.value: c.id for c in existing_list}
+        )
+        for idx, (iface_a, iface_b) in pairs:
             cable_name = f"CBL-{mlag_name}-PL{idx}"
-
-            existing_cables = await self.client.filters(kind=DcimCable, name__value=cable_name)
-            existing_cable_id: str | None = existing_cables[0].id if existing_cables else None
+            existing_cable_id: str | None = existing_by_name.get(cable_name)
 
             if existing_cable_id is None:
                 # Adopt an orphan cable already on either interface (e.g. after a rename); the ports came with

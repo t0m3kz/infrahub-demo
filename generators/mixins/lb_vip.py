@@ -140,8 +140,10 @@ class LoadbalancerVipMixin:
             vips[component_id] = await self._component_vips(
                 component, produce=produce, pools=pools, errors=errors if produce else [], server_rules=server_rules
             )
-        for rules in server_rules.values():
-            await self._reconcile_lb_server_rules(rules, rule_indexes)
+        if server_rules:
+            await asyncio.gather(
+                *(self._reconcile_lb_server_rules(rules, rule_indexes) for rules in server_rules.values())
+            )
         return vips, errors
 
     async def _await_lb_inputs(self, components: list[dict[str, Any]], edges: list[Edge]) -> None:
@@ -172,21 +174,23 @@ class LoadbalancerVipMixin:
                     and not context_ready(footprint.get("serving_loadbalancer_context"))
                 ):
                     deployments.setdefault(footprint["id"], []).append(footprint)
-        await self._reread_until_ready(
-            segments,
-            owner="add_vxlan_segment",
-            query=_SEGMENT_GATEWAYS_QUERY,
-            kind=ManagedVxlanSegment.__name__,
-            field="gateway",
-            ready=lambda node: member_prefix(node) is not None,
-        )
-        await self._reread_until_ready(
-            deployments,
-            owner="add_customer_deployment_dc",
-            query=_SERVING_CONTEXTS_QUERY,
-            kind=TopologyCustomerDC.__name__,
-            field="serving_loadbalancer_context",
-            ready=lambda node: context_ready(node.get("serving_loadbalancer_context")),
+        await asyncio.gather(
+            self._reread_until_ready(
+                segments,
+                owner="add_vxlan_segment",
+                query=_SEGMENT_GATEWAYS_QUERY,
+                kind=ManagedVxlanSegment.__name__,
+                field="gateway",
+                ready=lambda node: member_prefix(node) is not None,
+            ),
+            self._reread_until_ready(
+                deployments,
+                owner="add_customer_deployment_dc",
+                query=_SERVING_CONTEXTS_QUERY,
+                kind=TopologyCustomerDC.__name__,
+                field="serving_loadbalancer_context",
+                ready=lambda node: context_ready(node.get("serving_loadbalancer_context")),
+            ),
         )
 
     async def _reread_until_ready(
@@ -206,8 +210,7 @@ class LoadbalancerVipMixin:
             return
         node_ids = sorted(dicts)
         self.logger.info("Waiting for %s to write %s of %s", owner, field, ", ".join(node_ids))
-        for node_id in node_ids:
-            await self.wait_for_parent_generators((owner,), node_id)
+        await asyncio.gather(*(self.wait_for_parent_generators((owner,), node_id) for node_id in node_ids))
         from utils.query_flatten import load_flat_query
 
         text = load_flat_query(query)
@@ -265,19 +268,25 @@ class LoadbalancerVipMixin:
                 if reserved is None:
                     continue
                 member_ids = reserved
-            context_ports: list[PortSpec] = []
-            for port in ports:
+
+            async def _provision_port(
+                port: PortSpec, *, _ctx: Any = context, _pool: Any = vip_pool, _mids: list[str] = member_ids
+            ) -> PortSpec | None:
                 vip_ip_id = await self.allocate_prefix_address(
-                    pool=vip_pool,
+                    pool=_pool,
                     identifier=vip_identifier(component["id"], port),
                     prefix_length=VIP_PREFIXLEN,
                     description=f"VIP {fqdn} {PortProfileHelper.format_port_spec(port)}",
                 )
                 if vip_ip_id is None:
-                    continue
+                    return None
                 addresses.setdefault(port, {})[context_name] = vip_ip_id
-                if produce and await self._save_vip(component, context, port, member_ids, vip_ip_id=vip_ip_id):
-                    context_ports.append(port)
+                if produce and await self._save_vip(component, _ctx, port, _mids, vip_ip_id=vip_ip_id):
+                    return port
+                return None
+
+            port_results = await asyncio.gather(*(_provision_port(port) for port in ports))
+            context_ports = [port for port in port_results if port is not None]
             if leg_id and context_ports:
                 rules = server_rules.setdefault(context["id"], _ServerRules(context=context, leg_id=leg_id))
                 rules.backends.append((component, segment, context_ports))
@@ -323,8 +332,9 @@ class LoadbalancerVipMixin:
         pool = await self._shared_address_pool(pools, member_pool_name(prefix["id"]), prefix, prefix_length)
         if pool is None:
             return None
-        member_ids: list[str] = []
-        for instance in sorted(instances, key=lambda item: str(item.get("name") or item["id"])):
+        ordered = sorted(instances, key=lambda item: str(item.get("name") or item["id"]))
+
+        async def _ensure_member(instance: dict[str, Any]) -> str | None:
             primary = (instance.get("primary_address") or {}).get("id")
             if not primary:
                 primary = await self.allocate_prefix_address(
@@ -334,16 +344,18 @@ class LoadbalancerVipMixin:
                     description=f"Address of {instance.get('name', instance['id'])} in {segment.get('name', segment['id'])}",
                 )
                 if primary is None:
-                    continue
+                    return None
                 await self.attach_refs(
                     kind=str(instance["typename"]),
                     node_id=instance["id"],
                     refs={"primary_address": primary},
-                    current={"primary_address": (instance.get("primary_address") or {}).get("id")},
+                    current={"primary_address": None},
                 )
                 instance["primary_address"] = {"id": primary}
-            member_ids.append(instance["id"])
-        return member_ids
+            return instance["id"]
+
+        resolved = await asyncio.gather(*(_ensure_member(inst) for inst in ordered))
+        return [mid for mid in resolved if mid is not None]
 
     async def _cloud_component_vips(
         self, component: dict[str, Any], *, security_profile: str, errors: list[str]
@@ -364,12 +376,15 @@ class LoadbalancerVipMixin:
         load_balancer = await self._save_cloud_lb(component, network, segments, security_profile, errors)
         if load_balancer is None:
             return
+        cloud_tasks = []
         for port in ports:
             protocol, protocol_error = listener_protocol(component, port)
             if protocol is None:
                 errors.append(str(protocol_error))
                 continue
-            await self._save_vip(component, load_balancer, port, member_ids, protocol=protocol)
+            cloud_tasks.append(self._save_vip(component, load_balancer, port, member_ids, protocol=protocol))
+        if cloud_tasks:
+            await asyncio.gather(*cloud_tasks)
 
     async def _save_cloud_lb(
         self,

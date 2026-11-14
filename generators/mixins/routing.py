@@ -278,12 +278,19 @@ class RoutingMixin(SharedRoutingObjectsMixin):
                 else:
                     self.logger.error(f"Cannot resolve AS for {bgp.get('name')}")
 
-        # Step 3: upsert BGP + OSPF processes by HFID (local_as upserts cleanly, no new/existing split).
-        plan.bgp_processes = [await self.client.create(kind=ManagedBGP, data=d) for d in plan.bgp_processes]
-        plan.ospf_processes = [await self.client.create(kind=ManagedOSPF, data=d) for d in plan.ospf_processes]
-        for obj in plan.bgp_processes + plan.ospf_processes:
+        # Step 3: upsert BGP + OSPF processes by HFID concurrently.
+        async def _save_process(kind: Any, data: dict[str, Any]) -> Any:
+            obj = await self.client.create(kind=kind, data=data)
             await obj.save(allow_upsert=True)
             self.logger.info(f"  Saved: {getattr(getattr(obj, 'name', None), 'value', obj.id)}")
+            return obj
+
+        bgp_procs, ospf_procs = await asyncio.gather(
+            asyncio.gather(*(_save_process(ManagedBGP, d) for d in plan.bgp_processes)),
+            asyncio.gather(*(_save_process(ManagedOSPF, d) for d in plan.ospf_processes)),
+        )
+        plan.bgp_processes = list(bgp_procs)
+        plan.ospf_processes = list(ospf_procs)
 
         # Step 4: resolve HFID refs to processes saved in this run into ids (search-index lag gives NODE_NOT_FOUND).
         process_id_by_name = {obj.name.value: obj.id for obj in plan.bgp_processes + plan.ospf_processes}
@@ -297,17 +304,24 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         for ospf_peering in plan.ospf_peerings:
             ospf_peering["ospf_process"] = [_resolve_hfid(ref) for ref in ospf_peering["ospf_process"]]
 
-        # Step 5: save OSPF interfaces before peerings (same id resolution); peerings retry on save because concurrent
-        # runs may create the process they reference.
-        plan.bgp_peerings = [await self.client.create(kind=ManagedBGPPeering, data=d) for d in plan.bgp_peerings]
-        plan.ospf_interfaces = [
-            await self.client.create(kind=RoutingOSPFInterface, data=d) for d in plan.ospf_interfaces
-        ]
-        for obj in plan.bgp_peerings:
+        # Step 5: save BGP peerings and OSPF interfaces concurrently before OSPF peerings.
+        async def _save_bgp_peering(data: dict[str, Any]) -> Any:
+            obj = await self.client.create(kind=ManagedBGPPeering, data=data)
             await save_with_node_not_found_retry(obj, self.logger)
-        for obj in plan.ospf_interfaces:
+            return obj
+
+        async def _save_ospf_interface(data: dict[str, Any]) -> Any:
+            obj = await self.client.create(kind=RoutingOSPFInterface, data=data)
             await obj.save(allow_upsert=True)
             self.logger.info(f"  Saved: {getattr(getattr(obj, 'name', None), 'value', obj.id)}")
+            return obj
+
+        bgp_peers, ospf_ifaces = await asyncio.gather(
+            asyncio.gather(*(_save_bgp_peering(d) for d in plan.bgp_peerings)),
+            asyncio.gather(*(_save_ospf_interface(d) for d in plan.ospf_interfaces)),
+        )
+        plan.bgp_peerings = list(bgp_peers)
+        plan.ospf_interfaces = list(ospf_ifaces)
 
         ospf_iface_id_by_name = {obj.name.value: obj.id for obj in plan.ospf_interfaces}
         for ospf_peering in plan.ospf_peerings:
@@ -316,9 +330,12 @@ class RoutingMixin(SharedRoutingObjectsMixin):
                 for ref in ospf_peering["ospf_interface"]
             ]
 
-        plan.ospf_peerings = [await self.client.create(kind=ManagedOSPFPeering, data=d) for d in plan.ospf_peerings]
-        for obj in plan.ospf_peerings:
+        async def _save_ospf_peering(data: dict[str, Any]) -> Any:
+            obj = await self.client.create(kind=ManagedOSPFPeering, data=data)
             await save_with_node_not_found_retry(obj, self.logger)
+            return obj
+
+        plan.ospf_peerings = list(await asyncio.gather(*(_save_ospf_peering(d) for d in plan.ospf_peerings)))
 
         total = (
             len(plan.autonomous_systems)
@@ -338,20 +355,26 @@ class RoutingMixin(SharedRoutingObjectsMixin):
         if not as_dicts:
             return device_to_as_id
 
+        to_create: list[tuple[str, dict[str, Any]]] = []
         for as_dict in as_dicts:
             device_name = as_dict.get("_for_device", "")
             existing_id = as_dict.get("_existing_id")
-
             if existing_id:
                 self.client.group_context.related_node_ids.append(existing_id)
                 device_to_as_id[device_name] = existing_id
                 self.logger.info(f"  Tracked existing AS for {device_name}")
             else:
-                data = {k: v for k, v in as_dict.items() if not k.startswith("_")}
-                obj = await self.client.create(kind=RoutingAutonomousSystem, data=data)
-                await obj.save(allow_upsert=True)
-                device_to_as_id[device_name] = obj.id
-                self.logger.info(f"  Created AS{obj.asn.value}")
+                to_create.append((device_name, {k: v for k, v in as_dict.items() if not k.startswith("_")}))
+
+        async def _create_as(device_name: str, data: dict[str, Any]) -> tuple[str, str]:
+            obj = await self.client.create(kind=RoutingAutonomousSystem, data=data)
+            await obj.save(allow_upsert=True)
+            self.logger.info(f"  Created AS{obj.asn.value}")
+            return device_name, obj.id
+
+        if to_create:
+            created = await asyncio.gather(*(_create_as(dev, data) for dev, data in to_create))
+            device_to_as_id.update(created)
 
         return device_to_as_id
 

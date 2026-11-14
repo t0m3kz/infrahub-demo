@@ -6,6 +6,7 @@ keeps the device locks and never deletes.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator, Iterable, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -111,13 +112,14 @@ class VrfMixin(SviMixin):
         )
         cleaned = clean_data(result)
         namespaces = namespaces_by_name(cleaned)
-        touched: set[str] = set()
-        for node in cleaned.get("DcimDevice") or []:
-            facts = device_vrf_facts(node)
-            if hosting_id := await self._converge_device(
-                facts, namespaces, set(extra.get(facts.id) or ()), prune=prune
-            ):
-                touched.add(hosting_id)
+        device_facts = [device_vrf_facts(node) for node in (cleaned.get("DcimDevice") or [])]
+        results = await asyncio.gather(
+            *(
+                self._converge_device(facts, namespaces, set(extra.get(facts.id) or ()), prune=prune)
+                for facts in device_facts
+            )
+        )
+        touched = {hosting_id for hosting_id in results if hosting_id}
         if prune and touched:
             await self.prune_empty_vrfs(touched)
 
@@ -153,14 +155,15 @@ class VrfMixin(SviMixin):
                 for name in add:
                     instance_ids[name] = await self._join_instance(facts, hosting[0], hosting[1], namespaces[name])
 
-        await self.sync_svis(facts, instance_ids)
-        await self.sync_l3vni_svis(facts, namespaces, instance_ids)
-        # The device has a ManagedPBR exactly when one of its SVIs is steered
-        await self.sync_pbr(facts)
+        await asyncio.gather(
+            self.sync_svis(facts, instance_ids),
+            self.sync_l3vni_svis(facts, namespaces, instance_ids),
+            # The device has a ManagedPBR exactly when one of its SVIs is steered
+            self.sync_pbr(facts),
+        )
 
-        if prune:
-            for key in drop:
-                await self._delete_if_unused(key[0], key[1], have[key].id, leaving=facts)
+        if prune and drop:
+            await asyncio.gather(*(self._delete_if_unused(key[0], key[1], have[key].id, leaving=facts) for key in drop))
         return facts.hosting_id
 
     async def sync_pbr(self, facts: DeviceVrfFacts) -> None:
@@ -238,10 +241,11 @@ class VrfMixin(SviMixin):
 
     async def _exchanged(self, instance_id: str) -> bool:
         """Whether a routed exchange joins the instance (``vrf_a`` / ``vrf_z``)."""
-        for end in ("vrf_a__ids", "vrf_z__ids"):
-            if await self.client.filters(kind=TopologyExchangeGateway, **{end: [instance_id]}):
-                return True
-        return False
+        a, z = await asyncio.gather(
+            self.client.filters(kind=TopologyExchangeGateway, vrf_a__ids=[instance_id]),
+            self.client.filters(kind=TopologyExchangeGateway, vrf_z__ids=[instance_id]),
+        )
+        return bool(a or z)
 
     async def local_vrf_ids(self, device_ids: Iterable[str], names: Iterable[str]) -> dict[tuple[str, str], str]:
         """Read scoped instances already provisioned under ``vrfs_held``; never assign a remote instance."""

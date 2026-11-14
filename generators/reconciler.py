@@ -195,7 +195,10 @@ class PlanReconciler:
 
     async def _reconcile_ips(self, specs: list[IpSpec], result: ReconcileResult) -> None:
         pool_names = sorted({spec.pool for spec in specs if spec.pool})
-        pools_by_name = {name: await self.generator._resolve_pool(None, CoreIPAddressPool, name) for name in pool_names}
+        resolved = await asyncio.gather(
+            *(self.generator._resolve_pool(None, CoreIPAddressPool, name) for name in pool_names)
+        )
+        pools_by_name = dict(zip(pool_names, resolved, strict=True))
 
         async def _assign_ip(spec: IpSpec) -> None:
             async with self.sem:
@@ -231,10 +234,7 @@ class PlanReconciler:
                     self.generator.fail(
                         f"Cable {spec.a_device}:{spec.a_interface} <-> {spec.b_device}:{spec.b_interface} unresolved"
                     )
-                data: dict[str, Any] = {
-                    "connected_endpoints": [{"id": a_id}, {"id": b_id}],
-                    "interconnection_layer": "physical",
-                }
+                data: dict[str, Any] = {"connected_endpoints": [{"id": a_id}, {"id": b_id}]}
                 if spec.cable_type:
                     data["cable_type"] = spec.cable_type
                 cable = await self.client.create(kind=DcimCable, data=data)

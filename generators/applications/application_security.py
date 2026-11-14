@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from generators.helpers.lb_vip import is_cloud_component
@@ -96,10 +97,12 @@ class AppApplicationGenerator(
                 if segment.get("id") and segment.get("typename") == VXLAN_SEGMENT_KIND and not segment.get("gateway")
             }
         )
-        for segment_id in pending:
-            refreshed = await self.wait_for_parent_generator_and_refetch(("add_vxlan_segment",), segment_id)
+        if pending:
+            await asyncio.gather(*(self.wait_for_parent_generators(("add_vxlan_segment",), sid) for sid in pending))
+            refreshed = await self.collect_data()
             if refreshed is not None:
-                app = (clean_data(refreshed).get("AppApplication") or [app])[0]
+                unpacked = refreshed.get("data") or refreshed
+                app = (clean_data(unpacked).get("AppApplication") or [app])[0]
         return app
 
     async def _fan_out(self, app_ids: list[str]) -> None:
@@ -163,12 +166,22 @@ class AppApplicationGenerator(
         # may belong to an application that has not run yet).
         segments = self._used_segments(components, edges)
         # A segment without an id is a component without one.
-        for segment in segments:
-            if segment.get("id"):
-                await ensure_segment_tag(self.client, self.resource_lock, segment=segment)
-                await ensure_segment_routing_tag(self.client, segment=segment)
-        for component in components:
-            await self._ensure_segment_isolation_mode(component.get("network_segment") or {}, app_security_profile)
+        unique_segments = list({seg["id"]: seg for seg in segments if seg.get("id")}.values())
+
+        async def _tag_segment(seg: dict[str, Any]) -> None:
+            await asyncio.gather(
+                ensure_segment_tag(self.client, self.resource_lock, segment=seg),
+                ensure_segment_routing_tag(self.client, segment=seg),
+            )
+
+        if unique_segments:
+            await asyncio.gather(*(_tag_segment(seg) for seg in unique_segments))
+        await asyncio.gather(
+            *(
+                self._ensure_segment_isolation_mode(comp.get("network_segment") or {}, app_security_profile)
+                for comp in components
+            )
+        )
         # An edge target on those segments is a second dict of it; the rules below read its mode
         modes = {
             segment["id"]: segment.get("isolation_mode")
@@ -320,10 +333,16 @@ class AppApplicationGenerator(
         own = {id(component) for component in components}
         tag_ids: dict[str, str] = {}
         callers: set[str] = set()
+        unique_components: list[dict[str, Any]] = []
+        seen_comp_ids: set[str] = set()
         for component in [*components, *targets]:
-            component_id = component.get("id")
-            if not component_id or component_id in tag_ids:
-                continue
+            cid = component.get("id")
+            if cid and cid not in seen_comp_ids:
+                seen_comp_ids.add(cid)
+                unique_components.append(component)
+
+        async def _sync_comp_tag(component: dict[str, Any]) -> None:
+            component_id = component["id"]
             if (component.get("network_segment") or {}).get("id") in microsegmented:
                 untagged = not (component.get("security_tag") or {}).get("id")
                 tag_ids[component_id] = await ensure_security_tag(
@@ -335,6 +354,9 @@ class AppApplicationGenerator(
                 await clear_component_tag(self.client, component_id=component_id)
                 component["security_tag"] = None
                 self.logger.info("  Component %s left its microsegmented segment - tag detached", component_id)
+
+        if unique_components:
+            await asyncio.gather(*(_sync_comp_tag(comp) for comp in unique_components))
         for component in [*components, *targets]:
             if component.get("id") in tag_ids:
                 component["security_tag"] = {"id": tag_ids[component["id"]]}

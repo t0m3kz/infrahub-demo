@@ -5,6 +5,7 @@ comes from utils.vrf_demand.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
@@ -154,9 +155,8 @@ class SviMixin:
             self.logger.warning(
                 f"  {facts.name}: cannot create L3 VNI SVI {name}: an interface of that name exists - skipped"
             )
-        for write in plan.writes:
-            if write.name in taken:
-                continue
+
+        async def _write_l3vni(write: L3vniWrite) -> None:
             data: dict[str, Any] = {
                 "name": write.name,
                 "device": {"id": facts.id},
@@ -168,8 +168,12 @@ class SviMixin:
                 data["id"] = write.existing_id
             svi = await self.client.create(kind=DcimVirtualInterface, data=data)
             await svi.save(allow_upsert=True, update_group_context=False)
-        for svi_id in plan.stale_ids:
-            await self.client.delete(kind=DcimVirtualInterface, id=svi_id)
+
+        writes = [w for w in plan.writes if w.name not in taken]
+        if writes:
+            await asyncio.gather(*(_write_l3vni(w) for w in writes))
+        if plan.stale_ids:
+            await asyncio.gather(*(self.client.delete(kind=DcimVirtualInterface, id=sid) for sid in plan.stale_ids))
         if plan:
             self.logger.info(f"  {facts.name}: L3 VNI SVIs written {len(plan.writes)}, deleted {len(plan.stale_ids)}")
 
@@ -184,9 +188,10 @@ class SviMixin:
                 f"  {facts.name}: cannot create SVI {name}: an interface of that name (role {role}) exists - skipped"
             )
         plan = replace(plan, writes=tuple(write for write in plan.writes if write.name not in taken))
-        for svi_id in plan.recreate_ids:
-            await self.client.delete(kind=DcimVirtualInterface, id=svi_id)
-        for write in plan.writes:
+        if plan.recreate_ids:
+            await asyncio.gather(*(self.client.delete(kind=DcimVirtualInterface, id=sid) for sid in plan.recreate_ids))
+
+        async def _write_svi(write: SviWrite) -> None:
             data: dict[str, Any] = {
                 "name": write.name,
                 "device": {"id": facts.id},
@@ -202,10 +207,15 @@ class SviMixin:
             await svi.save(allow_upsert=True, update_group_context=False)
             # After the save, which replaces the edge set: the row exists from the segment reconcile
             await join_capabilities(self.client, self.logger, svi.id, [write.row_id])
-        for svi_id, row_id in plan.leave:
-            await remove_edge(self.client, node_id=svi_id, relation=_ROW_RELATION, peer_id=row_id)
-        for svi_id in plan.stale_ids:
-            await self.client.delete(kind=DcimVirtualInterface, id=svi_id)
+
+        if plan.writes:
+            await asyncio.gather(*(_write_svi(w) for w in plan.writes))
+        cleanup_tasks = [
+            *(remove_edge(self.client, node_id=sid, relation=_ROW_RELATION, peer_id=rid) for sid, rid in plan.leave),
+            *(self.client.delete(kind=DcimVirtualInterface, id=sid) for sid in plan.stale_ids),
+        ]
+        if cleanup_tasks:
+            await asyncio.gather(*cleanup_tasks)
         if plan:
             self.logger.info(
                 f"  {facts.name}: SVIs written {len(plan.writes)}, deleted {len(plan.recreate_ids) + len(plan.stale_ids)}"
