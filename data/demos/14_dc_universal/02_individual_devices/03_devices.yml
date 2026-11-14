@@ -9,46 +9,46 @@ spec:
       status: active
       object_template: N9K-C9336C-FX2_SUPER_SPINE
       deployment: DC15
-      rack: ["ber-u1-s-1-row-1", "BER-U1-SUITE-1-R1-1"]
+      rack: ber-u1-s-1-r-1-1
     - name: dc15-15-super-spine-2
       role: super-spine
       status: active
       object_template: N9K-C9336C-FX2_SUPER_SPINE
       deployment: DC15
-      rack: ["ber-u1-s-1-row-1", "BER-U1-SUITE-1-R1-1"]
+      rack: ber-u1-s-1-r-1-1
     - name: dc15-15-border-leaf-1
       role: border-leaf
       status: active
       object_template: N9K-C9364C-GX_BORDER_LEAF
       deployment: DC15
-      rack: ["ber-u1-s-1-row-1", "BER-U1-SUITE-1-R1-1"]
+      rack: ber-u1-s-1-r-1-1
     - name: dc15-15-border-leaf-2
       role: border-leaf
       status: active
       object_template: N9K-C9364C-GX_BORDER_LEAF
       deployment: DC15
-      rack: ["ber-u1-s-1-row-1", "BER-U1-SUITE-1-R1-1"]
+      rack: ber-u1-s-1-r-1-1
     - name: dc15-15-pod-1-spine-1
       role: spine
       status: active
       object_template: N9K-C9336C-FX2_SPINE
       deployment: DC15-15-POD-1
-      rack: ["ber-u1-s-1-row-1", "BER-U1-SUITE-1-R1-2"]
+      rack: ber-u1-s-1-r-1-2
     - name: dc15-15-pod-1-spine-2
       role: spine
       status: active
       object_template: N9K-C9336C-FX2_SPINE
       deployment: DC15-15-POD-1
-      rack: ["ber-u1-s-1-row-1", "BER-U1-SUITE-1-R1-2"]
+      rack: ber-u1-s-1-r-1-2
     - name: dc15-15-pod-1-leaf-1
       role: leaf
       status: active
       object_template: N9K-C9336C-FX2_LEAF_MR
       deployment: DC15-15-POD-1
-      rack: ["ber-u1-s-1-row-1", "BER-U1-SUITE-1-R1-5"]
+      rack: ber-u1-s-1-r-1-5
     - name: dc15-15-pod-1-leaf-2
       role: leaf
       status: active
       object_template: N9K-C9336C-FX2_LEAF_MR
       deployment: DC15-15-POD-1
-      rack: ["ber-u1-s-1-row-1", "BER-U1-SUITE-1-R1-5"]
+      rack: ber-u1-s-1-r-1-5
