@@ -272,9 +272,6 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         """Create one DC-scoped fabric tier (super-spine/hyper-spine) from the DC-fabric loopback pool."""
         names: list[str] = []
         for entry in entries:
-            if entry.get("devices"):
-                names.extend(d["name"] for d in entry["devices"])
-                continue
             tier_opts = DeviceOptions(
                 indexes=indexes,
                 allocate_loopback=True,
@@ -284,12 +281,13 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             )
             if entry.get("rack_id"):
                 tier_opts["rack"] = entry["rack_id"]
+            tpl = {**entry["template"], "devices": entry["devices"]} if entry.get("devices") else entry["template"]
             names.extend(
                 await self.create_devices(
                     deployment_id=self.data["id"],
                     device_role=role,
                     quantity=entry["quantity"],
-                    template=entry["template"],
+                    template=tpl,
                     naming_convention=naming_convention_of(self.data),
                     options=tier_opts,
                 )
@@ -357,7 +355,24 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         all_names: list[str] = []
         for entry in entries:
             if entry.get("devices"):
-                all_names.extend(d["name"] for d in entry["devices"])
+                bl_opts = DeviceOptions(
+                    indexes=[self.data["index"]],
+                    allocate_loopback=True,
+                    loopback_pool=self._dc_fabric_loopback_pool_id,
+                    loopback_prefix_length=loopback_prefix_length(self._underlay_protocol),
+                )
+                if entry.get("rack_id"):
+                    bl_opts["rack"] = entry["rack_id"]
+                all_names.extend(
+                    await self.create_devices(
+                        deployment_id=self.data["id"],
+                        device_role="border-leaf",
+                        quantity=len(entry["devices"]),
+                        template={**entry["template"], "devices": entry["devices"]},
+                        naming_convention=naming_convention_of(self.data),
+                        options=bl_opts,
+                    )
+                )
                 continue
             if entry["quantity"] > max_border_leafs_per_fabric:
                 self.logger.error(

@@ -112,7 +112,7 @@ def _extract_rack_entries_for_roles(
                 {
                     "role": role,
                     "quantity": len(devs),
-                    "template": {"interfaces": first_ifaces},
+                    "template": {"interfaces": first_ifaces, "devices": devs},
                     "devices": devs,
                     "rack_id": rack_id,
                 }
@@ -140,7 +140,7 @@ def normalize_dc_templates(dc: dict[str, Any]) -> dict[str, Any]:
                 {
                     "role": role,
                     "quantity": len(devs),
-                    "template": {"interfaces": list(devs[0].get("interfaces") or [])},
+                    "template": {"interfaces": list(devs[0].get("interfaces") or []), "devices": devs},
                     "devices": devs,
                 }
             )
@@ -176,7 +176,10 @@ def normalize_pod_templates(pod: dict[str, Any]) -> dict[str, Any]:
                 {
                     "role": role,
                     "quantity": len(direct_spines),
-                    "template": {"interfaces": list(direct_spines[0].get("interfaces") or [])},
+                    "template": {
+                        "interfaces": list(direct_spines[0].get("interfaces") or []),
+                        "devices": direct_spines,
+                    },
                     "devices": direct_spines,
                 }
             )
@@ -292,7 +295,7 @@ def normalize_rack_templates(rack: dict[str, Any]) -> dict[str, Any]:
                     {
                         "role": role,
                         "quantity": len(devs),
-                        "template": {"interfaces": list(devs[0].get("interfaces") or [])},
+                        "template": {"interfaces": list(devs[0].get("interfaces") or []), "devices": devs},
                         "devices": devs,
                     }
                 ]

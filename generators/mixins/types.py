@@ -28,6 +28,7 @@ class DeviceOptions(TypedDict, total=False):
     account_id: str
     """With ``appliance``: the CloudAccount the appliances are ordered under."""
     indexes: list[int]
+    device_names: list[str]
     """Device indexes for hierarchical naming."""
     role_index_start: int
     """role_index of the first device (default 1): a role split over several

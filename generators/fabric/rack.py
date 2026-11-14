@@ -368,11 +368,12 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         """create_devices() plus _created_device_names bookkeeping; mlag=True pairs the created devices into MLAG
         domains per the pod's mlag_create.
         """
+        tpl = {**role["template"], "devices": role["devices"]} if role.get("devices") else role["template"]
         devices = await self.create_devices(
             deployment_id=deployment_id,
             device_role=device_role,
             quantity=role["quantity"],
-            template=role["template"],
+            template=tpl,
             naming_convention=self._naming_conv,
             options=self._roles.build_device_options(
                 allocate_loopback=allocate_loopback,

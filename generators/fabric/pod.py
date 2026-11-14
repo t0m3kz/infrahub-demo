@@ -274,23 +274,24 @@ class PodTopologyGenerator(
         # role_index continues across entries so a second entry never re-creates names.
         spines: list[str] = []
         for entry in spine_entries:
-            if entry.get("devices"):
-                spines.extend(d["name"] for d in entry["devices"])
-                continue
+            spine_opts = DeviceOptions(
+                indexes=indexes,
+                role_index_start=len(spines) + 1,
+                allocate_loopback=True,
+                loopback_pool=pod_pools.get("loopback"),
+                loopback_prefix_length=loopback_prefix_length(underlay_protocol),
+                management_pool=management_pool_id,
+            )
+            if entry.get("rack_id"):
+                spine_opts["rack"] = entry["rack_id"]
+            tpl = {**entry["template"], "devices": entry["devices"]} if entry.get("devices") else entry["template"]
             entry_spines = await self.create_devices(
                 deployment_id=spine_deployment_id,
                 device_role=spine_role,
                 quantity=entry["quantity"],
-                template=entry["template"],
+                template=tpl,
                 naming_convention=naming_conv,
-                options=DeviceOptions(
-                    indexes=indexes,
-                    role_index_start=len(spines) + 1,
-                    allocate_loopback=True,
-                    loopback_pool=pod_pools.get("loopback"),
-                    loopback_prefix_length=loopback_prefix_length(underlay_protocol),
-                    management_pool=management_pool_id,
-                ),
+                options=spine_opts,
             )
             spines.extend(entry_spines)
 

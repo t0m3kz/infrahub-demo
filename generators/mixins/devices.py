@@ -206,7 +206,7 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
             existing_devices_list = await self.client.filters(
                 kind=device_kind,
                 name__values=device_names,
-                include=["member_of_groups", "primary_address"],
+                include=["member_of_groups", "primary_address", "platform"],
             )
             existing_devices_map = {device.name.value: device for device in existing_devices_list}
 
@@ -262,8 +262,8 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
                         "status": "active",
                         "role": device_role,
                         "deployment": {"id": deployment_id} if deployment_id else None,
-                        "device_type": template.get("device_type"),
-                        "platform": template.get("platform"),
+                        **({"device_type": template["device_type"]} if template.get("device_type") else {}),
+                        **({"platform": template["platform"]} if template.get("platform") else {}),
                         **({"owner": {"id": owner_id}} if owner_id else {}),
                         **({"hosting_device": {"id": hosting_device_id}} if virtual and hosting_device_id else {}),
                         **({"account": {"id": account_id} if account_id else None} if appliance else {}),
@@ -293,7 +293,17 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
                         kind=DcimVirtualInterface,
                         data={
                             **({"id": existing_loopback.id} if existing_loopback else {}),
-                            "name": get_loopback_name((template.get("platform") or {}).get("name") or "", 0),
+                            "name": get_loopback_name(
+                                (template.get("platform") or {}).get("name")
+                                or (
+                                    existing_device.platform.peer.name.value
+                                    if existing_device
+                                    and getattr(existing_device, "platform", None)
+                                    and existing_device.platform.peer
+                                    else ""
+                                ),
+                                0,
+                            ),
                             "description": "Loopback interface",
                             "device": obj,
                             "status": "active",
