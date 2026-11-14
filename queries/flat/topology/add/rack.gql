@@ -93,6 +93,37 @@ query RackGenerator($id: ID!) {
                 value
               }
             }
+            ... on LocationRackRow {
+              id
+              name {
+                value
+              }
+              index {
+                value
+              }
+              row_type {
+                value
+              }
+              racks_per_row {
+                value
+              }
+              parent {
+                node {
+                  ... on LocationSuite {
+                    id
+                    index {
+                      value
+                    }
+                    rows {
+                      value
+                    }
+                    racks_per_row {
+                      value
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         leafs: fabric_templates(role__value: "leaf") {

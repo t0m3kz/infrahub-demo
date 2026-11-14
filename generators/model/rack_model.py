@@ -49,7 +49,11 @@ class RackFabricModel:
             if len(conflicting) > 1:
                 errors.append(f"role(s) {conflicting} are mutually exclusive on the same rack")
 
-        suite_data = data.get("parent") if isinstance(data.get("parent"), Mapping) else None
+        suite_data = (
+            data.get("suite")
+            if isinstance(data.get("suite"), Mapping)
+            else (data.get("parent") if isinstance(data.get("parent"), Mapping) else None)
+        )
         reservation = SuitePortReservation.from_pod_and_suite(pod_design, suite_data)
         prev_slots = reservation.previous_row_rack_slots(row_index)
 

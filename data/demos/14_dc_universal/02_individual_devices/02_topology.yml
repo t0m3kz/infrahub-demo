@@ -19,10 +19,9 @@ spec:
         data:
           - name: BER-U1-SUITE-1-R1-1
             index: 1
-            row_index: 1
             shortname: ber-u1-s-1-r-1-1
             rack_type: network
-            parent: ber-u1-s-1
+            parent: ber-u1-s-1-row-1
       children:
         kind: TopologyPod
         data:
@@ -36,14 +35,12 @@ spec:
               data:
                 - name: BER-U1-SUITE-1-R1-2
                   index: 2
-                  row_index: 1
                   shortname: ber-u1-s-1-r-1-2
                   rack_type: network
-                  parent: ber-u1-s-1
+                  parent: ber-u1-s-1-row-1
                 - name: BER-U1-SUITE-1-R1-5
                   index: 5
-                  row_index: 1
                   shortname: ber-u1-s-1-r-1-5
                   rack_type: network
-                  parent: ber-u1-s-1
+                  parent: ber-u1-s-1-row-1
                   member_of_groups: [topologies_rack]

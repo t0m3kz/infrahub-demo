@@ -21,3 +21,18 @@ spec:
                   parent: muc-u1
                   rows: 4
                   racks_per_row: 9
+                  children:
+                    kind: LocationRackRow
+                    data:
+                      - name: MUC-U1-SUITE-1-ROW-1
+                        index: 1
+                        shortname: "muc-u1-s-1-row-1"
+                        row_type: network
+                        racks_per_row: 5
+                        parent: muc-u1-s-1
+                      - name: MUC-U1-SUITE-1-ROW-2
+                        index: 2
+                        shortname: "muc-u1-s-1-row-2"
+                        row_type: network
+                        racks_per_row: 5
+                        parent: muc-u1-s-1

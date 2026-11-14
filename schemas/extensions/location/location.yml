@@ -62,7 +62,7 @@ nodes:
     menu_placement: "LocationGeneric"
     label: Suite
     parent: LocationFacility
-    children: "LocationRack"
+    children: "LocationGeneric"
     # Unique within its facility; `shortname` (LocationGeneric) is the global identifier.
     uniqueness_constraints:
       - ["parent", "name__value"]
@@ -110,6 +110,63 @@ nodes:
         order_weight: 160
         parameters:
           min_value: 1
+  - name: RackRow
+    namespace: Location
+    inherit_from:
+      - "LocationGeneric"
+    include_in_menu: false
+    menu_placement: "LocationGeneric"
+    label: Rack Row
+    parent: "LocationSuite"
+    children: "LocationRack"
+    uniqueness_constraints:
+      - ["parent", "name__value"]
+      - ["parent", "index__value"]
+    icon: "mdi:view-sequential"
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        order_weight: 100
+      - name: index
+        label: "Row Index"
+        kind: Number
+        optional: false
+        order_weight: 120
+        parameters:
+          min_value: 1
+      - name: racks_per_row
+        label: "Racks in Row"
+        description: "Physical rack slots in this row (defaults to suite racks_per_row when omitted)"
+        kind: Number
+        optional: true
+        order_weight: 130
+        parameters:
+          min_value: 1
+      - name: row_type
+        label: "Row Type"
+        description: "Restricts which rack_type values may be placed in this row"
+        kind: Dropdown
+        optional: true
+        default_value: mixed
+        order_weight: 140
+        choices:
+          - name: mixed
+            label: Mixed Row
+            color: "#e6e6fa"
+          - name: network
+            label: Network / Core Row
+            color: "#d0e8fd"
+          - name: compute
+            label: Compute Row
+            color: "#a8d8b8"
+          - name: tor
+            label: ToR Row
+            color: "#fde8d0"
+          - name: storage
+            label: Storage Row
+            color: "#f5d0fd"
   - name: Rack
     namespace: Location
     generate_template: true
@@ -118,7 +175,7 @@ nodes:
       - CoreArtifactTarget
     include_in_menu: false
     menu_placement: "LocationGeneric"
-    parent: "LocationSuite"
+    parent: "LocationGeneric"
     children: ""
     # A rack name is unique within its suite, not across the estate (R1-1 exists in every suite); the globally
     # unique identifier is `shortname` (LocationGeneric), which is also the human friendly id.
@@ -137,6 +194,7 @@ nodes:
         order_weight: 120
       - name: row_index
         kind: Number
+        optional: true
         order_weight: 121
       - name: rack_type
         kind: Dropdown
@@ -222,6 +280,15 @@ extensions:
     # relationships of an unrelated node), the generic's peer (the server narrows it to the node's `parent:` kind) and
     # the generic's identifier and direction. Region, Country, Metro and Facility keep it optional.
     - kind: LocationSuite
+      relationships:
+        - name: parent
+          peer: LocationGeneric
+          cardinality: one
+          kind: Hierarchy
+          optional: false
+          identifier: parent__child
+          direction: outbound
+    - kind: LocationRackRow
       relationships:
         - name: parent
           peer: LocationGeneric

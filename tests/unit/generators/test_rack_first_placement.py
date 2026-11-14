@@ -96,3 +96,32 @@ def test_compute_rack_rejects_super_spine_and_spine_roles() -> None:
                 "fabric_templates": [{"role": "super-spine", "quantity": 2, "template": {"id": "tpl-ss"}}],
             }
         )
+
+
+def test_rack_row_derives_row_index_and_suite_and_enforces_row_type() -> None:
+    suite = {"id": "suite-1", "index": 1, "rows": 4, "racks_per_row": 9}
+    row = {"id": "row-2", "name": "ROW-2", "index": 2, "row_type": "network", "racks_per_row": 5, "parent": suite}
+    rack = normalize_rack_templates(
+        {
+            "id": "rack-r2-5",
+            "name": "R2-5",
+            "index": 5,
+            "rack_type": "network",
+            "parent": row,
+            "switch_template": {"id": "tpl-leaf"},
+            "switch_quantity": 2,
+        }
+    )
+    assert rack["row_index"] == 2
+    assert rack["suite"]["id"] == "suite-1"
+
+    with pytest.raises(ValueError, match="incompatible with row"):
+        normalize_rack_templates(
+            {
+                "id": "rack-bad",
+                "name": "R2-6",
+                "index": 6,
+                "rack_type": "compute",
+                "parent": row,
+            }
+        )

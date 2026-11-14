@@ -201,8 +201,45 @@ def _default_switch_quantity_for_rack(rack: Mapping[str, Any], switch_role: str)
     return None
 
 
+def resolve_rack_row_and_suite(rack: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Resolve optional LocationRackRow and parent LocationSuite from ``rack['parent']``."""
+    parent = rack.get("parent") if isinstance(rack.get("parent"), dict) else None
+    if not parent:
+        return None, None
+    # LocationRackRow has 'row_type' or a nested 'parent' (LocationSuite); LocationSuite has 'rows'.
+    if "row_type" in parent or ("rows" not in parent and isinstance(parent.get("parent"), dict)):
+        suite = parent.get("parent") if isinstance(parent.get("parent"), dict) else None
+        return parent, suite
+    return None, parent
+
+
+def validate_rack_row_compatibility(rack: Mapping[str, Any], row: Mapping[str, Any] | None) -> None:
+    """Enforce that a rack's ``rack_type`` matches its parent ``LocationRackRow.row_type`` when row_type != 'mixed'."""
+    if not row:
+        return
+    row_type = str(row.get("row_type") or "mixed")
+    if row_type == "mixed":
+        return
+    rack_type = str(rack.get("rack_type") or "")
+    if rack_type and rack_type != row_type:
+        rack_name = rack.get("name") or rack.get("id") or "<unknown>"
+        row_name = row.get("name") or f"row-{row.get('index', '?')}"
+        raise ValueError(
+            f"Rack {rack_name} has rack_type={rack_type!r} which is incompatible with row {row_name} "
+            f"(row_type={row_type!r})"
+        )
+
+
 def normalize_rack_templates(rack: dict[str, Any]) -> dict[str, Any]:
-    """Ensure rack role buckets reflect typed switch_template (role & quantity inferred from rack_type/design) or direct rack devices."""
+    """Resolve LocationRackRow/LocationSuite context and ensure rack role buckets reflect templates or devices."""
+    row, suite = resolve_rack_row_and_suite(rack)
+    if row is not None:
+        rack["row"] = row
+        if rack.get("row_index") is None and row.get("index") is not None:
+            rack["row_index"] = int(row["index"])
+        validate_rack_row_compatibility(rack, row)
+    if suite is not None:
+        rack["suite"] = suite
     switch_role = rack.get("switch_role") or _default_switch_role_for_rack(rack)
     rack_roles_present: list[str] = [
         *(str(ft["role"]) for ft in (rack.get("fabric_templates") or []) if ft.get("role")),
