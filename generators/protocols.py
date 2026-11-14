@@ -1185,3 +1185,18 @@ class CloudServiceEndpoint(CloudResource):
     saas_region: RelationshipAttribute[TopologySaasRegion]
     segments: RelationshipManager[CloudNetworkSegment]
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class TopologyConnectivityRequest(CoreNode):
+    bandwidth_mbps: IntegerOptional
+    connectivity_type: Dropdown
+    description: StringOptional
+    name: String
+    redundancy: DropdownOptional
+    status: Dropdown
+    destination: RelationshipAttribute[TopologyConnectableLocation]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    provider: RelationshipAttribute[OrganizationProvider]
+    realized_circuits: RelationshipManager[TopologyCircuit]
+    source: RelationshipAttribute[TopologyConnectableLocation]
+    vrf: RelationshipAttribute[ManagedVRF]

@@ -168,6 +168,12 @@ spec:
       group: carrier_circuits
       action: run-circuit-generator
 
+    - name: trigger-connectivity-request-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: connectivity_requests
+      action: run-connectivity-request-generator
+
     - name: trigger-session-circuit-on-added
       branch_scope: "other_branches"
       member_update: added

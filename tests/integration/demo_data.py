@@ -334,6 +334,7 @@ GROUP_MEMBER_KINDS: dict[str, tuple[str, ...]] = {
     "colocation_zones": ("TopologyColocationZone",),
     "virtual_colocations": ("TopologyVirtualColocation",),
     "carrier_circuits": ("TopologyCarrierCircuit",),
+    "connectivity_requests": ("TopologyConnectivityRequest",),
     "virtual_circuits": ("TopologySessionCircuit",),
     "patch_panels": ("DcimPatchPanel",),
     "endpoints": ("DcimPhysicalDevice",),

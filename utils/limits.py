@@ -147,6 +147,7 @@ GROUP_APP_COMPONENTS = "app_components"
 GROUP_CARRIER_CIRCUITS = "carrier_circuits"
 # Every session circuit: the target group of add_virtual_circuit.
 GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
+GROUP_CONNECTIVITY_REQUESTS = "connectivity_requests"
 # Devices that are never a border gateway of a VLAN domain.
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"
 GROUP_PROVIDER_STUBS = "provider_stubs"

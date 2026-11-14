@@ -386,10 +386,15 @@ class TestGenerate:
         await gen.generate(_payload(_office()))
         calls = [call[0] for call in manager.mock_calls]
 
-        # Pools, site key, attach, then devices, links, area, routing, WAN exit last.
-        assert calls[:4] == ["ensure_sliced_pool"] * 3 + ["upsert_number_pool"]
-        assert calls[4:] == [
+        # Pools and site key run concurrently via asyncio.gather(), followed by attach, devices, links, area, routing, WAN exit.
+        assert sorted(calls[:5]) == [
             "ensure_lisp_site_key",
+            "ensure_sliced_pool",
+            "ensure_sliced_pool",
+            "ensure_sliced_pool",
+            "upsert_number_pool",
+        ]
+        assert calls[5:] == [
             "attach_refs",
             "create_devices",
             "create_devices",

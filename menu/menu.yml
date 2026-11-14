@@ -486,6 +486,12 @@ spec:
                   kind: TopologySessionCircuit
                   icon: "mdi:cloud-sync"
                   description: "DCI, handoff and tunnel circuits: the connections routing is generated on"
+                - namespace: Topology
+                  name: ConnectivityRequestItem
+                  label: Connectivity Requests
+                  kind: TopologyConnectivityRequest
+                  icon: "mdi:connection"
+                  description: "Client requests for inter-topology connections (DC, Colo, Cloud, SaaS, Office)"
 
           # ── Cloud & SaaS inventory: gateways, attachments, route tables, endpoints, IPsec ──
           - namespace: Cloud

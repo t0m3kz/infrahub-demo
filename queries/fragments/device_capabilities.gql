@@ -377,17 +377,3 @@ fragment HardwareCapabilityProfileFields on DcimHardwareCapabilityProfile {
     value
   }
 }
-
-fragment InterconnectionFields on TopologyInterconnection {
-  id
-  __typename
-  interconnection_layer {
-    value
-  }
-  bandwidth_mbps {
-    value
-  }
-  mtu {
-    value
-  }
-}

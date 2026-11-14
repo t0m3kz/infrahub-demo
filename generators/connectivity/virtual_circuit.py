@@ -112,6 +112,15 @@ class SessionEnd:
         """Id of the device's single overlay-role ManagedBGP process, else None."""
         return self.overlay_ids[0] if len(self.overlay_ids) == 1 else None
 
+    @property
+    def is_external(self) -> bool:
+        """True when this end is an external/provider/internet interface with no ManagedBGP process of ours."""
+        return len(self.processes) == 0 and self.port_kind in {
+            "TopologyInternetInterface",
+            "TopologyProviderInterface",
+            "CloudPeeringInterface",
+        }
+
     def session_process(self) -> str | None:
         """Id of the process a session runs on: the single overlay one, else the device's only ManagedBGP."""
         overlay = self.overlay_process()
@@ -199,7 +208,7 @@ class SessionPlan:
     # The pool the link prefix is allocated from.
     pool_name: str
     prefix_length: int
-    process_ids: tuple[str, str]
+    process_ids: tuple[str, ...]
     peerings: tuple[PeeringPlan, ...]
     # The environment namespace the /31 lives in when it is not ``default`` (a handoff's): both ends need an instance
     # of it before the addresses are written.
@@ -384,10 +393,12 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                 "a port carries one interconnect or handoff session"
             )
 
-    def _process_ids(self, name: str, first: SessionEnd, second: SessionEnd) -> tuple[str, str]:
-        """The two ends' session processes: the single overlay one, else the device's only ManagedBGP."""
-        ids = []
+    def _process_ids(self, name: str, first: SessionEnd, second: SessionEnd) -> tuple[str, ...]:
+        """The participating ManagedBGP process IDs (2 for internal sessions, 1 when the far end is external)."""
+        ids: list[str] = []
         for end in (first, second):
+            if end.is_external:
+                continue
             process_id = end.session_process()
             if process_id is None:
                 names = ", ".join(proc for _, proc in end.processes) or "none"
@@ -396,7 +407,9 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                     f"process; has: {names}"
                 )
             ids.append(process_id)
-        return ids[0], ids[1]
+        if not ids:
+            self.fail(f"{name}: at least one end must have a ManagedBGP process")
+        return tuple(ids)
 
     # -- planners (pure: no client call) -------------------------------------------------------------------------
 
@@ -423,7 +436,9 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         namespace = (circuit.get("vrf") or {}).get("security_zone")
         if not isinstance(namespace, dict) or not namespace.get("name"):
             self.fail(f"{name}: a {label.lower()} circuit needs its routing VRF")
-        first, second = sorted(ends, key=lambda e: (e.overlay_process() is None, e.device_name, e.port_name))
+        first, second = sorted(
+            ends, key=lambda e: (e.is_external, e.overlay_process() is None, e.device_name, e.port_name)
+        )
         return SessionPlan(
             label=label,
             first=first,
@@ -583,22 +598,27 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                 password_id = await self._ensure_routing_password(
                     name=plan.key_name, description=f"Session key of {name}, generated once, never rotated", track=False
                 )
-            for peering in plan.peerings:
-                await self.upsert_bgp_peering(
-                    name=f"{name}-{peering.suffix}",
-                    description=peering.description,
-                    status="active" if status == "active" else "provisioning",
-                    session_type=peering.session_type,
-                    peering_role=peering.peering_role,
-                    process_ids=list(plan.process_ids),
-                    address_family_ids=[await self.ensure_address_family(*peering.address_family)],
-                    interface_ids=list(peering.interface_ids),
-                    password_id=password_id,
-                    ttl=peering.ttl,
-                    bfd_enabled=peering.bfd_enabled,
-                    send_community=peering.send_community,
-                    send_extended_community=peering.send_extended_community,
+            af_ids = await asyncio.gather(*(self.ensure_address_family(*p.address_family) for p in plan.peerings))
+            await asyncio.gather(
+                *(
+                    self.upsert_bgp_peering(
+                        name=f"{name}-{peering.suffix}",
+                        description=peering.description,
+                        status="active" if status == "active" else "provisioning",
+                        session_type=peering.session_type,
+                        peering_role=peering.peering_role,
+                        process_ids=list(plan.process_ids),
+                        address_family_ids=[af_id],
+                        interface_ids=list(peering.interface_ids),
+                        password_id=password_id,
+                        ttl=peering.ttl,
+                        bfd_enabled=peering.bfd_enabled,
+                        send_community=peering.send_community,
+                        send_extended_community=peering.send_extended_community,
+                    )
+                    for peering, af_id in zip(plan.peerings, af_ids, strict=True)
                 )
+            )
 
     async def _link_prefix(self, name: str, circuit_id: str, plan: SessionPlan, pool: Any) -> Any:
         """The link prefix of the session, allocated from our pool (idempotent per ``vc-p2p__<circuit id>``); a changed

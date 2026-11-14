@@ -645,6 +645,8 @@ queries:
     file_path: queries/flat/topology/add/circuit.gql
   - name: virtual_circuit_data
     file_path: queries/flat/topology/add/virtual_circuit.gql
+  - name: connectivity_request_data
+    file_path: queries/flat/topology/add/connectivity_request.gql
   - name: patch_panel_data
     file_path: queries/flat/topology/add/patch_panel.gql
   - name: context_routes
@@ -858,6 +860,15 @@ generator_definitions:
     targets: virtual_circuits
     query: virtual_circuit_data
     class_name: VirtualCircuitSessionGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_connectivity_request
+    file_path: generators/connectivity/request.py
+    targets: connectivity_requests
+    query: connectivity_request_data
+    class_name: ConnectivityRequestGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

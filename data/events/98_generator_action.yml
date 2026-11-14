@@ -70,6 +70,9 @@ spec:
     - name: run-virtual-circuit-generator
       description: Build the BGP session(s) of an interconnect or handoff circuit
       generator: add_virtual_circuit
+    - name: run-connectivity-request-generator
+      description: Reconcile inter-topology circuits for a ConnectivityRequest
+      generator: add_connectivity_request
     - name: run-context-routes-generator
       description: Write the static routes of a firewall or load-balancer context on its border devices
       generator: add_context_routes

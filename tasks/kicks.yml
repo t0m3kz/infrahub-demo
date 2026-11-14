@@ -165,3 +165,21 @@ kicks:
     stages:
       - name: topology
         load: [00_full_topology]
+
+  # -- Connectivity requests (30_all/09_connectivity_requests) ---------------------------------------------------
+  connectivity-requests:
+    description: Inter-topology connectivity requests (DC, Colocation, Cloud, SaaS) reconciled by the generator.
+    stages:
+      - name: foundation
+        load:
+          - 30_all/00_customer
+          - 30_all/01_cloud
+          - 30_all/02_colo
+          - 30_all/03_dc/dc10/00_location.yml
+          - 30_all/03_dc/dc10/01_topology.yml
+          - 30_all/04_saas
+      - name: interconnects
+        load: [30_all/08_interconnects]
+      - name: connectivity_requests
+        load: [30_all/09_connectivity_requests]
+        generator: add_connectivity_request

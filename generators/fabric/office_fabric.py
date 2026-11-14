@@ -127,9 +127,10 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
             return
         self.logger.info(f"Generating the fabric of office {office_name}")
 
-        pools = await self._ensure_office_pools(office_id=office_id)
-        # The office's two references in one fetch and one save: its VNI pool and its LISP site key.
-        site_key_id = await self.ensure_lisp_site_key()
+        pools, site_key_id = await asyncio.gather(
+            self._ensure_office_pools(office_id=office_id),
+            self.ensure_lisp_site_key(),
+        )
         await self.attach_refs(
             kind=TopologyCustomerOffice,
             node_id=office_id,
@@ -179,36 +180,38 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         """
         office = self.fabric_name
         async with self.resource_lock(f"office-pools-{office_id}"):
-            loopback_pool = await self.ensure_sliced_pool(
-                pool_name=f"{office}-loopback-pool",
-                parent_pool_name=LOOPBACK_IPV4_POOL,
-                prefix_length=_OFFICE_LOOPBACK_PREFIX_LENGTH,
-                role="loopback",
-                kind="address",
-            )
-            management_pool = await self.ensure_sliced_pool(
-                pool_name=f"{office}-management-pool",
-                parent_pool_name=MANAGEMENT_IPV4_POOL,
-                prefix_length=_OFFICE_MANAGEMENT_PREFIX_LENGTH,
-                role="management",
-                kind="address",
-                namespace=DEFAULT_NAMESPACE,
-            )
-            technical_pool = await self.ensure_sliced_pool(
-                pool_name=f"{office}-technical-pool",
-                parent_pool_name=TECHNICAL_IPV4_POOL,
-                prefix_length=_OFFICE_TECHNICAL_PREFIX_LENGTH,
-                role="technical",
-                kind="prefix",
-            )
-            # The L2 VNI (LISP instance-id) of an office segment; never stretched, so only the local band.
-            vni_pool = await self.upsert_number_pool(
-                pool_name=f"{office}-vni-pool",
-                description=f"L2 VNI pool for office {office.upper()}",
-                start_range=SITE_VNI_START,
-                end_range=SITE_VNI_END,
-                node="ManagedSegmentDeployment",
-                node_attribute="vni",
+            loopback_pool, management_pool, technical_pool, vni_pool = await asyncio.gather(
+                self.ensure_sliced_pool(
+                    pool_name=f"{office}-loopback-pool",
+                    parent_pool_name=LOOPBACK_IPV4_POOL,
+                    prefix_length=_OFFICE_LOOPBACK_PREFIX_LENGTH,
+                    role="loopback",
+                    kind="address",
+                ),
+                self.ensure_sliced_pool(
+                    pool_name=f"{office}-management-pool",
+                    parent_pool_name=MANAGEMENT_IPV4_POOL,
+                    prefix_length=_OFFICE_MANAGEMENT_PREFIX_LENGTH,
+                    role="management",
+                    kind="address",
+                    namespace=DEFAULT_NAMESPACE,
+                ),
+                self.ensure_sliced_pool(
+                    pool_name=f"{office}-technical-pool",
+                    parent_pool_name=TECHNICAL_IPV4_POOL,
+                    prefix_length=_OFFICE_TECHNICAL_PREFIX_LENGTH,
+                    role="technical",
+                    kind="prefix",
+                ),
+                # The L2 VNI (LISP instance-id) of an office segment; never stretched, so only the local band.
+                self.upsert_number_pool(
+                    pool_name=f"{office}-vni-pool",
+                    description=f"L2 VNI pool for office {office.upper()}",
+                    start_range=SITE_VNI_START,
+                    end_range=SITE_VNI_END,
+                    node="ManagedSegmentDeployment",
+                    node_attribute="vni",
+                ),
             )
         return {"loopback": loopback_pool, "management": management_pool, "technical": technical_pool, "vni": vni_pool}
 
