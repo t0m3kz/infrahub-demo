@@ -161,16 +161,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         return pod_profile(self.data["deployment"]["design"])
 
     def _planned_previous_row_rack_slots(self) -> int:
-        """Deterministic count of row-dependent rack slots before this row, from pod design capacity."""
-        if self.data["row_index"] <= 1:
-            return 0
-        profile = self._pod_profile()
-        if profile["deployment_type"] not in ("tor", "mixed"):
-            return 0
-
-        # In both tor and mixed modes, compute racks are the row-dependent slots.
-        racks_per_row = max(0, profile["row_dependent_rack_slots_per_row"])
-        return (self.data["row_index"] - 1) * racks_per_row
+        """Deterministic count of row-dependent rack slots before this row, bounded by suite grid."""
+        return RackFabricModel.compile(self.data, frozenset()).planned_previous_row_rack_slots
 
     def _validate_profile_capacity_limits(self) -> list[str]:
         """Profile-capacity violations for this rack context (offsets are only valid within them)."""

@@ -264,7 +264,14 @@ query RackGenerator($id: ID!) {
         parent {
           node {
             ... on LocationSuite {
+              id
               index {
+                value
+              }
+              rows {
+                value
+              }
+              racks_per_row {
                 value
               }
             }
