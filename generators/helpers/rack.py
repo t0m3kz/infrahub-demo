@@ -21,10 +21,15 @@ _POD_SPINE_ROLES: frozenset[str] = frozenset({"spine", "border-spine"})
 def normalize_pod_templates(pod: dict[str, Any]) -> dict[str, Any]:
     """Ensure pod['fabric_templates'] reflects typed spine_role/spine_quantity/spine_template or direct spine devices."""
     existing = list(pod.get("fabric_templates") or [])
-    spine_role = pod.get("spine_role")
-    spine_qty = pod.get("spine_quantity")
+    spine_role = pod.get("spine_role") or "spine"
     spine_tpl = pod.get("spine_template")
-    if spine_role and spine_tpl and spine_qty is not None and int(spine_qty) > 0:
+    spine_qty = pod.get("spine_quantity")
+    if spine_tpl and spine_qty is None:
+        raw_design = pod.get("design")
+        design: Mapping[str, Any] = raw_design if isinstance(raw_design, Mapping) else {}
+        max_sp = int(design.get("max_spines_per_pod") or 0)
+        spine_qty = min(2, max_sp) if max_sp > 0 else 2
+    if spine_tpl and spine_qty is not None and int(spine_qty) > 0:
         entry = {"role": spine_role, "quantity": int(spine_qty), "template": spine_tpl}
         existing = [entry, *[e for e in existing if e.get("role") not in _POD_SPINE_ROLES]]
     elif not existing:
@@ -41,11 +46,44 @@ def normalize_pod_templates(pod: dict[str, Any]) -> dict[str, Any]:
     return pod
 
 
+def _default_switch_role_for_rack(rack: Mapping[str, Any]) -> str:
+    """Infer default switch role from rack_type and pod deployment_type when switch_role is omitted."""
+    rack_type = str(rack.get("rack_type") or "compute")
+    if rack_type == "network":
+        return "leaf"
+    raw_pod = rack.get("deployment")
+    pod: Mapping[str, Any] = raw_pod if isinstance(raw_pod, Mapping) else {}
+    raw_design = pod.get("design")
+    design: Mapping[str, Any] = raw_design if isinstance(raw_design, Mapping) else {}
+    if design.get("max_tors_per_compute_rack") == 0:
+        return "l2-leaf"
+    return "tor"
+
+
+def _default_switch_quantity_for_rack(rack: Mapping[str, Any], switch_role: str) -> int | None:
+    """Infer default switch count from pod design capacity by rack_type when switch_quantity is omitted."""
+    raw_pod = rack.get("deployment")
+    pod: Mapping[str, Any] = raw_pod if isinstance(raw_pod, Mapping) else {}
+    raw_design = pod.get("design")
+    design: Mapping[str, Any] = raw_design if isinstance(raw_design, Mapping) else {}
+    if switch_role == "leaf":
+        val = int(design.get("max_leafs_per_network_rack") or 0)
+        return val if val > 0 else 2
+    if switch_role == "tor":
+        val = int(design.get("max_tors_per_compute_rack") or 0)
+        return val if val > 0 else 2
+    if switch_role in ("l2-leaf", "access-leaf"):
+        return 2
+    return None
+
+
 def normalize_rack_templates(rack: dict[str, Any]) -> dict[str, Any]:
-    """Ensure rack role buckets reflect typed switch_role/switch_quantity/switch_template or direct rack devices."""
-    switch_role = rack.get("switch_role")
-    switch_qty = rack.get("switch_quantity")
+    """Ensure rack role buckets reflect typed switch_template (role & quantity inferred from rack_type/design) or direct rack devices."""
+    switch_role = rack.get("switch_role") or _default_switch_role_for_rack(rack)
     switch_tpl = rack.get("switch_template")
+    switch_qty = rack.get("switch_quantity")
+    if switch_tpl and switch_qty is None:
+        switch_qty = _default_switch_quantity_for_rack(rack, switch_role)
     if switch_role in _RACK_ROLE_TO_BUCKET and switch_tpl and switch_qty is not None and int(switch_qty) > 0:
         bucket = _RACK_ROLE_TO_BUCKET[switch_role]
         rack[bucket] = [{"role": switch_role, "quantity": int(switch_qty), "template": switch_tpl}]

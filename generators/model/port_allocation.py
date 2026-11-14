@@ -41,16 +41,9 @@ class SuitePortReservation:
         design_comp = int(pod_design.get("max_compute_racks_per_row") or 0)
 
         suite_rows = (suite or {}).get("rows")
-        suite_per_row = (suite or {}).get("racks_per_row")
-
         effective_rows = min(design_rows, int(suite_rows)) if suite_rows else design_rows
-        if suite_per_row:
-            total_per_row = int(suite_per_row)
-            net_per_row = min(design_net, total_per_row)
-            comp_per_row = min(design_comp, max(0, total_per_row - net_per_row))
-        else:
-            net_per_row = design_net
-            comp_per_row = design_comp
+        net_per_row = design_net
+        comp_per_row = design_comp
 
         # In mixed mode rack.index spans both network and compute rack slots in the row; in tor mode only compute slots.
         row_slots = (net_per_row + comp_per_row) if deployment_type == "mixed" else comp_per_row
@@ -78,6 +71,16 @@ class SuitePortReservation:
         if self.deployment_type == "tor":
             return 0
         return self.effective_rows * self.network_racks_per_row * self.max_leafs_per_network_rack
+
+    @property
+    def total_reserved_downlinks(self) -> int:
+        """Total spine downlink ports needed per spine across leaf, border-leaf, and ToR blocks."""
+        tor_ports = (
+            0
+            if self.deployment_type == "middle_rack"
+            else self.effective_rows * self.compute_racks_per_row * self.max_tors_per_compute_rack
+        )
+        return self.tor_block_start + tor_ports
 
     def previous_row_rack_slots(self, row_index: int) -> int:
         """Deterministic count of row-dependent rack slots before ``row_index``, bounded by suite grid."""

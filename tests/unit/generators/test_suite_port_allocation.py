@@ -1,4 +1,4 @@
-"""Unit tests for suite-driven spine downlink port reservation."""
+"""Unit tests for capacity-based spine downlink port reservation."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ from generators.model.port_allocation import SuitePortReservation
 from generators.model.rack_model import RackFabricModel
 
 
-def test_suite_grid_bounds_reserved_leaf_and_tor_blocks() -> None:
+def test_suite_rows_and_rack_capacities_size_leaf_and_tor_blocks() -> None:
     pod_design = {
         "max_rows": 4,
         "max_network_racks_per_row": 1,
-        "max_compute_racks_per_row": 8,
+        "max_compute_racks_per_row": 4,
         "max_leafs_per_network_rack": 2,
         "max_tors_per_compute_rack": 2,
         "max_border_leafs_per_pod": 2,
@@ -24,11 +24,11 @@ def test_suite_grid_bounds_reserved_leaf_and_tor_blocks() -> None:
     assert res.tor_block_start == 6
 
 
-def test_rack_fabric_model_computes_non_overlapping_suite_offsets() -> None:
+def test_rack_fabric_model_computes_non_overlapping_offsets() -> None:
     pod_design = {
         "max_rows": 4,
         "max_network_racks_per_row": 1,
-        "max_compute_racks_per_row": 8,
+        "max_compute_racks_per_row": 4,
         "max_leafs_per_network_rack": 2,
         "max_tors_per_compute_rack": 2,
         "max_border_leafs_per_pod": 2,
@@ -60,7 +60,10 @@ def test_rack_fabric_model_computes_non_overlapping_suite_offsets() -> None:
     assert r2_tor.planned_previous_row_rack_slots == 5
     assert (
         r2_tor.cabling_offset(
-            pod_design, device_count=2, device_type="tor", racks_in_previous_rows=r2_tor.planned_previous_row_rack_slots
+            pod_design,
+            device_count=2,
+            device_type="tor",
+            racks_in_previous_rows=r2_tor.planned_previous_row_rack_slots,
         )
         == 18
     )

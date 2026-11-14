@@ -7,6 +7,5 @@ spec:
     - template_name: STD-LEAF-RACK-FX3
       rack_type: network
       height: 42
-      switch_role: leaf
       switch_quantity: 2
       switch_template: N9K-C93180YC-FX3_LEAF
