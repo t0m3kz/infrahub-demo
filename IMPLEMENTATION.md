@@ -80,7 +80,7 @@ The roles a rack may hold depend on the type ([generators/mixins/rack.py](genera
 
 `tor` and `l2_leaf`/`access_leaf` are mutually exclusive in one rack: a ToR cables to the spines, an L2 or access
 leaf cables to a local leaf pair, and no cabling plan does both. Border-leafs, firewalls and load balancers are not
-rack-level roles: they are declared on the data center's own `fabric_templates` and placed by the DC generator.
+rack-level roles: they are declared on network `LocationRack` `fabric_templates` under the data center and placed by the DC generator.
 
 ### Middle rack
 
