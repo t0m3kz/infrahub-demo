@@ -26,8 +26,7 @@ spec:
         data:
           - index: 1
             design: M_MIDDLE
-            fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+            object_template: DC6-POD-SPINE-FX2
             mlag_create: back-to-back
             member_of_groups:
               - topologies_pod
@@ -38,33 +37,25 @@ spec:
                   index: 5
                   row_index: 1
                   shortname: ktw-1-s-1-r-1-5
-                  rack_type: network
                   parent: ktw-1-s-1
+                  object_template: DC6-NET-RACK-DELL
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
                 - name: KTW-1-SUITE-1-R2-5
                   index: 5
                   row_index: 2
                   shortname: ktw-1-s-1-r-2-5
-                  rack_type: network
                   parent: ktw-1-s-1
+                  object_template: DC6-NET-RACK-DELL
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
           - index: 2
             design: S_TOR
-            # S_TOR's own design assumes 32 downlink ports per spine (2 rows
-            # x 8 racks x 2 ToRs) before border-leaf even needs its own —
-            # N9K-C9336C-FX2_SPINE only wires up 30 (Ethernet1/[1-30]), so
-            # border-leaf cabling's capacity-based offset (reserves the
-            # design's full ToR allocation, not live rack count) always
-            # overflows on this template regardless of how many racks are
-            # actually populated. N9K-C9364C-GX_SPINE has 60.
-            fabric_templates:
-              - ["2", "spine", "N9K-C9364C-GX_SPINE"]
+            # S_TOR reserves 32 downlink ports per spine (2 rows x 8 racks x 2 ToRs);
+            # N9K-C9364C-GX_SPINE provides 60 downlink ports.
+            object_template: DC6-POD-SPINE-GX
             mlag_create: back-to-back
             member_of_groups:
               - topologies_pod
@@ -75,42 +66,33 @@ spec:
                   index: 1
                   row_index: 1
                   shortname: ktw-1-s-2-r-1-1
-                  rack_type: tor
                   parent: ktw-1-s-2
+                  object_template: DC6-TOR-RACK-CISCO
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "tor", "N9K-C9336C-FX2_TOR"]
                 - name: KTW-1-SUITE-2-R1-5
                   index: 5
                   row_index: 1
                   shortname: ktw-1-s-2-r-1-5
-                  rack_type: tor
                   parent: ktw-1-s-2
+                  object_template: DC6-TOR-RACK-CISCO
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "tor", "N9K-C9336C-FX2_TOR"]
                 - name: KTW-1-SUITE-2-R2-1
                   index: 1
                   row_index: 2
                   shortname: ktw-1-s-2-r-2-1
-                  rack_type: tor
                   parent: ktw-1-s-2
+                  object_template: DC6-TOR-RACK-DELL
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
                 - name: KTW-1-SUITE-2-R2-5
                   index: 5
                   row_index: 2
                   shortname: ktw-1-s-2-r-2-5
-                  rack_type: tor
                   parent: ktw-1-s-2
+                  object_template: DC6-TOR-RACK-DELL
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
           - index: 3
             design: M_MIXED
-            fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+            object_template: DC6-POD-SPINE-FX2
             mlag_create: virtual
             member_of_groups:
               - topologies_pod
@@ -121,53 +103,41 @@ spec:
                   index: 1
                   row_index: 1
                   shortname: ktw-1-s-3-r-1-1
-                  rack_type: compute
                   parent: ktw-1-s-3
+                  object_template: DC6-COMP-RACK-ARISTA
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
                 - name: KTW-1-SUITE-3-R1-4
                   index: 4
                   row_index: 1
                   shortname: ktw-1-s-3-r-1-4
-                  rack_type: network
                   parent: ktw-1-s-3
+                  object_template: DC6-NET-RACK-ARISTA
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
                 - name: KTW-1-SUITE-3-R1-7
                   index: 7
                   row_index: 1
                   shortname: ktw-1-s-3-r-1-7
-                  rack_type: compute
                   parent: ktw-1-s-3
+                  object_template: DC6-COMP-RACK-ARISTA
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
                 - name: KTW-1-SUITE-3-R2-1
                   index: 1
                   row_index: 2
                   shortname: ktw-1-s-3-r-2-1
-                  rack_type: compute
                   parent: ktw-1-s-3
+                  object_template: DC6-COMP-RACK-ARISTA
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
                 - name: KTW-1-SUITE-3-R2-4
                   index: 4
                   row_index: 2
                   shortname: ktw-1-s-3-r-2-4
-                  rack_type: network
                   parent: ktw-1-s-3
+                  object_template: DC6-NET-RACK-ARISTA
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
                 - name: KTW-1-SUITE-3-R2-7
                   index: 7
                   row_index: 2
                   shortname: ktw-1-s-3-r-2-7
-                  rack_type: compute
                   parent: ktw-1-s-3
+                  object_template: DC6-COMP-RACK-ARISTA
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]

@@ -88,6 +88,28 @@ spec:
           - relationship_name: fabric_templates
             modification_type: updated
 
+    - name: trigger-pod-update-spine-template
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "updated"
+      action: run-pod-rack-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: spine_template
+            modification_type: updated
+
+    - name: trigger-pod-update-spine-quantity
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "updated"
+      action: run-pod-rack-cascade
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: spine_quantity
+            value_match: any
+
     - name: trigger-pod-update-mlag-create
       branch_scope: "other_branches"
       node_kind: TopologyPod
@@ -141,6 +163,28 @@ spec:
         data:
           - relationship_name: fabric_templates
             modification_type: updated
+
+    - name: trigger-rack-generator-update-switch-template
+      branch_scope: "other_branches"
+      node_kind: LocationRack
+      mutation_action: "updated"
+      action: run-rack-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: switch_template
+            modification_type: updated
+
+    - name: trigger-rack-generator-update-switch-quantity
+      branch_scope: "other_branches"
+      node_kind: LocationRack
+      mutation_action: "updated"
+      action: run-rack-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: switch_quantity
+            value_match: any
 
     # # Device decommission: when status set to decommissioned
     # - name: trigger-device-decommission

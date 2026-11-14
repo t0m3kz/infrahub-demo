@@ -92,6 +92,13 @@ def normalize_rack_templates(rack: dict[str, Any]) -> dict[str, Any]:
     if switch_role in _RACK_ROLE_TO_BUCKET and switch_tpl and switch_qty is not None and int(switch_qty) > 0:
         bucket = _RACK_ROLE_TO_BUCKET[switch_role]
         rack[bucket] = [{"role": switch_role, "quantity": int(switch_qty), "template": switch_tpl}]
+        # Also materialize any secondary roles present in fabric_templates (e.g. l2-leaf below a primary leaf pair)
+        for ft in rack.get("fabric_templates") or []:
+            ft_role = ft.get("role")
+            if ft_role in _RACK_ROLE_TO_BUCKET and ft_role != switch_role:
+                sec_bucket = _RACK_ROLE_TO_BUCKET[ft_role]
+                if not rack.get(sec_bucket):
+                    rack[sec_bucket] = [ft]
     else:
         direct_by_role: dict[str, list[dict[str, Any]]] = {}
         for dev in rack.get("devices") or []:
