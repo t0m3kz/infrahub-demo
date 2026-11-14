@@ -5,6 +5,7 @@ customer kind, parent label and specs.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
@@ -384,14 +385,12 @@ class FirewallContextMixin(TransitLegsMixin):
             pool_names = {leg_type: spec.leg_pool_name(ns.name.value) for leg_type, ns in namespaces.items()}
             if spec.vip_pool_name is not None:
                 pool_names[_VIP_POOL_KEY] = spec.vip_pool_name(tenant_namespace.name.value)
-            pools = await self._prefix_pools(pool_names, context_name=context_name)
-            if pools is None:
+            pools, snat_pool = await asyncio.gather(
+                self._prefix_pools(pool_names, context_name=context_name),
+                self._snat_pool() if needs_snat else asyncio.sleep(0, result=None),
+            )
+            if pools is None or (needs_snat and snat_pool is None):
                 return
-            snat_pool = None
-            if needs_snat:
-                snat_pool = await self._snat_pool()
-                if snat_pool is None:
-                    return
             context_obj = await self._get_or_create_context(
                 spec,
                 context_name,
@@ -445,23 +444,28 @@ class FirewallContextMixin(TransitLegsMixin):
             ):
                 return context_id
 
-            addresses: dict[str, dict[int, Any]] = {}
-            for leg_type in leg_types:
-                leg_addresses = await self._allocate_transit_addresses(
-                    spec,
-                    context_obj=context_obj,
-                    namespace=namespaces[leg_type],
-                    pool=pools[leg_type],
-                    members=members,
-                    vlan_id=vlan_id,
-                    leg_type=leg_type,
-                    track=track,
+            allocated = await asyncio.gather(
+                *(
+                    self._allocate_transit_addresses(
+                        spec,
+                        context_obj=context_obj,
+                        namespace=namespaces[lt],
+                        pool=pools[lt],
+                        members=members,
+                        vlan_id=vlan_id,
+                        leg_type=lt,
+                        track=track,
+                    )
+                    for lt in leg_types
                 )
-                if leg_addresses is None:
-                    return context_id
-                addresses[leg_type] = leg_addresses
+            )
+            if any(res is None for res in allocated):
+                return context_id
+            addresses: dict[str, dict[int, Any]] = {
+                lt: addr for lt, addr in zip(leg_types, allocated) if addr is not None
+            }
 
-            for exchange_name, a_type, z_type in exchange_specs:
+            async def _upsert_exchange(exchange_name: str, a_type: str, z_type: str) -> bool:
                 try:
                     exchange = await self.client.create(
                         kind=TopologyRoutedExchange,
@@ -474,8 +478,14 @@ class FirewallContextMixin(TransitLegsMixin):
                         },
                     )
                     await save_with_node_not_found_retry(exchange, self.logger, **tracked_save_kwargs(track))
+                    return True
                 except Exception as exc:
                     self.logger.error(f"Failed to upsert exchange '{exchange_name}': {exc}")
+                    return False
+
+            if exchange_specs:
+                ok = await asyncio.gather(*(_upsert_exchange(n, a, z) for n, a, z in exchange_specs))
+                if not all(ok):
                     return context_id
 
             # Exchange legs are derived (utils/service_contexts.py exchange_legs); nothing links a leg to its exchange
