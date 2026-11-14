@@ -28,7 +28,7 @@ from typing import Any
 from infrahub_sdk import InfrahubClientSync
 from infrahub_sdk.task.models import TaskState
 
-from tasks.proposed_change import DIFF_TASK_TIMEOUT
+from tests.integration.proposed_change import DIFF_TASK_TIMEOUT
 
 OPERATORS = {"equals": "==", "min": ">=", "max": "<="}
 _EXPECT_KEYS = {"count", "unchanged", "added", "removed"}

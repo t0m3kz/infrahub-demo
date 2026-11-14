@@ -5,7 +5,7 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClientSync
 
-from tasks import run_kick
+from tests.integration.kick_runner import run_kick
 from tests.integration.kicks_loader import Kick, load_suite_kicks
 
 from .conftest import TestInfrahubDockerWithClient

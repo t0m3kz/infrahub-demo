@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tasks import proposed_change
-from tasks.proposed_change import _fetch_failed_checks, _rerun_unfinished_validators
+from tests.integration import proposed_change
+from tests.integration.proposed_change import _fetch_failed_checks, _rerun_unfinished_validators
 
 
 def _response(*validators: dict[str, Any]) -> dict[str, Any]:

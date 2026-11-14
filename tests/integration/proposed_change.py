@@ -1,4 +1,4 @@
-"""Proposed change flow shared by `invoke kick` (tasks.py) and the integration tests: create, validate, merge."""
+"""Proposed change flow shared by integration tests and `invoke kick`: create, validate, merge."""
 
 import logging
 import time
@@ -7,56 +7,20 @@ from typing import Any, cast
 from infrahub_sdk import InfrahubClientSync
 from infrahub_sdk.exceptions import NodeNotFoundError
 from infrahub_sdk.graphql import Mutation
-from infrahub_sdk.task.models import TaskFilter, TaskState
+from infrahub_sdk.task.models import TaskState
+
+from .wait_helpers import wait_for_branch_idle
 
 logger = logging.getLogger(__name__)
 
 DIFF_TASK_TIMEOUT = 600  # seconds
 MERGE_TASK_TIMEOUT = 600  # seconds
 # Empty polls (5 s apart) of main's queue before the post-merge work counts as done: triggers schedule it late.
-POST_MERGE_STABLE_ZERO = 3
-VALIDATION_MAX_ATTEMPTS = 30
-VALIDATION_POLL_INTERVAL = 10  # seconds
+POST_MERGE_STABLE_ZERO = 2
+VALIDATION_MAX_ATTEMPTS = 60
+VALIDATION_POLL_INTERVAL = 3  # seconds
 # Quiet polls (5 s apart) on every branch before a proposed change or a merge starts.
-QUIET_POLLS_BEFORE_PROPOSED_CHANGE = 12
-
-IN_FLIGHT_STATES = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
-FAILURE_STATES = [TaskState.FAILED, TaskState.CRASHED, TaskState.CANCELLED]
-
-
-def wait_for_no_running_tasks(
-    client: InfrahubClientSync,
-    branch: str | None,
-    max_attempts: int = 120,
-    poll_interval: int = 5,
-    stable_zero: int = 3,
-) -> None:
-    """Wait until nothing is in flight on ``branch`` (any branch when None) for ``stable_zero`` polls."""
-    scope = f"branch '{branch}'" if branch else "any branch"
-    consecutive_zero = 0
-    for attempt in range(1, max_attempts + 1):
-        task_filter = (
-            TaskFilter(state=IN_FLIGHT_STATES, branch=branch) if branch else TaskFilter(state=IN_FLIGHT_STATES)
-        )
-        in_flight = client.task.filter(filter=task_filter)
-        if not in_flight:
-            consecutive_zero += 1
-            if consecutive_zero >= stable_zero:
-                logger.info("No in-flight tasks on %s (%d consecutive zero checks)", scope, consecutive_zero)
-                return
-        else:
-            consecutive_zero = 0
-            titles = [t.title for t in in_flight[:5]]
-            logger.info(
-                "Waiting for %d in-flight task(s) on %s... attempt %d/%d - %s",
-                len(in_flight),
-                scope,
-                attempt,
-                max_attempts,
-                titles,
-            )
-        time.sleep(poll_interval)
-    logger.warning("Timed out waiting for tasks to finish on %s", scope)
+QUIET_POLLS_BEFORE_PROPOSED_CHANGE = 3
 
 
 def diff_name(branch: str) -> str:
@@ -88,7 +52,7 @@ def create_proposed_change(
     destination_branch: str = "main",
 ) -> str:
     """Update the branch diff and open a proposed change; return its id."""
-    wait_for_no_running_tasks(client, branch=None, stable_zero=QUIET_POLLS_BEFORE_PROPOSED_CHANGE)
+    wait_for_branch_idle(client, branch=None, initial_delay=0, stable_zero=QUIET_POLLS_BEFORE_PROPOSED_CHANGE)
     logger.info("Creating proposed change: %s (%s -> %s)", name, source_branch, destination_branch)
     update_diff(client, source_branch)
 
@@ -265,25 +229,6 @@ def _rerun_unfinished_validators(client: InfrahubClientSync, pc_id: str) -> None
     wait_for_validations(client=client, pc_id=pc_id, pc_name=pc_id, allow_failures=True)
 
 
-def _wait_for_post_merge_tasks(client: InfrahubClientSync) -> None:
-    """Wait for the background tasks a merge schedules on main."""
-    time.sleep(5)
-    consecutive_zero = 0
-    for poll in range(1, 61):
-        in_flight = client.task.filter(filter=TaskFilter(state=IN_FLIGHT_STATES, branch="main"))
-        if not in_flight:
-            consecutive_zero += 1
-            if consecutive_zero >= POST_MERGE_STABLE_ZERO:
-                logger.info("All post-merge tasks completed on main (%d consecutive zero checks)", consecutive_zero)
-                return
-        else:
-            consecutive_zero = 0
-            titles = [t.title for t in in_flight[:5]]
-            logger.info("Waiting for %d post-merge task(s)... %d/60 - %s", len(in_flight), poll, titles)
-        time.sleep(5)
-    logger.warning("Post-merge tasks on main still in flight after 60 polls")
-
-
 def _state(node: Any) -> Any:
     """The proposed change's state value."""
     return node.state.value if hasattr(node.state, "value") else node.state
@@ -305,7 +250,7 @@ def merge_proposed_change(
 
     for attempt in range(1, max_retries + 1):
         # A merge blocks every write on every branch while it runs (MERGE_IN_PROGRESS)
-        wait_for_no_running_tasks(client, branch=None, stable_zero=QUIET_POLLS_BEFORE_PROPOSED_CHANGE)
+        wait_for_branch_idle(client, branch=None, initial_delay=0, stable_zero=QUIET_POLLS_BEFORE_PROPOSED_CHANGE)
         mutation = Mutation(
             mutation="CoreProposedChangeMerge",
             input_data={"data": {"id": pc_id}, "wait_until_completion": False},
@@ -320,7 +265,9 @@ def merge_proposed_change(
         pc_state_after = _state(client.get("CoreProposedChange", id=pc_id))
         if pc_state_after in ["merged", "closed"]:
             logger.info("Merge succeeded, waiting for post-merge tasks on main...")
-            _wait_for_post_merge_tasks(client)
+            wait_for_branch_idle(
+                client, branch="main", initial_delay=2, stable_zero=POST_MERGE_STABLE_ZERO, max_attempts=60
+            )
             return {
                 "task_id": task_id,
                 "task_state": task_state,
@@ -452,8 +399,8 @@ def fetch_artifacts(
     client: InfrahubClientSync,
     branch: str,
     expected_min_total: int = 0,
-    max_polls: int = 12,
-    poll_interval: int = 10,
+    max_polls: int = 40,
+    poll_interval: int = 3,
 ) -> dict[str, Any]:
     """The artifact checks of a proposed change, polled until none is pending and ``expected_min_total`` exist."""
     time.sleep(3)
