@@ -42,7 +42,8 @@ def _lower(payloads: dict[str, Any], suite_name: str, field: str) -> dict[str, A
     """A copy of the payloads where every rack of suite ``suite_name`` sees ``field`` of its suite one lower."""
     lowered = copy.deepcopy(payloads)
     for edge in lowered["LocationRack"]["edges"]:
-        suite = edge["node"]["parent"]["node"]
+        p = edge["node"]["parent"]["node"]
+        suite = p["parent"]["node"] if "parent" in p else p
         if suite["name"]["value"] == suite_name:
             suite[field]["value"] -= 1
     return lowered
@@ -130,7 +131,6 @@ def test_the_query_selects_what_the_check_reads_and_nothing_else() -> None:
     reads = {
         "id",
         "name",
-        "row_index",
         "index",
         "rack_type",
         "parent.id",

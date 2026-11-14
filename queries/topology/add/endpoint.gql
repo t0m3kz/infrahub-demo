@@ -51,8 +51,8 @@ fragment EndpointPodFields on TopologyPod {
         id
         name { value }
         index { value }
-        row_index { value }
         rack_type { value }
+        parent { node { ... on LocationRackRow { id index { value } } } }
       }
     }
   }
@@ -62,8 +62,8 @@ fragment RackFields on LocationRack {
   id
   name { value }
   index { value }
-  row_index { value }
   rack_type { value }
+  parent { node { ... on LocationRackRow { id index { value } } } }
   deployment {
     node {
       ...EndpointPodFields

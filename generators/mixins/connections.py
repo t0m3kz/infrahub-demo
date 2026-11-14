@@ -190,13 +190,31 @@ class CablingMixin:
                     for rack in await self.client.filters(kind=LocationRack, ids=rack_ids, include=["parent"])
                 }
             )
+        parent_ids = sorted(
+            {
+                pid
+                for rack_id in rack_id_by_device.values()
+                if rack_id in cache.racks and (pid := _peer_id(getattr(cache.racks[rack_id], "parent", None)))
+            }
+        )
+        rows_by_id = getattr(cache, "rows", None)
+        if rows_by_id is None:
+            rows_by_id = {}
+            setattr(cache, "rows", rows_by_id)
+        uncached_pids = [pid for pid in parent_ids if pid not in cache.suites and pid not in rows_by_id]
+        if uncached_pids:
+            rows_by_id.update(
+                {
+                    row.id: row
+                    for row in await self.client.filters(kind="LocationRackRow", ids=uncached_pids, include=["parent"])
+                }
+            )
         suite_ids = sorted(
             {
-                suite_id
-                for rack_id in rack_id_by_device.values()
-                if rack_id in cache.racks
-                and (suite_id := _peer_id(getattr(cache.racks[rack_id], "parent", None)))
-                and suite_id not in cache.suites
+                sid
+                for pid in parent_ids
+                for sid in [_peer_id(getattr(rows_by_id[pid], "parent", None)) if pid in rows_by_id else pid]
+                if sid and sid not in cache.suites
             }
         )
         if suite_ids:
@@ -209,12 +227,20 @@ class CablingMixin:
                 cache.positions[device_id] = None
                 continue
             rack = cache.racks.get(rack_id)
-            suite = cache.suites.get(_peer_id(getattr(rack, "parent", None)) or "") if rack is not None else None
-            if rack is None or suite is None:
+            if rack is None:
                 continue
+            pid = _peer_id(getattr(rack, "parent", None)) or ""
+            row_obj = rows_by_id.get(pid)
+            suite_id = (_peer_id(getattr(row_obj, "parent", None)) or "") if row_obj is not None else pid
+            suite = cache.suites.get(suite_id)
+            if suite is None:
+                continue
+            r_idx = (
+                row_obj.index.value if row_obj is not None else getattr(getattr(rack, "row_index", None), "value", None)
+            )
             cache.positions[device_id] = RackPosition(
                 suite_id=suite.id,
-                row_index=rack.row_index.value,
+                row_index=r_idx,
                 index=rack.index.value,
                 rows=suite.rows.value,
                 racks_per_row=suite.racks_per_row.value,

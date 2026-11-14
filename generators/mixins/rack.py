@@ -6,6 +6,8 @@ import asyncio
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
+from generators.helpers.rack import rack_row_index
+
 if TYPE_CHECKING:
     import logging
     from generators.mixins.common import CommonGenerator
@@ -214,18 +216,18 @@ class RackMixin:
         pod_loopback_pool = pod.get("loopback_pool")
         self._loopback_pool_id = pod_loopback_pool["id"] if pod_loopback_pool else None
 
-        suite = self.data["parent"]
+        suite = self.data.get("suite") or self.data["parent"]
         self._device_indexes: list[int] = [
             dc["index"],
             pod["index"],
             suite["index"],
-            self.data["row_index"],
+            rack_row_index(self.data),
             self.data["index"],
         ]
 
         if pod_deployment_type(pod["design"]) == "tor":
             self.logger.info(
-                f"ToR rack {self.data['name']}: using suite={suite['index']}, row={self.data['row_index']}, "
+                f"ToR rack {self.data['name']}: using suite={suite['index']}, row={rack_row_index(self.data)}, "
                 f"rack_index={self.data['index']}"
             )
 
@@ -277,7 +279,9 @@ class RackMixin:
 
         # The pod projection carries every rack of the pod; racks are data, and one created later has its own trigger
         # run
-        row_dependent_racks = pod_row_racks(self.data["deployment"], self.data["row_index"], ROW_DEPENDENT_RACK_TYPES)
+        row_dependent_racks = pod_row_racks(
+            self.data["deployment"], rack_row_index(self.data), ROW_DEPENDENT_RACK_TYPES
+        )
 
         await self.run_generator("add_rack", [rack["id"] for rack in row_dependent_racks], wait=False)
 

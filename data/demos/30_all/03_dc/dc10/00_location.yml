@@ -4,34 +4,61 @@ kind: Object
 spec:
   kind: LocationMetro
   data:
-    - name: "Frankfurt"
-      shortname: "fra"
+    - name: Frankfurt
+      shortname: fra
       parent: de
       children:
         kind: LocationFacility
         data:
-          - name: "FRA-1"
-            shortname: "fra-1"
+          - name: FRA-1
+            shortname: fra-1
             children:
               kind: LocationSuite
               data:
                 - name: FRA-1-Suite-1
                   index: 1
-                  shortname: "fra-1-s-1"
+                  shortname: fra-1-s-1
                   parent: fra-1
                   rows: 2
-                  # One network rack (leaf + access-leaf pair) and one compute
-                  # rack (application servers) per row — see 01_topology.yml.
                   racks_per_row: 9
+                  children:
+                    kind: LocationRackRow
+                    data:
+                      - name: FRA-1-SUITE-1-ROW-1
+                        index: 1
+                        shortname: fra-1-s-1-row-1
+                        parent: fra-1-s-1
+                      - name: FRA-1-SUITE-1-ROW-2
+                        index: 2
+                        shortname: fra-1-s-1-row-2
+                        parent: fra-1-s-1
                 - name: FRA-1-Suite-2
                   index: 2
-                  shortname: "fra-1-s-2"
+                  shortname: fra-1-s-2
                   parent: fra-1
                   rows: 2
                   racks_per_row: 1
+                  children:
+                    kind: LocationRackRow
+                    data:
+                      - name: FRA-1-SUITE-2-ROW-1
+                        index: 1
+                        shortname: fra-1-s-2-row-1
+                        parent: fra-1-s-2
+                      - name: FRA-1-SUITE-2-ROW-2
+                        index: 2
+                        shortname: fra-1-s-2-row-2
+                        parent: fra-1-s-2
                 - name: FRA-1-Suite-3
                   index: 3
-                  shortname: "fra-1-s-3"
+                  shortname: fra-1-s-3
                   parent: fra-1
                   rows: 1
                   racks_per_row: 1
+                  children:
+                    kind: LocationRackRow
+                    data:
+                      - name: FRA-1-SUITE-3-ROW-1
+                        index: 1
+                        shortname: fra-1-s-3-row-1
+                        parent: fra-1-s-3

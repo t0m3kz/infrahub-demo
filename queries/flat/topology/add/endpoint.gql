@@ -28,11 +28,18 @@ query GetEndpointForConnectivity($device_name: String!) {
                 index {
                   value
                 }
-                row_index {
-                  value
-                }
                 rack_type {
                   value
+                }
+                parent {
+                  node {
+                    ... on LocationRackRow {
+                      id
+                      index {
+                        value
+                      }
+                    }
+                  }
                 }
                 deployment {
                   node {
@@ -72,11 +79,18 @@ query GetEndpointForConnectivity($device_name: String!) {
                             index {
                               value
                             }
-                            row_index {
-                              value
-                            }
                             rack_type {
                               value
+                            }
+                            parent {
+                              node {
+                                ... on LocationRackRow {
+                                  id
+                                  index {
+                                    value
+                                  }
+                                }
+                              }
                             }
                           }
                         }

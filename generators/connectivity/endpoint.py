@@ -13,6 +13,7 @@ from typing_extensions import TypedDict
 from generators.connectivity.endpoint_lag import EndpointLagMixin
 from generators.connectivity.endpoint_targets import FREE_OR_CABLED_INTERFACE_STATUSES, EndpointTargetsMixin
 from generators.helpers.cabling import cable_endpoint_device_names
+from generators.helpers.rack import rack_row_index
 from generators.mixins.common import CommonGenerator
 from generators.mixins.connections import CablingMixin
 from generators.mixins.endpoint import EndpointUplinkMixin
@@ -194,7 +195,7 @@ class EndpointConnectivityGenerator(
             self.logger.info(f"Updated {self.data['name']} deployment to pod {self.pod_name}")
 
         # Concurrent endpoint runs would pick the same free port; lock on (pod, row) since tor/mixed reach the row.
-        cabling_lock_key = f"endpoint-cabling-pod-{pod_id}-row-{rack['row_index']}"
+        cabling_lock_key = f"endpoint-cabling-pod-{pod_id}-row-{rack_row_index(rack)}"
 
         # LAG endpoints get port-channels in the pair's ManagedMLAG domain instead of 1:1 uplink cabling.
         if bonds:

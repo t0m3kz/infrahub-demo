@@ -149,7 +149,7 @@ def setup(context: Context) -> None:
 
 
 @_task(optional=["ref"])
-def register_repo(context: Context, ref: str = "routing") -> None:
+def register_repo(context: Context, ref: str = "release/0.6.0") -> None:
     """Register the local repository (--ref) and load event actions."""
     os.environ["INFRAHUB_ADDRESS"] = INFRAHUB_ADDRESS
     os.environ["INFRAHUB_API_TOKEN"] = INFRAHUB_API_TOKEN

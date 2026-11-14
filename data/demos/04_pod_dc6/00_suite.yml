@@ -1,5 +1,4 @@
 ---
-# Suite-4 for POD-4
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -11,3 +10,22 @@ spec:
       parent: ktw-1
       rows: 4
       racks_per_row: 9
+      children:
+        kind: LocationRackRow
+        data:
+          - name: KTW-1-SUITE-4-ROW-1
+            index: 1
+            shortname: ktw-1-s-4-row-1
+            parent: ktw-1-s-4
+          - name: KTW-1-SUITE-4-ROW-2
+            index: 2
+            shortname: ktw-1-s-4-row-2
+            parent: ktw-1-s-4
+          - name: KTW-1-SUITE-4-ROW-3
+            index: 3
+            shortname: ktw-1-s-4-row-3
+            parent: ktw-1-s-4
+          - name: KTW-1-SUITE-4-ROW-4
+            index: 4
+            shortname: ktw-1-s-4-row-4
+            parent: ktw-1-s-4

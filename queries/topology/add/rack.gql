@@ -181,7 +181,6 @@ fragment RackPodFields on TopologyPod {
         id
         name { value }
         index { value }
-        row_index { value }
         rack_type { value }
         switch_role { value }
         switch_quantity { value }
@@ -277,7 +276,6 @@ fragment RackPodFields on TopologyPod {
         id
         name { value }
         index { value }
-        row_index { value }
         rack_type { value }
       }
     }
@@ -296,9 +294,6 @@ query RackGenerator($id: ID!) {
           value
         }
         rack_type {
-          value
-        }
-        row_index {
           value
         }
         switch_role {

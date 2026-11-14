@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from generators.helpers.rack import pod_row_racks
+from generators.helpers.rack import pod_row_racks, rack_row_index
 from generators.protocols import DcimPhysicalDevice, DcimPhysicalInterface
 
 # DcimInterface statuses of a port that is free to cable or already cabled by this endpoint (a re-run).
@@ -49,15 +49,15 @@ class EndpointTargetsMixin:
 
         self.logger.info(
             f"Endpoint {self.data['name']} is in {rack['rack_type']} rack "
-            f"(row {rack['row_index']}), searching for ToR/L2-leaf/access-leaf/Leaf switches "
+            f"(row {rack_row_index(rack)}), searching for ToR/L2-leaf/access-leaf/Leaf switches "
             "in middle rack (network rack) in same row"
         )
 
-        racks = pod_row_racks(rack["deployment"], rack["row_index"], {"network"})
+        racks = pod_row_racks(rack["deployment"], rack_row_index(rack), {"network"})
 
         if not racks:
             self.logger.error(
-                f"Endpoint {self.data['name']}: No network rack found in row {rack['row_index']} for middle_rack deployment."
+                f"Endpoint {self.data['name']}: No network rack found in row {rack_row_index(rack)} for middle_rack deployment."
             )
             return []
 
@@ -122,10 +122,10 @@ class EndpointTargetsMixin:
         # Fall back to the same row.
         if not all_target_interfaces:
             self.logger.info(
-                f"No ToR interfaces in same rack for {self.data['name']}, searching same row {rack['row_index']}"
+                f"No ToR interfaces in same rack for {self.data['name']}, searching same row {rack_row_index(rack)}"
             )
 
-            racks = pod_row_racks(rack["deployment"], rack["row_index"])
+            racks = pod_row_racks(rack["deployment"], rack_row_index(rack))
 
             if racks:
                 all_target_interfaces = await self._query_interfaces_by_location(
@@ -170,10 +170,10 @@ class EndpointTargetsMixin:
         if not all_target_interfaces:
             self.logger.info(
                 f"No local ToR/l2-leaf/access-leaf for {self.data['name']}, "
-                f"trying middle rack switches in same row {rack['row_index']}"
+                f"trying middle rack switches in same row {rack_row_index(rack)}"
             )
 
-            racks = pod_row_racks(rack["deployment"], rack["row_index"], {"network"})
+            racks = pod_row_racks(rack["deployment"], rack_row_index(rack), {"network"})
 
             if racks:
                 network_rack_ids = [r["id"] for r in racks]

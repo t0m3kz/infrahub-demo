@@ -7,17 +7,23 @@ spec:
     - name: DC6
       index: 1
       design: L
-      parent: "Data Center"
+      parent: Data Center
       routing_strategy: ebgp-ibgp
       underlay_protocol: ipv6
       naming_convention: standard
       fabric_templates:
-        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
-        # Cisco NX-OS: the border leaves steer firewall-served customers by PBR, which the SONiC templates cannot
-        # render (the border-leaf transform refuses the config).
-        - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
-        - ["2", "internal-firewall", "CP-26000_FIREWALL"]
-        - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
+        - - '2'
+          - super-spine
+          - N9K-C9336C-FX2_SUPER_SPINE
+        - - '2'
+          - border-leaf
+          - N9K-C9336C-FX2_BORDER_LEAF
+        - - '2'
+          - internal-firewall
+          - CP-26000_FIREWALL
+        - - '2'
+          - load-balancer
+          - NetScaler-MPX-26000-100G_LOAD_BALANCER
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -35,26 +41,28 @@ spec:
               data:
                 - name: KTW-1-SUITE-1-R1-5
                   index: 5
-                  row_index: 1
                   shortname: ktw-1-s-1-r-1-5
-                  parent: ktw-1-s-1
+                  parent: ktw-1-s-1-row-1
                   object_template: DC6-NET-RACK-DELL
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
                   fabric_templates:
-                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
+                    - - '2'
+                      - l2-leaf
+                      - PowerSwitch-S5224F-ON_TOR
                 - name: KTW-1-SUITE-1-R2-5
                   index: 5
-                  row_index: 2
                   shortname: ktw-1-s-1-r-2-5
-                  parent: ktw-1-s-1
+                  parent: ktw-1-s-1-row-2
                   object_template: DC6-NET-RACK-DELL
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
                   fabric_templates:
-                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
+                    - - '2'
+                      - l2-leaf
+                      - PowerSwitch-S5224F-ON_TOR
           - index: 2
             design: S_TOR
-            # S_TOR reserves 32 downlink ports per spine (2 rows x 8 racks x 2 ToRs);
-            # N9K-C9364C-GX_SPINE provides 60 downlink ports.
             object_template: DC6-POD-SPINE-GX
             mlag_create: back-to-back
             member_of_groups:
@@ -64,32 +72,32 @@ spec:
               data:
                 - name: KTW-1-SUITE-2-R1-1
                   index: 1
-                  row_index: 1
                   shortname: ktw-1-s-2-r-1-1
-                  parent: ktw-1-s-2
+                  parent: ktw-1-s-2-row-1
                   object_template: DC6-TOR-RACK-CISCO
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
                 - name: KTW-1-SUITE-2-R1-5
                   index: 5
-                  row_index: 1
                   shortname: ktw-1-s-2-r-1-5
-                  parent: ktw-1-s-2
+                  parent: ktw-1-s-2-row-1
                   object_template: DC6-TOR-RACK-CISCO
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
                 - name: KTW-1-SUITE-2-R2-1
                   index: 1
-                  row_index: 2
                   shortname: ktw-1-s-2-r-2-1
-                  parent: ktw-1-s-2
+                  parent: ktw-1-s-2-row-2
                   object_template: DC6-TOR-RACK-DELL
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
                 - name: KTW-1-SUITE-2-R2-5
                   index: 5
-                  row_index: 2
                   shortname: ktw-1-s-2-r-2-5
-                  parent: ktw-1-s-2
+                  parent: ktw-1-s-2-row-2
                   object_template: DC6-TOR-RACK-DELL
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
           - index: 3
             design: M_MIXED
             object_template: DC6-POD-SPINE-FX2
@@ -101,43 +109,43 @@ spec:
               data:
                 - name: KTW-1-SUITE-3-R1-1
                   index: 1
-                  row_index: 1
                   shortname: ktw-1-s-3-r-1-1
-                  parent: ktw-1-s-3
+                  parent: ktw-1-s-3-row-1
                   object_template: DC6-COMP-RACK-ARISTA
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
                 - name: KTW-1-SUITE-3-R1-4
                   index: 4
-                  row_index: 1
                   shortname: ktw-1-s-3-r-1-4
-                  parent: ktw-1-s-3
+                  parent: ktw-1-s-3-row-1
                   object_template: DC6-NET-RACK-ARISTA
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
                 - name: KTW-1-SUITE-3-R1-7
                   index: 7
-                  row_index: 1
                   shortname: ktw-1-s-3-r-1-7
-                  parent: ktw-1-s-3
+                  parent: ktw-1-s-3-row-1
                   object_template: DC6-COMP-RACK-ARISTA
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
                 - name: KTW-1-SUITE-3-R2-1
                   index: 1
-                  row_index: 2
                   shortname: ktw-1-s-3-r-2-1
-                  parent: ktw-1-s-3
+                  parent: ktw-1-s-3-row-2
                   object_template: DC6-COMP-RACK-ARISTA
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
                 - name: KTW-1-SUITE-3-R2-4
                   index: 4
-                  row_index: 2
                   shortname: ktw-1-s-3-r-2-4
-                  parent: ktw-1-s-3
+                  parent: ktw-1-s-3-row-2
                   object_template: DC6-NET-RACK-ARISTA
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack
                 - name: KTW-1-SUITE-3-R2-7
                   index: 7
-                  row_index: 2
                   shortname: ktw-1-s-3-r-2-7
-                  parent: ktw-1-s-3
+                  parent: ktw-1-s-3-row-2
                   object_template: DC6-COMP-RACK-ARISTA
-                  member_of_groups: [topologies_rack]
+                  member_of_groups:
+                    - topologies_rack

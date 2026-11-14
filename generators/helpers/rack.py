@@ -380,3 +380,14 @@ class RackRolesHelper:
     def overlay_only_routing_options(self) -> RoutingOptions:
         """Routing options payload for overlay-only access-leaf peering."""
         return {**self.ctx._routing_options, "skip_underlay": True}
+
+
+def rack_row_index(rack: Mapping[str, Any]) -> int:
+    """Return the rack's row index from its parent LocationRackRow (falling back to legacy row_index if present)."""
+    parent = rack.get("parent")
+    if isinstance(parent, Mapping) and "index" in parent and ("row_type" in parent or "rows" not in parent):
+        return int(parent["index"])
+    row = rack.get("row")
+    if isinstance(row, Mapping) and row.get("index") is not None:
+        return int(row["index"])
+    return int(rack["row_index"])

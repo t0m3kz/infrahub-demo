@@ -7,9 +7,6 @@ query suite_capacity {
         name {
           value
         }
-        row_index {
-          value
-        }
         index {
           value
         }

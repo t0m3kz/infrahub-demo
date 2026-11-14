@@ -1,42 +1,42 @@
 ---
-# DC11 — controller-managed firewall AND load-balancer, each via its own
-# dedicated vendor manager (see schemas/extensions/capabilities/
-# controller.yml's ManagedController + TopologyDataCenter.controllers).
-# Two separate controllers, one per role, demonstrating the split (compare
-# DC12's "all of them" single-DC combo: fabric + security + lb all
-# controller-managed at once).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyDataCenter
   data:
     - name: DC11
-      parent: "Data Center"
+      parent: Data Center
       index: 11
       design: L
       fabric_templates:
-        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
-        - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
-        - ["2", "internal-firewall", "PA-5260_FIREWALL"]
-        - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
+        - - '2'
+          - super-spine
+          - N9K-C9336C-FX2_SUPER_SPINE
+        - - '2'
+          - border-leaf
+          - N9K-C9336C-FX2_BORDER_LEAF
+        - - '2'
+          - internal-firewall
+          - PA-5260_FIREWALL
+        - - '2'
+          - load-balancer
+          - NetScaler-MPX-26000-100G_LOAD_BALANCER
       fabric_interface_sorting_method: top_down
       controllers:
-        - "DC11-PANORAMA1"
-        - "DC11-NSADM1"
+        - DC11-PANORAMA1
+        - DC11-NSADM1
       routing_filter_enforce: true
       member_of_groups:
         - topologies_dc
       children:
         kind: TopologyPod
         data:
-          # POD-1 carries the compute layer: one network rack per row with a
-          # leaf pair plus a 25G access-leaf pair, and one compute rack per row
-          # holding the application servers (05_servers.yml). POD-2 stays
-          # greenfield — spare fabric capacity.
           - index: 1
             design: S_MIDDLE
             fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+              - - '2'
+                - spine
+                - N9K-C9336C-FX2_SPINE
             mlag_create: virtual
             member_of_groups:
               - topologies_pod
@@ -45,42 +45,49 @@ spec:
               data:
                 - name: LYO-1-SUITE-1-R1-5
                   index: 5
-                  row_index: 1
                   shortname: lyo-1-s-1-r-1-5
                   rack_type: network
-                  parent: lyo-1-s-1
-                  member_of_groups: [topologies_rack]
+                  parent: lyo-1-s-1-row-1
+                  member_of_groups:
+                    - topologies_rack
                   fabric_templates:
-                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
-                    - ["2", "access-leaf", "N9K-C93180YC-EX_ACCESS"]
+                    - - '2'
+                      - leaf
+                      - N9K-C9336C-FX2_LEAF_MR
+                    - - '2'
+                      - access-leaf
+                      - N9K-C93180YC-EX_ACCESS
                 - name: LYO-1-SUITE-1-R2-5
                   index: 5
-                  row_index: 2
                   shortname: lyo-1-s-1-r-2-5
                   rack_type: network
-                  parent: lyo-1-s-1
-                  member_of_groups: [topologies_rack]
+                  parent: lyo-1-s-1-row-2
+                  member_of_groups:
+                    - topologies_rack
                   fabric_templates:
-                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
-                    - ["2", "access-leaf", "N9K-C93180YC-EX_ACCESS"]
-                # Compute racks: no fabric templates of their own. The endpoint
-                # generator cables their servers to the access-leaf pair in the
-                # network rack that shares their row.
+                    - - '2'
+                      - leaf
+                      - N9K-C9336C-FX2_LEAF_MR
+                    - - '2'
+                      - access-leaf
+                      - N9K-C93180YC-EX_ACCESS
                 - name: LYO-1-SUITE-1-R1-1
                   index: 1
-                  row_index: 1
                   shortname: lyo-1-s-1-r-1-1
-                  parent: lyo-1-s-1
-                  member_of_groups: [topologies_rack]
+                  parent: lyo-1-s-1-row-1
+                  member_of_groups:
+                    - topologies_rack
                 - name: LYO-1-SUITE-1-R2-1
                   index: 1
-                  row_index: 2
                   shortname: lyo-1-s-1-r-2-1
-                  parent: lyo-1-s-1
-                  member_of_groups: [topologies_rack]
+                  parent: lyo-1-s-1-row-2
+                  member_of_groups:
+                    - topologies_rack
           - index: 2
             design: S_MIDDLE
             fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+              - - '2'
+                - spine
+                - N9K-C9336C-FX2_SPINE
             member_of_groups:
               - topologies_pod

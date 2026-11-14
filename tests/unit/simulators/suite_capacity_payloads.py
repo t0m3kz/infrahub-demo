@@ -110,6 +110,22 @@ class _Inventory:
             "racks_per_row": _value(suite.item["racks_per_row"]),
         }
 
+    def parent_node(self, rack: Declared) -> dict[str, Any]:
+        """Return LocationRackRow node (wrapping suite) when rack sits in a row, else LocationSuite node."""
+        row = self.row_of(rack)
+        suite_dict = self.suite(rack)
+        if row is None:
+            return suite_dict
+        rshort = str(row.item["shortname"])
+        return {
+            "id": f"id-{rshort}",
+            "name": _value(rshort),
+            "index": _value(int(row.item["index"])),
+            "row_type": _value(str(row.item.get("row_type") or "mixed")),
+            "racks_per_row": _value(row.item.get("racks_per_row")),
+            "parent": {"node": suite_dict},
+        }
+
     def hosting(self, rack: Declared) -> dict[str, Any] | None:
         """The pod (or zone) hosting a rack: its ``deployment`` name or the pod it is nested under; None for neither."""
         enclosing_pod = _enclosing(rack, POD)
@@ -129,9 +145,8 @@ def build_payloads(*roots: Path) -> dict[str, Any]:
             {
                 "id": f"id-{shortname}",
                 "name": _value(shortname),
-                "row_index": _value(inventory.row_index(rack)),
                 "index": _value(rack.item["index"]),
-                "parent": {"node": inventory.suite(rack)},
+                "parent": {"node": inventory.parent_node(rack)},
                 "deployment": {"node": hosting},
             }
         )

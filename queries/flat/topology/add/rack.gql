@@ -13,9 +13,6 @@ query RackGenerator($id: ID!) {
         rack_type {
           value
         }
-        row_index {
-          value
-        }
         switch_role {
           value
         }
@@ -496,9 +493,6 @@ query RackGenerator($id: ID!) {
                     index {
                       value
                     }
-                    row_index {
-                      value
-                    }
                     rack_type {
                       value
                     }
@@ -616,9 +610,6 @@ query RackGenerator($id: ID!) {
                       value
                     }
                     index {
-                      value
-                    }
-                    row_index {
                       value
                     }
                     rack_type {

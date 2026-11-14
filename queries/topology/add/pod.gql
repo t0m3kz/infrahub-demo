@@ -208,7 +208,6 @@ query topology_pod($name: String!) {
               id
               name { value }
               index { value }
-              row_index { value }
               rack_type { value }
               switch_role { value }
               switch_quantity { value }

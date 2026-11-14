@@ -179,9 +179,6 @@ query topology_pod($name: String!) {
               index {
                 value
               }
-              row_index {
-                value
-              }
               rack_type {
                 value
               }

@@ -62,7 +62,7 @@ nodes:
     menu_placement: "LocationGeneric"
     label: Suite
     parent: LocationFacility
-    children: "LocationGeneric"
+    children: "LocationRackRow"
     # Unique within its facility; `shortname` (LocationGeneric) is the global identifier.
     uniqueness_constraints:
       - ["parent", "name__value"]
@@ -175,7 +175,7 @@ nodes:
       - CoreArtifactTarget
     include_in_menu: false
     menu_placement: "LocationGeneric"
-    parent: "LocationGeneric"
+    parent: "LocationRackRow"
     children: ""
     # A rack name is unique within its suite, not across the estate (R1-1 exists in every suite); the globally
     # unique identifier is `shortname` (LocationGeneric), which is also the human friendly id.
@@ -192,10 +192,6 @@ nodes:
       - name: index
         kind: Number
         order_weight: 120
-      - name: row_index
-        kind: Number
-        optional: true
-        order_weight: 121
       - name: rack_type
         kind: Dropdown
         choices:

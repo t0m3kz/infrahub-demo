@@ -204,8 +204,8 @@ class TestCableLayouts:
         layouts = await gen._cable_layouts(["d1", "d2"])
 
         assert layouts["d2"] is not None and layouts["d2"] == layouts["d1"]
-        assert [kind for kind, _ in estate.calls[3:]] == [DcimPhysicalDevice]
-        assert estate.calls[3][1]["ids"] == ["d2"]
+        assert [kind for kind, _ in estate.calls[4:]] == [DcimPhysicalDevice]
+        assert estate.calls[4][1]["ids"] == ["d2"]
 
     @pytest.mark.asyncio
     async def test_a_device_the_read_did_not_return_is_looked_up_again(self) -> None:

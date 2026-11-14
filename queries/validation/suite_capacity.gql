@@ -12,7 +12,6 @@ query suite_capacity {
       node {
         id
         name { value }
-        row_index { value }
         index { value }
         rack_type { value }
         parent {
