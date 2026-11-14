@@ -205,8 +205,11 @@ class PodTopologyGenerator(
             )
             return
 
-        super_spine_devices = [device["name"] for device in dc.get("devices", [])]
         dc_super_spine_entries = templates_by_role(dc.get("fabric_templates", []), "super-spine")
+        super_spine_devices = sorted(
+            {device["name"] for device in dc.get("devices", [])}
+            | {d["name"] for e in dc_super_spine_entries for d in e.get("devices") or []}
+        )
         super_spine_interfaces = (
             [iface["name"] for iface in dc_super_spine_entries[0]["template"].get("interfaces", [])]
             if dc_super_spine_entries
@@ -271,6 +274,9 @@ class PodTopologyGenerator(
         # role_index continues across entries so a second entry never re-creates names.
         spines: list[str] = []
         for entry in spine_entries:
+            if entry.get("devices"):
+                spines.extend(d["name"] for d in entry["devices"])
+                continue
             entry_spines = await self.create_devices(
                 deployment_id=spine_deployment_id,
                 device_role=spine_role,

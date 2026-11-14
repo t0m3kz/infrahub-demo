@@ -87,7 +87,7 @@ query topology_dc($name: String!) {
                 name { value }
                 index { value }
                 rack_type { value }
-                devices { edges { node { id name { value } role { value } } } }
+                devices { edges { node { id name { value } role { value } interfaces { edges { node { name { value } role { value } } } } } } }
                 switch_role { value }
                 switch_quantity { value }
                 switch_template {

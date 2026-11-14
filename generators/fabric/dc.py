@@ -272,6 +272,9 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         """Create one DC-scoped fabric tier (super-spine/hyper-spine) from the DC-fabric loopback pool."""
         names: list[str] = []
         for entry in entries:
+            if entry.get("devices"):
+                names.extend(d["name"] for d in entry["devices"])
+                continue
             tier_opts = DeviceOptions(
                 indexes=indexes,
                 allocate_loopback=True,
@@ -353,6 +356,9 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         capacities = self._pod_border_leaf_capacities(sorted_pods)
         all_names: list[str] = []
         for entry in entries:
+            if entry.get("devices"):
+                all_names.extend(d["name"] for d in entry["devices"])
+                continue
             if entry["quantity"] > max_border_leafs_per_fabric:
                 self.logger.error(
                     f"DC {self.fabric_name}: border-leaf entry requests {entry['quantity']} devices but "

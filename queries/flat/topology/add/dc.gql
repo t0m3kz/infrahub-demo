@@ -144,6 +144,18 @@ query topology_dc($name: String!) {
                       role {
                         value
                       }
+                      interfaces {
+                        edges {
+                          node {
+                            name {
+                              value
+                            }
+                            role {
+                              value
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
