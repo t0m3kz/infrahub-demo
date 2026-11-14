@@ -156,7 +156,36 @@ nodes:
         default_value: 42
         kind: Number
         order_weight: 4500
+      - name: switch_role
+        label: "Switch Role"
+        kind: Dropdown
+        optional: true
+        order_weight: 4600
+        choices:
+          - name: leaf
+            label: Leaf Switch
+            color: "#e6e6fa"
+          - name: tor
+            label: ToR Switch
+            color: "#e6e6fa"
+          - name: l2-leaf
+            label: L2 Leaf Switch
+            color: "#d0e8fd"
+          - name: access-leaf
+            label: Access Leaf Switch
+            color: "#a8d8b8"
+      - name: switch_quantity
+        label: "Switch Quantity"
+        kind: Number
+        optional: true
+        order_weight: 4610
     relationships:
+      - name: switch_template
+        label: "Switch Device Template"
+        peer: TemplateDcimPhysicalDevice
+        optional: true
+        cardinality: one
+        kind: Attribute
       - name: fabric_templates
         peer: TopologyElement
         label: Network Elements

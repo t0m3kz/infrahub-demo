@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from generators.helpers.rack import normalize_pod_templates
 from generators.helpers.routing import underlay_pool_is_ipv6
 from generators.helpers.template_interfaces import template_interface_names_by_role
 from generators.mixins.fabric_sizing import (
@@ -59,8 +60,9 @@ class PodFabricModel:
         dc_index: int = dc["index"]
         dc_design: Mapping[str, Any] = dc["design"]
 
+        normalized = normalize_pod_templates(dict(data))
         deployment_type = pod_deployment_type(design)
-        fabric_templates: list[dict[str, Any]] = list(data.get("fabric_templates") or [])
+        fabric_templates: list[dict[str, Any]] = list(normalized.get("fabric_templates") or [])
         spine_entries = spine_slot_templates(fabric_templates)
         spine_role = spine_slot_role(fabric_templates)
         if not spine_entries:

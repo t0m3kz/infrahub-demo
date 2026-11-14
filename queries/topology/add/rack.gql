@@ -138,6 +138,33 @@ fragment RackPodFields on TopologyPod {
       }
     }
   }
+  spine_role { value }
+  spine_quantity { value }
+  spine_template {
+    node {
+      id
+      ... on TemplateDcimPhysicalDevice {
+        interfaces(role__value: "downlink") {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  devices(role__values: ["spine", "border-spine"]) {
+    edges {
+      node {
+        id
+        name { value }
+        role { value }
+      }
+    }
+  }
   fabric_templates {
     edges {
       node {
@@ -212,6 +239,27 @@ query RackGenerator($id: ID!) {
         }
         row_index {
           value
+        }
+        switch_role {
+          value
+        }
+        switch_quantity {
+          value
+        }
+        switch_template {
+          node {
+            id
+            ...TemplateDeviceFields
+          }
+        }
+        devices {
+          edges {
+            node {
+              id
+              name { value }
+              role { value }
+            }
+          }
         }
         parent {
           node {

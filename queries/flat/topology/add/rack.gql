@@ -16,6 +16,57 @@ query RackGenerator($id: ID!) {
         row_index {
           value
         }
+        switch_role {
+          value
+        }
+        switch_quantity {
+          value
+        }
+        switch_template {
+          node {
+            id
+            ... on TemplateDcimPhysicalDevice {
+              platform {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+              device_type {
+                node {
+                  id
+                }
+              }
+              interfaces(role__values: ["uplink", "mlag-peer"]) {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                    role {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        devices {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              role {
+                value
+              }
+            }
+          }
+        }
         parent {
           node {
             ... on LocationSuite {
@@ -332,6 +383,41 @@ query RackGenerator($id: ID!) {
                           }
                         }
                       }
+                    }
+                  }
+                }
+              }
+              spine_role {
+                value
+              }
+              spine_quantity {
+                value
+              }
+              spine_template {
+                node {
+                  id
+                  ... on TemplateDcimPhysicalDevice {
+                    interfaces(role__value: "downlink") {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              devices(role__values: ["spine", "border-spine"]) {
+                edges {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                    role {
+                      value
                     }
                   }
                 }

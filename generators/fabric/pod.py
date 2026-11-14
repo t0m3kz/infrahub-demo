@@ -8,7 +8,7 @@ from typing_extensions import TypedDict
 from generators.fabric.fabric_shared import DC_GENERATORS, ServiceDevicesMixin
 from generators.fabric.pod_mesh import PodMeshMixin, mesh_slot_width, pod_routing_options
 from generators.helpers.naming import DeviceNamingConfig
-from generators.helpers.rack import expected_device_names
+from generators.helpers.rack import expected_device_names, normalize_pod_templates
 from generators.helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 from generators.helpers.template_interfaces import template_interface_names_by_role
 from generators.mixins.common import CommonGenerator
@@ -103,7 +103,7 @@ class PodTopologyGenerator(
                         self.logger.error("No Pod Deployment data found in GraphQL response")
                         return
 
-            self.data = cast(TopologyPodData, deployment_list[0])
+            self.data = cast(TopologyPodData, normalize_pod_templates(deployment_list[0]))
             # Force-read every required field here so a malformed response raises KeyError inside the try.
             pod_id = self.data["id"]
             pod_name = self.data["name"]

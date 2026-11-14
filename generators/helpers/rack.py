@@ -8,6 +8,60 @@ from utils.data_cleaning import clean_data
 
 from .naming import DeviceNameContext, DeviceNamingConfig
 
+_RACK_ROLE_TO_BUCKET: dict[str, str] = {
+    "leaf": "leafs",
+    "tor": "tors",
+    "l2-leaf": "l2_leafs",
+    "access-leaf": "access_leafs",
+}
+
+_POD_SPINE_ROLES: frozenset[str] = frozenset({"spine", "border-spine"})
+
+
+def normalize_pod_templates(pod: dict[str, Any]) -> dict[str, Any]:
+    """Ensure pod['fabric_templates'] reflects typed spine_role/spine_quantity/spine_template or direct spine devices."""
+    existing = list(pod.get("fabric_templates") or [])
+    spine_role = pod.get("spine_role")
+    spine_qty = pod.get("spine_quantity")
+    spine_tpl = pod.get("spine_template")
+    if spine_role and spine_tpl and spine_qty is not None and int(spine_qty) > 0:
+        entry = {"role": spine_role, "quantity": int(spine_qty), "template": spine_tpl}
+        existing = [entry, *[e for e in existing if e.get("role") not in _POD_SPINE_ROLES]]
+    elif not existing:
+        direct_spines = [
+            d for d in (pod.get("devices") or []) if isinstance(d, dict) and d.get("role") in _POD_SPINE_ROLES
+        ]
+        if direct_spines:
+            role = str(direct_spines[0]["role"])
+            existing.append(
+                {"role": role, "quantity": len(direct_spines), "template": {"interfaces": []}, "devices": direct_spines}
+            )
+    if existing:
+        pod["fabric_templates"] = existing
+    return pod
+
+
+def normalize_rack_templates(rack: dict[str, Any]) -> dict[str, Any]:
+    """Ensure rack role buckets reflect typed switch_role/switch_quantity/switch_template or direct rack devices."""
+    switch_role = rack.get("switch_role")
+    switch_qty = rack.get("switch_quantity")
+    switch_tpl = rack.get("switch_template")
+    if switch_role in _RACK_ROLE_TO_BUCKET and switch_tpl and switch_qty is not None and int(switch_qty) > 0:
+        bucket = _RACK_ROLE_TO_BUCKET[switch_role]
+        rack[bucket] = [{"role": switch_role, "quantity": int(switch_qty), "template": switch_tpl}]
+    else:
+        direct_by_role: dict[str, list[dict[str, Any]]] = {}
+        for dev in rack.get("devices") or []:
+            if isinstance(dev, dict) and dev.get("role") in _RACK_ROLE_TO_BUCKET:
+                direct_by_role.setdefault(str(dev["role"]), []).append(dev)
+        for role, devs in direct_by_role.items():
+            bucket = _RACK_ROLE_TO_BUCKET[role]
+            if not rack.get(bucket):
+                rack[bucket] = [{"role": role, "quantity": len(devs), "template": {"interfaces": []}, "devices": devs}]
+    if isinstance(rack.get("deployment"), dict):
+        normalize_pod_templates(rack["deployment"])
+    return rack
+
 
 def pod_row_racks(
     pod: Mapping[str, Any], row_index: int, rack_types: Collection[str] | None = None
@@ -39,7 +93,7 @@ def parse_rack_data(data: dict[str, Any]) -> dict[str, Any]:
         deployment_list = clean_data(data).get("LocationRack", [])
         if not deployment_list:
             raise ValueError("No rack found after clean_data — rack exists but has an invalid data structure.")
-        return deployment_list[0]
+        return normalize_rack_templates(deployment_list[0])
     raise ValueError(f"Unknown data structure. Keys: {list(data.keys())}")
 
 
