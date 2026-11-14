@@ -20,7 +20,8 @@ from infrahub_sdk.task.models import TaskFilter, TaskState
 from invoke import Collection, Context, Exit, Task
 from invoke import task as _task
 
-from .kicks import ALL_DEMO_KICK, Kick, KickError, Stage, all_kicks
+from tests.integration.kicks_loader import ALL_DEMO_KICK, Kick, KickError, Stage, all_kicks
+
 from .proposed_change import (
     FAILURE_STATES,
     IN_FLIGHT_STATES,
@@ -190,14 +191,14 @@ def setup_precommit(context: Context) -> None:
     log.info("Pre-commit hooks installed successfully")
 
 
-@_task
-def validate(context: Context) -> None:
+@_task(optional=["workers"])
+def validate(context: Context, workers: str = "4") -> None:
     """Run ruff, type checks, smoke tests, and unit tests with coverage."""
     log.info("Running pre-commit hooks on all files...")
     context.run("uv run prek run --all-files", pty=True)
     log.info("Running test suites...")
     context.run(
-        "uv run pytest -vv tests/smoke tests/unit --cov"
+        f"uv run pytest -n {workers} --dist worksteal -vv tests/smoke tests/unit --cov"
         " --cov=generators --cov=transforms --cov=checks"
         " --cov-report=term-missing",
         pty=True,
@@ -205,11 +206,17 @@ def validate(context: Context) -> None:
     log.info("All validation checks passed")
 
 
-@_task(optional=["basetemp"])
-def test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
+@_task(optional=["basetemp", "workers", "filter"])
+def test_unit(
+    context: Context,
+    basetemp: str = ".pytest-tmp",
+    workers: str = "4",
+    filter: str = "",
+) -> None:
     """Run unit tests (repo-local basetemp avoids bind-mount issues on macOS+Colima)."""
     base = _ensure_pytest_basetemp(basetemp)
-    context.run(f"uv run pytest -vv tests/unit --basetemp {base}", pty=True)
+    k_flag = f' -k "{filter}"' if filter else ""
+    context.run(f"uv run pytest -n {workers} --dist worksteal tests/unit --basetemp {base}{k_flag}", pty=True)
 
 
 def _run_integration_suite(context: Context, tests: str, basetemp: str, server_port: int) -> None:
@@ -301,17 +308,6 @@ def load_menu(context: Context, menu: str = "menu", branch: str = "main") -> Non
 def load_objects(context: Context, path: str = "data/bootstrap/", branch: str = "main") -> None:
     """Load object YAML files from --path (default data/bootstrap/)."""
     context.run(f"uv run infrahubctl object load {path} --branch {branch}", pty=True)
-
-
-@_task
-def flatten_queries(context: Context) -> None:
-    """Write the flat copy of every registered query (queries/flat/); run after editing a query or fragment."""
-    from utils.query_flatten import ROOT, write_flat_queries  # noqa: PLC0415 - keeps graphql out of task start-up
-
-    changed = write_flat_queries()
-    for path in changed:
-        log.info("flattened %s", path.relative_to(ROOT).as_posix())
-    log.info("%d flat quer%s written or removed", len(changed), "y" if len(changed) == 1 else "ies")
 
 
 # ---------------------------------------------------------------------------
@@ -780,7 +776,6 @@ ns.add_task(cast(Task, upgrade))
 ns.add_task(cast(Task, release))
 ns.add_task(cast(Task, load_schema), name="load-schema")
 ns.add_task(cast(Task, load_menu), name="load-menu")
-ns.add_task(cast(Task, flatten_queries), name="flatten-queries")
 ns.add_task(cast(Task, load_objects), name="load-objects")
 ns.add_task(cast(Task, load_all_demo), name="load-all-demo")
 ns.add_task(cast(Task, kick))

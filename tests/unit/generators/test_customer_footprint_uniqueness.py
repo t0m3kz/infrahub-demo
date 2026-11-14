@@ -1,0 +1,37 @@
+"""Uniqueness of customer footprints (schemas/extensions/topology/topology_customer.yml)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+
+_SCHEMA = Path(__file__).parents[3] / "schemas" / "extensions" / "topology" / "topology_customer.yml"
+
+
+def _entries() -> dict[str, dict[str, Any]]:
+    doc = yaml.safe_load(_SCHEMA.read_text())
+    return {f"{e['namespace']}{e['name']}": e for section in ("generics", "nodes") for e in doc.get(section) or []}
+
+
+def test_customer_generic_has_no_cross_kind_constraint() -> None:
+    """TopologyCustomer must not constrain footprints across DC/Colocation/Cloud."""
+    assert not _entries()["TopologyCustomer"].get("uniqueness_constraints")
+
+
+@pytest.mark.parametrize("kind", ["TopologyCustomerDC", "TopologyCustomerColocation"])
+def test_environment_scoped_footprints_are_unique_per_parent_and_environment(kind: str) -> None:
+    """A DC or colocation footprint is unique on name, parent facility and environment."""
+    assert _entries()[kind]["uniqueness_constraints"] == [["name__value", "parent", "environment__value"]]
+
+
+def test_cloud_footprint_is_unique_per_parent_and_per_account_without_an_environment() -> None:
+    """A cloud footprint has no environment (its CloudAccount carries it): name and parent, and one per account."""
+    assert _entries()["TopologyCustomerCloud"]["uniqueness_constraints"] == [["name__value", "parent"], ["account"]]
+
+
+def test_office_is_unique_on_its_name_parent_and_owner() -> None:
+    """One office per customer: the name embeds the owner's org_id but is computed once the office exists."""
+    assert _entries()["TopologyCustomerOffice"]["uniqueness_constraints"] == [["name__value", "parent", "owner"]]
