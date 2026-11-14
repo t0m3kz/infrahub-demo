@@ -29,6 +29,7 @@ ALLOWED_ROLES_BY_RACK_TYPE: dict[str, frozenset[str]] = {
             "l2-leaf",
             "access-leaf",
             "internal-firewall",
+            "external-firewall",
             "load-balancer",
         }
     ),
@@ -38,7 +39,7 @@ ALLOWED_ROLES_BY_RACK_TYPE: dict[str, frozenset[str]] = {
 }
 
 _DC_TIER_ROLES: frozenset[str] = frozenset(
-    {"super-spine", "hyper-spine", "border-leaf", "internal-firewall", "load-balancer"}
+    {"super-spine", "hyper-spine", "border-leaf", "internal-firewall", "external-firewall", "load-balancer"}
 )
 
 

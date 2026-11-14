@@ -399,11 +399,14 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
             ):
                 entry_options.update(appliance_options or {})
                 entry_options["appliance"] = True
+            if entry.get("rack_id"):
+                entry_options["rack"] = entry["rack_id"]
+            tpl = {**entry["template"], "devices": entry["devices"]} if entry.get("devices") else entry["template"]
             names = await self.create_devices(
                 deployment_id=deployment_id,
                 device_role=role,
                 quantity=entry["quantity"],
-                template=entry["template"],
+                template=tpl,
                 naming_convention=naming_convention,
                 options=cast("DeviceOptions", entry_options),
             )
