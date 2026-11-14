@@ -323,3 +323,71 @@ fragment DeviceCapabilitiesOnDeviceFields on DcimDevice {
     ...DeviceCapabilitiesFields
   }
 }
+
+fragment PlatformCapabilityProfileFields on DcimPlatformCapabilityProfile {
+  name {
+    value
+  }
+  supports_bgp {
+    value
+  }
+  supports_ospf {
+    value
+  }
+  supports_lisp {
+    value
+  }
+  supports_group_policy {
+    value
+  }
+  supports_ztna {
+    value
+  }
+  config_dialect {
+    value
+  }
+}
+
+fragment HardwareCapabilityProfileFields on DcimHardwareCapabilityProfile {
+  name {
+    value
+  }
+  supports_vxlan_vtep {
+    value
+  }
+  supports_evpn {
+    value
+  }
+  supports_mlag {
+    value
+  }
+  supports_virtual_mlag {
+    value
+  }
+  supports_pbr {
+    value
+  }
+  supports_stateful_firewall {
+    value
+  }
+  max_vrfs {
+    value
+  }
+  max_vlans {
+    value
+  }
+}
+
+fragment InterconnectionFields on TopologyInterconnection {
+  id
+  __typename
+  interconnection_layer {
+    value
+  }
+  bandwidth_mbps {
+    value
+  }
+  mtu {
+    value
+  }
+}

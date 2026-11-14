@@ -5279,6 +5279,33 @@ fragment leaf_config__F10 on DcimDeviceManaged {
       name {
         value
       }
+      os_capabilities {
+        node {
+          ... on DcimPlatformCapabilityProfile {
+            name {
+              value
+            }
+            supports_bgp {
+              value
+            }
+            supports_ospf {
+              value
+            }
+            supports_lisp {
+              value
+            }
+            supports_group_policy {
+              value
+            }
+            supports_ztna {
+              value
+            }
+            config_dialect {
+              value
+            }
+          }
+        }
+      }
     }
   }
   device_type {
@@ -5288,6 +5315,39 @@ fragment leaf_config__F10 on DcimDeviceManaged {
       }
       memory_gb {
         value
+      }
+      hardware_capabilities {
+        node {
+          ... on DcimHardwareCapabilityProfile {
+            name {
+              value
+            }
+            supports_vxlan_vtep {
+              value
+            }
+            supports_evpn {
+              value
+            }
+            supports_mlag {
+              value
+            }
+            supports_virtual_mlag {
+              value
+            }
+            supports_pbr {
+              value
+            }
+            supports_stateful_firewall {
+              value
+            }
+            max_vrfs {
+              value
+            }
+            max_vlans {
+              value
+            }
+          }
+        }
       }
     }
   }
@@ -5312,6 +5372,33 @@ fragment leaf_config__F12 on DcimDeviceManaged {
       name {
         value
       }
+      os_capabilities {
+        node {
+          ... on DcimPlatformCapabilityProfile {
+            name {
+              value
+            }
+            supports_bgp {
+              value
+            }
+            supports_ospf {
+              value
+            }
+            supports_lisp {
+              value
+            }
+            supports_group_policy {
+              value
+            }
+            supports_ztna {
+              value
+            }
+            config_dialect {
+              value
+            }
+          }
+        }
+      }
     }
   }
   device_type {
@@ -5321,6 +5408,39 @@ fragment leaf_config__F12 on DcimDeviceManaged {
       }
       memory_gb {
         value
+      }
+      hardware_capabilities {
+        node {
+          ... on DcimHardwareCapabilityProfile {
+            name {
+              value
+            }
+            supports_vxlan_vtep {
+              value
+            }
+            supports_evpn {
+              value
+            }
+            supports_mlag {
+              value
+            }
+            supports_virtual_mlag {
+              value
+            }
+            supports_pbr {
+              value
+            }
+            supports_stateful_firewall {
+              value
+            }
+            max_vrfs {
+              value
+            }
+            max_vlans {
+              value
+            }
+          }
+        }
       }
     }
   }

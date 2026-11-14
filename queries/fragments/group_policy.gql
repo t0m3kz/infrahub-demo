@@ -11,8 +11,8 @@ fragment DeviceGroupPolicyFields on DcimDevice {
   name { value }
   ... on DcimDeviceManaged {
     role { value }
-    platform { node { name { value } } }
-    device_type { node { name { value } memory_gb { value } } }
+    platform { node { name { value } os_capabilities { node { ...PlatformCapabilityProfileFields } } } }
+    device_type { node { name { value } memory_gb { value } hardware_capabilities { node { ...HardwareCapabilityProfileFields } } } }
   }
   # software_image is DcimSoftwareRunner's edge, not DcimDeviceManaged's
   ... on DcimSoftwareRunner {
