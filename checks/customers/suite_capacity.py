@@ -20,6 +20,17 @@ def _is_number(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def _row_and_suite(rack: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Resolve optional LocationRackRow and parent LocationSuite from ``rack['parent']``."""
+    parent = rack.get("parent") if isinstance(rack.get("parent"), dict) else None
+    if not parent:
+        return None, None
+    if "row_type" in parent or ("rows" not in parent and isinstance(parent.get("parent"), dict)):
+        suite = parent.get("parent") if isinstance(parent.get("parent"), dict) else None
+        return parent, suite
+    return None, parent
+
+
 def _suite_label(suite: dict[str, Any]) -> str:
     """``'name' (R rows, P racks per row)``."""
     name = suite.get("name") or suite.get("id") or "<unnamed-suite>"
@@ -39,16 +50,34 @@ class CheckSuiteCapacity(InfrahubCheck):
             self._validate_envelope(pod, suites)
 
     def _validate_position(self, rack: dict[str, Any]) -> None:
-        """Rule 1 and 2: the rack's row and slot are within its suite's rows and racks per row."""
-        suite = rack.get("parent")
+        """Rule 1 and 2: the rack's row and slot are within its suite/row grid and match row_type."""
+        row_node, suite = _row_and_suite(rack)
         if not suite:
             return
         problems = []
-        row, slot = rack.get("row_index"), rack.get("index")
+        row = (
+            rack.get("row_index")
+            if rack.get("row_index") is not None
+            else (row_node.get("index") if row_node else None)
+        )
+        slot = rack.get("index")
+        max_slots = (
+            row_node["racks_per_row"]
+            if row_node is not None and _is_number(row_node.get("racks_per_row"))
+            else suite["racks_per_row"]
+        )
         if _is_number(row) and row > suite["rows"]:
             problems.append(f"row {row} is beyond the suite's {suite['rows']} rows")
-        if _is_number(slot) and slot > suite["racks_per_row"]:
-            problems.append(f"position {slot} is beyond the suite's {suite['racks_per_row']} racks per row")
+        scope_label = "row's" if (row_node is not None and _is_number(row_node.get("racks_per_row"))) else "suite's"
+        if _is_number(slot) and slot > max_slots:
+            problems.append(f"position {slot} is beyond the {scope_label} {max_slots} racks per row")
+        if row_node is not None:
+            row_type = str(row_node.get("row_type") or "mixed")
+            rack_type = str(rack.get("rack_type") or "")
+            if row_type != "mixed" and rack_type and rack_type != row_type:
+                problems.append(
+                    f"rack_type '{rack_type}' does not match row '{row_node.get('name') or row}' row_type '{row_type}'"
+                )
         if problems:
             self.log_error(
                 message=f"Rack '{rack.get('name') or rack.get('id')}' does not fit suite {_suite_label(suite)}: "
@@ -88,7 +117,8 @@ def _suites_by_pod(racks: list[dict[str, Any]]) -> dict[str, tuple[dict[str, Any
     """Pod id -> (pod, suites hosting its racks) for every pod with a design and racks."""
     pods: dict[str, tuple[dict[str, Any], dict[str, dict[str, Any]]]] = {}
     for rack in racks:
-        pod, suite = rack.get("deployment"), rack.get("parent")
+        _, suite = _row_and_suite(rack)
+        pod = rack.get("deployment")
         if not pod or not pod.get("design") or not suite:
             continue
         pods.setdefault(str(pod.get("id")), (pod, {}))[1].setdefault(str(suite.get("id")), suite)

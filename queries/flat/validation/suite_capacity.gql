@@ -13,6 +13,9 @@ query suite_capacity {
         index {
           value
         }
+        rack_type {
+          value
+        }
         parent {
           node {
             ... on LocationSuite {
@@ -25,6 +28,37 @@ query suite_capacity {
               }
               racks_per_row {
                 value
+              }
+            }
+            ... on LocationRackRow {
+              id
+              name {
+                value
+              }
+              index {
+                value
+              }
+              row_type {
+                value
+              }
+              racks_per_row {
+                value
+              }
+              parent {
+                node {
+                  ... on LocationSuite {
+                    id
+                    name {
+                      value
+                    }
+                    rows {
+                      value
+                    }
+                    racks_per_row {
+                      value
+                    }
+                  }
+                }
               }
             }
           }
