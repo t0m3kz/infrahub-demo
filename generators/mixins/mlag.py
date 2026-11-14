@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 from generators.helpers import get_lag_name, get_loopback_name
 from generators.helpers.cable_attributes import cable_attributes, endpoint_label
+from generators.helpers.capabilities import mlag_control_family
 from generators.mixins.connections import tracked_save_kwargs
 from generators.protocols import (
     DcimCable,
@@ -293,11 +294,10 @@ class MLAGWiringMixin:
         peer-link carries it on its loopback (/32, /128). Returns {} for vPC or an unloaded pool, and removes a stale
         control SVI.
         """
-        if platforms & _NO_CONTROL_PLATFORMS:
+        family = mlag_control_family(platforms)
+        if family is None:
             await self._disconnect_stale_control_svis(member_devices, mlag_name)
             return {}
-
-        family = 4 if platforms & _IPV4_CONTROL_PLATFORMS else 6
         pool_name, prefix_length, loopback_length = _CONTROL_POOLS[family]
         # Control pools are static bootstrap data read once per run; a missing pool is not remembered
         pool_memo: dict[str, Any] = self.__dict__.setdefault("_control_pool_memo", {})

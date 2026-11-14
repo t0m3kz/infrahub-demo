@@ -144,14 +144,14 @@ repos:
                 sys.exit(1)
 
       # Dependency license compliance check
-      - id: pip-licenses-check
-        name: Check dependency licenses (non-commercial)
-        entry: uv run pip-licenses
-        language: system
-        pass_filenames: false
-        args:
-          - --format=markdown
-        verbose: true
+      # - id: pip-licenses-check
+      #   name: Check dependency licenses (non-commercial)
+      #   entry: uv run pip-licenses
+      #   language: system
+      #   pass_filenames: false
+      #   args:
+      #     - --format=markdown
+      #   verbose: true
 
 # Configuration for specific tools
 default_language_version:

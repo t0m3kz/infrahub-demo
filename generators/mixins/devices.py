@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.protocols import CoreIPAddressPool
 
+from generators.helpers.capabilities import template_supports_virtual_mlag
+
 if TYPE_CHECKING:
     import logging
 
@@ -346,7 +348,9 @@ class DeviceMixin(DomainPairingMixin, VirtualNicMixin):
                 role_label=device_role,
                 template=template,
                 mlag_create=mlag_create,
-                supports_virtual=options.get("mlag_supports_virtual", True),
+                supports_virtual=template_supports_virtual_mlag(
+                    template, default=options.get("mlag_supports_virtual", True)
+                ),
             )
 
         return device_names
