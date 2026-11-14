@@ -125,7 +125,8 @@ class CablingMixin:
                 break
             delay = self._retry_delay(WAIT_FOR_PEER_GENERATOR.delay, _attempt)
             self.logger.info(
-                f"Interfaces not ready yet (src={len(src_interfaces)}, dst={len(dst_interfaces)}) — "
+                f"Interfaces not ready yet (src={len(src_interfaces)} [{bottom_devices} {bottom_interfaces}], "
+                f"dst={len(dst_interfaces)} [{top_devices} {top_interfaces}]) — "
                 f"retrying in {delay:.2f}s (attempt {_attempt + 1}/{WAIT_FOR_PEER_GENERATOR.attempts})"
             )
             if _attempt < WAIT_FOR_PEER_GENERATOR.attempts - 1:
