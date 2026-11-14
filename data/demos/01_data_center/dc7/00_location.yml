@@ -20,7 +20,7 @@ spec:
                   shortname: ams-1-s-1
                   parent: ams-1
                   rows: 1
-                  racks_per_row: 1
+                  racks_per_row: 2
                   children:
                     kind: LocationRackRow
                     data:
@@ -33,7 +33,7 @@ spec:
                   shortname: ams-1-s-2
                   parent: ams-1
                   rows: 1
-                  racks_per_row: 1
+                  racks_per_row: 2
                   children:
                     kind: LocationRackRow
                     data:

@@ -6,7 +6,5 @@ spec:
   data:
     - template_name: DC6-POD-SPINE-FX2
       spine_quantity: 2
-      spine_template: N9K-C9336C-FX2_SPINE
     - template_name: DC6-POD-SPINE-GX
       spine_quantity: 2
-      spine_template: N9K-C9364C-GX_SPINE

@@ -54,15 +54,6 @@ fragment DataCenterFields on TopologyDataCenter {
   connectivity_mode { value }
   routing_strategy { value }
   underlay_protocol { value }
-  fabric_templates {
-    edges {
-      node {
-        role { value }
-        quantity { value }
-        template { node { ...SuperSpineTemplateFields } }
-      }
-    }
-  }
   # The DC's fabric envelope, as far as a pod's own checks and pool sizes read it
   # (generators/fabric_sizing.py): the pod designs it may host and their spine
   # widths, by id for a sibling pod's design (the back-to-back mesh slot width).
@@ -171,7 +162,6 @@ query topology_pod($name: String!) {
         spine_interface_sorting_method { value }
         spine_role { value }
         spine_quantity { value }
-        spine_template { node { ...DeviceTemplateFields } }
         devices(role__values: ["spine", "border-spine"]) {
           edges {
             node {
@@ -188,15 +178,6 @@ query topology_pod($name: String!) {
                   }
                 }
               }
-            }
-          }
-        }
-        fabric_templates {
-          edges {
-            node {
-              role { value }
-              quantity { value }
-              template { node { ...DeviceTemplateFields } }
             }
           }
         }

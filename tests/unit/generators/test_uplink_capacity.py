@@ -66,9 +66,12 @@ def datacenter_topologies(root_dir: Path) -> list[dict[str, Any]]:
 
 
 def _templates_by_role(entry: dict[str, Any]) -> dict[str, list[tuple[int, str]]]:
-    """``fabric_templates`` (``[quantity, role, template]`` triples) as role -> entries."""
+    """``fabric_templates`` (``[quantity, role, template]`` triples) from entry or its racks as role -> entries."""
     by_role: dict[str, list[tuple[int, str]]] = {}
-    for quantity, role, template in entry.get("fabric_templates") or []:
+    triples = list(entry.get("fabric_templates") or [])
+    for rack in (entry.get("racks") or {}).get("data") or []:
+        triples.extend(rack.get("fabric_templates") or [])
+    for quantity, role, template in triples:
         by_role.setdefault(role, []).append((int(quantity), template))
     return by_role
 

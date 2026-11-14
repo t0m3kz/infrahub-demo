@@ -197,50 +197,6 @@ query topology_dc($name: String!) {
                     }
                   }
                 }
-                fabric_templates {
-                  edges {
-                    node {
-                      role {
-                        value
-                      }
-                      quantity {
-                        value
-                      }
-                      template {
-                        node {
-                          id
-                          ... on TemplateDcimPhysicalDevice {
-                            platform {
-                              node {
-                                id
-                                name {
-                                  value
-                                }
-                              }
-                            }
-                            device_type {
-                              node {
-                                id
-                              }
-                            }
-                            interfaces {
-                              edges {
-                                node {
-                                  name {
-                                    value
-                                  }
-                                  role {
-                                    value
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
                 devices {
                   edges {
                     node {
@@ -333,50 +289,6 @@ query topology_dc($name: String!) {
                   platform {
                     node {
                       id
-                    }
-                  }
-                }
-              }
-            }
-          }
-          fabric_templates {
-            edges {
-              node {
-                role {
-                  value
-                }
-                quantity {
-                  value
-                }
-                template {
-                  node {
-                    id
-                    ... on TemplateDcimPhysicalDevice {
-                      platform {
-                        node {
-                          id
-                          name {
-                            value
-                          }
-                        }
-                      }
-                      device_type {
-                        node {
-                          id
-                        }
-                      }
-                      interfaces {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                            role {
-                              value
-                            }
-                          }
-                        }
-                      }
                     }
                   }
                 }

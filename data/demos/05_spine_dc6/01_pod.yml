@@ -1,12 +1,9 @@
 ---
-# DC6-1-POD-1 grows from 2 to 3 spines via spine_quantity override (no extra TopologyElement needed).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyPod
+  kind: TopologyElement
   data:
-    - index: 1
-      parent: DC6
-      design: M_MIDDLE
-      mlag_create: back-to-back
-      spine_quantity: 3
+    - quantity: 3
+      role: spine
+      template: N9K-C9336C-FX2_SPINE

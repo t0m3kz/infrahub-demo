@@ -5,25 +5,12 @@ spec:
   kind: TopologyDataCenter
   data:
     - name: DC3
-      index: 1
+      index: 2
       parent: Data Center
       design: L
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: flat
-      fabric_templates:
-        - - '4'
-          - super-spine
-          - PowerSwitch-S5232F-ON_SUPER_SPINE
-        - - '2'
-          - border-leaf
-          - PowerSwitch-S5232F-ON_BORDER_LEAF
-        - - '2'
-          - internal-firewall
-          - CP-26000_FIREWALL
-        - - '2'
-          - load-balancer
-          - BIG-IP-i5800_LOAD_BALANCER
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -32,15 +19,22 @@ spec:
         data:
           - index: 1
             design: M_MIDDLE
-            fabric_templates:
-              - - '2'
-                - spine
-                - N9K-C9336C-FX2_SPINE
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
+                - name: LON-1-S-1-R1-2
+                  index: 2
+                  shortname: lon-1-s-1-r-1-2
+                  rack_type: network
+                  parent: lon-1-s-1-row-1
+                  member_of_groups:
+                    - topologies_rack
+                  fabric_templates:
+                    - - "2"
+                      - spine
+                      - N9K-C9336C-FX2_SPINE
                 - name: LON-1-ROOM-1-R1-1
                   index: 1
                   shortname: lon-1-s-1-r-1-1
@@ -49,23 +43,30 @@ spec:
                   member_of_groups:
                     - topologies_rack
                   fabric_templates:
-                    - - '2'
+                    - - "2"
                       - leaf
                       - N9K-C9336C-FX2_LEAF_MR
-                    - - '2'
+                    - - "2"
                       - l2-leaf
                       - N9K-C9336C-FX2_TOR
           - index: 2
             design: M_MIDDLE
-            fabric_templates:
-              - - '2'
-                - spine
-                - DCS-7050CX3-32C-R_SPINE
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
+                - name: LON-1-S-2-R1-2
+                  index: 2
+                  shortname: lon-1-s-2-r-1-2
+                  rack_type: network
+                  parent: lon-1-s-2-row-1
+                  member_of_groups:
+                    - topologies_rack
+                  fabric_templates:
+                    - - "2"
+                      - spine
+                      - DCS-7050CX3-32C-R_SPINE
                 - name: LON-1-ROOM-2-R1-1
                   index: 1
                   shortname: lon-1-s-2-r-1-1
@@ -74,23 +75,30 @@ spec:
                   member_of_groups:
                     - topologies_rack
                   fabric_templates:
-                    - - '2'
+                    - - "2"
                       - leaf
                       - DCS-7050CX3-32C-R_LEAF_MR
-                    - - '2'
+                    - - "2"
                       - l2-leaf
                       - DCS-7050CX3-32C-R_TOR
           - index: 3
             design: M_MIDDLE
-            fabric_templates:
-              - - '2'
-                - spine
-                - PowerSwitch-S5232F-ON_SPINE
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
+                - name: LON-1-S-3-R1-2
+                  index: 2
+                  shortname: lon-1-s-3-r-1-2
+                  rack_type: network
+                  parent: lon-1-s-3-row-1
+                  member_of_groups:
+                    - topologies_rack
+                  fabric_templates:
+                    - - "2"
+                      - spine
+                      - PowerSwitch-S5232F-ON_SPINE
                 - name: LON-1-ROOM-3-R1-1
                   index: 1
                   shortname: lon-1-s-3-r-1-1
@@ -99,23 +107,30 @@ spec:
                   member_of_groups:
                     - topologies_rack
                   fabric_templates:
-                    - - '2'
+                    - - "2"
                       - leaf
                       - PowerSwitch-S5232F-ON_LEAF_MR
-                    - - '2'
+                    - - "2"
                       - l2-leaf
                       - PowerSwitch-S5224F-ON_TOR
           - index: 4
             design: M_MIDDLE
-            fabric_templates:
-              - - '2'
-                - spine
-                - Edgecore-7726-32X-O_SPINE
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
+                - name: LON-1-S-4-R1-9
+                  index: 9
+                  shortname: lon-1-s-4-r-1-9
+                  rack_type: network
+                  parent: lon-1-s-4-row-1
+                  member_of_groups:
+                    - topologies_rack
+                  fabric_templates:
+                    - - "2"
+                      - spine
+                      - Edgecore-7726-32X-O_SPINE
                 - name: LON-1-ROOM-4-R1-1
                   index: 1
                   shortname: lon-1-s-4-r-1-1
@@ -124,9 +139,32 @@ spec:
                   member_of_groups:
                     - topologies_rack
                   fabric_templates:
-                    - - '2'
+                    - - "2"
                       - leaf
                       - Edgecore-7726-32X-O_LEAF_MR
-                    - - '2'
+                    - - "2"
                       - l2-leaf
                       - Edgecore-7AS7326-56X-O-48V-F_TOR
+      racks:
+        kind: LocationRack
+        data:
+          - name: LON-1-S-4-R1-8
+            index: 1
+            shortname: lon-1-s-4-r-1-8
+            rack_type: network
+            parent: lon-1-s-4-row-1
+            member_of_groups:
+              - topologies_rack
+            fabric_templates:
+              - - "4"
+                - super-spine
+                - PowerSwitch-S5232F-ON_SUPER_SPINE
+              - - "2"
+                - border-leaf
+                - PowerSwitch-S5232F-ON_BORDER_LEAF
+              - - "2"
+                - internal-firewall
+                - CP-26000_FIREWALL
+              - - "2"
+                - load-balancer
+                - BIG-IP-i5800_LOAD_BALANCER

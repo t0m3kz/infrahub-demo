@@ -20,21 +20,28 @@ spec:
         data:
           - index: 1
             design: S_BORDER_SPINE_POD
-            fabric_templates:
-              - - '2'
-                - border-spine
-                - DCS-7050CX3-32C-R_BORDER_SPINE
-              - - '2'
-                - internal-firewall
-                - PA-5260_FIREWALL
-              - - '2'
-                - load-balancer
-                - NetScaler-MPX-26000-100G_LOAD_BALANCER
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
+                - name: AMS-1-S-1-R1-2
+                  index: 2
+                  shortname: ams-1-s-1-r-1-2
+                  rack_type: network
+                  parent: ams-1-s-1-row-1
+                  member_of_groups:
+                    - topologies_rack
+                  fabric_templates:
+                    - - "2"
+                      - border-spine
+                      - DCS-7050CX3-32C-R_BORDER_SPINE
+                    - - "2"
+                      - internal-firewall
+                      - PA-5260_FIREWALL
+                    - - "2"
+                      - load-balancer
+                      - NetScaler-MPX-26000-100G_LOAD_BALANCER
                 - name: AMS-1-SUITE-1-R1-1
                   index: 1
                   shortname: ams-1-s-1-r-1-1
@@ -43,26 +50,33 @@ spec:
                   member_of_groups:
                     - topologies_rack
                   fabric_templates:
-                    - - '8'
+                    - - "8"
                       - leaf
                       - DCS-7050CX3-32C-R_LEAF_MR
           - index: 2
             design: S_BORDER_SPINE_POD
-            fabric_templates:
-              - - '2'
-                - border-spine
-                - DCS-7050CX3-32C-R_BORDER_SPINE
-              - - '2'
-                - internal-firewall
-                - PA-5260_FIREWALL
-              - - '2'
-                - load-balancer
-                - NetScaler-MPX-26000-100G_LOAD_BALANCER
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
+                - name: AMS-1-S-2-R1-2
+                  index: 2
+                  shortname: ams-1-s-2-r-1-2
+                  rack_type: network
+                  parent: ams-1-s-2-row-1
+                  member_of_groups:
+                    - topologies_rack
+                  fabric_templates:
+                    - - "2"
+                      - border-spine
+                      - DCS-7050CX3-32C-R_BORDER_SPINE
+                    - - "2"
+                      - internal-firewall
+                      - PA-5260_FIREWALL
+                    - - "2"
+                      - load-balancer
+                      - NetScaler-MPX-26000-100G_LOAD_BALANCER
                 - name: AMS-1-SUITE-2-R1-1
                   index: 1
                   shortname: ams-1-s-2-r-1-1
@@ -71,6 +85,6 @@ spec:
                   member_of_groups:
                     - topologies_rack
                   fabric_templates:
-                    - - '8'
+                    - - "8"
                       - leaf
                       - DCS-7050CX3-32C-R_LEAF_MR

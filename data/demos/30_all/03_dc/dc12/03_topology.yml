@@ -8,19 +8,6 @@ spec:
       parent: Data Center
       index: 12
       design: L
-      fabric_templates:
-        - - '2'
-          - super-spine
-          - N9K-C9336C-FX2_SUPER_SPINE
-        - - '2'
-          - border-leaf
-          - N9K-C9336C-FX2_BORDER_LEAF
-        - - '2'
-          - internal-firewall
-          - CP-26000_FIREWALL
-        - - '2'
-          - load-balancer
-          - BIG-IP-i5800_LOAD_BALANCER
       fabric_interface_sorting_method: top_down
       controllers:
         - DC12-DCNM1
@@ -34,16 +21,23 @@ spec:
         data:
           - index: 1
             design: S_MIDDLE
-            fabric_templates:
-              - - '2'
-                - spine
-                - N9K-C9336C-FX2_SPINE
             mlag_create: virtual
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
+                - name: MIL-1-S-1-R1-2
+                  index: 2
+                  shortname: mil-1-s-1-r-1-2
+                  rack_type: network
+                  parent: mil-1-s-1-row-1
+                  member_of_groups:
+                    - topologies_rack
+                  fabric_templates:
+                    - - "2"
+                      - spine
+                      - N9K-C9336C-FX2_SPINE
                 - name: MIL-1-SUITE-1-R1-5
                   index: 5
                   shortname: mil-1-s-1-r-1-5
@@ -52,10 +46,10 @@ spec:
                   member_of_groups:
                     - topologies_rack
                   fabric_templates:
-                    - - '2'
+                    - - "2"
                       - leaf
                       - N9K-C9336C-FX2_LEAF_MR
-                    - - '2'
+                    - - "2"
                       - access-leaf
                       - N9K-C93180YC-EX_ACCESS
                 - name: MIL-1-SUITE-1-R2-5
@@ -66,10 +60,10 @@ spec:
                   member_of_groups:
                     - topologies_rack
                   fabric_templates:
-                    - - '2'
+                    - - "2"
                       - leaf
                       - N9K-C9336C-FX2_LEAF_MR
-                    - - '2'
+                    - - "2"
                       - access-leaf
                       - N9K-C93180YC-EX_ACCESS
                 - name: MIL-1-SUITE-1-R1-1
@@ -86,9 +80,42 @@ spec:
                     - topologies_rack
           - index: 2
             design: S_MIDDLE
-            fabric_templates:
-              - - '2'
-                - spine
-                - N9K-C9336C-FX2_SPINE
             member_of_groups:
               - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - name: MIL-1-S-2-R1-1
+                  index: 1
+                  shortname: mil-1-s-2-r-1-1
+                  rack_type: network
+                  parent: mil-1-s-2-row-1
+                  member_of_groups:
+                    - topologies_rack
+                  fabric_templates:
+                    - - "2"
+                      - spine
+                      - N9K-C9336C-FX2_SPINE
+      racks:
+        kind: LocationRack
+        data:
+          - name: MIL-1-S-3-R1-1
+            index: 1
+            shortname: mil-1-s-3-r-1-1
+            rack_type: network
+            parent: mil-1-s-3-row-1
+            member_of_groups:
+              - topologies_rack
+            fabric_templates:
+              - - "2"
+                - super-spine
+                - N9K-C9336C-FX2_SUPER_SPINE
+              - - "2"
+                - border-leaf
+                - N9K-C9336C-FX2_BORDER_LEAF
+              - - "2"
+                - internal-firewall
+                - CP-26000_FIREWALL
+              - - "2"
+                - load-balancer
+                - BIG-IP-i5800_LOAD_BALANCER

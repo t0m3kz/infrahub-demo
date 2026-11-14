@@ -37,7 +37,7 @@ spec:
                   shortname: fra-1-s-2
                   parent: fra-1
                   rows: 2
-                  racks_per_row: 1
+                  racks_per_row: 9
                   children:
                     kind: LocationRackRow
                     data:
@@ -54,7 +54,7 @@ spec:
                   shortname: fra-1-s-3
                   parent: fra-1
                   rows: 1
-                  racks_per_row: 1
+                  racks_per_row: 9
                   children:
                     kind: LocationRackRow
                     data:

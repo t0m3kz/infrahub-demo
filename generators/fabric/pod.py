@@ -206,7 +206,7 @@ class PodTopologyGenerator(
             return
 
         dc_super_spine_entries = templates_by_role(dc.get("fabric_templates", []), "super-spine")
-        dc_ss_devs = [device for device in dc.get("devices", []) if device.get("role") == "super-spine"]
+        dc_ss_devs = [device for device in dc.get("devices", []) if device.get("role") in (None, "super-spine")]
         super_spine_devices = sorted(
             {device["name"] for device in dc_ss_devs}
             | {d["name"] for e in dc_super_spine_entries for d in e.get("devices") or []}

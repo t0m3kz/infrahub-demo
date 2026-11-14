@@ -17,17 +17,6 @@ spec:
     # correct on its own: pod.py already waits for an in-flight add_dc/
     # dc_pod_cascade on its parent DC before reading DC-level data.
 
-    - name: trigger-dc-update-fabric-templates
-      branch_scope: "other_branches"
-      node_kind: TopologyDataCenter
-      mutation_action: "updated"
-      action: run-dc-pod-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: fabric_templates
-            modification_type: updated
-
     # Re-cables every rack's firewall/load-balancer links to match the new
     # mode — pbr and inline target different ports/far-ends on the same
     # firewall/load-balancer uplink interfaces, so an existing rack must be
@@ -76,28 +65,6 @@ spec:
         data:
           - attribute_name: index
             value_match: any
-
-    - name: trigger-pod-update-fabric-templates
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "updated"
-      action: run-pod-rack-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: fabric_templates
-            modification_type: updated
-
-    - name: trigger-pod-update-spine-template
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "updated"
-      action: run-pod-rack-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: spine_template
-            modification_type: updated
 
     - name: trigger-pod-update-spine-quantity
       branch_scope: "other_branches"

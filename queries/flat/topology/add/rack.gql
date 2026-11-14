@@ -440,22 +440,6 @@ query RackGenerator($id: ID!) {
               spine_quantity {
                 value
               }
-              spine_template {
-                node {
-                  id
-                  ... on TemplateDcimPhysicalDevice {
-                    interfaces(role__value: "downlink") {
-                      edges {
-                        node {
-                          name {
-                            value
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
               devices(role__values: ["spine", "border-spine"]) {
                 edges {
                   node {
@@ -541,37 +525,6 @@ query RackGenerator($id: ID!) {
                                 }
                                 role {
                                   value
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                    fabric_templates {
-                      edges {
-                        node {
-                          role {
-                            value
-                          }
-                          quantity {
-                            value
-                          }
-                          template {
-                            node {
-                              id
-                              ... on TemplateDcimPhysicalDevice {
-                                interfaces(role__value: "downlink") {
-                                  edges {
-                                    node {
-                                      name {
-                                        value
-                                      }
-                                      role {
-                                        value
-                                      }
-                                    }
-                                  }
                                 }
                               }
                             }

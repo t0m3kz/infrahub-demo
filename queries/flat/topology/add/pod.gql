@@ -50,38 +50,6 @@ query topology_pod($name: String!) {
         spine_quantity {
           value
         }
-        spine_template {
-          node {
-            ... on TemplateDcimPhysicalDevice {
-              id
-              platform {
-                node {
-                  id
-                  name {
-                    value
-                  }
-                }
-              }
-              device_type {
-                node {
-                  id
-                }
-              }
-              interfaces(role__values: ["uplink", "downlink", "firewall", "load-balancer"]) {
-                edges {
-                  node {
-                    name {
-                      value
-                    }
-                    role {
-                      value
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
         devices(role__values: ["spine", "border-spine"]) {
           edges {
             node {
@@ -101,50 +69,6 @@ query topology_pod($name: String!) {
                       }
                       role {
                         value
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        fabric_templates {
-          edges {
-            node {
-              role {
-                value
-              }
-              quantity {
-                value
-              }
-              template {
-                node {
-                  ... on TemplateDcimPhysicalDevice {
-                    id
-                    platform {
-                      node {
-                        id
-                        name {
-                          value
-                        }
-                      }
-                    }
-                    device_type {
-                      node {
-                        id
-                      }
-                    }
-                    interfaces(role__values: ["uplink", "downlink", "firewall", "load-balancer"]) {
-                      edges {
-                        node {
-                          name {
-                            value
-                          }
-                          role {
-                            value
-                          }
-                        }
                       }
                     }
                   }
@@ -340,44 +264,6 @@ query topology_pod($name: String!) {
               }
               underlay_protocol {
                 value
-              }
-              fabric_templates {
-                edges {
-                  node {
-                    role {
-                      value
-                    }
-                    quantity {
-                      value
-                    }
-                    template {
-                      node {
-                        ... on TemplateDcimPhysicalDevice {
-                          id
-                          platform {
-                            node {
-                              id
-                            }
-                          }
-                          device_type {
-                            node {
-                              id
-                            }
-                          }
-                          interfaces(role__value: "downlink") {
-                            edges {
-                              node {
-                                name {
-                                  value
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
               }
               design {
                 node {

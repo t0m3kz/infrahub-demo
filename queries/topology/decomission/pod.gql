@@ -33,18 +33,6 @@ query pod_decommission($name: String!) {
             }
           }
         }
-        fabric_templates {
-          edges {
-            node {
-              role {
-                value
-              }
-              quantity {
-                value
-              }
-            }
-          }
-        }
         parent {
           node {
             ... on TopologyDataCenter {
