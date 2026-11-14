@@ -1,13 +1,13 @@
-"""checks/bgp_closure.py and CheckBgpExpectations: the closure rules E1 to E5 on canned, already cleaned query data."""
+"""checks/routing/bgp_closure.py and CheckBgpExpectations: the closure rules E1 to E5 on canned, already cleaned query data."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, cast
 
-from checks import bgp_expectations
-from checks.bgp_closure import Finding, analyse
-from checks.bgp_expectations import CheckBgpExpectations
+from checks.routing import bgp_expectations
+from checks.routing.bgp_closure import Finding, analyse
+from checks.routing.bgp_expectations import CheckBgpExpectations
 from tests.unit.routing_helpers import in_vrf, make_vrf
 
 POOL = "10.250.0.0/24"

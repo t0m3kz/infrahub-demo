@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from checks.vrf_instances import missing_pbr_errors, svi_content_errors, unneeded_pbr_warnings
+from checks.routing.vrf_instances import missing_pbr_errors, svi_content_errors, unneeded_pbr_warnings
 from tests.unit.vrf_instances_helpers import facts_of, raw_device, raw_footprint, raw_row, raw_svi
 
 

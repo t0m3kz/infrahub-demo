@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.topology.orchestrator_routing import (
+from generators.connectivity.orchestrator_routing import (
     ApplicationOrchestratorRoutingGenerator,
     TopologyOrchestratorRoutingGenerator,
 )

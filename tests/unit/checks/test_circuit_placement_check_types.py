@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.circuit_placement import CheckCircuitPlacement
+from checks.connectivity.circuit_placement import CheckCircuitPlacement
 from tests.unit.circuit_placement_check_helpers import DCI, HANDOFF, TUNNEL, _edges, _routing_vrf, _run
 
 HANDOFF_ONLY: dict[str, Any] = {

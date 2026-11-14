@@ -1,4 +1,4 @@
-"""Unit tests for CheckColocationPlacement (checks/colocation_placement.py)."""
+"""Unit tests for CheckColocationPlacement (checks/customers/colocation_placement.py)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.colocation_placement import (
+from checks.customers.colocation_placement import (
     RULES,
     CheckColocationPlacement,
     kit_within_design_findings,

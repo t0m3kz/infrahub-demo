@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from generators.connectivity.circuit import CircuitEndpoint, CircuitLocation, plan_locations
 from generators.helpers.naming import sdwan_edge_name
-from generators.topology.circuit import CircuitEndpoint, CircuitLocation, plan_locations
 from tests.integration.demo_data import ROOT, Declared, declared, distinct, name
 from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.external_vrf_peers_helpers import _raw_vrf

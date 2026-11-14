@@ -12,12 +12,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.generator import InfrahubGenerator
 
-from generators.segment_vlan import segment_lock_key
-from generators.topology.circuit import CarrierCircuitGenerator
-from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
-from generators.topology.segment import VxlanSegmentGenerator
-from generators.topology.segment_ports import SegmentPortTagMixin
-from generators.topology.virtual_circuit import VirtualCircuitSessionGenerator
+from generators.connectivity.circuit import CarrierCircuitGenerator
+from generators.connectivity.virtual_circuit import VirtualCircuitSessionGenerator
+from generators.customers.customer_dc import CustomerDeploymentDCExchangeGenerator
+from generators.mixins.segment_vlan import segment_lock_key
+from generators.segments.segment import VxlanSegmentGenerator
+from generators.segments.segment_ports import SegmentPortTagMixin
 from tests.unit.customer_generator_helpers import make_generator
 from tests.unit.simulators.circuit_fakes import (
     FakeClient,
@@ -358,8 +358,8 @@ def _endpoint(port_id: str, device_id: str, deployment_kind: str, deployment_id:
 
 def test_every_host_composes_the_mixin_without_shadowing_it() -> None:
     """The hosts inherit the one VrfMixin implementation (no stub body shadows it in the MRO)."""
+    from generators.fabric.office_fabric import OfficeFabricGenerator
     from generators.helpers.vrf import VrfMixin
-    from generators.topology.office_fabric import OfficeFabricGenerator
 
     for host in (
         CarrierCircuitGenerator,

@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.protocols import CoreIPPrefixPool, IpamNamespace
 
-from generators.logger import GeneratorError
+from generators.applications.application_security import AppApplicationGenerator
+from generators.mixins.logger import GeneratorError
 from generators.protocols import IpamPrefix
-from generators.topology.application_security import AppApplicationGenerator
-from generators.topology.segment import VxlanSegmentGenerator
+from generators.segments.segment import VxlanSegmentGenerator
 from tests.integration.demo_data import ROOT, declared, name
 from utils.exchange_transit import is_exchange_zone, namespace_type_for_environment
 from utils.limits import OFFSET_ANYCAST
@@ -256,7 +256,7 @@ class TestGenerateOrder:
             order.append("tag")
             seen.append(segment.get("gateway"))
 
-        monkeypatch.setattr("generators.topology.segment.ensure_segment_tag", tag)
+        monkeypatch.setattr("generators.segments.segment.ensure_segment_tag", tag)
         gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()

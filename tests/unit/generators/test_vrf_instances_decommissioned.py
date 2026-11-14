@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from checks.vrf_instances import (
+from checks.routing.vrf_instances import (
     CheckVrfInstances,
     empty_instance_warnings,
     membership_errors,

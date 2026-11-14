@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.common import CommonGenerator
 from generators.helpers.rules import RulesPlanner
-from generators.segment_firewall import RULE_INDEX_START, SegmentFirewallMixin, _next_free_rule_index
+from generators.mixins.common import CommonGenerator
+from generators.mixins.segment_firewall import RULE_INDEX_START, SegmentFirewallMixin, _next_free_rule_index
 from utils.limits import ACL_CLOSING_SEQ, ACL_INTERNET_BAND_SEQ_START, ACL_RETURN_LEG_SEQ_START
 
 

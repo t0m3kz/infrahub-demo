@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from checks.internet_egress import internet_rules
+from checks.routing.internet_egress import internet_rules
 from tests.smoke.fixture_builders.common import run_transform
 from tests.smoke.fixture_builders.firewall import build_firewall_data
 from tests.smoke.fixture_builders.ipv6 import build_firewall_ipv6_data

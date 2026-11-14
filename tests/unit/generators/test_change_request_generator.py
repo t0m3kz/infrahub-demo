@@ -14,7 +14,7 @@ import yaml
 
 from generators.change import change_request as module
 from generators.change.change_request import ChangeRequestGenerator, changed_fields
-from generators.logger import GeneratorError
+from generators.mixins.logger import GeneratorError
 from tests.integration.demo_data import ROOT
 from tests.unit.change_text_helpers import raw_node, raw_segment, raw_summaries
 from tests.unit.query_shape_helpers import query_tree, unselected

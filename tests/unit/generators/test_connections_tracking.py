@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.common import CommonGenerator
-from generators.connections import CablingMixin, tracked_save_kwargs
+from generators.mixins.common import CommonGenerator
+from generators.mixins.connections import CablingMixin, tracked_save_kwargs
 from generators.protocols import DcimVirtualInterface, IpamIPAddress, ManagedInterfaceEncapsulation
 
 _UNTRACKED = {"allow_upsert": True, "update_group_context": False}
@@ -383,7 +383,7 @@ class TestEnsureVlanSubinterfaceVrf:
         old = MagicMock(id="vrf-old", typename="ManagedVRF")
         node.stored.capabilities.peers.append(old)
         leave = AsyncMock()
-        monkeypatch.setattr("generators.connections.leave_vrfs", leave)
+        monkeypatch.setattr("generators.mixins.connections.leave_vrfs", leave)
 
         await gen.ensure_vlan_subinterface(
             device_id="fw-1",
@@ -406,7 +406,7 @@ class TestEnsureVlanSubinterfaceVrf:
         node = _sub_iface(existing_peer_ids=["ex-1"], gen=gen)
         node.stored.capabilities.peers.append(MagicMock(id="vrf-new", typename="ManagedVRF"))
         leave = AsyncMock()
-        monkeypatch.setattr("generators.connections.leave_vrfs", leave)
+        monkeypatch.setattr("generators.mixins.connections.leave_vrfs", leave)
 
         await gen.ensure_vlan_subinterface(
             device_id="fw-1",

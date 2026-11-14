@@ -1,0 +1,33 @@
+"""Give a customer its routing tag: the number behind its community on every route it owns."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from generators.helpers.routing_tag import ensure_routing_tag
+from generators.mixins.common import CommonGenerator
+from utils.data_cleaning import clean_data
+from utils.limits import CUSTOMER_ROUTING_TAG_POOL
+
+CUSTOMER_KIND = "OrganizationCustomer"
+
+
+class CustomerRoutingTagGenerator(CommonGenerator):
+    """Draw ``OrganizationCustomer.routing_tag`` from Customer-Routing-Tag when the customer has none; idempotent and
+    untracked.
+    """
+
+    graphql_root_key = CUSTOMER_KIND
+
+    async def generate(self, data: dict[str, Any]) -> None:
+        customers = clean_data(data).get(self.graphql_root_key) or []
+        if not customers:
+            self.fail(f"No {self.graphql_root_key} data in GraphQL response")
+        customer = customers[0]
+        try:
+            tag = await ensure_routing_tag(
+                self.client, kind=CUSTOMER_KIND, node=customer, pool_name=CUSTOMER_ROUTING_TAG_POOL
+            )
+        except LookupError as exc:
+            self.fail(str(exc))
+        self.logger.info(f"Customer {customer.get('name')}: routing tag {tag}")

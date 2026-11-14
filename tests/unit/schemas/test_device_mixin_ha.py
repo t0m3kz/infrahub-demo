@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
-from generators.devices import DeviceMixin
+from generators.mixins.devices import DeviceMixin
 from generators.protocols import (
     CloudNetworkAppliance,
     DcimCable,

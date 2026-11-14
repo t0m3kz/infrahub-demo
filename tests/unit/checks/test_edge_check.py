@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.edge import CheckEdge, warn_transit_without_internet_bgw
+from checks.devices.edge import CheckEdge, warn_transit_without_internet_bgw
 
 _INTERNET_NS = {"name": "INTERNET", "l3_vni": 60002, "vrf_type": "internet"}
 

@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.protocols import CoreIPPrefixPool
 
-from generators.connections import CablingMixin
-from generators.mlag import MLAGWiringMixin
-from generators.pools import PoolMixin
+from generators.mixins.connections import CablingMixin
+from generators.mixins.mlag import MLAGWiringMixin
+from generators.mixins.pools import PoolMixin
 from generators.protocols import (
     DcimCable,
     DcimLAGInterface,

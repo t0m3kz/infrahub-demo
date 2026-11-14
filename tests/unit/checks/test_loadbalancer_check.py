@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from checks.loadbalancer import CheckLoadBalancer, validate_loadbalancer_contexts
+from checks.devices.loadbalancer import CheckLoadBalancer, validate_loadbalancer_contexts
 from tests.unit.encapsulation_helpers import cleaned_encapsulation
 
 

@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.common import CommonGenerator
-from generators.connections import CablingMixin
 from generators.helpers import CablingPlanError
+from generators.mixins.common import CommonGenerator
+from generators.mixins.connections import CablingMixin
 from generators.protocols import IpamIPAddress
 
 

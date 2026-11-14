@@ -1,4 +1,4 @@
-"""Unit tests for EndpointConnectivityGenerator (generators/topology/endpoint.py)."""
+"""Unit tests for EndpointConnectivityGenerator (generators/connectivity/endpoint.py)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from generators.topology.endpoint import EndpointConnectivityGenerator
+from generators.connectivity.endpoint import EndpointConnectivityGenerator
 from tests.unit.endpoint_generator_helpers import _bond, _bond_data, _endpoint_data, _iface, _make_generator, _nic
 
 # generate() — guard clauses and dispatch
@@ -17,7 +17,7 @@ class TestInit:
 
     def test_defaults(self) -> None:
         gen = EndpointConnectivityGenerator.__new__(EndpointConnectivityGenerator)
-        with patch("generators.logger.FailOnErrorLoggerMixin.__init__", return_value=None):
+        with patch("generators.mixins.logger.FailOnErrorLoggerMixin.__init__", return_value=None):
             EndpointConnectivityGenerator.__init__(gen)
 
         assert gen.planned_connections == set()

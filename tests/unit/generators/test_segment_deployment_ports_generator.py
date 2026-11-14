@@ -1,4 +1,4 @@
-"""Unit tests for SegmentDeploymentPortsGenerator (generators/topology/segment_deployment_ports.py): a port assigned to
+"""Unit tests for SegmentDeploymentPortsGenerator (generators/segments/segment_deployment_ports.py): a port assigned to
 a segment deployment re-runs the segment's reconcile."""
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.topology.segment_deployment_ports import SegmentDeploymentPortsGenerator
+from generators.segments.segment_deployment_ports import SegmentDeploymentPortsGenerator
 
 
 def _gen() -> Any:

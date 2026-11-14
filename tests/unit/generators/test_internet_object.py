@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from checks.carrier_circuit_ports import CheckCarrierCircuitPorts
-from checks.circuit_placement import CheckCircuitPlacement
-from generators.topology.circuit import CircuitEndpoint, CircuitLocation, plan_locations
+from checks.connectivity.carrier_circuit_ports import CheckCarrierCircuitPorts
+from checks.connectivity.circuit_placement import CheckCircuitPlacement
+from generators.connectivity.circuit import CircuitEndpoint, CircuitLocation, plan_locations
 from tests.unit.circuit_placement_check_helpers import KINDS, _edges, _place
 from utils.data_cleaning import clean_data
 from utils.internet_object import internet_findings

@@ -6,8 +6,8 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.topology.cloud_attachment_range import CloudAttachmentRangeGenerator
-from generators.topology.customer_cloud import CustomerDeploymentCloudGenerator
+from generators.colocation.cloud_attachment_range import CloudAttachmentRangeGenerator
+from generators.customers.customer_cloud import CustomerDeploymentCloudGenerator
 from tests.unit.cloud_range_helpers import ACCOUNT, REGION_ID, CloudClient, attachment, footprint, network
 from tests.unit.segment_customer_pool_helpers import make_gen
 from utils.limits import CLOUD_RANGE_PREFIX_LENGTH

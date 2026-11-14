@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.decommission.pod import PodDecommissionGenerator
-from generators.pod_config import spine_slot_device_names
+from generators.mixins.pod_config import spine_slot_device_names
 from generators.protocols import (
     CoreIPAddressPool,
     CoreIPPrefixPool,

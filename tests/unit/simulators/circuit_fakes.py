@@ -1,4 +1,4 @@
-"""Fakes for the circuit generators (generators/topology/circuit.py, virtual_circuit.py)."""
+"""Fakes for the circuit generators (generators/connectivity/circuit.py, virtual_circuit.py)."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 from infrahub_sdk.exceptions import GraphQLError
 
-from generators.logger import GeneratorError
-from generators.topology.circuit import CarrierCircuitGenerator
-from generators.topology.virtual_circuit import VirtualCircuitSessionGenerator
+from generators.connectivity.circuit import CarrierCircuitGenerator
+from generators.connectivity.virtual_circuit import VirtualCircuitSessionGenerator
+from generators.mixins.logger import GeneratorError
 from tests.unit.encapsulation_helpers import raw_encapsulation
 
 CIRCUIT_ID = "circ-df10"

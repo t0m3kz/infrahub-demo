@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from checks.evpn_fabric import CheckEvpnFabric
+from checks.routing.evpn_fabric import CheckEvpnFabric
 
 
 def _check() -> Any:

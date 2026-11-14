@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 import yaml
 
-from checks.vrf_instances import ERROR_RULES, WARNING_RULES, uncarried_instance_errors
+from checks.routing.vrf_instances import ERROR_RULES, WARNING_RULES, uncarried_instance_errors
 from tests.unit.vrf_instances_helpers import facts_of, raw_device, raw_instance, raw_mlag, raw_row, raw_svi
 from utils.vrf_demand import PARTY_DEPLOYMENT_KINDS, PARTY_GROUPS, VRF_DEVICE_KINDS, VRF_ROLES
 

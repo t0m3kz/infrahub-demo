@@ -10,10 +10,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
+from generators.protocols import DcimVirtualInterface
 from utils.limits import DEFAULT_NAMESPACE
 from utils.vrf_demand import L3VNI_ROLE, SVI_ROLE, DeviceVrfFacts, RoutedRow, SviFacts
 
-from ..protocols import DcimVirtualInterface
 from .edges import remove_edge
 from .interface_vrf import join_capabilities, vrf_capability
 

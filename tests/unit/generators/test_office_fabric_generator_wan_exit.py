@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from generators.helpers.naming import sdwan_edge_name
-from generators.logger import GeneratorError
+from generators.mixins.logger import GeneratorError
 from generators.protocols import DcimPhysicalDevice, DcimPhysicalInterface, DcimVirtualInterface, ManagedBGP
 from tests.unit.office_fabric_generator_helpers import _DISTRIBUTION_TEMPLATE, _make_generator, _office
 from utils.exchange_transit import wan_exit_vlan
@@ -87,7 +87,7 @@ class _WanExit:
         self.gen.ensure_shared_as = AsyncMock(side_effect=lambda description, asn_pool_id: f"as[{description}]")
         self.gen.ensure_address_family = AsyncMock(return_value="af-ipv4")
         self.gen.upsert_bgp_peering = AsyncMock()
-        self.sleep = patch("generators.topology.office_fabric.asyncio.sleep", new=AsyncMock())
+        self.sleep = patch("generators.fabric.office_fabric.asyncio.sleep", new=AsyncMock())
 
     @staticmethod
     def _switch_port(index: int) -> MagicMock:
@@ -360,7 +360,7 @@ class TestWanExitSkips:
         exit_ = _WanExit(sdwan_gateway=False, edge_present=False)
         sleep = AsyncMock()
 
-        with patch("generators.topology.office_fabric.asyncio.sleep", new=sleep):
+        with patch("generators.fabric.office_fabric.asyncio.sleep", new=sleep):
             await exit_.gen._ensure_wan_exit(
                 distribution_names=["ds-c005-office01"], distribution_template=_DISTRIBUTION_TEMPLATE
             )
@@ -375,7 +375,7 @@ class TestWanExitSkips:
         exit_ = _WanExit(edge_present=False)
         sleep = AsyncMock()
 
-        with patch("generators.topology.office_fabric.asyncio.sleep", new=sleep):
+        with patch("generators.fabric.office_fabric.asyncio.sleep", new=sleep):
             await exit_.gen._ensure_wan_exit(
                 distribution_names=["ds-c005-office01"], distribution_template=_DISTRIBUTION_TEMPLATE
             )

@@ -1,4 +1,4 @@
-"""Unit tests for ColocationZoneGenerator and VirtualColocationGenerator (generators/topology/colocation_fabric.py)."""
+"""Unit tests for ColocationZoneGenerator and VirtualColocationGenerator (generators/colocation/colocation_fabric.py)."""
 
 from __future__ import annotations
 
@@ -7,15 +7,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from generators.firewall_context import FIREWALL_CONTEXT
-from generators.protocols import TopologyColocationZone, TopologyVirtualColocation
-from generators.topology.colocation_fabric import (
+from generators.colocation.colocation_fabric import (
     _COLO_SERVICE_ROLES,
     _COLO_VALID_FABRIC_ROLES,
     ColocationFabricGenerator,
     ColocationZoneGenerator,
     VirtualColocationGenerator,
 )
+from generators.mixins.firewall_context import FIREWALL_CONTEXT
+from generators.protocols import TopologyColocationZone, TopologyVirtualColocation
 from tests.unit.colocation_zone_generator_helpers import (
     _EDGE_TEMPLATE,
     _EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS,

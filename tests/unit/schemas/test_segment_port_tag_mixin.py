@@ -1,4 +1,4 @@
-"""Unit tests for SegmentPortTagMixin (generators/topology/segment_ports.py)"""
+"""Unit tests for SegmentPortTagMixin (generators/segments/segment_ports.py)"""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.segment_vlan import segment_lock_key
-from generators.topology.app_instance_segment import AppInstanceSegmentGenerator
-from generators.topology.segment import VxlanSegmentGenerator
-from generators.topology.segment_ports import SegmentPortTagMixin
+from generators.applications.app_instance_segment import AppInstanceSegmentGenerator
+from generators.mixins.segment_vlan import segment_lock_key
+from generators.segments.segment import VxlanSegmentGenerator
+from generators.segments.segment_ports import SegmentPortTagMixin
 
 
 def _gen() -> Any:

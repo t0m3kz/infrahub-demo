@@ -246,7 +246,7 @@ class TestFamilyAwareGuards:
         """Assignable addresses: an IPv4 /24 loses 2, an IPv6 /64 loses 1."""
         from ipaddress import ip_network
 
-        from checks.pool_utilization import _assignable
+        from checks.customers.pool_utilization import _assignable
 
         assert _assignable(ip_network("10.0.0.0/24")) == 254
         assert _assignable(ip_network("fd5a::/64")) == 2**64 - 1

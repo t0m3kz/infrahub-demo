@@ -386,7 +386,7 @@ def build_device_data(
             }
         )
 
-    # An l2-leaf is pure L2 (generators/topology/rack.py _generate_l2_leafs)
+    # An l2-leaf is pure L2 (generators/fabric/rack.py _generate_l2_leafs)
     if role == "l2-leaf":
         interfaces[1:3] = [
             _make_interface(

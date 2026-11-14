@@ -1,4 +1,4 @@
-"""Unit tests for the security tags AppApplicationGenerator derives (generators/topology/application_security.py)."""
+"""Unit tests for the security tags AppApplicationGenerator derives (generators/applications/application_security.py)."""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ class TestComponentTags:
         app = _c013_app()
         ensure = AsyncMock(side_effect=lambda client, lock, *, kind, node, name: f"tag-{node['id']}")
 
-        with patch("generators.topology.application_security.ensure_security_tag", ensure):
+        with patch("generators.applications.application_security.ensure_security_tag", ensure):
             asyncio.run(gen._reconcile_application_rules(app))
 
         assert sorted(call.kwargs["node"]["id"] for call in ensure.await_args_list) == [
@@ -87,7 +87,7 @@ class TestComponentTags:
         gen = self._gen()
         ensure = AsyncMock()
 
-        with patch("generators.topology.application_security.ensure_security_tag", ensure):
+        with patch("generators.applications.application_security.ensure_security_tag", ensure):
             asyncio.run(gen._reconcile_application_rules(_app(_frontend(_dep(target=_backend())))))
 
         ensure.assert_not_awaited()
@@ -97,7 +97,7 @@ class TestComponentTags:
         component = {"id": "comp-1", "network_segment": _segment("seg-n"), "security_tag": {"id": "tag-old"}}
         clear = AsyncMock()
 
-        with patch("generators.topology.application_security.clear_component_tag", clear):
+        with patch("generators.applications.application_security.clear_component_tag", clear):
             asyncio.run(gen._ensure_component_tags([component], []))
 
         clear.assert_awaited_once_with(gen.client, component_id="comp-1")
@@ -110,7 +110,7 @@ class TestComponentTags:
         target = {"id": "comp-x", "network_segment": _micro_segment("seg-other")}
         ensure = AsyncMock(return_value="tag-1")
 
-        with patch("generators.topology.application_security.ensure_security_tag", ensure):
+        with patch("generators.applications.application_security.ensure_security_tag", ensure):
             asyncio.run(gen._ensure_component_tags([child], [(child, {}, target)]))
 
         assert [call.kwargs["node"]["id"] for call in ensure.await_args_list] == ["comp-1"]
@@ -122,7 +122,7 @@ class TestComponentTags:
         ensure = AsyncMock(side_effect=RuntimeError("SGT-POOL: no group_id allocated"))
 
         with (
-            patch("generators.topology.application_security.ensure_security_tag", ensure),
+            patch("generators.applications.application_security.ensure_security_tag", ensure),
             pytest.raises(RuntimeError, match="SGT-POOL"),
         ):
             asyncio.run(gen._reconcile_application_rules(_c013_app()))
@@ -202,8 +202,8 @@ class TestSegmentTags:
         routing = AsyncMock(side_effect=lambda client, *, segment: order.append(f"routing {segment['id']}"))
 
         with (
-            patch("generators.topology.application_security.ensure_segment_tag", ensure),
-            patch("generators.topology.application_security.ensure_segment_routing_tag", routing),
+            patch("generators.applications.application_security.ensure_segment_tag", ensure),
+            patch("generators.applications.application_security.ensure_segment_routing_tag", routing),
         ):
             asyncio.run(gen._reconcile_application_rules(self._app_on_tenant_segments()))
 
@@ -234,7 +234,7 @@ class TestSegmentTags:
         ensure = AsyncMock(side_effect=LookupError("No group tag pool"))
 
         with (
-            patch("generators.topology.application_security.ensure_segment_tag", ensure),
+            patch("generators.applications.application_security.ensure_segment_tag", ensure),
             pytest.raises(LookupError, match="No group tag pool"),
         ):
             asyncio.run(gen._reconcile_application_rules(self._app_on_tenant_segments()))
@@ -250,7 +250,7 @@ class TestSegmentTags:
         group_tag = AsyncMock()
 
         with (
-            patch("generators.topology.application_security.ensure_segment_tag", group_tag),
+            patch("generators.applications.application_security.ensure_segment_tag", group_tag),
             pytest.raises(LookupError, match="Segment-Routing-Tag"),
         ):
             asyncio.run(gen._reconcile_application_rules(self._app_on_tenant_segments()))
@@ -284,7 +284,7 @@ class TestCrossSegmentComponentTags:
         backend = _backend(ports=["tcp/8443"])
         app = _app(_frontend(_dep(target={**backend, "network_segment": _segment("seg-dst")})), backend)
 
-        with patch("generators.topology.application_security.ensure_security_tag", AsyncMock(return_value="tag-x")):
+        with patch("generators.applications.application_security.ensure_security_tag", AsyncMock(return_value="tag-x")):
             asyncio.run(gen._reconcile_application_rules(app))
 
         dst_seg = gen._reconcile_segment_rule.await_args.kwargs["dst_seg"]
@@ -306,7 +306,9 @@ class TestCrossSegmentComponentTags:
             "parent": {"id": "app-c005"},
         }
 
-        with patch("generators.topology.application_security.ensure_security_tag", AsyncMock(return_value="tag-web")):
+        with patch(
+            "generators.applications.application_security.ensure_security_tag", AsyncMock(return_value="tag-web")
+        ):
             asyncio.run(gen._ensure_component_tags([web], []))
 
         gen.run_generator.assert_awaited_once_with("add_app_application", ["app-c008"], wait=False)
@@ -323,7 +325,9 @@ class TestCrossSegmentComponentTags:
             "parent": {"id": "app-c005"},
         }
 
-        with patch("generators.topology.application_security.ensure_security_tag", AsyncMock(return_value="tag-web")):
+        with patch(
+            "generators.applications.application_security.ensure_security_tag", AsyncMock(return_value="tag-web")
+        ):
             asyncio.run(gen._ensure_component_tags([web], []))
 
         gen.run_generator.assert_not_awaited()

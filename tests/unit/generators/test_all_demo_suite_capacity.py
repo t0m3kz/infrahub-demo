@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.suite_capacity import CheckSuiteCapacity
+from checks.customers.suite_capacity import CheckSuiteCapacity
 from tests.integration.demo_data import ROOT, declared
 from tests.unit.generators.test_circuit_query_shapes import _QUERIES, _payload_paths, _selected_paths
 from tests.unit.simulators.suite_capacity_payloads import DEMOS, DESIGN_FIELDS, SUITE, build_payloads

@@ -10,10 +10,10 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 
-from checks.patch_panel_pairing import CheckPatchPanelPairing
+from checks.connectivity.patch_panel_pairing import CheckPatchPanelPairing
+from generators.connectivity.patch_panel import FRONT_PORT_KIND, REAR_PORT_KIND, PatchPanelGenerator
 from generators.helpers.patch_panel import LAYOUT_CASSETTE, LAYOUT_JACK, PANEL_TYPES, audit
-from generators.logger import GeneratorError
-from generators.topology.patch_panel import FRONT_PORT_KIND, REAR_PORT_KIND, PatchPanelGenerator
+from generators.mixins.logger import GeneratorError
 from tests.integration.demo_data import (
     ROOT,
     action_generators,

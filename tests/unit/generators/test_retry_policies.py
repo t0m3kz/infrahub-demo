@@ -27,17 +27,17 @@ _GENERATORS = Path(__file__).resolve().parents[3] / "generators"
 
 # The module that reads each policy -> the policy names it imports from utils.limits.
 _USERS: dict[str, tuple[str, ...]] = {
-    "generators.common": ("PARENT_GENERATOR_WAIT",),
+    "generators.mixins.common": ("PARENT_GENERATOR_WAIT",),
     "generators.helpers.common": ("NODE_SAVE_RETRY",),
-    "generators.connections": ("WAIT_FOR_PEER_GENERATOR",),
-    "generators.lb_vip": ("LB_VIP_REREAD",),
-    "generators.pools": ("RESOURCE_LOCK", "WAIT_FOR_PEER_GENERATOR"),
-    "generators.rack": ("WAIT_FOR_PEER_GENERATOR",),
-    "generators.routing": ("WAIT_FOR_PEER_GENERATOR",),
-    "generators.segment_firewall": ("RULE_SAVE_ATTEMPTS",),
-    "generators.topology.office_fabric": ("OFFICE_EDGE_WAIT",),
-    "generators.topology.pod": ("BORDER_LEAF_WAIT", "WAIT_FOR_PEER_GENERATOR"),
-    "generators.topology.pod_mesh": ("WAIT_FOR_PEER_GENERATOR",),
+    "generators.mixins.connections": ("WAIT_FOR_PEER_GENERATOR",),
+    "generators.mixins.lb_vip": ("LB_VIP_REREAD",),
+    "generators.mixins.pools": ("RESOURCE_LOCK", "WAIT_FOR_PEER_GENERATOR"),
+    "generators.mixins.rack": ("WAIT_FOR_PEER_GENERATOR",),
+    "generators.mixins.routing": ("WAIT_FOR_PEER_GENERATOR",),
+    "generators.mixins.segment_firewall": ("RULE_SAVE_ATTEMPTS",),
+    "generators.fabric.office_fabric": ("OFFICE_EDGE_WAIT",),
+    "generators.fabric.pod": ("BORDER_LEAF_WAIT", "WAIT_FOR_PEER_GENERATOR"),
+    "generators.fabric.pod_mesh": ("WAIT_FOR_PEER_GENERATOR",),
 }
 
 _RETRY_CONSTANT = re.compile(r"RETR|ATTEMPT|DELAY|INTERVAL|STALE|POLL")

@@ -1,4 +1,4 @@
-"""checks/virtual_switch.py: the rules VS1 to VS4 on canned query data, and the registration of the check."""
+"""checks/devices/virtual_switch.py: the rules VS1 to VS4 on canned query data, and the registration of the check."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import yaml
 
-from checks.virtual_switch import CheckVirtualSwitch
+from checks.devices.virtual_switch import CheckVirtualSwitch
 from tests.integration.demo_data import ROOT
 
 

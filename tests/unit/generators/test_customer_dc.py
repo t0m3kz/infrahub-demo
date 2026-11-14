@@ -1,4 +1,4 @@
-"""Unit tests for CustomerDeploymentDCExchangeGenerator (generators/topology/customer_dc.py)."""
+"""Unit tests for CustomerDeploymentDCExchangeGenerator (generators/customers/customer_dc.py)."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.firewall_context import EDGE_CONTEXT, FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
-from generators.lb_vip import load_balanced_components_in
-from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
+from generators.customers.customer_dc import CustomerDeploymentDCExchangeGenerator
+from generators.mixins.firewall_context import EDGE_CONTEXT, FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
+from generators.mixins.lb_vip import load_balanced_components_in
 from tests.unit.customer_generator_helpers import make_generator
 
 

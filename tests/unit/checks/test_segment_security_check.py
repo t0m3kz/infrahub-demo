@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.segment_security import CheckSegmentSecurity
+from checks.segments.segment_security import CheckSegmentSecurity
 from utils.exchange_transit import namespace_type_for_environment, zone_name_for_namespace_type
 
 _UNSET = object()
@@ -887,7 +887,7 @@ class TestContracts:
 
     def test_a_component_row_the_builder_dropped_is_an_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The narrowed row is checked too: to the target component, not to the segment group."""
-        monkeypatch.setattr("checks.segment_security.get_vrf_contracts", lambda segments, tags: [])
+        monkeypatch.setattr("checks.segments.segment_security.get_vrf_contracts", lambda segments, tags: [])
         segments = [
             _tenant(
                 "c8-portal",
@@ -903,7 +903,7 @@ class TestContracts:
 
     def test_a_rule_the_builder_dropped_is_an_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Builder drift: group policy would deny what L0 permits."""
-        monkeypatch.setattr("checks.segment_security.get_vrf_contracts", lambda segments, tags: [])
+        monkeypatch.setattr("checks.segments.segment_security.get_vrf_contracts", lambda segments, tags: [])
         check = _run_tags(segments=self._SEGMENTS, tags=self._TAGS, components=self._COMPONENTS)
         assert check._captured_errors == [
             "Rule 'web-to-session' between groups k-web.example -> k-session.example has no group contract row",

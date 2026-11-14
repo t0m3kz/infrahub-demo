@@ -1,11 +1,11 @@
-"""Unit tests for CheckInterfaceParents (checks/interface_parents.py)."""
+"""Unit tests for CheckInterfaceParents (checks/devices/interface_parents.py)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, cast
 
-from checks.interface_parents import CheckInterfaceParents
+from checks.devices.interface_parents import CheckInterfaceParents
 from tests.unit.query_shape_helpers import query_tree, unselected
 
 QUERY = Path(__file__).resolve().parents[3] / "queries" / "validation" / "interface_parents.gql"

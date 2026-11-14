@@ -11,7 +11,7 @@ import pytest
 import yaml
 from infrahub_sdk.schema import SchemaRoot
 
-from generators.topology.orchestrator_routing import BaseOrchestratorRoutingGenerator
+from generators.connectivity.orchestrator_routing import BaseOrchestratorRoutingGenerator
 from tests.integration.demo_data import ROOT
 
 _SCHEMAS = ROOT / "schemas"

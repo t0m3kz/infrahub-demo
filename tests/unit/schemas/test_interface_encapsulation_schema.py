@@ -154,7 +154,7 @@ def test_ip_address_is_declared_once_on_the_marker_generic() -> None:
 
 
 def test_common_parent_is_used_only_by_the_lag_pair_the_ospf_settings_the_vlan_rows_and_the_patch_panel_ports() -> None:
-    """The encapsulation file holds no same-device rule in the schema: checks/interface_parents.py does."""
+    """The encapsulation file holds no same-device rule in the schema: checks/devices/interface_parents.py does."""
     users = sorted(
         str(path.relative_to(_SCHEMAS))
         for path in _SCHEMAS.rglob("*.yml")

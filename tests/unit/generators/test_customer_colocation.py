@@ -1,4 +1,4 @@
-"""Unit tests for CustomerDeploymentColocationExchangeGenerator (generators/topology/customer_colocation.py)."""
+"""Unit tests for CustomerDeploymentColocationExchangeGenerator (generators/customers/customer_colocation.py)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.firewall_context import FIREWALL_CONTEXT
-from generators.firewall_transit import _dev_id
-from generators.topology.customer_colocation import CustomerDeploymentColocationExchangeGenerator
-from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
+from generators.customers.customer_colocation import CustomerDeploymentColocationExchangeGenerator
+from generators.customers.customer_dc import CustomerDeploymentDCExchangeGenerator
+from generators.mixins.firewall_context import FIREWALL_CONTEXT
+from generators.mixins.firewall_transit import _dev_id
 from tests.unit.customer_generator_helpers import make_generator
 
 

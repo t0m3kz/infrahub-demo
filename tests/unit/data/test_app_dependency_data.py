@@ -273,7 +273,7 @@ def test_the_scan_finds_the_approved_cross_owner_flow() -> None:
 
 @pytest.mark.parametrize("directory", _APP_DATA_DIRS, ids=lambda d: d.name)
 def test_approved_cross_owner_flow_lists_ports_and_reason(directory: Path) -> None:
-    """checks/app_dependency.py: an approved flow into another owner's component says exactly what it opens and why."""
+    """checks/applications/app_dependency.py: an approved flow into another owner's component says exactly what it opens and why."""
     for dep in _approved_cross_owner(directory):
         assert dep.get("ports"), dep["name"]
         assert str(dep.get("decision_reason") or "").strip(), dep["name"]

@@ -1,4 +1,4 @@
-"""The customer's pools are created when the footprint is boarded (generators/topology/segment_addressing.py)."""
+"""The customer's pools are created when the footprint is boarded (generators/segments/segment_addressing.py)."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.logger import GeneratorError
-from generators.topology.customer_cloud import CustomerDeploymentCloudGenerator
-from generators.topology.customer_colocation import CustomerDeploymentColocationExchangeGenerator
-from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
-from generators.topology.segment_addressing import SegmentAddressingMixin
+from generators.customers.customer_cloud import CustomerDeploymentCloudGenerator
+from generators.customers.customer_colocation import CustomerDeploymentColocationExchangeGenerator
+from generators.customers.customer_dc import CustomerDeploymentDCExchangeGenerator
+from generators.mixins.logger import GeneratorError
+from generators.segments.segment_addressing import SegmentAddressingMixin
 from tests.unit.cloud_range_helpers import CloudClient
 from tests.unit.customer_generator_helpers import make_generator
 from tests.unit.segment_customer_pool_helpers import Client, customer_pool, make_gen, segment_data

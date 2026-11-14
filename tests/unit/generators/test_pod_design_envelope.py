@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.fabric_sizing import host_bits_to_prefix_length, pod_loopback_bits, pod_technical_bits
-from generators.topology.pod import PodTopologyGenerator
+from generators.fabric.pod import PodTopologyGenerator
+from generators.mixins.fabric_sizing import host_bits_to_prefix_length, pod_loopback_bits, pod_technical_bits
 from tests.unit.simulators.fabric_designs import dc_design, pod_design
 
 

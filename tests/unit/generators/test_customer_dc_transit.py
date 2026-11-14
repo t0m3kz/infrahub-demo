@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from generators.firewall_context import FIREWALL_CONTEXT
+from generators.mixins.firewall_context import FIREWALL_CONTEXT
 from tests.unit.customer_dc_transit_helpers import (
     _LB_DEVICES,
     _LB_PROD,
@@ -536,7 +536,7 @@ class TestSnatAddress:
         world = _World(snat_pool=False)  # the pool is never looked up
         gen, _ = _make_gen(world)
 
-        with patch("generators.firewall_context_spec.EXCHANGE_PEERS", {"prod": ()}):
+        with patch("generators.mixins.firewall_context_spec.EXCHANGE_PEERS", {"prod": ()}):
             await _run(gen, world, _payload())
 
         assert world.snat_allocations == {}

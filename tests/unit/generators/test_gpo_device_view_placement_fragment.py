@@ -9,7 +9,7 @@ import pytest
 from graphql import parse
 from graphql.language import FieldNode, FragmentDefinitionNode, FragmentSpreadNode, InlineFragmentNode, SelectionNode
 
-from generators.topology.endpoint import ENDPOINT_NIC_ROLES
+from generators.connectivity.endpoint import ENDPOINT_NIC_ROLES
 from tests.smoke.fixture_builders.group_policy import _gp_instance
 from tests.unit.gpo_device_view_helpers import _coverage, _nic, _placed_roots
 

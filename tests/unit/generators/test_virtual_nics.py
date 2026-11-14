@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import yaml
 
+from generators.mixins.virtual_nics import PINNED_ROLES, VirtualNicMixin, pair_nics_with_host_ports
 from generators.protocols import DcimPhysicalInterface, DcimVirtualInterface, ManagedInterfaceEncapsulation
-from generators.virtual_nics import PINNED_ROLES, VirtualNicMixin, pair_nics_with_host_ports
 
 
 def _port(
@@ -200,7 +200,7 @@ async def test_a_nic_with_no_host_port_and_no_pin_does_nothing() -> None:
 async def test_pin_waits_for_the_template_to_instantiate_the_nics() -> None:
     client = _client([[], [], _nics()], _host_ports())
 
-    with patch("generators.virtual_nics.asyncio.sleep", new=AsyncMock()) as sleep:
+    with patch("generators.mixins.virtual_nics.asyncio.sleep", new=AsyncMock()) as sleep:
         await _Gen(client)._pin_virtual_nics([SimpleNamespace(id="vm-1", name=SimpleNamespace(value="vm"))], "host")
 
     assert sleep.await_count == 2
@@ -212,7 +212,7 @@ async def test_pin_reports_nics_that_never_appear() -> None:
     client = _client([[]], _host_ports())
     gen: Any = _Gen(client)
 
-    with patch("generators.virtual_nics.asyncio.sleep", new=AsyncMock()):
+    with patch("generators.mixins.virtual_nics.asyncio.sleep", new=AsyncMock()):
         await gen._pin_virtual_nics([SimpleNamespace(id="vm-1", name=SimpleNamespace(value="vm"))], "host")
 
     gen.logger.error.assert_called_once()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from generators.fabric_sizing import (
+from generators.mixins.fabric_sizing import (
     COLO_ZONE_LOOPBACK_IPV6_BITS,
     COLO_ZONE_TECHNICAL_IPV6_BITS,
     bits_to_hold,

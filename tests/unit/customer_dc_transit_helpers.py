@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from infrahub_sdk.query_groups import InfrahubGroupContextBase
 
-from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
+from generators.customers.customer_dc import CustomerDeploymentDCExchangeGenerator
 from tests.unit.vrf_instances_helpers import edges, raw_device, raw_instance, raw_interface, raw_service_port
 from tests.unit.vrf_reconcile_helpers import VrfHost
 from utils.exchange_transit import transit_vlan

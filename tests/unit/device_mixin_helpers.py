@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
-from generators.devices import DeviceMixin
+from generators.mixins.devices import DeviceMixin
 
 
 class _DummyBatch:

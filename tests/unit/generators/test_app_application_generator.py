@@ -1,4 +1,4 @@
-"""Unit tests for AppApplicationGenerator orchestration (generators/topology/application_security.py)."""
+"""Unit tests for AppApplicationGenerator orchestration (generators/applications/application_security.py)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.topology.application_security import AppApplicationGenerator
+from generators.applications.application_security import AppApplicationGenerator
 from tests.unit.app_application_generator_helpers import _app, _backend, _dep, _frontend, _make_gen
 
 # TestDependencyRuleGenerator / TestComponentRuleGenerator

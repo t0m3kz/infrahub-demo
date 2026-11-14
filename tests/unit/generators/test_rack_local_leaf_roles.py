@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.topology.rack import RackGenerator, TopologyRackData
+from generators.fabric.rack import RackGenerator, TopologyRackData
 from tests.unit.simulators.fabric_designs import pod_design
 
 

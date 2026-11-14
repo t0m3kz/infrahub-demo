@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from generators.logger import GeneratorError
-from generators.topology.virtual_circuit import handoff_pool_name
+from generators.connectivity.virtual_circuit import handoff_pool_name
+from generators.mixins.logger import GeneratorError
 from tests.integration.demo_data import BOOTSTRAP, declared
 from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.simulators.circuit_fakes import (

@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from generators.logger import GeneratorError
+from generators.mixins.logger import GeneratorError
+from generators.mixins.segment_vlan import segment_lock_key, vlan_device_lock_key
 from generators.protocols import ManagedSegmentVlan
-from generators.segment_vlan import segment_lock_key, vlan_device_lock_key
 from tests.unit.segment_vlan_helpers import VlanWorld, make_device, reconcile, segment_deployment_id
 from utils.limits import CUSTOMER_VLAN_ID_MIN, LOCAL_VLAN_ID_MAX
 

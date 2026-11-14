@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.lisp_fabric import CheckLispFabric
+from checks.routing.lisp_fabric import CheckLispFabric
 
 
 def _check() -> Any:

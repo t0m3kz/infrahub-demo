@@ -1,11 +1,11 @@
-"""Unit tests for CheckInterfaceLayers (checks/interface_layers.py): raw shapes of queries/validation/interface_layers.gql."""
+"""Unit tests for CheckInterfaceLayers (checks/devices/interface_layers.py): raw shapes of queries/validation/interface_layers.gql."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, cast
 
-from checks.interface_layers import CheckInterfaceLayers
+from checks.devices.interface_layers import CheckInterfaceLayers
 from tests.unit.query_shape_helpers import query_tree, unselected
 
 QUERY = Path(__file__).resolve().parents[3] / "queries" / "validation" / "interface_layers.gql"

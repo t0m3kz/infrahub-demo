@@ -1,10 +1,10 @@
-"""Unit tests for checks/sdwan.py."""
+"""Unit tests for checks/devices/sdwan.py."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from checks.sdwan import validate_managed_devices_active
+from checks.devices.sdwan import validate_managed_devices_active
 
 
 def _device(name: str, status: str = "active") -> dict[str, Any]:

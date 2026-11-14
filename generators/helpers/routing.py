@@ -9,9 +9,8 @@ from typing import Any, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from generators.mixins.types import RoutingOptions
 from utils.fabric_roles import OVERLAY_ROLES, RR_CLIENT_ROLES, RR_ROLES
-
-from ..types import RoutingOptions
 
 _SPINE_ROLES = frozenset({"spine", "border-spine"})
 

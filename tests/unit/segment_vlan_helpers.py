@@ -7,9 +7,9 @@ from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from generators.mixins.segment_vlan import segment_lock_key
 from generators.protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
-from generators.segment_vlan import segment_lock_key
-from generators.topology.segment import VxlanSegmentGenerator
+from generators.segments.segment import VxlanSegmentGenerator
 
 
 def make_gen() -> Any:

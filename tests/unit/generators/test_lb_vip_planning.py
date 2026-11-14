@@ -17,7 +17,7 @@ from generators.helpers.lb_vip import (
     vip_identifier,
     vip_ports,
 )
-from generators.lb_vip import load_balanced_components_in
+from generators.mixins.lb_vip import load_balanced_components_in
 from generators.protocols import AppComponent, ManagedVxlanSegment
 from tests.unit.lb_vip_helpers import _context, _instance, _with_footprints, lb_member
 from tests.unit.query_shape_helpers import fragment_text, fragment_tree, query_tree

@@ -1,4 +1,4 @@
-"""An IPv6 segment's addressing (generators/topology/segment_addressing.py)."""
+"""An IPv6 segment's addressing (generators/segments/segment_addressing.py)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from generators.logger import GeneratorError
+from generators.mixins.logger import GeneratorError
 from tests.unit.segment_customer_pool_helpers import Client, customer_pool, footprint, make_gen, segment_data
 
 _POOL = "c005-p-dc-ipv6"

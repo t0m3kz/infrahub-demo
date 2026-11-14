@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from generators import fabric_sizing
+from generators.mixins import fabric_sizing
 from utils.bgp_expectation import (
     DCI,
     DCI_UNDERLAY,

@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.exchange_routes import route_name
-from generators.topology.context_routes import ContextRoutesGenerator
+from generators.connectivity.context_routes import ContextRoutesGenerator
+from generators.mixins.exchange_routes import route_name
 from tests.unit.encapsulation_helpers import raw_encapsulation
 from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
 

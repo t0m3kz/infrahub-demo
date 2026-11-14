@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 import yaml
 
-from checks.customer_quota import CheckCustomerQuota
+from checks.customers.customer_quota import CheckCustomerQuota
 from tests.integration.demo_data import declared, distinct, name
 
 _ROOT = Path(__file__).parents[3]

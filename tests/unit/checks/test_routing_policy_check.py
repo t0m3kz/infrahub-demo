@@ -1,4 +1,4 @@
-"""checks/routing_policy.py: communities and prefixes of the routing policy objects (RP1 to RP3), and its registration."""
+"""checks/routing/routing_policy.py: communities and prefixes of the routing policy objects (RP1 to RP3), and its registration."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any, cast
 import pytest
 import yaml
 
-from checks.routing_policy import CheckRoutingPolicy, routing_policy_errors, routing_policy_warnings
+from checks.routing.routing_policy import CheckRoutingPolicy, routing_policy_errors, routing_policy_warnings
 from tests.integration.demo_data import ROOT
 from tests.unit.query_shape_helpers import query_tree, unselected
 from utils.routing_policy import any_community_error, community_error, prefix_entry_errors

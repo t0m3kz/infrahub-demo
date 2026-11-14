@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock
 from infrahub_sdk.exceptions import GraphQLError
 from infrahub_sdk.protocols import CoreIPPrefixPool
 
-from generators.logger import GeneratorError
-from generators.topology.segment import VxlanSegmentGenerator
+from generators.mixins.logger import GeneratorError
+from generators.segments.segment import VxlanSegmentGenerator
 
 
 def footprint(kind: str, name: str) -> dict[str, Any]:

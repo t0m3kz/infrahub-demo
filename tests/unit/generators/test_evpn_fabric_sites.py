@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.evpn_fabric import (
+from checks.routing.evpn_fabric import (
     CheckEvpnFabric,
     duplicate_rt_as_errors,
     stretched_management_errors,

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from generators.topology.virtual_circuit import PeeringPlan, SessionEnd, SessionPlan
+from generators.connectivity.virtual_circuit import PeeringPlan, SessionEnd, SessionPlan
 from tests.unit.simulators.circuit_fakes import FakeClient, handoff_payload, interconnect_payload, session_generator
 from utils.data_cleaning import clean_data
 

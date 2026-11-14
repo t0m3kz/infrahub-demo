@@ -1,4 +1,4 @@
-"""Unit tests for CheckInternetEgress (checks/internet_egress.py)."""
+"""Unit tests for CheckInternetEgress (checks/routing/internet_egress.py)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.internet_egress import (
+from checks.routing.internet_egress import (
     CheckInternetEgress,
     context_gaps,
     egress_findings,

@@ -10,11 +10,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
+from generators.connectivity.orchestrator_routing import ApplicationOrchestratorRoutingGenerator
 from generators.decommission.pod import PodDecommissionGenerator
-from generators.devices import DeviceMixin
-from generators.logger import GeneratorError
-from generators.mlag import MLAGWiringMixin
-from generators.pools import PoolMixin
+from generators.fabric.pod import PodTopologyGenerator
+from generators.mixins.devices import DeviceMixin
+from generators.mixins.logger import GeneratorError
+from generators.mixins.mlag import MLAGWiringMixin
+from generators.mixins.pools import PoolMixin
+from generators.mixins.routing import RoutingMixin
 from generators.protocols import (
     DcimCable,
     DcimInterface,
@@ -28,9 +31,6 @@ from generators.protocols import (
     ManagedMLAG,
     RoutingBGPAddressFamily,
 )
-from generators.routing import RoutingMixin
-from generators.topology.orchestrator_routing import ApplicationOrchestratorRoutingGenerator
-from generators.topology.pod import PodTopologyGenerator
 from tests.unit.simulators import circuit_fakes
 from tests.unit.simulators.fabric_designs import dc_design, pod_design
 
@@ -485,7 +485,7 @@ class TestPodDefersBeforeFirstSave:
     @pytest.mark.asyncio
     async def test_unready_super_spine_overlay_fails_before_any_write(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Super-spine overlay BGP that never lands fails the run, still before any save:"""
-        monkeypatch.setattr("generators.topology.pod.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.fabric.pod.asyncio.sleep", AsyncMock())
         gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
         gen.logger = MagicMock()
         gen.client = _client()
@@ -510,7 +510,7 @@ class TestPodDefersBeforeFirstSave:
     async def test_super_spine_overlay_waits_for_in_flight_add_dc(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """An add_dc that surfaces only after the up-front check is waited for."""
         sleep = AsyncMock()
-        monkeypatch.setattr("generators.topology.pod.asyncio.sleep", sleep)
+        monkeypatch.setattr("generators.fabric.pod.asyncio.sleep", sleep)
         gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
         gen.logger = MagicMock()
         gen.client = _client()
@@ -681,7 +681,7 @@ class TestPodDecommission:
 
 
 class TestCircuitOwnership:
-    """add_circuit (generators/topology/circuit.py) only adds derived locations to its target circuit."""
+    """add_circuit (generators/connectivity/circuit.py) only adds derived locations to its target circuit."""
 
     @pytest.mark.asyncio
     async def test_adding_derived_locations_claims_and_saves_nothing(self) -> None:
@@ -696,7 +696,7 @@ class TestCircuitOwnership:
 
 
 class TestSessionCircuitOwnership:
-    """add_virtual_circuit (generators/topology/virtual_circuit.py):"""
+    """add_virtual_circuit (generators/connectivity/virtual_circuit.py):"""
 
     @pytest.mark.asyncio
     async def test_handoff_run_claims_prefix_addresses_and_peering_only(self) -> None:

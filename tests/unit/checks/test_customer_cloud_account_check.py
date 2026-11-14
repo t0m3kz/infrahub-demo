@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from checks.customer_cloud_account import CheckCustomerCloudAccount
+from checks.customers.customer_cloud_account import CheckCustomerCloudAccount
 
 
 def _org(org_id: str | None) -> dict[str, Any]:

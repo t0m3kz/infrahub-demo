@@ -1,4 +1,4 @@
-"""Unit tests for SdwanEdgeGenerator (generators/topology/sdwan_edge.py)."""
+"""Unit tests for SdwanEdgeGenerator (generators/fabric/sdwan_edge.py)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import yaml
 
-from generators.logger import GeneratorError
-from generators.topology.sdwan_edge import _INTERNET_PROVIDER_ORG_ID, _OVERLAY_PROVIDER_ORG_ID, SdwanEdgeGenerator
+from generators.fabric.sdwan_edge import _INTERNET_PROVIDER_ORG_ID, _OVERLAY_PROVIDER_ORG_ID, SdwanEdgeGenerator
+from generators.mixins.logger import GeneratorError
 from utils.data_cleaning import clean_data
 
 _USE_DEFAULT_GATEWAY: Literal["__default__"] = "__default__"

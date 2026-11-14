@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.logger import GeneratorError
+from generators.mixins.logger import GeneratorError
 from generators.protocols import ManagedSegmentDeployment
-from generators.topology.segment import VxlanSegmentGenerator
+from generators.segments.segment import VxlanSegmentGenerator
 from tests.unit.query_shape_helpers import query_tree
 from tests.unit.segment_generators_helpers import _DEP_1, _DEP_2, _make_gen, _seg_response
 from utils.graphql_queries import load_query
@@ -250,7 +250,7 @@ class TestVxlanSegmentGeneratorGenerate:
         """The group tag is ensured once per run, with the run's lock, before a deployment is activated."""
         order: list[str] = []
         ensure_tag = AsyncMock(side_effect=lambda client, lock, *, segment: order.append(f"tag {segment['id']}"))
-        monkeypatch.setattr("generators.topology.segment.ensure_segment_tag", ensure_tag)
+        monkeypatch.setattr("generators.segments.segment.ensure_segment_tag", ensure_tag)
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock(side_effect=lambda **kw: order.append("activate"))
 
@@ -264,7 +264,7 @@ class TestVxlanSegmentGeneratorGenerate:
     def test_segment_tag_failure_stops_the_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A tag that cannot be drawn is not logged away: no deployment is activated."""
         monkeypatch.setattr(
-            "generators.topology.segment.ensure_segment_tag", AsyncMock(side_effect=LookupError("No group tag pool"))
+            "generators.segments.segment.ensure_segment_tag", AsyncMock(side_effect=LookupError("No group tag pool"))
         )
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
@@ -280,11 +280,11 @@ class TestVxlanSegmentGeneratorGenerate:
         """The routing tag helper gets the cleaned segment (with its stored tag) and the client, once per run."""
         order: list[str] = []
         monkeypatch.setattr(
-            "generators.topology.segment.ensure_segment_tag",
+            "generators.segments.segment.ensure_segment_tag",
             AsyncMock(side_effect=lambda client, lock, *, segment: order.append("group tag")),
         )
         ensure_routing = AsyncMock(side_effect=lambda client, *, segment: order.append("routing tag"))
-        monkeypatch.setattr("generators.topology.segment.ensure_segment_routing_tag", ensure_routing)
+        monkeypatch.setattr("generators.segments.segment.ensure_segment_routing_tag", ensure_routing)
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock(side_effect=lambda **kw: order.append("activate"))
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
@@ -300,9 +300,9 @@ class TestVxlanSegmentGeneratorGenerate:
 
     def test_routing_tag_failure_stops_the_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A tag that cannot be drawn (pool not loaded) is not logged away: no deployment is activated."""
-        monkeypatch.setattr("generators.topology.segment.ensure_segment_tag", AsyncMock())
+        monkeypatch.setattr("generators.segments.segment.ensure_segment_tag", AsyncMock())
         monkeypatch.setattr(
-            "generators.topology.segment.ensure_segment_routing_tag",
+            "generators.segments.segment.ensure_segment_routing_tag",
             AsyncMock(side_effect=LookupError("Routing tag pool Segment-Routing-Tag not found")),
         )
         gen = _make_gen()

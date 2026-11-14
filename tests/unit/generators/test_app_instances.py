@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from generators.topology.app_instance_segment import AppInstanceSegmentGenerator
-from generators.topology.endpoint import HOSTED_INSTANCE_KINDS
+from generators.applications.app_instance_segment import AppInstanceSegmentGenerator
+from generators.connectivity.endpoint import HOSTED_INSTANCE_KINDS
 from utils.app_instances import HOSTED_INSTANCE_TYPENAMES, PHYSICAL_INSTANCE_TYPENAMES, physical_host
 
 

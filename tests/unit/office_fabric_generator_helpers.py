@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.topology.office_fabric import OfficeFabricGenerator
+from generators.fabric.office_fabric import OfficeFabricGenerator
 
 _ACCESS_TEMPLATE: dict[str, Any] = {
     "id": "tpl-access",

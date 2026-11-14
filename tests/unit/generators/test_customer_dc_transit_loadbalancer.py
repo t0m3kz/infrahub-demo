@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
+from generators.mixins.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from tests.unit.customer_dc_transit_helpers import (
     _LB_DEVICES,
     _LB_NON_PROD,

@@ -1,4 +1,4 @@
-"""checks/software_lifecycle.py: what runs an image that is not approved, and the registration of the check."""
+"""checks/devices/software_lifecycle.py: what runs an image that is not approved, and the registration of the check."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any, cast
 import pytest
 import yaml
 
-from checks.software_lifecycle import CheckSoftwareLifecycle
+from checks.devices.software_lifecycle import CheckSoftwareLifecycle
 from tests.integration.demo_data import ROOT
 from tests.unit.query_shape_helpers import query_tree, unselected
 

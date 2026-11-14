@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.far_end import far_end_interfaces
+from generators.mixins.far_end import far_end_interfaces
 
 
 def _iface(iface_id: str, cable_id: str) -> Any:
@@ -77,7 +77,7 @@ async def test_far_end_that_is_not_a_physical_interface_is_absent(caplog: pytest
     port_b = SimpleNamespace(id="port-b")
     client = _client([_cable("c-1", "up-1", "front-port"), _cable("c-2", "up-2", "port-b")], [port_b])
 
-    with caplog.at_level(logging.DEBUG, logger="generators.far_end"):
+    with caplog.at_level(logging.DEBUG, logger="generators.mixins.far_end"):
         result = await far_end_interfaces(client, [_iface("up-1", "c-1"), _iface("up-2", "c-2")], include=[])
 
     assert result == {"up-2": port_b}

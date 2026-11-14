@@ -1,4 +1,4 @@
-"""Unit tests for the carrier circuit generator (generators/topology/circuit.py)."""
+"""Unit tests for the carrier circuit generator (generators/connectivity/circuit.py)."""
 
 from __future__ import annotations
 
@@ -6,14 +6,14 @@ from typing import Any
 
 import pytest
 
-from generators.logger import GeneratorError
-from generators.topology.circuit import (
+from generators.connectivity.circuit import (
     VIRTUAL_CIRCUIT_GENERATOR,
     CircuitEndpoint,
     CircuitLocation,
     circuit_endpoints,
     plan_locations,
 )
+from generators.mixins.logger import GeneratorError
 from tests.unit.simulators.circuit_fakes import (
     CAGE,
     CIRCUIT_ID,
@@ -430,7 +430,7 @@ class TestPlanLocations:
         assert "a DC, cloud region or colocation derived from an endpoint device's deployment" in problem
 
     def test_a_circuit_between_two_provider_routers_has_no_location(self) -> None:
-        """Neither end is placed: zero locations is a valid plan (checks/circuit_placement.py judges the owners)."""
+        """Neither end is placed: zero locations is a valid plan (checks/connectivity/circuit_placement.py judges the owners)."""
         ends = [_endpoint("if-a", "pe-a", None), _endpoint("if-b", "pe-b", None)]
 
         assert plan_locations([], ends) == ([], None)

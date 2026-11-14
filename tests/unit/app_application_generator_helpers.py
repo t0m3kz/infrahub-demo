@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.topology.application_security import AppApplicationGenerator
+from generators.applications.application_security import AppApplicationGenerator
 
 
 def _make_gen() -> Any:

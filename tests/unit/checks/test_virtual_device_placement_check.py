@@ -1,4 +1,4 @@
-"""Unit tests for CheckVirtualDevicePlacement (checks/virtual_device_placement.py)."""
+"""Unit tests for CheckVirtualDevicePlacement (checks/devices/virtual_device_placement.py)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,11 @@ from typing import Any, cast
 import pytest
 import yaml
 
-from checks.virtual_device_placement import ALLOWED_DEPLOYMENT_KINDS, VIRTUAL_DEVICE, CheckVirtualDevicePlacement
+from checks.devices.virtual_device_placement import (
+    ALLOWED_DEPLOYMENT_KINDS,
+    VIRTUAL_DEVICE,
+    CheckVirtualDevicePlacement,
+)
 from tests.integration.demo_data import declared, distinct, name
 
 _ROOT = Path(__file__).parents[3]

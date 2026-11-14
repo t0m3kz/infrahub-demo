@@ -1,4 +1,4 @@
-"""checks/cluster.py: the rules CL1 to CL7 on canned query data, and the registration of the check."""
+"""checks/customers/cluster.py: the rules CL1 to CL7 on canned query data, and the registration of the check."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any, cast
 import pytest
 import yaml
 
-from checks.cluster import CheckCluster
+from checks.customers.cluster import CheckCluster
 from tests.integration.demo_data import ROOT
 
 

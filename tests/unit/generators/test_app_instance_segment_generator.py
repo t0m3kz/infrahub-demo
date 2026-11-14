@@ -1,4 +1,4 @@
-"""Unit tests for AppInstanceSegmentGenerator (generators/topology/app_instance_segment.py)."""
+"""Unit tests for AppInstanceSegmentGenerator (generators/applications/app_instance_segment.py)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.topology.app_instance_segment import AppInstanceSegmentGenerator
+from generators.applications.app_instance_segment import AppInstanceSegmentGenerator
 
 # Harness helpers
 

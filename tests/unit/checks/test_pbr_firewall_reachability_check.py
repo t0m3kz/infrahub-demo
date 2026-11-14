@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.pbr_firewall_reachability import CheckPbrFirewallReachability
+from checks.routing.pbr_firewall_reachability import CheckPbrFirewallReachability
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability
 from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.vrf_instances_helpers import raw_service_port

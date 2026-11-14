@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import yaml
 
-from checks.cloud_connection import CheckCloudConnection
+from checks.connectivity.cloud_connection import CheckCloudConnection
 from tests.integration.demo_data import ROOT
 from tests.unit.encapsulation_helpers import raw_encapsulation
 
@@ -336,7 +336,7 @@ class TestParentsOfAPeering:
         assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering]) == []
 
     def test_the_other_device_rule_is_not_this_checks_business_any_more(self) -> None:
-        """A peering on a port of another device passes here; checks/interface_parents.py reports it."""
+        """A peering on a port of another device passes here; checks/devices/interface_parents.py reports it."""
         peering = _peering(parent_interface=_port("partner-port", device="partner"), vlan_id=_v(200))
         assert _run(CloudDirectConnect=[_transport("dx")], CloudPeeringInterface=[peering]) == []
 
@@ -542,7 +542,7 @@ def test_the_check_is_registered_with_its_query_and_a_smoke_entry() -> None:
     smoked = {item["resource_name"] for item in smoke["tests"]} if "tests" in smoke else set()
 
     assert checks["validate_cloud_connection"]["class_name"] == "CheckCloudConnection"
-    assert checks["validate_cloud_connection"]["file_path"] == "checks/cloud_connection.py"
+    assert checks["validate_cloud_connection"]["file_path"] == "checks/connectivity/cloud_connection.py"
     assert CheckCloudConnection.query == "cloud_connection"
     assert (ROOT / queries["cloud_connection"]).is_file()
     assert "cloud_connection" in smoked or "cloud_connection" in (ROOT / "tests/smoke/test_graphql.yml").read_text()

@@ -10,10 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from generators.mixins.common import CommonGenerator
 from utils.change_rules import CHANGE_REQUEST_KIND
 from utils.data_cleaning import clean_data
-
-from ..common import CommonGenerator
 
 VALIDATOR_KIND = "CoreArtifactValidator"
 COMPLETED_STATE = "completed"

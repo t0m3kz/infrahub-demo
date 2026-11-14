@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from generators.firewall_context import FIREWALL_CONTEXT
+from generators.mixins.firewall_context import FIREWALL_CONTEXT
 from tests.unit.customer_dc_transit_helpers import _SHARED, _dedicated, _make_gen, _payload, _run, _World
 
 _COMPLETENESS_KINDS = ("TopologyRoutedExchange", "DcimVirtualInterface")

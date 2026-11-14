@@ -4,7 +4,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from generators.helpers.routing import PendingASRef, RoutingPlanInput, RoutingPlanner
-from generators.types import RoutingOptions
+from generators.mixins.types import RoutingOptions
 from tests.unit.routing_helpers import make_loopback, make_p2p_interface
 
 # Helpers

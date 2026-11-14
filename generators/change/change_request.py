@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from generators.helpers.edges import add_edges, remove_edge
+from generators.mixins.common import CommonGenerator
 from utils.change_rules import (
     CHANGE_REQUEST_KIND,
     ChangeInputs,
@@ -24,9 +26,6 @@ from utils.change_sources import fetch_artifact_diff, fetch_data_diff
 from utils.change_text import derive_change_request, render_pc_comment
 from utils.data_cleaning import clean_data
 from utils.query_flatten import load_flat_query
-
-from ..common import CommonGenerator
-from ..helpers.edges import add_edges, remove_edge
 
 _QUERIES = Path(__file__).resolve().parents[2] / "queries" / "change"
 FACTS_QUERY = _QUERIES / "change_request_facts.gql"

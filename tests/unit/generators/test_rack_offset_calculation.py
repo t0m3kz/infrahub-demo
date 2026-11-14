@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generators.pod_config import spine_downlink_layout, tor_rack_slots_per_row
-from generators.topology.rack import RackGenerator, TopologyRackData
+from generators.fabric.rack import RackGenerator, TopologyRackData
+from generators.mixins.pod_config import spine_downlink_layout, tor_rack_slots_per_row
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, POD_DESIGN_NAMES, pod_design
 
 

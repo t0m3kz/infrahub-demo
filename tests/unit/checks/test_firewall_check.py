@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from checks.firewall import CheckFirewall
+from checks.devices.firewall import CheckFirewall
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability
 from tests.unit.encapsulation_helpers import raw_encapsulation
 

@@ -10,7 +10,7 @@ import pytest
 import yaml
 from infrahub_sdk.exceptions import NodeNotFoundError
 
-from generators.domain_pairing import DomainPairingMixin
+from generators.mixins.domain_pairing import DomainPairingMixin
 from utils.limits import FIREWALL_HA_GROUP_MAX, FIREWALL_HA_GROUP_MIN, FIREWALL_HA_GROUP_POOL
 
 

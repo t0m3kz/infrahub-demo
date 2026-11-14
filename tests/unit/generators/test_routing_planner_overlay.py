@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from generators.helpers.routing import RoutingPlan, RoutingPlanInput, RoutingPlanner
-from generators.types import RoutingOptions
+from generators.mixins.types import RoutingOptions
 from tests.unit.routing_helpers import make_loopback, make_p2p_interface
 
 # Test Data Helpers

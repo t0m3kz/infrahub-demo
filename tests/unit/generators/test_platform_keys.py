@@ -12,10 +12,10 @@ import pytest
 import yaml
 
 import transforms.config
-from checks.lisp_fabric import LISP_PLATFORM
-from generators.firewall_context_spec import _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE
+from checks.routing.lisp_fabric import LISP_PLATFORM
 from generators.helpers.interface_naming import _PLATFORM_NAMING
-from generators.mlag import _IPV4_CONTROL_PLATFORMS, _NO_CONTROL_PLATFORMS
+from generators.mixins.firewall_context_spec import _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE
+from generators.mixins.mlag import _IPV4_CONTROL_PLATFORMS, _NO_CONTROL_PLATFORMS
 from transforms.common import UNFILTERED_BANNER_PLATFORMS, BaseDeviceTransform
 from transforms.config.controller import _BUILDERS
 from transforms.helpers.group_policy.dispatch import GPO_RENDERERS
@@ -169,7 +169,7 @@ def _code_table_platforms() -> dict[str, set[str]]:
         "helpers.ospf.OSPF_AUTH_MODES": set(OSPF_AUTH_MODES),
         "helpers.overlay.OVERLAY_RENDERERS": set().union(*OVERLAY_RENDERERS.values()),
         "group_policy.dispatch.GPO_RENDERERS": set().union(*GPO_RENDERERS.values()),
-        "checks.lisp_fabric.LISP_PLATFORM": {LISP_PLATFORM},
+        "checks.routing.lisp_fabric.LISP_PLATFORM": {LISP_PLATFORM},
     }
 
 

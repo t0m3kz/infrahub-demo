@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.tenant_svi_protection import CheckTenantSviProtection
+from checks.segments.tenant_svi_protection import CheckTenantSviProtection
 
 
 def _v(value: Any) -> dict[str, Any]:

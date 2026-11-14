@@ -8,9 +8,9 @@ from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from generators.applications.application_security import AppApplicationGenerator
 from generators.helpers.lb_vip import cloud_lb_name
 from generators.protocols import LoadbalancerVIP
-from generators.topology.application_security import AppApplicationGenerator
 from tests.unit.encapsulation_helpers import cleaned_encapsulation
 
 # Fixtures (cleaned application.gql shape)

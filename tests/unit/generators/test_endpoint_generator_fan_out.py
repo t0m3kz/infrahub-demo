@@ -1,4 +1,4 @@
-"""The component segment fan-out of EndpointConnectivityGenerator (generators/topology/endpoint.py)."""
+"""The component segment fan-out of EndpointConnectivityGenerator (generators/connectivity/endpoint.py)."""
 
 from __future__ import annotations
 

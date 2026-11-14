@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
+from generators.fabric.dc import DCTopologyGenerator
 from generators.helpers import name_to_asn_range
 from generators.helpers.routing import RoutingStrategy
-from generators.logger import GeneratorError
+from generators.mixins.logger import GeneratorError
+from generators.mixins.shared_routing import _overlay_as_description
 from generators.protocols import RoutingAutonomousSystem
-from generators.shared_routing import _overlay_as_description
-from generators.topology.dc import DCTopologyGenerator
 from tests.unit.dc_generator_helpers import _dc_design, _deployment, _make_generator
 from utils.data_cleaning import clean_data
 

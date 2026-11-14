@@ -1,4 +1,4 @@
-"""Unit tests for generators.topology.mlag.MLAGGenerator."""
+"""Unit tests for generators.fabric.mlag.MLAGGenerator."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.topology.mlag import MLAGGenerator
+from generators.fabric.mlag import MLAGGenerator
 
 
 def _mlag(*peer_ids: str) -> MagicMock:

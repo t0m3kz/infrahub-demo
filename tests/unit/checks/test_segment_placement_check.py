@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
-from checks.segment_placement import CheckSegmentPlacement
+from checks.segments.segment_placement import CheckSegmentPlacement
 
 
 def _check() -> Any:

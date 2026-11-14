@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.routing import RoutingMixin
+from generators.mixins.routing import RoutingMixin
 
 # Minimal RoutingMixin instance
 
@@ -484,7 +484,7 @@ class TestGroupContextProtection:
     async def test_overlay_visibility_retry_attempts_and_sleep_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Overlay lookup retries max attempts and sleeps between attempts only."""
         from generators.helpers.routing import RoutingStrategy
-        from generators.types import RoutingOptions
+        from generators.mixins.types import RoutingOptions
 
         m = _make_mixin()
         design = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
@@ -495,7 +495,7 @@ class TestGroupContextProtection:
         )
 
         sleep_mock = AsyncMock()
-        monkeypatch.setattr("generators.routing.asyncio.sleep", sleep_mock)
+        monkeypatch.setattr("generators.mixins.routing.asyncio.sleep", sleep_mock)
 
         class _NoopPlanner:
             def __init__(self, deployment_id: str, logger: Any, strict: bool = False) -> None:
@@ -513,7 +513,7 @@ class TestGroupContextProtection:
                     ospf_peerings=[],
                 )
 
-        monkeypatch.setattr("generators.routing.RoutingPlanner", _NoopPlanner)
+        monkeypatch.setattr("generators.mixins.routing.RoutingPlanner", _NoopPlanner)
 
         async def _filters_side_effect(*args: Any, **kwargs: Any) -> list[Any]:
             kind = kwargs.get("kind")
@@ -542,7 +542,7 @@ class TestGroupContextProtection:
     async def test_resolved_overlay_as_is_used_but_not_tracked(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A resolved overlay_as_id is used, never tracked"""
         from generators.helpers.routing import RoutingStrategy
-        from generators.types import RoutingOptions
+        from generators.mixins.types import RoutingOptions
 
         m = _make_mixin()
 
@@ -554,7 +554,7 @@ class TestGroupContextProtection:
         m.client.group_context = MagicMock()
         m.client.group_context.related_node_ids = []
         # Avoid real backoff sleeps from overlay visibility retries.
-        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.mixins.routing.asyncio.sleep", AsyncMock())
 
         # Stub shared-object lookup to return a known overlay AS ID
         m._resolve_shared_objects = AsyncMock(return_value=("as-overlay-99", None))
@@ -575,7 +575,7 @@ class TestGroupContextProtection:
     async def test_planner_is_constructed_in_strict_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """create_routing must opt into strict mode, or none of it ever runs."""
         from generators.helpers.routing import RoutingStrategy
-        from generators.types import RoutingOptions
+        from generators.mixins.types import RoutingOptions
 
         m = _make_mixin()
         design = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
@@ -595,8 +595,8 @@ class TestGroupContextProtection:
                     ospf_peerings=[],
                 )
 
-        monkeypatch.setattr("generators.routing.RoutingPlanner", _CapturingPlanner)
-        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.mixins.routing.RoutingPlanner", _CapturingPlanner)
+        monkeypatch.setattr("generators.mixins.routing.asyncio.sleep", AsyncMock())
         m.client.filters = AsyncMock(return_value=[])
         m.ensure_address_family = AsyncMock(return_value="evpn-af-1")
 
@@ -613,7 +613,7 @@ class TestGroupContextProtection:
         """Resolved underlay/overlay password IDs are used, never tracked —
         same as overlay_as_id/ospf_area_id: add_dc owns the shared keys."""
         from generators.helpers.routing import RoutingStrategy
-        from generators.types import RoutingOptions
+        from generators.mixins.types import RoutingOptions
 
         m = _make_mixin()
         design = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
@@ -622,7 +622,7 @@ class TestGroupContextProtection:
         m.client.group_context = MagicMock()
         m.client.group_context.related_node_ids = []
         # Avoid real backoff sleeps from overlay visibility retries.
-        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.mixins.routing.asyncio.sleep", AsyncMock())
         m._resolve_shared_passwords = AsyncMock(return_value=("pw-underlay-1", "pw-overlay-1"))
         m.client.filters = AsyncMock(return_value=[])
         m.ensure_address_family = AsyncMock(return_value="evpn-af-1")
@@ -642,7 +642,7 @@ class TestGroupContextProtection:
         """Unlike overlay_as_id/ospf_area_id, a missing password is non-fatal —
         create_routing must proceed (not return early) when both are None."""
         from generators.helpers.routing import RoutingStrategy
-        from generators.types import RoutingOptions
+        from generators.mixins.types import RoutingOptions
 
         m = _make_mixin()
         design = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
@@ -651,7 +651,7 @@ class TestGroupContextProtection:
         m.client.group_context = MagicMock()
         m.client.group_context.related_node_ids = []
         # Avoid real backoff sleeps from overlay visibility retries.
-        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.mixins.routing.asyncio.sleep", AsyncMock())
         m._resolve_shared_passwords = AsyncMock(return_value=(None, None))
         m.client.filters = AsyncMock(return_value=[])
         m.ensure_address_family = AsyncMock(return_value="evpn-af-1")
@@ -667,7 +667,7 @@ class TestGroupContextProtection:
     @pytest.mark.asyncio
     async def test_missing_overlay_as_logs_error_and_returns(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from generators.helpers.routing import RoutingStrategy
-        from generators.types import RoutingOptions
+        from generators.mixins.types import RoutingOptions
 
         m = _make_mixin()
         design = {"routing_strategy": RoutingStrategy.EBGP_IBGP.value}
@@ -678,7 +678,7 @@ class TestGroupContextProtection:
         m._resolve_shared_objects = AsyncMock(return_value=(None, None))
         m.client.filters = AsyncMock(return_value=[])
         # Never resolves -> exhausts every retry attempt; avoid real backoff sleeps.
-        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.mixins.routing.asyncio.sleep", AsyncMock())
 
         # Should return early without creating any objects
         await m.create_routing(
@@ -693,7 +693,7 @@ class TestGroupContextProtection:
 
     @pytest.mark.asyncio
     async def test_no_design_logs_warning_and_returns(self) -> None:
-        from generators.types import RoutingOptions
+        from generators.mixins.types import RoutingOptions
 
         m = _make_mixin()
         options: RoutingOptions = RoutingOptions()  # no design key
@@ -708,7 +708,7 @@ class TestGroupContextProtection:
 
     @pytest.mark.asyncio
     async def test_unsupported_strategy_logs_warning(self) -> None:
-        from generators.types import RoutingOptions
+        from generators.mixins.types import RoutingOptions
 
         m = _make_mixin()
         design = {"routing_strategy": "UNKNOWN_STRATEGY"}

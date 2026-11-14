@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.exceptions import GraphQLError
 
-from generators.common import CommonGenerator
-from generators.logger import GeneratorError
-from generators.pools import PoolMixin
+from generators.mixins.common import CommonGenerator
+from generators.mixins.logger import GeneratorError
+from generators.mixins.pools import PoolMixin
 from utils.limits import RESOURCE_LOCK
 
 
@@ -83,7 +83,7 @@ class TestAcquireResourceLock:
         gen.client.create = AsyncMock(side_effect=_uniqueness_error())
         gen.client.execute_graphql = AsyncMock(return_value={"CoreStandardGroup": {"edges": []}})
         monkeypatch.setattr("asyncio.sleep", AsyncMock())
-        monkeypatch.setattr("generators.pools.RESOURCE_LOCK", replace(RESOURCE_LOCK, attempts=2))
+        monkeypatch.setattr("generators.mixins.pools.RESOURCE_LOCK", replace(RESOURCE_LOCK, attempts=2))
 
         with pytest.raises(GeneratorError):
             await gen.acquire_resource_lock("res-1")

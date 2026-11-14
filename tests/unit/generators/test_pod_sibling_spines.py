@@ -8,11 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from generators.pod_config import pod_spine_slot_device_names, spine_slot_device_names
+from generators.fabric import pod_mesh as pod_mesh_module
+from generators.fabric.pod import PodTopologyGenerator
+from generators.mixins.pod_config import pod_spine_slot_device_names, spine_slot_device_names
+from generators.mixins.rack import RackMixin
 from generators.protocols import DcimPhysicalDevice, DcimPhysicalInterface
-from generators.rack import RackMixin
-from generators.topology import pod_mesh as pod_mesh_module
-from generators.topology.pod import PodTopologyGenerator
 from utils.limits import WAIT_FOR_PEER_GENERATOR
 
 _DC_ID = "dc-7"

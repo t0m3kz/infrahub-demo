@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from generators.logger import GeneratorError
+from generators.mixins.logger import GeneratorError
 from tests.unit.simulators.circuit_fakes import FakeClient, session_generator
 
 HANDOFF = "VC-C001-EQXFR-AWS"

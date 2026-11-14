@@ -1,4 +1,4 @@
-"""Unit tests for generators.logger."""
+"""Unit tests for generators.mixins.logger."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import logging
 
 import pytest
 
-from generators.logger import FailOnErrorLogger, FailOnErrorLoggerMixin, GeneratorError
+from generators.mixins.logger import FailOnErrorLogger, FailOnErrorLoggerMixin, GeneratorError
 
 
 class TestFailOnErrorLogger:

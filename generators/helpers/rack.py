@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping
 from typing import Any
 
+from generators.mixins.types import DeviceOptions, RoutingOptions
 from utils.data_cleaning import clean_data
 
-from ..types import DeviceOptions, RoutingOptions
 from .naming import DeviceNameContext, DeviceNamingConfig
 
 

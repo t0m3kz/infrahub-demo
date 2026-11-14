@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
-from generators.segment_vlan import SEGMENT_PORTS_QUERY, SegmentVlanMixin
+from generators.mixins.segment_vlan import SEGMENT_PORTS_QUERY, SegmentVlanMixin
 from tests.unit.segment_vlan_helpers import VlanWorld, make_device, make_gen, raw_state
 
 

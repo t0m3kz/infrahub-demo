@@ -6,9 +6,9 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.common import CommonGenerator
+from generators.mixins.common import CommonGenerator
+from generators.mixins.ztna import ZtnaMixin
 from generators.protocols import ProxyPolicyRule
-from generators.ztna import ZtnaMixin
 
 
 def _make_gen() -> Any:

@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.endpoint import EndpointUplinkMixin
-from generators.topology.endpoint import EndpointConnectivityGenerator
-from generators.types import ConnectionFingerprint
+from generators.connectivity.endpoint import EndpointConnectivityGenerator
+from generators.mixins.endpoint import EndpointUplinkMixin
+from generators.mixins.types import ConnectionFingerprint
 
 
 class _Host(EndpointUplinkMixin):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from checks.routing_invariants import CheckRoutingInvariants
+from checks.routing.routing_invariants import CheckRoutingInvariants
 from tests.unit.external_vrf_peers_helpers import _raw_gateway, _raw_vrf
 
 

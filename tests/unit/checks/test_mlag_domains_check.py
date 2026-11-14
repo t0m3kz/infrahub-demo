@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
-from checks.mlag_domains import (
+from checks.routing.mlag_domains import (
     CheckMlagDomains,
     device_domain_errors,
     listed_interface_errors,

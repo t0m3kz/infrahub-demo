@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 from generators.helpers.lb_vip import leg_zone
 from generators.helpers.rules import RulesPlanner
+from generators.mixins.segment_firewall import SegmentFirewallMixin
 from generators.protocols import SecurityPolicy
-from generators.segment_firewall import SegmentFirewallMixin
 from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.lb_vip_helpers import (
     _client_comp,
@@ -309,7 +309,7 @@ class TestServerRule:
         assert leg_zone(_context(leg=None)) is None
 
     def test_a_leg_with_no_zone_leaves_the_source_zone_out(self) -> None:
-        """No zone is invented: the payload names none and checks/segment_security.py reports the rule."""
+        """No zone is invented: the payload names none and checks/segments/segment_security.py reports the rule."""
         payload = RulesPlanner.build_lb_server_rule_payload(
             policy_id="pol-lb",
             rule_name="web",

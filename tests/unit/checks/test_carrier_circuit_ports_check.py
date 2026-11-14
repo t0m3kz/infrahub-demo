@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.carrier_circuit_ports import CheckCarrierCircuitPorts
+from checks.connectivity.carrier_circuit_ports import CheckCarrierCircuitPorts
 
 
 def _check() -> Any:

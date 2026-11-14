@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.pools import PoolMixin
-from generators.topology.rack import RackGenerator, TopologyRackData
+from generators.fabric.rack import RackGenerator, TopologyRackData
+from generators.mixins.pools import PoolMixin
 from tests.unit.simulators.fabric_designs import pod_design
 
 
@@ -202,7 +202,7 @@ class TestRackGeneratorMethods:
                 [leaf_if],
             ]
         )
-        monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", AsyncMock())
 
         devices, interfaces = await gen._get_leaf_devices_in_row("pod-1", 1)
 
@@ -215,7 +215,7 @@ class TestRackGeneratorMethods:
         # across every retry attempt: the error fires after retries are exhausted.
         gen = _build_gen()
         gen.client.filters = AsyncMock(return_value=[])
-        monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", AsyncMock())
 
         await gen._get_leaf_devices_in_row("pod-1", 1)
 
@@ -234,7 +234,7 @@ class TestRackGeneratorMethods:
 
         gen.client.filters = AsyncMock(side_effect=[[], [], [rack_obj], [leaf_dev], [leaf_if]])
         sleep_mock = AsyncMock()
-        monkeypatch.setattr("generators.rack.asyncio.sleep", sleep_mock)
+        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", sleep_mock)
 
         devices, interfaces = await gen._get_leaf_devices_in_row("pod-1", 1)
 

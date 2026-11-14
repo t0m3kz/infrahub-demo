@@ -138,7 +138,7 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
             }
         }
     )
-    # The generated transit policies (generators/topology/transit_policy.py)
+    # The generated transit policies (generators/connectivity/transit_policy.py)
     from tests.smoke.fixture_builders.routing_policy import add_transit_policies  # noqa: PLC0415 - imports this module
 
     add_transit_policies(data, ["192.0.2.0/24"])

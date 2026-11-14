@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from generators.segment_vlan import SegmentVlanMixin
+from generators.mixins.segment_vlan import SegmentVlanMixin
 from utils.segment_addressing import hosting_deployment
 
 _DC = "TopologyDataCenter"

@@ -9,7 +9,7 @@ from tests.unit.generators.test_circuit_query_shapes import _QUERIES, ENCAPSULAT
 
 PLACEMENT = _QUERIES / "validation" / "circuit_placement.gql"
 
-# checks/circuit_placement.py: what it reads from a carrier circuit.
+# checks/connectivity/circuit_placement.py: what it reads from a carrier circuit.
 _PHYSICAL_READS = [
     "id",
     "name",

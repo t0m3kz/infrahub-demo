@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
-from generators.topology.dc import DCTopologyGenerator
+from generators.fabric.dc import DCTopologyGenerator
+from generators.mixins.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from tests.unit.simulators.fabric_designs import custom_dc_design, custom_pod_design, dc_design
 
 

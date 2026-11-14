@@ -14,7 +14,7 @@ from generators.change.open_change_request import (
     OpenChangeRequestGenerator,
     change_request_name,
 )
-from generators.logger import GeneratorError
+from generators.mixins.logger import GeneratorError
 from tests.integration.demo_data import ROOT
 
 BRANCH = "feat/leaf"

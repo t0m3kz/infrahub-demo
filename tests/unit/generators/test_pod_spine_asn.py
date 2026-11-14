@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.topology.pod import PodTopologyGenerator
+from generators.fabric.pod import PodTopologyGenerator
 
 
 def _make_generator(pod_name: str = "dc1-pod1") -> Any:

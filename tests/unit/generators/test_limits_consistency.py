@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 import yaml
 
-from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
-from generators.topology.virtual_circuit import handoff_pool_name
+from generators.connectivity.virtual_circuit import handoff_pool_name
+from generators.mixins.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from tests.integration.demo_data import attribute
 from utils import limits
 from utils.exchange_transit import (
@@ -307,7 +307,7 @@ class TestAclSequenceBands:
 
     def test_own_rules_return_legs_internet_band_and_closing_rule_are_ordered(self) -> None:
         """Own rules (rule index) < return legs < internet band < closing rule; change utils/limits.py ACL_*_SEQ*."""
-        from generators.segment_firewall import RULE_INDEX_START, RULE_INDEX_STEP
+        from generators.mixins.segment_firewall import RULE_INDEX_START, RULE_INDEX_STEP
 
         assert 0 < RULE_INDEX_START
         assert RULE_INDEX_START + RULE_INDEX_STEP < limits.ACL_RETURN_LEG_SEQ_START
@@ -376,8 +376,8 @@ class TestUnderlayMtu:
         assert config["underlay_mtu"] == limits.UNDERLAY_MTU
 
     def test_the_dci_planner_uses_it(self) -> None:
-        """The DCI ports and sessions of generators/topology/virtual_circuit.py read the same constant."""
-        from generators.topology import virtual_circuit
+        """The DCI ports and sessions of generators/connectivity/virtual_circuit.py read the same constant."""
+        from generators.connectivity import virtual_circuit
 
         assert virtual_circuit.UNDERLAY_MTU == limits.UNDERLAY_MTU
 

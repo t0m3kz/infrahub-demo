@@ -10,9 +10,9 @@ import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 from infrahub_sdk.protocols import CoreNumberPool
 
-from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
-from generators.logger import GeneratorError
-from generators.pools import PoolMixin
+from generators.mixins.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
+from generators.mixins.logger import GeneratorError
+from generators.mixins.pools import PoolMixin
 
 
 def _make_gen() -> Any:

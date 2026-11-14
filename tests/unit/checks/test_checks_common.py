@@ -5,11 +5,11 @@ from typing import Any
 
 import pytest
 
-from checks.border_leaf import CheckBorderLeaf
-from checks.border_spine import CheckBorderSpine
 from checks.common import validate_exchange_gateways, validate_routing_password, validate_snat_addresses
 from checks.common import validate_transit_vlans as _validate_transit_vlans
-from checks.edge import CheckEdge
+from checks.devices.border_leaf import CheckBorderLeaf
+from checks.devices.border_spine import CheckBorderSpine
+from checks.devices.edge import CheckEdge
 from tests.unit.encapsulation_helpers import cleaned_encapsulation
 from tests.unit.routing_helpers import in_vrf, make_vrf
 from tests.unit.service_contexts_helpers import make_far, make_iface, make_member, make_switch

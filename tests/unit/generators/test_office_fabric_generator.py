@@ -1,4 +1,4 @@
-"""Unit tests for OfficeFabricGenerator (generators/topology/office_fabric.py)."""
+"""Unit tests for OfficeFabricGenerator (generators/fabric/office_fabric.py)."""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
-from generators.protocols import TopologyCustomerOffice
-from generators.topology.office_fabric import (
+from generators.fabric.office_fabric import (
     _OFFICE_LOOPBACK_PREFIX_LENGTH,
     _OFFICE_MANAGEMENT_PREFIX_LENGTH,
     _OFFICE_TECHNICAL_PREFIX_LENGTH,
     _OFFICE_VALID_FABRIC_ROLES,
 )
+from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
+from generators.protocols import TopologyCustomerOffice
 from tests.unit.office_fabric_generator_helpers import (
     _ACCESS_ENTRY,
     _ACCESS_TEMPLATE,

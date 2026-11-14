@@ -1,4 +1,4 @@
-"""The sizing of a segment's prefix and its customer's pool (generators/topology/segment_addressing.py)."""
+"""The sizing of a segment's prefix and its customer's pool (generators/segments/segment_addressing.py)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import asyncio
 import pytest
 from infrahub_sdk.exceptions import GraphQLError
 
-from generators.logger import GeneratorError
+from generators.mixins.logger import GeneratorError
 from tests.unit.segment_customer_pool_helpers import (
     Client,
     customer_pool,

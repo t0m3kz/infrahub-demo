@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from generators.common import CommonGenerator
-from generators.connections import CablingMixin
-from generators.devices import DeviceMixin
 from generators.helpers.cable_attributes import cable_id
+from generators.mixins.common import CommonGenerator
+from generators.mixins.connections import CablingMixin
+from generators.mixins.devices import DeviceMixin
 from generators.protocols import DcimCable, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack, LocationSuite
 
 _SUITE = "suite-1"
@@ -250,7 +250,7 @@ class TestCablingSite:
         estate, interfaces = self._pairs(count, racked=racked)
         gen = _cabling_gen(estate, interfaces)
         plan = list(zip(interfaces["leaf"], interfaces["spine"]))
-        with patch("generators.connections.CablingPlanner.build_cabling_plan", return_value=plan):
+        with patch("generators.mixins.connections.CablingPlanner.build_cabling_plan", return_value=plan):
             await gen.create_cabling(["leaf"], ["Ethernet1/49"], ["spine"], ["Ethernet1/1"])
         return gen, estate
 
@@ -283,7 +283,7 @@ class TestCablingSite:
         }
         gen = _cabling_gen(estate, interfaces)
         plan = list(zip(interfaces["leaf"], interfaces["spine"]))
-        with patch("generators.connections.CablingPlanner.build_cabling_plan", return_value=plan):
+        with patch("generators.mixins.connections.CablingPlanner.build_cabling_plan", return_value=plan):
             await gen.create_cabling(["leaf"], ["Ethernet1/1"], ["spine"], ["eth0"])
 
         data = _cable_data(gen)[0]

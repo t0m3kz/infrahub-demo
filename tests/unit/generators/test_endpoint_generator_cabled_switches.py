@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.topology.endpoint import EndpointConnectivityGenerator
+from generators.connectivity.endpoint import EndpointConnectivityGenerator
 from tests.unit.endpoint_generator_helpers import _iface, _make_generator
 
 # _extract_device_name()

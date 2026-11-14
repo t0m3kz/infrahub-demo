@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, TypeVar
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.common import CommonGenerator
+from generators.mixins.common import CommonGenerator
 
 _T = TypeVar("_T", bound=CommonGenerator)
 

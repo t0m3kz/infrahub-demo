@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from generators.pod_config import pod_deployment_type, pod_profile, spine_downlink_layout
+from generators.mixins.pod_config import pod_deployment_type, pod_profile, spine_downlink_layout
 from tests.unit.simulators.fabric_designs import POD_DESIGN_NAMES, custom_pod_design, pod_design
 
 _EXPECTED_DEPLOYMENT_TYPE = {

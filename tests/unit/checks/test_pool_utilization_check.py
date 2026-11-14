@@ -1,4 +1,4 @@
-"""Unit tests for CheckPoolUtilization (checks/pool_utilization.py)."""
+"""Unit tests for CheckPoolUtilization (checks/customers/pool_utilization.py)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from checks.pool_utilization import CheckPoolUtilization, PoolUsage, pool_usages
+from checks.customers.pool_utilization import CheckPoolUtilization, PoolUsage, pool_usages
 
 DC_ID = "dc10"
 

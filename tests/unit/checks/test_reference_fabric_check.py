@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
-from checks.reference_fabric import CheckReferenceFabric
+from checks.routing.reference_fabric import CheckReferenceFabric
 
 
 def _v(value: Any) -> dict[str, Any]:

@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from generators.mixins.routing import RoutingMixin
 from generators.protocols import ManagedBGPPeering
-from generators.routing import RoutingMixin
 
 
 def _mixin() -> Any:

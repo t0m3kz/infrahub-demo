@@ -10,8 +10,8 @@ from infrahub_sdk.config import Config
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.node import InfrahubNode
 
-from generators.firewall_context_spec import FIREWALL_CONTEXT
-from generators.firewall_transit import TransitLegsMixin
+from generators.mixins.firewall_context_spec import FIREWALL_CONTEXT
+from generators.mixins.firewall_transit import TransitLegsMixin
 
 
 def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:

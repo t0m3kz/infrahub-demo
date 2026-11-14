@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.customer_quota import CheckCustomerQuota
+from checks.customers.customer_quota import CheckCustomerQuota
 
 
 def _v(value: Any) -> dict[str, Any]:

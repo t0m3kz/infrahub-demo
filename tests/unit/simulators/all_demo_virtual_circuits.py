@@ -19,7 +19,7 @@ def all_demo(kind: str) -> list[Declared]:
     return distinct(declared(kind, ROOT / ALL_DEMO_DATA))
 
 
-# The offices that opt into add_sdwan_edge (generators/topology/sdwan_edge.py) by naming a gateway in sdwan_gateway.
+# The offices that opt into add_sdwan_edge (generators/fabric/sdwan_edge.py) by naming a gateway in sdwan_gateway.
 _SDWAN_OFFICES: list[Declared] = [
     office for office in all_demo("TopologyCustomerOffice") if office.item.get("sdwan_gateway")
 ]

@@ -7,7 +7,8 @@ from typing import Any
 
 import pytest
 
-from generators.fabric_sizing import (
+from generators.helpers.routing import underlay_pool_is_ipv6
+from generators.mixins.fabric_sizing import (
     bits_to_hold,
     bits_with_headroom,
     dc_loopback_bits,
@@ -24,7 +25,6 @@ from generators.fabric_sizing import (
     pod_technical_bits,
     pod_tors,
 )
-from generators.helpers.routing import underlay_pool_is_ipv6
 from tests.integration.demo_data import ROOT, declared
 from tests.unit.simulators.fabric_designs import (
     DC_DESIGN_NAMES,

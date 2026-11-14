@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.protocols import CoreNumberPool
 
+from generators.customers.customer_routing_tag import CustomerRoutingTagGenerator
 from generators.helpers.routing_tag import ensure_routing_tag, ensure_segment_routing_tag
-from generators.logger import GeneratorError
-from generators.topology.customer_routing_tag import CustomerRoutingTagGenerator
+from generators.mixins.logger import GeneratorError
 from tests.unit.query_shape_helpers import compact
 from utils.graphql_queries import load_query
 from utils.limits import CUSTOMER_ROUTING_TAG_POOL, SEGMENT_ROUTING_TAG_POOL

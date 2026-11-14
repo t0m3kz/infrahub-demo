@@ -97,7 +97,7 @@ def generator_paths() -> set[str]:
     )
 
 
-# What generators/topology/virtual_circuit.py reads from the cleaned virtual circuit, for every kind
+# What generators/connectivity/virtual_circuit.py reads from the cleaned virtual circuit, for every kind
 # (utils/circuit_underlay.py included).
 _GENERATOR_READS = [
     "id",

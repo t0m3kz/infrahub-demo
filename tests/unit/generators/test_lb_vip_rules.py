@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.logger import GeneratorError
-from generators.topology.application_security import AppApplicationGenerator
+from generators.applications.application_security import AppApplicationGenerator
+from generators.mixins.logger import GeneratorError
 from tests.unit.lb_vip_helpers import (
     _CLOUD_FQDN,
     _CLOUD_LB,

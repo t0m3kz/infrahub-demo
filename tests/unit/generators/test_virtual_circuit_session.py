@@ -1,4 +1,4 @@
-"""Unit tests for the session generator (generators/topology/virtual_circuit.py, add_virtual_circuit)."""
+"""Unit tests for the session generator (generators/connectivity/virtual_circuit.py, add_virtual_circuit)."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
-from generators.logger import GeneratorError
-from generators.topology.circuit import CARRIER_CIRCUIT_GENERATOR
-from generators.topology.virtual_circuit import SessionEnd, VirtualCircuitSessionGenerator
+from generators.connectivity.circuit import CARRIER_CIRCUIT_GENERATOR
+from generators.connectivity.virtual_circuit import SessionEnd, VirtualCircuitSessionGenerator
+from generators.mixins.logger import GeneratorError
 from tests.unit.simulators.circuit_fakes import (
     VC_ID,
     FakeClient,

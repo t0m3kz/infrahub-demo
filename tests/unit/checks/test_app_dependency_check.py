@@ -1,4 +1,4 @@
-"""Unit tests for CheckAppDependency (checks/app_dependency.py)."""
+"""Unit tests for CheckAppDependency (checks/applications/app_dependency.py)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.app_dependency import CheckAppDependency
+from checks.applications.app_dependency import CheckAppDependency
 
 # Harness and payload builders (raw GraphQL shape)
 

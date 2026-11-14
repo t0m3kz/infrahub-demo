@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 from graphql import FieldNode, OperationDefinitionNode, parse
 
-from checks.firewall import CheckFirewall
+from checks.devices.firewall import CheckFirewall
 from tests.smoke.fixture_builders.common import run_transform
 from tests.smoke.fixture_builders.context_members import with_context_members
 from tests.smoke.fixture_builders.transit import build_virtual_firewall_data

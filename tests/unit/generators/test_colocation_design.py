@@ -9,22 +9,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
-from generators.fabric_sizing import (
-    COLO_ZONE_LOOPBACK_IPV6_BITS,
-    COLO_ZONE_TECHNICAL_IPV6_BITS,
-    colo_zone_loopback_bits,
-    colo_zone_management_bits,
-    colo_zone_technical_bits,
-    host_bits_to_prefix_length,
-)
-from generators.logger import GeneratorError
-from generators.pools import PoolMixin
-from generators.topology.colocation_fabric import (
+from generators.colocation.colocation_fabric import (
     ColocationFabricGenerator,
     ColocationZoneGenerator,
     VirtualColocationGenerator,
 )
-from generators.topology.colocation_pools import (
+from generators.colocation.colocation_pools import (
     _COLO_LOOPBACK_PREFIX_LENGTH,
     _COLO_MANAGEMENT_PREFIX_LENGTH,
     _COLO_TECHNICAL_PREFIX_LENGTH,
@@ -36,6 +26,16 @@ from generators.topology.colocation_pools import (
     TECHNICAL_IPV6_SLOT,
     TECHNICAL_SLOT,
 )
+from generators.mixins.fabric_sizing import (
+    COLO_ZONE_LOOPBACK_IPV6_BITS,
+    COLO_ZONE_TECHNICAL_IPV6_BITS,
+    colo_zone_loopback_bits,
+    colo_zone_management_bits,
+    colo_zone_technical_bits,
+    host_bits_to_prefix_length,
+)
+from generators.mixins.logger import GeneratorError
+from generators.mixins.pools import PoolMixin
 from tests.unit.colocation_zone_generator_helpers import (
     _EDGE_TEMPLATE,
     _EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS,

@@ -170,7 +170,7 @@ def test_the_sizing_tiers_have_the_agreed_values(tier: str) -> None:
 
 @pytest.mark.parametrize("kind", _BLOCK_KINDS)
 def test_the_address_blocks_hold_the_tier(kind: str) -> None:
-    """checks/customer_quota.py on the data: the IPv4 block holds max_segments segments of segment_prefix_length."""
+    """checks/customers/customer_quota.py on the data: the IPv4 block holds max_segments segments of segment_prefix_length."""
     for row in declared(kind, _BOOTSTRAP):
         item = row.item
         label = f"{kind} {item['name']}"

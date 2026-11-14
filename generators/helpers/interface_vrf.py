@@ -7,7 +7,8 @@ import logging
 from collections.abc import Iterable
 from typing import Any
 
-from ..protocols import ManagedVRF
+from generators.protocols import ManagedVRF
+
 from .common import call_with_node_not_found_retry
 from .edges import add_edges, remove_edge
 

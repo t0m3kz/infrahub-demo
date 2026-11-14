@@ -8,13 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from generators.common import CommonGenerator
-from generators.connections import CablingMixin
+from generators.fabric import pod_mesh as pod_mesh_module
+from generators.fabric.pod import PodTopologyGenerator
 from generators.helpers import CablingPlanError
-from generators.logger import GeneratorError
-from generators.topology import pod_mesh as pod_mesh_module
-from generators.topology.pod import PodTopologyGenerator
-from generators.types import CablingOptions
+from generators.mixins.common import CommonGenerator
+from generators.mixins.connections import CablingMixin
+from generators.mixins.logger import GeneratorError
+from generators.mixins.types import CablingOptions
 from utils.limits import WAIT_FOR_PEER_GENERATOR
 
 
@@ -72,7 +72,7 @@ class TestCreateCabling:
             dst=[_iface("Ethernet1/1", device="spine-01")],
         )
 
-        with patch("generators.connections.CablingPlanner.build_cabling_plan", return_value=[]):
+        with patch("generators.mixins.connections.CablingPlanner.build_cabling_plan", return_value=[]):
             result = await gen.create_cabling(
                 bottom_devices=["leaf-01"],
                 bottom_interfaces=["Ethernet1/49"],

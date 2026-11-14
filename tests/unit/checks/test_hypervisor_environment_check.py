@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 import yaml
 
-from checks.hypervisor_environment import CheckHypervisorEnvironment
+from checks.devices.hypervisor_environment import CheckHypervisorEnvironment
 from tests.integration.demo_data import declared, distinct, name
 from utils.query_flatten import source_path
 

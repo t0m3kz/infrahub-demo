@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.topology.colocation_fabric import (
+from generators.colocation.colocation_fabric import (
     ColocationFabricGenerator,
     ColocationZoneGenerator,
     VirtualColocationGenerator,

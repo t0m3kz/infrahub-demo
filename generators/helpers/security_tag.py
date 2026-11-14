@@ -12,10 +12,9 @@ from weakref import WeakKeyDictionary
 
 from infrahub_sdk.exceptions import GraphQLError
 
+from generators.protocols import AppComponent, DcimGroupPolicyProfile, SecurityTag
 from utils.exchange_transit import is_routed_tenant_segment
 from utils.group_policy import tag_pool
-
-from ..protocols import AppComponent, DcimGroupPolicyProfile, SecurityTag
 
 # Per-run memo keyed by the run's client: the tag pool (id, name) and consumer node id -> tag id attached in this run
 _POOLS: WeakKeyDictionary[Any, tuple[str, str]] = WeakKeyDictionary()

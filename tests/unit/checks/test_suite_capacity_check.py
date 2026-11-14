@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.suite_capacity import CheckSuiteCapacity
+from checks.customers.suite_capacity import CheckSuiteCapacity
 
 
 def _suite(name: str = "SUITE-1", rows: int = 2, racks_per_row: int = 9) -> dict[str, Any]:

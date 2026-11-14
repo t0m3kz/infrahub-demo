@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators import protocols
-from generators.pools import PoolMixin
+from generators.mixins.pools import PoolMixin
 from tests.integration.demo_data import ROOT, attribute
 
 _QUERY = " ".join((ROOT / "queries" / "topology" / "add" / "vxlan_segment.gql").read_text().split())
@@ -35,7 +35,7 @@ def test_the_generator_query_reads_what_the_addressing_needs() -> None:
     assert "id __typename name { value }" in _QUERY
     for kind in ("TopologyCustomerDC", "TopologyCustomerColocation"):
         fragment = _QUERY.split(f"... on {kind} {{", 1)[1]
-        # The design's block and segment lengths of both families (see generators/topology/segment_addressing.py).
+        # The design's block and segment lengths of both families (see generators/segments/segment_addressing.py).
         design = " ".join(fragment.lstrip().split("parent {", 1)[0].split())
         assert design == (
             "design { node { id name { value } address_prefix_length { value } segment_prefix_length { value } "
@@ -98,9 +98,9 @@ def test_a_sliced_block_can_carry_its_member_type_and_pool_flag() -> None:
 def test_the_component_generator_reads_the_same_addressing_inputs_and_shares_the_implementation() -> None:
     """add_app_component_segment addresses the segment too (before its reconcile): one implementation, the same
     inputs in its query, the gateway's prefix included (a changed host_count is detected from it)."""
-    from generators.topology.app_instance_segment import AppInstanceSegmentGenerator
-    from generators.topology.segment import VxlanSegmentGenerator
-    from generators.topology.segment_addressing import SegmentAddressingMixin
+    from generators.applications.app_instance_segment import AppInstanceSegmentGenerator
+    from generators.segments.segment import VxlanSegmentGenerator
+    from generators.segments.segment_addressing import SegmentAddressingMixin
 
     query = " ".join((ROOT / "queries" / "topology" / "add" / "app_component_segment.gql").read_text().split())
     assert "host_count { value }" in query and "owner { node { id org_id { value } } }" in query

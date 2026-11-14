@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import yaml
 
-from generators.topology.endpoint_targets import FREE_OR_CABLED_INTERFACE_STATUSES
+from generators.connectivity.endpoint_targets import FREE_OR_CABLED_INTERFACE_STATUSES
 from tests.unit.endpoint_generator_helpers import _iface, _make_generator, _pod_rack
 
 # Interface status filters

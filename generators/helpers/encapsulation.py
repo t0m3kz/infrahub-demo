@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..protocols import DcimVirtualInterface, ManagedInterfaceEncapsulation
+from generators.protocols import DcimVirtualInterface, ManagedInterfaceEncapsulation
 
 
 async def parent_ids_of(client: Any, interface_ids: list[str]) -> dict[str, str]:

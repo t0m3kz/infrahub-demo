@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.common import CommonGenerator
+from generators.mixins.common import CommonGenerator
+from generators.mixins.segment_firewall import SegmentFirewallMixin
 from generators.protocols import SecurityPolicyRule
-from generators.segment_firewall import SegmentFirewallMixin
 
 _COLLISION = "Violates uniqueness constraint 'policy-index'"
 _FUTURE = "2099-01-01T00:00:00+00:00"

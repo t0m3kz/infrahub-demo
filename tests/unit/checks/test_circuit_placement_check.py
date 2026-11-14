@@ -166,7 +166,7 @@ class TestCarrierCircuitPlacement:
         assert len(messages) == 1
 
     def test_end_count_is_left_to_carrier_circuit_ports(self) -> None:
-        """A circuit with one end gets no placement finding: checks/carrier_circuit_ports.py reports it."""
+        """A circuit with one end gets no placement finding: checks/connectivity/carrier_circuit_ports.py reports it."""
         assert _run(carrier=[_carrier_circuit("DF-DC10-EQXFR2", [DC10, FR2], [BL10_END])]) == []
 
 

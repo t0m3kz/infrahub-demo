@@ -10,7 +10,7 @@ from utils.ports import PortProfileHelper, PortSpec
 
 def zone_ref(zone_name: str | None) -> dict[str, Any]:
     """``{side}_zone`` of a rule side with a selector and no segment, as a SecurityZone HFID reference.
-    Empty when the zone is not known (checks/segment_security.py reports the rule)."""
+    Empty when the zone is not known (checks/segments/segment_security.py reports the rule)."""
     return {"hfid": [zone_name]} if zone_name else {}
 
 
@@ -84,7 +84,7 @@ class RulesPlanner:
     def cross_environment_reason(cls, src_comp: dict[str, Any], dst_comp: dict[str, Any]) -> str | None:
         """Why the flow between two components is never allowed because it joins prod and non-prod, else None. Decided
         from each segment's own environment; flows without two segments, and exchange-zone segments (EXCHANGE_PEERS),
-        are not judged. Used by the planner and ``checks/app_dependency.py``.
+        are not judged. Used by the planner and ``checks/applications/app_dependency.py``.
         """
         src_seg = src_comp.get("network_segment") or {}
         dst_seg = dst_comp.get("network_segment") or {}

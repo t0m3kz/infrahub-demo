@@ -251,17 +251,17 @@ def test_colocation_generators_are_registered_in_infrahub_yml() -> None:
         "add_colocation_metro": (
             "colocation_metro_data",
             "ColocationMetroGenerator",
-            "generators/topology/colocation.py",
+            "generators/colocation/colocation.py",
         ),
         "add_colocation_zone": (
             "colocation_zone_data",
             "ColocationZoneGenerator",
-            "generators/topology/colocation_fabric.py",
+            "generators/colocation/colocation_fabric.py",
         ),
         "add_virtual_colocation": (
             "virtual_colocation_data",
             "VirtualColocationGenerator",
-            "generators/topology/colocation_fabric.py",
+            "generators/colocation/colocation_fabric.py",
         ),
     }
     queries = {query["name"]: query["file_path"] for query in config["queries"]}
@@ -317,7 +317,7 @@ def test_the_cloud_boarding_generator_is_registered_in_infrahub_yml() -> None:
     definition = {d["name"]: d for d in config["generator_definitions"]}["add_customer_deployment_cloud"]
     queries = {query["name"]: query["file_path"] for query in config["queries"]}
     assert definition["class_name"] == "CustomerDeploymentCloudGenerator"
-    assert definition["file_path"] == "generators/topology/customer_cloud.py"
+    assert definition["file_path"] == "generators/customers/customer_cloud.py"
     assert definition["query"] == "customer_cloud" and definition["parameters"] == {"name": "name__value"}
     assert (ROOT / definition["file_path"]).is_file() and (ROOT / queries["customer_cloud"]).is_file()
 
@@ -351,7 +351,7 @@ def test_the_cloud_attachment_range_generator_is_registered_in_infrahub_yml() ->
     definition = {d["name"]: d for d in config["generator_definitions"]}["add_cloud_attachment_range"]
     queries = {query["name"]: query["file_path"] for query in config["queries"]}
     assert definition["class_name"] == "CloudAttachmentRangeGenerator"
-    assert definition["file_path"] == "generators/topology/cloud_attachment_range.py"
+    assert definition["file_path"] == "generators/colocation/cloud_attachment_range.py"
     assert definition["query"] == "cloud_attachment_range" and definition["parameters"] == {"name": "name__value"}
     assert (ROOT / definition["file_path"]).is_file() and (ROOT / queries["cloud_attachment_range"]).is_file()
 
@@ -444,7 +444,7 @@ def test_the_session_generator_is_registered_in_infrahub_yml() -> None:
     definition = {d["name"]: d for d in config["generator_definitions"]}["add_virtual_circuit"]
     queries = {query["name"]: query["file_path"] for query in config["queries"]}
     assert definition["class_name"] == "VirtualCircuitSessionGenerator"
-    assert definition["file_path"] == "generators/topology/virtual_circuit.py"
+    assert definition["file_path"] == "generators/connectivity/virtual_circuit.py"
     assert definition["query"] == "virtual_circuit_data"
     assert (ROOT / queries["virtual_circuit_data"]).is_file()
     assert (ROOT / definition["file_path"]).is_file()

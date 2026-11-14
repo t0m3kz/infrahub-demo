@@ -1,4 +1,4 @@
-"""checks/shared_vlan.py: a shared segment has the VLAN id its VNI gives on every switch (SV1)."""
+"""checks/segments/shared_vlan.py: a shared segment has the VLAN id its VNI gives on every switch (SV1)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import yaml
 
-from checks.shared_vlan import CheckSharedVlan, shared_vlan_errors
+from checks.segments.shared_vlan import CheckSharedVlan, shared_vlan_errors
 from tests.integration.demo_data import ROOT
 from tests.unit.query_shape_helpers import query_tree, unselected
 

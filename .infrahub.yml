@@ -196,169 +196,169 @@ artifact_definitions:
 check_definitions:
   - name: validate_spine
     class_name: CheckSpine
-    file_path: checks/spine.py
+    file_path: checks/devices/spine.py
     targets: spines
     parameters:
       device: name__value
   - name: validate_leaf
     class_name: CheckLeaf
-    file_path: checks/leaf.py
+    file_path: checks/devices/leaf.py
     targets: leafs
     parameters:
       device: name__value
   - name: validate_edge
     class_name: CheckEdge
-    file_path: checks/edge.py
+    file_path: checks/devices/edge.py
     targets: edges
     parameters:
       device: name__value
   - name: validate_loadbalancer
     class_name: CheckLoadBalancer
-    file_path: checks/loadbalancer.py
+    file_path: checks/devices/loadbalancer.py
     targets: loadbalancers
     parameters:
       device: name__value
   - name: validate_tor
     class_name: CheckToR
-    file_path: checks/tor.py
+    file_path: checks/devices/tor.py
     targets: tors
     parameters:
       device: name__value
   - name: validate_access_leaf
     class_name: CheckAccessLeaf
-    file_path: checks/access_leaf.py
+    file_path: checks/devices/access_leaf.py
     targets: access-leafs
     parameters:
       device: name__value
   - name: validate_border_leaf
     class_name: CheckBorderLeaf
-    file_path: checks/border_leaf.py
+    file_path: checks/devices/border_leaf.py
     targets: border-leafs
     parameters:
       device: name__value
   - name: validate_border_spine
     class_name: CheckBorderSpine
-    file_path: checks/border_spine.py
+    file_path: checks/devices/border_spine.py
     targets: border-spines
     parameters:
       device: name__value
   - name: validate_super_spine
     class_name: CheckSuperSpine
-    file_path: checks/super_spine.py
+    file_path: checks/devices/super_spine.py
     targets: super-spines
     parameters:
       device: name__value
   - name: validate_firewall
     class_name: CheckFirewall
-    file_path: checks/firewall.py
+    file_path: checks/devices/firewall.py
     targets: firewalls
     parameters:
       device: name__value
   - name: validate_sdwan_orchestrator
     class_name: CheckSdwanOrchestrator
-    file_path: checks/sdwan.py
+    file_path: checks/devices/sdwan.py
     targets: sdwan_orchestrators
     parameters:
       controller: name__value
   - name: validate_segment_placement
     class_name: CheckSegmentPlacement
-    file_path: checks/segment_placement.py
+    file_path: checks/segments/segment_placement.py
   - name: validate_segment_security
     class_name: CheckSegmentSecurity
-    file_path: checks/segment_security.py
+    file_path: checks/segments/segment_security.py
   - name: validate_customer_quota
     class_name: CheckCustomerQuota
-    file_path: checks/customer_quota.py
+    file_path: checks/customers/customer_quota.py
   - name: validate_tenant_svi_protection
     class_name: CheckTenantSviProtection
-    file_path: checks/tenant_svi_protection.py
+    file_path: checks/segments/tenant_svi_protection.py
   - name: validate_pbr_firewall_reachability
     class_name: CheckPbrFirewallReachability
-    file_path: checks/pbr_firewall_reachability.py
+    file_path: checks/routing/pbr_firewall_reachability.py
   - name: validate_reference_fabric
     class_name: CheckReferenceFabric
-    file_path: checks/reference_fabric.py
+    file_path: checks/routing/reference_fabric.py
   - name: validate_routing_tags
     class_name: CheckRoutingTags
-    file_path: checks/routing_tags.py
+    file_path: checks/routing/routing_tags.py
   - name: validate_bgp_expectations
     class_name: CheckBgpExpectations
-    file_path: checks/bgp_expectations.py
+    file_path: checks/routing/bgp_expectations.py
   - name: validate_mlag_domains
     class_name: CheckMlagDomains
-    file_path: checks/mlag_domains.py
+    file_path: checks/routing/mlag_domains.py
   - name: validate_vrf_instances
     class_name: CheckVrfInstances
-    file_path: checks/vrf_instances.py
+    file_path: checks/routing/vrf_instances.py
   - name: validate_routing_invariants
     class_name: CheckRoutingInvariants
-    file_path: checks/routing_invariants.py
+    file_path: checks/routing/routing_invariants.py
   - name: validate_evpn_fabric
     class_name: CheckEvpnFabric
-    file_path: checks/evpn_fabric.py
+    file_path: checks/routing/evpn_fabric.py
   - name: validate_lisp_fabric
     class_name: CheckLispFabric
-    file_path: checks/lisp_fabric.py
+    file_path: checks/routing/lisp_fabric.py
   - name: validate_carrier_circuit_ports
     class_name: CheckCarrierCircuitPorts
-    file_path: checks/carrier_circuit_ports.py
+    file_path: checks/connectivity/carrier_circuit_ports.py
   - name: validate_circuit_placement
     class_name: CheckCircuitPlacement
-    file_path: checks/circuit_placement.py
+    file_path: checks/connectivity/circuit_placement.py
   - name: validate_customer_cloud_account
     class_name: CheckCustomerCloudAccount
-    file_path: checks/customer_cloud_account.py
+    file_path: checks/customers/customer_cloud_account.py
   - name: validate_cloud_connection
     class_name: CheckCloudConnection
-    file_path: checks/cloud_connection.py
+    file_path: checks/connectivity/cloud_connection.py
   - name: validate_cluster
     class_name: CheckCluster
-    file_path: checks/cluster.py
+    file_path: checks/customers/cluster.py
   - name: validate_shared_vlan
     class_name: CheckSharedVlan
-    file_path: checks/shared_vlan.py
+    file_path: checks/segments/shared_vlan.py
   - name: validate_routing_policy
     class_name: CheckRoutingPolicy
-    file_path: checks/routing_policy.py
+    file_path: checks/routing/routing_policy.py
   - name: validate_software_lifecycle
     class_name: CheckSoftwareLifecycle
-    file_path: checks/software_lifecycle.py
+    file_path: checks/devices/software_lifecycle.py
   - name: validate_virtual_switch
     class_name: CheckVirtualSwitch
-    file_path: checks/virtual_switch.py
+    file_path: checks/devices/virtual_switch.py
   - name: validate_patch_panel_pairing
     class_name: CheckPatchPanelPairing
-    file_path: checks/patch_panel_pairing.py
+    file_path: checks/connectivity/patch_panel_pairing.py
   - name: validate_suite_capacity
     class_name: CheckSuiteCapacity
-    file_path: checks/suite_capacity.py
+    file_path: checks/customers/suite_capacity.py
   - name: validate_colocation_placement
     class_name: CheckColocationPlacement
-    file_path: checks/colocation_placement.py
+    file_path: checks/customers/colocation_placement.py
   - name: validate_app_dependency
     class_name: CheckAppDependency
-    file_path: checks/app_dependency.py
+    file_path: checks/applications/app_dependency.py
   - name: validate_hypervisor_environment
     class_name: CheckHypervisorEnvironment
-    file_path: checks/hypervisor_environment.py
+    file_path: checks/devices/hypervisor_environment.py
   - name: validate_virtual_device_placement
     class_name: CheckVirtualDevicePlacement
-    file_path: checks/virtual_device_placement.py
+    file_path: checks/devices/virtual_device_placement.py
   - name: validate_interface_parents
     class_name: CheckInterfaceParents
-    file_path: checks/interface_parents.py
+    file_path: checks/devices/interface_parents.py
   - name: validate_interface_layers
     class_name: CheckInterfaceLayers
-    file_path: checks/interface_layers.py
+    file_path: checks/devices/interface_layers.py
   - name: validate_internet_egress
     class_name: CheckInternetEgress
-    file_path: checks/internet_egress.py
+    file_path: checks/routing/internet_egress.py
   - name: validate_pool_utilization
     class_name: CheckPoolUtilization
-    file_path: checks/pool_utilization.py
+    file_path: checks/customers/pool_utilization.py
   - name: validate_change_request
     class_name: CheckChangeRequest
-    file_path: checks/change_request.py
+    file_path: checks/change/change_request.py
 
 python_transforms:
   - name: topology_cabling
@@ -755,7 +755,7 @@ queries:
 
 generator_definitions:
   - name: add_dc
-    file_path: generators/topology/dc.py
+    file_path: generators/fabric/dc.py
     targets: topologies_dc
     query: topology_dc
     class_name: DCTopologyGenerator
@@ -764,7 +764,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_pod
-    file_path: generators/topology/pod.py
+    file_path: generators/fabric/pod.py
     targets: topologies_pod
     query: topology_pod
     class_name: PodTopologyGenerator
@@ -773,7 +773,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: dc_pod_cascade
-    file_path: generators/topology/dc_pod_cascade.py
+    file_path: generators/fabric/dc_pod_cascade.py
     targets: topologies_dc
     query: topology_dc
     class_name: DCPodCascadeGenerator
@@ -782,7 +782,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: pod_rack_cascade
-    file_path: generators/topology/pod_rack_cascade.py
+    file_path: generators/fabric/pod_rack_cascade.py
     targets: topologies_pod
     query: topology_pod
     class_name: PodRackCascadeGenerator
@@ -800,7 +800,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_rack
-    file_path: generators/topology/rack.py
+    file_path: generators/fabric/rack.py
     targets: topologies_rack
     query: rack
     class_name: RackGenerator
@@ -809,7 +809,7 @@ generator_definitions:
     parameters:
       id: id
   - name: add_endpoint
-    file_path: generators/topology/endpoint.py
+    file_path: generators/connectivity/endpoint.py
     targets: endpoints
     query: endpoint_connectivity
     class_name: EndpointConnectivityGenerator
@@ -818,7 +818,7 @@ generator_definitions:
     parameters:
       device_name: name__value
   - name: add_vxlan_segment
-    file_path: generators/topology/segment.py
+    file_path: generators/segments/segment.py
     targets: vxlan_segments
     query: vxlan_segment_data
     class_name: VxlanSegmentGenerator
@@ -827,7 +827,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_customer_routing_tag
-    file_path: generators/topology/customer_routing_tag.py
+    file_path: generators/customers/customer_routing_tag.py
     targets: customers
     query: customer_routing_tag
     class_name: CustomerRoutingTagGenerator
@@ -836,7 +836,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_transit_policy
-    file_path: generators/topology/transit_policy.py
+    file_path: generators/connectivity/transit_policy.py
     targets: transit_peerings
     query: transit_policy
     class_name: TransitPolicyGenerator
@@ -845,7 +845,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_circuit
-    file_path: generators/topology/circuit.py
+    file_path: generators/connectivity/circuit.py
     targets: carrier_circuits
     query: circuit_data
     class_name: CarrierCircuitGenerator
@@ -854,7 +854,7 @@ generator_definitions:
     parameters:
       circuit_id: circuit_id__value
   - name: add_virtual_circuit
-    file_path: generators/topology/virtual_circuit.py
+    file_path: generators/connectivity/virtual_circuit.py
     targets: virtual_circuits
     query: virtual_circuit_data
     class_name: VirtualCircuitSessionGenerator
@@ -863,7 +863,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_context_routes
-    file_path: generators/topology/context_routes.py
+    file_path: generators/connectivity/context_routes.py
     targets: service_contexts
     query: context_routes
     class_name: ContextRoutesGenerator
@@ -872,7 +872,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_patch_panel
-    file_path: generators/topology/patch_panel.py
+    file_path: generators/connectivity/patch_panel.py
     targets: patch_panels
     query: patch_panel_data
     class_name: PatchPanelGenerator
@@ -881,7 +881,7 @@ generator_definitions:
     parameters:
       panel_id: panel_id__value
   - name: add_mlag
-    file_path: generators/topology/mlag.py
+    file_path: generators/fabric/mlag.py
     targets: mlag_domains
     query: mlag_domain_data
     class_name: MLAGGenerator
@@ -890,7 +890,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_app_application
-    file_path: generators/topology/application_security.py
+    file_path: generators/applications/application_security.py
     targets: app_applications
     query: application
     class_name: AppApplicationGenerator
@@ -899,7 +899,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_app_dependency
-    file_path: generators/topology/application_security.py
+    file_path: generators/applications/application_security.py
     targets: app_dependencies
     query: app_dependency
     class_name: AppApplicationGenerator
@@ -908,7 +908,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_app_component
-    file_path: generators/topology/application_security.py
+    file_path: generators/applications/application_security.py
     targets: app_components
     query: app_component
     class_name: AppApplicationGenerator
@@ -917,7 +917,7 @@ generator_definitions:
     parameters:
       fqdn: fqdn__value
   - name: add_app_component_segment
-    file_path: generators/topology/app_instance_segment.py
+    file_path: generators/applications/app_instance_segment.py
     targets: app_components
     query: app_component_segment
     class_name: AppInstanceSegmentGenerator
@@ -926,7 +926,7 @@ generator_definitions:
     parameters:
       fqdn: fqdn__value
   - name: add_segment_deployment_ports
-    file_path: generators/topology/segment_deployment_ports.py
+    file_path: generators/segments/segment_deployment_ports.py
     targets: segment_deployments
     query: segment_deployment_ports
     class_name: SegmentDeploymentPortsGenerator
@@ -935,7 +935,7 @@ generator_definitions:
     parameters:
       id: id
   - name: add_customer_deployment_dc
-    file_path: generators/topology/customer_dc.py
+    file_path: generators/customers/customer_dc.py
     targets: customer_deployments_dc
     query: customer_dc
     class_name: CustomerDeploymentDCExchangeGenerator
@@ -944,7 +944,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_customer_deployment_colocation
-    file_path: generators/topology/customer_colocation.py
+    file_path: generators/customers/customer_colocation.py
     targets: customer_deployments_colocation
     query: customer_colocation
     class_name: CustomerDeploymentColocationExchangeGenerator
@@ -953,7 +953,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_customer_deployment_cloud
-    file_path: generators/topology/customer_cloud.py
+    file_path: generators/customers/customer_cloud.py
     targets: customer_deployments_cloud
     query: customer_cloud
     class_name: CustomerDeploymentCloudGenerator
@@ -962,7 +962,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_cloud_attachment_range
-    file_path: generators/topology/cloud_attachment_range.py
+    file_path: generators/colocation/cloud_attachment_range.py
     targets: cloud_attachment_ranges
     query: cloud_attachment_range
     class_name: CloudAttachmentRangeGenerator
@@ -971,7 +971,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_colocation_metro
-    file_path: generators/topology/colocation.py
+    file_path: generators/colocation/colocation.py
     targets: colocation_metros
     query: colocation_metro_data
     class_name: ColocationMetroGenerator
@@ -980,7 +980,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_colocation_zone
-    file_path: generators/topology/colocation_fabric.py
+    file_path: generators/colocation/colocation_fabric.py
     targets: colocation_zones
     query: colocation_zone_data
     class_name: ColocationZoneGenerator
@@ -989,7 +989,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_virtual_colocation
-    file_path: generators/topology/colocation_fabric.py
+    file_path: generators/colocation/colocation_fabric.py
     targets: virtual_colocations
     query: virtual_colocation_data
     class_name: VirtualColocationGenerator
@@ -998,7 +998,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_office_fabric
-    file_path: generators/topology/office_fabric.py
+    file_path: generators/fabric/office_fabric.py
     targets: customer_deployments_office
     query: office_fabric_data
     class_name: OfficeFabricGenerator
@@ -1007,7 +1007,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_sdwan_edge
-    file_path: generators/topology/sdwan_edge.py
+    file_path: generators/fabric/sdwan_edge.py
     targets: customer_deployments_office
     query: customer_office_sdwan
     class_name: SdwanEdgeGenerator
@@ -1016,7 +1016,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_application_orchestrator_routing
-    file_path: generators/topology/orchestrator_routing.py
+    file_path: generators/connectivity/orchestrator_routing.py
     targets: app_applications
     query: application_orchestrator_routing
     class_name: ApplicationOrchestratorRoutingGenerator
@@ -1025,7 +1025,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_customer_dc_orchestrator_routing
-    file_path: generators/topology/orchestrator_routing.py
+    file_path: generators/connectivity/orchestrator_routing.py
     targets: customer_deployments_dc
     query: customer_deployment_orchestrator_routing
     class_name: TopologyOrchestratorRoutingGenerator
@@ -1034,7 +1034,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_customer_colocation_orchestrator_routing
-    file_path: generators/topology/orchestrator_routing.py
+    file_path: generators/connectivity/orchestrator_routing.py
     targets: customer_deployments_colocation
     query: customer_deployment_orchestrator_routing
     class_name: TopologyOrchestratorRoutingGenerator
@@ -1043,7 +1043,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_customer_cloud_orchestrator_routing
-    file_path: generators/topology/orchestrator_routing.py
+    file_path: generators/connectivity/orchestrator_routing.py
     targets: customer_deployments_cloud
     query: customer_deployment_orchestrator_routing
     class_name: TopologyOrchestratorRoutingGenerator
@@ -1052,7 +1052,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_customer_office_orchestrator_routing
-    file_path: generators/topology/orchestrator_routing.py
+    file_path: generators/connectivity/orchestrator_routing.py
     targets: customer_deployments_office
     query: customer_deployment_orchestrator_routing
     class_name: TopologyOrchestratorRoutingGenerator

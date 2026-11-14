@@ -92,7 +92,7 @@ def test_the_session_circuit_type_is_required_with_four_choices() -> None:
 
 
 def test_the_session_fields_of_one_type_are_optional_in_the_schema() -> None:
-    """The rules per type live in checks/circuit_placement.py, so the schema requires none of them."""
+    """The rules per type live in checks/connectivity/circuit_placement.py, so the schema requires none of them."""
     session = _node("SessionCircuit")
     for name in ("vrf", "password", "registered_prefixes", "link_prefix"):
         assert _field(session["relationships"], name)["optional"] is True, name

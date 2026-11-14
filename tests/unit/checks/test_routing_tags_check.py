@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 from graphql import FieldNode, FragmentDefinitionNode, parse
 
-from checks.routing_tags import CheckRoutingTags
+from checks.routing.routing_tags import CheckRoutingTags
 from utils.graphql_queries import load_query
 
 

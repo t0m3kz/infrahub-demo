@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.devices import DeviceMixin
+from generators.mixins.devices import DeviceMixin
 from generators.protocols import ManagedMLAG
 
 

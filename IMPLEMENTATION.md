@@ -24,7 +24,7 @@ them). For the full data model rules see
 Two required design templates bound every fabric. They hold only the envelope (the `max_*` values); the records
 live in [data/bootstrap/14b_fabric_templates.yml](data/bootstrap/14b_fabric_templates.yml). Every pool size, port
 stride and loopback or technical prefix is derived from them by
-[generators/fabric_sizing.py](generators/fabric_sizing.py) before any rack exists.
+[generators/mixins/fabric_sizing.py](generators/mixins/fabric_sizing.py) before any rack exists.
 
 ### Data center designs (`TopologyDataCenter.design`, `TopologyTemplateDC`)
 
@@ -61,7 +61,7 @@ The number of switches per tier follows from the envelope:
 
 Pick one before the procurement committee picks the switches for you. The deployment type of a pod is **derived from
 its design, never stored**
-([generators/pod_config.py](generators/pod_config.py) `pod_deployment_type`):
+([generators/mixins/pod_config.py](generators/mixins/pod_config.py) `pod_deployment_type`):
 
 | Design has | Deployment type |
 | ---------- | --------------- |
@@ -69,7 +69,7 @@ its design, never stored**
 | ToRs and no leafs | `tor` |
 | ToRs and leafs | `mixed` |
 
-The roles a rack may hold depend on the type ([generators/rack.py](generators/rack.py)
+The roles a rack may hold depend on the type ([generators/mixins/rack.py](generators/mixins/rack.py)
 `ROLES_BY_DEPLOYMENT_TYPE`):
 
 | Deployment type | Roles a rack may hold |
@@ -153,7 +153,7 @@ compromise, in rack form.
 
 Every leaf, ToR and border-leaf takes one downlink port on every spine of its pod. The ports are laid out in fixed
 blocks computed from the **design envelope, not from what is built**, so the blocks never overlap however a pod
-fills up ([generators/pod_config.py](generators/pod_config.py) `spine_downlink_layout`):
+fills up ([generators/mixins/pod_config.py](generators/mixins/pod_config.py) `spine_downlink_layout`):
 
 | Block | Middle rack / Mixed | ToR |
 | ----- | ------------------- | --- |
@@ -257,7 +257,7 @@ or a rack coordinate outside the suite grid.
 Racks and suites are data; nothing generates a `LocationRack`. The checks hold them to the designs, rather than
 letting you discover on rack-and-stack day that the design never fitted the room:
 
-- [checks/suite_capacity.py](checks/suite_capacity.py): every rack sits inside its suite's grid
+- [checks/customers/suite_capacity.py](checks/customers/suite_capacity.py): every rack sits inside its suite's grid
   (`row_index <= rows`, `index <= racks_per_row`), and each suite that hosts a rack of a pod fits the pod's design
   envelope (`max_rows <= rows`, `max_compute_racks_per_row + max_network_racks_per_row <= racks_per_row`). The
   envelope, not the racks present today, is the demand, so a pod can always grow into its design.

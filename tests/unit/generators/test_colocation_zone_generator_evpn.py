@@ -9,7 +9,7 @@ import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 from infrahub_sdk.protocols import CoreNumberPool
 
-from generators.logger import GeneratorError
+from generators.mixins.logger import GeneratorError
 from tests.unit.colocation_zone_generator_helpers import _created, _made_virtual, _made_zone, _zone
 
 

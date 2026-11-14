@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from generators.mixins.routing import RoutingMixin
+from generators.mixins.types import RoutingOptions
 from generators.protocols import RoutingOSPFArea, RoutingPassword
-from generators.routing import RoutingMixin
-from generators.types import RoutingOptions
 
 
 def _mixin() -> Any:
@@ -140,7 +140,7 @@ def _capture_planner(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
                 ospf_peerings=[],
             )
 
-    monkeypatch.setattr("generators.routing.RoutingPlanner", _Planner)
+    monkeypatch.setattr("generators.mixins.routing.RoutingPlanner", _Planner)
     return inputs
 
 
@@ -150,7 +150,7 @@ class TestCreateRoutingNoOverlay:
     @pytest.mark.asyncio
     async def test_plans_the_underlay_only_with_the_given_area(self, monkeypatch: pytest.MonkeyPatch) -> None:
         sleep = AsyncMock()
-        monkeypatch.setattr("generators.routing.asyncio.sleep", sleep)
+        monkeypatch.setattr("generators.mixins.routing.asyncio.sleep", sleep)
         inputs = _capture_planner(monkeypatch)
         mixin = _mixin()
         options = RoutingOptions(design={"routing_strategy": "ospf-ibgp"}, ospf_area_id="area-1", no_overlay=True)
@@ -171,7 +171,7 @@ class TestCreateRoutingNoOverlay:
 
     @pytest.mark.asyncio
     async def test_without_the_option_the_strategy_keeps_its_overlay(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.mixins.routing.asyncio.sleep", AsyncMock())
         inputs = _capture_planner(monkeypatch)
         mixin = _mixin()
         mixin._resolve_shared_objects = AsyncMock(return_value=("as-overlay-1", "area-1"))

@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 import generators
-from generators.common import CommonGenerator
+from generators.mixins.common import CommonGenerator
 
 ROOT = Path(generators.__file__).parent
 

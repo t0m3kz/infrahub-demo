@@ -13,6 +13,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from generators.protocols import ManagedPBR, ManagedVRF, TopologyExchangeGateway
 from utils.data_cleaning import clean_data
 from utils.limits import DEFAULT_NAMESPACE
 from utils.query_flatten import load_flat_query
@@ -24,12 +25,11 @@ from utils.vrf_demand import (
     vrf_demand,
 )
 
-from ..protocols import ManagedPBR, ManagedVRF, TopologyExchangeGateway
 from .svi import SviMixin
 
 if TYPE_CHECKING:
-    from ..common import CommonGenerator
-    from ..pools import PoolMixin
+    from generators.mixins.common import CommonGenerator
+    from generators.mixins.pools import PoolMixin
 
 _VRF_REFERENCES = ("capabilities", "session_circuits")
 """The edges of an instance that keep it alive besides its members: its interfaces and its session circuits."""

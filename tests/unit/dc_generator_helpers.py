@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.shared_routing import SharedRoutingIds
-from generators.topology.dc import DCTopologyGenerator
+from generators.fabric.dc import DCTopologyGenerator
+from generators.mixins.shared_routing import SharedRoutingIds
 from tests.unit.simulators.fabric_designs import custom_dc_design, dc_design
 
 

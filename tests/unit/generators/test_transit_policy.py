@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.logger import GeneratorError
-from generators.topology.transit_policy import TransitPolicyGenerator
+from generators.connectivity.transit_policy import TransitPolicyGenerator
+from generators.mixins.logger import GeneratorError
 from utils.transit_policy import (
     IN_POLICY,
     LEARNED_LIST,

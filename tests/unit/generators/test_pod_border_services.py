@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.topology.pod import PodTopologyGenerator
+from generators.fabric.pod import PodTopologyGenerator
 from tests.unit.simulators.fabric_designs import dc_design, pod_design
 
 _FW_TEMPLATE = {

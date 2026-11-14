@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.firewall_context import EDGE_CONTEXT, FIREWALL_CONTEXT
-from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
+from generators.customers.customer_dc import CustomerDeploymentDCExchangeGenerator
+from generators.mixins.firewall_context import EDGE_CONTEXT, FIREWALL_CONTEXT
 from tests.unit.customer_dc_transit_helpers import (
     _SHARED,
     _TRACKED,

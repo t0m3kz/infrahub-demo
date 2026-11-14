@@ -6,15 +6,11 @@ from typing import Any
 
 from infrahub_sdk.batch import InfrahubBatch
 
-from utils.data_cleaning import clean_data
-from utils.interface_encapsulation import encapsulation_name
-from utils.vrf_demand import SVI_ROLE
-
-from ..common import CommonGenerator
-from ..helpers.vrf import VrfMixin
-from ..pod_config import pod_spine_slot_device_names, spine_slot_role
-from ..pools import PoolMixin
-from ..protocols import (
+from generators.helpers.vrf import VrfMixin
+from generators.mixins.common import CommonGenerator
+from generators.mixins.pod_config import pod_spine_slot_device_names, spine_slot_role
+from generators.mixins.pools import PoolMixin
+from generators.protocols import (
     CoreIPAddressPool,
     CoreIPPrefixPool,
     DcimCable,
@@ -25,6 +21,9 @@ from ..protocols import (
     IpamPrefix,
     ManagedInterfaceEncapsulation,
 )
+from utils.data_cleaning import clean_data
+from utils.interface_encapsulation import encapsulation_name
+from utils.vrf_demand import SVI_ROLE
 
 # Device roles add_pod/add_rack create under a pod's deployment
 _POD_FABRIC_ROLES = frozenset({"spine", "leaf", "tor", "l2-leaf", "access-leaf", "internal-firewall", "load-balancer"})

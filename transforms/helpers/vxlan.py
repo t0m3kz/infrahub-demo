@@ -247,7 +247,7 @@ def get_interfaces(
             iface_dict["lacp_mode"] = iface.get("lacp_mode")
             iface_dict["minimum_links"] = iface.get("minimum_links")
             # The multi-chassis id of a host-facing port-channel: both peers of one bond carry the same lag_id
-            # (generators/topology/endpoint_lag.py) and checks/mlag_domains.py M5 pairs them.
+            # (generators/topology/endpoint_lag.py) and checks/routing/mlag_domains.py M5 pairs them.
             if (iface.get("mlag_domain") or {}).get("id") and iface.get("role") != "mlag-peer":
                 iface_dict["mlag_id"] = iface.get("lag_id")
             member_interfaces = iface.get("member_interfaces") or []

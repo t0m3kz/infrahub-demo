@@ -1,4 +1,4 @@
-"""checks/change_request.py: the open PC of the branch has exactly one complete and current change request (CR1-CR5)."""
+"""checks/change/change_request.py: the open PC of the branch has exactly one complete and current change request (CR1-CR5)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 
-from checks.change_request import ARTIFACT_FINGERPRINT_KEY, CheckChangeRequest
+from checks.change.change_request import ARTIFACT_FINGERPRINT_KEY, CheckChangeRequest
 from tests.integration.demo_data import ROOT
 from tests.unit.query_shape_helpers import query_tree, unselected
 from utils.change_rules import artifact_fingerprint, parse_artifact_diff
