@@ -192,46 +192,6 @@ class ColocationFabricGenerator(
             total_by_role[role] = total
         return [entry for index, entry in enumerate(entries) if index not in skipped]
 
-    def _drop_uncablable_service_entries(self, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Drop a physical firewall/load-balancer entry that no physical edge template can cable to, warning why
-        (virtual entries are exempt).
-        """
-        physical_edge_entries = [
-            entry
-            for entry in entries
-            if entry.get("role") == "edge"
-            and (entry.get("template") or {}).get("template_kind") == _COLO_TEMPLATE_KIND_PHYSICAL
-        ]
-        if not physical_edge_entries:
-            return entries
-
-        physical_edge_port_roles: set[str] = set()
-        for entry in physical_edge_entries:
-            for iface in (entry.get("template") or {}).get("interfaces") or []:
-                role = iface.get("role")
-                if role:
-                    physical_edge_port_roles.add(role)
-
-        usable: list[dict[str, Any]] = []
-        for entry in entries:
-            role = entry.get("role")
-            template = entry.get("template") or {}
-            is_physical_service = role in _COLO_SERVICE_ROLES and template.get("template_kind") == (
-                _COLO_TEMPLATE_KIND_PHYSICAL
-            )
-            port_role = BORDER_ROLE_FOR_SERVICES.get(str(role), str(role))
-            if is_physical_service and port_role not in physical_edge_port_roles:
-                self.logger.warning(
-                    f"Colocation {self._label} {self.fabric_name}: fabric_templates entry for role={role!r} has no "
-                    f"matching {port_role!r}-role port on any physical edge template in this {self._label} (available "
-                    f"edge port roles: {sorted(physical_edge_port_roles) or 'none'}) — skipping this entry rather "
-                    "than creating an appliance with nothing to cable it to. Point the edge template at a device "
-                    f"with a {port_role!r}-role port block, or drop this entry."
-                )
-                continue
-            usable.append(entry)
-        return usable
-
     def _parent_pool_name(self, slot: ColoPoolSlot) -> str:
         """The pool this node's ``slot`` is sliced from: the metro's supernet, else the bootstrap pool."""
         if self._slices_from_metro:

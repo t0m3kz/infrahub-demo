@@ -308,15 +308,6 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             bottom_devices=names, top_devices=[], options=options, p2p_interfaces=[], bottom_role=role
         )
 
-    def _validate_fabric_template_roles(self) -> None:
-        """Log and skip a fabric_templates entry with a role this generator cannot place."""
-        for entry in self.data.get("fabric_templates", []):
-            if entry["role"] not in _DC_VALID_FABRIC_ROLES:
-                self.logger.warning(
-                    f"DC {self.fabric_name}: fabric_templates entry with role={entry['role']!r} is not valid "
-                    f"at DC level (expected one of {sorted(_DC_VALID_FABRIC_ROLES)}) — skipping this entry."
-                )
-
     @staticmethod
     def pods_of(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         """The DC's pods from its cleaned payload: the children that carry a design."""

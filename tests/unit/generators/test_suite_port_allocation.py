@@ -22,6 +22,7 @@ def test_suite_rows_and_rack_capacities_size_leaf_and_tor_blocks() -> None:
     assert res.compute_racks_per_row == 4
     assert res.leaf_block_size == 4
     assert res.tor_block_start == 6
+    assert res.total_reserved_downlinks == 22
 
 
 def test_rack_fabric_model_computes_non_overlapping_offsets() -> None:
