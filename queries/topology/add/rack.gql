@@ -162,6 +162,67 @@ fragment RackPodFields on TopologyPod {
         id
         name { value }
         role { value }
+        ... on DcimDevice {
+          interfaces(role__value: "downlink") {
+            edges {
+              node {
+                name { value }
+                role { value }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  racks {
+    edges {
+      node {
+        id
+        name { value }
+        index { value }
+        row_index { value }
+        rack_type { value }
+        switch_role { value }
+        switch_quantity { value }
+        switch_template {
+          node {
+            id
+            ... on TemplateDcimPhysicalDevice {
+              interfaces(role__value: "downlink") {
+                edges {
+                  node {
+                    name { value }
+                    role { value }
+                  }
+                }
+              }
+            }
+          }
+        }
+        fabric_templates {
+          edges {
+            node {
+              role { value }
+              quantity { value }
+              template {
+                node {
+                  id
+                  ... on TemplateDcimPhysicalDevice {
+                    interfaces(role__value: "downlink") {
+                      edges {
+                        node {
+                          name { value }
+                          role { value }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
