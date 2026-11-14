@@ -41,9 +41,19 @@ class SuitePortReservation:
         design_comp = int(pod_design.get("max_compute_racks_per_row") or 0)
 
         suite_rows = (suite or {}).get("rows")
+        suite_racks = (suite or {}).get("racks_per_row")
         effective_rows = min(design_rows, int(suite_rows)) if suite_rows else design_rows
         net_per_row = design_net
         comp_per_row = design_comp
+        if suite_racks is not None and int(suite_racks) > 0:
+            cap = int(suite_racks)
+            if deployment_type == "tor":
+                comp_per_row = min(design_comp, cap)
+            elif deployment_type == "middle_rack":
+                net_per_row = min(design_net, cap)
+            elif deployment_type == "mixed":
+                net_per_row = min(design_net, cap)
+                comp_per_row = min(design_comp, max(0, cap - net_per_row))
 
         # In mixed mode rack.index spans both network and compute rack slots in the row; in tor mode only compute slots.
         row_slots = (net_per_row + comp_per_row) if deployment_type == "mixed" else comp_per_row

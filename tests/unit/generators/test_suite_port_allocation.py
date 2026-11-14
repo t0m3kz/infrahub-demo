@@ -68,3 +68,40 @@ def test_rack_fabric_model_computes_non_overlapping_offsets() -> None:
         )
         == 18
     )
+
+
+def test_heterogeneous_rows_with_suite_racks_per_row_never_collide() -> None:
+    """Row 1 (network row) and Row 2 (compute row) under one suite get disjoint spine downlink ports."""
+    pod_design = {
+        "max_rows": 4,
+        "max_network_racks_per_row": 2,
+        "max_compute_racks_per_row": 6,
+        "max_leafs_per_network_rack": 2,
+        "max_tors_per_compute_rack": 2,
+        "max_border_leafs_per_pod": 2,
+    }
+    suite = {"id": "suite-het", "index": 1, "rows": 2, "racks_per_row": 4}
+    res = SuitePortReservation.from_pod_and_suite(pod_design, suite)
+    assert res.effective_rows == 2
+    assert res.network_racks_per_row == 2
+    assert res.compute_racks_per_row == 2
+    assert res.row_rack_slots == 4
+    assert res.leaf_block_size == 8
+    assert res.tor_block_start == 10
+    assert res.total_reserved_downlinks == 18
+
+    # Row 1: two network racks (leaf pairs) -> ports 0..1 and 2..3
+    assert res.offset_for_rack(row_index=1, rack_index=1, device_type="leaf", device_count=2) == 0
+    assert res.offset_for_rack(row_index=1, rack_index=2, device_type="leaf", device_count=2) == 2
+
+    # Row 2: two compute racks (ToR pairs) -> ports 18..19 and 20..21 (even without explicit racks_in_previous_rows)
+    prev = res.previous_row_rack_slots(2)
+    assert prev == 4
+    assert (
+        res.offset_for_rack(row_index=2, rack_index=1, device_type="tor", device_count=2, racks_in_previous_rows=prev)
+        == 18
+    )
+    assert (
+        res.offset_for_rack(row_index=2, rack_index=2, device_type="tor", device_count=2, racks_in_previous_rows=prev)
+        == 20
+    )

@@ -199,11 +199,3 @@ kicks:
         load: [15_dc_universal_scale_out]
         generator: add_rack
         min_artifacts: 1
-
-  dc-individual-devices:
-    description: DC15 deployed with individual DcimPhysicalDevice switches placed directly onto the pod and rack.
-    stages:
-      - name: dc15
-        load: [14_dc_universal/02_individual_devices]
-        generator: add_dc
-        min_artifacts: 1
