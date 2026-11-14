@@ -182,7 +182,7 @@ nodes:
     relationships:
       - name: switch_template
         label: "Switch Device Template"
-        peer: TemplateDcimPhysicalDevice
+        peer: CoreObjectTemplate
         optional: true
         cardinality: one
         kind: Attribute

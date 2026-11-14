@@ -407,7 +407,7 @@ nodes:
         order_weight: 1050
       - name: spine_template
         label: "Spine Device Template"
-        peer: TemplateDcimPhysicalDevice
+        peer: CoreObjectTemplate
         optional: true
         cardinality: one
         kind: Attribute
