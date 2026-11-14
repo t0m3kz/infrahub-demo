@@ -111,6 +111,7 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
+      - TopologyRackHosting
       - TopologyPhysicalDeployment
       - TopologyConnectableLocation
       - TopologyFacility
