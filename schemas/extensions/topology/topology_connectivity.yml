@@ -2,6 +2,32 @@
 version: "1.0"
 
 generics:
+  - name: Interconnection
+    namespace: Topology
+    description: "Unified umbrella for all physical and logical point-to-point or multipoint connectivity"
+    label: "Interconnection"
+    include_in_menu: false
+    attributes:
+      - name: interconnection_layer
+        kind: Dropdown
+        optional: true
+        order_weight: 150
+        choices:
+          - name: physical
+            label: Physical (Cable / Cross-Connect)
+          - name: transport
+            label: Transport (Carrier / Dark Fiber / DWDM)
+          - name: logical
+            label: Logical (Session / Tunnel / Cloud / Peering)
+      - name: bandwidth_mbps
+        kind: Number
+        optional: true
+        order_weight: 160
+      - name: mtu
+        kind: Number
+        optional: true
+        order_weight: 170
+
   - name: ConnectableLocation
     namespace: Topology
     description: "Topology location that can participate in circuit connectivity (carrier or session)"
@@ -358,3 +384,9 @@ nodes:
         identifier: "session_circuit__link_prefix"
         order_weight: 1450
         description: "The link range the provider handed this session (vpn, or a provider-assigned handoff)"
+
+extensions:
+  nodes:
+    - kind: DcimCable
+      inherit_from:
+        - TopologyInterconnection

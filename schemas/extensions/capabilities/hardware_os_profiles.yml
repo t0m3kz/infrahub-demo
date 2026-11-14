@@ -1,0 +1,123 @@
+# schemas/extensions/capabilities/hardware_os_profiles.yml
+version: "1.0"
+
+nodes:
+  - name: HardwareCapabilityProfile
+    namespace: Dcim
+    description: "Hardware ASIC forwarding & redundancy capabilities of a device model"
+    label: "Hardware Capability Profile"
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+        order_weight: 100
+      - name: supports_vxlan_vtep
+        kind: Boolean
+        default_value: false
+        order_weight: 200
+      - name: supports_evpn
+        kind: Boolean
+        default_value: false
+        order_weight: 210
+      - name: supports_mlag
+        kind: Boolean
+        default_value: false
+        order_weight: 220
+      - name: supports_virtual_mlag
+        kind: Boolean
+        default_value: false
+        order_weight: 230
+      - name: supports_pbr
+        kind: Boolean
+        default_value: false
+        order_weight: 240
+      - name: supports_stateful_firewall
+        kind: Boolean
+        default_value: false
+        order_weight: 250
+      - name: max_vrfs
+        kind: Number
+        optional: true
+        order_weight: 300
+      - name: max_vlans
+        kind: Number
+        optional: true
+        order_weight: 310
+
+  - name: PlatformCapabilityProfile
+    namespace: Dcim
+    description: "Network OS control-plane & automation capabilities of a platform"
+    label: "Platform Capability Profile"
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+        order_weight: 100
+      - name: supports_bgp
+        kind: Boolean
+        default_value: true
+        order_weight: 200
+      - name: supports_ospf
+        kind: Boolean
+        default_value: true
+        order_weight: 210
+      - name: supports_lisp
+        kind: Boolean
+        default_value: false
+        order_weight: 220
+      - name: supports_group_policy
+        kind: Boolean
+        default_value: false
+        order_weight: 230
+      - name: supports_ztna
+        kind: Boolean
+        default_value: false
+        order_weight: 240
+      - name: config_dialect
+        kind: Dropdown
+        optional: true
+        order_weight: 300
+        choices:
+          - name: nxos
+            label: Cisco NX-OS
+          - name: eos
+            label: Arista EOS
+          - name: sonic
+            label: SONiC
+          - name: iosxe
+            label: Cisco IOS-XE
+          - name: junos
+            label: Juniper Junos
+          - name: linux
+            label: Linux / FRR
+
+extensions:
+  nodes:
+    - kind: DcimDeviceType
+      relationships:
+        - name: hardware_capabilities
+          peer: DcimHardwareCapabilityProfile
+          label: Hardware Capabilities
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: device_type__hardware_capabilities
+          order_weight: 1800
+    - kind: DcimPlatform
+      relationships:
+        - name: os_capabilities
+          peer: DcimPlatformCapabilityProfile
+          label: OS Capabilities
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: platform__os_capabilities
+          order_weight: 1800
