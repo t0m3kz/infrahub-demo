@@ -20,11 +20,11 @@ kicks:
             - DcimPhysicalDevice: {role: leaf, deployment: DC15-15-POD-1}
               equals: 2
             - DcimCable: {}
-              equals: 4
+              equals: 16
             - ManagedBGP: {}
-              equals: 12
+              equals: 16
             - ManagedBGPPeering: {}
-              equals: 14
+              equals: 24
           removed: 0
 
       - name: idempotency
@@ -42,11 +42,11 @@ kicks:
             - DcimPhysicalDevice: {role: leaf, deployment: DC15-15-POD-1}
               equals: 2
             - DcimCable: {}
-              equals: 4
+              equals: 16
             - ManagedBGP: {}
-              equals: 12
+              equals: 16
             - ManagedBGPPeering: {}
-              equals: 14
+              equals: 24
           unchanged:
             DcimPhysicalDevice: [name, role, status]
             ManagedBGP: [local_as]

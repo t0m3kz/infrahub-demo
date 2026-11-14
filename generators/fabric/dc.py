@@ -344,15 +344,8 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         if not entries:
             return []
 
-        existing_pods = getattr(self, "_existing_pods", [])
-        if not existing_pods:
-            self.logger.info(f"DC {self.fabric_name}: no pods yet — deferring border-leaf placement")
-            return []
-        sorted_pods = sorted(existing_pods, key=lambda p: p["index"])
-
-        max_border_leafs_per_fabric = self.data["design"]["max_border_leafs_per_fabric"]
-        capacities = self._pod_border_leaf_capacities(sorted_pods)
         all_names: list[str] = []
+        template_entries: list[dict[str, Any]] = []
         for entry in entries:
             if entry.get("devices"):
                 bl_opts = DeviceOptions(
@@ -373,7 +366,21 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                         options=bl_opts,
                     )
                 )
-                continue
+            else:
+                template_entries.append(entry)
+
+        if not template_entries:
+            return all_names
+
+        existing_pods = getattr(self, "_existing_pods", [])
+        if not existing_pods:
+            self.logger.info(f"DC {self.fabric_name}: no pods yet — deferring border-leaf placement")
+            return all_names
+        sorted_pods = sorted(existing_pods, key=lambda p: p["index"])
+
+        max_border_leafs_per_fabric = self.data["design"]["max_border_leafs_per_fabric"]
+        capacities = self._pod_border_leaf_capacities(sorted_pods)
+        for entry in template_entries:
             if entry["quantity"] > max_border_leafs_per_fabric:
                 self.logger.error(
                     f"DC {self.fabric_name}: border-leaf entry requests {entry['quantity']} devices but "

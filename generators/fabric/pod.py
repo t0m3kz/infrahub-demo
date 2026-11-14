@@ -206,15 +206,18 @@ class PodTopologyGenerator(
             return
 
         dc_super_spine_entries = templates_by_role(dc.get("fabric_templates", []), "super-spine")
+        dc_ss_devs = [device for device in dc.get("devices", []) if device.get("role") == "super-spine"]
         super_spine_devices = sorted(
-            {device["name"] for device in dc.get("devices", [])}
+            {device["name"] for device in dc_ss_devs}
             | {d["name"] for e in dc_super_spine_entries for d in e.get("devices") or []}
         )
-        super_spine_interfaces = (
-            [iface["name"] for iface in dc_super_spine_entries[0]["template"].get("interfaces", [])]
-            if dc_super_spine_entries
-            else []
-        )
+        if dc_super_spine_entries:
+            super_spine_interfaces = [
+                iface["name"] for iface in dc_super_spine_entries[0]["template"].get("interfaces", [])
+            ]
+        else:
+            first_ss_ifaces = next((d.get("interfaces") or [] for d in dc_ss_devs if d.get("interfaces")), [])
+            super_spine_interfaces = [iface["name"] for iface in first_ss_ifaces]
 
         # Check every precondition before the first save: returning after a save leaves a partial tracked set.
         if super_spine_devices and not await self._wait_for_super_spine_overlay(super_spine_devices, dc_id, pod_name):
@@ -468,13 +471,19 @@ class PodTopologyGenerator(
         if max_border_leafs_per_fabric <= 0:
             return
         naming = DeviceNamingConfig(strategy=naming_convention_of(dc, lower=False))
-        candidate_names = expected_device_names(
-            naming_config=naming,
-            fabric_name=self.fabric_name,
-            device_indexes=[dc["index"], self.data["index"]],
-            role="border-leaf",
-            quantity=max_border_leafs_per_fabric,
+        candidate_names = list(
+            expected_device_names(
+                naming_config=naming,
+                fabric_name=self.fabric_name,
+                device_indexes=[dc["index"], self.data["index"]],
+                role="border-leaf",
+                quantity=max_border_leafs_per_fabric,
+            )
         )
+        if self.data["index"] == 1:
+            candidate_names.extend(
+                d["name"] for d in dc.get("devices", []) if d.get("role") == "border-leaf" and "-pod-" not in d["name"]
+            )
         # Bounded retry: border-leaf may be read before add_dc's write is visible; short because most pods host none.
         border_leafs: list[Any] = []
         for attempt in range(BORDER_LEAF_WAIT.attempts):
