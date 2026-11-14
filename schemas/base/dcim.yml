@@ -2,6 +2,32 @@
 version: "1.0"
 
 generics:
+  - name: Interconnection
+    namespace: Topology
+    description: "Unified umbrella for all physical, transport, and logical interconnections"
+    label: "Interconnection"
+    include_in_menu: false
+    attributes:
+      - name: interconnection_layer
+        kind: Dropdown
+        optional: true
+        order_weight: 150
+        choices:
+          - name: physical
+            label: Physical (Cable / Cross-Connect)
+          - name: transport
+            label: Transport (Carrier / Dark Fiber / DWDM)
+          - name: logical
+            label: Logical (Session / Tunnel / Cloud)
+      - name: bandwidth_mbps
+        kind: Number
+        optional: true
+        order_weight: 160
+      - name: mtu
+        kind: Number
+        optional: true
+        order_weight: 170
+
   # The slim device: a name and the interfaces it holds. It is all an interface needs of its device (the interface
   # `device` Parent, the HFID `[device name, name]`), so a holder of interfaces that is not a managed device (a cloud
   # transport: Direct Connect, VPN connection) inherits ONLY this. The unique name holds across every kind that
@@ -769,3 +795,83 @@ nodes:
         identifier: "lag__members"
         common_parent: device
         order_weight: 1700
+
+  # Cable
+  - name: Cable
+    namespace: Dcim
+    description: A cable connecting two endpoints.
+    label: Cable
+    icon: mdi:cable-data
+    include_in_menu: false
+    inherit_from:
+      - TopologyInterconnection
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - ["name__value"]
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        optional: false
+        order_weight: 1000
+      - name: type
+        kind: Dropdown
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: mmf
+            label: Multi-Mode Fibre
+          - name: smf
+            label: Single-Mode Fibre
+          - name: copper
+            label: Copper
+          - name: dac
+            label: Direct Attach Copper (DAC)
+      - name: cable_id
+        label: "Cable ID"
+        description: >-
+          Short label printed on the physical cable, derived from its endpoints; unset on hand-declared cables
+        kind: Text
+        optional: true
+        order_weight: 1050
+      - name: color
+        label: "Color"
+        description: "Jacket colour, derived from the cable type (TIA-598 convention); unset when unknown"
+        kind: Dropdown
+        optional: true
+        order_weight: 1150
+        choices:
+          - name: blue
+            label: Blue
+            color: "#3b82f6"
+          - name: yellow
+            label: Yellow
+            color: "#eab308"
+          - name: aqua
+            label: Aqua
+            color: "#06b6d4"
+          - name: black
+            label: Black
+            color: "#111827"
+      - name: length_cm
+        label: "Length (cm)"
+        description: "Centimetres, derived from the rack positions when both ends sit in racks of one suite; else unset"
+        kind: Number
+        optional: true
+        order_weight: 1200
+        parameters:
+          min_value: 0
+    relationships:
+      - name: endpoints
+        peer: DcimEndpoint
+        cardinality: many
+        optional: true
+        min_count: 2
+        max_count: 2
+        kind: Attribute
+        on_delete: no-action
+        order_weight: 1300
