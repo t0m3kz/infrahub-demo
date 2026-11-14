@@ -9,18 +9,17 @@ from generators.helpers.template_interfaces import template_interface_names_by_r
 from generators.mixins.common import CommonGenerator
 from generators.mixins.connections import CablingMixin
 from generators.mixins.devices import DeviceMixin
-from generators.mixins.pod_config import pod_deployment_type, pod_profile, spine_downlink_layout
+from generators.mixins.pod_config import pod_deployment_type, pod_profile
 from generators.mixins.pools import PoolMixin
 from generators.mixins.rack import (
-    MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
     POD_GENERATORS,
-    ROLES_BY_DEPLOYMENT_TYPE,
     ROW_DEPENDENT_RACK_TYPES,
     RackMixin,
     spine_bgp_readiness_role,
 )
 from generators.mixins.routing import RoutingMixin
 from generators.mixins.types import CablingOptions
+from generators.model import RackFabricModel
 
 
 class TopologyRackParentData(TypedDict, total=False):
@@ -134,23 +133,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         """Human-readable errors for fabric_templates roles this rack can't cable (ROLES_BY_DEPLOYMENT_TYPE,
         MUTUALLY_EXCLUSIVE_ROLE_GROUPS).
         """
-        present = self._present_roles()
-        errors: list[str] = []
-
-        allowed = ROLES_BY_DEPLOYMENT_TYPE.get(deployment_type, frozenset())
-        incompatible = sorted(present - allowed)
-        if incompatible:
-            errors.append(
-                f"role(s) {incompatible} are not valid for deployment_type={deployment_type!r} "
-                f"(allowed: {sorted(allowed)})"
-            )
-
-        for group in MUTUALLY_EXCLUSIVE_ROLE_GROUPS:
-            conflicting = sorted(present & group)
-            if len(conflicting) > 1:
-                errors.append(f"role(s) {conflicting} are mutually exclusive on the same rack")
-
-        return errors
+        return list(RackFabricModel.compile(self.data, self._present_roles()).role_errors)
 
     def calculate_cabling_offsets(
         self,
@@ -161,47 +144,16 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         """Cabling offset from the rack's row/index position and the count of racks in previous rows; never from a
         design cap.
         """
-        data = self.data
-        current_index = data["index"]
-        pod = data["deployment"]
-        deployment_type = pod_deployment_type(pod["design"])
-        effective_rack_index = max(0, current_index - 1)
-
-        # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
-        if deployment_type == "middle_rack" and device_type == "tor":
-            offset = 0
-            self.logger.info(
-                f"Calculated {device_type} offset={offset} for rack {data['name']} (mode=middle_rack) - intra-rack cabling"
-            )
-
-        # mixed/middle_rack leafs: offset by row position (middle-rack leafs serve all ToRs in their row).
-        elif deployment_type in ("mixed", "middle_rack") and device_type == "leaf":
-            offset = (data["row_index"] - 1) * device_count
-
-            self.logger.info(
-                f"Calculated {device_type} offset={offset} for rack {data['name']} "
-                f"(row_index={data['row_index']}, leafs_per_rack={device_count}, mode={deployment_type})"
-            )
-
-        # mixed/tor ToRs: cumulative offset on the spines (from port 0 in a tor pod, past leafs and border-leafs in
-        # mixed) plus previous rows' rack slots.
-        elif deployment_type in ("mixed", "tor") and device_type == "tor":
-            tor_block_start = spine_downlink_layout(pod["design"])["tor"]
-            tors_in_previous_rows = (racks_in_previous_rows or 0) * device_count
-            offset_in_current_row = device_count * effective_rack_index
-            offset = tor_block_start + tors_in_previous_rows + offset_in_current_row
-
-            self.logger.info(
-                f"Calculated {device_type} offset={offset} for rack {data['name']} "
-                f"(row={data['row_index']}, index={current_index}, tors_in_rack={device_count}, "
-                f"tor_block_start={tor_block_start}, tors_in_previous_rows={tors_in_previous_rows}, "
-                f"mode={deployment_type})"
-            )
-
-        else:
-            offset = 0
-            self.logger.info(f"No offset needed for {device_type} in rack {data['name']} (mode={deployment_type})")
-
+        model = RackFabricModel.compile(self.data, frozenset())
+        offset = model.cabling_offset(
+            self.data["deployment"]["design"],
+            device_count=device_count,
+            device_type=device_type,
+            racks_in_previous_rows=racks_in_previous_rows,
+        )
+        self.logger.info(
+            f"Calculated {device_type} offset={offset} for rack {model.rack_name} (mode={model.deployment_type})"
+        )
         return offset
 
     def _pod_profile(self) -> dict[str, Any]:

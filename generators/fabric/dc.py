@@ -6,24 +6,17 @@ from typing import Any, Literal, cast
 from typing_extensions import TypedDict
 
 from generators.fabric.fabric_shared import ServiceDevicesMixin
-from generators.helpers import name_to_asn_range
-from generators.helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
+from generators.helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length
 from generators.helpers.template_interfaces import template_interface_names_by_role
 from generators.mixins.common import CommonGenerator
 from generators.mixins.connections import CablingMixin
 from generators.mixins.devices import DeviceMixin
-from generators.mixins.fabric_sizing import (
-    dc_loopback_bits,
-    dc_management_bits,
-    dc_technical_bits,
-    fabric_loopback_bits,
-    host_bits_to_prefix_length,
-)
 from generators.mixins.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from generators.mixins.pod_config import templates_by_role
 from generators.mixins.pools import PoolMixin
 from generators.mixins.routing import RoutingMixin
 from generators.mixins.types import CablingOptions, DeviceOptions, RoutingOptions, naming_convention_of
+from generators.model import DcFabricModel
 from generators.protocols import TopologyDataCenter
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
@@ -83,68 +76,29 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
 
             self.data = cast(TopologyDcData, deployment_list[0])
             # No Pydantic validation: force-read every required field so a partial response raises KeyError.
-            dc_id = self.data["id"]
-            dc_name = self.data["name"]
-            dc_index = self.data["index"]
-            # The DC's fabric design: every DC pool is sized from its envelope.
-            dc_design = self.data["design"]
-            technical_bits = dc_technical_bits(dc_design)
-            loopback_bits = dc_loopback_bits(dc_design)
-            management_bits = dc_management_bits(dc_design)
-            tier_loopback_bits = fabric_loopback_bits(dc_design)
+            model = DcFabricModel.compile(self.data)
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
 
-        # Controllers are read by create_devices() (devices.py _resolve_role_controller).
-        self.set_controllers_from(self.data)
-
-        self.logger.info(f"Processing Data Center: {dc_name}")
-
-        # Pods come with the DC query and are read, never saved (DCPodCascadeGenerator fans out to them).
-        self._existing_pods = self.pods_of(self.data)
-
-        self.deployment_id = dc_id  # Store for cable linking
-        self.fabric_name = dc_name.lower()
-        self._validate_fabric_template_roles()
-        super_spine_entries = templates_by_role(self.data.get("fabric_templates", []), "super-spine")
-        amount_of_super_spines = sum(entry["quantity"] for entry in super_spine_entries)
-        self.logger.info(f"Generating topology for data center {self.fabric_name.upper()}")
-
-        if amount_of_super_spines > dc_design["max_super_spines_per_fabric"]:
-            raise RuntimeError(
-                f"DC {self.fabric_name.upper()} requests {amount_of_super_spines} super-spines but the assigned "
-                f"design allows at most {dc_design['max_super_spines_per_fabric']}"
-            )
-
-        underlay_protocol = self.data.get("underlay_protocol", "ipv6")
-
-        # Host bits become a prefix length in the family each pool is sliced from (underlay_pool_is_ipv6); management is
-        # always IPv4.
-        technical_prefix = host_bits_to_prefix_length(
-            technical_bits, ipv6=underlay_pool_is_ipv6(underlay_protocol, "technical")
-        )
-        loopback_prefix = host_bits_to_prefix_length(
-            loopback_bits, ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
-        )
-        management_prefix = host_bits_to_prefix_length(management_bits, ipv6=False)
-
-        # Always re-allocate every pool (idempotent): skipping one drops it from the run's group, which deletes it.
-        pools_to_allocate: dict[str, int] = {
-            "technical": technical_prefix,
-            "loopback": loopback_prefix,
-            "management": management_prefix,
-        }
-
-        # One DC-scoped loopback pool for super-spine and border-leaf, sized from the design's max caps.
-        design_mode = "back-to-back" if dc_design["max_super_spines_per_fabric"] == 0 else "super-spine"
+        dc_id = model.dc_id
+        dc_name = model.dc_name
+        dc_index = model.dc_index
+        dc_design = self.data["design"]
+        underlay_protocol = model.underlay_protocol
+        routing_strategy = model.routing_strategy
+        design_mode = model.design_mode
         max_hyper_spines_cap = dc_design["max_hyper_spines_per_fabric"]
-        # Needed whenever any DC-level tier draws from it, whatever the design mode.
-        if tier_loopback_bits is not None:
-            pools_to_allocate["dc-fabric-loopback"] = host_bits_to_prefix_length(
-                tier_loopback_bits, ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
-            )
+        pools_to_allocate = dict(model.pools_to_allocate)
 
+        self.set_controllers_from(self.data)
+        self.logger.info(f"Processing Data Center: {dc_name}")
+        self._existing_pods = self.pods_of(self.data)
+        super_spine_entries = templates_by_role(self.data.get("fabric_templates", []), "super-spine")
+
+        self.deployment_id = dc_id
+        self.fabric_name = model.fabric_name
+        self.logger.info(f"Generating topology for data center {self.fabric_name.upper()}")
         self.logger.info(f"Allocating DC pools: {list(pools_to_allocate.keys())}")
 
         dc_pools = await self.allocate_resource_pools(
@@ -154,19 +108,9 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             underlay_protocol=underlay_protocol,
         )
 
-        # Deterministic ASN range from the DC name; border-leaf devices draw from the same pool.
-        max_pods = dc_design["max_pods"]
-        max_border_leafs_per_fabric = dc_design["max_border_leafs_per_fabric"]
-        asn_start, asn_end = name_to_asn_range(
-            dc_name=dc_name,
-            max_pods=max_pods,
-            max_border_leafs_per_fabric=max_border_leafs_per_fabric,
-        )
-
-        # eBGP strategies only: one ASN pool per DC (ospf-ibgp needs no per-device pools).
-        routing_strategy = self.data.get("routing_strategy", "ebgp-ebgp")
+        asn_start, asn_end = model.asn_range
         fabric_asn_pool_id: str | None = None
-        if routing_strategy in (RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value):
+        if model.requires_asn_pool:
             asn_pool_obj = await self.upsert_asn_pool(
                 pool_name=f"{self.fabric_name}-asn-pool",
                 description=f"ASN pool for {self.fabric_name.upper()} fabric",
