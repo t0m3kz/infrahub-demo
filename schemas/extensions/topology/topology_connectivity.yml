@@ -384,9 +384,3 @@ nodes:
         identifier: "session_circuit__link_prefix"
         order_weight: 1450
         description: "The link range the provider handed this session (vpn, or a provider-assigned handoff)"
-
-extensions:
-  nodes:
-    - kind: DcimCable
-      inherit_from:
-        - TopologyInterconnection
