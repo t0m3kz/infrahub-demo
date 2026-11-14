@@ -258,6 +258,14 @@ query RackGenerator($id: ID!) {
               id
               name { value }
               role { value }
+              interfaces {
+                edges {
+                  node {
+                    name { value }
+                    role { value }
+                  }
+                }
+              }
             }
           }
         }

@@ -39,7 +39,12 @@ def normalize_pod_templates(pod: dict[str, Any]) -> dict[str, Any]:
         if direct_spines:
             role = str(direct_spines[0]["role"])
             existing.append(
-                {"role": role, "quantity": len(direct_spines), "template": {"interfaces": []}, "devices": direct_spines}
+                {
+                    "role": role,
+                    "quantity": len(direct_spines),
+                    "template": {"interfaces": list(direct_spines[0].get("interfaces") or [])},
+                    "devices": direct_spines,
+                }
             )
     if existing:
         pod["fabric_templates"] = existing
@@ -95,7 +100,14 @@ def normalize_rack_templates(rack: dict[str, Any]) -> dict[str, Any]:
         for role, devs in direct_by_role.items():
             bucket = _RACK_ROLE_TO_BUCKET[role]
             if not rack.get(bucket):
-                rack[bucket] = [{"role": role, "quantity": len(devs), "template": {"interfaces": []}, "devices": devs}]
+                rack[bucket] = [
+                    {
+                        "role": role,
+                        "quantity": len(devs),
+                        "template": {"interfaces": list(devs[0].get("interfaces") or [])},
+                        "devices": devs,
+                    }
+                ]
     if isinstance(rack.get("deployment"), dict):
         normalize_pod_templates(rack["deployment"])
     return rack

@@ -178,6 +178,14 @@ query topology_pod($name: String!) {
               id
               name { value }
               role { value }
+              interfaces {
+                edges {
+                  node {
+                    name { value }
+                    role { value }
+                  }
+                }
+              }
             }
           }
         }

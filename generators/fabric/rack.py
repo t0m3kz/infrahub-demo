@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
@@ -340,9 +341,11 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         created_leaf_devices: list[str] = []
 
         await self._generate_leafs(created_leaf_devices)
-        await self._generate_tors()
-        await self._generate_l2_leafs(created_leaf_devices)
-        await self._generate_access_leafs(created_leaf_devices)
+        await asyncio.gather(
+            self._generate_tors(),
+            self._generate_l2_leafs(created_leaf_devices),
+            self._generate_access_leafs(created_leaf_devices),
+        )
 
         total_devices = len(created_leaf_devices) + sum(tor_role["quantity"] for tor_role in self.data.get("tors", []))
         self.logger.info(
