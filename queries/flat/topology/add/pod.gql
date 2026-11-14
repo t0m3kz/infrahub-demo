@@ -169,6 +169,134 @@ query topology_pod($name: String!) {
             }
           }
         }
+        racks {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              index {
+                value
+              }
+              row_index {
+                value
+              }
+              rack_type {
+                value
+              }
+              switch_role {
+                value
+              }
+              switch_quantity {
+                value
+              }
+              switch_template {
+                node {
+                  ... on TemplateDcimPhysicalDevice {
+                    id
+                    platform {
+                      node {
+                        id
+                        name {
+                          value
+                        }
+                      }
+                    }
+                    device_type {
+                      node {
+                        id
+                      }
+                    }
+                    interfaces(role__values: ["uplink", "downlink", "firewall", "load-balancer"]) {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              fabric_templates {
+                edges {
+                  node {
+                    role {
+                      value
+                    }
+                    quantity {
+                      value
+                    }
+                    template {
+                      node {
+                        ... on TemplateDcimPhysicalDevice {
+                          id
+                          platform {
+                            node {
+                              id
+                              name {
+                                value
+                              }
+                            }
+                          }
+                          device_type {
+                            node {
+                              id
+                            }
+                          }
+                          interfaces(role__values: ["uplink", "downlink", "firewall", "load-balancer"]) {
+                            edges {
+                              node {
+                                name {
+                                  value
+                                }
+                                role {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              devices {
+                edges {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                    role {
+                      value
+                    }
+                    ... on DcimDevice {
+                      interfaces {
+                        edges {
+                          node {
+                            name {
+                              value
+                            }
+                            role {
+                              value
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         spine_count: devices(role__value: "spine") {
           count
         }

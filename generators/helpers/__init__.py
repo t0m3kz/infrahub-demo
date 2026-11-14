@@ -17,6 +17,7 @@ from .pools import name_to_asn_range
 from .routing import PendingASRef, RoutingPlanInput, RoutingPlanner, RoutingStrategy
 
 __all__ = [
+    "normalize_dc_templates",
     "CableTypeDetector",
     "CablingPlanError",
     "CablingPlanner",

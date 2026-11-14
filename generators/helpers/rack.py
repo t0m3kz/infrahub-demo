@@ -17,6 +17,122 @@ _RACK_ROLE_TO_BUCKET: dict[str, str] = {
 
 _POD_SPINE_ROLES: frozenset[str] = frozenset({"spine", "border-spine"})
 
+ALLOWED_ROLES_BY_RACK_TYPE: dict[str, frozenset[str]] = {
+    "network": frozenset(
+        {
+            "super-spine",
+            "hyper-spine",
+            "border-spine",
+            "spine",
+            "border-leaf",
+            "leaf",
+            "l2-leaf",
+            "access-leaf",
+            "internal-firewall",
+            "load-balancer",
+        }
+    ),
+    "tor": frozenset({"tor", "l2-leaf", "access-leaf"}),
+    "compute": frozenset({"tor", "l2-leaf", "access-leaf"}),
+    "storage": frozenset({"tor", "l2-leaf", "access-leaf"}),
+}
+
+_DC_TIER_ROLES: frozenset[str] = frozenset(
+    {"super-spine", "hyper-spine", "border-leaf", "internal-firewall", "load-balancer"}
+)
+
+
+def rack_type_role_errors(rack: Mapping[str, Any], roles: Collection[str]) -> list[str]:
+    """Return error messages for roles forbidden on ``rack['rack_type']`` (e.g. super-spine/spine/leaf on compute)."""
+    raw_type = rack.get("rack_type")
+    if not raw_type:
+        return []
+    rack_type = str(raw_type)
+    allowed = ALLOWED_ROLES_BY_RACK_TYPE.get(rack_type)
+    if allowed is None:
+        return []
+    normalized = {str(r).replace("_", "-") for r in roles}
+    forbidden = sorted(r for r in normalized if r not in allowed)
+    if not forbidden:
+        return []
+    rack_name = rack.get("name") or rack.get("id") or "<unknown>"
+    return [
+        f"Rack {rack_name} has rack_type={rack_type!r} which cannot host role(s) {forbidden} "
+        f"(allowed: {sorted(allowed)})"
+    ]
+
+
+def validate_rack_device_roles(rack: Mapping[str, Any], roles: Collection[str]) -> None:
+    """Raise ValueError when any role in ``roles`` is forbidden on ``rack['rack_type']``."""
+    errors = rack_type_role_errors(rack, roles)
+    if errors:
+        raise ValueError(errors)
+
+
+def _extract_rack_entries_for_roles(
+    racks: list[dict[str, Any]],
+    target_roles: frozenset[str],
+) -> list[dict[str, Any]]:
+    """Collect template or pre-created device entries for ``target_roles`` from physical racks, preserving ``rack_id``."""
+    extracted: list[dict[str, Any]] = []
+    for rack in sorted(racks, key=lambda r: (r.get("row_index") or 0, r.get("index") or 0, str(r.get("name") or ""))):
+        if not isinstance(rack, dict):
+            continue
+        rack_id = rack.get("id")
+        rack_roles: list[str] = []
+
+        # 1. Explicit fabric_templates entries on the rack
+        for ft in rack.get("fabric_templates") or []:
+            role = ft.get("role")
+            if role:
+                rack_roles.append(str(role))
+                if role in target_roles:
+                    extracted.append({**ft, "rack_id": rack_id})
+
+        # 2. Primary switch_template + switch_quantity on the rack
+        sw_tpl = rack.get("switch_template")
+        sw_qty = rack.get("switch_quantity")
+        sw_role = rack.get("switch_role")
+        if sw_tpl and sw_qty is not None and int(sw_qty) > 0 and sw_role:
+            rack_roles.append(str(sw_role))
+            if sw_role in target_roles:
+                extracted.append({"role": sw_role, "quantity": int(sw_qty), "template": sw_tpl, "rack_id": rack_id})
+
+        # 3. Direct individual DcimPhysicalDevice nodes placed in the rack
+        direct_by_role: dict[str, list[dict[str, Any]]] = {}
+        for dev in rack.get("devices") or []:
+            if isinstance(dev, dict) and dev.get("role"):
+                d_role = str(dev["role"])
+                rack_roles.append(d_role)
+                if d_role in target_roles:
+                    direct_by_role.setdefault(d_role, []).append(dev)
+        for role, devs in direct_by_role.items():
+            first_ifaces = list(devs[0].get("interfaces") or [])
+            extracted.append(
+                {
+                    "role": role,
+                    "quantity": len(devs),
+                    "template": {"interfaces": first_ifaces},
+                    "devices": devs,
+                    "rack_id": rack_id,
+                }
+            )
+
+        validate_rack_device_roles(rack, rack_roles)
+    return extracted
+
+
+def normalize_dc_templates(dc: dict[str, Any]) -> dict[str, Any]:
+    """Synthesize DC fabric_templates from DC-attached core racks when present, validating rack_type compatibility."""
+    existing = list(dc.get("fabric_templates") or [])
+    rack_entries = _extract_rack_entries_for_roles(list(dc.get("racks") or []), _DC_TIER_ROLES)
+    if rack_entries:
+        rack_roles = {e["role"] for e in rack_entries}
+        existing = [*rack_entries, *[e for e in existing if e.get("role") not in rack_roles]]
+    if existing:
+        dc["fabric_templates"] = existing
+    return dc
+
 
 def normalize_pod_templates(pod: dict[str, Any]) -> dict[str, Any]:
     """Ensure pod['fabric_templates'] reflects typed spine_role/spine_quantity/spine_template or direct spine devices."""
@@ -46,6 +162,9 @@ def normalize_pod_templates(pod: dict[str, Any]) -> dict[str, Any]:
                     "devices": direct_spines,
                 }
             )
+    rack_spines = _extract_rack_entries_for_roles(list(pod.get("racks") or []), _POD_SPINE_ROLES)
+    if rack_spines:
+        existing = [*rack_spines, *[e for e in existing if e.get("role") not in _POD_SPINE_ROLES]]
     if existing:
         pod["fabric_templates"] = existing
     return pod
@@ -85,6 +204,13 @@ def _default_switch_quantity_for_rack(rack: Mapping[str, Any], switch_role: str)
 def normalize_rack_templates(rack: dict[str, Any]) -> dict[str, Any]:
     """Ensure rack role buckets reflect typed switch_template (role & quantity inferred from rack_type/design) or direct rack devices."""
     switch_role = rack.get("switch_role") or _default_switch_role_for_rack(rack)
+    rack_roles_present: list[str] = [
+        *(str(ft["role"]) for ft in (rack.get("fabric_templates") or []) if ft.get("role")),
+        *(str(d["role"]) for d in (rack.get("devices") or []) if isinstance(d, dict) and d.get("role")),
+    ]
+    if rack.get("switch_template"):
+        rack_roles_present.append(switch_role)
+    validate_rack_device_roles(rack, rack_roles_present)
     switch_tpl = rack.get("switch_template")
     switch_qty = rack.get("switch_quantity")
     if switch_tpl and switch_qty is None:

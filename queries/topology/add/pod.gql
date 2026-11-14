@@ -202,6 +202,48 @@ query topology_pod($name: String!) {
         }
         loopback_pool { node { id name { value } } }
         prefix_pool { node { id name { value } } }
+        racks {
+          edges {
+            node {
+              id
+              name { value }
+              index { value }
+              row_index { value }
+              rack_type { value }
+              switch_role { value }
+              switch_quantity { value }
+              switch_template { node { ...DeviceTemplateFields } }
+              fabric_templates {
+                edges {
+                  node {
+                    role { value }
+                    quantity { value }
+                    template { node { ...DeviceTemplateFields } }
+                  }
+                }
+              }
+              devices {
+                edges {
+                  node {
+                    id
+                    name { value }
+                    role { value }
+                    ... on DcimDevice {
+                      interfaces {
+                        edges {
+                          node {
+                            name { value }
+                            role { value }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         spine_count: devices(role__value: "spine") {
           count
         }

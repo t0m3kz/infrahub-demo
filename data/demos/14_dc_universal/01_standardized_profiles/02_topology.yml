@@ -6,29 +6,47 @@ spec:
   data:
     - name: DC14
       index: 14
-      design: M
+      design: L
       parent: "Data Center"
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: standard
-      fabric_templates:
-        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
-        - ["2", "border-leaf", "N9K-C9364C-GX_BORDER_LEAF"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
+      racks:
+        kind: LocationRack
+        data:
+          # Multi-role DC core rack hosting both super-spines and border-leafs in physical rack R1-1
+          - name: MUC-U1-SUITE-1-R1-1
+            index: 1
+            row_index: 1
+            shortname: muc-u1-s-1-r-1-1
+            rack_type: network
+            parent: muc-u1-s-1
+            fabric_templates:
+              - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+              - ["2", "border-leaf", "N9K-C9364C-GX_BORDER_LEAF"]
       children:
         kind: TopologyPod
         data:
           - index: 1
             design: M_MIDDLE
-            object_template: STD-POD-SPINE-FX2
             mlag_create: virtual
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
+                # Pod spine rack: spines sit in physical rack R1-2 and are assigned to DC14-14-POD-1
+                - name: MUC-U1-SUITE-1-R1-2
+                  index: 2
+                  row_index: 1
+                  shortname: muc-u1-s-1-r-1-2
+                  rack_type: network
+                  parent: muc-u1-s-1
+                  fabric_templates:
+                    - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
                 - name: MUC-U1-SUITE-1-R1-5
                   index: 5
                   row_index: 1

@@ -190,7 +190,6 @@ kicks:
     stages:
       - name: dc14
         load:
-          - 14_dc_universal/01_standardized_profiles/00_pod_template.yml
           - 14_dc_universal/01_standardized_profiles/00_rack_template.yml
           - 14_dc_universal/01_standardized_profiles/01_location.yml
           - 14_dc_universal/01_standardized_profiles/02_topology.yml

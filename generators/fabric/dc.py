@@ -6,6 +6,7 @@ from typing import Any, Literal, cast
 from typing_extensions import TypedDict
 
 from generators.fabric.fabric_shared import ServiceDevicesMixin
+from generators.helpers.rack import normalize_dc_templates
 from generators.helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length
 from generators.helpers.template_interfaces import template_interface_names_by_role
 from generators.mixins.common import CommonGenerator
@@ -74,7 +75,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                 self.logger.error("No TopologyDeployment data found in GraphQL response")
                 return
 
-            self.data = cast(TopologyDcData, deployment_list[0])
+            self.data = cast(TopologyDcData, normalize_dc_templates(deployment_list[0]))
             # No Pydantic validation: force-read every required field so a partial response raises KeyError.
             model = DcFabricModel.compile(self.data)
         except (ValueError, KeyError, IndexError) as exc:
@@ -271,6 +272,15 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         """Create one DC-scoped fabric tier (super-spine/hyper-spine) from the DC-fabric loopback pool."""
         names: list[str] = []
         for entry in entries:
+            tier_opts = DeviceOptions(
+                indexes=indexes,
+                allocate_loopback=True,
+                loopback_pool=dc_pools.get("dc-fabric-loopback"),
+                loopback_prefix_length=loopback_prefix_length(underlay_protocol),
+                management_pool=dc_pools.get("management"),
+            )
+            if entry.get("rack_id"):
+                tier_opts["rack"] = entry["rack_id"]
             names.extend(
                 await self.create_devices(
                     deployment_id=self.data["id"],
@@ -278,13 +288,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                     quantity=entry["quantity"],
                     template=entry["template"],
                     naming_convention=naming_convention_of(self.data),
-                    options=DeviceOptions(
-                        indexes=indexes,
-                        allocate_loopback=True,
-                        loopback_pool=dc_pools.get("dc-fabric-loopback"),
-                        loopback_prefix_length=loopback_prefix_length(underlay_protocol),
-                        management_pool=dc_pools.get("management"),
-                    ),
+                    options=tier_opts,
                 )
             )
         return names
@@ -372,6 +376,8 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                     loopback_pool=self._dc_fabric_loopback_pool_id,
                     loopback_prefix_length=loopback_prefix_length(self._underlay_protocol),
                 )
+                if entry.get("rack_id"):
+                    device_options["rack"] = entry["rack_id"]
                 names = await self.create_devices(
                     deployment_id=self.data["id"],
                     device_role="border-leaf",
