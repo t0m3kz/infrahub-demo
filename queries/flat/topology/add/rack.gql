@@ -496,6 +496,33 @@ query RackGenerator($id: ID!) {
                     rack_type {
                       value
                     }
+                    devices(role__values: ["spine", "border-spine"]) {
+                      edges {
+                        node {
+                          id
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                          ... on DcimDevice {
+                            interfaces(role__value: "downlink") {
+                              edges {
+                                node {
+                                  name {
+                                    value
+                                  }
+                                  role {
+                                    value
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                     switch_role {
                       value
                     }
@@ -600,22 +627,6 @@ query RackGenerator($id: ID!) {
               prefix_pool {
                 node {
                   id
-                }
-              }
-              racks {
-                edges {
-                  node {
-                    id
-                    name {
-                      value
-                    }
-                    index {
-                      value
-                    }
-                    rack_type {
-                      value
-                    }
-                  }
                 }
               }
             }

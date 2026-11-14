@@ -182,6 +182,25 @@ fragment RackPodFields on TopologyPod {
         name { value }
         index { value }
         rack_type { value }
+        devices(role__values: ["spine", "border-spine"]) {
+          edges {
+            node {
+              id
+              name { value }
+              role { value }
+              ... on DcimDevice {
+                interfaces(role__value: "downlink") {
+                  edges {
+                    node {
+                      name { value }
+                      role { value }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         switch_role { value }
         switch_quantity { value }
         switch_template {
@@ -266,18 +285,6 @@ fragment RackPodFields on TopologyPod {
   prefix_pool {
     node {
       id
-    }
-  }
-  # Every rack of the pod: the generator filters its row in Python instead of reading it
-  # (racks are data, never saved by this generator).
-  racks {
-    edges {
-      node {
-        id
-        name { value }
-        index { value }
-        rack_type { value }
-      }
     }
   }
 }

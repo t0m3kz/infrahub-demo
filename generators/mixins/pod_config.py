@@ -47,7 +47,11 @@ def pod_spine_slot_device_names(pod: Mapping[str, Any]) -> list[str]:
     """Every spine-slot device name a pod's fabric_templates declare, [] for none.
     role_index runs 1..N across all spine-slot entries, as add_pod numbers them."""
     templates = pod.get("fabric_templates") or []
-    quantity = sum(entry["quantity"] for entry in spine_slot_templates(templates))
+    slot_entries = spine_slot_templates(templates)
+    precreated = sorted(str(d["name"]) for entry in slot_entries for d in (entry.get("devices") or []) if d.get("name"))
+    if precreated:
+        return precreated
+    quantity = sum(entry["quantity"] for entry in slot_entries)
     if not quantity:
         return []
     dc = pod["parent"]
