@@ -14,6 +14,20 @@ from utils.routing_domain import RoutingDomainError
 from utils.segment_addressing import segment_namespace
 
 LISP_PLATFORM = "cisco_xe"
+
+
+def platform_supports_lisp(platform: dict[str, Any] | str | None) -> bool:
+    """Honor DcimPlatformCapabilityProfile.supports_lisp when present; fall back to LISP_PLATFORM."""
+    if isinstance(platform, dict):
+        os_caps = platform.get("os_capabilities")
+        if isinstance(os_caps, dict) and "supports_lisp" in os_caps:
+            return bool(os_caps["supports_lisp"])
+        return platform.get("name") == LISP_PLATFORM
+    if isinstance(platform, str):
+        return platform == LISP_PLATFORM
+    return False
+
+
 OFFICE_FABRIC_ROLES = CAMPUS_FABRIC_ROLES | LISP_BORDER_ROLES
 """The roles of an office LISP site; any other device of the office (its SD-WAN edge) is not part of it."""
 MIN_DISTRIBUTION_SWITCHES = 1

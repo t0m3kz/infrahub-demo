@@ -23,6 +23,7 @@ from generators.mixins.devices import DeviceMixin
 from generators.mixins.pools import PoolMixin
 from generators.mixins.routing import IPV4_UNICAST_AF, RoutingMixin
 from generators.mixins.types import CablingOptions, DeviceOptions, RoutingOptions, naming_convention_of
+from generators.model import OfficeFabricModel
 from generators.protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -165,46 +166,11 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
             await self._ensure_wan_exit(distribution_names=distribution_names, distribution_template=template)
 
     def _valid_fabric_templates(self) -> list[dict[str, Any]]:
-        """Drop entries this generator cannot act on, warning per entry (one entry per role; names derive from it)."""
-        usable: list[dict[str, Any]] = []
-        seen_roles: set[str] = set()
-        for entry in self.data.get("fabric_templates") or []:
-            role = entry.get("role")
-            if role not in _OFFICE_VALID_FABRIC_ROLES:
-                self.logger.warning(
-                    f"Office {self.fabric_name}: fabric_templates entry with role={role!r} is not valid in an "
-                    f"office fabric (expected one of {sorted(_OFFICE_VALID_FABRIC_ROLES)}) — skipping this entry."
-                )
-                continue
-            if not entry.get("quantity", 0) > 0:
-                self.logger.warning(
-                    f"Office {self.fabric_name}: fabric_templates entry for role={role!r} has quantity "
-                    f"{entry.get('quantity')!r} — skipping this entry."
-                )
-                continue
-            template = entry.get("template")
-            if not template:
-                self.logger.warning(
-                    f"Office {self.fabric_name}: fabric_templates entry for role={role!r} has no template — "
-                    "skipping this entry."
-                )
-                continue
-            if template.get("template_kind") != _PHYSICAL_TEMPLATE_KIND:
-                self.logger.warning(
-                    f"Office {self.fabric_name}: fabric_templates entry for role={role!r} uses a "
-                    f"{template.get('template_kind') or 'unknown'} template — an office fabric is physical "
-                    "switches only, skipping this entry."
-                )
-                continue
-            if role in seen_roles:
-                self.logger.warning(
-                    f"Office {self.fabric_name}: a second fabric_templates entry for role={role!r} — only one "
-                    "entry per role is supported (device names derive from the role), skipping it."
-                )
-                continue
-            seen_roles.add(role)
-            usable.append(entry)
-        return usable
+        """Validate office fabric_templates via OfficeFabricModel and emit any warnings."""
+        model = OfficeFabricModel.compile(self.data)
+        for warning in model.warnings:
+            self.logger.warning(warning)
+        return list(model.usable_templates)
 
     async def _ensure_office_pools(self, *, office_id: str) -> dict[str, Any]:
         """Create this office's loopback/management/technical/VNI pools (the caller attaches the VNI pool), under a

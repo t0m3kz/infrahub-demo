@@ -4,88 +4,96 @@ kind: Object
 spec:
   kind: DcimDeviceType
   data:
-    # Arista
     - name: DCS-7050CX3-32C-R
       height: 1
       full_depth: false
       manufacturer: Arista
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: DCS-7050PX4-32S-R
       height: 1
       full_depth: false
       manufacturer: Arista
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: DCS-7050CX4M-48D8-F
       height: 1
       full_depth: false
       manufacturer: Arista
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: DCS-7050SX3-24YC4C-S-R
       height: 1
       full_depth: false
       manufacturer: Arista
       cpu_count: 1
       memory_gb: 16
-    # 7280R3 (Jericho2): the arista_eos reference fabric types
-    # (19b_group_policy_profile.yml). Depth, memory, routes and price are
-    # not recorded: no source for them was read.
+      hardware_capabilities: evpn-vtep-switch
     - name: DCS-7280CR3-32P4
       height: 1
       manufacturer: Arista
+      hardware_capabilities: evpn-vtep-switch
     - name: DCS-7280SR3-48YC8
       height: 1
       manufacturer: Arista
-    # CheckPoint
+      hardware_capabilities: evpn-vtep-switch
     - name: CloudGuard
       height: 0
       full_depth: false
       manufacturer: Check Point
       cpu_count: 4
       memory_gb: 8
+      hardware_capabilities: stateful-firewall
     - name: ASR1002-HX
       height: 2
       full_depth: true
       manufacturer: Cisco
       cpu_count: 2
       memory_gb: 16
+      hardware_capabilities: core-router
     - name: C8000V
       height: 0
       full_depth: false
       manufacturer: Cisco
       cpu_count: 4
       memory_gb: 8
+      hardware_capabilities: core-router
     - name: C9200L-24P-4G
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 4
+      hardware_capabilities: l2-access-switch
     - name: C9200L-48P-4G
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 4
-    # Catalyst 9000 EVPN-VXLAN (cisco_xe); sizing values are approximate datasheet figures
+      hardware_capabilities: l2-access-switch
     - name: C9300-48UXM
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 8
+      hardware_capabilities: evpn-vtep-switch
     - name: C9500-32C
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: C9130AXI-B
       height: 0
       full_depth: false
       manufacturer: Cisco
+      hardware_capabilities: compute-or-passive
     - name: ISR4451-X
       height: 2
       full_depth: true
@@ -93,6 +101,7 @@ spec:
       cpu_count: 1
       core_count: 4
       memory_gb: 4
+      hardware_capabilities: core-router
     - name: DL360-Gen11
       manufacturer: Dell
       height: 1
@@ -100,6 +109,7 @@ spec:
       cpu_count: 2
       core_count: 60
       memory_gb: 512
+      hardware_capabilities: compute-or-passive
     - name: DL380-Gen11
       manufacturer: Dell
       height: 2
@@ -107,32 +117,38 @@ spec:
       cpu_count: 2
       core_count: 60
       memory_gb: 512
+      hardware_capabilities: compute-or-passive
     - name: N77-C7710
       height: 24
       full_depth: false
       manufacturer: Cisco
       cpu_count: 2
       memory_gb: 64
+      hardware_capabilities: evpn-vtep-switch
     - name: N77-F324FQ-25
       height: 0
       full_depth: false
       manufacturer: Cisco
+      hardware_capabilities: evpn-vtep-switch
     - name: N77-M312CQ-26L
       height: 0
       full_depth: false
       manufacturer: Cisco
+      hardware_capabilities: evpn-vtep-switch
     - name: N77-SUP2E
       height: 0
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9000V
       height: 0
       full_depth: false
       manufacturer: Cisco
       cpu_count: 2
       memory_gb: 8
+      hardware_capabilities: evpn-vtep-switch
     - name: APIC-L3
       height: 1
       full_depth: true
@@ -140,12 +156,14 @@ spec:
       cpu_count: 2
       core_count: 20
       memory_gb: 128
+      hardware_capabilities: compute-or-passive
     - name: C9800-40
       height: 1
       full_depth: true
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: compute-or-passive
     - name: MDS-NDFC
       height: 2
       full_depth: true
@@ -153,6 +171,7 @@ spec:
       cpu_count: 2
       core_count: 16
       memory_gb: 128
+      hardware_capabilities: compute-or-passive
     - name: DN2-HW
       height: 2
       full_depth: true
@@ -160,214 +179,250 @@ spec:
       cpu_count: 2
       core_count: 16
       memory_gb: 256
+      hardware_capabilities: compute-or-passive
     - name: N9K-C93108TC-FX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 24
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93108TC-FX3
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93108TC-FX3P
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93120TX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 24
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93128TX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 24
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9316D-GX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93180YC-EX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 24
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93180YC-FX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 24
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93180YC-FX3
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93180YC-FX3S
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93216TC-FX2
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 24
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93240YC-FX2
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 24
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9332C
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9332D-GX2B
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9332PQ
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9336C-FX2
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9336PQ
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9348D-GX2A
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9348GC-FX3
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9348GC-FX3PH
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9348GC-FXP
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 24
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C93600CD-GX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9364C
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9364C-GX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9364D-GX2A
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9372PX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9372PX-E
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9372TX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9372TX-E
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: N9K-C9396PX
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: evpn-vtep-switch
     - name: NCS-5501-SE
       height: 1
       full_depth: false
       manufacturer: Cisco
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: core-router
     - name: PowerSwitch S5224F-ON
       height: 1
       full_depth: true
       manufacturer: Dell
       cpu_count: 1
       memory_gb: 8
+      hardware_capabilities: evpn-vtep-switch
     - name: PowerSwitch S5232F-ON
       height: 1
       full_depth: true
       manufacturer: Dell
       cpu_count: 1
       memory_gb: 8
+      hardware_capabilities: evpn-vtep-switch
     - name: PowerSwitch S5248F-ON
       height: 1
       full_depth: true
       manufacturer: Dell
       cpu_count: 1
       memory_gb: 8
+      hardware_capabilities: evpn-vtep-switch
     - name: Dell-H625cdw-MFP
       height: 0
       full_depth: false
       manufacturer: Dell
+      hardware_capabilities: compute-or-passive
     - name: PowerEdge-R640
       height: 1
       full_depth: true
@@ -375,19 +430,21 @@ spec:
       cpu_count: 2
       core_count: 40
       memory_gb: 384
+      hardware_capabilities: compute-or-passive
     - name: 7726-32X-O
       height: 1
       full_depth: false
       manufacturer: Edgecore
       cpu_count: 1
       memory_gb: 8
+      hardware_capabilities: evpn-vtep-switch
     - name: 7AS7326-56X-O-48V-F
       height: 1
       full_depth: true
       manufacturer: Edgecore
       cpu_count: 1
       memory_gb: 8
-    # LBs
+      hardware_capabilities: evpn-vtep-switch
     - name: BIG-IP-i5800
       height: 2
       full_depth: true
@@ -395,36 +452,42 @@ spec:
       cpu_count: 2
       core_count: 18
       memory_gb: 64
+      hardware_capabilities: load-balancer-adc
     - name: BIG-IP-VE
       height: 0
       full_depth: false
       manufacturer: F5 Networks
       cpu_count: 2
       memory_gb: 8
+      hardware_capabilities: load-balancer-adc
     - name: NGINX
       height: 1
       full_depth: false
       manufacturer: F5 Networks
       cpu_count: 2
       memory_gb: 4
+      hardware_capabilities: load-balancer-adc
     - name: HA-PROXY
       height: 1
       full_depth: false
       manufacturer: HAProxy Technologies
       cpu_count: 2
       memory_gb: 2
+      hardware_capabilities: load-balancer-adc
     - name: LINUX-SVC
       height: 1
       full_depth: false
       manufacturer: Generic
       cpu_count: 2
       memory_gb: 4
+      hardware_capabilities: compute-or-passive
     - name: NSX-EDGE-LARGE
       height: 0
       full_depth: false
       manufacturer: VMware
       cpu_count: 8
       memory_gb: 32
+      hardware_capabilities: stateful-firewall
     - name: NetScaler-MPX-26000-100G
       height: 2
       full_depth: true
@@ -432,6 +495,7 @@ spec:
       cpu_count: 2
       core_count: 28
       memory_gb: 128
+      hardware_capabilities: load-balancer-adc
     - name: NetScaler-MPX-26100-100G
       height: 2
       full_depth: true
@@ -439,6 +503,7 @@ spec:
       cpu_count: 2
       core_count: 32
       memory_gb: 256
+      hardware_capabilities: load-balancer-adc
     - name: NetScaler-MPX-26160-100G
       height: 2
       full_depth: true
@@ -446,6 +511,7 @@ spec:
       cpu_count: 2
       core_count: 32
       memory_gb: 256
+      hardware_capabilities: load-balancer-adc
     - name: NetScaler-MPX-26200-100G
       height: 2
       full_depth: true
@@ -453,52 +519,61 @@ spec:
       cpu_count: 2
       core_count: 40
       memory_gb: 512
+      hardware_capabilities: load-balancer-adc
     - name: NetScaler-ADC-VPX
       height: 0
       full_depth: false
       manufacturer: Citrix
       cpu_count: 2
       memory_gb: 4
+      hardware_capabilities: load-balancer-adc
     - name: SRX-1500
       height: 1
       full_depth: false
       manufacturer: Juniper
       cpu_count: 1
       memory_gb: 16
+      hardware_capabilities: stateful-firewall
     - name: vSRX
       height: 0
       full_depth: false
       manufacturer: Juniper
       cpu_count: 2
       memory_gb: 8
+      hardware_capabilities: stateful-firewall
     - name: MX204
       height: 1
       full_depth: false
       manufacturer: Juniper
       cpu_count: 1
       memory_gb: 32
+      hardware_capabilities: core-router
     - name: SCG50R
       height: 1
       full_depth: false
       manufacturer: Perle
+      hardware_capabilities: compute-or-passive
     - name: VCE-610
       height: 1
       full_depth: false
       manufacturer: Arista
       cpu_count: 1
       memory_gb: 4
+      hardware_capabilities: sdwan-edge
     - name: VCG-VA
       height: 0
       full_depth: false
       manufacturer: Arista
       cpu_count: 4
       memory_gb: 8
+      hardware_capabilities: sdwan-edge
     - name: VCO-VA
       height: 0
       full_depth: false
       manufacturer: Arista
       cpu_count: 4
       memory_gb: 16
+      hardware_capabilities: compute-or-passive
     - name: CP-26000
       height: 2
       full_depth: true
@@ -506,36 +581,42 @@ spec:
       cpu_count: 2
       core_count: 24
       memory_gb: 256
+      hardware_capabilities: stateful-firewall
     - name: CP-SMS
       height: 0
       full_depth: false
       manufacturer: Check Point
       cpu_count: 4
       memory_gb: 16
+      hardware_capabilities: compute-or-passive
     - name: Panorama
       height: 0
       full_depth: false
       manufacturer: Palo Alto Networks
       cpu_count: 4
       memory_gb: 16
+      hardware_capabilities: compute-or-passive
     - name: Security-Director
       height: 0
       full_depth: false
       manufacturer: Juniper
       cpu_count: 4
       memory_gb: 16
+      hardware_capabilities: compute-or-passive
     - name: BIG-IQ
       height: 0
       full_depth: false
       manufacturer: F5 Networks
       cpu_count: 4
       memory_gb: 16
+      hardware_capabilities: compute-or-passive
     - name: NetScaler-ADM
       height: 0
       full_depth: false
       manufacturer: Citrix
       cpu_count: 4
       memory_gb: 16
+      hardware_capabilities: compute-or-passive
     - name: PA-5260
       height: 2
       full_depth: true
@@ -543,26 +624,28 @@ spec:
       cpu_count: 2
       core_count: 32
       memory_gb: 512
+      hardware_capabilities: stateful-firewall
     - name: PA-VM
       height: 0
       full_depth: false
       manufacturer: Palo Alto Networks
       cpu_count: 2
       memory_gb: 8
+      hardware_capabilities: stateful-firewall
     - name: linux-vm
       height: 0
       full_depth: false
       manufacturer: Generic
       cpu_count: 2
       memory_gb: 8
-    # Passive patch panel — used for provider cross-connect handoffs
+      hardware_capabilities: compute-or-passive
     - name: PATCH-PANEL-24
       height: 1
       full_depth: false
       manufacturer: Generic
-    # Zscaler Enforcement Node (ZEN): the SaaS-hosted function a tunnel lands on
-    # (09_network_appliance_templates_zscaler)
+      hardware_capabilities: compute-or-passive
     - name: ZEN
       height: 0
       full_depth: false
       manufacturer: Zscaler
+      hardware_capabilities: compute-or-passive

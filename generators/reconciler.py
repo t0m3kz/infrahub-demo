@@ -231,7 +231,10 @@ class PlanReconciler:
                     self.generator.fail(
                         f"Cable {spec.a_device}:{spec.a_interface} <-> {spec.b_device}:{spec.b_interface} unresolved"
                     )
-                data: dict[str, Any] = {"connected_endpoints": [{"id": a_id}, {"id": b_id}]}
+                data: dict[str, Any] = {
+                    "connected_endpoints": [{"id": a_id}, {"id": b_id}],
+                    "interconnection_layer": "physical",
+                }
                 if spec.cable_type:
                     data["cable_type"] = spec.cable_type
                 cable = await self.client.create(kind=DcimCable, data=data)

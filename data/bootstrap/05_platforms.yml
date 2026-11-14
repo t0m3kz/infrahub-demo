@@ -6,62 +6,58 @@ spec:
   data:
     - name: cisco_ios
       containerlab_os: ios
-
+      os_capabilities: iosxe-campus-wan
     - name: cisco_xr
       containerlab_os: cisco_xrv
-
+      os_capabilities: iosxe-campus-wan
     - name: cisco_xe
       containerlab_os: cisco_xrv
-
+      os_capabilities: iosxe-campus-wan
     - name: cisco_nxos
       containerlab_os: cisco_n9kv
-
+      os_capabilities: nxos-fabric
     - name: dell_sonic
       containerlab_os: linux
-
+      os_capabilities: sonic-fabric
     - name: juniper_junos
       containerlab_os: juniper_vjunosswitch
-
+      os_capabilities: junos-routing-sec
     - name: arista_eos
       containerlab_os: ceos
-
+      os_capabilities: eos-fabric
     - name: sonic
       containerlab_os: sonic-vm
-
+      os_capabilities: sonic-fabric
     - name: linux
       containerlab_os: linux
-
+      os_capabilities: adc-linux
     - name: checkpoint_gaia
       containerlab_os: gaia
-
+      os_capabilities: security-appliance
     - name: netscaler
       containerlab_os: netscaler
-
+      os_capabilities: adc-linux
     - name: haproxy_technologies
       containerlab_os: linux
-
+      os_capabilities: adc-linux
     - name: f5_tmos
       containerlab_os: linux
-
+      os_capabilities: adc-linux
     - name: paloalto_panos
       containerlab_os: linux
-
-    # Zscaler Enforcement Node: a SaaS region's hosted function (a CloudNetworkAppliance stub, role provider,
-    # nothing is rendered for it), so it has no config template.
+      os_capabilities: security-appliance
     - name: zscaler_zen
       containerlab_os: linux
-
-    # The software of a cluster (ManagedCluster.software_image): hypervisors and Kubernetes distributions. Nothing is
-    # rendered for them, so they have no config template.
+      os_capabilities: security-appliance
     - name: vsphere
-      description: "VMware vSphere (ESXi and vCenter)"
+      description: VMware vSphere (ESXi and vCenter)
     - name: proxmox
-      description: "Proxmox VE"
+      description: Proxmox VE
     - name: nutanix
-      description: "Nutanix AHV"
+      description: Nutanix AHV
     - name: rke2
-      description: "Rancher RKE2 (on-prem Kubernetes)"
+      description: Rancher RKE2 (on-prem Kubernetes)
     - name: eks
-      description: "Amazon EKS (managed Kubernetes)"
+      description: Amazon EKS (managed Kubernetes)
     - name: aks
-      description: "Azure AKS (managed Kubernetes)"
+      description: Azure AKS (managed Kubernetes)

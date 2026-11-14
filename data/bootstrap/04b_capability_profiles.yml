@@ -1,0 +1,134 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimHardwareCapabilityProfile
+  data:
+    - name: evpn-vtep-switch
+      supports_vxlan_vtep: true
+      supports_evpn: true
+      supports_mlag: true
+      supports_virtual_mlag: true
+      supports_pbr: true
+      supports_stateful_firewall: false
+      max_vrfs: 1024
+      max_vlans: 4094
+
+    - name: l2-access-switch
+      supports_vxlan_vtep: false
+      supports_evpn: false
+      supports_mlag: true
+      supports_virtual_mlag: false
+      supports_pbr: false
+      supports_stateful_firewall: false
+      max_vrfs: 16
+      max_vlans: 4094
+
+    - name: core-router
+      supports_vxlan_vtep: true
+      supports_evpn: true
+      supports_mlag: false
+      supports_virtual_mlag: false
+      supports_pbr: true
+      supports_stateful_firewall: false
+      max_vrfs: 2048
+      max_vlans: 4094
+
+    - name: stateful-firewall
+      supports_vxlan_vtep: false
+      supports_evpn: false
+      supports_mlag: false
+      supports_virtual_mlag: false
+      supports_pbr: true
+      supports_stateful_firewall: true
+      max_vrfs: 256
+      max_vlans: 4094
+
+    - name: load-balancer-adc
+      supports_vxlan_vtep: false
+      supports_evpn: false
+      supports_mlag: false
+      supports_virtual_mlag: false
+      supports_pbr: true
+      supports_stateful_firewall: false
+      max_vrfs: 128
+      max_vlans: 4094
+
+    - name: sdwan-edge
+      supports_vxlan_vtep: false
+      supports_evpn: false
+      supports_mlag: false
+      supports_virtual_mlag: false
+      supports_pbr: true
+      supports_stateful_firewall: true
+      max_vrfs: 64
+      max_vlans: 4094
+
+    - name: compute-or-passive
+      supports_vxlan_vtep: false
+      supports_evpn: false
+      supports_mlag: false
+      supports_virtual_mlag: false
+      supports_pbr: false
+      supports_stateful_firewall: false
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPlatformCapabilityProfile
+  data:
+    - name: eos-fabric
+      supports_bgp: true
+      supports_ospf: true
+      supports_lisp: false
+      supports_group_policy: true
+      supports_ztna: false
+      config_dialect: eos
+
+    - name: nxos-fabric
+      supports_bgp: true
+      supports_ospf: true
+      supports_lisp: false
+      supports_group_policy: true
+      supports_ztna: false
+      config_dialect: nxos
+
+    - name: sonic-fabric
+      supports_bgp: true
+      supports_ospf: false
+      supports_lisp: false
+      supports_group_policy: true
+      supports_ztna: false
+      config_dialect: sonic
+
+    - name: iosxe-campus-wan
+      supports_bgp: true
+      supports_ospf: true
+      supports_lisp: true
+      supports_group_policy: true
+      supports_ztna: false
+      config_dialect: iosxe
+
+    - name: junos-routing-sec
+      supports_bgp: true
+      supports_ospf: true
+      supports_lisp: false
+      supports_group_policy: false
+      supports_ztna: false
+      config_dialect: junos
+
+    - name: security-appliance
+      supports_bgp: true
+      supports_ospf: true
+      supports_lisp: false
+      supports_group_policy: false
+      supports_ztna: true
+
+    - name: adc-linux
+      supports_bgp: true
+      supports_ospf: false
+      supports_lisp: false
+      supports_group_policy: false
+      supports_ztna: false
+      config_dialect: linux
