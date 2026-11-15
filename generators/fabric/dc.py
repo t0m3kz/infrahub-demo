@@ -278,6 +278,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                 loopback_pool=dc_pools.get("dc-fabric-loopback"),
                 loopback_prefix_length=loopback_prefix_length(underlay_protocol),
                 management_pool=dc_pools.get("management"),
+                role_index_start=len(names) + 1,
             )
             if entry.get("rack_id"):
                 tier_opts["rack"] = entry["rack_id"]

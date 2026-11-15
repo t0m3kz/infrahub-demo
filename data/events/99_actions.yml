@@ -32,17 +32,6 @@ spec:
           - attribute_name: connectivity_mode
             value_match: any
 
-    - name: trigger-dc-update-racks
-      branch_scope: "other_branches"
-      node_kind: TopologyDataCenter
-      mutation_action: "updated"
-      action: run-dc-pod-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: racks
-            modification_type: updated
-
     - name: trigger-dc-update-devices
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
@@ -154,17 +143,6 @@ spec:
           - attribute_name: index
             value_match: any
 
-    - name: trigger-pod-update-spine-quantity
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "updated"
-      action: run-pod-rack-cascade
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: spine_quantity
-            value_match: any
-
     - name: trigger-pod-update-mlag-create
       branch_scope: "other_branches"
       node_kind: TopologyPod
@@ -241,28 +219,6 @@ spec:
           - relationship_name: fabric_templates
             modification_type: updated
 
-    - name: trigger-rack-generator-update-switch-template
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "updated"
-      action: run-rack-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: switch_template
-            modification_type: updated
-
-    - name: trigger-rack-generator-update-switch-quantity
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "updated"
-      action: run-rack-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: switch_quantity
-            value_match: any
-
     - name: trigger-colocation-rack-update-templates
       branch_scope: "other_branches"
       node_kind: LocationRack
@@ -274,31 +230,6 @@ spec:
           - relationship_name: fabric_templates
             modification_type: updated
 
-    - name: trigger-colocation-rack-update-switch-quantity
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "updated"
-      action: run-colocation-rack-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: switch_quantity
-            value_match: any
-
-
-    # # Device decommission: when status set to decommissioned
-    # - name: trigger-device-decommission
-    #   branch_scope: "other_branches"
-    #   node_kind: DcimPhysicalDevice
-    #   mutation_action: "updated"
-    #   action: run-decommission-device
-    #   matches:
-    #     kind: CoreNodeTriggerAttributeMatch
-    #     data:
-    #       - attribute_name: status
-    #         value_match: decommissioned
-
-    # Pod decommission: when status set to decommissioned
     - name: trigger-pod-decommission
       branch_scope: "other_branches"
       node_kind: TopologyPod

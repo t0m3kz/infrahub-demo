@@ -266,12 +266,17 @@ class ColocationFabricGenerator(
 
         physical_names_by_role: dict[str, list[str]] = {}
 
+        edge_index_start = 1
         for entry in (e for e in templates if e["role"] == "edge"):
             virtual = entry["template"].get("template_kind") == _COLO_TEMPLATE_KIND_APPLIANCE
             # Always allocated: a virtual edge (an MCR) still has a loopback and peers over it
             options = DeviceOptions(
-                indexes=[], allocate_loopback=True, loopback_prefix_length=loopback_prefix_length("ipv4")
+                indexes=[],
+                allocate_loopback=True,
+                loopback_prefix_length=loopback_prefix_length("ipv4"),
+                role_index_start=edge_index_start,
             )
+            edge_index_start += int(entry["quantity"])
             if virtual:
                 # Provider-hosted kit: a CloudNetworkAppliance with no hosting_device (the operator's platform is not
                 # modelled)

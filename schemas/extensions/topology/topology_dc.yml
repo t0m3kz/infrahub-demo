@@ -111,7 +111,6 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
-      - TopologyRackHosting
       - TopologyPhysicalDeployment
       - TopologyConnectableLocation
       - TopologyFacility
@@ -241,6 +240,15 @@ nodes:
         optional: false
         identifier: "dc__design"
         order_weight: 1040
+      - name: fabric_templates
+        peer: TopologyElement
+        label: "Fabric Elements"
+        description: "Super-spine, border-leaf, firewall, and load-balancer templates for this DC's fabric"
+        optional: true
+        cardinality: many
+        kind: Attribute
+        identifier: "dc__fabric_templates"
+        order_weight: 1110
       - name: loopback_pool
         peer: CoreIPPrefixPool
         kind: Attribute
@@ -368,23 +376,6 @@ nodes:
         default_value: "no"
         optional: true
         order_weight: 4500
-      - name: spine_role
-        label: "Spine Role"
-        kind: Dropdown
-        optional: true
-        order_weight: 4600
-        choices:
-          - name: spine
-            label: Spine Switch
-            color: "#7fbfbf"
-          - name: border-spine
-            label: Border Spine Switch
-            color: "#c58fdd"
-      - name: spine_quantity
-        label: "Spine Quantity"
-        kind: Number
-        optional: true
-        order_weight: 4610
     relationships:
       # Row/rack grid and device envelope of the pod; must be one of its DC
       # design's pod_templates (enforced by the pod generator).
@@ -397,6 +388,15 @@ nodes:
         optional: false
         identifier: "pod__design"
         order_weight: 1050
+      - name: fabric_templates
+        peer: TopologyElement
+        label: "Fabric Elements"
+        description: "Spine templates for this pod's fabric"
+        optional: true
+        cardinality: many
+        kind: Attribute
+        identifier: "pod__fabric_templates"
+        order_weight: 1100
       - name: loopback_pool
         peer: CoreIPAddressPool
         kind: Attribute

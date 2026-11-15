@@ -32,6 +32,7 @@ from generators.protocols import (
     SecurityZone,
     TopologyCustomerOffice,
 )
+from generators.specs.registry import imperative_flow
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import PROD_TYPE, transit_pool_name, wan_exit_vlan
 from utils.fabric_roles import CAMPUS_FABRIC_ROLES, LISP_BORDER_ROLES
@@ -320,6 +321,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
                 await asyncio.sleep(delay)
         return None
 
+    @imperative_flow(reason="Waits on peer add_sdwan_edge generator convergence")
     async def _ensure_wan_exit(self, *, distribution_names: list[str], distribution_template: dict[str, Any]) -> None:
         """Build the office's exit to its SD-WAN edge: cabling, tenant-VRF handoff sub-interfaces, eBGP; skipped
         (logged) while there is no edge.

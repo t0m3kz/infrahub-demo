@@ -229,3 +229,6 @@ BORDER_LEAF_WAIT = RetryPolicy(attempts=3, delay=2.0)
 
 # Retries of a security policy rule save whose generated index collided.
 RULE_SAVE_ATTEMPTS = 5
+
+# Default max concurrent Infrahub API writes in PlanReconciler.
+RECONCILE_CONCURRENCY = 8

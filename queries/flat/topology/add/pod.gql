@@ -44,95 +44,16 @@ query topology_pod($name: String!) {
         spine_interface_sorting_method {
           value
         }
-        spine_role {
-          value
-        }
-        spine_quantity {
-          value
-        }
-        devices(role__values: ["spine", "border-spine"]) {
+        fabric_templates {
           edges {
             node {
-              id
-              name {
-                value
-              }
               role {
                 value
               }
-              ... on DcimPhysicalDevice {
-                object_template {
-                  node {
-                    ... on TemplateDcimPhysicalDevice {
-                      interfaces {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                            role {
-                              value
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              ... on DcimDevice {
-                interfaces {
-                  edges {
-                    node {
-                      name {
-                        value
-                      }
-                      role {
-                        value
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        loopback_pool {
-          node {
-            id
-            name {
-              value
-            }
-          }
-        }
-        prefix_pool {
-          node {
-            id
-            name {
-              value
-            }
-          }
-        }
-        racks {
-          edges {
-            node {
-              id
-              name {
+              quantity {
                 value
               }
-              index {
-                value
-              }
-              rack_type {
-                value
-              }
-              switch_role {
-                value
-              }
-              switch_quantity {
-                value
-              }
-              switch_template {
+              template {
                 node {
                   ... on TemplateDcimPhysicalDevice {
                     id
@@ -164,97 +85,22 @@ query topology_pod($name: String!) {
                   }
                 }
               }
-              fabric_templates {
-                edges {
-                  node {
-                    role {
-                      value
-                    }
-                    quantity {
-                      value
-                    }
-                    template {
-                      node {
-                        ... on TemplateDcimPhysicalDevice {
-                          id
-                          platform {
-                            node {
-                              id
-                              name {
-                                value
-                              }
-                            }
-                          }
-                          device_type {
-                            node {
-                              id
-                            }
-                          }
-                          interfaces(role__values: ["uplink", "downlink", "firewall", "load-balancer"]) {
-                            edges {
-                              node {
-                                name {
-                                  value
-                                }
-                                role {
-                                  value
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              devices {
-                edges {
-                  node {
-                    id
-                    name {
-                      value
-                    }
-                    role {
-                      value
-                    }
-                    ... on DcimPhysicalDevice {
-                      object_template {
-                        node {
-                          ... on TemplateDcimPhysicalDevice {
-                            interfaces {
-                              edges {
-                                node {
-                                  name {
-                                    value
-                                  }
-                                  role {
-                                    value
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                    ... on DcimDevice {
-                      interfaces {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                            role {
-                              value
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
+            }
+          }
+        }
+        loopback_pool {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        prefix_pool {
+          node {
+            id
+            name {
+              value
             }
           }
         }
@@ -304,6 +150,44 @@ query topology_pod($name: String!) {
               }
               underlay_protocol {
                 value
+              }
+              fabric_templates {
+                edges {
+                  node {
+                    role {
+                      value
+                    }
+                    quantity {
+                      value
+                    }
+                    template {
+                      node {
+                        ... on TemplateDcimPhysicalDevice {
+                          id
+                          platform {
+                            node {
+                              id
+                            }
+                          }
+                          device_type {
+                            node {
+                              id
+                            }
+                          }
+                          interfaces(role__value: "downlink") {
+                            edges {
+                              node {
+                                name {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
               design {
                 node {

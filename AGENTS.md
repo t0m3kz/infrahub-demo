@@ -2417,3 +2417,10 @@ To keep the codebase modular, deterministic, and easy to extend without cross-do
    - Always pass `-x` (`--exitfirst`) and chain commands with `&&` so test execution stops immediately on the first failure.
    - Run `uv run invoke clean-testcontainers` first, then run the relevant kick (`dc-individual-devices-suite`, `full-topology-suite`, `dc6-suite`).
    - A kick stage is only valid when `refuse_failed_tasks` reports **0 failed/crashed Prefect tasks** across both the branch and post-merge `main`.
+
+## Declarative Spec Persistence Idiom (`generators/specs/`)
+
+- **One persistence idiom**: Every single-generator create/upsert or locked find-or-create flow (devices, interfaces, IP assignments, segment addressing, firewall contexts, LB VIPs, routing/security tags, VRFs, BGP peerings, cables) MUST emit a spec into `TopologyPlan` and persist via `apply_plan`.
+- **Self-registering modules**: Each spec family registers its own step via `@register_spec(SpecClass, order=...)` inside `generators/specs/` (`nodes.py`, `devices.py`, `routing.py`, `cables.py`) — never add central union branches or pass-through mixin wrappers.
+- **Explicit step order**: `10-19` tags -> `20-29` contexts/VIPs -> `30-39` devices -> `40-49` interfaces -> `50-59` IPs -> `60-69` routing -> `90` cables (always last, because both endpoint interfaces and device capability edges must exist before link-port attachment).
+- **Explicit imperative exceptions**: Flows that wait on peer generator convergence across branches (such as office WAN exit and colocation EVPN) may stay imperative ONLY when decorated with `@imperative_flow(reason=...)`.

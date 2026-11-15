@@ -54,6 +54,15 @@ fragment DataCenterFields on TopologyDataCenter {
   connectivity_mode { value }
   routing_strategy { value }
   underlay_protocol { value }
+  fabric_templates {
+    edges {
+      node {
+        role { value }
+        quantity { value }
+        template { node { ...SuperSpineTemplateFields } }
+      }
+    }
+  }
   # The DC's fabric envelope, as far as a pod's own checks and pool sizes read it
   # (generators/fabric_sizing.py): the pod designs it may host and their spine
   # widths, by id for a sibling pod's design (the back-to-back mesh slot width).
@@ -160,102 +169,17 @@ query topology_pod($name: String!) {
         }
         leaf_interface_sorting_method { value }
         spine_interface_sorting_method { value }
-        spine_role { value }
-        spine_quantity { value }
-        devices(role__values: ["spine", "border-spine"]) {
+        fabric_templates {
           edges {
             node {
-              id
-              name { value }
               role { value }
-              ... on DcimPhysicalDevice {
-                object_template {
-                        node {
-                          ... on TemplateDcimPhysicalDevice {
-                            interfaces {
-                              edges {
-                                node {
-                                  name { value }
-                                  role { value }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-              }
-              ... on DcimDevice {
-                interfaces {
-                  edges {
-                    node {
-                      name { value }
-                      role { value }
-                    }
-                  }
-                }
-              }
+              quantity { value }
+              template { node { ...DeviceTemplateFields } }
             }
           }
         }
         loopback_pool { node { id name { value } } }
         prefix_pool { node { id name { value } } }
-        racks {
-          edges {
-            node {
-              id
-              name { value }
-              index { value }
-              rack_type { value }
-              switch_role { value }
-              switch_quantity { value }
-              switch_template { node { ...DeviceTemplateFields } }
-              fabric_templates {
-                edges {
-                  node {
-                    role { value }
-                    quantity { value }
-                    template { node { ...DeviceTemplateFields } }
-                  }
-                }
-              }
-              devices {
-                edges {
-                  node {
-                    id
-                    name { value }
-                    role { value }
-                    ... on DcimPhysicalDevice {
-                      object_template {
-                        node {
-                          ... on TemplateDcimPhysicalDevice {
-                            interfaces {
-                              edges {
-                                node {
-                                  name { value }
-                                  role { value }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                    ... on DcimDevice {
-                      interfaces {
-                        edges {
-                          node {
-                            name { value }
-                            role { value }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
         spine_count: devices(role__value: "spine") {
           count
         }

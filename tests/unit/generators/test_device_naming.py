@@ -144,3 +144,29 @@ def test_sdwan_edge_name_is_the_one_spelling_both_office_generators_share() -> N
     from generators.helpers.naming import sdwan_edge_name
 
     assert sdwan_edge_name("C005-OFFICE") == "C005-OFFICE-EDGE1"
+
+
+def test_multiple_same_role_entries_continue_role_index_without_duplicates() -> None:
+    """Two fabric_templates entries of the same role must continue numbering sequentially."""
+    from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
+
+    naming = DeviceNamingConfig(strategy="flat")
+    entries: list[tuple[str, int]] = [("edge", 1), ("edge", 2)]
+    names: list[str] = []
+    role_index_start = 1
+    for role, quantity in entries:
+        for idx in range(role_index_start, role_index_start + quantity):
+            names.append(
+                naming.format_device_name(
+                    DeviceNameContext.from_indexes(
+                        fabric_name="colo-ams",
+                        device_role=role,
+                        role_index=idx,
+                        indexes=[],
+                    )
+                )
+            )
+        role_index_start += quantity
+
+    assert len(names) == 3
+    assert len(set(names)) == 3
