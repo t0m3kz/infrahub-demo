@@ -7,7 +7,8 @@ kicks:
     stages:
       - name: fabric
         load: [data/demos/14_dc_universal/02_individual_devices]
-        generator: dc_pod_cascade
+        generator: add_dc
+        run: dc_pod_cascade
         min_artifacts: 1
         expect:
           count:
@@ -29,7 +30,7 @@ kicks:
 
       - name: idempotency
         load: [data/demos/14_dc_universal/02_individual_devices]
-        generator: dc_pod_cascade
+        run: dc_pod_cascade
         min_artifacts: 1
         expect:
           count:

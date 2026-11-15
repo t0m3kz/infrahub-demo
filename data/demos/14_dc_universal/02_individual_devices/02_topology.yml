@@ -28,8 +28,6 @@ spec:
           - index: 1
             design: M_MIDDLE
             mlag_create: virtual
-            member_of_groups:
-              - topologies_pod
             racks:
               kind: LocationRack
               data:
@@ -43,4 +41,3 @@ spec:
                   shortname: ber-u1-s-1-r-1-5
                   rack_type: network
                   parent: ber-u1-s-1-row-1
-                  member_of_groups: [topologies_rack]
