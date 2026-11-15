@@ -59,7 +59,6 @@ class TopologyRackPodData(TypedDict, total=False):
     index: int
     design: dict[str, Any]
     parent: TopologyRackParentData
-    fabric_templates: list[dict[str, Any]]
     leaf_interface_sorting_method: str
     spine_interface_sorting_method: str
     mlag_create: Literal["no", "back-to-back", "virtual"]
