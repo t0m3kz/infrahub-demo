@@ -183,3 +183,7 @@ def write_flat_queries() -> list[Path]:
             stale.unlink()
             changed.append(stale)
     return changed
+
+
+if __name__ == "__main__":
+    write_flat_queries()

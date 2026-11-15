@@ -535,34 +535,6 @@ query RackGenerator($id: ID!) {
                   }
                 }
               }
-              fabric_templates {
-                edges {
-                  node {
-                    role {
-                      value
-                    }
-                    quantity {
-                      value
-                    }
-                    template {
-                      node {
-                        id
-                        ... on TemplateDcimPhysicalDevice {
-                          interfaces(role__value: "downlink") {
-                            edges {
-                              node {
-                                name {
-                                  value
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
               leaf_interface_sorting_method {
                 value
               }

@@ -430,6 +430,15 @@ def reset_generator_groups(
             raise Exit(f"[{name}] tracking groups still have members after {_RESET_MAX_PASSES} passes", code=1)
 
 
+@_task
+def flatten_queries(context: Context) -> None:
+    """Flatten registered GraphQL queries into queries/flat/."""
+    from utils.query_flatten import write_flat_queries
+
+    changed = write_flat_queries()
+    log.info("Flattened queries (%d file(s) updated)", len(changed))
+
+
 # ---------------------------------------------------------------------------
 # Collection — every task is registered at the root
 # ---------------------------------------------------------------------------
@@ -456,3 +465,4 @@ ns.add_task(cast(Task, load_all_demo), name="load-all-demo")
 ns.add_task(cast(Task, kick))
 ns.add_task(cast(Task, kicks))
 ns.add_task(cast(Task, reset_generator_groups), name="reset-generator-groups")
+ns.add_task(cast(Task, flatten_queries), name="flatten-queries")
