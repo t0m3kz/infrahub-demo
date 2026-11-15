@@ -2258,3 +2258,155 @@ See `.claude/skills/infrahub-greenfield-schema` for the full rules and examples.
 
 - [InfraHub Documentation](https://docs.infrahub.app)
 - [InfraHub SDK Documentation](https://docs.infrahub.app/python-sdk/)
+
+## Universal Architecture & Device Capability Principles
+
+Every schema, generator, transform, and validation check in this repository MUST follow these four invariants so any topology kind (Data Center, Colocation, Cloud, SaaS, Office, or hybrid) can interconnect cleanly without topology-specific hacks:
+
+### 1. Rack-First & Individual-Device Onboarding (Universal Physical Placement)
+
+- **Physical containers (`LocationRack`) own hardware intent, not topology wrappers (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationZone`).**
+  - Physical device templates (`fabric_templates`, `switch_template` + `switch_quantity`) and pre-created `DcimPhysicalDevice` nodes live on `LocationRack` (or directly on `TopologyVirtualColocation` / `TopologyCloudRegion` only when no physical rack exists).
+  - Topology containers (`DC`, `Pod`, `ColocationZone`) own **policy, design envelopes, IP/ASN/VNI pools, and shared routing objects**—and normalize their device inventory from their child racks via `generators/helpers/rack.py` (`normalize_dc_templates`, `normalize_pod_templates`, `normalize_colo_zone_templates`).
+- **Every physical generator MUST support both template-driven creation and pre-created individual devices.**
+  - Generators must discover pre-created `DcimPhysicalDevice` nodes already placed in racks/deployments, reconcile their interfaces/IPs/capabilities idempotently, and never assume devices were created by the generator itself.
+- **Validate `rack_type` compatibility (`rack_type_role_errors`) before writing:**
+  - Never bypass `rack_type` validation by site or naming prefix; every physical role (`super-spine`, `hyper-spine`, `border-spine`, `spine`, `border-leaf`, `leaf`, `tor`, `l2-leaf`, `access-leaf`, `edge`, `internal-firewall`, `external-firewall`, `load-balancer`) must be explicitly permitted by its rack's `rack_type`.
+
+### 2. Device-Centric Capabilities (Daemons & Sessions Attach to Devices/Interfaces)
+
+- **Protocol daemons (`ManagedBGP`, `ManagedOSPF`, `ManagedISIS`, `ManagedEVPN`, `ManagedBFD`, `ManagedVRF`, etc.) are capabilities of the device (`DcimDeviceManaged` / `CloudNetworkAppliance`), never hardcoded to a topology tier.**
+  - A generator or transform must inspect a device's **capabilities** and **role**, not infer protocol behavior from whether its parent happens to be a DC, Colocation zone, Office, or Cloud region.
+- **Protocol sessions (`ManagedBGPPeering`, `ManagedOSPFNeighbor`, `ManagedInterfaceEncapsulation`, `TopologySessionCircuit`, tunnels) attach to concrete devices and interfaces.**
+  - Every session or underlay/overlay peering must bind to the participating device's protocol daemon (`local_process` / `peer_process`) and/or interface (`source_interface` / `destination_interface`).
+  - Never synthesize config or validation logic from topology-level shortcuts when the device/interface capability graph can express it directly.
+
+### 3. Topology-Agnostic Interconnects
+
+- **Interconnects (`TopologyConnectivityRequest`, `TopologyCarrierCircuit`, `TopologySessionCircuit`, DCI, transit, and cloud/SaaS handoffs) connect capability-bearing border/edge devices across ANY two topologies (`DC <-> Colocation`, `DC <-> DC`, `Colocation <-> Cloud`, `Office <-> Colocation/SaaS`, `Cloud <-> Cloud`).**
+  - Interconnect generators (`generators/connectivity/`) must resolve endpoints via `TopologyConnectableLocation` and each endpoint's border/edge device capabilities (`edge`, `border-leaf`, `border-spine`, `sdwan-edge`, `cloud-gateway`) rather than branching on pairs of topology types.
+  - Adding a new topology type (e.g., Campus, Edge POP, IXP) must only require implementing the standard hosting/capability generics and registering its border device capabilities—never rewriting interconnect or routing generators.
+
+### 4. GraphQL & Query Flattening Discipline
+
+- **Never select the same field with conflicting nullability across interface and concrete fragments** (e.g., selecting bare `id` on a `TopologyDeployment` interface alongside a fragment that selects `id` on `TopologyPod` fails GraphQL validation with `String` vs `String!`). Alias or scope fields inside concrete fragments (`... on <ConcreteKind>`).
+- **Never query `interfaces` directly on `DcimDeviceManaged`**—always scope inside `... on DcimPhysicalDevice` or `... on DcimVirtualDevice`.
+- **Always run `uv run invoke flatten-queries`** after editing any file under `queries/` (excluding `queries/flat/`), and verify with `tests/integration/test_02_repository.py::TestRepository::test_05_no_query_selects_a_field_twice_on_one_object`.
+
+## Writing & Running Integration Kicks (`tests/integration/kicks/`)
+
+Integration kicks deploy demo data through real Infrahub branches, triggers, generators, proposed changes, artifact builds, and merges—and fail immediately if any Prefect task fails or any expected object/attribute/cable/session count is off.
+
+### 1. Where Kicks Live
+
+- **`tests/integration/kicks/*.yml`**: Automated CI suite kicks run by `tests/integration/test_04_kicks.py::TestSuiteChains::test_kick[<kick-name>]`.
+- **`tasks/kicks.yml`**: Interactive demo kicks run by `uv run invoke kick <kick-name>` against a dev stack.
+
+### 2. Stage Execution Order (`tests/integration/kick_runner.py`)
+
+For each stage in `stages:`, `kick_runner` executes these exact steps:
+
+1. Creates a fresh branch from `main` (unless `branch:` is pinned at the kick level).
+2. Loads every directory/file in `load:` in alphabetical order via `infrahubctl object load` (one `kind` per YAML file!).
+3. **`generator:` (Passive Wait):** Calls `wait_for_dispatch(client, branch, stage.generator)` — **waits** for an event-triggered generator (`trigger-*-on-added`) to fire; it does **not** invoke a generator itself.
+4. **`run:` (Active Execution):** Calls `run_generator_definition(client, branch, stage.run)` — **actively executes** a generator definition (e.g., `dc_pod_cascade`, `add_dc`, `add_vxlan_segment`) across its target group after load settles.
+5. **Zero-Failed-Tasks Gate (`refuse_failed_tasks`):** Fails the stage if **any** Prefect task on the branch failed, crashed, or was cancelled since the stage began.
+6. Opens a Proposed Change, waits for all artifact validators (`min_artifacts:`), merges to `main` (unless `merge: false`), and re-checks **0 failed tasks** on `main` post-merge.
+
+### 3. Rules for Authoring Kick Stages & Demo Files
+
+- **Prevent premature event-trigger failures on staged objects:**
+  - Infrahub fires `member_update: added` group triggers as soon as a YAML document adds an object to `topologies_dc`, `topologies_pod`, `topologies_rack`, or `colocation_zones`.
+  - If a Pod or Rack relies on child devices or racks loaded in a *later* file (e.g. `02_topology.yml` -> `03_devices.yml` -> `04_pods.yml`), **omit `member_of_groups` from the earlier file** and attach `member_of_groups` in a single-kind follow-up file *after* its dependencies exist—otherwise the group trigger fires prematurely and fails the stage.
+- **Use `run:` for cascade reconciliation:**
+  - When loading pre-created individual devices or multi-tier objects, pair `generator:` (if a group trigger fires) with `run: dc_pod_cascade` (or `add_colocation_zone`) so top-down fan-out reconciles DC -> Pod -> Rack cleanly.
+- **Always include an `idempotency` stage:**
+  - Every new feature kick MUST include a second stage that reloads the exact same `load:` paths and re-runs the generator (`run: ...`), asserting:
+    - Exact same `count:` totals (0 duplicate devices, cables, interfaces, IP allocations, or BGP sessions).
+    - `unchanged:` key attributes (`[name, role, status]`, `[local_as]`).
+    - `removed: 0` (confirming group-context cleanup does not delete existing objects).
+- **Assert full graph outcomes in `expect:`:**
+  - Never check device counts alone—always assert `DcimCable`, `ManagedBGP`, and `ManagedBGPPeering` counts so missing links or sessions fail loudly.
+
+### 4. Kick Stage Template
+
+```yaml
+---
+kicks:
+  my-feature-suite:
+    description: Deploy feature X and verify idempotent reload.
+    stages:
+      - name: deploy
+        load: [data/demos/99_my_feature]
+        generator: add_dc          # waits for group-add trigger (omit if no group trigger fires)
+        run: dc_pod_cascade        # actively runs cascade generator after load settles
+        min_artifacts: 1
+        expect:
+          count:
+            - DcimPhysicalDevice: {role: leaf, deployment: DC99-1-POD-1}
+              equals: 2
+            - DcimCable: {}
+              equals: 12
+            - ManagedBGP: {}
+              equals: 16
+            - ManagedBGPPeering: {}
+              equals: 20
+          removed: 0
+
+      - name: idempotency
+        load: [data/demos/99_my_feature]
+        run: dc_pod_cascade
+        min_artifacts: 1
+        expect:
+          count:
+            - DcimCable: {}
+              equals: 12
+            - ManagedBGP: {}
+              equals: 16
+            - ManagedBGPPeering: {}
+              equals: 20
+          unchanged:
+            DcimPhysicalDevice: [name, role, status]
+            ManagedBGP: [local_as]
+          removed: 0
+```
+
+### 5. Running & Debugging Kicks
+
+```bash
+# Run a single suite kick (requires test_01_setup.py + test_02_repository.py in the same session):
+uv run invoke clean-testcontainers
+uv run invoke test-integration --tests "tests/integration/test_01_setup.py tests/integration/test_02_repository.py tests/integration/test_04_kicks.py::TestSuiteChains::test_kick[my-feature-suite]"
+
+# Keep the Docker stack alive on port 8100 when debugging a failure:
+INFRAHUB_TESTING_KEEP_STACK=1 uv run invoke test-integration --tests "tests/integration/test_01_setup.py tests/integration/test_02_repository.py tests/integration/test_04_kicks.py::TestSuiteChains::test_kick[my-feature-suite]"
+```
+
+## Code Structure & Anti-Bypass Guardrails
+
+To keep the codebase modular, deterministic, and easy to extend without cross-domain spaghetti, every agent MUST obey these structural boundaries:
+
+### 1. Layered Module Boundaries (No Cross-Layer Shortcuts)
+
+- **`schemas/extensions/` (Source of Truth):** Define generics, attributes, relationships, and constraints here first. Never work around a missing schema relationship in Python.
+- **`generators/model/` (Pure Compilation & Validation):** Compile raw GraphQL dicts into frozen dataclasses (`@dataclass(frozen=True)`) with zero Infrahub SDK I/O. All design-envelope math, role filtering, and template normalization belong here—not scattered inside async generator methods.
+- **`generators/helpers/` (Pure Stateless Functions):** Shared naming, cabling, rack normalization (`rack.py`), and routing helpers. Must have zero SDK client calls and 100% unit-test coverage.
+- **`generators/mixins/` (Reusable SDK Write Primitives):** `PoolMixin`, `DeviceMixin`, `CablingMixin`, `RoutingMixin`. Domain generators (`generators/fabric/`, `generators/colocation/`, `generators/connectivity/`, `generators/customers/`) MUST compose these mixins—never re-implement raw `client.create()` / `upsert()` loops for pools, devices, cables, or BGP sessions.
+- **`transforms/` (Read-Only Rendering):** Render Jinja2 templates strictly from the device's queried capabilities, interfaces, and sessions. Transforms NEVER mutate state or infer topology rules that belong in a generator.
+- **`checks/` (Deterministic Validation):** Pure validation over cleaned GraphQL payloads (`clean_data()`). Every check must emit structured `Finding` / `log_error` entries pointing to the offending object ID and kind.
+
+### 2. Forbidden Shortcuts (Strictly Enforced)
+
+- **No topology-type `if/elif` branching in shared mixins, transforms, or interconnect generators:** Branch on device `role` and attached `capabilities` (`ManagedBGP`, `ManagedOSPF`, `ManagedEVPN`, etc.), never on `if deployment_type == "colocation"` vs `"dc"`.
+- **No silent bypasses in validators:** Never skip validation based on object names or prefixes (e.g., `if "COLO" in name: return []`). Express exceptions via explicit schema generics or `rack_type` allowlists.
+- **No multi-kind YAML files under `data/demos/`:** Every demo YAML file MUST declare exactly one `kind` (`<NN>_<kind>.yml`) so static demo simulators and `test_demo_one_kind_per_file.py` stay deterministic.
+- **No hand-editing `queries/flat/`:** Always edit `queries/**/*.gql` and run `uv run invoke flatten-queries`.
+- **No suppressing or weakening existing tests to make a change pass:** If a unit test fails after a schema or trigger change, verify whether the test caught a real regression before updating test expectations.
+
+### 3. Mandatory Verification Pipeline (Before Every Commit)
+
+1. **Query Flattening (whenever `queries/` or `schemas/` changes):** `uv run invoke flatten-queries`
+2. **Static Validation & Full Unit Test Suite (ALWAYS required):** `uv run invoke validate`
+3. **Targeted Integration Kick (whenever generators, schemas, queries, events, or demo data change):**
+   - Run `uv run invoke clean-testcontainers` first, then run the relevant kick (`dc-individual-devices-suite`, `full-topology-suite`, `dc6-suite`).
+   - A kick stage is only valid when `refuse_failed_tasks` reports **0 failed/crashed Prefect tasks** across both the branch and post-merge `main`.
