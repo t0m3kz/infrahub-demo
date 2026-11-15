@@ -83,7 +83,7 @@ async def ensure_security_tag(client: Any, lock: Lock, *, kind: Any, node: dict[
             from generators.specs import PlanReconciler, SecurityTagSpec, TopologyPlan
 
             plan = TopologyPlan()
-            plan.add(SecurityTagSpec(name=name, consumer_kind=kind, consumer_id=node_id))
+            plan.add(SecurityTagSpec(name=name, tag_id=tag_id, consumer_kind=kind, consumer_id=node_id))
             await PlanReconciler(SimpleNamespace(client=client)).apply(plan)
         attached[node_id] = tag_id
     node["security_tag"] = {"id": attached[node_id]}
