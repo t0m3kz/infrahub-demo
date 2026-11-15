@@ -178,17 +178,19 @@ query topology_colocation_zone($name: String!) {
                     role {
                       value
                     }
-                    object_template {
-                      node {
-                        ... on TemplateDcimPhysicalDevice {
-                          interfaces {
-                            edges {
-                              node {
-                                name {
-                                  value
-                                }
-                                role {
-                                  value
+                    ... on DcimPhysicalDevice {
+                      object_template {
+                        node {
+                          ... on TemplateDcimPhysicalDevice {
+                            interfaces {
+                              edges {
+                                node {
+                                  name {
+                                    value
+                                  }
+                                  role {
+                                    value
+                                  }
                                 }
                               }
                             }
@@ -226,17 +228,19 @@ query topology_colocation_zone($name: String!) {
               role {
                 value
               }
-              object_template {
-                node {
-                  ... on TemplateDcimPhysicalDevice {
-                    interfaces {
-                      edges {
-                        node {
-                          name {
-                            value
-                          }
-                          role {
-                            value
+              ... on DcimPhysicalDevice {
+                object_template {
+                  node {
+                    ... on TemplateDcimPhysicalDevice {
+                      interfaces {
+                        edges {
+                          node {
+                            name {
+                              value
+                            }
+                            role {
+                              value
+                            }
                           }
                         }
                       }
