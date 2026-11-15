@@ -14,6 +14,7 @@ from generators.specs import (
     LoadBalancerVipSpec,
     RoutingTagSpec,
     SecurityTagSpec,
+    SegmentGatewaySpec,
     TopologyPlan,
     VrfSpec,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "LoadBalancerVipSpec",
     "RoutingTagSpec",
     "SecurityTagSpec",
+    "SegmentGatewaySpec",
     "TopologyPlan",
     "VrfSpec",
 ]

@@ -15,8 +15,18 @@ from generators.specs.registry import PlanReconciler, ReconcileResult, register_
 class SecurityTagSpec:
     name: str
     group_id: int | None = None
+    pool_id: str | None = None
+    consumer_kind: Any = None
+    consumer_id: str | None = None
     description: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class SegmentGatewaySpec:
+    segment_kind: str
+    segment_id: str
+    gateway_id: str
 
 
 @dataclass(frozen=True)
@@ -30,9 +40,10 @@ class RoutingTagSpec:
 @dataclass(frozen=True)
 class FirewallContextSpec:
     name: str
-    kind: str = "ManagedFirewallContext"
+    kind: Any = "ManagedFirewallContext"
     firewall_ha_id: str | None = None
     tenant_id: str | None = None
+    track: bool = True
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -70,18 +81,41 @@ async def _upsert_named_nodes(
 async def _reconcile_security_tags(
     reconciler: PlanReconciler, specs: list[SecurityTagSpec], result: ReconcileResult
 ) -> None:
-    items = [
-        (
-            s.name,
-            {
-                **({"group_id": s.group_id} if s.group_id is not None else {}),
+    for s in specs:
+        existing = await reconciler.client.filters(kind="SecurityTag", name__value=s.name)
+        if existing:
+            tag_id = str(existing[0].id)
+        else:
+            payload: dict[str, Any] = {
+                "name": s.name,
+                **({"group_id": {"from_pool": {"id": s.pool_id}}} if s.pool_id else {}),
+                **({"group_id": s.group_id} if s.group_id is not None and not s.pool_id else {}),
                 **({"description": s.description} if s.description else {}),
                 **s.extra,
-            },
+            }
+            tag = await reconciler.client.create(kind="SecurityTag", data=payload)
+            await tag.save(allow_upsert=True, update_group_context=False)
+            tag_id = str(tag.id)
+        result.node_ids[("SecurityTag", s.name)] = tag_id
+        if s.consumer_kind and s.consumer_id:
+            consumer = await reconciler.client.create(
+                kind=s.consumer_kind,
+                data={"id": s.consumer_id, "security_tag": {"id": tag_id}},
+            )
+            await consumer.save(allow_upsert=True, update_group_context=False)
+
+
+@register_spec(SegmentGatewaySpec, order=25)
+async def _reconcile_segment_gateways(
+    reconciler: PlanReconciler, specs: list[SegmentGatewaySpec], result: ReconcileResult
+) -> None:
+    for s in specs:
+        seg_obj = await reconciler.client.create(
+            kind=s.segment_kind,
+            data={"id": s.segment_id, "gateway": {"id": s.gateway_id}},
         )
-        for s in specs
-    ]
-    await _upsert_named_nodes(reconciler, "SecurityTag", items, result)
+        await seg_obj.save(allow_upsert=True, update_group_context=False)
+        result.node_ids[(s.segment_kind, s.segment_id)] = s.segment_id
 
 
 @register_spec(RoutingTagSpec, order=12)
@@ -103,17 +137,26 @@ async def _reconcile_firewall_contexts(
     reconciler: PlanReconciler, specs: list[FirewallContextSpec], result: ReconcileResult
 ) -> None:
     for s in specs:
-        payload = {
+        data: dict[str, Any] = {
+            "name": s.name,
             **({"firewall_ha": {"id": s.firewall_ha_id}} if s.firewall_ha_id else {}),
             **({"tenant": {"id": s.tenant_id}} if s.tenant_id else {}),
             **s.extra,
         }
+        save_kwargs: dict[str, Any] = {"allow_upsert": True}
+        if not s.track:
+            save_kwargs["update_group_context"] = False
         lock_fn = getattr(reconciler.generator, "resource_lock", None)
         if lock_fn:
             async with lock_fn(f"fw-context-{s.name}"):
-                await _upsert_named_nodes(reconciler, s.kind, [(s.name, payload)], result)
+                node = await reconciler.client.create(kind=s.kind, data=data)
+                await node.save(**save_kwargs)
         else:
-            await _upsert_named_nodes(reconciler, s.kind, [(s.name, payload)], result)
+            node = await reconciler.client.create(kind=s.kind, data=data)
+            await node.save(**save_kwargs)
+        kind_key = s.kind if isinstance(s.kind, str) else getattr(s.kind, "__name__", str(s.kind))
+        result.node_ids[(kind_key, s.name)] = node.id
+        result.nodes[(s.kind, s.name)] = node
 
 
 @register_spec(LoadBalancerVipSpec, order=22)

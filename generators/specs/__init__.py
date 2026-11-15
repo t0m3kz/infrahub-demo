@@ -5,7 +5,13 @@ from __future__ import annotations
 from generators.specs import cables, devices, nodes, routing  # noqa: F401
 from generators.specs.cables import CableSpec
 from generators.specs.devices import INTERFACE_KIND_BY_FLAVOR, DeviceSpec, InterfaceFlavor, InterfaceSpec, IpSpec
-from generators.specs.nodes import FirewallContextSpec, LoadBalancerVipSpec, RoutingTagSpec, SecurityTagSpec
+from generators.specs.nodes import (
+    FirewallContextSpec,
+    LoadBalancerVipSpec,
+    RoutingTagSpec,
+    SecurityTagSpec,
+    SegmentGatewaySpec,
+)
 from generators.specs.registry import (
     PlanReconciler,
     ReconcileResult,
@@ -32,6 +38,7 @@ __all__ = [
     "RegisteredStep",
     "RoutingTagSpec",
     "SecurityTagSpec",
+    "SegmentGatewaySpec",
     "TopologyPlan",
     "VrfSpec",
     "imperative_flow",

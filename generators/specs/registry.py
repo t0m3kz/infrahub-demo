@@ -57,6 +57,7 @@ class ReconcileResult:
     interface_ids: dict[tuple[str, str], str] = field(default_factory=dict)
     interface_roles: dict[tuple[str, str], str] = field(default_factory=dict)
     node_ids: dict[tuple[str, str], str] = field(default_factory=dict)
+    nodes: dict[tuple[Any, str], Any] = field(default_factory=dict)
 
 
 @dataclass
