@@ -9,7 +9,6 @@ from generators.fabric.fabric_shared import DC_GENERATORS, ServiceDevicesMixin
 from generators.fabric.pod_mesh import PodMeshMixin, mesh_slot_width, pod_routing_options
 from generators.helpers.naming import DeviceNamingConfig
 from generators.helpers.rack import (
-    _device_interfaces,
     expected_device_names,
     normalize_dc_templates,
     normalize_pod_templates,
@@ -41,6 +40,17 @@ from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
 from utils.limits import BORDER_LEAF_WAIT, WAIT_FOR_PEER_GENERATOR
 
 # FW/LB "uplink" interfaces face border-spine's "firewall"/"load-balancer" ports (BORDER_ROLE_FOR_SERVICES).
+
+
+def _device_interfaces(dev: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return materialized device interfaces, falling back to object_template interfaces before async template apply."""
+    direct = list(dev.get("interfaces") or [])
+    if direct:
+        return direct
+    tpl = dev.get("object_template")
+    if isinstance(tpl, dict):
+        return list(tpl.get("interfaces") or [])
+    return []
 
 
 class TopologyPodParentData(TypedDict, total=False):
