@@ -207,14 +207,16 @@ query topology_colocation_zone($name: String!) {
               role {
                 value
               }
-              interfaces {
-                edges {
-                  node {
-                    name {
-                      value
-                    }
-                    role {
-                      value
+              ... on DcimPhysicalDevice {
+                interfaces {
+                  edges {
+                    node {
+                      name {
+                        value
+                      }
+                      role {
+                        value
+                      }
                     }
                   }
                 }
