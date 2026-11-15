@@ -11,6 +11,7 @@ import pytest
 import yaml
 from graphql import IntrospectionQuery, build_client_schema, get_introspection_query
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
+from infrahub_sdk.task.models import TaskFilter, TaskState
 from infrahub_sdk.testing.repository import GitRepo
 
 from .conftest import PROJECT_DIRECTORY, TestInfrahubDockerWithClient
@@ -114,7 +115,16 @@ class TestRepository(TestInfrahubDockerWithClient):
             has_error = "error" in sync_status
 
             if has_error:
-                raise AssertionError(f"Repository sync failed with error status: {sync_status}")
+                tasks = await client.task.filter(
+                    filter=TaskFilter(state=[TaskState.FAILED, TaskState.CRASHED]),
+                    include_logs=True,
+                )
+                details = []
+                for t in tasks:
+                    logs = "\n".join(f"    [{entry.level}] {entry.message}" for entry in (t.logs or []))
+                    details.append(f"  Task: {t.title} ({t.state})\n{logs}")
+                detail_block = "\n".join(details) or "  (no failed task logs returned)"
+                raise AssertionError(f"Repository sync failed with error status: {sync_status}\n{detail_block}")
             return synchronized, repository
 
         try:

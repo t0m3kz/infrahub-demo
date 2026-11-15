@@ -347,7 +347,9 @@ query RackGenerator($id: ID!) {
         deployment {
           node {
             typename: __typename
-            id
+            ... on TopologyColocationZone {
+              id
+            }
             ...RackPodFields
           }
         }
