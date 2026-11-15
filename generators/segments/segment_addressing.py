@@ -95,13 +95,11 @@ class SegmentAddressingMixin:
                     track=False,
                 )
             )[OFFSET_ANYCAST]
-            from types import SimpleNamespace
-
-            from generators.specs import PlanReconciler, SegmentGatewaySpec, TopologyPlan
-
-            plan = TopologyPlan()
-            plan.add(SegmentGatewaySpec(segment_kind=segment["typename"], segment_id=segment_id, gateway_id=gateway.id))
-            await PlanReconciler(SimpleNamespace(client=self.client)).apply(plan)
+            segment_obj = await self.client.create(
+                kind=segment["typename"],
+                data={"id": segment_id, "gateway": {"id": gateway.id}},
+            )
+            await segment_obj.save(allow_upsert=True, update_group_context=False)
         segment["gateway"] = {
             "id": gateway.id,
             "address": gateway.address.value,

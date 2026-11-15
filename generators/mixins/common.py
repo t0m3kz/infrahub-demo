@@ -7,6 +7,7 @@ from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreGeneratorDefinition
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
+from generators.batch_writer import BatchWriter
 from generators.helpers.common import retry_delay
 from generators.mixins.logger import FailOnErrorLoggerMixin, GeneratorError
 from utils.limits import PARENT_GENERATOR_WAIT
@@ -16,6 +17,15 @@ _FAILED_PARENT_STATES = [TaskState.FAILED, TaskState.CRASHED, TaskState.CANCELLE
 
 
 class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
+    @property
+    def writer(self) -> BatchWriter:
+        """Lazy per-generator phased batch writer for protocol payloads."""
+        w = getattr(self, "_batch_writer", None)
+        if w is None:
+            w = BatchWriter(self.client)
+            self._batch_writer = w
+        return w
+
     """Extended InfrahubGenerator with fan-out/orchestration helpers. deployment_id/fabric_name are set in generate();
     pod_name is optional. ``self.logger.error()`` raises GeneratorError (task fails). Domain logic lives in mixins
     (PoolMixin, DeviceMixin, CablingMixin, RoutingMixin) that each generator composes as needed.

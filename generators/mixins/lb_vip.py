@@ -37,6 +37,7 @@ from generators.helpers.rules import RulesPlanner
 from generators.protocols import (
     AppComponent,
     CloudLoadBalancer,
+    LoadbalancerVIP,
     ManagedVxlanSegment,
     SecurityPolicy,
     TopologyCustomerDC,
@@ -437,30 +438,22 @@ class LoadbalancerVipMixin:
         fqdn = component_ref(component)
         listener = f"{fqdn} {PortProfileHelper.format_port_spec(port)} on {load_balancer.get('name')}"
         try:
-            from types import SimpleNamespace
-
-            from generators.specs import LoadBalancerVipSpec, PlanReconciler, TopologyPlan
-
-            plan = TopologyPlan()
-            plan.add(
-                LoadBalancerVipSpec(
-                    hostname=fqdn,
-                    address_id=vip_ip_id,
-                    load_balancer_id=load_balancer["id"],
-                    extra={
-                        "protocol": protocol,
-                        "port": port_start,
-                        "status": "active",
-                        "description": listener,
-                        "pool_members": member_ids,
-                        **({"ssl_certificate": component["lb_certificate"]} if protocol == "https" else {}),
-                        "health_checks": [
-                            check["id"] for check in component.get("health_checks") or [] if check.get("id")
-                        ],
-                    },
-                )
+            vip = await self.client.create(
+                kind=LoadbalancerVIP,
+                data={
+                    "hostname": fqdn,
+                    "protocol": protocol,
+                    "port": port_start,
+                    "status": "active",
+                    "description": listener,
+                    "load_balancer": {"id": load_balancer["id"]},
+                    **({"vip_ip": {"id": vip_ip_id}} if vip_ip_id else {}),
+                    "pool_members": member_ids,
+                    **({"ssl_certificate": component["lb_certificate"]} if protocol == "https" else {}),
+                    "health_checks": [check["id"] for check in component.get("health_checks") or [] if check.get("id")],
+                },
             )
-            await PlanReconciler(SimpleNamespace(client=self.client)).apply(plan)
+            await vip.save(allow_upsert=True)
         except Exception as exc:
             self.logger.error(f"Failed to save the VIP {listener}: {exc}")
             return False

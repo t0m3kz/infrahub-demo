@@ -14,7 +14,6 @@ from generators.helpers.routing import p2p_prefix_length
 from generators.mixins.routing import EVPN_AF
 from generators.mixins.types import CablingOptions
 from generators.protocols import DcimVirtualInterface, ManagedBGP
-from generators.specs.registry import imperative_flow
 
 if TYPE_CHECKING:
     from generators.mixins.common import CommonGenerator
@@ -83,7 +82,6 @@ class ColocationEvpnMixin:
             )
         return found.id
 
-    @imperative_flow(reason="Waits on peer add_colocation_metro supernet and ASN pools")
     async def _ensure_evpn(self) -> dict[str, str]:
         """Make this node's edges EVPN Multi-Site border gateways: the metro's site ASN, an overlay ManagedBGP and an
         IPv6 VTEP loopback per edge. DCI sessions and the Multi-Site VIP are not built here. Returns edge name ->

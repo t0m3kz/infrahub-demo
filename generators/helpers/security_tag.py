@@ -78,13 +78,8 @@ async def ensure_security_tag(client: Any, lock: Lock, *, kind: Any, node: dict[
     if node_id not in attached:
         async with lock(f"sgt-{name}"):
             tag_id = await _find_or_create_tag(client, name)
-            from types import SimpleNamespace
-
-            from generators.specs import PlanReconciler, SecurityTagSpec, TopologyPlan
-
-            plan = TopologyPlan()
-            plan.add(SecurityTagSpec(name=name, tag_id=tag_id, consumer_kind=kind, consumer_id=node_id))
-            await PlanReconciler(SimpleNamespace(client=client)).apply(plan)
+            consumer = await client.create(kind=kind, data={"id": node_id, "security_tag": {"id": tag_id}})
+            await consumer.save(allow_upsert=True, update_group_context=False)
         attached[node_id] = tag_id
     node["security_tag"] = {"id": attached[node_id]}
     return attached[node_id]

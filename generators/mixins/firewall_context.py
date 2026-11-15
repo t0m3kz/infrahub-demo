@@ -652,25 +652,16 @@ class FirewallContextMixin(TransitLegsMixin):
         # the context, written as the whole list (this generator is their only writer). track=False (shared): written,
         # never claimed by this customer's group (_resolve_context_target).
         try:
-            from types import SimpleNamespace
-
-            from generators.specs import FirewallContextSpec, PlanReconciler, TopologyPlan
-
-            plan = TopologyPlan()
-            plan.add(
-                FirewallContextSpec(
-                    name=context_name,
-                    kind=spec.context_kind,
-                    tenant_id=tenant_id,
-                    track=track,
-                    extra={
-                        "deployment": {"id": deployment_id},
-                        "shared_devices": [{"id": member_id} for member_id in member_ids],
-                    },
-                )
+            context_obj = await self.client.create(
+                kind=spec.context_kind,
+                data={
+                    "name": context_name,
+                    "deployment": {"id": deployment_id},
+                    "shared_devices": [{"id": member_id} for member_id in member_ids],
+                    **({"tenant": {"id": tenant_id}} if tenant_id else {}),
+                },
             )
-            res = await PlanReconciler(SimpleNamespace(client=self.client)).apply(plan)
-            context_obj = res.nodes[(spec.context_kind, context_name)]
+            await context_obj.save(**tracked_save_kwargs(track))
             self.logger.info(f"Ensured {spec.label} '{context_name}'")
             return context_obj
         except Exception as exc:

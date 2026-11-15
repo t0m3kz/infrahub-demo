@@ -381,6 +381,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
 
         max_border_leafs_per_fabric = self.data["design"]["max_border_leafs_per_fabric"]
         capacities = self._pod_border_leaf_capacities(sorted_pods)
+        placed_by_pod: dict[str, int] = {}
         for entry in template_entries:
             if entry["quantity"] > max_border_leafs_per_fabric:
                 self.logger.error(
@@ -399,11 +400,14 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                 share = min(remaining, pod_capacity)
                 remaining -= share
 
+                pod_offset = placed_by_pod.get(pod["id"], 0)
+                placed_by_pod[pod["id"]] = pod_offset + share
                 device_options = DeviceOptions(
                     indexes=[self.data["index"], pod["index"]],
                     allocate_loopback=True,
                     loopback_pool=self._dc_fabric_loopback_pool_id,
                     loopback_prefix_length=loopback_prefix_length(self._underlay_protocol),
+                    role_index_start=pod_offset + 1,
                 )
                 if entry.get("rack_id"):
                     device_options["rack"] = entry["rack_id"]

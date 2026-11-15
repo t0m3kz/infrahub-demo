@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 import yaml
 
-from generators.specs import (
+from generators.plan import (
     BgpPeeringSpec,
     CableSpec,
     DeviceSpec,
@@ -16,12 +16,12 @@ from generators.specs import (
     InterfaceSpec,
     IpSpec,
     LoadBalancerVipSpec,
-    PlanReconciler,
     RoutingTagSpec,
     SecurityTagSpec,
     TopologyPlan,
     VrfSpec,
 )
+from generators.reconciler import PlanReconciler
 from tests.unit.generators.test_spec_registry_and_recovery import _StatefulFakeClient
 
 _ROOT = Path(__file__).resolve().parents[3]

@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from generators.specs import (
+from generators.plan import (
     BgpPeeringSpec,
     CableSpec,
     DeviceSpec,
@@ -15,21 +15,12 @@ from generators.specs import (
     InterfaceSpec,
     IpSpec,
     LoadBalancerVipSpec,
-    PlanReconciler,
     RoutingTagSpec,
     SecurityTagSpec,
     TopologyPlan,
     VrfSpec,
-    registered_steps,
 )
-
-
-def test_registry_order_is_explicit_and_cables_are_last() -> None:
-    steps = registered_steps()
-    orders = [s.order for s in steps]
-    assert orders == sorted(orders)
-    assert steps[-1].spec_type is CableSpec
-    assert steps[-1].order == 90
+from generators.reconciler import PlanReconciler
 
 
 class _StatefulFakeClient:
