@@ -29,6 +29,9 @@ spec:
                         shortname: fr2-s1-r-1
                         index: 1
                         deployment: FR2
+                        fabric_templates:
+                          - ["2", "edge", "N9K-C9316D-GX_EDGE"]
+                          - ["2", "internal-firewall", "PA-5260_FIREWALL"]
                         member_of_groups:
                           - topologies_rack
                         parent: fr2-s1-row-1

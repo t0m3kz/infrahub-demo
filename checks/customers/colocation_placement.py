@@ -49,12 +49,31 @@ def _entry_label(entry: dict[str, Any]) -> str:
     return f"{entry.get('quantity')} x {entry.get('role')} on '{template.get('display_label') or template.get('id')}'"
 
 
+def _fabric_entries(node: dict[str, Any], kind: str) -> list[dict[str, Any]]:
+    if kind != ZONE:
+        return list(node.get("fabric_templates") or [])
+    entries: list[dict[str, Any]] = list(node.get("fabric_templates") or [])
+    for rack in node.get("racks") or []:
+        if not isinstance(rack, dict):
+            continue
+        entries.extend(rack.get("fabric_templates") or [])
+        if rack.get("switch_template") and rack.get("switch_quantity") is not None and rack.get("switch_role"):
+            entries.append(
+                {
+                    "role": rack["switch_role"],
+                    "quantity": int(rack["switch_quantity"]),
+                    "template": rack["switch_template"],
+                }
+            )
+    return entries
+
+
 def template_kind_findings(cleaned: dict[str, Any]) -> list[Finding]:
     """Rule 1: a zone declares physical templates only, a virtual colocation network appliance ones only."""
     findings = []
     for kind, wanted in HOSTED_TEMPLATE_KIND.items():
         for node in cleaned.get(kind) or []:
-            for entry in node.get("fabric_templates") or []:
+            for entry in _fabric_entries(node, kind):
                 template = entry.get("template") or {}
                 actual = template.get("template_kind")
                 if not template or actual == wanted:
@@ -115,7 +134,7 @@ def kit_without_design_findings(cleaned: dict[str, Any]) -> list[Finding]:
     findings = []
     for kind in FABRIC_KINDS:
         for node in cleaned.get(kind) or []:
-            entries = node.get("fabric_templates") or []
+            entries = _fabric_entries(node, kind)
             if entries and not node.get("design"):
                 findings.append(
                     Finding(
@@ -137,7 +156,7 @@ def kit_within_design_findings(cleaned: dict[str, Any]) -> list[Finding]:
             if design is None:
                 continue
             totals: dict[str, int] = defaultdict(int)
-            for entry in node.get("fabric_templates") or []:
+            for entry in _fabric_entries(node, kind):
                 if entry.get("role") in ROLE_LIMIT:
                     totals[entry["role"]] += int(entry.get("quantity") or 0)
             for role, attribute in ROLE_LIMIT.items():

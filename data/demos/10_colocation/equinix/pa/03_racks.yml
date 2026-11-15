@@ -29,6 +29,10 @@ spec:
                         shortname: pa4-s1-r-1
                         index: 1
                         deployment: PA4
+                        member_of_groups:
+                          - topologies_rack
+                        fabric_templates:
+                          - ["2", "edge", "N9K-C9316D-GX_EDGE"]
                         parent: pa4-s1-row-1
                       - name: PA4-PA4-R1-2
                         shortname: pa4-s1-r-2

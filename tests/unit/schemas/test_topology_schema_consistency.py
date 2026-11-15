@@ -171,11 +171,11 @@ class TestColocationKit:
     def test_the_fabric_generic_carries_design_templates_and_the_three_pools(self) -> None:
         assert _relationship_names(_FABRIC) == {
             "design",
-            "fabric_templates",
             "loopback_pool",
             "technical_pool",
             "management_pool",
         }
+        assert "fabric_templates" in _relationship_names("TopologyVirtualColocation")
 
     def test_a_virtual_colocation_is_no_physical_deployment_and_hosts_no_racks(self) -> None:
         """Provider-hosted: nothing of ours to rack or cable."""

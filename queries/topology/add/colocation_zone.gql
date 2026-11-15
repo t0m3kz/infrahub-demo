@@ -1,15 +1,5 @@
-# The kit a colocation zone (cage) declares (fabric_templates), turned into devices by
-# generators/topology/colocation_fabric.py. The pools it attaches are written, not
-# read, so they are not selected. The parent metro supplies the naming convention,
-# the ASN pool of its one EVPN site AS and the AS itself once drawn (evpn_rt_as: read so the
-# generator skips re-attaching it; the metro is a parent the generator never tracks). Its own design (the envelope: most
-# edges, firewalls and load balancers) and the metro's size the pools
-# (generators/fabric_sizing.py); both are optional. template_kind is aliased deliberately:
-# clean_data() strips "__" out of any key it finds, so a bare __typename would
-# arrive as "typename". The generator reads template_kind to tell a physical
-# template from a virtual one and to refuse the kind this node cannot host.
-# Physical templates only: a zone's
-# virtual entries are skipped.
+# The kit a colocation zone (cage) declares on its physical racks (fabric_templates or pre-created devices),
+# turned into devices by generators/colocation/colocation_fabric.py.
 query topology_colocation_zone($name: String!) {
   TopologyColocationZone(name__value: $name) {
     edges {
@@ -82,16 +72,26 @@ query topology_colocation_zone($name: String!) {
             }
           }
         }
-        fabric_templates {
+        racks {
           edges {
             node {
-              role {
+              id
+              name {
                 value
               }
-              quantity {
+              index {
                 value
               }
-              template {
+              rack_type {
+                value
+              }
+              switch_role {
+                value
+              }
+              switch_quantity {
+                value
+              }
+              switch_template {
                 node {
                   id
                   template_kind: __typename
@@ -120,6 +120,101 @@ query topology_colocation_zone($name: String!) {
                           }
                         }
                       }
+                    }
+                  }
+                }
+              }
+              fabric_templates {
+                edges {
+                  node {
+                    role {
+                      value
+                    }
+                    quantity {
+                      value
+                    }
+                    template {
+                      node {
+                        id
+                        template_kind: __typename
+                        ... on TemplateDcimPhysicalDevice {
+                          platform {
+                            node {
+                              id
+                              name {
+                                value
+                              }
+                            }
+                          }
+                          device_type {
+                            node {
+                              id
+                            }
+                          }
+                          interfaces {
+                            edges {
+                              node {
+                                name {
+                                  value
+                                }
+                                role {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              devices {
+                edges {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                    role {
+                      value
+                    }
+                    interfaces {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        devices {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              role {
+                value
+              }
+              interfaces {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                    role {
+                      value
                     }
                   }
                 }

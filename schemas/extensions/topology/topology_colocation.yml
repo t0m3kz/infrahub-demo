@@ -37,15 +37,6 @@ generics:
         optional: true
         identifier: "colocation_fabric__design"
         order_weight: 200
-      - name: fabric_templates
-        peer: TopologyElement
-        label: "Elements"
-        description: "Edge-router, firewall, and load-balancer templates for this zone's own devices"
-        optional: true
-        cardinality: many
-        kind: Attribute
-        identifier: "colocation_fabric__fabric_templates"
-        order_weight: 1100
       - name: loopback_pool
         peer: CoreIPAddressPool
         label: "Loopback Pool"
@@ -263,6 +254,16 @@ nodes:
     uniqueness_constraints:
       - [name__value, parent]
     include_in_menu: false
+    relationships:
+      - name: fabric_templates
+        peer: TopologyElement
+        label: "Elements"
+        description: "Edge-router, firewall, and load-balancer templates for this virtual colocation's appliances"
+        optional: true
+        cardinality: many
+        kind: Attribute
+        identifier: "virtual_colocation__fabric_templates"
+        order_weight: 1100
 
   # The envelope of a metro and of a zone or virtual colocation, the colocation
   # counterparts of TopologyTemplateDC / TopologyTemplatePod (topology_dc.yml).

@@ -531,17 +531,6 @@ spec:
     # so a rule matching those relationships — or an unguarded `updated` rule —
     # would re-fire itself on every run. No cascade generator either: the
     # racks nested below a zone declare no kit of their own.
-    - name: trigger-colocation-zone-update-fabric-templates
-      branch_scope: "other_branches"
-      node_kind: TopologyColocationZone
-      mutation_action: "updated"
-      action: run-colocation-zone-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: fabric_templates
-            modification_type: updated
-
     - name: trigger-virtual-colocation-update-fabric-templates
       branch_scope: "other_branches"
       node_kind: TopologyVirtualColocation

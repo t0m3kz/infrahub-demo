@@ -36,11 +36,14 @@ ALLOWED_ROLES_BY_RACK_TYPE: dict[str, frozenset[str]] = {
     "tor": frozenset({"tor", "l2-leaf", "access-leaf"}),
     "compute": frozenset({"tor", "l2-leaf", "access-leaf"}),
     "storage": frozenset({"tor", "l2-leaf", "access-leaf"}),
+    "colocation": frozenset({"edge", "internal-firewall", "external-firewall", "load-balancer"}),
 }
 
 _DC_TIER_ROLES: frozenset[str] = frozenset(
     {"super-spine", "hyper-spine", "border-leaf", "internal-firewall", "external-firewall", "load-balancer"}
 )
+
+_COLO_TIER_ROLES: frozenset[str] = frozenset({"edge", "internal-firewall", "external-firewall", "load-balancer"})
 
 
 def rack_type_role_errors(rack: Mapping[str, Any], roles: Collection[str]) -> list[str]:
@@ -50,8 +53,6 @@ def rack_type_role_errors(rack: Mapping[str, Any], roles: Collection[str]) -> li
         dep_type = deployment.get("__typename")
         if dep_type and dep_type != "TopologyPod":
             return []
-    if "COLO" in str(rack.get("name") or "").upper():
-        return []
     raw_type = rack.get("rack_type")
     if not raw_type:
         return []
@@ -197,6 +198,33 @@ def normalize_pod_templates(pod: dict[str, Any]) -> dict[str, Any]:
     if existing:
         pod["fabric_templates"] = existing
     return pod
+
+
+def normalize_colo_zone_templates(zone: dict[str, Any]) -> dict[str, Any]:
+    """Synthesize TopologyColocationZone fabric_templates from its physical racks (templates or pre-created devices)."""
+    existing = list(zone.get("fabric_templates") or [])
+    rack_entries = _extract_rack_entries_for_roles(list(zone.get("racks") or []), _COLO_TIER_ROLES)
+    if rack_entries:
+        rack_roles = {e["role"] for e in rack_entries}
+        existing = [*rack_entries, *[e for e in existing if e.get("role") not in rack_roles]]
+    if not existing:
+        rack_devs = [d for r in (zone.get("racks") or []) if isinstance(r, dict) for d in (r.get("devices") or [])]
+        by_role: dict[str, list[dict[str, Any]]] = {}
+        for d in [*(zone.get("devices") or []), *rack_devs]:
+            if isinstance(d, dict) and d.get("role") in _COLO_TIER_ROLES:
+                by_role.setdefault(str(d["role"]), []).append(d)
+        for role, devs in by_role.items():
+            existing.append(
+                {
+                    "role": role,
+                    "quantity": len(devs),
+                    "template": {"interfaces": list(devs[0].get("interfaces") or []), "devices": devs},
+                    "devices": devs,
+                }
+            )
+    if existing:
+        zone["fabric_templates"] = existing
+    return zone
 
 
 def _default_switch_role_for_rack(rack: Mapping[str, Any]) -> str:

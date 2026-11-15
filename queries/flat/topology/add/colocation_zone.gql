@@ -71,16 +71,26 @@ query topology_colocation_zone($name: String!) {
             }
           }
         }
-        fabric_templates {
+        racks {
           edges {
             node {
-              role {
+              id
+              name {
                 value
               }
-              quantity {
+              index {
                 value
               }
-              template {
+              rack_type {
+                value
+              }
+              switch_role {
+                value
+              }
+              switch_quantity {
+                value
+              }
+              switch_template {
                 node {
                   id
                   template_kind: __typename
@@ -109,6 +119,101 @@ query topology_colocation_zone($name: String!) {
                           }
                         }
                       }
+                    }
+                  }
+                }
+              }
+              fabric_templates {
+                edges {
+                  node {
+                    role {
+                      value
+                    }
+                    quantity {
+                      value
+                    }
+                    template {
+                      node {
+                        id
+                        template_kind: __typename
+                        ... on TemplateDcimPhysicalDevice {
+                          platform {
+                            node {
+                              id
+                              name {
+                                value
+                              }
+                            }
+                          }
+                          device_type {
+                            node {
+                              id
+                            }
+                          }
+                          interfaces {
+                            edges {
+                              node {
+                                name {
+                                  value
+                                }
+                                role {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              devices {
+                edges {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                    role {
+                      value
+                    }
+                    interfaces {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        devices {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              role {
+                value
+              }
+              interfaces {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                    role {
+                      value
                     }
                   }
                 }

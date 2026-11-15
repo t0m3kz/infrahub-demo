@@ -63,20 +63,46 @@ query colocation_placement {
             }
           }
         }
-        fabric_templates {
+        racks {
           edges {
             node {
-              role {
+              id
+              name {
                 value
               }
-              quantity {
+              rack_type {
                 value
               }
-              template {
+              switch_role {
+                value
+              }
+              switch_quantity {
+                value
+              }
+              switch_template {
                 node {
                   id
                   template_kind: __typename
                   display_label
+                }
+              }
+              fabric_templates {
+                edges {
+                  node {
+                    role {
+                      value
+                    }
+                    quantity {
+                      value
+                    }
+                    template {
+                      node {
+                        id
+                        template_kind: __typename
+                        display_label
+                      }
+                    }
+                  }
                 }
               }
             }

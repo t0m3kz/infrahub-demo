@@ -127,7 +127,6 @@ class TopologyCloudHosting(CoreNode):
 
 class TopologyColocationFabric(CoreNode):
     design: RelationshipAttribute[TopologyTemplateColocationZone]
-    fabric_templates: RelationshipManager[TopologyElement]
     loopback_pool: RelationshipAttribute[CoreIPAddressPool]
     management_pool: RelationshipAttribute[CoreIPAddressPool]
     technical_pool: RelationshipAttribute[CoreIPPrefixPool]
@@ -447,7 +446,7 @@ class TopologyVirtualColocation(
     TopologyConnectableLocation,
     TopologyFacility,
 ):
-    pass
+    fabric_templates: RelationshipManager[TopologyElement]
 
 
 class AppComponent(AppGeneric):

@@ -21,6 +21,7 @@ from generators.colocation.colocation_pools import (
     ColocationFabricData,
     ColoPoolSlot,
 )
+from generators.helpers.rack import normalize_colo_zone_templates
 from generators.helpers.routing import loopback_prefix_length
 from generators.mixins.common import CommonGenerator
 from generators.mixins.connections import CablingMixin
@@ -133,6 +134,8 @@ class ColocationFabricGenerator(
 
     def _valid_fabric_templates(self) -> list[dict[str, Any]]:
         """Validate colocation fabric_templates via ColocationFabricModel (supports physical, virtual, and mixed)."""
+        if self._flavor == "physical":
+            normalize_colo_zone_templates(cast(dict[str, Any], self.data))
         model = ColocationFabricModel.compile(self.data, flavor=self._flavor, label=self._label)
         for warning in model.warnings:
             self.logger.warning(warning)
@@ -273,11 +276,14 @@ class ColocationFabricGenerator(
                 # Provider-hosted kit: a CloudNetworkAppliance with no hosting_device (the operator's platform is not
                 # modelled)
                 options.update(self._appliance_options())
+            elif entry.get("rack_id"):
+                options["rack"] = entry["rack_id"]
+            tpl = {**entry["template"], "devices": entry["devices"]} if entry.get("devices") else entry["template"]
             names = await self.create_devices(
                 deployment_id=self.data["id"],
                 device_role="edge",
                 quantity=entry["quantity"],
-                template=entry["template"],
+                template=tpl,
                 naming_convention=naming_convention,
                 options=options,
             )

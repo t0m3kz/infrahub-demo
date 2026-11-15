@@ -210,7 +210,6 @@ def test_colocation_kind_bootstraps_on_its_group_rule(node_kind: str, group_rule
 @pytest.mark.parametrize(
     ("node_kind", "update_rule"),
     [
-        ("TopologyColocationZone", "trigger-colocation-zone-update-fabric-templates"),
         ("TopologyVirtualColocation", "trigger-virtual-colocation-update-fabric-templates"),
     ],
 )
@@ -237,7 +236,6 @@ def test_colocation_generators_are_fired_by_exactly_the_expected_rules() -> None
     assert names == {
         "trigger-colocation-metro-on-added",
         "trigger-colocation-zone-on-added",
-        "trigger-colocation-zone-update-fabric-templates",
         "trigger-virtual-colocation-on-added",
         "trigger-virtual-colocation-update-fabric-templates",
     }

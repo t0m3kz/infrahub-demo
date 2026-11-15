@@ -140,8 +140,18 @@ class _Model:
     def _add_generated_devices(self) -> None:
         """The edges add_colocation_zone / add_virtual_colocation create, the DC border leaves, the office edges."""
         virtual = {name(v) for v in _all("TopologyVirtualColocation")}
+        rack_templates_by_zone: dict[str, list[list[Any]]] = {}
+        for rack in _all("LocationRack"):
+            dep = str(rack.item.get("deployment") or "")
+            if dep:
+                rack_templates_by_zone.setdefault(dep, []).extend(rack.item.get("fabric_templates") or [])
         for place in [*_all("TopologyColocationZone"), *_all("TopologyVirtualColocation")]:
-            count = sum(int(row[0]) for row in place.item.get("fabric_templates") or [] if row[1] == "edge")
+            entries = (
+                rack_templates_by_zone.get(name(place), [])
+                if name(place) not in virtual
+                else (place.item.get("fabric_templates") or [])
+            )
+            count = sum(int(row[0]) for row in entries if row[1] == "edge")
             for index in range(1, count + 1):
                 self.devices[f"eg-{name(place).lower()}{index:02d}"] = {
                     "kind": APPLIANCE if name(place) in virtual else PHYSICAL_DEVICE,

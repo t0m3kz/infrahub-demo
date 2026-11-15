@@ -1,0 +1,13 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPod
+  data:
+    - name: DC15-15-POD-1
+      index: 1
+      parent: DC15
+      design: M_MIDDLE
+      mlag_create: virtual
+      member_of_groups:
+        - topologies_pod
