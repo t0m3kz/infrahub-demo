@@ -9,7 +9,7 @@ query office_rack($id: ID!) {
         }
         deployment {
           node {
-            ... on TopologyOffice {
+            ... on TopologyCustomerOffice {
               id
               name {
                 value
