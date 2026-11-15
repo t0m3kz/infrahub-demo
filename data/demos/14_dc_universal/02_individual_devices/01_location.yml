@@ -30,3 +30,21 @@ spec:
                         row_type: network
                         racks_per_row: 5
                         parent: ber-u1-s-1
+                        children:
+                          kind: LocationRack
+                          data:
+                            - name: BER-U1-SUITE-1-R1-1
+                              index: 1
+                              shortname: ber-u1-s-1-r-1-1
+                              rack_type: network
+                              parent: ber-u1-s-1-row-1
+                            - name: BER-U1-SUITE-1-R1-2
+                              index: 2
+                              shortname: ber-u1-s-1-r-1-2
+                              rack_type: network
+                              parent: ber-u1-s-1-row-1
+                            - name: BER-U1-SUITE-1-R1-5
+                              index: 5
+                              shortname: ber-u1-s-1-r-1-5
+                              rack_type: network
+                              parent: ber-u1-s-1-row-1
