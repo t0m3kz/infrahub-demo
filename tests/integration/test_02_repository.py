@@ -121,7 +121,7 @@ class TestRepository(TestInfrahubDockerWithClient):
                 )
                 details = []
                 for t in tasks:
-                    logs = "\n".join(f"    [{entry.level}] {entry.message}" for entry in (t.logs or []))
+                    logs = "\n".join(f"    [{entry.severity}] {entry.message}" for entry in (t.logs or []))
                     details.append(f"  Task: {t.title} ({t.state})\n{logs}")
                 detail_block = "\n".join(details) or "  (no failed task logs returned)"
                 raise AssertionError(f"Repository sync failed with error status: {sync_status}\n{detail_block}")
