@@ -60,21 +60,3 @@ spec:
       object_template: N9K-C9336C-FX2_LEAF_MR
       deployment: DC15-15-POD-1
       rack: ber-u1-s-1-r-1-5
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologyPod
-  data:
-    - name: DC15-15-POD-1
-      member_of_groups:
-        - topologies_pod
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: LocationRack
-  data:
-    - name: BER-U1-SUITE-1-R1-5
-      member_of_groups:
-        - topologies_rack
