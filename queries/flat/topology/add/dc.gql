@@ -121,6 +121,112 @@ query topology_dc($name: String!) {
               }
             }
           }
+          racks {
+            edges {
+              node {
+                id
+                name {
+                  value
+                }
+                index {
+                  value
+                }
+                rack_type {
+                  value
+                }
+                devices {
+                  edges {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                      role {
+                        value
+                      }
+                      interfaces {
+                        edges {
+                          node {
+                            name {
+                              value
+                            }
+                            role {
+                              value
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                switch_role {
+                  value
+                }
+                switch_quantity {
+                  value
+                }
+                switch_template {
+                  node {
+                    id
+                    ... on TemplateDcimPhysicalDevice {
+                      platform {
+                        node {
+                          id
+                          name {
+                            value
+                          }
+                        }
+                      }
+                      device_type {
+                        node {
+                          id
+                        }
+                      }
+                      interfaces {
+                        edges {
+                          node {
+                            name {
+                              value
+                            }
+                            role {
+                              value
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                devices {
+                  edges {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                      role {
+                        value
+                      }
+                      ... on DcimDevice {
+                        interfaces {
+                          edges {
+                            node {
+                              name {
+                                value
+                              }
+                              role {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
           children {
             edges {
               node {
@@ -183,50 +289,6 @@ query topology_dc($name: String!) {
                   platform {
                     node {
                       id
-                    }
-                  }
-                }
-              }
-            }
-          }
-          fabric_templates {
-            edges {
-              node {
-                role {
-                  value
-                }
-                quantity {
-                  value
-                }
-                template {
-                  node {
-                    id
-                    ... on TemplateDcimPhysicalDevice {
-                      platform {
-                        node {
-                          id
-                          name {
-                            value
-                          }
-                        }
-                      }
-                      device_type {
-                        node {
-                          id
-                        }
-                      }
-                      interfaces {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                            role {
-                              value
-                            }
-                          }
-                        }
-                      }
                     }
                   }
                 }

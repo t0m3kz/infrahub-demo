@@ -41,7 +41,7 @@ fragment FabricTemplateFields on TopologyElement {
   }
 }
 
-fragment PodFields on TopologyPod {
+fragment RackPodFields on TopologyPod {
   id
   name {
     value
@@ -138,21 +138,80 @@ fragment PodFields on TopologyPod {
       }
     }
   }
-  fabric_templates {
+  spine_role { value }
+  spine_quantity { value }
+  devices(role__values: ["spine", "border-spine"]) {
     edges {
       node {
+        id
+        name { value }
         role { value }
-        quantity { value }
-        template {
+        ... on DcimDevice {
+          interfaces(role__value: "downlink") {
+            edges {
+              node {
+                name { value }
+                role { value }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  racks {
+    edges {
+      node {
+        id
+        name { value }
+        index { value }
+        rack_type { value }
+        devices(role__values: ["spine", "border-spine"]) {
+          edges {
+            node {
+              id
+              name { value }
+              role { value }
+              ... on DcimPhysicalDevice {
+                object_template {
+                        node {
+                          ... on TemplateDcimPhysicalDevice {
+                            interfaces {
+                              edges {
+                                node {
+                                  name { value }
+                                  role { value }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+              }
+              ... on DcimDevice {
+                interfaces(role__value: "downlink") {
+                  edges {
+                    node {
+                      name { value }
+                      role { value }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        switch_role { value }
+        switch_quantity { value }
+        switch_template {
           node {
             id
             ... on TemplateDcimPhysicalDevice {
               interfaces(role__value: "downlink") {
                 edges {
                   node {
-                    name {
-                      value
-                    }
+                    name { value }
+                    role { value }
                   }
                 }
               }
@@ -181,23 +240,10 @@ fragment PodFields on TopologyPod {
       id
     }
   }
-  # Every rack of the pod: the generator filters its row in Python instead of reading it
-  # (racks are data, never saved by this generator).
-  racks {
-    edges {
-      node {
-        id
-        name { value }
-        index { value }
-        row_index { value }
-        rack_type { value }
-      }
-    }
-  }
 }
 
-query RackGenerator($name: String) {
-  LocationRack(name__value: $name) {
+query RackGenerator($id: ID!) {
+  LocationRack(ids: [$id]) {
     edges {
       node {
         id
@@ -210,14 +256,94 @@ query RackGenerator($name: String) {
         rack_type {
           value
         }
-        row_index {
+        switch_role {
           value
+        }
+        switch_quantity {
+          value
+        }
+        switch_template {
+          node {
+            id
+            ...TemplateDeviceFields
+          }
+        }
+        devices {
+          edges {
+            node {
+              id
+              name { value }
+              role { value }
+              ... on DcimPhysicalDevice {
+                object_template {
+                        node {
+                          ... on TemplateDcimPhysicalDevice {
+                            interfaces {
+                              edges {
+                                node {
+                                  name { value }
+                                  role { value }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+              }
+              interfaces {
+                edges {
+                  node {
+                    name { value }
+                    role { value }
+                  }
+                }
+              }
+            }
+          }
         }
         parent {
           node {
             ... on LocationSuite {
+              id
               index {
                 value
+              }
+              rows {
+                value
+              }
+              racks_per_row {
+                value
+              }
+            }
+            ... on LocationRackRow {
+              id
+              name {
+                value
+              }
+              index {
+                value
+              }
+              row_type {
+                value
+              }
+              racks_per_row {
+                value
+              }
+              parent {
+                node {
+                  ... on LocationSuite {
+                    id
+                    index {
+                      value
+                    }
+                    rows {
+                      value
+                    }
+                    racks_per_row {
+                      value
+                    }
+                  }
+                }
               }
             }
           }
@@ -252,7 +378,11 @@ query RackGenerator($name: String) {
         }
         deployment {
           node {
-            ...PodFields
+            typename: __typename
+            ... on TopologyColocationZone {
+              id
+            }
+            ...RackPodFields
           }
         }
       }
