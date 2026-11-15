@@ -152,7 +152,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                 (_task_ts(task) for task in matching if task.state == TaskState.COMPLETED), default=""
             )
             if latest_failed_ts is not None and latest_failed_ts >= latest_completed_ts:
-                self.logger.error(
+                raise GeneratorError(
                     f"Parent generator '{name}' last run failed for {parent_id} — "
                     "cannot safely continue child generation until parent succeeds"
                 )

@@ -2293,6 +2293,12 @@ Every schema, generator, transform, and validation check in this repository MUST
 - **Never query `interfaces` directly on `DcimDeviceManaged`**—always scope inside `... on DcimPhysicalDevice` or `... on DcimVirtualDevice`.
 - **Always run `uv run invoke flatten-queries`** after editing any file under `queries/` (excluding `queries/flat/`), and verify with `tests/integration/test_02_repository.py::TestRepository::test_05_no_query_selects_a_field_twice_on_one_object`.
 
+### 4. Fail-Loud Error Handling (`GeneratorError`)
+
+- **Never silently skip missing prerequisites with `self.logger.error(...)` + `return`:** In Infrahub, returning early leaves the Prefect flow in `Completed()` state and hides incomplete topologies.
+- **Raise `GeneratorError` (from `generators.mixins.logger`)** whenever a required object, pool, template, interface, or design constraint prevents creating the requested resource.
+- **Required `GeneratorError` message format:** Name the **target object** (`<Kind> '<name>'`), **what could not be created**, the **root cause**, and the **actionable fix** (which schema field, template, or pool to define).
+
 ## Writing & Running Integration Kicks (`tests/integration/kicks/`)
 
 Integration kicks deploy demo data through real Infrahub branches, triggers, generators, proposed changes, artifact builds, and merges—and fail immediately if any Prefect task fails or any expected object/attribute/cable/session count is off.
