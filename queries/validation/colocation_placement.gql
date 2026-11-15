@@ -37,6 +37,15 @@ query colocation_placement {
               id
               name { value }
               rack_type { value }
+              switch_role { value }
+              switch_quantity { value }
+              switch_template {
+                node {
+                  id
+                  template_kind: __typename
+                  display_label
+                }
+              }
               fabric_templates {
                 edges {
                   node {

@@ -85,6 +85,45 @@ query topology_colocation_zone($name: String!) {
               rack_type {
                 value
               }
+              switch_role {
+                value
+              }
+              switch_quantity {
+                value
+              }
+              switch_template {
+                node {
+                  id
+                  template_kind: __typename
+                  ... on TemplateDcimPhysicalDevice {
+                    platform {
+                      node {
+                        id
+                        name {
+                          value
+                        }
+                      }
+                    }
+                    device_type {
+                      node {
+                        id
+                      }
+                    }
+                    interfaces {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
               fabric_templates {
                 edges {
                   node {
