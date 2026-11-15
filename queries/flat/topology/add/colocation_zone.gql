@@ -178,6 +178,24 @@ query topology_colocation_zone($name: String!) {
                     role {
                       value
                     }
+                    object_template {
+                      node {
+                        ... on TemplateDcimPhysicalDevice {
+                          interfaces {
+                            edges {
+                              node {
+                                name {
+                                  value
+                                }
+                                role {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                     ... on DcimPhysicalDevice {
                       interfaces {
                         edges {
@@ -207,6 +225,24 @@ query topology_colocation_zone($name: String!) {
               }
               role {
                 value
+              }
+              object_template {
+                node {
+                  ... on TemplateDcimPhysicalDevice {
+                    interfaces {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
               ... on DcimPhysicalDevice {
                 interfaces {

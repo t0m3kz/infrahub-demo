@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
 
+from generators.mixins.logger import GeneratorError
+
 if TYPE_CHECKING:
     import logging
     from generators.mixins.common import CommonGenerator
@@ -133,10 +135,13 @@ class CablingMixin:
                 await asyncio.sleep(delay)
 
         if not src_interfaces or not dst_interfaces:
-            self.logger.error(
-                f"Interfaces still not found after {WAIT_FOR_PEER_GENERATOR.attempts} attempts "
-                f"(src={len(src_interfaces)}, dst={len(dst_interfaces)}) — skipping cabling"
-            )
+            if bottom_devices and top_devices:
+                raise GeneratorError(
+                    f"Interfaces not found for cabling {sorted(bottom_devices)} ({bottom_interfaces}) "
+                    f"-> {sorted(top_devices)} ({top_interfaces}) after "
+                    f"{WAIT_FOR_PEER_GENERATOR.attempts} attempts "
+                    f"(src={len(src_interfaces)}, dst={len(dst_interfaces)})"
+                )
             return []
 
         iface_map: dict[str, Any] = {iface.id: iface for iface in src_interfaces + dst_interfaces}

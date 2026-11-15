@@ -172,6 +172,20 @@ fragment RackPodFields on TopologyPod {
               id
               name { value }
               role { value }
+              object_template {
+                      node {
+                        ... on TemplateDcimPhysicalDevice {
+                          interfaces {
+                            edges {
+                              node {
+                                name { value }
+                                role { value }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
               ... on DcimDevice {
                 interfaces(role__value: "downlink") {
                   edges {
@@ -258,6 +272,20 @@ query RackGenerator($id: ID!) {
               id
               name { value }
               role { value }
+              object_template {
+                      node {
+                        ... on TemplateDcimPhysicalDevice {
+                          interfaces {
+                            edges {
+                              node {
+                                name { value }
+                                role { value }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
               interfaces {
                 edges {
                   node {

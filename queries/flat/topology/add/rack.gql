@@ -61,6 +61,24 @@ query RackGenerator($id: ID!) {
               role {
                 value
               }
+              object_template {
+                node {
+                  ... on TemplateDcimPhysicalDevice {
+                    interfaces {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
               interfaces {
                 edges {
                   node {
@@ -493,6 +511,24 @@ query RackGenerator($id: ID!) {
                           }
                           role {
                             value
+                          }
+                          object_template {
+                            node {
+                              ... on TemplateDcimPhysicalDevice {
+                                interfaces {
+                                  edges {
+                                    node {
+                                      name {
+                                        value
+                                      }
+                                      role {
+                                        value
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
                           }
                           ... on DcimDevice {
                             interfaces(role__value: "downlink") {

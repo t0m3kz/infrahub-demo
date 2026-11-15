@@ -8,7 +8,12 @@ from typing_extensions import TypedDict
 from generators.fabric.fabric_shared import DC_GENERATORS, ServiceDevicesMixin
 from generators.fabric.pod_mesh import PodMeshMixin, mesh_slot_width, pod_routing_options
 from generators.helpers.naming import DeviceNamingConfig
-from generators.helpers.rack import expected_device_names, normalize_dc_templates, normalize_pod_templates
+from generators.helpers.rack import (
+    _device_interfaces,
+    expected_device_names,
+    normalize_dc_templates,
+    normalize_pod_templates,
+)
 from generators.helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 from generators.helpers.template_interfaces import template_interface_names_by_role
 from generators.mixins.common import CommonGenerator
@@ -216,7 +221,7 @@ class PodTopologyGenerator(
                 iface["name"] for iface in dc_super_spine_entries[0]["template"].get("interfaces", [])
             ]
         else:
-            first_ss_ifaces = next((d.get("interfaces") or [] for d in dc_ss_devs if d.get("interfaces")), [])
+            first_ss_ifaces = next((_device_interfaces(d) for d in dc_ss_devs if _device_interfaces(d)), [])
             super_spine_interfaces = [iface["name"] for iface in first_ss_ifaces]
 
         # Check every precondition before the first save: returning after a save leaves a partial tracked set.

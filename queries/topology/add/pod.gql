@@ -168,6 +168,20 @@ query topology_pod($name: String!) {
               id
               name { value }
               role { value }
+              object_template {
+                      node {
+                        ... on TemplateDcimPhysicalDevice {
+                          interfaces {
+                            edges {
+                              node {
+                                name { value }
+                                role { value }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
               ... on DcimDevice {
                 interfaces {
                   edges {
@@ -208,6 +222,20 @@ query topology_pod($name: String!) {
                     id
                     name { value }
                     role { value }
+                    object_template {
+                      node {
+                        ... on TemplateDcimPhysicalDevice {
+                          interfaces {
+                            edges {
+                              node {
+                                name { value }
+                                role { value }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                     ... on DcimDevice {
                       interfaces {
                         edges {

@@ -116,7 +116,7 @@ def _extract_rack_entries_for_roles(
                 if d_role in target_roles:
                     direct_by_role.setdefault(d_role, []).append(dev)
         for role, devs in direct_by_role.items():
-            first_ifaces = list(devs[0].get("interfaces") or [])
+            first_ifaces = _device_interfaces(devs[0])
             extracted.append(
                 {
                     "role": role,
@@ -129,6 +129,17 @@ def _extract_rack_entries_for_roles(
 
         validate_rack_device_roles(rack, rack_roles)
     return extracted
+
+
+def _device_interfaces(dev: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return materialized device interfaces, falling back to object_template interfaces before async template apply."""
+    direct = list(dev.get("interfaces") or [])
+    if direct:
+        return direct
+    tpl = dev.get("object_template")
+    if isinstance(tpl, Mapping):
+        return list(tpl.get("interfaces") or [])
+    return []
 
 
 def normalize_dc_templates(dc: dict[str, Any]) -> dict[str, Any]:
@@ -149,7 +160,7 @@ def normalize_dc_templates(dc: dict[str, Any]) -> dict[str, Any]:
                 {
                     "role": role,
                     "quantity": len(devs),
-                    "template": {"interfaces": list(devs[0].get("interfaces") or []), "devices": devs},
+                    "template": {"interfaces": _device_interfaces(devs[0]), "devices": devs},
                     "devices": devs,
                 }
             )
@@ -186,7 +197,7 @@ def normalize_pod_templates(pod: dict[str, Any]) -> dict[str, Any]:
                     "role": role,
                     "quantity": len(direct_spines),
                     "template": {
-                        "interfaces": list(direct_spines[0].get("interfaces") or []),
+                        "interfaces": _device_interfaces(direct_spines[0]),
                         "devices": direct_spines,
                     },
                     "devices": direct_spines,
@@ -218,7 +229,7 @@ def normalize_colo_zone_templates(zone: dict[str, Any]) -> dict[str, Any]:
                 {
                     "role": role,
                     "quantity": len(devs),
-                    "template": {"interfaces": list(devs[0].get("interfaces") or []), "devices": devs},
+                    "template": {"interfaces": _device_interfaces(devs[0]), "devices": devs},
                     "devices": devs,
                 }
             )
@@ -331,7 +342,7 @@ def normalize_rack_templates(rack: dict[str, Any]) -> dict[str, Any]:
                     {
                         "role": role,
                         "quantity": len(devs),
-                        "template": {"interfaces": list(devs[0].get("interfaces") or []), "devices": devs},
+                        "template": {"interfaces": _device_interfaces(devs[0]), "devices": devs},
                         "devices": devs,
                     }
                 ]
