@@ -1433,7 +1433,7 @@ The copies need Infrahub 1.12: on 1.11 a fragment spread inside an inline fragme
 The test stack serves on port 8100 (`--server-port` moves it).
 
 Always, after any run that registers a new check or transform query: run that query against the settled stack
-(`KEEP_STACK`) and simulate the check or transform on the real data. Unit tests with canned responses do not catch
+(`INFRAHUB_TESTING_KEEP_STACK=1`) and simulate the check or transform on the real data. Unit tests with canned responses do not catch
 schema-invalid queries or false positives on real data. Clean the
 previous stack (`uv run invoke clean-testcontainers`) before starting a run, and confirm a merged PR's `state` is
 `MERGED` before relying on it.
