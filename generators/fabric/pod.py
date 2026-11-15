@@ -8,7 +8,7 @@ from typing_extensions import TypedDict
 from generators.fabric.fabric_shared import DC_GENERATORS, ServiceDevicesMixin
 from generators.fabric.pod_mesh import PodMeshMixin, mesh_slot_width, pod_routing_options
 from generators.helpers.naming import DeviceNamingConfig
-from generators.helpers.rack import expected_device_names, normalize_pod_templates
+from generators.helpers.rack import expected_device_names, normalize_dc_templates, normalize_pod_templates
 from generators.helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 from generators.helpers.template_interfaces import template_interface_names_by_role
 from generators.mixins.common import CommonGenerator
@@ -108,7 +108,7 @@ class PodTopologyGenerator(
             pod_id = self.data["id"]
             pod_name = self.data["name"]
             pod_index = self.data["index"]
-            dc = self.data["parent"]
+            dc = cast(TopologyPodParentData, normalize_dc_templates(cast(dict[str, Any], self.data["parent"])))
             dc_id = dc["id"]
             dc_name = dc["name"]
 
@@ -136,7 +136,7 @@ class PodTopologyGenerator(
                         self.logger.error("No Pod Deployment data found in GraphQL response")
                         return
                     self.data = cast(TopologyPodData, deployment_list[0])
-                    dc = self.data["parent"]
+                    dc = cast(TopologyPodParentData, normalize_dc_templates(cast(dict[str, Any], self.data["parent"])))
             # This pod's and its DC's design: the envelope every check and pool size reads.
             design = self.data["design"]
             dc_design = dc["design"]

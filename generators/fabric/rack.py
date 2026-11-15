@@ -5,7 +5,7 @@ from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
 
-from generators.helpers.rack import RackRolesHelper, parse_rack_data, pod_row_racks
+from generators.helpers.rack import RackRolesHelper, normalize_pod_templates, parse_rack_data, pod_row_racks
 from generators.helpers.template_interfaces import template_interface_names_by_role
 from generators.mixins.common import CommonGenerator
 from generators.mixins.connections import CablingMixin
@@ -269,6 +269,14 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             )
             await self.run_generator("add_colocation_zone", [pod["id"]], wait=False)
             return
+        if pod.get("typename") == "TopologyDataCenter" and pod.get("id"):
+            self.logger.info(
+                "Rack %s: parent %s is a TopologyDataCenter — cascading to dc_pod_cascade",
+                self.data["name"],
+                pod["id"],
+            )
+            await self.run_generator("dc_pod_cascade", [pod["id"]], wait=False)
+            return
         if "design" not in pod:
             self.logger.info(
                 "Rack %s: parent %s is not a DC-fabric pod, nothing to generate",
@@ -283,7 +291,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             if not self._load_rack_data(refreshed):
                 return
 
-        pod = self.data["deployment"]
+        pod = cast(Any, normalize_pod_templates(cast(dict[str, Any], self.data["deployment"])))
         spine_names = await self._existing_spine_slot_names()
         spine_bgp_role = spine_bgp_readiness_role(pod.get("parent") or {})
         if spine_names and not await self.bgp_processes_ready(spine_names, spine_bgp_role):
@@ -306,7 +314,10 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 if refreshed is not None:
                     if not self._load_rack_data(refreshed):
                         return
-                    pod = self.data["deployment"]
+                    pod = cast(
+                        Any,
+                        normalize_pod_templates(cast(dict[str, Any], self.data["deployment"])),
+                    )
                     deployment_type = pod_deployment_type(pod["design"])
 
         self.logger.info(
@@ -404,7 +415,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         """Shared executor for roles that dual-home to the pod's spines: create devices, optionally MLAG-pair,
         cable+route at the given offset.
         """
-        pod = self.data["deployment"]
+        pod = cast(Any, normalize_pod_templates(cast(dict[str, Any], self.data["deployment"])))
         devices = await self._create_devices_for_role(
             role, device_role=device_role, deployment_id=deployment_id, allocate_loopback=True, mlag=mlag
         )
@@ -449,7 +460,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
     async def _generate_tors(self) -> None:
         """Create -> cable -> route ToR devices (L2-only switches below leafs use l2-leaf/access-leaf)."""
-        pod = self.data["deployment"]
+        pod = cast(Any, normalize_pod_templates(cast(dict[str, Any], self.data["deployment"])))
         if not (tor_roles := self.data.get("tors", [])):
             return
 
