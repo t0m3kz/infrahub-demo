@@ -22,9 +22,6 @@ spec:
     - name: run-colocation-rack-generator
       description: Run Colocation Rack Generator
       generator: add_colocation_rack
-    - name: run-office-rack-generator
-      description: Run Office Rack Generator
-      generator: add_office_rack
     - name: run-decommission-pod
       description: Decommission all devices within a pod
       generator: decommission_pod

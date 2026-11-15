@@ -187,13 +187,6 @@ infrahub_tests:
           path: queries/flat/topology/add/colocation_rack.gql
           kind: graphql-query-smoke
 
-  - resource: GraphQLQuery
-    resource_name: office_rack
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/flat/topology/add/office_rack.gql
-          kind: graphql-query-smoke
 
   - resource: GraphQLQuery
     resource_name: application

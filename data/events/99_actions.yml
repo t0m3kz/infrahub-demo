@@ -230,17 +230,6 @@ spec:
           - relationship_name: devices
             modification_type: updated
 
-    - name: trigger-office-rack-update-devices
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "updated"
-      action: run-office-rack-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: devices
-            modification_type: updated
-
     - name: trigger-rack-generator-update-templates
       branch_scope: "other_branches"
       node_kind: LocationRack
@@ -296,27 +285,6 @@ spec:
           - attribute_name: switch_quantity
             value_match: any
 
-    - name: trigger-office-rack-update-templates
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "updated"
-      action: run-office-rack-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: fabric_templates
-            modification_type: updated
-
-    - name: trigger-office-rack-update-switch-quantity
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "updated"
-      action: run-office-rack-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: switch_quantity
-            value_match: any
 
     # # Device decommission: when status set to decommissioned
     # - name: trigger-device-decommission

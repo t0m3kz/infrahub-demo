@@ -574,8 +574,6 @@ queries:
     file_path: queries/flat/topology/add/rack.gql
   - name: colocation_rack
     file_path: queries/flat/topology/add/colocation_rack.gql
-  - name: office_rack
-    file_path: queries/flat/topology/add/office_rack.gql
   - name: topology_pop
     file_path: queries/flat/topology/add/pop.gql
   - name: topology_simulator
@@ -817,13 +815,6 @@ generator_definitions:
     targets: topologies_rack
     query: colocation_rack
     class_name: ColocationRackGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-  - name: add_office_rack
-    file_path: generators/fabric/office_rack.py
-    targets: topologies_rack
-    query: office_rack
-    class_name: OfficeRackGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
