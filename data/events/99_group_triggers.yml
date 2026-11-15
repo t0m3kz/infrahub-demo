@@ -36,6 +36,18 @@ spec:
       group: topologies_rack
       action: run-rack-generator
 
+    - name: trigger-colocation-rack-generator-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: topologies_rack
+      action: run-colocation-rack-generator
+
+    - name: trigger-office-rack-generator-on-added
+      branch_scope: "other_branches"
+      member_update: added
+      group: topologies_rack
+      action: run-office-rack-generator
+
     - name: trigger-endpoint-generator-on-added
       branch_scope: "other_branches"
       member_update: added

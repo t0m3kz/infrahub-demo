@@ -489,6 +489,18 @@ class PodTopologyGenerator(
             candidate_names.extend(
                 d["name"] for d in dc.get("devices", []) if d.get("role") == "border-leaf" and "-pod-" not in d["name"]
             )
+            candidate_names.extend(
+                d["name"]
+                for entry in templates_by_role(dc.get("fabric_templates", []), "border-leaf")
+                for d in entry.get("devices") or []
+                if "-pod-" not in d["name"]
+            )
+            candidate_names.extend(
+                d["name"]
+                for entry in templates_by_role(dc.get("fabric_templates", []), "border-leaf")
+                for d in entry.get("devices") or []
+                if "-pod-" not in d["name"]
+            )
         # Bounded retry: border-leaf may be read before add_dc's write is visible; short because most pods host none.
         border_leafs: list[Any] = []
         for attempt in range(BORDER_LEAF_WAIT.attempts):

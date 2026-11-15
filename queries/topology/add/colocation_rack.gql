@@ -1,0 +1,18 @@
+query colocation_rack($id: ID!) {
+  LocationRack(ids: [$id]) {
+    edges {
+      node {
+        id
+        name { value }
+        deployment {
+          node {
+            ... on TopologyColocationZone {
+              id
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -261,14 +261,6 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         # A rack whose deployment is not a TopologyPod (e.g. a colocation zone) has no DC-fabric fields: nothing to
         # build. Checked before reading pod["id"]; every LocationRack reaches this generator (group trigger).
         pod = self.data.get("deployment") or {}
-        if pod.get("typename") == "TopologyColocationZone" and pod.get("id"):
-            self.logger.info(
-                "Rack %s: parent %s is a TopologyColocationZone — cascading to add_colocation_zone",
-                self.data["name"],
-                pod["id"],
-            )
-            await self.run_generator("add_colocation_zone", [pod["id"]], wait=False)
-            return
         if pod.get("typename") == "TopologyDataCenter" and pod.get("id"):
             self.logger.info(
                 "Rack %s: parent %s is a TopologyDataCenter — cascading to dc_pod_cascade",

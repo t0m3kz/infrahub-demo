@@ -14,6 +14,7 @@ from generators.fabric.dc import DCTopologyGenerator
 from generators.fabric.dc_pod_cascade import DCPodCascadeGenerator
 from generators.fabric.pod_rack_cascade import PodRackCascadeGenerator
 from generators.mixins.common import CommonGenerator
+from generators.mixins.logger import GeneratorError
 from generators.mixins.pools import PoolMixin
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 
@@ -185,8 +186,8 @@ class TestWaitForParentGeneratorAndRefetch:
             ]
         )
 
-        assert await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1") is None
-        gen.logger.error.assert_called_once()
+        with pytest.raises(GeneratorError, match="last run failed"):
+            await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1")
 
     @pytest.mark.asyncio
     async def test_failure_followed_by_success_is_not_an_error(self) -> None:

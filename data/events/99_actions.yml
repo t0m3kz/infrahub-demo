@@ -32,6 +32,50 @@ spec:
           - attribute_name: connectivity_mode
             value_match: any
 
+    - name: trigger-dc-update-racks
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "updated"
+      action: run-dc-pod-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: racks
+            modification_type: updated
+
+    - name: trigger-dc-update-devices
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "updated"
+      action: run-dc-pod-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: devices
+            modification_type: updated
+
+    - name: trigger-dc-update-design
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "updated"
+      action: run-dc-pod-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: design
+            modification_type: updated
+
+    - name: trigger-dc-update-profiles
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "updated"
+      action: run-dc-pod-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: profiles
+            modification_type: updated
+
     - name: trigger-dc-status
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
@@ -54,6 +98,50 @@ spec:
     # every rack. Plain add_pod keeps ordering correct on its own: rack.py
     # already waits for an in-flight add_pod/pod_rack_cascade on its parent pod
     # before reading pod-level data.
+
+    - name: trigger-pod-update-racks
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "updated"
+      action: run-pod-rack-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: racks
+            modification_type: updated
+
+    - name: trigger-pod-update-devices
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "updated"
+      action: run-pod-rack-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: devices
+            modification_type: updated
+
+    - name: trigger-pod-update-design
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "updated"
+      action: run-pod-rack-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: design
+            modification_type: updated
+
+    - name: trigger-pod-update-profiles
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "updated"
+      action: run-pod-rack-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: profiles
+            modification_type: updated
 
     - name: trigger-pod-update-index
       branch_scope: "other_branches"
@@ -120,6 +208,39 @@ spec:
           - attribute_name: rack_type
             value_match: any
 
+    - name: trigger-rack-generator-update-devices
+      branch_scope: "other_branches"
+      node_kind: LocationRack
+      mutation_action: "updated"
+      action: run-rack-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: devices
+            modification_type: updated
+
+    - name: trigger-colocation-rack-update-devices
+      branch_scope: "other_branches"
+      node_kind: LocationRack
+      mutation_action: "updated"
+      action: run-colocation-rack-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: devices
+            modification_type: updated
+
+    - name: trigger-office-rack-update-devices
+      branch_scope: "other_branches"
+      node_kind: LocationRack
+      mutation_action: "updated"
+      action: run-office-rack-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: devices
+            modification_type: updated
+
     - name: trigger-rack-generator-update-templates
       branch_scope: "other_branches"
       node_kind: LocationRack
@@ -147,6 +268,50 @@ spec:
       node_kind: LocationRack
       mutation_action: "updated"
       action: run-rack-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: switch_quantity
+            value_match: any
+
+    - name: trigger-colocation-rack-update-templates
+      branch_scope: "other_branches"
+      node_kind: LocationRack
+      mutation_action: "updated"
+      action: run-colocation-rack-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: fabric_templates
+            modification_type: updated
+
+    - name: trigger-colocation-rack-update-switch-quantity
+      branch_scope: "other_branches"
+      node_kind: LocationRack
+      mutation_action: "updated"
+      action: run-colocation-rack-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: switch_quantity
+            value_match: any
+
+    - name: trigger-office-rack-update-templates
+      branch_scope: "other_branches"
+      node_kind: LocationRack
+      mutation_action: "updated"
+      action: run-office-rack-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: fabric_templates
+            modification_type: updated
+
+    - name: trigger-office-rack-update-switch-quantity
+      branch_scope: "other_branches"
+      node_kind: LocationRack
+      mutation_action: "updated"
+      action: run-office-rack-generator
       matches:
         kind: CoreNodeTriggerAttributeMatch
         data:

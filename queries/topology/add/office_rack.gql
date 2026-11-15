@@ -1,0 +1,18 @@
+query office_rack($id: ID!) {
+  LocationRack(ids: [$id]) {
+    edges {
+      node {
+        id
+        name { value }
+        deployment {
+          node {
+            ... on TopologyOffice {
+              id
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

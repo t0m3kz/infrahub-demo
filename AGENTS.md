@@ -2414,5 +2414,6 @@ To keep the codebase modular, deterministic, and easy to extend without cross-do
 1. **Query Flattening (whenever `queries/` or `schemas/` changes):** `uv run invoke flatten-queries`
 2. **Static Validation & Full Unit Test Suite (ALWAYS required):** `uv run invoke validate`
 3. **Targeted Integration Kick (whenever generators, schemas, queries, events, or demo data change):**
+   - Always pass `-x` (`--exitfirst`) and chain commands with `&&` so test execution stops immediately on the first failure.
    - Run `uv run invoke clean-testcontainers` first, then run the relevant kick (`dc-individual-devices-suite`, `full-topology-suite`, `dc6-suite`).
    - A kick stage is only valid when `refuse_failed_tasks` reports **0 failed/crashed Prefect tasks** across both the branch and post-merge `main`.

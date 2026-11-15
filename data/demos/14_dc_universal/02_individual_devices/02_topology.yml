@@ -12,8 +12,6 @@ spec:
       underlay_protocol: ipv6
       naming_convention: standard
       fabric_interface_sorting_method: top_down
-      member_of_groups:
-        - topologies_dc
       racks:
         kind: LocationRack
         data:

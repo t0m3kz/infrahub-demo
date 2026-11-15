@@ -17,8 +17,14 @@ spec:
       description: Re-run the racks a pod is directly responsible for after a pod-level capacity change
       generator: pod_rack_cascade
     - name: run-rack-generator
-      description: Run Rack Generator
+      description: Run DC Rack Generator
       generator: add_rack
+    - name: run-colocation-rack-generator
+      description: Run Colocation Rack Generator
+      generator: add_colocation_rack
+    - name: run-office-rack-generator
+      description: Run Office Rack Generator
+      generator: add_office_rack
     - name: run-decommission-pod
       description: Decommission all devices within a pod
       generator: decommission_pod
