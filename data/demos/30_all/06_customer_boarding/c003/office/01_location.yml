@@ -2,7 +2,7 @@
 # Office footprint for C003 (Vaultex), mirroring c001/office/.
 #
 # C003 already has an AWS eu-central-1 footprint (../cloud/aws/eu-central-1/)
-# and a TGW attachment on the shared route table
+# and, being transit, a generated TGW attachment on its own route table
 # (../../../08_interconnects/02_cloud_hub/05_attachments.yml). Giving it a branch
 # office is what makes the end-to-end path exist: office -> SD-WAN overlay ->
 # Equinix FR2 gateway -> cross-connect -> transit connection -> TGW -> its own VPC.

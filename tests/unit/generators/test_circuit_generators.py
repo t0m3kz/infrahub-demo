@@ -13,7 +13,7 @@ from generators.connectivity.circuit import (
     circuit_endpoints,
     plan_locations,
 )
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
 from tests.unit.simulators.circuit_fakes import (
     CAGE,
     CIRCUIT_ID,
@@ -294,10 +294,7 @@ class TestFanOutToSessionCircuits:
 
         await physical_generator(client).generate(carrier_payload())
 
-        assert (
-            "ManagedInterfaceEncapsulation",
-            {"parent__ids": ["if-bl", "if-eg"], "include": ["capabilities"]},
-        ) in client.filter_calls
+        assert ("DcimSubInterface", {"parent__ids": ["if-bl", "if-eg"]}) in client.filter_calls
         session_queries = [kwargs for _, kwargs in client.filter_calls if "capabilities__ids" in kwargs]
         assert session_queries == [
             {

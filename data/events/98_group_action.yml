@@ -6,6 +6,6 @@ spec:
   kind: CoreGroupAction
   data:
     - name: add-to-artifact-validators
-      description: Add an artifact validator to artifact_validators (open_change_request runs for its members)
+      description: Add an artifact validator to artifact_validators (joining starts open_change_request)
       member_action: add_member
       group: artifact_validators

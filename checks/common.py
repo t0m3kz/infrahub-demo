@@ -2,6 +2,7 @@ from collections.abc import Callable
 from ipaddress import ip_interface
 from typing import Any
 
+from checks.base import WarningCheck
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.firewall import get_exchange_transits
 from transforms.helpers.firewall_contexts import member_firewall_contexts
@@ -27,8 +28,6 @@ from utils.service_contexts import (
     exchange_legs,
     leg_contexts,
 )
-
-from .base import WarningCheck
 
 TRANSIT_LEGS_PER_EXCHANGE = 2
 

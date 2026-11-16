@@ -6,10 +6,9 @@ from typing import Any
 
 from infrahub_sdk.batch import InfrahubBatch
 
-from generators.helpers.vrf import VrfMixin
-from generators.mixins.common import CommonGenerator
-from generators.mixins.pod_config import pod_spine_slot_device_names, spine_slot_role
-from generators.mixins.pools import PoolMixin
+from generators.base import BaseGenerator
+from generators.capabilities.vrf import prune_empty_vrfs, reconcile_vrfs
+from generators.model.pod_profile import pod_spine_slot_device_names, spine_slot_role
 from generators.protocols import (
     CoreIPAddressPool,
     CoreIPPrefixPool,
@@ -19,10 +18,8 @@ from generators.protocols import (
     DcimVirtualInterface,
     IpamIPAddress,
     IpamPrefix,
-    ManagedInterfaceEncapsulation,
 )
 from utils.data_cleaning import clean_data
-from utils.interface_encapsulation import encapsulation_name
 from utils.vrf_demand import SVI_ROLE
 
 # Device roles add_pod/add_rack create under a pod's deployment
@@ -33,7 +30,7 @@ _FAR_END_FABRIC_ROLES = frozenset({"super-spine", "spine", "border-spine", "bord
 _POD_POOLS = (("loopback_pool", CoreIPAddressPool), ("prefix_pool", CoreIPPrefixPool))
 
 
-class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
+class PodDecommissionGenerator(BaseGenerator):
     async def _filter_by_ids(self, kind: Any, ids: list[str], **kwargs: Any) -> list[Any]:
         """client.filters(ids=...), or [] for no ids (the SDK forwards an empty id list, which does not narrow the
         query).
@@ -209,19 +206,6 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
             )
 
         interface_objs: list[DcimVirtualInterface] = await self._filter_by_ids(DcimVirtualInterface, virtual_interfaces)
-        # An interface does not take its encapsulation with it: delete those first
-        encapsulations = (
-            await self.client.filters(
-                kind=ManagedInterfaceEncapsulation,
-                name__values=[
-                    encapsulation_name(*hfid) for interface_obj in interface_objs if (hfid := interface_obj.hfid)
-                ],
-            )
-            if interface_objs
-            else []
-        )
-        for encapsulation in encapsulations:
-            await encapsulation.delete()
         for interface_obj in interface_objs:
             await interface_obj.delete()
             self.logger.info(f"deleted virtual interface {interface_obj.hfid}")
@@ -246,10 +230,10 @@ class PodDecommissionGenerator(PoolMixin, VrfMixin, CommonGenerator):
 
         # Decommissioned devices carry no VRF: the reconcile (locks held) deletes their SVIs, memberships and empty
         # instances, also on a re-run
-        await self.reconcile_vrfs([device["id"] for device in pod_devices if device.get("id")])
+        await reconcile_vrfs(self, [device["id"] for device in pod_devices if device.get("id")])
 
         await self._release_pod_pools()
 
         # Last: sweep what is left empty in the DC
         if dc_id := (self.data.get("parent") or {}).get("id"):
-            await self.prune_empty_vrfs([dc_id])
+            await prune_empty_vrfs(self, [dc_id])

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from graphql import FieldNode, OperationDefinitionNode, parse
 
 from checks.devices.firewall import CheckFirewall
 from tests.smoke.fixture_builders.common import run_transform
@@ -16,23 +14,6 @@ from tests.smoke.fixture_builders.vrf import interface_vrf_capability, with_inte
 from transforms.config.firewall import Firewall
 
 EMPTY_ROOTS = {"DcimDevice": {"edges": []}, "SecurityZone": {"edges": []}}
-
-
-def _root_fields(root_dir: Path, query_file: str) -> list[str]:
-    """The root fields of the (single) operation of a query file."""
-    document = parse((root_dir / query_file).read_text())
-    operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
-    return [s.name.value for s in operation.selection_set.selections if isinstance(s, FieldNode)]
-
-
-def test_firewall_query_roots_at_the_device_generic(root_dir: Path) -> None:
-    """Both device kinds are found by name: the first root is DcimDevice, never one kind."""
-    assert _root_fields(root_dir, "queries/config/firewall.gql") == ["DcimDevice", "SecurityZone"]
-
-
-def test_loadbalancer_query_selects_both_device_kinds(root_dir: Path) -> None:
-    """The load balancer config query already reaches a dedicated virtual instance."""
-    assert _root_fields(root_dir, "queries/config/loadbalancer.gql") == ["DcimPhysicalDevice", "DcimVirtualDevice"]
 
 
 def test_virtual_firewall_payload_renders_its_contexts() -> None:

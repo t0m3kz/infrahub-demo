@@ -1,18 +1,24 @@
-"""Validate the cloud side of a connection: gateways, transports, interfaces and tunnels (R1-R11).
+"""Validate the cloud side of a connection: gateways, transports, interfaces and tunnels (R1-R16).
 
-R1-R11 cover attachment targets, route tables, rides_on, endpoints, crypto, peerings, placement and public endpoints.
-See AGENTS.md.
+R1-R11 cover attachment targets, route tables, endpoints, crypto, peerings, placement and public endpoints (R3, the
+rides_on chain, is retired: what carries a leg is its carrier circuit or cable and its peering's parent port).
+R12-R16 prove each footprint's ``connection``: a transit footprint has the one hub of its region and environment and its
+networks are attached to it (R12), a hub route table never mixes owners (R13), a dedicated footprint's own peering and every serving
+hub's link reach L1 and our session end (R14, R16, utils/path_trace.py), a vpn footprint's tunnels ride an edge with
+internet access (R15). See domain-model.md.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from infrahub_sdk.checks import InfrahubCheck
-
+from checks.base import WarningCheck
 from utils.circuit_underlay import INTERNET_KIND
 from utils.data_cleaning import clean_data
 from utils.interface_encapsulation import parent_of, vlan_of
+from utils.ownership import customer_owner
+from utils.path_trace import Trace, session_circuits, trace_gateway, trace_peering
+from utils.transit_hub import TRANSIT, hub_candidates, missing_hub_message
 
 ATTACHMENT = "CloudGatewayAttachment"
 ROUTE_TABLE = "CloudGatewayRouteTable"
@@ -27,6 +33,12 @@ PHYSICAL = "physical"
 IPSEC = "ipsec"
 PROVIDER_CONNECT = "TopologyProviderConnect"
 PUBLIC = "public"
+FOOTPRINT = "TopologyCustomerCloud"
+GATEWAY = "CloudGateway"
+NETWORK = "CloudVirtualNetwork"
+DEDICATED = "dedicated"
+VPN = "vpn"
+INTERNET_CIRCUIT = "internet"
 
 
 def _ref(value: Any) -> str | None:
@@ -58,8 +70,42 @@ def _internet_attached(connect: dict[str, Any]) -> bool:
     return False
 
 
-class CheckCloudConnection(InfrahubCheck):
-    """The cloud side of a connection is consistent where the schema cannot say it (rules R1 to R11)."""
+def _attachment_owner(attachment: dict[str, Any]) -> str | None:
+    """Who a network attachment's routes belong to: the customer owning its network's account, else that account."""
+    network = attachment.get("virtual_network")
+    if not isinstance(network, dict):
+        return None
+    account = network.get("account")
+    if not isinstance(account, dict):
+        return _ref(account) and f"account {_ref(account)}"
+    return customer_owner(account.get("owner")) or f"account {account.get('id')}"
+
+
+def _transport_account(peering: dict[str, Any]) -> str | None:
+    device = peering.get("device")
+    return _ref(device.get("account")) if isinstance(device, dict) else None
+
+
+def _has_internet(device: Any) -> bool:
+    """A port of the device is an end of a live internet carrier circuit."""
+    if not isinstance(device, dict):
+        return False
+    return any(
+        circuit.get("typename") == "TopologyCarrierCircuit"
+        and circuit.get("circuit_type") == INTERNET_CIRCUIT
+        and circuit.get("status") != "decommissioned"
+        for port in _dicts(device.get("interfaces"))
+        for circuit in _dicts(port.get("capabilities"))
+    )
+
+
+def _best(traces: list[Trace]) -> Trace:
+    """The trace that goes furthest (a reaching one wins)."""
+    return max(traces, key=lambda trace: (trace.ok, len(trace.hops)))
+
+
+class CheckCloudConnection(WarningCheck):
+    """The cloud side of a connection is consistent where the schema cannot say it (rules R1 to R16)."""
 
     query = "cloud_connection"
 
@@ -72,10 +118,7 @@ class CheckCloudConnection(InfrahubCheck):
             self._r2_table_gateway(table)
         direct = [t for t in _dicts(cleaned.get(DIRECT_CONNECT)) if t.get("id")]
         transports = {str(t["id"]): t for t in [*direct, *_dicts(cleaned.get(VPN_CONNECTION))] if t.get("id")}
-        by_id = {str(t["id"]): t for t in direct}
         for transport in transports.values():
-            if transport.get("typename") == DIRECT_CONNECT:
-                self._r3_transport(transport, by_id)
             self._r9_transport(transport)
         peerings = _dicts(cleaned.get(PEERING))
         for peering in peerings:
@@ -89,6 +132,21 @@ class CheckCloudConnection(InfrahubCheck):
         for endpoint in _dicts(cleaned.get(ENDPOINT)):
             self._r4_endpoint_segments(endpoint)
             self._r10_public_endpoint(endpoint, connects)
+        attachments = _dicts(cleaned.get(ATTACHMENT))
+        self._r13_route_tables(attachments)
+        served: dict[str, dict[str, Any]] = {}
+        for footprint in _dicts(cleaned.get(FOOTPRINT)):
+            connection = footprint.get("connection") or TRANSIT
+            if connection == TRANSIT:
+                hub = self._r12_transit(footprint, cleaned, attachments)
+                if hub is not None:
+                    served.setdefault(str(hub["id"]), hub)
+            elif connection == DEDICATED:
+                self._r14_dedicated(footprint, peerings)
+            elif connection == VPN:
+                self._r15_vpn(footprint, peerings)
+        for hub in served.values():
+            self._r16_hub_link(hub, attachments, peerings)
 
     def _error(self, node: dict[str, Any], kind: str, message: str) -> None:
         self.log_error(message=message, object_id=node.get("id"), object_type=kind)
@@ -125,30 +183,6 @@ class CheckCloudConnection(InfrahubCheck):
                     f"R2: attachment '{_name(attachment)}' uses route table '{_name(table)}' of another gateway "
                     f"than its own '{_name(attachment.get('gateway'))}'.",
                 )
-
-    def _r3_transport(self, transport: dict[str, Any], transports: dict[str, dict[str, Any]]) -> None:
-        up = transport.get("rides_on")
-        if not isinstance(up, dict):
-            return
-        label = f"R3: transport '{_name(transport)}'"
-        chain = [str(transport["id"])]
-        node: dict[str, Any] | None = up
-        while node is not None and node.get("id"):
-            if str(node["id"]) in chain:
-                self._error(transport, DIRECT_CONNECT, f"{label} rides on itself (loop through '{_name(node)}').")
-                return
-            chain.append(str(node["id"]))
-            node = transports.get(str(node["id"]), {}).get("rides_on")
-        kind = transport.get("connection_type")
-        if kind == PHYSICAL and up.get("connection_type") != PHYSICAL:
-            self._error(transport, DIRECT_CONNECT, f"{label} is physical but rides on the logical '{_name(up)}'.")
-        if kind != PHYSICAL and transport.get("partner_account"):
-            self._error(
-                transport,
-                DIRECT_CONNECT,
-                f"{label} is logical on a transport of ours ('{_name(up)}') and also has a partner_account: "
-                "a partner's connection rides on the partner's port.",
-            )
 
     def _r10_public_endpoint(self, endpoint: dict[str, Any], connects: list[dict[str, Any]]) -> None:
         """R10 and R11 for one enabled public endpoint: its provider connect, and that device's internet carrier."""
@@ -289,3 +323,162 @@ class CheckCloudConnection(InfrahubCheck):
             self._error(peering, PEERING, f"{label} has no endpoint_ip (the provider's public address).")
         if kind != VPN_CONNECTION:
             self._error(peering, PEERING, f"{label} is an interface of a {kind}, not of a VPN connection.")
+
+    # R12-R16: how a footprint reaches us (TopologyCustomerCloud.connection)
+
+    def _r12_transit(
+        self, footprint: dict[str, Any], cleaned: dict[str, Any], attachments: list[dict[str, Any]]
+    ) -> dict[str, Any] | None:
+        """R12: the one hub of the footprint's region and environment (ERROR), and each network of its account and
+        region attached to it with an associated route table (a WARNING: a network no hub reaches, a sandbox, is not
+        reachable from us; add_customer_deployment_cloud attaches the networks it finds). Returns the hub.
+        """
+        gateways = _dicts(cleaned.get(GATEWAY))
+        candidates = hub_candidates(footprint, gateways)
+        if message := missing_hub_message(footprint, candidates):
+            self._error(footprint, FOOTPRINT, f"R12: {message}")
+            return None
+        hub = next(g for g in gateways if str(g.get("id")) == candidates[0].id)
+        account, region = _ref(footprint.get("account")), _ref(footprint.get("parent"))
+        for network in _dicts(cleaned.get(NETWORK)):
+            if _ref(network.get("account")) != account or _ref(network.get("region")) != region:
+                continue
+            boarded = [
+                a
+                for a in attachments
+                if _ref(a.get("virtual_network")) == str(network.get("id"))
+                and _ref(a.get("gateway")) == str(hub["id"])
+                and _ref(a.get("associated_route_table"))
+            ]
+            if not boarded:
+                self.log_warning(
+                    f"R12: footprint '{_name(footprint)}' is transit but its virtual network '{_name(network)}' has "
+                    f"no attachment on hub '{_name(hub)}' with a route table: it is not reachable from us. Re-run "
+                    "add_customer_deployment_cloud for the footprint (it attaches every network of its account and "
+                    "region), or attach it by hand."
+                )
+        return hub
+
+    def _r13_route_tables(self, attachments: list[dict[str, Any]]) -> None:
+        """R13: the network attachments associated with a route table are of one owner, and only that owner's networks
+        propagate into it (a table associated by one owner that learns another's routes leaks them).
+        """
+        associated: dict[str, set[str]] = {}
+        propagated: dict[str, set[str]] = {}
+        tables: dict[str, dict[str, Any]] = {}
+        for attachment in attachments:
+            owner = _attachment_owner(attachment)
+            if owner is None:
+                continue
+            table = attachment.get("associated_route_table")
+            if isinstance(table, dict) and table.get("id"):
+                tables.setdefault(str(table["id"]), table)
+                associated.setdefault(str(table["id"]), set()).add(owner)
+            for each in _dicts(attachment.get("propagates_to_route_tables")):
+                if each.get("id"):
+                    tables.setdefault(str(each["id"]), each)
+                    propagated.setdefault(str(each["id"]), set()).add(owner)
+        for table_id, owners in sorted(associated.items()):
+            table = tables[table_id]
+            if len(owners) > 1:
+                self._error(
+                    table,
+                    ROUTE_TABLE,
+                    f"R13: route table '{_name(table)}' is associated with networks of {', '.join(sorted(owners))}: "
+                    "two owners on one routing domain reach each other. Give each footprint its own route table "
+                    "(a transit footprint gets rt-<footprint> from add_customer_deployment_cloud).",
+                )
+                continue
+            leaked = sorted(propagated.get(table_id, set()) - owners)
+            if leaked:
+                self._error(
+                    table,
+                    ROUTE_TABLE,
+                    f"R13: route table '{_name(table)}' is associated with networks of {next(iter(owners))} and learns "
+                    f"the routes of {', '.join(leaked)}: that owner's networks reach another owner's. Propagate a "
+                    "network only into its owner's tables and the hub link's table towards us.",
+                )
+
+    def _r14_dedicated(self, footprint: dict[str, Any], peerings: list[dict[str, Any]]) -> None:
+        """R14: a dedicated footprint has a peering of its own (a transport of its account) whose path reaches L1 and
+        our session end.
+        """
+        account = _ref(footprint.get("account"))
+        own = [p for p in peerings if account and _transport_account(p) == account and p.get("scope") != PUBLIC]
+        label = f"R14: footprint '{_name(footprint)}'"
+        if not own:
+            self._error(
+                footprint,
+                FOOTPRINT,
+                f"{label} is dedicated but no peering of a transport in its account "
+                f"'{_name(footprint.get('account'))}' exists: author its Direct Connect / ExpressRoute / Interconnect "
+                "with a CloudPeeringInterface, or set its connection to transit or vpn.",
+            )
+            return
+        trace = _best([trace_peering(peering) for peering in own])
+        if not trace.ok:
+            self._error(
+                footprint,
+                FOOTPRINT,
+                f"{label} is dedicated but its connection does not reach us: {trace.describe()}. Author the missing "
+                "hop (the peering's parent, the cable or carrier circuit on the provider port, our sub-interface and "
+                "the session circuit).",
+            )
+
+    def _r15_vpn(self, footprint: dict[str, Any], peerings: list[dict[str, Any]]) -> None:
+        """R15: a vpn footprint has tunnels (peerings of a VPN connection of its account), each ending a session
+        circuit on an edge of ours with a live internet carrier circuit.
+        """
+        account = _ref(footprint.get("account"))
+        tunnels = [
+            p
+            for p in peerings
+            if account
+            and _transport_account(p) == account
+            and isinstance(p.get("device"), dict)
+            and p["device"].get("typename") == VPN_CONNECTION
+        ]
+        label = f"R15: footprint '{_name(footprint)}'"
+        if not tunnels:
+            self._error(
+                footprint,
+                FOOTPRINT,
+                f"{label} is vpn but its account '{_name(footprint.get('account'))}' has no CloudVPNConnection with "
+                "a tunnel: author the VPN connection and its tunnel peerings, or set its connection to transit or "
+                "dedicated.",
+            )
+            return
+        for tunnel in tunnels:
+            circuits = session_circuits(tunnel)
+            ends = [
+                end for circuit in circuits for end in _dicts(circuit.get("capabilities")) if _ref(end) != _ref(tunnel)
+            ]
+            if not ends:
+                self._error(
+                    tunnel,
+                    PEERING,
+                    f"{label}: tunnel '{_name(tunnel)}' ends no session circuit on an edge of ours: author its vpn "
+                    "session circuit to our tunnel interface.",
+                )
+            elif not any(_has_internet(end.get("device")) for end in ends):
+                devices = ", ".join(sorted({_name(end.get("device")) for end in ends}))
+                self._error(
+                    tunnel,
+                    PEERING,
+                    f"{label}: tunnel '{_name(tunnel)}' rides on {devices}, which has no live internet carrier "
+                    "circuit: give the edge its internet access (an internet carrier on one of its ports).",
+                )
+
+    def _r16_hub_link(
+        self, hub: dict[str, Any], attachments: list[dict[str, Any]], peerings: list[dict[str, Any]]
+    ) -> None:
+        """R16: a hub that serves a transit footprint reaches L1 and our session end through its own link."""
+        trace = trace_gateway(hub, attachments, peerings)
+        if not trace.ok:
+            self._error(
+                hub,
+                GATEWAY,
+                f"R16: hub '{_name(hub)}' serves transit footprints but its link towards us does not reach us: "
+                f"{trace.describe()}. Author the hub's link (an attachment to the edge gateway a peering lands on, "
+                "the peering's parent port, its cable or carrier circuit, our sub-interface and the session circuit).",
+            )

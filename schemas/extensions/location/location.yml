@@ -1,6 +1,36 @@
 ---
 version: "1.0"
 
+# LocationGeneric loads in the same file as its nodes: a node whose `parent:` is another node then gets that parent
+# mandatory from the server (a generic loaded in an earlier step hands its nodes an optional `parent`).
+generics:
+  - name: Generic
+    namespace: Location
+    description: Generic Location, could be a country, city ...
+    label: Location
+    icon: mingcute:location-line
+    hierarchical: true
+    include_in_menu: true
+    uniqueness_constraints:
+      - ["shortname__value"]
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: shortname
+        kind: Text
+        unique: true
+        order_weight: 110
+    relationships:
+      - name: tags
+        peer: BuiltinTag
+        kind: Attribute
+        optional: true
+        cardinality: many
+
 nodes:
   - name: Region
     namespace: Location
@@ -41,7 +71,7 @@ nodes:
     include_in_menu: false
     display_label: "{{name__value}}"
     parent: LocationCountry
-    children: ""
+    children: LocationFacility
     icon: healthicons:city
   - name: Facility
     namespace: Location
@@ -78,7 +108,7 @@ nodes:
         order_weight: 120
       - name: rows
         label: "Number of Rows"
-        description: "Physical capacity: rack rows (checks/suite_capacity.py: racks and pod designs must fit)"
+        description: "Physical capacity: rack rows (checks/customers/suite_capacity.py: racks and pod designs must fit)"
         kind: Number
         optional: false
         order_weight: 130
@@ -86,7 +116,7 @@ nodes:
           min_value: 1
       - name: racks_per_row
         label: "Racks per Row"
-        description: "Physical capacity: rack slots per row (checks/suite_capacity.py: racks and pod designs must fit)"
+        description: "Physical capacity: rack slots per row (see checks/customers/suite_capacity.py)"
         kind: Number
         optional: false
         order_weight: 140
@@ -119,7 +149,6 @@ nodes:
     include_in_menu: false
     menu_placement: "LocationGeneric"
     parent: "LocationSuite"
-    children: ""
     # A rack name is unique within its suite, not across the estate (R1-1 exists in every suite); the globally
     # unique identifier is `shortname` (LocationGeneric), which is also the human friendly id.
     uniqueness_constraints:
@@ -186,27 +215,3 @@ extensions:
           kind: Attribute
           optional: true
           identifier: "device_rack"
-
-    # The hierarchical `parent` is inherited from LocationGeneric as an optional relationship, and a uniqueness
-    # constraint refuses an optional relationship. A suite and a rack always sit under a parent, so the override
-    # makes it mandatory (measured on 1.11.9): kind Hierarchy (not Parent: that one breaks the template reverse
-    # relationships of an unrelated node), the generic's peer (the server narrows it to the node's `parent:` kind) and
-    # the generic's identifier and direction. Region, Country, Metro and Facility keep it optional.
-    - kind: LocationSuite
-      relationships:
-        - name: parent
-          peer: LocationGeneric
-          cardinality: one
-          kind: Hierarchy
-          optional: false
-          identifier: parent__child
-          direction: outbound
-    - kind: LocationRack
-      relationships:
-        - name: parent
-          peer: LocationGeneric
-          cardinality: one
-          kind: Hierarchy
-          optional: false
-          identifier: parent__child
-          direction: outbound

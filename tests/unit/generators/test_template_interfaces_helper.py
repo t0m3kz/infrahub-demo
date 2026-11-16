@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from generators.helpers.template_interfaces import template_interface_names_by_role
+from generators.dcim.template_interfaces import template_interface_names_by_role
 
 
 def test_template_interface_names_by_role_filters_model_and_dict_items() -> None:

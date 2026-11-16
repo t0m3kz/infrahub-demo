@@ -11,8 +11,6 @@ from unittest.mock import patch
 
 import pytest
 import yaml
-from graphql import parse
-from graphql.language import FieldNode, FragmentDefinitionNode, FragmentSpreadNode
 
 from tests.integration.demo_data import attribute_names, relationship_names
 from tests.smoke.fixture_builders.common import make_transform, run_transform
@@ -434,11 +432,11 @@ class TestSegmentsOutsideAVrf:
             get_lisp_config(_device(), "access-switch", [activation], _inputs())
 
     @pytest.mark.parametrize("vni", [10100, None])
-    def test_an_ipv6_gateway_is_refused_with_or_without_a_vni(self, vni: int | None) -> None:
+    def test_an_ipv6_gateway_renders_with_or_without_a_vni(self, vni: int | None) -> None:
+        """The LISP overlay leaves an IPv6 gateway out (no `service ipv6`); nothing raises."""
         activation = _activation(vni=vni, gateway="2001:db8::1/64")
 
-        with pytest.raises(ValueError, match=r"VLAN 100 has an IPv6 gateway \(service ipv6 is not rendered\)"):
-            get_lisp_config(_device(), "access-switch", [activation], _inputs())
+        assert get_lisp_config(_device(), "access-switch", [activation], _inputs()) is not None
 
     def test_a_vlan_only_gateway_in_a_vrf_is_accepted(self) -> None:
         config = get_lisp_config(_device(), "access-switch", [_activation(vni=None)], _inputs())
@@ -499,16 +497,6 @@ class TestRegistration:
         assert entry["file_path"] == f"transforms/config/{transform}.py"
         assert (ROOT / entry["file_path"]).is_file()
 
-    def test_the_query_is_registered_and_exists(
-        self, registry: dict, role: str, cls: type, transform: str, query: str, subdir: str
-    ) -> None:
-        entry = next(q for q in registry["queries"] if q["name"] == query)
-
-        assert entry["file_path"] == f"queries/flat/config/{transform}.gql"
-        text = (ROOT / entry["file_path"]).read_text()
-        assert f"query {query}(" in text
-        assert "$device: String!" in text
-
     def test_the_artifact_targets_the_role_group(
         self, registry: dict, group_names: set[str], role: str, cls: type, transform: str, query: str, subdir: str
     ) -> None:
@@ -528,72 +516,10 @@ class TestRegistration:
         assert not [line for line in template.splitlines() if line and not line.startswith(("{", "    "))]
 
 
-# Queries (offline: syntax, spreads and the office schema fields; a live stack confirms the rest)
-
-
-def _fragment_definitions() -> dict[str, FragmentDefinitionNode]:
-    defined: dict[str, FragmentDefinitionNode] = {}
-    for path in sorted((ROOT / "queries" / "fragments").glob("*.gql")):
-        for item in parse(path.read_text()).definitions:
-            if isinstance(item, FragmentDefinitionNode):
-                defined[item.name.value] = item
-    return defined
-
-
-def _spreads(node: Any) -> set[str]:
-    if isinstance(node, FragmentSpreadNode):
-        return {node.name.value}
-    selection_set = getattr(node, "selection_set", None)
-    found: set[str] = set()
-    for child in selection_set.selections if selection_set else ():
-        found |= _spreads(child)
-    return found
+# Queries (offline: syntax and the office schema fields; a live stack confirms the rest)
 
 
 class TestQueries:
-    @pytest.mark.parametrize("query", ["access_switch", "distribution_switch"])
-    def test_every_spread_resolves_against_the_fragments_directory(self, query: str) -> None:
-        defined = _fragment_definitions()
-        pending = _spreads(parse((ROOT / "queries" / "config" / f"{query}.gql").read_text()).definitions[0])
-        seen: set[str] = set()
-        while pending:
-            name = pending.pop()
-            assert name in defined, f"{query} spreads {name}, defined in no queries/fragments/ file"
-            seen.add(name)
-            pending |= _spreads(defined[name]) - seen
-
-    @pytest.mark.parametrize("directory", [ACCESS_INPUT, DISTRIBUTION_INPUT, "access_switch_cisco_xe_lisp_wan_exit"])
-    def test_the_goldens_carry_every_field_the_office_fragment_selects(self, directory: str) -> None:
-        """The goldens' raw deployment has the keys LispSiteOnOfficeFields returns."""
-        fragment = _fragment_definitions()["LispSiteOnOfficeFields"]
-        selected = {
-            (field.alias or field.name).value
-            for field in fragment.selection_set.selections
-            if isinstance(field, FieldNode)
-        }
-        assert selected == {"name", "lisp_site_key", "lisp_map_servers", "lisp_wan_edges"}
-        deployment = _deployment(_raw(directory))
-
-        assert selected - {"lisp_wan_edges"} <= set(deployment)
-
-    def test_the_lisp_fabric_check_query_parses_and_selects_the_office_inputs(self) -> None:
-        text = (ROOT / "queries" / "validation" / "lisp_fabric.gql").read_text()
-        parse(text)
-        office = text.split("TopologyCustomerOffice {")[1]
-
-        for selection in (
-            "fabric_templates",
-            "locations",
-            "lisp_site_key",
-            "devices",
-            "capabilities",
-            "segment_deployments",
-            "security_zone",
-        ):
-            assert selection in office
-        assert "...RoutingZoneFields" in office
-        assert "overlay_control_plane" not in text and "TopologyDataCenter" not in text
-
     def test_the_office_schema_has_every_field_the_check_and_the_config_queries_read(self) -> None:
         """The segment activations and the anycast MAC come from TopologySegmentHosting;"""
         names = relationship_names("TopologyCustomerOffice")

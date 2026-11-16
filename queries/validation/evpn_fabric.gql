@@ -41,7 +41,18 @@ query evpn_fabric {
       node {
         security_zone {
           node {
-            ...RoutingZoneFields
+            ... on SecurityZone {
+              id
+              name {
+                value
+              }
+              vrf_type {
+                value
+              }
+              l3_vni {
+                value
+              }
+            }
           }
         }
         id
@@ -114,7 +125,12 @@ query evpn_fabric {
         ... on DcimPhysicalDevice {
           deployment {
             node {
-              ...EvpnRtAsOnDeploymentFields
+              ... on TopologyDeployment {
+                ...evpn_fabric__F1
+                ...evpn_fabric__F2
+                ...evpn_fabric__F3
+                ...evpn_fabric__F4
+              }
             }
           }
         }
@@ -126,7 +142,18 @@ query evpn_fabric {
                 ... on ManagedVRF {
                   security_zone {
                     node {
-                      ...RoutingZoneFields
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
                     }
                   }
                 }
@@ -156,12 +183,207 @@ query evpn_fabric {
             }
           }
         }
-        ...ServiceBorderPortsFields
+        ... on DcimDevice {
+          service_ports: interfaces(role__values: ["firewall", "load-balancer"]) {
+            edges {
+              node {
+                __typename
+                id
+                name {
+                  value
+                }
+                role {
+                  value
+                }
+                ... on DcimPhysicalInterface {
+                  cable {
+                    node {
+                      id
+                      endpoints {
+                        edges {
+                          node {
+                            ... on DcimInterface {
+                              __typename
+                              id
+                              name {
+                                value
+                              }
+                              role {
+                                value
+                              }
+                              device {
+                                node {
+                                  ... on DcimDevice {
+                                    __typename
+                                    id
+                                    name {
+                                      value
+                                    }
+                                    ...evpn_fabric__F5
+                                    interfaces {
+                                      edges {
+                                        node {
+                                          ... on DcimInterface {
+                                            __typename
+                                            id
+                                            name {
+                                              value
+                                            }
+                                            role {
+                                              value
+                                            }
+                                            ...evpn_fabric__F6
+                                            ...evpn_fabric__F7
+                                            ...evpn_fabric__F8
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            ... on DcimPhysicalInterface {
+                              sub_interfaces {
+                                edges {
+                                  node {
+                                    __typename
+                                    ... on DcimVirtualInterface {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      role {
+                                        value
+                                      }
+                                      device {
+                                        node {
+                                          ... on DcimDevice {
+                                            __typename
+                                            id
+                                            name {
+                                              value
+                                            }
+                                            ...evpn_fabric__F9
+                                            interfaces {
+                                              edges {
+                                                node {
+                                                  ... on DcimInterface {
+                                                    __typename
+                                                    id
+                                                    name {
+                                                      value
+                                                    }
+                                                    role {
+                                                      value
+                                                    }
+                                                    ...evpn_fabric__F10
+                                                    ...evpn_fabric__F11
+                                                    ...evpn_fabric__F12
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         ... on DcimDevice {
           interfaces {
             edges {
               node {
-                ...InterfaceRoutingZoneFields
+                ... on DcimInterface {
+                  zone_capabilities: capabilities {
+                    edges {
+                      node {
+                        __typename
+                        ... on ManagedVRF {
+                          id
+                          deployment {
+                            node {
+                              id
+                              name {
+                                value
+                              }
+                            }
+                          }
+                          security_zone {
+                            node {
+                              ... on SecurityZone {
+                                id
+                                name {
+                                  value
+                                }
+                                vrf_type {
+                                  value
+                                }
+                                l3_vni {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                        ... on TopologySessionCircuit {
+                          circuit_type {
+                            value
+                          }
+                          vrf {
+                            node {
+                              ... on ManagedVRF {
+                                id
+                                deployment {
+                                  node {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                  }
+                                }
+                                security_zone {
+                                  node {
+                                    ... on SecurityZone {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      vrf_type {
+                                        value
+                                      }
+                                      l3_vni {
+                                        value
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                        ... on ManagedSegmentVlan {
+                          id
+                          vlan_id {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
                 __typename
                 id
                 role {
@@ -169,6 +391,568 @@ query evpn_fabric {
                 }
               }
             }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F1 on TopologySegmentHosting {
+  evpn_rt_as {
+    node {
+      asn {
+        value
+      }
+    }
+  }
+  evpn_anycast_gateway_mac {
+    value
+  }
+  routing_filter_enforce {
+    value
+  }
+  ... on TopologyDataCenter {
+    loopback_pool {
+      node {
+        resources {
+          edges {
+            node {
+              prefix {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ... on TopologyColocationMetro {
+    loopback_pool {
+      node {
+        resources {
+          edges {
+            node {
+              prefix {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F2 on TopologyPod {
+  parent {
+    node {
+      ... on TopologySegmentHosting {
+        evpn_rt_as {
+          node {
+            asn {
+              value
+            }
+          }
+        }
+        evpn_anycast_gateway_mac {
+          value
+        }
+        routing_filter_enforce {
+          value
+        }
+        ... on TopologyDataCenter {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on TopologyColocationMetro {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F3 on TopologyColocationZone {
+  parent {
+    node {
+      ... on TopologySegmentHosting {
+        evpn_rt_as {
+          node {
+            asn {
+              value
+            }
+          }
+        }
+        evpn_anycast_gateway_mac {
+          value
+        }
+        routing_filter_enforce {
+          value
+        }
+        ... on TopologyDataCenter {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on TopologyColocationMetro {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F4 on TopologyVirtualColocation {
+  parent {
+    node {
+      ... on TopologySegmentHosting {
+        evpn_rt_as {
+          node {
+            asn {
+              value
+            }
+          }
+        }
+        evpn_anycast_gateway_mac {
+          value
+        }
+        routing_filter_enforce {
+          value
+        }
+        ... on TopologyDataCenter {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on TopologyColocationMetro {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F5 on DcimDeviceManaged {
+  role {
+    value
+  }
+  shared_capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedSecurityContext {
+          id
+          ... on ManagedGeneric {
+            name {
+              value
+            }
+          }
+          vlan_id {
+            value
+          }
+          tenant {
+            node {
+              id
+              ... on TopologyEnvironmentScoped {
+                environment {
+                  value
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedFirewallContext {
+          fw_served: served_deployments {
+            edges {
+              node {
+                id
+                ... on TopologyEnvironmentScoped {
+                  environment {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedLoadbalancerContext {
+          lb_served: served_deployments {
+            edges {
+              node {
+                id
+                ... on TopologyEnvironmentScoped {
+                  environment {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F6 on DcimInterface {
+  zone_capabilities: capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedVRF {
+          id
+          deployment {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+          security_zone {
+            node {
+              ... on SecurityZone {
+                id
+                name {
+                  value
+                }
+                vrf_type {
+                  value
+                }
+                l3_vni {
+                  value
+                }
+              }
+            }
+          }
+        }
+        ... on TopologySessionCircuit {
+          circuit_type {
+            value
+          }
+          vrf {
+            node {
+              ... on ManagedVRF {
+                id
+                deployment {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+                security_zone {
+                  node {
+                    ... on SecurityZone {
+                      id
+                      name {
+                        value
+                      }
+                      vrf_type {
+                        value
+                      }
+                      l3_vni {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedSegmentVlan {
+          id
+          vlan_id {
+            value
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F7 on DcimInterface {
+  ... on DcimSubInterface {
+    vlan_id {
+      value
+    }
+    parent {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+        device {
+          node {
+            id
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F8 on DcimVirtualInterface {
+  ip_address {
+    node {
+      address {
+        value
+      }
+      ip_namespace {
+        node {
+          name {
+            value
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F9 on DcimDeviceManaged {
+  role {
+    value
+  }
+  shared_capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedSecurityContext {
+          id
+          ... on ManagedGeneric {
+            name {
+              value
+            }
+          }
+          vlan_id {
+            value
+          }
+          tenant {
+            node {
+              id
+              ... on TopologyEnvironmentScoped {
+                environment {
+                  value
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedFirewallContext {
+          fw_served: served_deployments {
+            edges {
+              node {
+                id
+                ... on TopologyEnvironmentScoped {
+                  environment {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedLoadbalancerContext {
+          lb_served: served_deployments {
+            edges {
+              node {
+                id
+                ... on TopologyEnvironmentScoped {
+                  environment {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F10 on DcimInterface {
+  zone_capabilities: capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedVRF {
+          id
+          deployment {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+          security_zone {
+            node {
+              ... on SecurityZone {
+                id
+                name {
+                  value
+                }
+                vrf_type {
+                  value
+                }
+                l3_vni {
+                  value
+                }
+              }
+            }
+          }
+        }
+        ... on TopologySessionCircuit {
+          circuit_type {
+            value
+          }
+          vrf {
+            node {
+              ... on ManagedVRF {
+                id
+                deployment {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+                security_zone {
+                  node {
+                    ... on SecurityZone {
+                      id
+                      name {
+                        value
+                      }
+                      vrf_type {
+                        value
+                      }
+                      l3_vni {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedSegmentVlan {
+          id
+          vlan_id {
+            value
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F11 on DcimInterface {
+  ... on DcimSubInterface {
+    vlan_id {
+      value
+    }
+    parent {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+        device {
+          node {
+            id
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment evpn_fabric__F12 on DcimVirtualInterface {
+  ip_address {
+    node {
+      address {
+        value
+      }
+      ip_namespace {
+        node {
+          name {
+            value
           }
         }
       }

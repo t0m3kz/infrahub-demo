@@ -168,7 +168,7 @@ def get_interfaces(
 
         vlans = [segment_vlan[s["name"]] for s in interface_segments(iface) if s.get("name") in segment_vlan]
 
-        # FirewallContext sub-interface (role="service", created by generators/topology/customer_dc.py's
+        # FirewallContext sub-interface (role="service", created by generators/customers/customer_dc.py's
         # _create_context_subinterface) needs its own dot1q tag rendered.
         context_vlan_id = next(
             (c.get("vlan_id") for c in contexts if c.get("typename") == FIREWALL_CONTEXT_KIND and c.get("vlan_id")),
@@ -247,7 +247,7 @@ def get_interfaces(
             iface_dict["lacp_mode"] = iface.get("lacp_mode")
             iface_dict["minimum_links"] = iface.get("minimum_links")
             # The multi-chassis id of a host-facing port-channel: both peers of one bond carry the same lag_id
-            # (generators/topology/endpoint_lag.py) and checks/routing/mlag_domains.py M5 pairs them.
+            # (generators/connectivity/endpoint_lag.py) and checks/routing/mlag_domains.py M5 pairs them.
             if (iface.get("mlag_domain") or {}).get("id") and iface.get("role") != "mlag-peer":
                 iface_dict["mlag_id"] = iface.get("lag_id")
             member_interfaces = iface.get("member_interfaces") or []
@@ -334,7 +334,7 @@ def _warn_unencodable_vnis(
         _log.warning(
             "%s: VNI(s) %s are allocated as both an L2 VNI and an L3 VNI. The "
             "VNI space is flat, so the device will reject the duplicate. l3_vni is "
-            "fixed per namespace (data/bootstrap/22_namespaces.yml); correct that "
+            "fixed per namespace (data/bootstrap/24_security_zones.yml); correct that "
             "value or move the conflicting L2 pool.",
             device_name or "device",
             ", ".join(str(v) for v in collisions),

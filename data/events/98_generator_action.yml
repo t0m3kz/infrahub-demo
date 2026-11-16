@@ -17,11 +17,8 @@ spec:
       description: Re-run the racks a pod is directly responsible for after a pod-level capacity change
       generator: pod_rack_cascade
     - name: run-rack-generator
-      description: Run DC Rack Generator
+      description: Run Rack Generator
       generator: add_rack
-    - name: run-colocation-rack-generator
-      description: Run Colocation Rack Generator
-      generator: add_colocation_rack
     - name: run-decommission-pod
       description: Decommission all devices within a pod
       generator: decommission_pod
@@ -73,9 +70,6 @@ spec:
     - name: run-virtual-circuit-generator
       description: Build the BGP session(s) of an interconnect or handoff circuit
       generator: add_virtual_circuit
-    - name: run-connectivity-request-generator
-      description: Reconcile inter-topology circuits for a ConnectivityRequest
-      generator: add_connectivity_request
     - name: run-context-routes-generator
       description: Write the static routes of a firewall or load-balancer context on its border devices
       generator: add_context_routes
@@ -106,15 +100,12 @@ spec:
     - name: run-virtual-colocation-generator
       description: Create a virtual colocation's resource pools and its virtual on-ramp devices
       generator: add_virtual_colocation
-    - name: run-sdwan-edge-generator
-      description: Provision an SD-WAN Edge, tunnel, and circuits for a customer office that opted in
-      generator: add_sdwan_edge
     - name: run-office-fabric-generator
-      description: Create an office's LISP fabric (pools, switches, cabling, OSPF underlay) when fabric_templates is set
+      description: Build an office (LISP fabric, SD-WAN edge, tunnels, WAN exit) from its fabric_templates
       generator: add_office_fabric
     - name: run-change-request-generator
       description: Derive a change request from its Proposed Change (data and artifact diffs, devices, customers)
       generator: add_change_request
     - name: run-open-change-request
-      description: Create or re-derive the change request of a Proposed Change whose artifacts are computed
+      description: Wait for an artifact validator to complete, then create or re-derive its PC's change request
       generator: open_change_request

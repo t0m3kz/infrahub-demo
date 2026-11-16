@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from generators.capabilities.vrf import reconcile_vrfs, vrfs_held
 from tests.unit.vrf_instances_helpers import address, raw_device, raw_instance, raw_interface
 from tests.unit.vrf_reconcile_helpers import FakeVrf, VrfHost, VrfStore, response
 
@@ -44,7 +45,7 @@ class SharedHost(VrfHost):
 
     @asynccontextmanager
     async def resource_lock(self, key: str) -> AsyncGenerator[None]:
-        """Serializes by key, like the group-based lock of PoolMixin."""
+        """Serializes by key, like the group-based lock of BaseGenerator."""
         async with self.world.locks.setdefault(key, asyncio.Lock()):
             yield
 
@@ -55,9 +56,9 @@ def test_a_prune_between_ensure_and_the_write_waits_and_the_instance_survives() 
     writer, pruner = SharedHost(world), SharedHost(world)
 
     async def scenario() -> asyncio.Task[None]:
-        async with writer.vrfs_held({"d1": {"PROD"}}):
+        async with vrfs_held(writer, {"d1": {"PROD"}}):
             assert len(world.store.vrfs) == 1
-            task = asyncio.create_task(pruner.reconcile_vrfs(["d1"]))
+            task = asyncio.create_task(reconcile_vrfs(pruner, ["d1"]))
             await asyncio.sleep(0.01)
             assert not task.done()
             world.addresses.add("d1")
@@ -78,9 +79,9 @@ def test_without_the_held_lock_the_same_prune_deletes_the_fresh_instance() -> No
     writer, pruner = SharedHost(world), SharedHost(world)
 
     async def main() -> None:
-        async with writer.vrfs_held({"d1": {"PROD"}}):
+        async with vrfs_held(writer, {"d1": {"PROD"}}):
             pass
-        await pruner.reconcile_vrfs(["d1"])
+        await reconcile_vrfs(pruner, ["d1"])
         world.addresses.add("d1")
 
     asyncio.run(main())
@@ -96,8 +97,8 @@ def test_a_prune_of_another_member_does_not_delete_the_instance_a_writer_just_jo
     writer, pruner = SharedHost(world), SharedHost(world)
 
     async def main() -> None:
-        async with writer.vrfs_held({"d1": {"PROD"}}):
-            await pruner.reconcile_vrfs(["d2"])
+        async with vrfs_held(writer, {"d1": {"PROD"}}):
+            await reconcile_vrfs(pruner, ["d2"])
             assert world.store.vrfs["vrf-1"].members == {"d1"}
 
     asyncio.run(main())
@@ -112,7 +113,7 @@ def test_two_writers_of_the_same_instance_serialize_on_its_lock_and_create_one()
     hosts = [SharedHost(world), SharedHost(world)]
 
     async def hold(host: SharedHost, device_id: str) -> None:
-        async with host.vrfs_held({device_id: {"PROD"}}):
+        async with vrfs_held(host, {device_id: {"PROD"}}):
             await asyncio.sleep(0)
 
     async def main() -> None:

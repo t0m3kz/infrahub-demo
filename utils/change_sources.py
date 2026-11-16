@@ -21,7 +21,6 @@ from utils.change_rules import (
     parse_diff_summaries,
     parse_object_nodes,
 )
-from utils.query_flatten import load_flat_query
 
 ARTIFACT_DIFF_PATH = "/api/diff/artifacts"
 OBJECT_PAGE_SIZE = 100
@@ -52,7 +51,7 @@ class DataDiff:
 
 async def fetch_data_diff(client: Any, branch: str) -> DataDiff:
     """The ``DiffTreeSummary`` counts and, in pages up to OBJECT_MAX, the objects of OBJECT_DIFF_KINDS with values."""
-    query = load_flat_query(_DIFF_QUERY)
+    query = _DIFF_QUERY.read_text()
     raw: list[dict[str, Any]] = []
     summaries: dict[str, Any] = {}
     offset = 0

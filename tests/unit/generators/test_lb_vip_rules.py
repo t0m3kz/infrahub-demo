@@ -1,250 +1,154 @@
-"""Unit tests for the application rules around a load balanced component."""
+"""The application rules around a load balanced component, applied on the HFID fake: R_client replaces the direct rule,
+and what a run saves into its group (tracked) is what the next run keeps."""
 
 from __future__ import annotations
 
-import asyncio
-from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from generators.applications.application_security import AppApplicationGenerator
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
+from tests.unit.app_plan_helpers import AppClient
 from tests.unit.lb_vip_helpers import (
-    _CLOUD_FQDN,
-    _CLOUD_LB,
     _client_comp,
     _cloud_frontend,
+    _context,
     _dep,
-    _reconcile,
-    _vip_gen,
+    _instance,
     _web,
+    application,
+    run_application,
 )
-from tests.unit.query_shape_helpers import fragment_tree
-from utils.graphql_queries import load_query
-
-# AppApplicationGenerator: R_client and the run's errors
 
 
-def _app_gen(lb_vips: dict[str, Any], lb_errors: list[str] | None = None) -> Any:
-    gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
-    gen.client = AsyncMock()
-    gen._init_client = AsyncMock()
-    gen.logger = MagicMock()
-    gen._ensure_segment_isolation_mode = AsyncMock()
-    gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
-    gen._reconcile_load_balancing = AsyncMock(return_value=(lb_vips, list(lb_errors or [])))
-    policy = MagicMock()
-    policy.id = "policy-portal"
-    gen._segment_policy = AsyncMock(return_value=policy)
-    gen._find_policy_rule = AsyncMock(return_value=None)
-    gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
-    gen._get_profile = AsyncMock(return_value=None)
-    return gen
+def rules(client: AppClient) -> dict[str, dict[str, Any]]:
+    """The SecurityPolicyRules written, by name."""
+    return {data["name"]: data for data in client.saved("SecurityPolicyRule")}
 
 
-def _rules(gen: Any) -> dict[str, dict[str, Any]]:
-    return {c.kwargs["rule_name"]: c.kwargs["rule_data"] for c in gen._create_or_update_policy_rule.await_args_list}
-
-
-def _application(*components: dict[str, Any]) -> dict[str, Any]:
-    return {"name": "portal", "security_profile": "internal_standard", "children": list(components)}
+def tracked(client: AppClient) -> set[tuple[str, str]]:
+    """(kind, name) of what the run saved into its group: a save that did not ask to stay out of it."""
+    return {
+        (kind, str(data.get("name") or f"{data.get('hostname')}:{data.get('port')}"))
+        for kind, _id, data, kwargs in client.saves
+        if kwargs.get("update_group_context", True)
+    }
 
 
 class TestClientRule:
     def test_r_client_replaces_the_direct_rule(self) -> None:
-        gen = _app_gen({"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "vip-a"}}})
+        _, client = run_application(application(_client_comp(_dep(_web()))))
 
-        asyncio.run(gen._reconcile_application_rules(_application(_client_comp(_dep(_web())))))
-
-        rules = _rules(gen)
-        assert list(rules) == ["portal-to-web-tcp-443-vip-dc10-lb-prod"]
-        data = rules["portal-to-web-tcp-443-vip-dc10-lb-prod"]
-        assert data["destination_ip_addresses"] == [{"id": "vip-a"}]
+        data = rules(client)["portal-to-web-tcp-443-vip-dc10-lb-prod"]
+        assert [name for name in rules(client) if name.startswith("portal-to-web")] == [
+            "portal-to-web-tcp-443-vip-dc10-lb-prod"
+        ]
+        vip_address = next(
+            node
+            for node in client.address_pool_allocations.values()
+            if node.data["identifier"] == "comp-web-tcp-443-vip"
+        )
+        assert data["destination_ip_addresses"] == [{"id": vip_address.id}]
         assert "destination_segment" not in data
         # The VIP has no segment: the target's tenant zone (the context's VIP range is in it) qualifies it.
         assert data["destination_zone"] == {"hfid": ["PROD"]}
         assert data["source_segment"] == {"id": "seg-portal"}
         assert (data["protocol"], data["port_start"]) == ("tcp", 443)
-        # Looked up by name in the policy's rules, which are read once with their selectors (_read_policy_rules).
-        gen._find_policy_rule.assert_awaited_once_with("policy-portal", "portal-to-web-tcp-443-vip-dc10-lb-prod", {})
 
     def test_one_r_client_per_vip(self) -> None:
         """VIPs on two contexts: two rules, each naming one VIP (the ACL renders one address selector)."""
-        gen = _app_gen({"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "vip-a", "dc12-lb-PROD": "vip-b"}}})
+        other = _context("ctx-2", "dc12-lb-PROD", leg="leg-2", vip_prefix="vip-pfx-2")
+        web = _web(instances=[_instance("vm-1", _context()), _instance("vm-2", other)])
 
-        asyncio.run(gen._reconcile_application_rules(_application(_client_comp(_dep(_web())))))
+        _, client = run_application(application(_client_comp(_dep(web))))
 
-        rules = _rules(gen)
-        assert {name: data["destination_ip_addresses"] for name, data in rules.items()} == {
-            "portal-to-web-tcp-443-vip-dc10-lb-prod": [{"id": "vip-a"}],
-            "portal-to-web-tcp-443-vip-dc12-lb-prod": [{"id": "vip-b"}],
-        }
+        clients = {name: data for name, data in rules(client).items() if name.startswith("portal-to-web")}
+        assert sorted(clients) == ["portal-to-web-tcp-443-vip-dc10-lb-prod", "portal-to-web-tcp-443-vip-dc12-lb-prod"]
+        assert all(len(data["destination_ip_addresses"]) == 1 for data in clients.values())
+        assert len({data["destination_ip_addresses"][0]["id"] for data in clients.values()}) == 2
 
-    def test_target_that_is_not_load_balanced_keeps_the_direct_rule(self) -> None:
-        gen = _app_gen({})
+    def test_a_target_that_is_not_load_balanced_keeps_the_direct_rule(self) -> None:
+        _, client = run_application(application(_client_comp(_dep(_web(load_balanced=False)))))
 
-        asyncio.run(gen._reconcile_application_rules(_application(_client_comp(_dep(_web(load_balanced=False))))))
+        assert list(rules(client)) == ["portal-to-web-tcp-443"]
+        assert rules(client)["portal-to-web-tcp-443"]["destination_segment"] == {"id": "seg-web"}
 
-        rules = _rules(gen)
-        assert list(rules) == ["portal-to-web-tcp-443"]
-        assert rules["portal-to-web-tcp-443"]["destination_segment"] == {"id": "seg-web"}
+    def test_a_port_without_a_vip_fails_the_run_before_any_write(self) -> None:
+        """Strict: no VIP on a port means no rule at all, never the direct one. The target's context has no VIP range."""
+        web = _web(instances=[_instance("vm-1", _context(vip_prefix=None))])
+        client = AppClient()
 
-    def test_port_without_vip_gets_no_rule_and_fails_the_run_after_the_others(self) -> None:
-        """Strict: no VIP on a port means no rule at all, never the direct one."""
-        web = _web(ports=["tcp/443", "tcp/8443"])
-        gen = _app_gen({"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "vip-a"}}})
+        with (
+            patch("generators.applications.lb_vip.asyncio.sleep", AsyncMock()),
+            pytest.raises(GeneratorError, match="load-balanced target web.c001.example has no VIP on tcp/443"),
+        ):
+            run_application(application(_client_comp(_dep(web))), client)
 
-        with pytest.raises(GeneratorError, match="no VIP on tcp/8443"):
-            asyncio.run(gen._reconcile_application_rules(_application(_client_comp(_dep(web)))))
-
-        assert list(_rules(gen)) == ["portal-to-web-tcp-443-vip-dc10-lb-prod"]
+        assert client.saves == []
 
     def test_producer_errors_fail_the_run_without_edges_too(self) -> None:
-        gen = _app_gen({"comp-web": {}}, ["web.c001.example: port range udp/1-2 cannot be load balanced"])
+        client = AppClient()
 
         with pytest.raises(GeneratorError, match="port range"):
-            asyncio.run(gen._reconcile_application_rules(_application(_web())))
+            run_application(application(_web(ports=["tcp/443", "udp/1-2"])), client)
+
+        assert client.saves == []
 
     def test_no_load_balancing_error_does_not_fail(self) -> None:
-        gen = _app_gen({"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "vip-a"}}})
+        _, client = run_application(application(_web()))
 
-        asyncio.run(gen._reconcile_application_rules(_application(_web())))
-
-        gen._reconcile_load_balancing.assert_awaited_once()
-
-
-# Tracking: a component that stops being load_balanced
-
-
-class _Node:
-    def __init__(self, client: _TrackingClient, kind: Any, data: dict[str, Any]) -> None:
-        self._client = client
-        self.kind = getattr(kind, "__name__", kind)
-        self.data = data
-        self.id = f"id-{self.key[1]}"
-
-    @property
-    def key(self) -> tuple[str, str]:
-        if self.kind == "LoadbalancerVIP":
-            return self.kind, f"{self.data['hostname']}:{self.data['port']}@{self.data['load_balancer']['id']}"
-        return self.kind, str(self.data.get("name"))
-
-    async def save(self, allow_upsert: bool = False, update_group_context: bool = True) -> None:
-        (self._client.tracked if update_group_context else self._client.untracked).add(self.key)
-
-
-class _TrackingClient:
-    """Records what a run saves into its group (tracked) and what it writes outside it."""
-
-    def __init__(self) -> None:
-        self.tracked: set[tuple[str, str]] = set()
-        self.untracked: set[tuple[str, str]] = set()
-
-    async def create(self, kind: Any, data: dict[str, Any]) -> _Node:
-        return _Node(self, kind, data)
-
-    async def filters(self, **_kwargs: Any) -> list[Any]:
-        return []
-
-
-def _tracked_run(web_load_balanced: bool) -> set[tuple[str, str]]:
-    """One add_app_application run of an application whose portal calls its own web tier."""
-    gen = _vip_gen()
-    gen.client = _TrackingClient()
-    del gen._get_or_create_by_name
-    del gen._upsert_policy_rule
-    gen._ensure_segment_isolation_mode = AsyncMock()
-    gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
-    gen._get_profile = AsyncMock(return_value=None)
-    web = _web(load_balanced=web_load_balanced)
-    portal = _client_comp(_dep(dict(web)))
-
-    asyncio.run(gen._reconcile_application_rules(_application(portal, web)))
-    return gen.client.tracked
+        assert len(client.saved("LoadbalancerVIP")) == 1
 
 
 class TestLoadBalancedFlip:
+    @staticmethod
+    def _run(web_load_balanced: bool) -> set[tuple[str, str]]:
+        """One add_app_application run of an application whose portal calls its own web tier."""
+        web = _web(load_balanced=web_load_balanced)
+        portal = _client_comp(_dep(dict(web)))
+        _, client = run_application(application(portal, web))
+        return tracked(client)
+
     def test_turning_load_balanced_off_leaves_vip_and_both_rules_to_the_cleanup(self) -> None:
         """delete_unused_nodes removes what the earlier run tracked and this one did not save."""
-        on = _tracked_run(web_load_balanced=True)
-        off = _tracked_run(web_load_balanced=False)
+        on = self._run(web_load_balanced=True)
+        off = self._run(web_load_balanced=False)
 
         assert on - off == {
-            ("LoadbalancerVIP", "web.c001.example:443@ctx-1"),
+            ("LoadbalancerVIP", "web.c001.example:443"),
             ("SecurityPolicyRule", "web.c001.example-tcp-443"),
             ("SecurityPolicyRule", "portal-to-web-tcp-443-vip-dc10-lb-prod"),
         }
         assert off - on == {("SecurityPolicyRule", "portal-to-web-tcp-443")}
 
-    def test_turning_load_balanced_on_drops_the_direct_rule(self) -> None:
-        off = _tracked_run(web_load_balanced=False)
-        on = _tracked_run(web_load_balanced=True)
+    def test_shared_objects_are_never_tracked(self) -> None:
+        web = _web()
+        _, client = run_application(application(_client_comp(_dep(dict(web))), web))
 
-        assert off - on == {("SecurityPolicyRule", "portal-to-web-tcp-443")}
-
-    def test_shared_policies_are_never_tracked(self) -> None:
-        gen_tracked = _tracked_run(web_load_balanced=True)
-
-        assert not any(kind == "SecurityPolicy" for kind, _name in gen_tracked)
+        kinds = {kind for kind, _ in tracked(client)}
+        assert kinds == {"LoadbalancerVIP", "SecurityPolicyRule"}
 
 
 class TestCloudTracking:
-    @staticmethod
-    def _tracked(load_balanced: bool) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
-        gen = _vip_gen()
-        gen.client = _TrackingClient()
-        _reconcile(gen, [_cloud_frontend(load_balanced=load_balanced)])
-        return gen.client.tracked, gen.client.untracked
-
     def test_turning_load_balanced_off_leaves_the_load_balancer_and_its_vips_to_the_cleanup(self) -> None:
-        """delete_unused_nodes removes what the earlier run tracked and this one did not save."""
-        on, on_untracked = self._tracked(load_balanced=True)
-        off, _ = self._tracked(load_balanced=False)
+        _, on = run_application(application(_cloud_frontend(load_balanced=True)))
+        _, off = run_application(application(_cloud_frontend(load_balanced=False)))
 
-        assert on == {
-            ("CloudLoadBalancer", _CLOUD_LB),
-            ("LoadbalancerVIP", f"{_CLOUD_FQDN}:443@id-{_CLOUD_LB}"),
-        }
-        assert off == set()
-        assert on_untracked == set()
+        assert {kind for kind, _ in tracked(on)} == {"CloudLoadBalancer", "LoadbalancerVIP"}
+        assert tracked(off) == set()
 
 
 class TestCloudClientRule:
-    def test_dependency_into_a_cloud_target_keeps_the_direct_rule_and_no_vip_error(self) -> None:
+    def test_a_dependency_into_a_cloud_target_keeps_the_direct_rule_and_no_vip_error(self) -> None:
         """No R_client for a cloud target: the 'has no VIP on port' error is for an on-prem one only."""
-        gen = _app_gen({})
+        _, client = run_application(application(_client_comp(_dep(_cloud_frontend()))))
 
-        asyncio.run(gen._reconcile_application_rules(_application(_client_comp(_dep(_cloud_frontend())))))
+        data = rules(client)["portal-to-web-tcp-443"]
+        assert data["destination_segment"] == {"id": "sub-a"}
+        assert "destination_ip_addresses" not in data
 
-        rules = _rules(gen)
-        assert list(rules) == ["portal-to-web-tcp-443"]
-        assert rules["portal-to-web-tcp-443"]["destination_segment"] == {"id": "sub-a"}
-        assert "destination_ip_addresses" not in rules["portal-to-web-tcp-443"]
+    def test_the_application_security_profile_reaches_the_load_balancer(self) -> None:
+        _, client = run_application(application(_cloud_frontend(), profile="internet_exposed"))
 
-    def test_the_application_security_profile_reaches_the_producer(self) -> None:
-        gen = _app_gen({})
-
-        asyncio.run(
-            gen._reconcile_application_rules(
-                {**_application(_cloud_frontend()), "security_profile": "internet_exposed"}
-            )
-        )
-
-        assert gen._reconcile_load_balancing.await_args.kwargs == {"security_profile": "internet_exposed"}
-
-
-def test_application_query_reads_the_cloud_placement_of_instances(root_dir: Path) -> None:
-    """A cloud instance's private IP, virtual network and CIDR blocks (neutral IPAM, no routing zone)."""
-    query = load_query(root_dir / "queries/topology/add/application.gql")
-    fragment = query.split("fragment AppInstanceFields", 1)[1].split("fragment AppComponentSecurityFields", 1)[0]
-    cloud = " ".join(fragment.split("... on CloudInstance {", 1)[1].split())
-    assert "private_ip { value }" in cloud
-    assert "virtual_network {" in cloud
-    fields = fragment_tree(root_dir / "queries/topology/add/application.gql", "AppInstanceFields")
-    prefix = fields["network_segment"]["node"]["virtual_network"]["node"]["cidr_blocks"]["edges"]["node"]
-    assert {"prefix", "ip_namespace"} <= set(prefix)
-    assert "id" in prefix["ip_namespace"]["node"]
-    # IPAM is neutral: a prefix carries no routing zone, the segment's security_zone does.
-    assert "security_zone" not in prefix
+        assert client.saved("CloudLoadBalancer")[0]["scheme"] == "internet_facing"

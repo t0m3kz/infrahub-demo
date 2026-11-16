@@ -63,19 +63,6 @@ def _policy(rules: list[dict[str, Any]], owner: str = "seg-a", enabled: bool = T
     }
 
 
-def _carried(seg_id: str, policy: dict[str, Any] | None, inbound: list[dict[str, Any]] | None = None) -> dict:
-    """A segment on a firewall interface (NetworkSegmentFields + SegmentRulesFields)."""
-    return {
-        "__typename": "ManagedVxlanSegment",
-        "id": seg_id,
-        "name": _v(seg_id),
-        "status": _v("active"),
-        "segment_deployments": _edges([{"vlan_id": _v(10), "vni": _v(10010)}]),
-        "security_policy": _node(policy),
-        "inbound_rules": _edges(inbound or []),
-    }
-
-
 def _payload(*capabilities: dict[str, Any]) -> dict[str, Any]:
     interfaces = [
         {

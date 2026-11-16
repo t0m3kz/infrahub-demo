@@ -1,5 +1,5 @@
 """Target resolution of the endpoint generator: which switch interfaces a server dual-homes onto (plain uplink and LAG
-flows).
+flows). Reads only; the cabling is planned from what it finds (endpoint_uplink.py, endpoint_lag.py).
 """
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from generators.helpers.rack import pod_row_racks, rack_row_index
+from generators.helpers.rack import pod_row_racks
 from generators.protocols import DcimPhysicalDevice, DcimPhysicalInterface
 
 # DcimInterface statuses of a port that is free to cable or already cabled by this endpoint (a re-run).
@@ -19,18 +19,28 @@ def interface_type_of(intf: Any) -> str | None:
     return intf.interface_type.value or None
 
 
-class EndpointTargetsMixin:
-    """Mixin resolving the switch interfaces an endpoint is cabled to, per deployment type; the host provides the
-    attributes below.
+class EndpointTargetResolver:
+    """Resolves the switch interfaces an endpoint is cabled to, per deployment type. ``data`` is the endpoint device's
+    cleaned query payload, ``free_interfaces`` its uplinks still to cable (the types narrow the switch-port search),
+    ``already_connected`` whether it has cables from an earlier run (a port it cabled then still counts as free).
     """
 
-    client: Any
-    logger: logging.Logger
-    data: Any
-    _free_interfaces: list[DcimPhysicalInterface]
-    _already_connected: bool
+    def __init__(
+        self,
+        client: Any,
+        logger: logging.Logger,
+        data: Any,
+        free_interfaces: list[DcimPhysicalInterface],
+        *,
+        already_connected: bool = False,
+    ) -> None:
+        self.client = client
+        self.logger = logger
+        self.data = data
+        self._free_interfaces = free_interfaces
+        self._already_connected = already_connected
 
-    async def _resolve_target_interfaces(self, deployment_type: str) -> list[DcimPhysicalInterface]:
+    async def resolve(self, deployment_type: str) -> list[DcimPhysicalInterface]:
         """Resolve the target switch interfaces for this endpoint's deployment type."""
         if deployment_type == "middle_rack":
             return await self._connect_middle_rack_deployment()
@@ -49,15 +59,15 @@ class EndpointTargetsMixin:
 
         self.logger.info(
             f"Endpoint {self.data['name']} is in {rack['rack_type']} rack "
-            f"(row {rack_row_index(rack)}), searching for ToR/L2-leaf/access-leaf/Leaf switches "
+            f"(row {rack['row_index']}), searching for ToR/L2-leaf/access-leaf/Leaf switches "
             "in middle rack (network rack) in same row"
         )
 
-        racks = pod_row_racks(rack["deployment"], rack_row_index(rack), {"network"})
+        racks = pod_row_racks(rack["deployment"], rack["row_index"], {"network"})
 
         if not racks:
             self.logger.error(
-                f"Endpoint {self.data['name']}: No network rack found in row {rack_row_index(rack)} for middle_rack deployment."
+                f"Endpoint {self.data['name']}: No network rack found in row {rack['row_index']} for middle_rack deployment."
             )
             return []
 
@@ -122,10 +132,10 @@ class EndpointTargetsMixin:
         # Fall back to the same row.
         if not all_target_interfaces:
             self.logger.info(
-                f"No ToR interfaces in same rack for {self.data['name']}, searching same row {rack_row_index(rack)}"
+                f"No ToR interfaces in same rack for {self.data['name']}, searching same row {rack['row_index']}"
             )
 
-            racks = pod_row_racks(rack["deployment"], rack_row_index(rack))
+            racks = pod_row_racks(rack["deployment"], rack["row_index"])
 
             if racks:
                 all_target_interfaces = await self._query_interfaces_by_location(
@@ -170,10 +180,10 @@ class EndpointTargetsMixin:
         if not all_target_interfaces:
             self.logger.info(
                 f"No local ToR/l2-leaf/access-leaf for {self.data['name']}, "
-                f"trying middle rack switches in same row {rack_row_index(rack)}"
+                f"trying middle rack switches in same row {rack['row_index']}"
             )
 
-            racks = pod_row_racks(rack["deployment"], rack_row_index(rack), {"network"})
+            racks = pod_row_racks(rack["deployment"], rack["row_index"], {"network"})
 
             if racks:
                 network_rack_ids = [r["id"] for r in racks]

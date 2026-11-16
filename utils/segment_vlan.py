@@ -1,6 +1,6 @@
 """Segment port, VLAN row and MLAG pair helpers shared by generators, transforms and checks.
 
-A port carries a segment as a member of its switch's ``ManagedSegmentVlan`` row; see AGENTS.md "VLAN rows".
+A port carries a segment as a member of its switch's ``ManagedSegmentVlan`` row; see domain-model.md "VLAN rows".
 """
 
 from __future__ import annotations

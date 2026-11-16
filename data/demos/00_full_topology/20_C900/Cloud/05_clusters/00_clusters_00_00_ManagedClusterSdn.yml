@@ -7,8 +7,8 @@
 # ours CloudKubernetesCluster   a distribution, an account, a virtual network and the subnets its worker nodes sit in
 # The node subnets are the cloud segments of the accounts (02_tenant/01_network_segments.yml). EKS addresses pods from
 # the VPC (no pod range); AKS runs an overlay, so its pod and service ranges are ranges of their own that overlap
-# nothing (checks/cluster.py, rule CL4). The ranges and the CNI are the cluster's SDN (ManagedClusterSdn), one kind
-# for these, for the NSX of the Equinix cloud and for the clusters in the data halls.
+# nothing (checks/customers/cluster.py, rule CL4). The ranges and the CNI are the cluster's SDN (ManagedClusterSdn),
+# one kind for these, for the NSX of the Equinix cloud and for the clusters in the data halls.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

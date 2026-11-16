@@ -4,27 +4,32 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
-from generators.connectivity.endpoint import EndpointConnectivityGenerator
+from generators.connectivity.endpoint_lag import next_free_lag_id, plan_lag_wiring, read_lag_wiring
+from generators.connectivity.endpoint_uplink import interface_device_name
+from generators.model.errors import GeneratorError
+from generators.plan import NodeSpec
 from tests.unit.endpoint_generator_helpers import _iface, _make_generator
+from tests.unit.endpoint_world import SERVER_ID, EndpointWorld
+from tests.unit.simulators.circuit_fakes import raising_logger
 
-# _extract_device_name()
+# interface_device_name()
 
 
 class TestExtractDeviceName:
     def test_reads_the_device_peer_name(self) -> None:
         """The included device peer's name is the grouping key."""
-        assert EndpointConnectivityGenerator._extract_device_name(_iface("Eth1", device="leaf-1")) == "leaf-1"
+        assert interface_device_name(_iface("Eth1", device="leaf-1")) == "leaf-1"
 
     def test_no_device_peer_returns_none(self) -> None:
         """An interface without a device peer has no name to group by."""
         intf = _iface("Eth1", device="leaf-1")
         intf.device.peer = None
 
-        assert EndpointConnectivityGenerator._extract_device_name(intf) is None
+        assert interface_device_name(intf) is None
 
 
 # _extract_cabled_switch_names()
@@ -97,340 +102,212 @@ class TestExtractCabledSwitchNames:
         assert gen._extract_cabled_switch_names([intf]) == set()
 
 
-# _next_free_lag_id()
+# next_free_lag_id()
 
 
 class TestNextFreeLagId:
     def test_returns_one_when_no_ids_taken(self) -> None:
-        assert EndpointConnectivityGenerator._next_free_lag_id(set()) == 1
+        assert next_free_lag_id(set()) == 1
 
     def test_skips_taken_ids(self) -> None:
-        assert EndpointConnectivityGenerator._next_free_lag_id({1, 2, 3}) == 4
+        assert next_free_lag_id({1, 2, 3}) == 4
 
     def test_reserves_100_for_mlag_peer_link(self) -> None:
-        assert EndpointConnectivityGenerator._next_free_lag_id(set(range(1, 100))) == 101
+        assert next_free_lag_id(set(range(1, 100))) == 101
 
     def test_fills_gaps_before_extending(self) -> None:
-        assert EndpointConnectivityGenerator._next_free_lag_id({1, 3}) == 2
+        assert next_free_lag_id({1, 3}) == 2
 
 
-# _process_lag_endpoint_connections()
+# read_lag_wiring() and plan_lag_wiring(): the pair, its MLAG domain, the ports and the lag ids
 
 
-class TestProcessLagEndpointConnections:
-    def _gen(self) -> Any:
-        gen = _make_generator()
-        gen.data = {"name": "server-1"}
-        gen._resolve_target_interfaces = AsyncMock()
-        # Restore the real method that _make_generator() stubs.
-        gen._process_lag_endpoint_connections = EndpointConnectivityGenerator._process_lag_endpoint_connections.__get__(
-            gen
-        )
-        return gen
+def _bond_world(*, nic_type: str = "10gbase-x-sfpp", nics: int = 2) -> tuple[EndpointWorld, list[Any]]:
+    """A server with ``nics`` lag NICs and the two ToRs of its rack in one MLAG domain."""
+    world = EndpointWorld()
+    server = world.add_device("server-1", "endpoint", device_id=SERVER_ID)
+    members = world.add_ports(server, [f"eth{n}" for n in range(nics)], role="lag", interface_type=nic_type)
+    world.add_mlag_domain(*world.add_switches())
+    return world, members
 
+
+def _targets(world: EndpointWorld) -> list[Any]:
+    return [*world.ports("tor-1").values(), *world.ports("tor-2").values()]
+
+
+async def _wire(world: EndpointWorld, bonds: dict[str, list[Any]]) -> Any:
+    """The wiring the generator plans for ``bonds`` over the ports of both ToRs."""
+    logger = raising_logger()
+    reads = await read_lag_wiring(
+        world,
+        logger,
+        endpoint_name="server-1",
+        members_by_bond=bonds,
+        target_interfaces=_targets(world),
+        existing_switch_names=set(),
+    )
+    assert reads is not None
+    return plan_lag_wiring(
+        logger,
+        reads,
+        endpoint_name="server-1",
+        members_by_bond=bonds,
+        target_interfaces=_targets(world),
+        deployment_id="dc-1",
+        positions={},
+    )
+
+
+class TestReadLagWiring:
     @pytest.mark.asyncio
-    async def test_no_target_interfaces_returns_early(self) -> None:
-        gen = self._gen()
-        gen._resolve_target_interfaces = AsyncMock(return_value=[])
+    async def test_no_target_interfaces_reads_nothing(self) -> None:
+        world, members = _bond_world()
 
-        await gen._process_lag_endpoint_connections({"bond0": []}, "tor")
-
-        gen.client.filters.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_fewer_than_two_switches_logs_error(self) -> None:
-        gen = self._gen()
-        gen._resolve_target_interfaces = AsyncMock(return_value=[_iface("Eth1", device="leaf-1")])
-
-        await gen._process_lag_endpoint_connections({"bond0": []}, "tor")
-
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_no_shared_mlag_domain_logs_error_and_skips(self) -> None:
-        gen = self._gen()
-        gen._resolve_target_interfaces = AsyncMock(
-            return_value=[_iface("Eth1", device="leaf-1"), _iface("Eth1", device="leaf-2")]
-        )
-        switch_a, switch_b = MagicMock(id="sw-a"), MagicMock(id="sw-b")
-        switch_a.name = MagicMock(value="leaf-1")
-        switch_b.name = MagicMock(value="leaf-2")
-
-        def _caps(peers: list) -> MagicMock:
-            caps = MagicMock()
-            caps.peers = peers
-            return caps
-
-        mlag_a = MagicMock(id="mlag-a", typename="ManagedMLAG")
-        mlag_b = MagicMock(id="mlag-b", typename="ManagedMLAG")
-        switch_a.capabilities = _caps([mlag_a])
-        switch_b.capabilities = _caps([mlag_b])
-        gen.client.filters = AsyncMock(return_value=[switch_a, switch_b])
-
-        await gen._process_lag_endpoint_connections({"bond0": []}, "tor")
-
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_multiple_shared_mlag_domains_logs_error_and_skips(self) -> None:
-        gen = self._gen()
-        gen._resolve_target_interfaces = AsyncMock(
-            return_value=[_iface("Eth1", device="leaf-1"), _iface("Eth1", device="leaf-2")]
-        )
-        switch_a, switch_b = MagicMock(id="sw-a"), MagicMock(id="sw-b")
-        switch_a.name = MagicMock(value="leaf-1")
-        switch_b.name = MagicMock(value="leaf-2")
-
-        shared_1 = MagicMock(id="mlag-1", typename="ManagedMLAG")
-        shared_2 = MagicMock(id="mlag-2", typename="ManagedMLAG")
-        switch_a.capabilities = MagicMock(peers=[shared_1, shared_2])
-        switch_b.capabilities = MagicMock(peers=[shared_1, shared_2])
-        gen.client.filters = AsyncMock(return_value=[switch_a, switch_b])
-
-        await gen._process_lag_endpoint_connections({"bond0": []}, "tor")
-
-        gen.logger.error.assert_called_once()
-
-    def _switches_with_shared_domain(self) -> tuple[MagicMock, MagicMock, str]:
-        switch_a, switch_b = MagicMock(id="sw-a"), MagicMock(id="sw-b")
-        switch_a.name = MagicMock(value="leaf-1")
-        switch_b.name = MagicMock(value="leaf-2")
-        shared = MagicMock(id="mlag-shared", typename="ManagedMLAG")
-        switch_a.capabilities = MagicMock(peers=[shared])
-        switch_b.capabilities = MagicMock(peers=[shared])
-        return switch_a, switch_b, "mlag-shared"
-
-    @pytest.mark.asyncio
-    async def test_bond_with_fewer_than_two_members_logs_error(self) -> None:
-        gen = self._gen()
-        switch_a, switch_b, _ = self._switches_with_shared_domain()
-        gen._resolve_target_interfaces = AsyncMock(
-            return_value=[_iface("Eth1", device="leaf-1"), _iface("Eth1", device="leaf-2")]
-        )
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
-
-        await gen._process_lag_endpoint_connections({"bond0": [_iface("eth0", device="server-1")]}, "tor")
-
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_successful_bond_creates_cabling_and_lag_on_both_switches(self) -> None:
-        gen = self._gen()
-        switch_a, switch_b, mlag_id = self._switches_with_shared_domain()
-        switch_a.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
-        switch_b.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
-
-        target_a = _iface("Ethernet1", device="leaf-1")
-        target_b = _iface("Ethernet1", device="leaf-2")
-        gen._resolve_target_interfaces = AsyncMock(return_value=[target_a, target_b])
-
-        # filters call order: (1) switches by name, (2) existing LAGs on both switches
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
-
-        bond = {"bond0": [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]}
-
-        new_lag = MagicMock(id="lag-obj-1")
-        new_lag.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=new_lag)
-
-        await gen._process_lag_endpoint_connections(bond, "tor")
-
-        assert gen.create_cabling.await_count == 2
-        assert gen.client.filters.await_count == 2  # no cabled member: no far-end lookup
-        assert gen.client.filters.await_args_list[1].kwargs["device__ids"] == ["sw-a", "sw-b"]
-        assert gen.client.create.await_count == 2
-        for call in gen.client.create.call_args_list:
-            assert call.kwargs["data"]["mlag_domain"] == {"id": mlag_id}
-        new_lag.save.assert_awaited_with(allow_upsert=True)
-
-    @pytest.mark.asyncio
-    async def test_no_free_port_on_switch_logs_error_and_skips_member(self) -> None:
-        gen = self._gen()
-        switch_a, switch_b, _ = self._switches_with_shared_domain()
-        switch_a.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
-        switch_b.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
-
-        target_a_cabled = _iface("Ethernet1", device="leaf-1", cabled=True)
-        target_b = _iface("Ethernet1", device="leaf-2")
-        gen._resolve_target_interfaces = AsyncMock(return_value=[target_a_cabled, target_b])
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
-
-        bond = {"bond0": [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]}
-
-        await gen._process_lag_endpoint_connections(bond, "tor")
-
-        gen.logger.error.assert_called_once()
-        gen.create_cabling.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_reuses_existing_cable_far_end_port(self) -> None:
-        """A member already cabled from a prior run reuses its far-end switch port."""
-        gen = self._gen()
-        switch_a, switch_b, mlag_id = self._switches_with_shared_domain()
-        switch_a.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
-        switch_b.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
-
-        target_a = _iface("Ethernet1", device="leaf-1")
-        target_b = _iface("Ethernet1", device="leaf-2")
-        gen._resolve_target_interfaces = AsyncMock(return_value=[target_a, target_b])
-
-        far_end_port = MagicMock(id="far-end-1")
-        far_end_port.lag = MagicMock(id=None, peer=None)
-        existing_cable_obj = MagicMock(id="existing-cable-1")
-        existing_cable_obj.endpoints = MagicMock()
-        far_end_peer = MagicMock(id="far-end-1")
-        member_own_peer = MagicMock(id="member-own-id")
-        existing_cable_obj.endpoints.peers = [member_own_peer, far_end_peer]
-
-        member_1 = _iface("eth0", device="server-1")
-        member_1.id = "member-own-id"
-        member_1.cable = MagicMock(id="existing-cable-1")
-        bond = {"bond0": [member_1, _iface("eth1", device="server-1")]}
-
-        # filters call order: switches, existing LAGs, then the batched far-end lookup (cables, far ends)
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], [existing_cable_obj], [far_end_port]])
-
-        new_lag = MagicMock(id="lag-obj-1")
-        new_lag.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=new_lag)
-
-        await gen._process_lag_endpoint_connections(bond, "tor")
-
-        # member_1 must reuse its existing far-end port, not claim a fresh one.
-        assert gen.create_cabling.await_count == 2
-        first_call_kwargs = gen.create_cabling.call_args_list[0].kwargs
-        assert first_call_kwargs["top_interfaces"] == [far_end_port.name.value]
-        gen.client.get.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_far_ends_of_all_bonds_are_read_in_one_batch(self) -> None:
-        """Two bonds with a cabled member each:"""
-        gen = self._gen()
-        switch_a, switch_b, _ = self._switches_with_shared_domain()
-        switch_a.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
-        switch_b.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
-        gen._resolve_target_interfaces = AsyncMock(
-            return_value=[_iface(f"Ethernet{n}", device=d) for d in ("leaf-1", "leaf-2") for n in (1, 2, 3)]
+        reads = await read_lag_wiring(
+            world,
+            raising_logger(),
+            endpoint_name="server-1",
+            members_by_bond={"bond0": members},
+            target_interfaces=[],
+            existing_switch_names=set(),
         )
 
-        members = {name: _iface(name, device="server-1") for name in ("eth0", "eth1", "eth2", "eth3")}
-        cables, far_ends = [], []
-        for number, name in enumerate(("eth0", "eth2")):
-            members[name].id = f"member-{name}"
-            members[name].cable = MagicMock(id=f"cable-{name}")
-            cable = MagicMock(id=f"cable-{name}")
-            cable.endpoints.peers = [MagicMock(id=f"member-{name}"), MagicMock(id=f"far-{name}")]
-            cables.append(cable)
-            far_end = MagicMock(id=f"far-{name}")
-            far_end.name = MagicMock(value=f"Ethernet{number + 1}")
-            far_end.lag = MagicMock(id=None, peer=None)
-            far_ends.append(far_end)
-        bonds = {"bond0": [members["eth0"], members["eth1"]], "bond1": [members["eth2"], members["eth3"]]}
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], cables, far_ends])
-        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
-
-        await gen._process_lag_endpoint_connections(bonds, "tor")
-
-        assert gen.client.filters.await_count == 4
-        assert gen.client.filters.await_args_list[2].kwargs["ids"] == ["cable-eth0", "cable-eth2"]
-        gen.client.get.assert_not_called()
-        assert gen.create_cabling.await_count == 4
+        assert reads is None
+        assert world.read_kinds == []
 
     @pytest.mark.asyncio
-    async def test_existing_lag_id_reused_when_port_already_in_a_lag(self) -> None:
-        gen = self._gen()
-        switch_a, switch_b, mlag_id = self._switches_with_shared_domain()
-        switch_a.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
-        switch_b.platform = MagicMock(peer=MagicMock(name=MagicMock(value="arista_eos")))
+    async def test_fewer_than_two_switches_is_an_error(self) -> None:
+        world, members = _bond_world()
 
-        target_a = _iface("Ethernet1", device="leaf-1")
-        target_b = _iface("Ethernet1", device="leaf-2")
-        target_a.lag = MagicMock(id="existing-lag-rel", peer=MagicMock(lag_id=MagicMock(value=42)))
-        target_b.lag = MagicMock(id=None, peer=None)
-        gen._resolve_target_interfaces = AsyncMock(return_value=[target_a, target_b])
-
-        bond = {"bond0": [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]}
-
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
-        new_lag = MagicMock(id="lag-obj-1")
-        new_lag.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=new_lag)
-
-        await gen._process_lag_endpoint_connections(bond, "tor")
-
-        for call in gen.client.create.call_args_list:
-            assert call.kwargs["data"]["lag_id"] == 42
+        with pytest.raises(GeneratorError, match="Need 2 switches"):
+            await read_lag_wiring(
+                world,
+                raising_logger(),
+                endpoint_name="server-1",
+                members_by_bond={"bond0": members},
+                target_interfaces=list(world.ports("tor-1").values()),
+                existing_switch_names=set(),
+            )
 
     @pytest.mark.asyncio
-    async def test_member_takes_only_a_switch_port_of_its_own_type(self) -> None:
+    async def test_switches_in_different_domains_are_an_error(self) -> None:
+        world, members = _bond_world()
+        world.store[next(iter(world.ports("tor-2").values())).data["device"]["id"]].data["capabilities"] = [
+            {"id": world.seed("ManagedMLAG", name="other").id}
+        ]
+
+        with pytest.raises(GeneratorError, match="share 0 MLAG domain"):
+            await read_lag_wiring(
+                world,
+                raising_logger(),
+                endpoint_name="server-1",
+                members_by_bond={"bond0": members},
+                target_interfaces=_targets(world),
+                existing_switch_names=set(),
+            )
+
+    @pytest.mark.asyncio
+    async def test_switches_in_two_shared_domains_are_an_error(self) -> None:
+        world, members = _bond_world()
+        second = world.seed("ManagedMLAG", name="second")
+        for name in ("tor-1", "tor-2"):
+            device = world.store[next(iter(world.ports(name).values())).data["device"]["id"]]
+            device.data["capabilities"].append({"id": second.id})
+
+        with pytest.raises(GeneratorError, match="share 2 MLAG domain"):
+            await read_lag_wiring(
+                world,
+                raising_logger(),
+                endpoint_name="server-1",
+                members_by_bond={"bond0": members},
+                target_interfaces=_targets(world),
+                existing_switch_names=set(),
+            )
+
+    @pytest.mark.asyncio
+    async def test_the_far_ends_of_all_bonds_are_read_in_one_batch(self) -> None:
+        world, members = _bond_world(nics=4)
+        world.cable(members[0], world.ports("tor-1")["Ethernet1/1"], "tor-1-Ethernet1/1__server-1-eth0")
+        world.cable(members[2], world.ports("tor-1")["Ethernet1/2"], "tor-1-Ethernet1/2__server-1-eth2")
+        world.read_kinds.clear()
+
+        reads = await read_lag_wiring(
+            world,
+            raising_logger(),
+            endpoint_name="server-1",
+            members_by_bond={"bond0": members[:2], "bond1": members[2:]},
+            target_interfaces=_targets(world),
+            existing_switch_names=set(),
+        )
+
+        assert reads is not None
+        assert world.read_kinds.count("DcimCable") == 1
+        assert set(reads.far_ends) == {members[0].id, members[2].id}
+
+
+class TestPlanLagWiring:
+    @pytest.mark.asyncio
+    async def test_a_bond_is_one_cable_per_member_and_one_port_channel_per_switch(self) -> None:
+        world, members = _bond_world()
+
+        wiring = await _wire(world, {"bond0": members})
+
+        assert [(c.server_name, c.server_interface, c.switch_name, c.switch_interface) for c in wiring.connections] == [
+            ("server-1", "eth0", "tor-1", "Ethernet1/1"),
+            ("server-1", "eth1", "tor-2", "Ethernet1/1"),
+        ]
+        channels = wiring.port_channels.of(NodeSpec)
+        assert [(spec.data["lag_id"], spec.data["description"], spec.tracked) for spec in channels] == [
+            (1, "server-1:bond0", True)
+        ] * 2
+        assert [spec.data["name"] for spec in channels] == ["Port-Channel1", "Port-Channel1"]
+        assert all(spec.data["mlag_domain"] == {"id": world.of_kind("ManagedMLAG")[0].id} for spec in channels)
+
+    @pytest.mark.asyncio
+    async def test_a_member_that_is_cabled_keeps_the_switch_port_at_the_far_end_of_its_cable(self) -> None:
+        world, members = _bond_world()
+        world.cable(members[0], world.ports("tor-1")["Ethernet1/3"], "tor-1-Ethernet1/3__server-1-eth0")
+
+        wiring = await _wire(world, {"bond0": members})
+
+        assert [(c.server_interface, c.switch_name, c.switch_interface) for c in wiring.connections] == [
+            ("eth0", "tor-1", "Ethernet1/3"),
+            ("eth1", "tor-2", "Ethernet1/1"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_port_already_in_a_port_channel_gives_its_lag_id(self) -> None:
+        world, members = _bond_world()
+        tor1 = world.store[next(iter(world.ports("tor-1").values())).data["device"]["id"]]
+        lag = world.seed("DcimLAGInterface", device={"id": tor1.id}, name="Port-Channel42", lag_id=42)
+        world.ports("tor-1")["Ethernet1/1"].data["lag"] = {"id": lag.id}
+
+        wiring = await _wire(world, {"bond0": members})
+
+        assert {spec.data["lag_id"] for spec in wiring.port_channels.of(NodeSpec)} == {42}
+
+    @pytest.mark.asyncio
+    async def test_a_member_takes_only_a_switch_port_of_its_own_type(self) -> None:
         """A 25G member skips the switches' 100G ports, even when they sort first."""
-        gen = self._gen()
-        switch_a, switch_b, _ = self._switches_with_shared_domain()
-        switch_a.platform = MagicMock(peer=MagicMock(name=MagicMock(value="dell_sonic")))
-        switch_b.platform = MagicMock(peer=MagicMock(name=MagicMock(value="dell_sonic")))
-        gen._resolve_target_interfaces = AsyncMock(
-            return_value=[
-                _iface("Ethernet1", device="leaf-1", interface_type="100gbase-x-qsfp28"),
-                _iface("Ethernet2", device="leaf-1", interface_type="25gbase-x-sfp28"),
-                _iface("Ethernet1", device="leaf-2", interface_type="100gbase-x-qsfp28"),
-                _iface("Ethernet2", device="leaf-2", interface_type="25gbase-x-sfp28"),
-            ]
-        )
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
-        new_lag = MagicMock()
-        new_lag.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=new_lag)
-        members = [
-            _iface("eth0", device="server-1", interface_type="25gbase-x-sfp28"),
-            _iface("eth1", device="server-1", interface_type="25gbase-x-sfp28"),
-        ]
+        world, members = _bond_world(nic_type="25gbase-x-sfp28")
+        for switch in ("tor-1", "tor-2"):
+            for name, port in world.ports(switch).items():
+                port.data["interface_type"] = "100gbase-x-qsfp28" if name == "Ethernet1/1" else "25gbase-x-sfp28"
 
-        await gen._process_lag_endpoint_connections({"bond0": members}, "tor")
+        wiring = await _wire(world, {"bond0": members})
 
-        assert [c.kwargs["top_interfaces"] for c in gen.create_cabling.call_args_list] == [["Ethernet2"], ["Ethernet2"]]
-        gen.logger.error.assert_not_called()
+        assert [c.switch_interface for c in wiring.connections] == ["Ethernet1/2", "Ethernet1/2"]
 
     @pytest.mark.asyncio
-    async def test_no_matching_type_port_is_an_error(self) -> None:
-        """A 25G bond facing only 100G ports gets no cable and no port-channel, and fails the run."""
-        gen = self._gen()
-        switch_a, switch_b, _ = self._switches_with_shared_domain()
-        gen._resolve_target_interfaces = AsyncMock(
-            return_value=[
-                _iface("Ethernet1", device="leaf-1", interface_type="100gbase-x-qsfp28"),
-                _iface("Ethernet1", device="leaf-2", interface_type="100gbase-x-qsfp28"),
-            ]
-        )
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
-        gen.client.create = AsyncMock()
-        members = [
-            _iface("eth0", device="server-1", interface_type="25gbase-x-sfp28"),
-            _iface("eth1", device="server-1", interface_type="25gbase-x-sfp28"),
-        ]
+    async def test_no_port_of_the_members_type_is_an_error(self) -> None:
+        world, members = _bond_world(nic_type="25gbase-x-sfp28")
 
-        await gen._process_lag_endpoint_connections({"bond0": members}, "tor")
-
-        assert gen.logger.error.call_count == 2
-        assert "no free 25gbase-x-sfp28 port" in gen.logger.error.call_args_list[0].args[0]
-        gen.create_cabling.assert_not_called()
-        gen.client.create.assert_not_called()
+        with pytest.raises(GeneratorError, match="no free 25gbase-x-sfp28 port"):
+            await _wire(world, {"bond0": members})
 
     @pytest.mark.asyncio
-    async def test_no_port_channel_when_a_member_gets_no_cable(self) -> None:
-        """A member create_cabling did not cable fails the run, and neither switch gets the port-channel."""
-        gen = self._gen()
-        switch_a, switch_b, _ = self._switches_with_shared_domain()
-        gen._resolve_target_interfaces = AsyncMock(
-            return_value=[_iface("Ethernet1", device="leaf-1"), _iface("Ethernet1", device="leaf-2")]
-        )
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
-        gen.client.create = AsyncMock()
-        gen.create_cabling = AsyncMock(side_effect=[[("eth0", "Ethernet1")], []])
-        members = [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]
+    async def test_a_bond_of_one_member_is_an_error(self) -> None:
+        world, members = _bond_world()
 
-        await gen._process_lag_endpoint_connections({"bond0": members}, "tor")
-
-        assert gen.create_cabling.await_count == 2
-        gen.logger.error.assert_called_once()
-        assert "no cable from eth1" in gen.logger.error.call_args.args[0]
-        gen.client.create.assert_not_called()
+        with pytest.raises(GeneratorError, match="< 2 member"):
+            await _wire(world, {"bond0": members[:1]})

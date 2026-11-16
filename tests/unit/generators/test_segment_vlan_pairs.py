@@ -1,4 +1,4 @@
-"""MLAG pairs in the per-device VLAN rows (generators/segment_vlan.py)."""
+"""MLAG pairs in the per-device VLAN rows (generators/segments/segment_vlan.py)."""
 
 from __future__ import annotations
 

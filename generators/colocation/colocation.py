@@ -1,7 +1,7 @@
 """Colocation metro bootstrap: the VNI and ASN pools and, with a ``design``, the address supernets of the metro's
 Multi-Site site. A metro owns no devices; zones and virtual colocations slice their pools from its supernets
-(ColoPoolSlot) or from bootstrap pools without a design. Pools are upserts by name, only supernets are locked, an
-existing pool keeps its prefix. Registered as add_colocation_metro in .infrahub.yml.
+(ColoPoolSlot) or from bootstrap pools without a design. Pools are upserts by name, only supernets are locked (the plan runs
+under that lock), an existing pool keeps its prefix. Registered as add_colocation_metro in .infrahub.yml.
 """
 
 from __future__ import annotations
@@ -10,11 +10,18 @@ from typing import Any, cast
 
 from typing_extensions import TypedDict
 
+from generators.base import BaseGenerator
 from generators.colocation.colocation_pools import ATTACHED_SLOTS, COLO_POOL_SLOTS
-from generators.helpers.pools import name_to_asn_range
-from generators.mixins.common import CommonGenerator
-from generators.mixins.fabric_sizing import colo_metro_asn_units
-from generators.mixins.pools import PoolMixin
+from generators.ipam.pools import (
+    PREFIX_POOL_KIND,
+    name_to_asn_range,
+    plan_asn_pool,
+    plan_number_pool,
+    plan_pool_refs,
+    plan_sliced_pool,
+)
+from generators.model.sizing import colo_metro_asn_units
+from generators.plan import Hfid, NodeRef, TopologyPlan
 from generators.protocols import TopologyColocationMetro
 from utils.data_cleaning import clean_data
 from utils.limits import SITE_VNI_END, SITE_VNI_START
@@ -32,7 +39,7 @@ class TopologyColocationMetroData(TypedDict, total=False):
     design: dict[str, Any] | None
 
 
-class ColocationMetroGenerator(PoolMixin, CommonGenerator):
+class ColocationMetroGenerator(BaseGenerator):
     """Create a colocation metro's VNI and ASN pools and attach them."""
 
     data: TopologyColocationMetroData
@@ -67,43 +74,46 @@ class ColocationMetroGenerator(PoolMixin, CommonGenerator):
 
         asn_units = colo_metro_asn_units(design) if design else _METRO_ASN_SIZING_UNITS
         asn_start, asn_end = name_to_asn_range(dc_name=metro, max_pods=asn_units)
-        asn_pool = await self.upsert_asn_pool(
-            pool_name=f"{metro}-asn-pool",
-            description=f"ASN pool for colocation metro {metro.upper()}",
-            start_range=asn_start,
-            end_range=asn_end,
-        )
+        plan = TopologyPlan(root_id=metro_id)
+        refs: dict[str, NodeRef] = {
+            "fabric_asn_pool": plan_asn_pool(
+                plan,
+                name=f"{metro}-asn-pool",
+                description=f"ASN pool for colocation metro {metro.upper()}",
+                start_range=asn_start,
+                end_range=asn_end,
+            ),
+            # L2 VNI pool for segments local to the metro; stretched segments use GLOBAL-L2VNI
+            "vni_pool": plan_number_pool(
+                plan,
+                name=f"{metro}-vni-pool",
+                description=f"L2 VNI pool for colocation metro {metro.upper()}",
+                start_range=SITE_VNI_START,
+                end_range=SITE_VNI_END,
+                node="ManagedSegmentDeployment",
+                node_attribute="vni",
+            ),
+        }
+        for slot, prefix_length in supernet_lengths.items():
+            # A prefix pool per slot, sliced by the zones; an existing pool keeps its prefix when the design changes
+            pool = plan_sliced_pool(
+                plan,
+                name=slot.name(metro),
+                parent=Hfid(PREFIX_POOL_KIND, (slot.bootstrap_pool,)),
+                prefix_length=prefix_length,
+                role=slot.role,
+                kind="prefix",
+            )
+            if slot in ATTACHED_SLOTS:
+                refs[cast(str, slot.attribute)] = pool
+        plan_pool_refs(plan, kind=TopologyColocationMetro, node_id=metro_id, refs=refs, current={})
 
-        # L2 VNI pool for segments local to the metro; stretched segments use GLOBAL-L2VNI
-        vni_pool = await self.upsert_number_pool(
-            pool_name=f"{metro}-vni-pool",
-            description=f"L2 VNI pool for colocation metro {metro.upper()}",
-            start_range=SITE_VNI_START,
-            end_range=SITE_VNI_END,
-            node="ManagedSegmentDeployment",
-            node_attribute="vni",
-        )
-
-        refs: dict[str, str | None] = {"fabric_asn_pool": asn_pool.id, "vni_pool": vni_pool.id}
+        # Each supernet allocates a prefix from a shared bootstrap pool: serialized, around the apply
+        async with self.plan_locks(*([f"colocation-metro-pools-{metro}"] if supernet_lengths else [])):
+            await self.apply_plan(plan)
         if supernet_lengths:
-            # Serialized: each supernet allocates a prefix from a shared bootstrap pool (see allocate_resource_pools)
-            async with self.resource_lock(f"colocation-metro-pools-{metro}"):
-                for slot, prefix_length in supernet_lengths.items():
-                    # A prefix pool per slot, sliced by the zones; an existing pool keeps its prefix when the design
-                    # changes
-                    pool = await self.ensure_sliced_pool(
-                        pool_name=slot.name(metro),
-                        parent_pool_name=slot.bootstrap_pool,
-                        prefix_length=prefix_length,
-                        role=slot.role,
-                        kind="prefix",
-                    )
-                    if slot in ATTACHED_SLOTS:
-                        refs[cast(str, slot.attribute)] = pool.id
             self.logger.info(
                 f"Metro {metro}: design '{cast(dict, design)['name']}' sized supernets "
                 + ", ".join(f"{slot.name(metro)}=/{length}" for slot, length in supernet_lengths.items())
             )
-
-        await self.attach_refs(kind=TopologyColocationMetro, node_id=metro_id, refs=refs)
         self.logger.info(f"Metro {metro}: attached ASN/VNI{'/supernet' if supernet_lengths else ''} pool references")

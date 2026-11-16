@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
-from generators.applications.application_security import AppApplicationGenerator
+from generators.applications.lb_vip import LoadBalancing, plan_load_balancing
 from generators.helpers.lb_vip import cloud_lb_name
+from generators.plan import NodeSpec, TopologyPlan
 from generators.protocols import LoadbalancerVIP
+from tests.unit.app_plan_helpers import AppClient, make_app_generator
 from tests.unit.encapsulation_helpers import cleaned_encapsulation
 
 # Fixtures (cleaned application.gql shape)
@@ -160,46 +159,38 @@ def _dep(target: dict[str, Any], ports: list[str] | None = None) -> dict[str, An
     }
 
 
-# LoadbalancerVipMixin
+# The plan of the load balancing, and the application run on the HFID fake
 
 
-def _vip_gen() -> Any:
-    """An AppApplicationGenerator with every Infrahub boundary of the VIP producer stubbed."""
-    gen: Any = AppApplicationGenerator.__new__(AppApplicationGenerator)
-    gen.client = AsyncMock()
-    gen.client.filters = AsyncMock(return_value=[])
-    gen.logger = MagicMock()
-    gen.locks = []
-
-    @asynccontextmanager
-    async def _lock(key: str) -> AsyncGenerator[None]:
-        gen.locks.append(key)
-        yield
-
-    gen.resource_lock = _lock
-    gen.ensure_prefix_address_pool = AsyncMock(side_effect=lambda **kw: MagicMock(name=kw["pool_name"]))
-    gen.allocate_prefix_address = AsyncMock(side_effect=lambda **kw: f"ip:{kw['identifier']}")
-    gen.attach_refs = AsyncMock()
-    gen._get_or_create_by_name = AsyncMock(return_value=MagicMock(id="pol-lb"))
-    gen._upsert_policy_rule = AsyncMock(return_value=100)
-    # Nothing in flight, nothing more on a re-read, and no real sleep between re-reads.
-    gen.wait_for_parent_generators = AsyncMock(return_value=False)
-    gen.client.execute_graphql = AsyncMock(return_value={})
-    gen.lb_reread_sleep = AsyncMock()
-    return gen
+def plan_lb(
+    components: list[dict[str, Any]], edges: list[Any] | None = None, security_profile: str = "internal_standard"
+) -> tuple[TopologyPlan, LoadBalancing]:
+    """The specs and the verdict of ``plan_load_balancing`` for ``components``."""
+    plan = TopologyPlan(root_id=None)
+    return plan, plan_load_balancing(plan, components, edges or [], security_profile=security_profile)
 
 
-def _vip_payloads(gen: Any) -> list[dict[str, Any]]:
-    return [call.kwargs["data"] for call in gen.client.create.await_args_list if call.kwargs["kind"] is LoadbalancerVIP]
+def specs_of(plan: TopologyPlan, kind: Any) -> list[NodeSpec]:
+    """The ``NodeSpec`` of ``kind`` in the plan, in order."""
+    return [spec for spec in plan.of(NodeSpec) if spec.kind is kind]
 
 
-def _reconcile(
-    gen: Any,
-    components: list[dict[str, Any]],
-    edges: list[Any] | None = None,
-    security_profile: str = "internal_standard",
-) -> Any:
-    return asyncio.run(gen._reconcile_load_balancing(components, edges or [], {}, security_profile=security_profile))
+def vip_data(plan: TopologyPlan) -> list[dict[str, Any]]:
+    """The data of every LoadbalancerVIP of the plan."""
+    return [dict(spec.data) for spec in specs_of(plan, LoadbalancerVIP)]
+
+
+def application(*components: dict[str, Any], profile: str = "internal_standard") -> dict[str, Any]:
+    """An application of ``components``."""
+    return {"name": "portal", "security_profile": profile, "children": list(components)}
+
+
+def run_application(app: dict[str, Any], client: AppClient | None = None) -> tuple[Any, AppClient]:
+    """The application reconciled on the HFID fake: (generator, client)."""
+    client = client or AppClient()
+    gen = make_app_generator(client)
+    asyncio.run(gen._reconcile_application_rules(app))
+    return gen, client
 
 
 # Cloud: a CloudLoadBalancer per load_balanced component on cloud instances
@@ -274,17 +265,3 @@ def _cloud_frontend(
     if lb_certificate:
         component["lb_certificate"] = lb_certificate
     return component
-
-
-def _lb_gen() -> Any:
-    """_vip_gen() whose created nodes carry their own id, so a VIP points at its load balancer."""
-    gen = _vip_gen()
-    gen.created = []
-
-    def create(kind: Any, data: dict[str, Any]) -> Any:
-        node = MagicMock(id=f"id-{data.get('name') or data.get('hostname')}", save=AsyncMock())
-        gen.created.append(node)
-        return node
-
-    gen.client.create = AsyncMock(side_effect=create)
-    return gen

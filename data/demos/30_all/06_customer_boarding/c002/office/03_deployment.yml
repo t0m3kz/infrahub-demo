@@ -11,5 +11,9 @@ spec:
       lan_prefixes:
         - ["10.210.2.0/24", "default"]
       member_of_groups: [customer_deployments_office]
-      sdwan_gateway: "EQX-FR2-SDWAN-GW1"
+      sdwan_gateways:
+        - "EQX-FR2-SDWAN-GW1"
+        - "EQX-PA4-SDWAN-GW1"
       branch_to_branch: full_mesh
+      # The edge only: no switches, so the office keeps its authored LAN prefix.
+      fabric_templates: [["1", "sdwan-edge", "VCE-610_EDGE"]]

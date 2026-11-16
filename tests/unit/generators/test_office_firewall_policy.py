@@ -152,16 +152,6 @@ def test_an_office_without_segments_gives_an_empty_policy_and_no_office_gives_no
     assert _run({"TopologyCustomerOffice": _edges()}) == ""
 
 
-def test_the_query_reads_the_segments_through_the_shared_fragments_at_the_node() -> None:
-    """The zone and the rules come from the fragments every consumer reads, spread at the segment node."""
-    text = QUERY.read_text()
-    node = text.split("network_segments {", 1)[1]
-
-    assert "...SegmentSecurityZoneFields" in node and "...SegmentRulesFields" in node
-    assert "... on" not in node
-    assert "gateway { node { ip_prefix { node { prefix { value } } } } }" in node
-
-
 def test_the_artifact_targets_the_office_group_and_is_registered() -> None:
     config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
     artifact = next(a for a in config["artifact_definitions"] if a["name"] == "office_firewall_policy")

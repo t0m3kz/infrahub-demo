@@ -177,7 +177,7 @@ class TestTransformDataRouting:
         assert extra_kwargs["extra_roots"].get("DcimFirewallInterface") == extra_key_value
 
 
-# _collect_activations_from_interfaces (the domain rule itself: tests/unit/test_segment_vlan_rule.py)
+# _collect_activations_from_interfaces (the domain rule itself: tests/unit/generators/test_segment_vlan_rule.py)
 
 
 class TestCollectActivationsOwnRow:

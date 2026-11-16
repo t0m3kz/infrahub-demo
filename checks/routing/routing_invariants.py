@@ -1,6 +1,6 @@
 """Check the routing invariants that hold between topologies (none is visible in one rendered config).
 
-Rules 1-10: namespaces and l3_vni, INTERNET transit-only, cloud and office prefix registration, ownership. See AGENTS.md
+Rules 1-10: namespaces and l3_vni, INTERNET transit-only, cloud and office prefix registration, ownership. See domain-model.md
 "Border policy".
 """
 
@@ -254,13 +254,14 @@ class CheckRoutingInvariants(WarningCheck):
         legs: list[CloudLeg],
     ) -> None:
         for leg in legs:
-            if leg.registered and leg.owner is None:
+            if leg.unowned:
                 self.log_error(
                     message=(
-                        f"cloud peering '{leg.peering}' registers prefixes behind {leg.point}, but its transport "
-                        f"'{leg.transport}' has no customer owner (its account's owner, or its own for a SaaS): "
-                        "only a customer-owned prefix is accepted from or announced to an external BGP peer, so "
-                        "its prefixes are never accepted or announced at the border"
+                        f"cloud peering '{leg.peering}' registers prefixes behind {leg.point} with no customer owner: "
+                        "neither the account of the attachment's virtual network nor its transport "
+                        f"'{leg.transport}' (its account's owner, or its own for a SaaS) has a customer owner. Only a "
+                        "customer-owned prefix is accepted from or announced to an external BGP peer, so those "
+                        "prefixes are never accepted or announced at the border"
                     )
                 )
         registrants = [
@@ -324,11 +325,12 @@ class CheckRoutingInvariants(WarningCheck):
 
     def _validate_offices_register(self, offices: list[dict[str, Any]]) -> None:
         for office in offices:
-            gateway = (office.get("sdwan_gateway") or {}).get("name")
-            if gateway and not office_registered(office):
+            gateways = sorted(g["name"] for g in office.get("sdwan_gateways") or [] if g.get("name"))
+            if gateways and not office_registered(office):
+                names = ", ".join(f"'{gateway}'" for gateway in gateways)
                 self.log_error(
                     message=(
-                        f"office '{office.get('name')}' sits behind SD-WAN gateway '{gateway}' but registers no "
+                        f"office '{office.get('name')}' sits behind SD-WAN gateway(s) {names} but registers no "
                         "prefix (no lan_prefixes, no segment it hosts): the gateway session accepts nothing of it"
                     )
                 )
@@ -391,7 +393,7 @@ def _office_aggregates(offices: list[dict[str, Any]]) -> list[_Aggregate]:
             zone=dict(registration.zone),
         )
         for office in offices
-        if (office.get("sdwan_gateway") or {}).get("name")
+        if office.get("sdwan_gateways")
         for registration in office_registered(office)
     ]
 

@@ -1,9 +1,3 @@
-# The metro owns no kit (its zones and virtual colocations do, see
-# colocation_zone.gql / colocation_virtual.gql): the generator creates its VNI and
-# ASN pools and, when the metro has a design, the pool supernets its zones slice
-# from, then attaches them. It reads the identity and the design envelope: the
-# most zones the metro holds and the zone designs they may use sizes every pool
-# (generators/fabric_sizing.py).
 query topology_colocation_metro($name: String!) {
   TopologyColocationMetro(name__value: $name) {
     edges {

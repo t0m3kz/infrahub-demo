@@ -90,7 +90,7 @@ def test_without_the_cables_the_cable_carried_handoffs_are_reported() -> None:
     """The gateway handoff and the AWS Direct Connect handoff have only a cable under them."""
     messages = [finding["message"] for finding in _findings(build_payloads(without_cables=True))]
     reported = {circuit for circuit in ALL_DEMO_VIRTUAL_CIRCUITS if any(f"'{circuit}'" in m for m in messages)}
-    assert reported == {"HANDOFF-FR2-SDWAN-GW1-PROD", "HANDOFF-FR2-AWS-EUC1-PROD"}
+    assert reported == {"HANDOFF-FR2-SDWAN-GW1-PROD", "HANDOFF-PA4-SDWAN-GW1-PROD", "HANDOFF-FR2-AWS-EUC1-PROD"}
 
 
 def test_without_the_partner_internet_access_the_partner_tunnel_is_reported() -> None:
@@ -115,8 +115,14 @@ def test_the_partner_router_needs_no_uplink_of_its_own() -> None:
 
 
 def test_without_the_gateway_access_every_tunnel_is_reported() -> None:
-    """Every tunnel ends on the gateway's eth1, which rides INET-LUMEN-EQXFR2-GW: the six tunnels are reported."""
+    """Every tunnel to the Frankfurt gateway ends on its eth1, which rides INET-LUMEN-EQXFR2-GW: those six are reported,
+    the Paris gateway's tunnels (own access) are not.
+    """
     findings = _findings(build_payloads(without_circuits=["INET-LUMEN-EQXFR2-GW"]))
-    tunnels = {name for name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items() if expected["circuit_type"] == TUNNEL}
+    tunnels = {
+        name
+        for name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items()
+        if expected["circuit_type"] == TUNNEL and "INET-LUMEN-EQXFR2-GW" in expected["carrier"]
+    }
     assert len(tunnels) == 6
     assert {name for name in tunnels if any(f"'{name}'" in f["message"] for f in findings)} == tunnels

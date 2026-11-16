@@ -1,0 +1,17 @@
+---
+# The hub's link towards us: its connection to the ExpressRoute gateway the private peering lands on.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGatewayAttachment
+  data:
+    - name: "vhub-30all-weu-ergw"
+      description: "The virtual WAN hub's ExpressRoute connection, carrying on-prem traffic in over Equinix PA4"
+      status: active
+      gateway: "vhub-30all-weu"
+      owner_account: "net-hub-azure-prod"
+      member_of_groups: [cloud_attachment_ranges]
+      peer_gateway: "ergw-30all-weu"
+      associated_route_table: "rt-vhub-30all-weu-onprem"
+      propagates_to_route_tables:
+        - "rt-vhub-30all-weu-onprem"

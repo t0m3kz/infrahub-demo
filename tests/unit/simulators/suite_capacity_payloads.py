@@ -11,7 +11,6 @@ from tests.integration.demo_data import BOOTSTRAP, ROOT, Declared, declared, dis
 DEMOS = ROOT / "data" / "demos"
 
 RACK = "LocationRack"
-RACK_ROW = "LocationRackRow"
 SUITE = "LocationSuite"
 POD = "TopologyPod"
 ZONE = "TopologyColocationZone"
@@ -56,7 +55,6 @@ class _Inventory:
     def __init__(self, roots: tuple[Path, ...]) -> None:
         designs = {name(d): d for d in distinct(declared("TopologyTemplatePod", BOOTSTRAP))}
         self.suites = {str(s.item["shortname"]): s for s in distinct(declared(SUITE, *roots))}
-        self.rows = {str(r.item["shortname"]): r for r in distinct(declared(RACK_ROW, *roots))}
         self.data_centers = {str(dc.item["name"]): dc for dc in distinct(declared(DATA_CENTER, *roots))}
         self.pods: dict[str, dict[str, Any]] = {}
         for pod in distinct(declared(POD, *roots)):
@@ -76,30 +74,9 @@ class _Inventory:
         dc_name = str(pod.item["parent"]) if pod.item.get("parent") else str((data_center or pod).item["name"])
         return f"{dc_name.upper()}-{self.data_centers[dc_name].item['index']}-POD-{pod.item['index']}"
 
-    def row_of(self, rack: Declared) -> Declared | None:
-        """The LocationRackRow of a rack if its parent is a LocationRackRow, else None."""
-        parent_ref = str(rack.item["parent"]) if rack.item.get("parent") else None
-        if parent_ref and parent_ref in self.rows:
-            return self.rows[parent_ref]
-        return _enclosing(rack, RACK_ROW)
-
-    def row_index(self, rack: Declared) -> int:
-        """The row_index of a rack, falling back to its parent LocationRackRow.index."""
-        if rack.item.get("row_index") is not None:
-            return int(rack.item["row_index"])
-        row = self.row_of(rack)
-        if row is not None and row.item.get("index") is not None:
-            return int(row.item["index"])
-        raise KeyError(f"{rack.item['shortname']}: neither row_index nor parent LocationRackRow.index set")
-
     def suite(self, rack: Declared) -> dict[str, Any]:
-        """The suite node of a rack: its capacity as the query selects it (directly or via LocationRackRow)."""
-        row = self.row_of(rack)
-        shortname = (
-            str(row.item["parent"])
-            if row is not None and row.item.get("parent")
-            else suite_ref(row if row is not None else rack)
-        )
+        """The suite node of a rack: its capacity as the query selects it."""
+        shortname = suite_ref(rack)
         if shortname is None:
             raise KeyError(f"{rack.item['shortname']}: no suite (neither a parent nor nested under one)")
         suite = self.suites[shortname]
@@ -108,22 +85,6 @@ class _Inventory:
             "name": _value(shortname),
             "rows": _value(suite.item["rows"]),
             "racks_per_row": _value(suite.item["racks_per_row"]),
-        }
-
-    def parent_node(self, rack: Declared) -> dict[str, Any]:
-        """Return LocationRackRow node (wrapping suite) when rack sits in a row, else LocationSuite node."""
-        row = self.row_of(rack)
-        suite_dict = self.suite(rack)
-        if row is None:
-            return suite_dict
-        rshort = str(row.item["shortname"])
-        return {
-            "id": f"id-{rshort}",
-            "name": _value(rshort),
-            "index": _value(int(row.item["index"])),
-            "row_type": _value(str(row.item.get("row_type") or "mixed")),
-            "racks_per_row": _value(row.item.get("racks_per_row")),
-            "parent": {"node": suite_dict},
         }
 
     def hosting(self, rack: Declared) -> dict[str, Any] | None:
@@ -145,8 +106,9 @@ def build_payloads(*roots: Path) -> dict[str, Any]:
             {
                 "id": f"id-{shortname}",
                 "name": _value(shortname),
+                "row_index": _value(rack.item["row_index"]),
                 "index": _value(rack.item["index"]),
-                "parent": {"node": inventory.parent_node(rack)},
+                "parent": {"node": inventory.suite(rack)},
                 "deployment": {"node": hosting},
             }
         )

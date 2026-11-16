@@ -105,17 +105,22 @@ was right.
 
 ## Project Structure
 
-- [`checks/`](checks/) – Custom validation logic
-- [`data/`](data/) – Example data for bootstrapping
-- [`generators/`](generators/) – Topology and config generators
-- [`menu/`](menu/) – Example menu definition
-- [`queries/`](queries/) – GraphQL queries for Infrahub
-- [`schemas/`](schemas/) – Base and extension schemas
-- [`tasks/`](tasks/) – Invoke tasks and the kicks (`kicks.yml`) that deploy the demos
-- [`templates/`](templates/) – Jinja2 templates for device configs
-- [`tests/`](tests/) – Unit, integration, and smoke tests
-- [`transforms/`](transforms/) – Python transforms for Infrahub
-- [`utils/`](utils/) – Commonly used helpers
+| Path | Content |
+| ---- | ------- |
+| [`schemas/`](schemas/) | Data model: base schemas (`base/`) and domain extensions (`extensions/`) |
+| [`data/bootstrap/`](data/bootstrap/) | Reference data every scenario needs: locations, providers, platforms, device types, templates, pools, designs |
+| [`data/events/`](data/events/) | Event rules and actions that start generators |
+| [`data/demos/`](data/demos/) | Demo scenarios (see [Scenarios](#scenarios)) |
+| [`generators/`](generators/) | Topology and service generators (DC, pod, rack, segments, circuits, applications, change requests) |
+| [`transforms/`](transforms/) | Python transforms that build device configuration payloads |
+| [`templates/`](templates/) | Jinja2 configuration templates, one per role and platform (`templates/configs/<role>/<platform>.j2`) |
+| [`checks/`](checks/) | Validation checks run on proposed changes |
+| [`queries/`](queries/) | GraphQL queries; `queries/fragments/` holds the shared fragments they spread |
+| [`menu/`](menu/) | Infrahub navigation menu |
+| [`utils/`](utils/) | Shared helpers and limits (`utils/limits.py`) |
+| [`tests/`](tests/) | Unit, smoke and integration tests |
+| [`.infrahub.yml`](.infrahub.yml) | Registry of generators, transforms, checks, artifacts and queries |
+| [`tasks.py`](tasks.py) | Invoke tasks for setup, loading, testing and running the deployment kicks (`tests/integration/utils/`) |
 
 ## Quickstart
 
@@ -174,6 +179,8 @@ Register repository and load event actions (`setup` already does this when no re
 uv run invoke register-repo
 ```
 
+## Scenarios
+
 ### Deploy Data Center Scenarios
 
 **6 strategic scenarios** demonstrating vendor platforms, naming strategies, multi-vendor architectures.
@@ -219,7 +226,7 @@ Brace yourself: even more questionable use cases, wild topologies, and vendor dr
 
 ## Deploying a Scenario
 
-Demos are deployed by **kicks**: YAML in [`tasks/kicks.yml`](tasks/kicks.yml), run with `invoke`.
+Demos are deployed by **kicks**: YAML in [`tasks/kicks.yml`](tests/integration/demos/kicks.yml), run with `invoke`.
 
 ```bash
 uv run invoke kicks                                     # list every kick, demo and suite

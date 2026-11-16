@@ -1,10 +1,10 @@
-"""generators/fabric_sizing.py, colocation part: pool sizes derived from the colocation design envelope."""
+"""generators/model/sizing.py, colocation part: pool sizes derived from the colocation design envelope."""
 
 from __future__ import annotations
 
 import pytest
 
-from generators.mixins.fabric_sizing import (
+from generators.model.sizing import (
     COLO_ZONE_LOOPBACK_IPV6_BITS,
     COLO_ZONE_TECHNICAL_IPV6_BITS,
     bits_to_hold,

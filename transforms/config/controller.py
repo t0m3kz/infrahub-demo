@@ -118,8 +118,8 @@ def _vrf_handoffs(device: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _build_velocloud_vco(controller: dict[str, Any]) -> dict[str, Any]:
-    """VCO payload — the Gateway plus every office Edge it manages (generators/topology/sdwan_edge.py's
-    SdwanEdgeGenerator appends Edges to managed_devices;"""
+    """VCO payload — the Gateway plus every office Edge it manages (generators/office/edge.py's
+    attach_to_orchestrator appends Edges to managed_devices;"""
     edges = [
         {
             "hostname": device.get("name"),

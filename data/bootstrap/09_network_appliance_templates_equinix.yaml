@@ -5,7 +5,7 @@
 # own routing service is not modelled.
 #
 # An Equinix Network Edge order takes the device type name (type_code) and cpu_count, the software
-# image's package (package_code) and version, and the term_length (checks/colocation_placement.py rule 8).
+# image's package (package_code) and version, and the term_length (checks/customers/colocation_placement.py rule 8).
 # DEMO VALUES: not verified against the Equinix API, check type/package/version/term in the Equinix portal before
 # applying.
 # The account and its notification list live on the CloudAccount; licence tokens are never stored (provider-order

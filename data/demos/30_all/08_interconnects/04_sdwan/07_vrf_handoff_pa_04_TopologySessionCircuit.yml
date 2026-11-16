@@ -1,0 +1,22 @@
+# The Paris PROD handoff circuit, the twin of HANDOFF-FR2-SDWAN-GW1-PROD
+# (06_vrf_handoff_04_TopologySessionCircuit.yml): unowned shared on-ramp, both ends in the PA4 cage, provider
+# VeloCloud (P035). The far end is EQX-PA4-SDWAN-GW1, so the registered prefixes are those of every office that
+# lists it in sdwan_gateways.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySessionCircuit
+  data:
+    - name: "HANDOFF-PA4-SDWAN-GW1-PROD"
+      circuit_type: handoff
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P035"
+      description: "PROD handoff eg-pa401 <-> EQX-PA4-SDWAN-GW1 (office routes into the stretched segments)"
+      vrf: [PA, "PROD"]
+      password: "eqx-pa4-sdwan-handoff-key"
+      locations:
+        - "PA4"
+      capabilities:
+        - ["eg-pa401", "Ethernet1/12.1900"]
+        - ["EQX-PA4-SDWAN-GW1", "eth0.1900"]

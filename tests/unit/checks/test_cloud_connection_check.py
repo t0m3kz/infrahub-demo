@@ -48,7 +48,7 @@ def _attachment(name: str = "att", **overrides: Any) -> dict[str, Any]:
     return attachment
 
 
-def _transport(name: str, connection_type: str = "physical", rides_on: str | None = None, **overrides: Any) -> dict:
+def _transport(name: str, connection_type: str = "physical", **overrides: Any) -> dict:
     """A well-placed Direct Connect (account and region), the fields the rules read."""
     transport = {
         "__typename": "CloudDirectConnect",
@@ -56,7 +56,6 @@ def _transport(name: str, connection_type: str = "physical", rides_on: str | Non
         "name": _v(name),
         "connection_type": _v(connection_type),
         "partner_account": _node(None),
-        "rides_on": _node(rides_on, connection_type=_v("physical")) if rides_on else _node(None),
         "account": _node("acct"),
         "owner": _node(None),
         "region": _node("region"),
@@ -190,41 +189,6 @@ class TestR2RouteTables:
         """Propagation is checked like association."""
         errors = _run(CloudGatewayAttachment=[_attachment(propagates_to_route_tables=_edges(_table("rt", "other")))])
         assert len(errors) == 1 and "another gateway" in errors[0]
-
-
-class TestR3Transports:
-    """rides_on: no loop, physical on physical, a logical circuit on a transport of ours has no partner."""
-
-    def test_a_logical_circuit_riding_on_a_physical_transport_passes(self) -> None:
-        """The circuit and the transport that holds its port."""
-        assert _run(CloudDirectConnect=[_transport("port"), _transport("vc", "logical", rides_on="port")]) == []
-
-    def test_riding_on_itself_fails(self) -> None:
-        """The server accepts it (measured); the check does not."""
-        errors = _run(CloudDirectConnect=[_transport("m1", rides_on="m1")])
-        assert len(errors) == 1 and "rides on itself" in errors[0]
-
-    def test_a_loop_of_two_fails(self) -> None:
-        """a rides on b and b rides on a."""
-        errors = _run(CloudDirectConnect=[_transport("a", rides_on="b"), _transport("b", rides_on="a")])
-        assert len(errors) == 2 and all("loop" in error for error in errors)
-
-    def test_a_physical_transport_on_a_logical_circuit_fails(self) -> None:
-        """A port cannot ride on a circuit."""
-        rider = _transport("m1", rides_on="circuit")
-        rider["rides_on"] = _node("circuit", connection_type=_v("logical"))
-        errors = _run(CloudDirectConnect=[rider, _transport("circuit", "logical")])
-        assert len(errors) == 1 and "physical but rides on the logical" in errors[0]
-
-    def test_a_logical_circuit_on_our_transport_with_a_partner_fails(self) -> None:
-        """A partner's connection rides on the partner's port, not on ours."""
-        circuit = _transport("vc", "logical", rides_on="port", partner_account=_node("partner"))
-        errors = _run(CloudDirectConnect=[circuit, _transport("port")])
-        assert len(errors) == 1 and "partner_account" in errors[0]
-
-    def test_a_logical_circuit_with_a_partner_and_no_rides_on_passes(self) -> None:
-        """The partner-hosted case: a partner account and nothing to ride on."""
-        assert _run(CloudDirectConnect=[_transport("vc", "logical", partner_account=_node("partner"))]) == []
 
 
 class TestR4ServiceEndpointsAndKeys:

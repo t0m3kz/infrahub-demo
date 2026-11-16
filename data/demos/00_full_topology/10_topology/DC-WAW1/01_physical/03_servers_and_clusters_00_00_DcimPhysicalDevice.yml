@@ -2,7 +2,8 @@
 # The extra servers and the Proxmox VE cluster of the DC-WAW1 data hall. The cluster model is hypervisor-neutral
 # (schemas/extensions/service/cluster.yml, `hypervisor`): one kind describes a vCenter, a Proxmox and a Nutanix
 # cluster, so the three DCs use three vendors on purpose. A cluster needs more than one host: a VM then survives the
-# loss of one box, and checks/cluster.py (rule CL5) asks the instances of a component to stand on different hosts.
+# loss of one box, and checks/customers/cluster.py (rule CL5) asks the instances of a component to stand on different
+# hosts.
 # waw1-srv-02 has no bond and no tagged port in the data: the two ports go straight to the leaf pair (eno1 to leaf 1,
 # eno2 to leaf 2), without the patch panels of waw1-srv-01, so a server is cabled inventory rather than a tenant
 # server.

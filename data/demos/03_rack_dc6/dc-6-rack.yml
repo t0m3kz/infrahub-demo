@@ -6,13 +6,15 @@ spec:
   data:
     - name: KTW-1-SUITE-1-R4-5
       index: 5
+      row_index: 4
       shortname: ktw-1-s-1-r-4-5
+      rack_type: network
       deployment: DC6-1-POD-1
-      parent: ktw-1-s-1-row-4
-      object_template: DC6-NET-RACK-DELL
-      member_of_groups:
-        - topologies_rack
+      parent: ktw-1-s-1
+      member_of_groups: [topologies_rack]
+      # Pod 1 is mlag_create: back-to-back, so the rack mirrors the pod's other
+      # network racks: an L2-only l2-leaf pair on a template with mlag-peer
+      # ports. Access-leaf templates carry none and only work in virtual pods.
       fabric_templates:
-        - - '2'
-          - l2-leaf
-          - PowerSwitch-S5224F-ON_TOR
+        - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+        - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]

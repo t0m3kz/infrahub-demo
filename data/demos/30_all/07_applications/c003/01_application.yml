@@ -24,7 +24,7 @@ spec:
               - tcp/443
             # Cloud instances: fronted by a CloudLoadBalancer in their VPC
             # (internet-facing, the application is internet_exposed), not by an
-            # on-prem load balancer context (generators/lb_vip.py). Layer 7: an
+            # on-prem load balancer context (generators/applications/lb_vip.py). Layer 7: an
             # https listener with the certificate, forwarding to the two
             # instances, checked over http.
             load_balanced: true

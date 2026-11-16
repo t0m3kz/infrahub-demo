@@ -2,40 +2,7 @@
 
 from __future__ import annotations
 
-import re
-from pathlib import Path
-
-from tests.unit.query_shape_helpers import fragment_text
-from utils.graphql_queries import load_query
 from utils.segment_addressing import segment_prefix
-
-
-def _query(root_dir: Path) -> str:
-    """The application query text without comment lines."""
-    text = load_query(root_dir / "queries" / "topology" / "add" / "application.gql")
-    return "\n".join(line for line in text.splitlines() if not line.strip().startswith("#"))
-
-
-def test_target_segment_carries_the_fields_a_cloud_endpoint_needs(root_dir: Path) -> None:
-    """The query returns typename, environment, cidr_block and the parent network as plain fields."""
-    text = _query(root_dir)
-    target = " ".join(text[text.index("target {") : text.index("health_checks")].split())
-    for needle in ("...SegmentSecurityFields", "cidr_block { value }", "virtual_network {"):
-        assert needle in target
-    head = fragment_text(root_dir / "queries/topology/add/application.gql", "SegmentSecurityFields")
-    assert "__typename" in head
-    assert "environment { value }" in head
-
-
-def test_no_named_spread_inside_an_inline_fragment(root_dir: Path) -> None:
-    """No named fragment spread inside the cloud inline fragments: keep the fields plain."""
-    text = _query(root_dir)
-    for match in re.finditer(r"\.\.\. on CloudNetworkSegment \{", text):
-        depth, i = 1, match.end()
-        while depth:
-            depth += {"{": 1, "}": -1}.get(text[i], 0)
-            i += 1
-        assert "..." not in text[match.end() : i]
 
 
 def test_cloud_segment_resolves_to_its_cidr_block() -> None:

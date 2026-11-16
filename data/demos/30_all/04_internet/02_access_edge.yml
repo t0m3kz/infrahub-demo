@@ -1,7 +1,7 @@
 ---
-# Orange's access PE: the far end of every SD-WAN office's internet access (INET-<office>, created by
-# add_sdwan_edge). One device for all offices; the generator takes a free `customer` port per office, so a new
-# office adds no row here. Foundation stage, because add_sdwan_edge runs in the next one. Carrier kit, no group.
+# Orange's access PE: the far end of every SD-WAN office's internet access (INET-<office>, authored in
+# ../08_interconnects/05_office_internet/01_circuits.yml on one `customer` port per office). One device for all
+# offices. Carrier kit, no group.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

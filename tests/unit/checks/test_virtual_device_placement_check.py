@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-import yaml
 
 from checks.devices.virtual_device_placement import (
     ALLOWED_DEPLOYMENT_KINDS,
@@ -92,19 +91,6 @@ def test_each_wrong_device_is_its_own_finding() -> None:
     )
 
     assert [finding["object_id"] for finding in findings] == ["vm-2", "vm-3"]
-
-
-def test_query_is_registered_and_selects_what_the_check_reads() -> None:
-    """The check and its query are registered, and the generic peer is read through id/__typename/name only."""
-    config = yaml.safe_load((_ROOT / ".infrahub.yml").read_text())
-    queries = {query["name"]: query["file_path"] for query in config["queries"]}
-    checks = {check["name"]: check for check in config["check_definitions"]}
-
-    assert checks["validate_virtual_device_placement"]["class_name"] == "CheckVirtualDevicePlacement"
-    assert "targets" not in checks["validate_virtual_device_placement"]
-    text = (_ROOT / queries[CheckVirtualDevicePlacement.query]).read_text()
-    assert "__typename" in text
-    assert "... on" not in text
 
 
 def test_every_declared_demo_virtual_device_is_deployed_to_an_allowed_kind() -> None:

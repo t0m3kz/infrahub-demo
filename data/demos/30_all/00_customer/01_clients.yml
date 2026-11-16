@@ -84,3 +84,9 @@ spec:
       org_id: "C020"
       member_of_groups:
         - customers
+    # The Infrastructure Services pseudo-customer: it owns the shared cloud network accounts and their hubs
+    # (01_cloud/*/03_network_account.yml), so it exists before them; its segment is 07_applications/infra.
+    - name: "Infrastructure Services"
+      org_id: "INFRA"
+      member_of_groups:
+        - customers

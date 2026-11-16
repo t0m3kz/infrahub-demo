@@ -6,15 +6,15 @@ from typing import Any
 
 import pytest
 
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
 from tests.unit.simulators.circuit_fakes import FakeClient, session_generator
 
 HANDOFF = "VC-C001-EQXFR-AWS"
 DCI = "VC-DCI-DC10-FR2"
 DCI_KEY = f"RoutingPassword:{DCI}-dci-key"
 UNTRACKED = {"update_group_context": False}
-# An end interface is updated in place (never upserted), untracked, through save_with_node_not_found_retry.
-INTERFACE_UPDATE = {"allow_upsert": False, **UNTRACKED}
+# An end interface is an update by id (a NodeSpec of the plan), untracked: the circuit's target, not its output.
+INTERFACE_UPDATE = {"allow_upsert": True, **UNTRACKED}
 
 
 async def _run(client: FakeClient, payload: dict[str, Any]) -> Any:

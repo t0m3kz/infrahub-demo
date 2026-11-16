@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from generators.fabric import pod_mesh as pod_mesh_module
-from generators.fabric.pod import PodTopologyGenerator
-from generators.mixins.pod_config import pod_spine_slot_device_names, spine_slot_device_names
-from generators.mixins.rack import RackMixin
+from generators.base import BaseGenerator
+from generators.dc import pod as pod_module
+from generators.dc import pod_mesh as pod_mesh_module
+from generators.dc.pod import PodTopologyGenerator
+from generators.dc.pod_mesh import read_sibling_spines
+from generators.dcim.template_interfaces import TemplatePort
+from generators.plan import TopologyPlan
 from generators.protocols import DcimPhysicalDevice, DcimPhysicalInterface
 from utils.limits import WAIT_FOR_PEER_GENERATOR
 
@@ -46,6 +50,8 @@ def _interface(name: str, *, device: str) -> MagicMock:
     interface = MagicMock()
     interface.name.value = name
     interface.device_name = device
+    interface.device.peer.name.value = device
+    interface.interface_type.value = "100gbase-x-qsfp28"
     return interface
 
 
@@ -55,6 +61,7 @@ class _FakeClient:
     def __init__(self, devices: list[MagicMock]) -> None:
         self.devices = devices
         self.interfaces = [_interface(port, device=d.name.value) for d in devices for port in _UPLINKS]
+        self.group_context = SimpleNamespace(related_node_ids=[])
 
     async def filters(self, *, kind: Any, **kwargs: Any) -> list[MagicMock]:
         if kind is DcimPhysicalDevice:
@@ -86,107 +93,60 @@ def _pod_spines(pod_index: int, *, role: str, deployment_id: str) -> list[MagicM
 def _make_pod_gen(*, pod_index: int, devices: list[MagicMock]) -> Any:
     gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
     gen.logger = MagicMock()
-    gen.data = {"name": f"DC7-7-POD-{pod_index}", "index": pod_index}
+    gen.data = {"id": f"pod-{pod_index}", "name": f"DC7-7-POD-{pod_index}", "index": pod_index}
     gen.fabric_name = "dc7"
+    gen.pod_name = f"dc7-7-pod-{pod_index}"
     gen.client = _FakeClient(devices)
-    gen.create_cabling = AsyncMock(return_value=[])
-    gen.create_routing = AsyncMock()
+    gen.fail = BaseGenerator.fail.__get__(gen)
     return gen
+
+
+class _Mesh:
+    """What the mesh planned: the cables (local ports, the sibling's spines, the offset) and the routing calls."""
+
+    def __init__(self) -> None:
+        self.cabling: list[tuple[list[str], list[str], int]] = []
+        self.routing: list[list[str]] = []
 
 
 async def _mesh(
     gen: Any, *, siblings: list[dict[str, Any]], spines: list[str], spine_role: str, slot_width: int = 2
-) -> None:
-    await gen._cable_to_existing_sibling_pods(
-        siblings=siblings,
-        spines=spines,
-        spine_interfaces=_UPLINKS,
-        spine_role=spine_role,
+) -> _Mesh:
+    """Read the lower siblings' spines and plan the mesh to them, as ``generate()`` does."""
+    pod_index = gen.data["index"]
+    found = await read_sibling_spines(
+        gen,
+        siblings=[s for s in siblings if s["index"] < pod_index],
         dc=_DC,
-        dc_asn_pool_id=None,
-        pod_pools={},
-        underlay_protocol="ipv6",
+        fabric_name=gen.fabric_name,
+        spine_role=spine_role,
         slot_width=slot_width,
+        pod_name=gen.data["name"],
     )
+    planned = _Mesh()
+    real = pod_module.plan_cabling
 
+    def spy(plan: Any, **kwargs: Any) -> Any:
+        bottom = [port.port_name for port in kwargs["bottom_ports"][: len(kwargs["bottom_ports"]) // len(spines)]]
+        planned.cabling.append((bottom, sorted({port.device_name for port in kwargs["top_ports"]}), kwargs["offset"]))
+        return real(plan, **kwargs)
 
-class TestSpineSlotDeviceNames:
-    def test_names_match_what_create_devices_builds(self) -> None:
-        """The same [dc.index, pod.index] naming pod.py creates the devices under."""
-        names = spine_slot_device_names(dc=_DC, fabric_name="dc7", pod_index=2, role="border-spine", quantity=2)
+    model = SimpleNamespace(
+        pod_index=pod_index,
+        spine_role=spine_role,
+        spine_uplink_interfaces=tuple(_UPLINKS),
+        dc_id=_DC_ID,
+        underlay_protocol="ipv6",
+    )
+    reads = SimpleNamespace(siblings=found, positions={})
+    ports = {name: [TemplatePort(port, "uplink", "100gbase-x-qsfp28") for port in _UPLINKS] for name in spines}
 
-        assert names == ["dc7.7.2.bs01", "dc7.7.2.bs02"]
+    def route(bottom: list[str], top: list[str], *_: Any, **__: Any) -> None:
+        planned.routing.append(top)
 
-    def test_pods_of_one_dc_never_share_a_name(self) -> None:
-        pod_1 = spine_slot_device_names(dc=_DC, fabric_name="dc7", pod_index=1, role="border-spine", quantity=4)
-        pod_2 = spine_slot_device_names(dc=_DC, fabric_name="dc7", pod_index=2, role="border-spine", quantity=4)
-
-        assert not set(pod_1) & set(pod_2)
-
-    def test_rack_derives_the_same_names(self) -> None:
-        """rack.py's spine-slot derivation is the same helper, so the two cannot drift."""
-        gen: Any = RackMixin.__new__(RackMixin)
-        gen.logger = MagicMock()
-        gen.fabric_name = "dc7"
-        gen.data = {
-            "name": "ams-1-s-2-r-1-1",
-            "deployment": {
-                "index": 2,
-                "parent": _DC,
-                "fabric_templates": [
-                    {
-                        "role": "border-spine",
-                        "quantity": 2,
-                        "template": {"interfaces": [{"name": "Ethernet1/1", "role": "downlink"}]},
-                    }
-                ],
-            },
-        }
-
-        device_names, _ = gen._derive_spine_info()
-
-        assert device_names == spine_slot_device_names(
-            dc=_DC, fabric_name="dc7", pod_index=2, role="border-spine", quantity=2
-        )
-
-
-class TestPodSpineSlotDeviceNames:
-    def test_role_index_continues_across_entries(self) -> None:
-        """Two border-spine entries of 2: role_index 1..4, the way add_pod numbers them."""
-        pod = {
-            "index": 2,
-            "parent": _DC,
-            "fabric_templates": [
-                {"role": "border-spine", "quantity": 2, "template": {}},
-                {"role": "border-spine", "quantity": 2, "template": {}},
-                {"role": "internal-firewall", "quantity": 2, "template": {}},
-            ],
-        }
-
-        assert pod_spine_slot_device_names(pod) == [
-            "dc7.7.2.bs01",
-            "dc7.7.2.bs02",
-            "dc7.7.2.bs03",
-            "dc7.7.2.bs04",
-        ]
-
-    def test_a_pod_without_spine_slot_entries_has_none(self) -> None:
-        assert pod_spine_slot_device_names({"index": 1, "parent": _DC, "fabric_templates": []}) == []
-
-    def test_rack_derives_distinct_names_for_two_entries(self) -> None:
-        gen: Any = RackMixin.__new__(RackMixin)
-        gen.logger = MagicMock()
-        gen.fabric_name = "dc7"
-        entry = {
-            "role": "spine",
-            "quantity": 2,
-            "template": {"interfaces": [{"name": "Ethernet1/1", "role": "downlink"}]},
-        }
-        gen.data = {"name": "r", "deployment": {"index": 1, "parent": _DC, "fabric_templates": [entry, entry]}}
-
-        device_names, _ = gen._derive_spine_info()
-
-        assert device_names == ["dc7.7.1.sp01", "dc7.7.1.sp02", "dc7.7.1.sp03", "dc7.7.1.sp04"]
+    with patch.object(pod_module, "plan_cabling", spy):
+        gen._plan_mesh(TopologyPlan(root_id="pod"), model, reads, spines, ports, None, slot_width, route, [])
+    return planned
 
 
 class TestSiblingSpineLookup:
@@ -198,16 +158,15 @@ class TestSiblingSpineLookup:
         gen = _make_pod_gen(pod_index=2, devices=pod_1 + pod_2)
 
         with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
-            await _mesh(
+            mesh = await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2)],
                 spines=[d.name.value for d in pod_2],
                 spine_role="border-spine",
             )
 
-        gen.create_cabling.assert_awaited_once()
-        assert gen.create_cabling.call_args.kwargs["top_devices"] == ["dc7.7.1.bs01", "dc7.7.1.bs02"]
-        assert gen.create_routing.call_args.kwargs["top_devices"] == ["dc7.7.1.bs01", "dc7.7.1.bs02"]
+        assert [top for _, top, _ in mesh.cabling] == [["dc7.7.1.bs01", "dc7.7.1.bs02"]]
+        assert mesh.routing == [["dc7.7.1.bs01", "dc7.7.1.bs02"]]
 
     @pytest.mark.asyncio
     async def test_border_spine_pods_do_not_pick_up_each_others_devices(self) -> None:
@@ -218,18 +177,19 @@ class TestSiblingSpineLookup:
         gen = _make_pod_gen(pod_index=3, devices=pod_1 + pod_2 + pod_3)
 
         with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
-            await _mesh(
+            mesh = await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2), _sibling(3)],
                 spines=[d.name.value for d in pod_3],
                 spine_role="border-spine",
             )
 
-        top_devices = [call.kwargs["top_devices"] for call in gen.create_cabling.call_args_list]
-        assert top_devices == [["dc7.7.1.bs01", "dc7.7.1.bs02"], ["dc7.7.2.bs01", "dc7.7.2.bs02"]]
+        assert [top for _, top, _ in mesh.cabling] == [
+            ["dc7.7.1.bs01", "dc7.7.1.bs02"],
+            ["dc7.7.2.bs01", "dc7.7.2.bs02"],
+        ]
         # One uplink pair per sibling on this pod's side: Ethernet17-18 to pod 1, 19-20 to pod 2.
-        local_uplinks = [call.kwargs["bottom_interfaces"] for call in gen.create_cabling.call_args_list]
-        assert local_uplinks == [_UPLINKS[0:2], _UPLINKS[2:4]]
+        assert [bottom for bottom, _, _ in mesh.cabling] == [_UPLINKS[0:2], _UPLINKS[2:4]]
 
     @pytest.mark.asyncio
     async def test_plain_spine_sibling_deployed_to_its_pod_is_still_found(self) -> None:
@@ -238,26 +198,23 @@ class TestSiblingSpineLookup:
         gen = _make_pod_gen(pod_index=2, devices=pod_1 + pod_2)
 
         with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
-            await _mesh(
+            mesh = await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2)],
                 spines=[d.name.value for d in pod_2],
                 spine_role="spine",
             )
 
-        assert gen.create_cabling.call_args.kwargs["top_devices"] == ["dc7.7.1.sp01", "dc7.7.1.sp02"]
+        assert [top for _, top, _ in mesh.cabling] == [["dc7.7.1.sp01", "dc7.7.1.sp02"]]
 
 
 class TestMeshPortSlots:
     """The pair slots come from the pod indexes and the shared slot width, never from what a sibling has built."""
 
     @staticmethod
-    def _slots(gen: Any) -> list[tuple[list[str], int]]:
+    def _slots(mesh: _Mesh) -> list[tuple[list[str], int]]:
         """(local uplinks, offset on the sibling's uplinks) of every pair cabled, in order."""
-        return [
-            (call.kwargs["bottom_interfaces"], call.kwargs["options"]["cabling_offset"])
-            for call in gen.create_cabling.call_args_list
-        ]
+        return [(bottom, offset) for bottom, _, offset in mesh.cabling]
 
     @pytest.mark.asyncio
     async def test_a_sibling_seen_with_only_some_spines_keeps_the_full_slot(self) -> None:
@@ -268,14 +225,14 @@ class TestMeshPortSlots:
         gen = _make_pod_gen(pod_index=3, devices=pod_1 + pod_2 + pod_3)
 
         with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
-            await _mesh(
+            mesh = await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2), _sibling(3)],
                 spines=[d.name.value for d in pod_3],
                 spine_role="spine",
             )
 
-        assert self._slots(gen) == [(_UPLINKS[0:1], 2), (_UPLINKS[2:4], 2)]
+        assert self._slots(mesh) == [(_UPLINKS[0:1], 2), (_UPLINKS[2:4], 2)]
 
     @pytest.mark.asyncio
     async def test_slots_stride_by_the_slot_width(self) -> None:
@@ -286,7 +243,7 @@ class TestMeshPortSlots:
         gen = _make_pod_gen(pod_index=3, devices=pod_1 + pod_2)
 
         with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
-            await _mesh(
+            mesh = await _mesh(
                 gen,
                 siblings=[_sibling(1), _sibling(2)],
                 spines=["dc7.7.3.sp01", "dc7.7.3.sp02", "dc7.7.3.sp03", "dc7.7.3.sp04"],
@@ -294,7 +251,7 @@ class TestMeshPortSlots:
                 slot_width=4,
             )
 
-        assert self._slots(gen) == [(_UPLINKS[0:2], 4), (_UPLINKS[4:6], 4)]
+        assert self._slots(mesh) == [(_UPLINKS[0:2], 4), (_UPLINKS[4:6], 4)]
 
     @pytest.mark.asyncio
     async def test_slots_follow_the_pod_index_not_the_list_position(self) -> None:
@@ -304,9 +261,9 @@ class TestMeshPortSlots:
         gen = _make_pod_gen(pod_index=3, devices=pod_2)
 
         with patch.object(pod_mesh_module, "WAIT_FOR_PEER_GENERATOR", replace(WAIT_FOR_PEER_GENERATOR, attempts=1)):
-            await _mesh(gen, siblings=[_sibling(2), _sibling(3)], spines=["dc7.7.3.sp01"], spine_role="spine")
+            mesh = await _mesh(gen, siblings=[_sibling(2), _sibling(3)], spines=["dc7.7.3.sp01"], spine_role="spine")
 
-        assert self._slots(gen) == [(_UPLINKS[2:4], 2)]
+        assert self._slots(mesh) == [(_UPLINKS[2:4], 2)]
 
 
 class TestMeshSlotWidth:

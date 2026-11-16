@@ -7,9 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from generators.fabric.rack import RackGenerator, TopologyRackData
+from generators.dc.rack import RackGenerator
+from generators.dc.rack_data import TopologyRackData
 from generators.helpers.rack import parse_rack_data
-from generators.mixins.pod_config import pod_spine_slot_device_names
+from generators.model.pod_profile import pod_spine_slot_device_names
 from generators.protocols import DcimPhysicalDevice
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 
@@ -51,6 +52,7 @@ def _build_rack_generator(
         "leafs": leafs if leafs is not None else [_DEFAULT_LEAF],
     }
     gen = RackGenerator.__new__(RackGenerator)
+    gen._controllers = []
     gen.data = cast(TopologyRackData, rack)
     gen.logger = MagicMock()
     gen.client = MagicMock()
@@ -321,7 +323,7 @@ class TestGenerateRackGating:
     @pytest.mark.asyncio
     async def test_empty_input_logs_error_and_stops(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        with patch("generators.fabric.rack.parse_rack_data") as mock_parse:
+        with patch("generators.dc.rack.parse_rack_data") as mock_parse:
             await gen.generate({})
 
         mock_parse.assert_not_called()
@@ -331,7 +333,7 @@ class TestGenerateRackGating:
     async def test_parse_failure_logs_error_and_stops(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
 
-        with patch("generators.fabric.rack.parse_rack_data", side_effect=ValueError("boom")):
+        with patch("generators.dc.rack.parse_rack_data", side_effect=ValueError("boom")):
             await gen.generate({"any": "shape"})
 
         gen.logger.error.assert_called_once()
@@ -345,7 +347,7 @@ class TestGenerateRackGating:
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
         gen._prepare_generation_context = MagicMock()
 
-        with patch("generators.fabric.rack.parse_rack_data", return_value=gen.data):
+        with patch("generators.dc.rack.parse_rack_data", return_value=gen.data):
             await gen.generate({"any": "shape"})
 
         gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
@@ -360,7 +362,7 @@ class TestGenerateRackGating:
         gen.data["deployment"] = None  # type: ignore[typeddict-item]
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
 
-        with patch("generators.fabric.rack.parse_rack_data", return_value=gen.data):
+        with patch("generators.dc.rack.parse_rack_data", return_value=gen.data):
             await gen.generate({"any": "shape"})
 
         gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
@@ -383,13 +385,16 @@ class TestGenerateRackGating:
         gen.data["deployment"]["parent"]["routing_strategy"] = strategy
         gen.client.filters = AsyncMock(return_value=[_device("spine-2"), _device("spine-1")])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-        gen.bgp_processes_ready = AsyncMock(return_value=False)
+        gen.bgp_ready = AsyncMock(return_value=False)
         gen._prepare_generation_context = MagicMock()
 
-        with patch("generators.fabric.rack.parse_rack_data", return_value=gen.data):
+        with (
+            patch("generators.dc.rack.parse_rack_data", return_value=gen.data),
+            patch("generators.dc.rack.bgp_processes_ready", gen.bgp_ready),
+        ):
             await gen.generate({"any": "shape"})
 
-        gen.bgp_processes_ready.assert_awaited_once_with(["spine-1", "spine-2"], expected_role)
+        gen.bgp_ready.assert_awaited_once_with(gen.client, ["spine-1", "spine-2"], expected_role)
         gen._prepare_generation_context.assert_not_called()
         gen.logger.error.assert_not_called()
         assert any(expected_role in call.args for call in gen.logger.info.call_args_list)
@@ -404,12 +409,15 @@ class TestGenerateRackGating:
         gen.data["deployment"]["parent"]["routing_strategy"] = "ospf-ibgp"
         gen.client.filters = AsyncMock(return_value=[_device("spine-1")])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-        gen.bgp_processes_ready = AsyncMock(return_value=True)
+        gen.bgp_ready = AsyncMock(return_value=True)
 
-        with patch("generators.fabric.rack.parse_rack_data", return_value=gen.data):
+        with (
+            patch("generators.dc.rack.parse_rack_data", return_value=gen.data),
+            patch("generators.dc.rack.bgp_processes_ready", gen.bgp_ready),
+        ):
             await gen.generate({"any": "shape"})
 
-        gen.bgp_processes_ready.assert_awaited_once_with(["spine-1"], "overlay")
+        gen.bgp_ready.assert_awaited_once_with(gen.client, ["spine-1"], "overlay")
         assert any("endpoint-only rack" in str(call.args[0]) for call in gen.logger.info.call_args_list)
 
     @pytest.mark.asyncio
@@ -426,9 +434,12 @@ class TestGenerateRackGating:
         ]
         gen.client.filters = AsyncMock(return_value=[_device("spine-1")])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-        gen.bgp_processes_ready = AsyncMock(return_value=True)
+        gen.bgp_ready = AsyncMock(return_value=True)
 
-        with patch("generators.fabric.rack.parse_rack_data", return_value=gen.data):
+        with (
+            patch("generators.dc.rack.parse_rack_data", return_value=gen.data),
+            patch("generators.dc.rack.bgp_processes_ready", gen.bgp_ready),
+        ):
             await gen.generate({"any": "shape"})
 
         waits = [call.args for call in gen.wait_for_parent_generator_and_refetch.await_args_list]
@@ -448,17 +459,20 @@ class TestGenerateRackGating:
         expected = pod_spine_slot_device_names(gen.data["deployment"])
         gen.client.filters = AsyncMock(return_value=[_device(name) for name in expected])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-        gen.bgp_processes_ready = AsyncMock(return_value=False)
+        gen.bgp_ready = AsyncMock(return_value=False)
         gen._prepare_generation_context = MagicMock()
 
-        with patch("generators.fabric.rack.parse_rack_data", return_value=gen.data):
+        with (
+            patch("generators.dc.rack.parse_rack_data", return_value=gen.data),
+            patch("generators.dc.rack.bgp_processes_ready", gen.bgp_ready),
+        ):
             await gen.generate({"any": "shape"})
 
         lookup = gen.client.filters.call_args.kwargs
         assert lookup["kind"] is DcimPhysicalDevice
         assert lookup["name__values"] == expected
         assert lookup["role__value"] == "border-spine"
-        gen.bgp_processes_ready.assert_awaited_once_with(expected, "underlay")
+        gen.bgp_ready.assert_awaited_once_with(gen.client, expected, "underlay")
         gen._prepare_generation_context.assert_not_called()
 
     @pytest.mark.asyncio
@@ -471,12 +485,15 @@ class TestGenerateRackGating:
         gen.data["access_leafs"] = []
         gen.client.filters = AsyncMock(return_value=[])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-        gen.bgp_processes_ready = AsyncMock(return_value=False)
+        gen.bgp_ready = AsyncMock(return_value=False)
 
-        with patch("generators.fabric.rack.parse_rack_data", return_value=gen.data):
+        with (
+            patch("generators.dc.rack.parse_rack_data", return_value=gen.data),
+            patch("generators.dc.rack.bgp_processes_ready", gen.bgp_ready),
+        ):
             await gen.generate({"any": "shape"})
 
-        gen.bgp_processes_ready.assert_not_awaited()
+        gen.bgp_ready.assert_not_awaited()
         assert any("endpoint-only rack" in str(call.args[0]) for call in gen.logger.info.call_args_list)
 
     @pytest.mark.asyncio
@@ -488,7 +505,7 @@ class TestGenerateRackGating:
         gen._role_compatibility_errors = MagicMock()
         gen._prepare_generation_context = MagicMock()
 
-        with patch("generators.fabric.rack.parse_rack_data", return_value=gen.data):
+        with patch("generators.dc.rack.parse_rack_data", return_value=gen.data):
             await gen.generate({"any": "shape"})
 
         gen._role_compatibility_errors.assert_not_called()
@@ -561,7 +578,7 @@ class TestRoleDeploymentCompatibility:
         gen.data["access_leafs"] = []
         gen._prepare_generation_context = MagicMock()
 
-        with patch("generators.fabric.rack.parse_rack_data", return_value=gen.data):
+        with patch("generators.dc.rack.parse_rack_data", return_value=gen.data):
             await gen.generate({"any": "shape"})
 
         gen._prepare_generation_context.assert_not_called()

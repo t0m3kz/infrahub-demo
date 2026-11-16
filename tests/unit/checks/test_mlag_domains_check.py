@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 from checks.routing.mlag_domains import (
@@ -14,7 +13,6 @@ from checks.routing.mlag_domains import (
     pair_row_errors,
     peer_devices_errors,
 )
-from tests.unit.query_shape_helpers import query_tree, unselected
 from utils.data_cleaning import clean_data
 from utils.segment_vlan import mlag_peer_devices
 
@@ -212,7 +210,7 @@ def test_m3_fails_on_a_hand_edit() -> None:
     assert len(errors) == 1
     assert "'b,a'" in errors[0]
     assert "'a,b'" in errors[0]
-    assert "Re-run the pod or DC generator" in errors[0] and "domain_pairing" in errors[0]
+    assert "Re-run the pod or DC generator" in errors[0] and "mlag" in errors[0]
 
 
 def test_check_logs_m3_error() -> None:
@@ -293,18 +291,6 @@ def test_check_logs_m4_and_m5_errors() -> None:
     errors = _run(_PAIR, rows=(_row("r1", "a", 100), _row("r2", "b", 101)), lags=(_lag(1, "a"),))
     assert len(errors) == 2
     assert _run(_PAIR, rows=(_row("r1", "a", 100), _row("r2", "b", 100)), lags=(_lag(1, "a"), _lag(1, "b"))) == []
-
-
-def test_the_fixtures_only_emit_fields_the_query_selects() -> None:
-    """Query-shape pin: the raw fixtures stay inside queries/validation/mlag_domains.gql."""
-    tree = query_tree(Path(__file__).parents[3] / "queries" / "validation" / "mlag_domains.gql")
-    raw = _raw(_PAIR, rows=(_row("r1", "a", 100),), lags=(_lag(1, "a"),))
-    assert unselected(raw, tree) == []
-    # the pair rule needs the segment deployment, the row's device and the LAG's MLAG
-    assert {"segment_deployment", "device", "vlan_id"} <= set(tree["ManagedSegmentVlan"]["edges"]["node"])
-    assert {"lag_id", "lacp_mode", "minimum_links", "role", "mlag_domain"} <= set(
-        tree["DcimLAGInterface"]["edges"]["node"]
-    )
 
 
 def test_m6_passes_when_each_member_lists_its_peer_link() -> None:

@@ -1,4 +1,4 @@
-"""Unit tests for how SegmentVlanMixin chooses a segment's local VLAN ID per device (generators/segment_vlan.py)."""
+"""Unit tests for how generators/segments/segment_vlan.py chooses a segment's local VLAN ID per device (generators/segments/segment_vlan.py)."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from generators.mixins.logger import GeneratorError
-from generators.mixins.segment_vlan import segment_lock_key, vlan_device_lock_key
+from generators.model.errors import GeneratorError
 from generators.protocols import ManagedSegmentVlan
+from generators.segments.segment_vlan import segment_lock_key, vlan_device_lock_key
 from tests.unit.segment_vlan_helpers import VlanWorld, make_device, reconcile, segment_deployment_id
 from utils.limits import CUSTOMER_VLAN_ID_MIN, LOCAL_VLAN_ID_MAX
 
@@ -225,14 +225,15 @@ class TestIsolation:
         assert world.vlan_ids("seg-1") == {}
         assert world.vlan_ids("seg-3") == {"sw-a": 100}
 
-    def test_delete_is_seen_by_the_read_of_the_same_run(self) -> None:
-        """A segment moving off one device onto another deletes first, then reads the ids in use."""
+    def test_a_stale_row_goes_before_the_new_one_is_written_and_its_id_is_free_for_the_choice(self) -> None:
+        """A segment moving off one device onto another: the stale row (generated, so removable) is deleted before the
+        new row is created, and the id it held does not steer the choice (the lowest free one is taken)."""
         world = _standalone_world("b")
-        stale = world.add("seg-1", "sw-a", 100)
+        stale = world.add("seg-1", "sw-a", 105)
 
         _run(world, "seg-1", ["b"])
 
-        assert world.events.index(f"delete:{stale}") < world.events.index("read:ManagedSegmentVlan")
+        assert world.events.index(f"delete:{stale}") < world.events.index("create:sw-b")
         assert world.vlan_ids("seg-1") == {"sw-b": 100}
 
 

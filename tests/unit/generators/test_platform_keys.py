@@ -13,9 +13,9 @@ import yaml
 
 import transforms.config
 from checks.routing.lisp_fabric import LISP_PLATFORM
+from generators.capabilities.mlag import IPV4_CONTROL_PLATFORMS, NO_CONTROL_PLATFORMS
+from generators.customers.firewall_context_spec import _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE
 from generators.helpers.interface_naming import _PLATFORM_NAMING
-from generators.mixins.firewall_context_spec import _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE
-from generators.mixins.mlag import _IPV4_CONTROL_PLATFORMS, _NO_CONTROL_PLATFORMS
 from transforms.common import UNFILTERED_BANNER_PLATFORMS, BaseDeviceTransform
 from transforms.config.controller import _BUILDERS
 from transforms.helpers.group_policy.dispatch import GPO_RENDERERS
@@ -160,8 +160,8 @@ def _code_table_platforms() -> dict[str, set[str]]:
         "controller._BUILDERS": {platform for _, platform in _BUILDERS if platform},
         "helpers.loadbalancer._VENDORS": set(_VENDORS),
         "helpers.proxy._DESTINATION_TYPES": set(_DESTINATION_TYPES) - cloud_proxy_renderers,
-        "mlag._IPV4_CONTROL_PLATFORMS": set(_IPV4_CONTROL_PLATFORMS),
-        "mlag._NO_CONTROL_PLATFORMS": set(_NO_CONTROL_PLATFORMS),
+        "mlag._IPV4_CONTROL_PLATFORMS": set(IPV4_CONTROL_PLATFORMS),
+        "mlag._NO_CONTROL_PLATFORMS": set(NO_CONTROL_PLATFORMS),
         "common.UNFILTERED_BANNER_PLATFORMS": set(UNFILTERED_BANNER_PLATFORMS),
         "BaseDeviceTransform.external_policy_platforms": external_policy,
         "helpers.vxlan._PLATFORM_VXLAN_KEYS": set(_PLATFORM_VXLAN_KEYS),

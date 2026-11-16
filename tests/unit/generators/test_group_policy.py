@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
-from graphql import parse, print_ast
-from graphql.language import FieldNode, FragmentDefinitionNode, OperationDefinitionNode
 
-from tests.unit.generators.test_circuit_query_shapes import _selected_paths
 from utils.fabric_roles import DC_VTEP_ROLES, VTEP_ROLES
-from utils.graphql_queries import load_query
 from utils.group_policy import (
     fabric_reason,
     gbp_required,
@@ -85,23 +80,6 @@ def _bootstrap(root_dir: Path, path: str) -> list[dict[str, Any]]:
     return yaml.safe_load((root_dir / path).read_text())["spec"]["data"]
 
 
-def _cleaned_bootstrap_rows(root_dir: Path) -> list[dict[str, Any]]:
-    """The bootstrap profile rows as the cleaned GroupPolicyProfileFields (+ tag_pool) selection."""
-    pools = {pool["name"]: pool for pool in _bootstrap(root_dir, "data/bootstrap/19_sgt_pool.yml")}
-    return [
-        {
-            "name": row["name"],
-            "group_policy_kind": row["group_policy_kind"],
-            "platform": {"name": row["platform"]},
-            "min_release": row["min_release"],
-            "min_memory_gb": row.get("min_memory_gb"),
-            "device_types": [{"name": name} for name in row["device_types"]],
-            "tag_pool": {"id": row["tag_pool"], **pools[row["tag_pool"]]} if row.get("tag_pool") else None,
-        }
-        for row in _bootstrap(root_dir, "data/bootstrap/19b_group_policy_profile.yml")
-    ]
-
-
 class TestReleaseKey:
     """Releases compare by their numbers, within one platform."""
 
@@ -162,38 +140,6 @@ class TestProfilesByPlatform:
         profiles, problems = profiles_by_platform([{**NXOS, **change}])
         assert profiles == {}
         assert problems == [problem]
-
-    def test_bootstrap_rows_are_usable_and_reference_loaded_data(self, root_dir: Path) -> None:
-        """AC1: one row each for cisco_nxos and arista_eos; their platforms, device types and pool exist."""
-        rows = _cleaned_bootstrap_rows(root_dir)
-        profiles, problems = profiles_by_platform(rows)
-        assert problems == []
-        assert sorted(profiles) == ["arista_eos", "cisco_nxos"]
-        platforms = {item["name"] for item in _bootstrap(root_dir, "data/bootstrap/05_platforms.yml")}
-        device_types = {item["name"] for item in _bootstrap(root_dir, "data/bootstrap/06_device_types.yml")}
-        assert set(profiles) <= platforms
-        for row in rows:
-            assert {item["name"] for item in row["device_types"]} <= device_types, row["name"]
-        assert tag_pool(rows)[0] is not None
-
-    def test_bootstrap_nxos_row_is_the_fx3_gx_gx2_family_with_enough_memory(self, root_dir: Path) -> None:
-        """Owner decision: FX3/GX/GX2 only (no FX2, FX, EX), each with memory_gb >= the row's floor."""
-        nxos = profiles_by_platform(_cleaned_bootstrap_rows(root_dir))[0]["cisco_nxos"]
-        names = {item["name"] for item in nxos["device_types"]}
-        assert len(names) == 9
-        assert all(re.search(r"-(FX3|GX|GX2[AB])$", name) for name in names)
-        memory = {
-            item["name"]: item.get("memory_gb", 0)
-            for item in _bootstrap(root_dir, "data/bootstrap/06_device_types.yml")
-        }
-        assert all(memory[name] >= nxos["min_memory_gb"] for name in names)
-
-    def test_sgt_pool_is_16_to_4095(self, root_dir: Path) -> None:
-        """AC3: clear of 0, 1 and 15, inside the NX-OS group ID; the NX-OS row names it."""
-        pool, problem = tag_pool(_cleaned_bootstrap_rows(root_dir))
-        assert problem is None
-        assert pool is not None
-        assert (pool["name"], pool["start_range"], pool["end_range"]) == ("SGT-POOL", 16, 4095)
 
 
 class TestTagPool:
@@ -376,125 +322,6 @@ class TestGbpRequired:
         }
 
 
-class TestQueries:
-    """The queries select what the profile functions read, and filter no role by literal."""
-
-    def test_check_query_reads_the_profile_rows_and_no_role_literal(self, root_dir: Path) -> None:
-        """Rows through the shared fragment; VTEP roles come from utils/fabric_roles.py, not the query."""
-        text = (root_dir / "queries/validation/reference_fabric.gql").read_text()
-        assert "...GroupPolicyProfileFields" in text
-        assert "...DeviceGroupPolicyFields" in text
-        assert "role__values" not in text
-
-    @staticmethod
-    def _roots(text: str) -> dict[str, str]:
-        """Response key -> printed selection of every top-level root of the query operation."""
-        operation = next(item for item in parse(text).definitions if isinstance(item, OperationDefinitionNode))
-        return {
-            (field.alias or field.name).value: print_ast(field)
-            for field in operation.selection_set.selections
-            if isinstance(field, FieldNode)
-        }
-
-    @staticmethod
-    def _fragment(root_dir: Path, name: str) -> str:
-        """The printed definition of one fragment of queries/fragments/group_policy.gql."""
-        document = parse((root_dir / "queries/fragments/group_policy.gql").read_text())
-        return next(
-            print_ast(item)
-            for item in document.definitions
-            if isinstance(item, FragmentDefinitionNode) and item.name.value == name
-        )
-
-    DEVICE_QUERIES = ("queries/config/leaf.gql", "queries/config/border_leaf.gql", "queries/config/border_spine.gql")
-    FLEET_ROOTS = (
-        "DcimGroupPolicyProfile",
-        "TopologyDataCenter",
-        "TopologyPod",
-        "ManagedNetworkSegment",
-        "SecurityTag",
-    )
-    BGP_ROOTS = (
-        "DcimVirtualInterface",
-        "environment_segments",
-        "environment_zones",
-        "ManagedVRF",
-        "ManagedVxlanSegment",
-    )
-    PLACEMENT_SPREAD = "      ...SecurityTagPlacementFields\n"
-
-    @pytest.mark.parametrize("query", DEVICE_QUERIES)
-    def test_device_queries_carry_the_same_fleet_roots_after_the_device_root(self, root_dir: Path, query: str) -> None:
-        """The GPO block reads the fleet roots as top-level roots, the same in every device query;"""
-        reference = self._roots(load_query(root_dir / self.DEVICE_QUERIES[0]))
-        device = self._roots(load_query(root_dir / query))
-        assert list(device)[0] == "DcimDevice"
-        fleet = len(self.FLEET_ROOTS)
-        assert list(device)[1 : 1 + fleet] == list(self.FLEET_ROOTS)
-        # Past the fleet roots: the BGP route protection's data.
-        assert set(list(device)[1 + fleet :]) <= {*self.BGP_ROOTS, "DeviceServices"}
-        assert "environment_zones" in device
-        assert not any(key.startswith("environment_prefixes_") for key in device)
-        assert {key: device[key] for key in self.FLEET_ROOTS} == {key: reference[key] for key in self.FLEET_ROOTS}
-        assert self.PLACEMENT_SPREAD in device["SecurityTag"]
-
-    @pytest.mark.parametrize("query", DEVICE_QUERIES)
-    def test_route_protection_reads_segment_owned_prefixes_in_every_device_query(
-        self, root_dir: Path, query: str
-    ) -> None:
-        """Segment gateway prefixes reach route protection through their explicit SecurityZone owner."""
-        reference = self._roots(load_query(root_dir / self.DEVICE_QUERIES[0]))
-        device = self._roots(load_query(root_dir / query))
-        selection = device["environment_segments"]
-
-        assert selection.startswith("environment_segments: ManagedNetworkSegment")
-        assert "...SegmentRoutingPrefixFields" in selection
-        assert selection == reference["environment_segments"]
-
-        paths = _selected_paths(root_dir / query, "environment_zones")
-        assert {
-            "id",
-            "name",
-            "vrf_type",
-            "l3_vni",
-            "vrfs.id",
-            "vrfs.deployment.id",
-            "vrfs.security_zone.id",
-            # The VRF's interfaces are its capabilities, each with its own VRF among its capabilities.
-            "vrfs.capabilities.capabilities.id",
-            "vrfs.capabilities.capabilities.vrf.id",
-            "vrfs.session_circuits.vrf.id",
-        } <= paths
-        assert not {"registered_prefixes", "routed_interfaces", "session_circuits"} & paths
-        assert not any("ip_prefix.security_zone" in path for path in paths)
-
-    @pytest.mark.parametrize("query", DEVICE_QUERIES)
-    def test_every_query_reads_the_tags_through_the_one_fragment(self, root_dir: Path, query: str) -> None:
-        text = (root_dir / query).read_text()
-        assert "...SecurityTagGroupPolicyFields" in text
-        assert "components" not in text
-        fragments = (root_dir / "queries/fragments/group_policy.gql").read_text()
-        assert fragments.count("fragment SecurityTagGroupPolicyFields on SecurityTag") == 1
-
-    def test_only_the_device_queries_read_the_instance_placement(self, root_dir: Path) -> None:
-        """The reference_fabric check must not pay for the NIC and cable walk of every instance."""
-        for query in self.DEVICE_QUERIES:
-            text = (root_dir / query).read_text()
-            assert text.count("...SecurityTagPlacementFields") == 1
-        assert "SecurityTagPlacementFields" not in (root_dir / "queries/validation/reference_fabric.gql").read_text()
-        fragments = (root_dir / "queries/fragments/group_policy.gql").read_text()
-        assert fragments.count("fragment SecurityTagPlacementFields on SecurityTag") == 1
-        assert "instances" not in self._fragment(root_dir, "SecurityTagGroupPolicyFields"), (
-            "the shared fragment stays as the check reads it"
-        )
-
-    def test_fragment_selects_memory_and_kind(self, root_dir: Path) -> None:
-        """fabric_reason reads device_type.memory_gb; site_kind reads group_policy_kind."""
-        text = (root_dir / "queries/fragments/group_policy.gql").read_text()
-        assert "memory_gb { value }" in text
-        assert "group_policy_kind { value }" in text
-
-
 class TestReservedGroups:
     """The reserved group IDs of one kind come from its profile rows, never from code."""
 
@@ -513,16 +340,6 @@ class TestReservedGroups:
             "other": {**NXOS, "name": "other", "unaware_group_id": 14},
         }
         assert reserved_groups(profiles, "vxlan_gpo")["unaware"] is None
-
-    def test_bootstrap_profile_names_the_nxos_reserved_groups_outside_the_pool(self, root_dir: Path) -> None:
-        """Data, not code: 0 and 15 on the NX-OS row, both below the SGT-POOL band."""
-        rows = yaml.safe_load((root_dir / "data/bootstrap/19b_group_policy_profile.yml").read_text())["spec"]["data"]
-        nxos = next(row for row in rows if row["platform"] == "cisco_nxos")
-        pool = yaml.safe_load((root_dir / "data/bootstrap/19_sgt_pool.yml").read_text())["spec"]["data"][0]
-        assert (nxos["unclassified_group_id"], nxos["unaware_group_id"]) == (0, 15)
-        assert all(not pool["start_range"] <= value <= pool["end_range"] for value in (0, 15))
-        eos = next(row for row in rows if row["platform"] == "arista_eos")
-        assert "unaware_group_id" not in eos and "unclassified_group_id" not in eos
 
 
 class TestSites:

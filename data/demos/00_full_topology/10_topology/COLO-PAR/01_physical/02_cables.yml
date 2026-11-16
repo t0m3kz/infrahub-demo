@@ -12,7 +12,7 @@
 # start on et-0/0/0 (90_bindings/50_connections/Cloud/00_carriers/00_carrier_circuits.yml) are carriers; the
 # sub-interfaces on Ethernet1/1 are
 # carried because the
-# port is cabled (checks/circuit_placement.py: a cable on the port counts).
+# port is cabled (checks/connectivity/circuit_placement.py: a cable on the port counts).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

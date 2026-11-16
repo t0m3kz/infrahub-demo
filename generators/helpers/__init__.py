@@ -1,6 +1,6 @@
 """Helper utilities for generators - organized by responsibility."""
 
-from .cabling import (
+from generators.helpers.cabling import (
     CableTypeDetector,
     CablingPlanError,
     CablingPlanner,
@@ -11,13 +11,11 @@ from .cabling import (
     PodCablingStrategy,
     RackCablingStrategy,
 )
-from .interface_naming import get_lag_name, get_loopback_name
-from .naming import DeviceNameContext, DeviceNamingConfig
-from .pools import name_to_asn_range
-from .routing import PendingASRef, RoutingPlanInput, RoutingPlanner, RoutingStrategy
+from generators.helpers.interface_naming import get_lag_name, get_loopback_name
+from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
+from generators.helpers.routing import RoutingStrategy
 
 __all__ = [
-    "normalize_dc_templates",
     "CableTypeDetector",
     "CablingPlanError",
     "CablingPlanner",
@@ -27,13 +25,9 @@ __all__ = [
     "DeviceNamingConfig",
     "InterfaceSpeedMatcher",
     "IntraRackMiddleCablingStrategy",
-    "PendingASRef",
     "PodCablingStrategy",
     "RackCablingStrategy",
-    "RoutingPlanInput",
-    "RoutingPlanner",
     "RoutingStrategy",
     "get_lag_name",
     "get_loopback_name",
-    "name_to_asn_range",
 ]

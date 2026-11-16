@@ -29,9 +29,8 @@ from utils.exchange_transit import (
     ZONE_BY_NS_TYPE,
 )
 from utils.interface_encapsulation import vlan_of
-from utils.query_flatten import load_flat_query
 from utils.routing_domain import interface_security_zone, interface_vrfs
-from utils.segment_addressing import Ipv6SegmentNotRenderedError, own_prefix, prefix_family, refuse_ipv6_segment
+from utils.segment_addressing import has_ipv6_gateway, own_prefix, prefix_family
 from utils.service_contexts import leg_contexts
 
 DEFAULT_ROUTE = "0.0.0.0/0"
@@ -65,9 +64,9 @@ async def read_rules(operation: Any, data: Any) -> int:
         client, branch = operation.client, operation.branch_name
     except Exception as exc:  # noqa: BLE001 - an operation built without a client raises its own error type
         raise FirewallRulesError(f"{len(edges)} rules to read but no client: {exc}") from exc
-    rules = await _read_by_id(client, branch, load_flat_query(RULES_QUERY), "SecurityPolicyRule", rule_ids(edges))
+    rules = await _read_by_id(client, branch, RULES_QUERY.read_text(), "SecurityPolicyRule", rule_ids(edges))
     segments = await _read_by_id(
-        client, branch, load_flat_query(SEGMENTS_QUERY), "ManagedNetworkSegment", segment_ids(rules)
+        client, branch, SEGMENTS_QUERY.read_text(), "ManagedNetworkSegment", segment_ids(rules)
     )
     return put_rules_back(edges, rules, segments)
 
@@ -156,8 +155,9 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
         # A segment the pair terminates is connected to it: no route to the border leaves' gateway.
         if segment.get("id") in terminated:
             continue
-        # The transit legs are IPv4 (their pools, VIPs and anycast gateways): an IPv6 segment has no next hop to reach it.
-        refuse_ipv6_segment(segment, "the transit legs of a firewall context (IPv4 only)")
+        # The transit legs are IPv4 (their pools, VIPs and anycast gateways): an IPv6 segment gets no transit route.
+        if has_ipv6_gateway(segment):
+            continue
         root_zone, root_prefix = segment_prefixes.get(segment.get("id"), (None, None))
         # A referenced policy endpoint can supply the same segment's prefix.
         prefix = own_prefix(segment) or root_prefix
@@ -180,13 +180,8 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
             for segment in context.get("segments") or []
             if (segment.get("security_zone") or {}).get("name") == leg["zone"] and (prefix := own_prefix(segment))
         )
-        v6 = sorted(prefix for prefix in zone_prefixes if prefix_family(prefix) == "ipv6")
-        if v6:
-            raise Ipv6SegmentNotRenderedError(
-                f"Prefix {v6[0]}: IPv6 segments are not rendered by the transit legs of a firewall context (IPv4 only) "
-                "yet; refusing incomplete config"
-            )
-        leg["prefixes"] = sorted(zone_prefixes)
+        # The legs are IPv4: an IPv6 prefix of the zone gets no transit route.
+        leg["prefixes"] = sorted(prefix for prefix in zone_prefixes if prefix_family(prefix) != "ipv6")
 
     routes = [
         {"destination": prefix, "nexthop": leg["anycast"], "interface": leg["interface"], "vrf": leg["vrf"]}

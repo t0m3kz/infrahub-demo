@@ -6,7 +6,7 @@ spec:
   data:
     # Dedicated per-customer instances, one per sizing tier, hosted on the
     # DC's physical pair when a customer's design asks for dedicated_firewall
-    # / dedicated_loadbalancer (generators/firewall_context.py).
+    # / dedicated_loadbalancer (generators/customers/firewall_context.py).
     - template_name: CloudGuard_EDGE_CUSTOMER_S
       owner: "P027"
       device_type: CloudGuard

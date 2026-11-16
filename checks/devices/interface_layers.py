@@ -1,6 +1,6 @@
 """Check that a port is on one layer, a switchport (L2) or a routed port (L3), and its segment membership.
 
-Rules R1-R10 (both layers, deployments and rows, SVIs, OSPF interface settings): see AGENTS.md "Interface addresses and
+Rules R1-R10 (both layers, deployments and rows, SVIs, OSPF interface settings): see domain-model.md "Interface addresses and
 layers".
 """
 
@@ -10,7 +10,7 @@ from typing import Any
 
 from checks.base import WarningCheck
 from generators.connectivity.endpoint import ENDPOINT_NIC_ROLES
-from generators.mixins.virtual_nics import is_host_nic
+from generators.dcim.virtual_nics import is_host_nic
 from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES

@@ -1,206 +1,177 @@
-"""Pure Colocation fabric model compiler: supports physical, virtual, and mixed colocation flavors without I/O."""
+"""The colocation fabric model: which fabric_templates entries a zone or virtual colocation acts on, held to its design
+envelope (pure, no I/O)."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
 
+# Roles a zone or virtual colocation can host; unlike a DC, `edge` is valid and DC-only fabric tiers are not
 COLO_VALID_FABRIC_ROLES = frozenset({"edge", "internal-firewall", "load-balancer"})
+
+# Service appliances hanging off the on-ramp, HA-paired and given no loopback. Their template must provide a role=ha
+# interface (the sync cable needs one per member), so a model with no such port cannot be paired.
 COLO_SERVICE_ROLES = frozenset({"internal-firewall", "load-balancer"})
+
+# The template kind each class may instantiate: a zone holds our hardware, a virtual colocation provider-hosted
+# appliances
 COLO_TEMPLATE_KIND_PHYSICAL = "TemplateDcimPhysicalDevice"
 COLO_TEMPLATE_KIND_APPLIANCE = "TemplateCloudNetworkAppliance"
 
-COLO_DESIGN_MAX_BY_ROLE: dict[str, str] = {
+# The design maximum each role is held to (TopologyTemplateColocationZone).
+COLO_DESIGN_MAX_BY_ROLE = {
     "edge": "max_edges",
     "internal-firewall": "max_firewalls",
     "load-balancer": "max_load_balancers",
 }
 
-ColocationFlavor = Literal["physical", "virtual", "mixed"]
-
-ALLOWED_TEMPLATE_KINDS_BY_FLAVOR: dict[ColocationFlavor, frozenset[str]] = {
-    "physical": frozenset({COLO_TEMPLATE_KIND_PHYSICAL}),
-    "virtual": frozenset({COLO_TEMPLATE_KIND_APPLIANCE}),
-    "mixed": frozenset({COLO_TEMPLATE_KIND_PHYSICAL, COLO_TEMPLATE_KIND_APPLIANCE}),
-}
-
 
 @dataclass(frozen=True)
 class ColocationFabricModel:
-    """Compiled, immutable blueprint of a Colocation deployment (physical, virtual, or mixed)."""
+    """What a zone or virtual colocation declares, compiled: the usable entries and a warning per dropped one
+    (a warning, not an error, so the other roles are still created).
+    """
 
-    node_id: str
-    node_name: str
     fabric_name: str
     label: str
-    flavor: ColocationFlavor
-    effective_flavor: Literal["physical", "virtual", "mixed", "empty"]
     usable_templates: tuple[dict[str, Any], ...]
-    physical_templates: tuple[dict[str, Any], ...]
-    virtual_templates: tuple[dict[str, Any], ...]
     warnings: tuple[str, ...]
-    has_design: bool
-    slices_from_metro: bool
-    metro_id: str | None
-
-    @property
-    def is_requested(self) -> bool:
-        return len(self.usable_templates) > 0
 
     @classmethod
-    def compile(
-        cls,
-        data: Mapping[str, Any],
-        *,
-        flavor: ColocationFlavor = "physical",
-        label: str = "zone",
-    ) -> ColocationFabricModel:
-        """Compile a clean_data() TopologyColocationZone / TopologyVirtualColocation payload."""
-        node_id: str = data["id"]
-        node_name: str = data["name"]
-        fabric_name = node_name.lower()
-        design: dict[str, Any] | None = data.get("design")
-        metro: dict[str, Any] = data.get("parent") or {}
-        metro_design: dict[str, Any] | None = metro.get("design")
-        slices_from_metro = bool(metro_design and metro.get("id"))
-
-        allowed_kinds = ALLOWED_TEMPLATE_KINDS_BY_FLAVOR[flavor]
+    def compile(cls, data: Mapping[str, Any], *, label: str, template_kind: str) -> ColocationFabricModel:
+        """Compile one clean_data() zone or virtual colocation entry; ``label`` and ``template_kind`` are the class's
+        (a zone, physical templates; a virtual colocation, appliances).
+        """
+        fabric_name = data["name"].lower()
+        prefix = f"Colocation {label} {fabric_name}"
         warnings: list[str] = []
-        raw_usable: list[dict[str, Any]] = []
-
-        for entry in data.get("fabric_templates") or []:
+        usable: list[dict[str, Any]] = []
+        for entry in data.get("fabric_templates", []):
             role = entry.get("role")
             if role not in COLO_VALID_FABRIC_ROLES:
                 warnings.append(
-                    f"Colocation {label} {fabric_name}: fabric_templates entry with role={role!r} is not "
+                    f"{prefix}: fabric_templates entry with role={role!r} is not "
                     f"valid here (expected one of {sorted(COLO_VALID_FABRIC_ROLES)}) — skipping this entry."
                 )
                 continue
-            qty = entry.get("quantity", 0)
-            if not (isinstance(qty, int) and qty > 0):
+            if not entry.get("quantity", 0) > 0:
                 warnings.append(
-                    f"Colocation {label} {fabric_name}: fabric_templates entry for role={role!r} has "
-                    f"quantity {qty!r} — skipping this entry."
+                    f"{prefix}: fabric_templates entry for role={role!r} has "
+                    f"quantity {entry.get('quantity')!r} — skipping this entry."
                 )
                 continue
             template = entry.get("template")
             if not template:
                 warnings.append(
-                    f"Colocation {label} {fabric_name}: fabric_templates entry for role={role!r} has "
-                    "no template — skipping this entry."
+                    f"{prefix}: fabric_templates entry for role={role!r} has no template — skipping this entry."
                 )
                 continue
-            template_kind = template.get("template_kind")
-            if template_kind not in allowed_kinds:
-                expected_str = (
-                    next(iter(allowed_kinds)) if len(allowed_kinds) == 1 else f"one of {sorted(allowed_kinds)}"
-                )
+            kind = template.get("template_kind")
+            if kind != template_kind:
                 warnings.append(
-                    f"Colocation {label} {fabric_name}: fabric_templates entry for role={role!r} uses a "
-                    f"{template_kind or 'unknown'} template, which a {label} cannot host (expected "
-                    f"{expected_str}) — skipping this entry."
+                    f"{prefix}: fabric_templates entry for role={role!r} uses a "
+                    f"{kind or 'unknown'} template, which a {label} cannot host (expected "
+                    f"{template_kind}) — skipping this entry."
                 )
                 continue
-            raw_usable.append(entry)
+            usable.append(entry)
 
-        physical_edge_entries = [
-            e
-            for e in raw_usable
-            if e.get("role") == "edge" and (e.get("template") or {}).get("template_kind") == COLO_TEMPLATE_KIND_PHYSICAL
-        ]
-        cablable: list[dict[str, Any]] = []
-        if not physical_edge_entries:
-            cablable = raw_usable
-        else:
-            physical_edge_port_roles: set[str] = set()
-            for edge_entry in physical_edge_entries:
-                for iface in (edge_entry.get("template") or {}).get("interfaces") or []:
-                    port_role = iface.get("role")
-                    if port_role:
-                        physical_edge_port_roles.add(port_role)
-
-            for entry in raw_usable:
-                role = entry.get("role")
-                template = entry.get("template") or {}
-                is_physical_service = (
-                    role in COLO_SERVICE_ROLES and template.get("template_kind") == COLO_TEMPLATE_KIND_PHYSICAL
-                )
-                needed_port_role = BORDER_ROLE_FOR_SERVICES.get(str(role), str(role))
-                if is_physical_service and needed_port_role not in physical_edge_port_roles:
-                    warnings.append(
-                        f"Colocation {label} {fabric_name}: fabric_templates entry for role={role!r} has no "
-                        f"matching {needed_port_role!r}-role port on any physical edge template in this {label} "
-                        f"(available edge port roles: {sorted(physical_edge_port_roles) or 'none'}) — skipping "
-                        "this entry rather than creating an appliance with nothing to cable it to. Point the edge "
-                        f"template at a device with a {needed_port_role!r}-role port block, or drop this entry."
-                    )
-                    continue
-                cablable.append(entry)
-
-        bounded: list[dict[str, Any]] = cablable
-        if cablable and design:
-            if metro_design:
-                allowed = sorted(template["name"] for template in metro_design["zone_templates"])
-                if design["name"] not in allowed:
-                    warnings.append(
-                        f"Colocation {label} {fabric_name}: design {design['name']!r} is not one of metro "
-                        f"design {metro_design['name']!r} zone_templates {allowed}, so the metro's pools were "
-                        "not sized for it."
-                    )
-
-            total_by_role: dict[str, int] = {}
-            skipped: set[int] = set()
-            for index in sorted(
-                range(len(cablable)),
-                key=lambda i: (str(cablable[i]["template"].get("id")), cablable[i]["quantity"], cablable[i]["role"]),
-            ):
-                entry = cablable[index]
-                role = entry["role"]
-                maximum = design[COLO_DESIGN_MAX_BY_ROLE[role]]
-                total = total_by_role.get(role, 0) + entry["quantity"]
-                if total > maximum:
-                    warnings.append(
-                        f"Colocation {label} {fabric_name}: fabric_templates entry for role={role!r} "
-                        f"(quantity {entry['quantity']}) would bring the {role} total to {total}, past the "
-                        f"{COLO_DESIGN_MAX_BY_ROLE[role]}={maximum} of design {design['name']!r} its pools are "
-                        "sized for — skipping this entry."
-                    )
-                    skipped.add(index)
-                    continue
-                total_by_role[role] = total
-            bounded = [entry for index, entry in enumerate(cablable) if index not in skipped]
-
-        physical_templates = tuple(
-            e for e in bounded if (e.get("template") or {}).get("template_kind") == COLO_TEMPLATE_KIND_PHYSICAL
-        )
-        virtual_templates = tuple(
-            e for e in bounded if (e.get("template") or {}).get("template_kind") == COLO_TEMPLATE_KIND_APPLIANCE
-        )
-
-        if physical_templates and virtual_templates:
-            effective_flavor: Literal["physical", "virtual", "mixed", "empty"] = "mixed"
-        elif physical_templates:
-            effective_flavor = "physical"
-        elif virtual_templates:
-            effective_flavor = "virtual"
-        else:
-            effective_flavor = "empty"
-
+        usable, cablable_warnings = _drop_uncablable_service_entries(usable, prefix=prefix, label=label)
+        usable, design_warnings = _within_design(usable, data, prefix=prefix, label=label)
         return cls(
-            node_id=node_id,
-            node_name=node_name,
             fabric_name=fabric_name,
             label=label,
-            flavor=flavor,
-            effective_flavor=effective_flavor,
-            usable_templates=tuple(bounded),
-            physical_templates=physical_templates,
-            virtual_templates=virtual_templates,
-            warnings=tuple(warnings),
-            has_design=design is not None,
-            slices_from_metro=slices_from_metro,
-            metro_id=metro.get("id"),
+            usable_templates=tuple(usable),
+            warnings=tuple([*warnings, *cablable_warnings, *design_warnings]),
         )
+
+
+def _drop_uncablable_service_entries(
+    entries: list[dict[str, Any]], *, prefix: str, label: str
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Drop a physical firewall/load-balancer entry that no physical edge template can cable to, warning why
+    (virtual entries are exempt).
+    """
+    physical_edge_entries = [
+        entry
+        for entry in entries
+        if entry.get("role") == "edge"
+        and (entry.get("template") or {}).get("template_kind") == COLO_TEMPLATE_KIND_PHYSICAL
+    ]
+    if not physical_edge_entries:
+        return entries, []
+
+    physical_edge_port_roles: set[str] = set()
+    for entry in physical_edge_entries:
+        for iface in (entry.get("template") or {}).get("interfaces") or []:
+            role = iface.get("role")
+            if role:
+                physical_edge_port_roles.add(role)
+
+    usable: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for entry in entries:
+        role = entry.get("role")
+        template = entry.get("template") or {}
+        is_physical_service = (
+            role in COLO_SERVICE_ROLES and template.get("template_kind") == COLO_TEMPLATE_KIND_PHYSICAL
+        )
+        port_role = BORDER_ROLE_FOR_SERVICES.get(str(role), str(role))
+        if is_physical_service and port_role not in physical_edge_port_roles:
+            warnings.append(
+                f"{prefix}: fabric_templates entry for role={role!r} has no "
+                f"matching {port_role!r}-role port on any physical edge template in this {label} (available "
+                f"edge port roles: {sorted(physical_edge_port_roles) or 'none'}) — skipping this entry rather "
+                "than creating an appliance with nothing to cable it to. Point the edge template at a device "
+                f"with a {port_role!r}-role port block, or drop this entry."
+            )
+            continue
+        usable.append(entry)
+    return usable, warnings
+
+
+def _within_design(
+    entries: list[dict[str, Any]], data: Mapping[str, Any], *, prefix: str, label: str
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Hold the entries to the design envelope, warning per finding (never an error); no design means entries pass.
+    A role over the design maximum has its entries skipped whole, in template-id order, before any device exists.
+    """
+    design = data.get("design")
+    if not entries or not design:
+        return entries, []
+
+    warnings: list[str] = []
+    metro_design = (data.get("parent") or {}).get("design")
+    if metro_design:
+        allowed = sorted(template["name"] for template in metro_design["zone_templates"])
+        if design["name"] not in allowed:
+            warnings.append(
+                f"{prefix}: design '{design['name']}' is not one of metro "
+                f"design '{metro_design['name']}' zone_templates {allowed}, so the metro's pools were not sized "
+                "for it."
+            )
+
+    total_by_role: dict[str, int] = {}
+    skipped: set[int] = set()
+    for index in sorted(
+        range(len(entries)),
+        key=lambda i: (str(entries[i]["template"].get("id")), entries[i]["quantity"], entries[i]["role"]),
+    ):
+        entry = entries[index]
+        role = entry["role"]
+        maximum = design[COLO_DESIGN_MAX_BY_ROLE[role]]
+        total = total_by_role.get(role, 0) + entry["quantity"]
+        if total > maximum:
+            warnings.append(
+                f"{prefix}: fabric_templates entry for role={role!r} "
+                f"(quantity {entry['quantity']}) would bring the {role} total to {total}, past the "
+                f"{COLO_DESIGN_MAX_BY_ROLE[role]}={maximum} of design '{design['name']}' its pools are sized "
+                "for — skipping this entry."
+            )
+            skipped.add(index)
+            continue
+        total_by_role[role] = total
+    return [entry for index, entry in enumerate(entries) if index not in skipped], warnings

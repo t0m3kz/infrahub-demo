@@ -4,18 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-from graphql import FragmentDefinitionNode, OperationDefinitionNode, parse
-
 from tests.unit.cloud_leg_helpers import attachment, peering, prefix
-from tests.unit.generators.test_circuit_query_shapes import _QUERIES, _selected_paths
 from tests.unit.generators.test_segment_destination_prefixes import _dest_rule
 from tests.unit.generators.test_segment_destination_prefixes import _run as _run_security
 from tests.unit.generators.test_segment_destination_prefixes import _unreachable
-from tests.unit.query_shape_helpers import _selection_tree
 from tests.unit.routing_invariants_helpers import _rule_eight
 from tests.unit.routing_invariants_helpers import _run as _run_invariants
-from utils.graphql_queries import load_query
 
 _EDGE_PORT = ("eg-fr201", "Ethernet1/13.1000")
 
@@ -124,70 +118,57 @@ class TestRoutingInvariantsCloudLegs:
         assert _rule_eight(_run_invariants(**roots)) == []
 
 
-_PEERING_READS = [
-    "name",
-    "scope",
-    "routing",
-    "peer_ip.address",
-    "peer_asn.asn",
-    "auth.password",
-    "gateway.id",
-    "gateway.name",
-    "advertised_prefixes.prefix",
-    "device.__typename",
-    "device.name",
-    "device.account.owner.org_id",
-    "device.owner.org_id",
-    "device.gateway.name",
-    "capabilities.__typename",
-    "capabilities.circuit_type",
-    "capabilities.capabilities.name",
-    "capabilities.capabilities.device.name",
-    "capabilities.vrf.id",
-    "capabilities.vrf.security_zone.name",
-    # The VRF of a circuit end: the ManagedVRF among the interface's capabilities (alias zone_capabilities).
-    "capabilities.capabilities.capabilities.id",
-    "capabilities.capabilities.capabilities.security_zone.name",
-]
-_ATTACHMENT_READS = [
-    "gateway.id",
-    "gateway.name",
-    "peer_gateway.id",
-    "peer_gateway.name",
-    "virtual_network.id",
-    "virtual_network.cidr_blocks.prefix",
-    "virtual_network.cidr_blocks.ip_namespace.name",
-    "allowed_prefixes.prefix",
-    "allowed_prefixes.ip_namespace.name",
-    "associated_route_table.id",
-    "propagates_to_route_tables.id",
-]
+def _hub(*networks: tuple[str, str, str | None]) -> dict:
+    """A leg on our network account's transport (a provider owns it) to a hub with (network, block, owner) behind it."""
+    return {
+        "CloudPeeringInterface": [
+            peering(
+                "vif-hub",
+                "dx-hub",
+                ends=(_EDGE_PORT,),
+                account_owner="P028",
+                account_owner_type="OrganizationProvider",
+            )
+        ],
+        "CloudGatewayAttachment": [
+            attachment("tgwa-dxgw", "tgw", peer="dxgw", table="shared"),
+            *(
+                attachment(
+                    f"tgw-{name}",
+                    "tgw",
+                    network=name,
+                    blocks=(prefix(block),),
+                    propagates=("shared",),
+                    network_owner=owner_key,
+                )
+                for name, block, owner_key in networks
+            ),
+        ],
+    }
 
 
-@pytest.mark.parametrize(
-    "query", ["config/edge.gql", "validation/segment_security.gql", "validation/routing_invariants.gql"]
-)
-def test_the_queries_select_what_the_cloud_legs_read(query: str) -> None:
-    """The edge and both checks select the peering and attachment fields transforms/helpers/bgp_cloud.py reads."""
-    peering_paths = _selected_paths(_QUERIES / query, "CloudPeeringInterface")
-    attachment_paths = _selected_paths(_QUERIES / query, "CloudGatewayAttachment")
-    assert not [item for item in _PEERING_READS if item not in peering_paths]
-    assert not [item for item in _ATTACHMENT_READS if item not in attachment_paths]
-    for paths in (peering_paths, attachment_paths):
-        assert not {p for p in paths if p.endswith(("ip_namespace.vrf_type", "ip_namespace.l3_vni", "vrf_name"))}
-    assert "peer_ip.security_zone" not in peering_paths
+class TestSharedHubOwnership:
+    """A hub leg registers each prefix for the owner of its attachment's network (rules 7 and 8)."""
 
+    def test_two_customers_behind_one_hub_are_no_conflict(self) -> None:
+        check = _run_invariants(**_hub(("vaultex", "10.30.0.0/16", "C003"), ("novantis", "10.150.0.0/16", "C015")))
+        assert _rule_eight(check) == []
+        assert _invariants_errors(check, "no customer owner") == []
 
-def test_the_firewall_selects_exchange_gateway_zone_owners_without_registry_fallbacks() -> None:
-    """The exchange's two routing domains come from its VRF edges, not address namespaces."""
-    document = parse(load_query(_QUERIES / "config/firewall.gql"))
-    fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
-    operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
-    tree = _selection_tree(operation.selection_set, fragments)
-    context = tree["DcimDevice"]["edges"]["node"]["shared_capabilities"]["edges"]["node"]
-    exchange = context["exchanges"]["edges"]["node"]
-    for side in ("a", "z"):
-        assert f"vrf_{side}" in exchange, f"ExchangeGateway.vrf_{side} is not selected"
-        vrf = exchange[f"vrf_{side}"]["node"]
-        assert "id" in vrf
-        assert set(vrf["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
+    def test_the_same_prefix_of_two_owners_behind_one_hub_is_a_conflict(self) -> None:
+        check = _run_invariants(**_hub(("vaultex", "10.30.0.0/16", "C003"), ("novantis", "10.30.0.0/16", "C015")))
+        assert any("registered by more than one owner (C003, C015" in e for e in _rule_eight(check))
+
+    def test_an_owner_behind_the_hub_and_its_own_leg_is_two_points(self) -> None:
+        roots = _hub(("vaultex", "10.30.0.0/16", "C003"))
+        roots["CloudPeeringInterface"].append(
+            peering("vif-own", "dx-own", ends=(("eg-fr202", "Ethernet1/13.1000"),), on="dxgw2", account_owner="C003")
+        )
+        roots["CloudGatewayAttachment"].append(
+            attachment("own-vpc", "dxgw2", network="v2", blocks=(prefix("10.30.0.0/16"),))
+        )
+        assert any("registered behind more than one session" in e for e in _rule_eight(_run_invariants(**roots)))
+
+    def test_a_network_of_no_customer_behind_a_provider_transport_is_rule_seven(self) -> None:
+        errors = _invariants_errors(_run_invariants(**_hub(("orphan", "10.30.0.0/16", None))), "no customer owner")
+        assert len(errors) == 1 and "cloud peering 'vif-hub'" in errors[0]

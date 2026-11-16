@@ -1,4 +1,5 @@
 ---
+# Megaport Paris racks
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -16,17 +17,10 @@ spec:
             rows: 1
             racks_per_row: 1
             children:
-              kind: LocationRackRow
+              kind: LocationRack
               data:
-                - name: MCR-PAR1-MCR-PAR1-ROW-1
+                - name: MCR-PAR1-MCR-PAR1-R1-1
+                  shortname: mcr-par1-s1-r-1
                   index: 1
-                  shortname: mcr-par1-s1-row-1
-                  parent: mcr-par1-s1
-                  children:
-                    kind: LocationRack
-                    data:
-                      - name: MCR-PAR1-MCR-PAR1-R1-1
-                        shortname: mcr-par1-s1-r-1
-                        index: 1
-                        deployment: MCR-PAR1
-                        parent: mcr-par1-s1-row-1
+                  row_index: 1
+                  deployment: MCR-PAR1

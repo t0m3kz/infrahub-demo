@@ -7,7 +7,7 @@ spec:
 
     # dc_pod_cascade subclasses DCTopologyGenerator (add_dc) and runs its entire
     # bootstrap via super().generate() before fanning out — a strict superset of
-    # add_dc's own work (see generators/topology/dc_pod_cascade.py's docstring).
+    # add_dc's own work (see generators/dc/dc_pod_cascade.py's docstring).
     # Structural DC-level changes (updated triggers below) need the fan-out: an
     # existing pod isn't touched by the DC-level change, so its own group/
     # updated triggers won't fire it. A freshly created DC does NOT need it —
@@ -16,6 +16,17 @@ spec:
     # every pod (and, one level down, every rack). Plain add_dc keeps ordering
     # correct on its own: pod.py already waits for an in-flight add_dc/
     # dc_pod_cascade on its parent DC before reading DC-level data.
+
+    - name: trigger-dc-update-fabric-templates
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "updated"
+      action: run-dc-pod-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: fabric_templates
+            modification_type: updated
 
     # Re-cables every rack's firewall/load-balancer links to match the new
     # mode — pbr and inline target different ports/far-ends on the same
@@ -31,39 +42,6 @@ spec:
         data:
           - attribute_name: connectivity_mode
             value_match: any
-
-    - name: trigger-dc-update-devices
-      branch_scope: "other_branches"
-      node_kind: TopologyDataCenter
-      mutation_action: "updated"
-      action: run-dc-pod-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: devices
-            modification_type: updated
-
-    - name: trigger-dc-update-design
-      branch_scope: "other_branches"
-      node_kind: TopologyDataCenter
-      mutation_action: "updated"
-      action: run-dc-pod-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: design
-            modification_type: updated
-
-    - name: trigger-dc-update-profiles
-      branch_scope: "other_branches"
-      node_kind: TopologyDataCenter
-      mutation_action: "updated"
-      action: run-dc-pod-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: profiles
-            modification_type: updated
 
     - name: trigger-dc-status
       branch_scope: "other_branches"
@@ -88,50 +66,6 @@ spec:
     # already waits for an in-flight add_pod/pod_rack_cascade on its parent pod
     # before reading pod-level data.
 
-    - name: trigger-pod-update-racks
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "updated"
-      action: run-pod-rack-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: racks
-            modification_type: updated
-
-    - name: trigger-pod-update-devices
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "updated"
-      action: run-pod-rack-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: devices
-            modification_type: updated
-
-    - name: trigger-pod-update-design
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "updated"
-      action: run-pod-rack-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: design
-            modification_type: updated
-
-    - name: trigger-pod-update-profiles
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "updated"
-      action: run-pod-rack-cascade
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: profiles
-            modification_type: updated
-
     - name: trigger-pod-update-index
       branch_scope: "other_branches"
       node_kind: TopologyPod
@@ -142,6 +76,17 @@ spec:
         data:
           - attribute_name: index
             value_match: any
+
+    - name: trigger-pod-update-fabric-templates
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "updated"
+      action: run-pod-rack-cascade
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: fabric_templates
+            modification_type: updated
 
     - name: trigger-pod-update-mlag-create
       branch_scope: "other_branches"
@@ -186,28 +131,6 @@ spec:
           - attribute_name: rack_type
             value_match: any
 
-    - name: trigger-rack-generator-update-devices
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "updated"
-      action: run-rack-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: devices
-            modification_type: updated
-
-    - name: trigger-colocation-rack-update-devices
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "updated"
-      action: run-colocation-rack-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: devices
-            modification_type: updated
-
     - name: trigger-rack-generator-update-templates
       branch_scope: "other_branches"
       node_kind: LocationRack
@@ -219,17 +142,19 @@ spec:
           - relationship_name: fabric_templates
             modification_type: updated
 
-    - name: trigger-colocation-rack-update-templates
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "updated"
-      action: run-colocation-rack-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: fabric_templates
-            modification_type: updated
+    # # Device decommission: when status set to decommissioned
+    # - name: trigger-device-decommission
+    #   branch_scope: "other_branches"
+    #   node_kind: DcimPhysicalDevice
+    #   mutation_action: "updated"
+    #   action: run-decommission-device
+    #   matches:
+    #     kind: CoreNodeTriggerAttributeMatch
+    #     data:
+    #       - attribute_name: status
+    #         value_match: decommissioned
 
+    # Pod decommission: when status set to decommissioned
     - name: trigger-pod-decommission
       branch_scope: "other_branches"
       node_kind: TopologyPod
@@ -246,7 +171,7 @@ spec:
 
     # A customer gets its routing tag when it joins the `customers` group (its
     # group trigger, 99_group_triggers.yml), so every customer object file
-    # declares it (tests/unit/test_event_rules.py requires it of the demo data).
+    # declares it.
     # No update trigger: the tag is written once and never changes.
 
     # Segment triggers: a segment created with customer_deployments inline
@@ -271,7 +196,7 @@ spec:
             modification_type: updated
 
     # Re-run generator when the segment gets, or loses, its firewall gateway: the reconcile tags the border
-    # service ports of its footprint's internal context facing its HA pair (generators/topology/segment_ports.py)
+    # service ports of its footprint's internal context facing its HA pair (generators/segments/segment_ports.py)
     # and removes them again. The reconcile writes the ports' edges, not this attribute, so the run raises no
     # event of this rule.
     - name: trigger-vxlan-segment-firewall-gateway-updated
@@ -304,7 +229,7 @@ spec:
 
     # Re-run generator when stretch_scope changes (e.g. local -> dc_pair) —
     # it picks the VNI identifier strategy (per-deployment vs shared, see
-    # generators/topology/segment.py's _activate_segment_in_deployment), so a
+    # generators/segments/segment.py's _activate_segment_in_deployment), so a
     # scope flip needs re-processing even without a customer_deployments change.
     - name: trigger-vxlan-segment-generator-update-stretch-scope
       branch_scope: "other_branches"
@@ -327,8 +252,8 @@ spec:
     # ── MLAG Wiring ───────────────────────────────────────────────────────────
     # Peer-link wiring on domain *creation* is no longer a separate
     # trigger-based generator round-trip — DeviceMixin._ensure_mlag_pairs
-    # (generators/devices.py) calls ensure_mlag_wiring (also in
-    # generators/devices.py) directly, synchronously, right after creating
+    # (generators/dcim/device_plan.py) calls ensure_mlag_wiring (also in
+    # generators/dcim/device_plan.py) directly, synchronously, right after creating
     # or finding each ManagedMLAG domain, closing the storm where a bulk
     # topology regen's ~14 concurrently-created ManagedMLAG domains each
     # independently fired their own async add_mlag flow run and overloaded
@@ -361,7 +286,7 @@ spec:
             value_match: any
 
     # HA sync interfaces/cables are no longer a separate trigger-based
-    # generator — _ensure_ha_pairs (generators/devices.py) calls
+    # generator — _ensure_ha_pairs (generators/dcim/device_plan.py) calls
     # _ensure_ha_interfaces directly, synchronously, right after creating or
     # finding each ManagedFirewallHA/LoadbalancerHA domain, closing the race
     # where two concurrent boarding customers could each fire the old
@@ -384,7 +309,7 @@ spec:
     # A customer DC moved to another load balancer context (dedicated <->
     # shared) has no rule here: its one writer, add_customer_deployment_dc,
     # fans add_app_component out to the deployment's load_balanced components
-    # on the relink (generators/firewall_context.py, link_serving_context). A
+    # on the relink (generators/customers/firewall_context.py, link_serving_context). A
     # rule on serving_loadbalancer_context could only dispatch a generator of
     # customer_deployments_dc, and add_customer_deployment_dc writes that link
     # on every first boarding, so it would run every boarding twice.
@@ -442,7 +367,7 @@ spec:
     # ── App Component Segment Tagging ─────────────────────────────────────────
     # add_app_component_segment tags the switch ports a component's instances
     # are cabled to with its network_segment and reconciles that segment's
-    # VLAN domain activations (generators/topology/app_instance_segment.py).
+    # VLAN domain activations (generators/applications/app_instance_segment.py).
     # It shares app_components with add_app_component but is a second
     # concern, so the network_segment change dispatches both generators.
     # Its group trigger (99_group_triggers.yml) covers a component loaded with
@@ -475,7 +400,7 @@ spec:
             modification_type: updated
 
     # ── Orchestrator Routing Groups ───────────────────────────────────────────
-    # generators/topology/orchestrator_routing.py moves a node into the
+    # generators/connectivity/orchestrator_routing.py moves a node into the
     # routing group (application_*/topology_*/virtual_colocation_*) named by its orchestrator
     # dropdown. It writes only member_of_groups, never the dropdown, so the
     # attribute-matched `updated` rules cannot re-fire themselves.
@@ -483,7 +408,7 @@ spec:
     # Customer deployments: one generator definition per kind, each targeting
     # that kind's target group (customer_deployments_dc/colocation/
     # cloud/office). Every footprint in the demo data joins its per-kind group
-    # (the add_customer_deployment_* and add_sdwan_edge generators start on
+    # (the add_customer_deployment_* and add_office_fabric generators start on
     # that group's trigger, 99_group_triggers.yml).
 
     - name: trigger-application-orchestrator-routing-on-orchestrator-updated
@@ -542,7 +467,7 @@ spec:
             value_match: any
 
     # ── Cloud attachment: the routed range of the virtual network it targets ───
-    # generators/topology/cloud_attachment_range.py. The target is the attachment (a member of
+    # generators/cloud/cloud_attachment_range.py. The target is the attachment (a member of
     # cloud_attachment_ranges: every attachment in the data declares the group). Retargeting an attachment to another
     # virtual network gives that network its range; the generator writes only `allowed_prefixes`, never
     # `virtual_network`, so it raises no event of this rule.
@@ -560,11 +485,11 @@ spec:
     # ── Customer Deployment (FirewallContext/dedicated LB) ────────────────────
     # Same generator/query shape for both deployment kinds that still have
     # on-site fabric to provision a FirewallContext on (see
-    # generators/topology/customer_dc.py and customer_colocation.py).
+    # generators/customers/customer_dc.py and customer_colocation.py).
     # TopologyCustomerCloud/Office had no fabric of their own — their only job
     # was hub-and-spoke exchange auto-provisioning, now replaced by the
     # per-context TopologyRoutedExchange objects the DC/colocation customer
-    # generators create (docs/exchange_gateway.md), so those two
+    # generators create, so those two
     # generators/triggers were removed rather than left as no-ops.
 
     # ── Colocation Metro, Zone and Virtual Colocation Bootstrap ───────────────
@@ -595,6 +520,17 @@ spec:
     # so a rule matching those relationships — or an unguarded `updated` rule —
     # would re-fire itself on every run. No cascade generator either: the
     # racks nested below a zone declare no kit of their own.
+    - name: trigger-colocation-zone-update-fabric-templates
+      branch_scope: "other_branches"
+      node_kind: TopologyColocationZone
+      mutation_action: "updated"
+      action: run-colocation-zone-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: fabric_templates
+            modification_type: updated
+
     - name: trigger-virtual-colocation-update-fabric-templates
       branch_scope: "other_branches"
       node_kind: TopologyVirtualColocation
@@ -606,35 +542,15 @@ spec:
           - relationship_name: fabric_templates
             modification_type: updated
 
-    # ── SD-WAN Edge Provisioning ────────────────────────────────────────────────
-    # The group trigger (99_group_triggers.yml) covers an office loaded with sdwan_gateway already
-    # populated inline (the normal bulk-load shape) — SdwanEdgeGenerator itself no-ops
-    # when sdwan_gateway is unset, so it is safe to fire for every office in
-    # customer_deployments_office, not just ones that opted in. The `updated` rule covers an
-    # existing office that opts in later by having sdwan_gateway set on it —
-    # the generator writes back only lan_prefixes (the office LAN it allocates), which no rule
-    # matches, so it can't self-trigger the way a colocation zone's fabric_templates can.
-
-    - name: trigger-customer-office-sdwan-update-gateway
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerOffice
-      mutation_action: "updated"
-      action: run-sdwan-edge-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: sdwan_gateway
-            modification_type: updated
-
-    # ── Office Fabric ─────────────────────────────────────────────────────────
-    # An office with fabric_templates is a LISP site: add_office_fabric creates
-    # its pools, access/distribution switches, cabling and OSPF underlay. Like
-    # the SD-WAN rules above it fires for EVERY office (all are members of
-    # customer_deployments_office) and the generator no-ops on one without
-    # fabric_templates. Its group trigger covers an office loaded with its fabric_templates
-    # inline; the `updated` rule an existing office that opts in later. The
-    # generator writes only vni_pool and lisp_site_key back onto the office, never
-    # fabric_templates, so it cannot re-fire itself.
+    # ── Office ────────────────────────────────────────────────────────────────
+    # add_office_fabric builds the office: its LISP fabric (pools, access/distribution switches,
+    # cabling, OSPF underlay), its SD-WAN edge (the `sdwan-edge` fabric_templates entry), one
+    # tunnel per sdwan_gateways entry and the WAN exit. Every office is a member of
+    # customer_deployments_office and the generator no-ops on one without fabric_templates. Its
+    # group trigger (99_group_triggers.yml) covers an office loaded with both inline; the two
+    # `updated` rules an existing office that gains an entry or a gateway later. The generator writes
+    # vni_pool, lisp_site_key and (an edge-only office) lan_prefixes back onto the office, never
+    # fabric_templates or sdwan_gateways, so it cannot re-fire itself.
 
     - name: trigger-customer-office-fabric-update-fabric-templates
       branch_scope: "other_branches"
@@ -647,15 +563,26 @@ spec:
           - relationship_name: fabric_templates
             modification_type: updated
 
+    - name: trigger-customer-office-fabric-update-gateway
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerOffice
+      mutation_action: "updated"
+      action: run-office-fabric-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: sdwan_gateways
+            modification_type: updated
+
     # ── Circuits ──────────────────────────────────────────────────────────────
     # add_circuit targets carrier_circuits, so every carrier circuit — loaded or
-    # generator-created (add_sdwan_edge creates INET-<office>) — must be a member: the
+    # generator-created or authored (an office's INET-<office> is data) — must be a member: the
     # generator starts when the circuit joins the group (99_group_triggers.yml), and the
     # `updated` rules below fail for a non-member (see the endpoint note above). A carrier circuit
     # is a pure carrier; add_circuit reads its ends and fans out to the session
     # circuits riding it, so the `updated` rules watch `capabilities` (the ends) and
     # `status` (a carrier set to decommissioned, or back to active, reaches the
-    # sessions on it through that fan-out, generators/topology/circuit.py).
+    # sessions on it through that fan-out, generators/connectivity/circuit.py).
     # `locations` is deliberately absent: add_circuit writes the derived ends there.
     # No loop: add_circuit writes only that derived `locations` relationship (one
     # RelationshipAdd), never `status` or `capabilities`, so it cannot re-fire these
@@ -664,8 +591,8 @@ spec:
     # rule either: a rule on a device kind dispatches only a generator whose
     # target group holds the device, and none targets every device (see the
     # endpoint note above). Every producer sets it when it creates the device,
-    # before a circuit names it; checks/circuit_placement.py reports a later
-    # edit (generators/topology/circuit.py).
+    # before a circuit names it; checks/connectivity/circuit_placement.py reports a later
+    # edit (generators/connectivity/circuit.py).
 
     - name: trigger-circuit-on-interface-capabilities-updated
       branch_scope: "other_branches"
@@ -700,7 +627,8 @@ spec:
     # Each `updated` rule watches what the generator reads and nothing it writes: `capabilities` (the ends, hence
     # the carrier), `status`, and for a handoff its `vrf` (the routing instance) and `password`
     # (those two fire for a dci or a tunnel too, which never sets them: harmless).
-    # A carrier's change reaches the circuits through add_circuit, which fans out here (generators/topology/circuit.py).
+    # A carrier's change reaches the circuits through add_circuit, which fans out here
+    # (generators/connectivity/circuit.py).
 
     - name: trigger-session-circuit-on-capabilities-updated
       branch_scope: "other_branches"
@@ -765,8 +693,8 @@ spec:
 
     # A context is built in steps (VLAN, SNAT or VIP prefix, then its legs): a route needs the whole of it, so the
     # context joins service_contexts (the group trigger of add_context_routes) only once its legs are written
-    # (generators/firewall_context.py). Its legs and border ports are derived from its members (a context has no
-    # interface edge), so a change of its members re-runs the route generator (an incomplete context writes nothing).
+    # (generators/customers/firewall_context.py). Its legs and border ports are derived from its members (a context has
+    # no interface edge), so a change of its members re-runs the route generator (an incomplete context writes nothing).
     - name: trigger-firewall-context-routes-on-members
       branch_scope: "other_branches"
       node_kind: ManagedFirewallContext
@@ -789,22 +717,12 @@ spec:
           - relationship_name: shared_devices
             modification_type: updated
 
-    # A Proposed Change gets its change request when its artifacts are computed. Validators live on main: the first
-    # rule adds each new artifact validator to artifact_validators, the second runs open_change_request on completion.
+    # A Proposed Change gets its change request when its artifacts are computed. Validators live on main: this rule adds
+    # each new artifact validator to artifact_validators, and joining that group starts open_change_request
+    # (99_group_triggers.yml), which waits for its validator to complete. A node rule on the completed state raced this
+    # one (the validator was not yet a member: "Target ... is not part of the group"), so there is none.
     - name: trigger-artifact-validator-on-created
       branch_scope: "default_branch"
       node_kind: CoreArtifactValidator
       mutation_action: created
       action: add-to-artifact-validators
-
-    - name: trigger-artifact-validator-completed
-      branch_scope: "default_branch"
-      node_kind: CoreArtifactValidator
-      mutation_action: updated
-      action: run-open-change-request
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: state
-            value_match: value
-            value: completed

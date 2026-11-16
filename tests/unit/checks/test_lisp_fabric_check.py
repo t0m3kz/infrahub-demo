@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from checks.routing.lisp_fabric import CheckLispFabric
+from checks.routing.lisp_fabric import CheckLispFabric, platform_supports_lisp
 
 
 def _check() -> Any:
@@ -221,3 +221,32 @@ class TestOfficeFabric:
         check.log_error = lambda message, **kwargs: recorded.append(kwargs)
         check.validate({"TopologyCustomerOffice": [_office(lisp_site_key=None)]})
         assert recorded == [{"object_id": "office-1", "object_type": "TopologyCustomerOffice"}]
+
+
+@pytest.mark.parametrize(
+    ("platform", "expected"),
+    [
+        ({"name": "cisco_xe"}, True),
+        ({"name": "cisco_xe", "os_capabilities": None}, True),
+        ({"name": "arista_eos"}, False),
+        ({"name": "arista_eos", "os_capabilities": {"supports_lisp": True}}, True),
+        ({"name": "cisco_xe", "os_capabilities": {"supports_lisp": False}}, False),
+        (None, False),
+    ],
+)
+def test_platform_supports_lisp_honors_the_profile_over_the_name(
+    platform: dict[str, Any] | None, expected: bool
+) -> None:
+    """supports_lisp of the profile decides; a platform without a profile falls back to cisco_xe."""
+    assert platform_supports_lisp(platform) is expected
+
+
+def test_fabric_device_whose_profile_denies_lisp_is_an_error() -> None:
+    """A cisco_xe device whose profile says supports_lisp: false is reported."""
+    bad = {
+        "name": "c005-x-01",
+        "role": "access-switch",
+        "platform": {"name": "cisco_xe", "os_capabilities": {"supports_lisp": False}},
+    }
+    errors = _run_offices(_office(devices=_office()["devices"] + [bad]))
+    assert any("c005-x-01" in error for error in errors)

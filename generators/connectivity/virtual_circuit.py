@@ -7,22 +7,30 @@ changed length is reported); tracking is on cleanup and build paths only, never 
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, Callable
-from contextlib import AsyncExitStack, asynccontextmanager
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
-from infrahub_sdk.exceptions import GraphQLError
+from infrahub_sdk.exceptions import GraphQLError, NodeNotFoundError
 from infrahub_sdk.protocols import CoreIPPrefixPool
 
+from generators.base import BaseGenerator
+from generators.capabilities.bgp import (
+    EVPN_AF,
+    IPV4_UNICAST_AF,
+    IPV6_UNICAST_AF,
+    address_family_lock_key,
+    dci_key_name,
+    plan_address_family,
+    plan_password,
+    plan_session_peering,
+    read_address_families,
+    read_password_id,
+)
+from generators.capabilities.vrf import local_vrf_ids, reconcile_vrfs, vrf_membership_plan, vrfs_held
 from generators.connectivity.circuit import CARRIER_CIRCUIT_GENERATOR
-from generators.helpers.common import save_with_node_not_found_retry
-from generators.helpers.interface_vrf import join_capabilities, leave_vrfs, vrf_ids
-from generators.helpers.vrf import VrfMixin
-from generators.mixins.common import CommonGenerator
-from generators.mixins.connections import CablingMixin
-from generators.mixins.pools import PoolMixin
-from generators.mixins.routing import EVPN_AF, IPV4_UNICAST_AF, IPV6_UNICAST_AF, RoutingMixin, _dci_key_name
+from generators.ipam.customer_pool import LENGTH_CHANGE_MARKER
+from generators.plan import NodeRef, NodeSpec, PrefixAllocationSpec, TopologyPlan
 from generators.protocols import DcimPhysicalInterface, DcimVirtualInterface
 from utils.circuit_underlay import (
     BGP_PROCESS,
@@ -112,15 +120,6 @@ class SessionEnd:
         """Id of the device's single overlay-role ManagedBGP process, else None."""
         return self.overlay_ids[0] if len(self.overlay_ids) == 1 else None
 
-    @property
-    def is_external(self) -> bool:
-        """True when this end is an external/provider/internet interface with no ManagedBGP process of ours."""
-        return len(self.processes) == 0 and self.port_kind in {
-            "TopologyInternetInterface",
-            "TopologyProviderInterface",
-            "CloudPeeringInterface",
-        }
-
     def session_process(self) -> str | None:
         """Id of the process a session runs on: the single overlay one, else the device's only ManagedBGP."""
         overlay = self.overlay_process()
@@ -208,7 +207,7 @@ class SessionPlan:
     # The pool the link prefix is allocated from.
     pool_name: str
     prefix_length: int
-    process_ids: tuple[str, ...]
+    process_ids: tuple[str, str]
     peerings: tuple[PeeringPlan, ...]
     # The environment namespace the /31 lives in when it is not ``default`` (a handoff's): both ends need an instance
     # of it before the addresses are written.
@@ -220,7 +219,7 @@ class SessionPlan:
     offsets: tuple[int, int] = (0, 1)
 
 
-class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfMixin, CommonGenerator):
+class VirtualCircuitSessionGenerator(BaseGenerator):
     """add_virtual_circuit: the BGP session(s) of an interconnect or handoff circuit."""
 
     client: Any
@@ -236,7 +235,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         namespace demand).
         """
         await super().run(identifier, data)
-        await self.reconcile_vrfs(self._vrf_device_ids)
+        await reconcile_vrfs(self, self._vrf_device_ids)
 
     def _note_end_devices(self, circuit: dict[str, Any]) -> None:
         """Remember the devices on the circuit's listed ports (a handoff only)."""
@@ -276,7 +275,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         self._note_end_devices(circuit)
         ends = self._ends_or_none(circuit, name)
         if ends is None:
-            self._track_circuit(circuit["id"])
+            await self._track_circuit(circuit["id"])
             return
         # The carriers are independent: wait for all at once; the last refetch is the freshest data.
         refetched = await asyncio.gather(
@@ -295,7 +294,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
             self._note_end_devices(circuit)
             ends = self._ends_or_none(circuit, name)
             if ends is None:
-                self._track_circuit(circuit["id"])
+                await self._track_circuit(circuit["id"])
                 return
         ports = [port for port in circuit.get("capabilities") or [] if isinstance(port, dict) and port.get("id")]
         carried = [has_carrier(port) for port in ports]
@@ -313,31 +312,35 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
             and all(carrier.get("status") == DECOMMISSIONED for carrier in carriers)
             and not any(port_cabled(port) for port in ports)
         ):
-            self._track_circuit(circuit["id"])
+            await self._track_circuit(circuit["id"])
             self.logger.info(f"  {name}: its whole carrier is decommissioned - no session; the old one is cleaned up")
             return
 
-        self._track_circuit(circuit["id"])
+        await self._track_circuit(circuit["id"])
         plan = planner(self, circuit, name, ends)
-        async with self._hold_ports(ends):
+        families = {peering.address_family for peering in plan.peerings}
+        known_families = await read_address_families(self.client, families)
+        # One lock per end port around the shared-port check AND the writes, the circuit's own, the per-circuit key's, and
+        # that of an address family nobody has created yet
+        async with self.plan_locks(
+            *(f"vc-port-{end.port_id}" for end in ends),
+            f"vc-session-{circuit['id']}",
+            *([f"routing-password-{plan.key_name}"] if plan.key_name else []),
+            *(address_family_lock_key(*family) for family in sorted(families - known_families.keys())),
+        ):
             await self._refuse_shared_ports(circuit["id"], name, ends)
-            pool = await self.client.get(kind=CoreIPPrefixPool, name__value=plan.pool_name, raise_when_missing=False)
-            if pool is None:
+            try:
+                await self.resolve_pool(None, CoreIPPrefixPool, plan.pool_name)
+            except NodeNotFoundError:
                 self.fail(f"{name}: pool '{plan.pool_name}' not found (data/bootstrap/)")
-            await self._write_session(circuit, name, plan, pool)
+            if families - known_families.keys():
+                known_families = await read_address_families(self.client, families)
+            await self._write_session(circuit, name, plan, known_families)
         self.logger.info(f"Virtual circuit {name} — completed")
 
-    def _track_circuit(self, circuit_id: str) -> None:
+    async def _track_circuit(self, circuit_id: str) -> None:
         """Make the circuit a member of the run's group so the SDK's cleanup runs (see "Ownership" above)."""
-        self.client.group_context.related_node_ids.append(circuit_id)
-
-    @asynccontextmanager
-    async def _hold_ports(self, ends: list[SessionEnd]) -> AsyncGenerator[None]:
-        """A lock per end port, in sorted order, around the shared-port check AND the writes."""
-        async with AsyncExitStack() as stack:
-            for port_id in sorted({end.port_id for end in ends}):
-                await stack.enter_async_context(self.resource_lock(f"vc-port-{port_id}"))
-            yield
+        await self.apply_plan(TopologyPlan(root_id=circuit_id))
 
     # -- shared preconditions ------------------------------------------------------------------------------------
 
@@ -393,12 +396,10 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                 "a port carries one interconnect or handoff session"
             )
 
-    def _process_ids(self, name: str, first: SessionEnd, second: SessionEnd) -> tuple[str, ...]:
-        """The participating ManagedBGP process IDs (2 for internal sessions, 1 when the far end is external)."""
-        ids: list[str] = []
+    def _process_ids(self, name: str, first: SessionEnd, second: SessionEnd) -> tuple[str, str]:
+        """The two ends' session processes: the single overlay one, else the device's only ManagedBGP."""
+        ids = []
         for end in (first, second):
-            if end.is_external:
-                continue
             process_id = end.session_process()
             if process_id is None:
                 names = ", ".join(proc for _, proc in end.processes) or "none"
@@ -407,9 +408,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                     f"process; has: {names}"
                 )
             ids.append(process_id)
-        if not ids:
-            self.fail(f"{name}: at least one end must have a ManagedBGP process")
-        return tuple(ids)
+        return ids[0], ids[1]
 
     # -- planners (pure: no client call) -------------------------------------------------------------------------
 
@@ -417,7 +416,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         """One eBGP session over the circuit's link prefix; our end (overlay process) takes the lower address."""
         for end in ends:
             if end.port_kind != DcimVirtualInterface.__name__ or end.parent_id is None:
-                self.fail(f"{name}: {end.label} must be a DcimVirtualInterface riding on a parent (its encapsulation)")
+                self.fail(f"{name}: {end.label} must be a DcimVirtualInterface riding on a parent")
         return self._plan_routed_link(circuit, name, ends, label="Handoff")
 
     def _plan_vpn(self, circuit: dict[str, Any], name: str, ends: list[SessionEnd]) -> SessionPlan:
@@ -436,9 +435,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
         namespace = (circuit.get("vrf") or {}).get("security_zone")
         if not isinstance(namespace, dict) or not namespace.get("name"):
             self.fail(f"{name}: a {label.lower()} circuit needs its routing VRF")
-        first, second = sorted(
-            ends, key=lambda e: (e.is_external, e.overlay_process() is None, e.device_name, e.port_name)
-        )
+        first, second = sorted(ends, key=lambda e: (e.overlay_process() is None, e.device_name, e.port_name))
         return SessionPlan(
             label=label,
             first=first,
@@ -522,7 +519,7 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
                     interface_ids=(by_port[first.port_id].id, by_port[second.port_id].id),
                 ),
             ),
-            key_name=_dci_key_name(name),
+            key_name=dci_key_name(name),
             mtu=UNDERLAY_MTU,
         )
 
@@ -556,124 +553,139 @@ class VirtualCircuitSessionGenerator(CablingMixin, PoolMixin, RoutingMixin, VrfM
 
     # -- the writes ----------------------------------------------------------------------------------------------
 
-    async def _write_session(self, circuit: dict[str, Any], name: str, plan: SessionPlan, pool: Any) -> None:
-        """Prefix, addresses, end interfaces, key and peerings, under one lock per circuit."""
-        status: str = circuit.get("status") or ""
-        async with self.resource_lock(f"vc-session-{circuit['id']}"):
-            ports = [plan.first.port_id, plan.second.port_id]
-            nodes = {
-                node.id: node
-                for node in await self.client.filters(kind=plan.port_kind, ids=ports, include=["capabilities"])
-            }
-            missing = [end.label for end in (plan.first, plan.second) if end.port_id not in nodes]
-            if missing:
-                self.fail(f"{name}: interface(s) {', '.join(missing)} not found")
-
-            # Preconditions hold, the writes start. The instance comes first, device locks held until the addresses are
-            # saved (a pruning pass must not see it without demand).
-            needs = {end.device_id: {plan.namespace} for end in (plan.first, plan.second)} if plan.namespace else {}
-            async with self.vrfs_held(needs):
-                local_vrfs = await self.local_vrf_ids(needs, [plan.namespace]) if plan.namespace else {}
-                prefix = await self._link_prefix(name, circuit["id"], plan, pool)
-                addresses = await self.upsert_prefix_addresses(
-                    prefix, offsets=plan.offsets, description=f"{plan.label} {name}"
-                )
-                interface_status = _INTERFACE_STATUS_FOR_CIRCUIT.get(status, "provisioning")
-                for end, peer, address in (
-                    (plan.first, plan.second, addresses[plan.offsets[0]]),
-                    (plan.second, plan.first, addresses[plan.offsets[1]]),
-                ):
-                    await self._update_interface(
-                        nodes[end.port_id],
-                        address_id=address.id,
-                        description=f"{plan.label} {name} to {peer.device_name} {peer.port_name}",
-                        status=interface_status,
-                        mtu=plan.mtu,
-                        vrf_id=local_vrfs.get((end.device_id, plan.namespace or "")),
-                    )
-                    self.logger.info(f"  {end.label} = {address.address.value}")
-
-            password_id = plan.password_id
-            if plan.key_name:
-                password_id = await self._ensure_routing_password(
-                    name=plan.key_name, description=f"Session key of {name}, generated once, never rotated", track=False
-                )
-            af_ids = await asyncio.gather(*(self.ensure_address_family(*p.address_family) for p in plan.peerings))
-            await asyncio.gather(
-                *(
-                    self.upsert_bgp_peering(
-                        name=f"{name}-{peering.suffix}",
-                        description=peering.description,
-                        status="active" if status == "active" else "provisioning",
-                        session_type=peering.session_type,
-                        peering_role=peering.peering_role,
-                        process_ids=list(plan.process_ids),
-                        address_family_ids=[af_id],
-                        interface_ids=list(peering.interface_ids),
-                        password_id=password_id,
-                        ttl=peering.ttl,
-                        bfd_enabled=peering.bfd_enabled,
-                        send_community=peering.send_community,
-                        send_extended_community=peering.send_extended_community,
-                    )
-                    for peering, af_id in zip(plan.peerings, af_ids, strict=True)
-                )
-            )
-
-    async def _link_prefix(self, name: str, circuit_id: str, plan: SessionPlan, pool: Any) -> Any:
-        """The link prefix of the session, allocated from our pool (idempotent per ``vc-p2p__<circuit id>``); a changed
-        length is reported, never re-allocated.
-        """
-        try:
-            prefix = await self.client.allocate_next_ip_prefix(
-                resource_pool=pool,
-                identifier=f"vc-p2p__{circuit_id}",
-                prefix_length=plan.prefix_length,
-                member_type="address",
-                data={"role": "technical", "is_pool": True, "description": f"{plan.label} {name}"},
-            )
-        except GraphQLError as exc:
-            if "cannot be changed" not in str(exc):
-                raise
-            self.fail(
-                f"{name}: its link prefix is already allocated with another length than "
-                f"/{plan.prefix_length}; a prefix length cannot change in place. Delete the old prefix "
-                f"(identifier vc-p2p__{circuit_id}) and its addresses, then rerun; the server said: {exc}"
-            )
-        if prefix is None:
-            self.fail(f"{name}: pool '{plan.pool_name}' returned no prefix - exhausted?")
-        # Owned by this circuit: allocate_next_ip_prefix() is a pool mutation, so the prefix joins the tracking group
-        # only here.
-        self.client.group_context.related_node_ids.append(prefix.id)
-        self.logger.info(f"  {plan.label} prefix {prefix.prefix.value} for {name}")
-        return prefix
-
-    async def _update_interface(
-        self, node: Any, *, address_id: str, description: str, status: str, mtu: int | None, vrf_id: str | None = None
+    async def _write_session(
+        self, circuit: dict[str, Any], name: str, plan: SessionPlan, families: Mapping[tuple[str, str], str]
     ) -> None:
-        """Address an end interface, untracked, only if something changed, and put it in the VRF instance ``vrf_id``
-        (stale VRF edges removed).
+        """Prefix, addresses and end interfaces (the device locks held, so a pruning pass does not see the instance
+        without demand), then the key and peerings; the caller holds the circuit's locks.
         """
-        changed = False
-        stale_vrfs: list[str] = []
-        join: list[str] = []
-        if vrf_id is not None:
-            peers = getattr(node, "capabilities").peers
-            stale_vrfs = [old for old in vrf_ids(peers) if old != vrf_id]
-            join = [] if vrf_id in {peer.id for peer in peers} else [vrf_id]
-        if getattr(getattr(node, "ip_address", None), "id", None) != address_id:
-            node.ip_address = address_id
-            changed = True
-        if node.description.value != description:
-            node.description.value = description
-            changed = True
-        if node.status.value != status:
-            node.status.value = status
-            changed = True
-        if mtu is not None and node.mtu.value != mtu:
-            node.mtu.value = mtu
-            changed = True
-        if changed:
-            await save_with_node_not_found_retry(node, self.logger, allow_upsert=False, update_group_context=False)
-        await join_capabilities(self.client, self.logger, node.id, join)
-        await leave_vrfs(self.client, node.id, stale_vrfs)
+        status: str = circuit.get("status") or ""
+        ports = [plan.first.port_id, plan.second.port_id]
+        nodes = {
+            node.id: node
+            for node in await self.client.filters(kind=plan.port_kind, ids=ports, include=["capabilities"])
+        }
+        missing = [end.label for end in (plan.first, plan.second) if end.port_id not in nodes]
+        if missing:
+            self.fail(f"{name}: interface(s) {', '.join(missing)} not found")
+        key_id = await read_password_id(self.client, plan.key_name) if plan.key_name else None
+        peerings = plan_peerings(name, status, plan, families, key_id)
+
+        # Preconditions hold, the writes start. The instance comes first, device locks held until the addresses are
+        # saved.
+        needs = {end.device_id: {plan.namespace} for end in (plan.first, plan.second)} if plan.namespace else {}
+        async with vrfs_held(self, needs):
+            local_vrfs = await local_vrf_ids(self, needs, [plan.namespace]) if plan.namespace else {}
+            addressing = plan_addressing(circuit["id"], name, status, plan, nodes, local_vrfs)
+            try:
+                result = await self.apply_plan(addressing)
+            except GraphQLError as exc:
+                if LENGTH_CHANGE_MARKER not in str(exc):
+                    raise
+                self.fail(
+                    f"{name}: its link prefix is already allocated with another length than "
+                    f"/{plan.prefix_length}; a prefix length cannot change in place. Delete the old prefix "
+                    f"(identifier {link_identifier(circuit['id'])}) and its addresses, then rerun; the server said: {exc}"
+                )
+        self.logger.info(f"  {plan.label} prefix {result.nodes[_PREFIX_KEY].prefix.value} for {name}")
+        for end, offset in ((plan.first, plan.offsets[0]), (plan.second, plan.offsets[1])):
+            self.logger.info(f"  {end.label} = {result.nodes[f'{_PREFIX_KEY}#{offset}'].address.value}")
+        await self.apply_plan(peerings)
+
+
+_PREFIX_KEY = "link-prefix"
+
+
+def link_identifier(circuit_id: str) -> str:
+    """The allocation identifier of a circuit's link prefix: the same prefix on every run."""
+    return f"vc-p2p__{circuit_id}"
+
+
+def plan_addressing(
+    circuit_id: str,
+    name: str,
+    status: str,
+    plan: SessionPlan,
+    ports: Mapping[str, Any],
+    local_vrfs: Mapping[tuple[str, str], str],
+) -> TopologyPlan:
+    """The link prefix (owned by the circuit: it joins the run's group with the circuit, so it goes when the session
+    does), its two addresses (tracked) and both end interfaces: addressed, described, given the circuit's status and MTU
+    and put in the instance of the namespace (``ports`` are the end interfaces read with their ``capabilities``; ones
+    that leave an instance are detached from it). The interfaces are the circuit's targets, never tracked.
+    """
+    out = TopologyPlan(root_id=circuit_id)
+    prefix = PrefixAllocationSpec(
+        key=_PREFIX_KEY,
+        identifier=link_identifier(circuit_id),
+        prefix_length=plan.prefix_length,
+        role="technical",
+        pool_name=plan.pool_name,
+        is_pool=True,
+        member_type="address",
+        description=f"{plan.label} {name}",
+        address_offsets=plan.offsets,
+        address_description=f"{plan.label} {name}",
+        address_ownership="owned",
+        track_prefix=True,
+    )
+    out.add(prefix)
+    interface_status = _INTERFACE_STATUS_FOR_CIRCUIT.get(status, "provisioning")
+    for end, peer, offset in (
+        (plan.first, plan.second, plan.offsets[0]),
+        (plan.second, plan.first, plan.offsets[1]),
+    ):
+        out.add(
+            NodeSpec(
+                f"port:{end.port_id}",
+                plan.port_kind,
+                {
+                    "id": end.port_id,
+                    "ip_address": NodeRef(prefix.address_key(offset)),
+                    "description": f"{plan.label} {name} to {peer.device_name} {peer.port_name}",
+                    "status": interface_status,
+                    **({"mtu": plan.mtu} if plan.mtu is not None else {}),
+                },
+                ownership="shared",
+                retry_on_conflict=True,
+            )
+        )
+        if (vrf_id := local_vrfs.get((end.device_id, plan.namespace or ""))) is not None:
+            out.specs.extend(vrf_membership_plan(end.port_id, vrf_id, ports[end.port_id].capabilities.peers).specs)
+    return out
+
+
+def plan_peerings(
+    name: str, status: str, plan: SessionPlan, families: Mapping[tuple[str, str], str], key_id: str | None = None
+) -> TopologyPlan:
+    """The session's key and peerings (owned): the DCI's own key (``key_id`` when it exists, else created, shared and
+    never tracked: it is generated once and never rotated), a handoff's is the circuit's optional one; a missing address
+    family is created (shared).
+    """
+    out = TopologyPlan(root_id=None)
+    password: str | NodeRef | None = plan.password_id
+    if plan.key_name:
+        password = key_id or plan_password(
+            out,
+            name=plan.key_name,
+            description=f"Session key of {name}, generated once, never rotated",
+            track=False,
+        )
+    for peering in plan.peerings:
+        plan_session_peering(
+            out,
+            name=f"{name}-{peering.suffix}",
+            description=peering.description,
+            status="active" if status == "active" else "provisioning",
+            session_type=peering.session_type,
+            peering_role=peering.peering_role,
+            process_ids=plan.process_ids,
+            address_families=[plan_address_family(out, peering.address_family, families)],
+            interface_ids=peering.interface_ids,
+            password=password,
+            ttl=peering.ttl,
+            bfd_enabled=peering.bfd_enabled,
+            send_community=peering.send_community,
+            send_extended_community=peering.send_extended_community,
+        )
+    return out

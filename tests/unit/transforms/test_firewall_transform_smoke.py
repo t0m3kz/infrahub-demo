@@ -1,4 +1,4 @@
-"""Unit + smoke tests for transforms/firewall.py."""
+"""Unit + smoke tests for transforms/config/firewall.py."""
 
 from __future__ import annotations
 

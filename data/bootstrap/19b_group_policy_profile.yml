@@ -11,7 +11,7 @@
 #   GX2 types of 06_device_types.yml, by exact name. Not listed: FX2 and FX
 #   (owner decision), EX (not supported), and the undocumented FX3P / FX3PH /
 #   FX3S / FXP variants.
-#   Reserved groups (transforms/helpers/group_policy.py, deny by default):
+#   Reserved groups (transforms/helpers/group_policy/, deny by default):
 #   unaware_group_id 15 (D: Multi-Site installs routes from policy-unaware
 #   sites with reserved tag 15, and contracts with tag 15 are needed);
 #   unclassified_group_id 0 (I/U: the guide never defines group 0; its only

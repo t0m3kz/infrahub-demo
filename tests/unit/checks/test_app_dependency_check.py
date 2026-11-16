@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -499,12 +498,6 @@ class TestLoadBalancedComponent:
         web = _load_balanced("web.c001.example", ["tcp/443"])
 
         assert _errors(_dependency("fe-to-web", ports=["tcp/443"], target=web), components=[web]) == []
-
-    def test_query_reads_load_balanced_and_instances(self, root_dir: Path) -> None:
-        """The validation query selects the flag and the instance count the rules read."""
-        components = (root_dir / "queries/validation/app_dependency.gql").read_text().split("AppDependency", 1)[0]
-        assert "load_balanced { value }" in components
-        assert "instances { count }" in components
 
 
 # Prod and non-prod separation

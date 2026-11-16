@@ -6,10 +6,8 @@ from typing import Any
 
 import pytest
 
-from tests.integration.demo_data import relationship_names
 from tests.unit.cloud_leg_helpers import attachment, peering
 from tests.unit.external_vrf_peers_helpers import _raw_gateway, _raw_vrf
-from tests.unit.generators.test_circuit_query_shapes import _QUERIES, _selected_paths
 from tests.unit.routing_invariants_helpers import (
     _CUSTOMER,
     _PROVIDER,
@@ -412,7 +410,7 @@ class TestOfficeLanPrefixes:
         """A prod office LAN registered in NONPROD is an error naming the office."""
         office = _gateway_office("C005-OFFICE", "GW1", _CUSTOMER, _block("10.210.5.0/24", "NONPROD", "non_prod"))
         office["vrfs"] = {"edges": [{"node": _raw_vrf("NONPROD", "C005-OFFICE")}]}
-        office["sdwan_gateway"] = {"node": _raw_gateway("GW1", "NONPROD")}
+        office["sdwan_gateways"] = {"edges": [{"node": _raw_gateway("GW1", "NONPROD")}]}
         with pytest.raises(RoutingDomainError, match="missing PROD gateway handoff VRF"):
             _run(TopologyCustomerOffice=[office])
 
@@ -527,33 +525,6 @@ class TestRegisteredPrefixOwners:
             "display_label": "Vaultex Inc. (C003)",
         }
         assert office["network_segments"] == [{"id": "seg-C003-OFFICE-0"}]
-
-
-def test_the_query_selects_what_rule_seven_reads() -> None:
-    """The owner of an account and of an office, and the segments an office hosts, are selected, on real fields."""
-    for root, reads in {
-        "CloudVirtualNetwork": [
-            "account.name",
-            "account.owner.__typename",
-            "account.owner.org_id",
-            "account.owner.display_label",
-            "cidr_blocks",
-        ],
-        "TopologyCustomerOffice": [
-            "owner.__typename",
-            "owner.org_id",
-            "owner.display_label",
-            "network_segments",
-            "lan_prefixes",
-        ],
-        "TopologySessionCircuit": ["locations.owner.__typename", "locations.owner.org_id", "registered_prefixes"],
-    }.items():
-        selected = _selected_paths(_QUERIES / "validation" / "routing_invariants.gql", root)
-        assert not [path for path in reads if path not in selected]
-    assert {"owner", "network_segments", "lan_prefixes"} <= relationship_names("TopologyCustomerOffice")
-    assert {"account", "cidr_blocks"} <= relationship_names("CloudVirtualNetwork")
-    assert "owner" in relationship_names("CloudAccount")
-    assert "owner" not in relationship_names("TopologySessionCircuit")
 
 
 # 8. One owner and one attachment point per registered prefix

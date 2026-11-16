@@ -9,8 +9,16 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import yaml
 
-from generators.connectivity.endpoint_targets import FREE_OR_CABLED_INTERFACE_STATUSES
-from tests.unit.endpoint_generator_helpers import _iface, _make_generator, _pod_rack
+from generators.connectivity.endpoint_targets import FREE_OR_CABLED_INTERFACE_STATUSES, EndpointTargetResolver
+from tests.unit.endpoint_generator_helpers import _iface, _pod_rack
+
+
+def _make_generator() -> Any:
+    """A resolver of the endpoint ``server-1`` over a mocked client: its attributes are set per test."""
+    client = MagicMock()
+    client.filters = AsyncMock(return_value=[])
+    return EndpointTargetResolver(client, MagicMock(), {"name": "server-1"}, [])
+
 
 # Interface status filters
 
@@ -27,7 +35,7 @@ def test_interface_status_filter_values_are_dcim_interface_status_choices(root_d
     assert set(FREE_OR_CABLED_INTERFACE_STATUSES) <= choices
 
 
-# _resolve_target_interfaces() — dispatch
+# resolve() — dispatch
 
 
 class TestResolveTargetInterfaces:
@@ -40,7 +48,7 @@ class TestResolveTargetInterfaces:
         }
         gen._connect_middle_rack_deployment = AsyncMock(return_value=["x"])
 
-        result = await gen._resolve_target_interfaces("middle_rack")
+        result = await gen.resolve("middle_rack")
 
         assert result == ["x"]
         gen._connect_middle_rack_deployment.assert_awaited_once()
@@ -51,7 +59,7 @@ class TestResolveTargetInterfaces:
         gen.data = {"name": "server-1"}
         gen._connect_tor_deployment = AsyncMock(return_value=["x"])
 
-        result = await gen._resolve_target_interfaces("tor")
+        result = await gen.resolve("tor")
 
         assert result == ["x"]
 
@@ -61,7 +69,7 @@ class TestResolveTargetInterfaces:
         gen.data = {"name": "server-1"}
         gen._connect_mixed_deployment = AsyncMock(return_value=["x"])
 
-        result = await gen._resolve_target_interfaces("mixed")
+        result = await gen.resolve("mixed")
 
         assert result == ["x"]
 

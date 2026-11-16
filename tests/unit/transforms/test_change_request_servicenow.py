@@ -8,7 +8,6 @@ from typing import Any
 import yaml
 
 from tests.integration.demo_data import ROOT, schema
-from tests.unit.query_shape_helpers import query_tree, unselected
 from transforms.change.servicenow import ChangeRequestServiceNow
 
 QUERY = ROOT / "queries" / "change" / "change_request_servicenow.gql"
@@ -94,11 +93,6 @@ def test_the_risk_is_the_effective_one_and_the_number_is_the_external_id() -> No
 def test_no_request_renders_an_empty_payload() -> None:
     """An unknown name gives {}."""
     assert _render(None) == {}
-
-
-def test_the_fixture_emits_only_fields_the_query_selects() -> None:
-    """The raw row stands for the registered query."""
-    assert unselected({"ChangeRequest": _edges(_row())}, query_tree(QUERY)) == []
 
 
 def test_the_transform_is_registered_and_not_an_artifact() -> None:

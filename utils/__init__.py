@@ -1,1 +1,1 @@
-"""Shared utility modules for Infrahub Demo project."""
+"""Shared utility modules for the Temeria project."""

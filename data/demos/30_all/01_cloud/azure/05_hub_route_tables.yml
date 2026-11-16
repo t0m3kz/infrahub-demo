@@ -1,0 +1,12 @@
+---
+# The table of the hub's link towards us: the networks on-prem reaches propagate here, none is associated with it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGatewayRouteTable
+  data:
+    - name: "rt-vhub-30all-weu-onprem"
+      description: "The ExpressRoute connection's table: the networks on-prem reaches propagate here"
+      status: active
+      is_default: true
+      gateway: "vhub-30all-weu"

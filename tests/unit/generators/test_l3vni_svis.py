@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from generators.helpers.svi import L3vniPlan, L3vniWrite, plan_l3vni_svis
+from generators.dcim.svi import L3vniPlan, L3vniWrite, l3vni_changes
 from tests.unit.vrf_instances_helpers import facts_of, raw_device, raw_interface, raw_row, raw_svi
 
 _NAMESPACES: dict[str, dict[str, Any]] = {
@@ -42,7 +42,7 @@ def test_the_existing_l3vni_interfaces_are_read_and_are_not_other_interfaces() -
 def test_a_missing_l3vni_svi_is_created_on_the_instance_of_its_vrf() -> None:
     """Nothing there yet: one write for PROD, on its instance."""
     facts = facts_of(raw_device("d1", "leaf-1", rows=[raw_row("r1", 100, "PROD")]))
-    assert plan_l3vni_svis(facts, _NAMESPACES, {"PROD": "vrf-prod"}) == L3vniPlan(
+    assert l3vni_changes(facts, _NAMESPACES, {"PROD": "vrf-prod"}) == L3vniPlan(
         writes=(L3vniWrite("Vlan3900", "vrf-prod"),)
     )
 
@@ -51,8 +51,8 @@ def test_everything_in_place_writes_nothing_and_an_instance_that_moved_updates_i
     """Idempotent; a different instance is a move, not a recreate."""
     rows = [raw_row("r1", 100, "PROD")]
     same = facts_of(raw_device("d1", "leaf-1", rows=rows, interfaces=[_l3vni("i1", "Vlan3900", "vrf-prod", "PROD")]))
-    assert not plan_l3vni_svis(same, _NAMESPACES, {"PROD": "vrf-prod"})
-    moved = plan_l3vni_svis(same, _NAMESPACES, {"PROD": "vrf-new"})
+    assert not l3vni_changes(same, _NAMESPACES, {"PROD": "vrf-prod"})
+    moved = l3vni_changes(same, _NAMESPACES, {"PROD": "vrf-new"})
     assert moved == L3vniPlan(writes=(L3vniWrite("Vlan3900", "vrf-new", existing_id="i1"),))
 
 
@@ -60,13 +60,13 @@ def test_the_l3vni_svi_of_a_vrf_the_device_stopped_terminating_is_deleted() -> N
     """No segment or leg in INTERNET any more: its SVI goes, the PROD one stays."""
     interfaces = [_l3vni("i1", "Vlan3900", "vrf-prod", "PROD"), _l3vni("i2", "Vlan3902", "vrf-inet", "INTERNET")]
     facts = facts_of(raw_device("d1", "leaf-1", rows=[raw_row("r1", 100, "PROD")], interfaces=interfaces))
-    assert plan_l3vni_svis(facts, _NAMESPACES, {"PROD": "vrf-prod"}) == L3vniPlan(stale_ids=("i2",))
+    assert l3vni_changes(facts, _NAMESPACES, {"PROD": "vrf-prod"}) == L3vniPlan(stale_ids=("i2",))
 
 
 def test_an_instance_the_device_is_not_in_yet_is_skipped_not_guessed() -> None:
     """No instance for the namespace in this pass: no write (the next pass has it)."""
     facts = facts_of(raw_device("d1", "leaf-1", rows=[raw_row("r1", 100, "PROD")]))
-    assert not plan_l3vni_svis(facts, _NAMESPACES, {})
+    assert not l3vni_changes(facts, _NAMESPACES, {})
 
 
 def test_a_hand_made_interface_with_the_name_is_other_not_l3vni() -> None:

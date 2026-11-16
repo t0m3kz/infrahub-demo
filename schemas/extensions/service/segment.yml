@@ -78,8 +78,8 @@ nodes:
       # The segment's gateway holder. false: the fabric routes it (an anycast SVI on every switch with a routed row).
       # true: the firewall pair of the segment's one DC footprint owns the gateway as a floating VIP and the fabric only
       # bridges it (VLAN row and L2 VNI, no SVI, VRF or ACL); `add_vxlan_segment` stores the firewall's sub-interface
-      # (generators/topology/segment_gateway.py). The context is the footprint's internal one, never named here.
-      # checks/segment_placement.py: one DC footprint, a serving internal context, a gateway.
+      # (generators/segments/segment.py). The context is the footprint's internal one, never named here.
+      # checks/segments/segment_placement.py: one DC footprint, a serving internal context, a gateway.
       - name: firewall_gateway
         kind: Boolean
         label: Firewall Gateway
@@ -91,7 +91,7 @@ nodes:
       # TopologyDeployment, not TopologyCustomer: a TopologyCustomerOffice hosts
       # its own segments (it is TopologySegmentHosting) but is not a
       # TopologyCustomer (it carries its own owner, and no environment), so the
-      # narrower generic could not name it. checks/segment_placement.py is what limits the kinds.
+      # narrower generic could not name it. checks/segments/segment_placement.py is what limits the kinds.
       - name: customer_deployments
         peer: TopologyDeployment
         cardinality: many
@@ -126,10 +126,10 @@ nodes:
     include_in_menu: false
     # The switch ports (physical, LAG) a person asks to carry the segment in this deployment are its interface
     # `capabilities` (ManagedGenericInterfaces, the interface edge): the INTENT, "this port carries this segment in this
-    # DC", written by a person (or the 00_full data). The segment reconcile (generators/topology/segment_ports.py)
+    # DC", written by a person (or the 00_full data). The segment reconcile (generators/segments/segment_ports.py)
     # realizes it, with the ports its components derive: the row of each port's switch, then the port -> row edge (the
-    # row's `capabilities`). It never writes or removes this list. checks/interface_layers.py holds what the schema
-    # cannot (a physical port or a LAG only).
+    # row's `capabilities`). It never writes or removes this list. checks/devices/interface_layers.py holds what the
+    # schema cannot (a physical port or a LAG only).
     inherit_from:
       - ManagedGenericInterfaces
     display_label: "{{ segment__customer_name__value }} in {{ deployment__name__value }}"  # yamllint disable-line rule:line-length
@@ -205,26 +205,26 @@ nodes:
   # 802.1Q VLAN ID has only local significance and is unique on a device (the [device, vlan_id__value] constraint):
   # two segments never share it on one switch. The two peers of an MLAG pair MUST carry the same vlan_id for a
   # segment (one L2 broadcast domain for a dual-homed port-channel): the allocator gives them one id and
-  # checks/mlag_domains.py reports a pair whose rows differ. The generator reuses a segment's vlan_id across the
+  # checks/routing/mlag_domains.py reports a pair whose rows differ. The generator reuses a segment's vlan_id across the
   # switches it lands on. The segment's DC-wide identity remains SegmentDeployment.vni (L2 VNI).
   #
-  # Created by: the segment reconcile (generators/segment_vlan.py), once per (segment deployment, device) pair and for
-  # the MLAG peers of every device that has a port of the segment (derived or assigned to a deployment), untracked.
-  # Only the reconcile creates a row. The row is a child of its switch (Parent `device`, deleted with it) and goes
-  # with its deployment too (the deployment's cascading `vlans`); a row of a device that no longer needs the segment
-  # is deleted by the next reconcile.
+  # Created by: the segment reconcile (generators/segments/segment_vlan.py), once per (segment deployment, device) pair
+  # and for the MLAG peers of every device that has a port of the segment (derived or assigned to a deployment),
+  # untracked. Only the reconcile creates a row. The row is a child of its switch (Parent `device`, deleted with it) and
+  # goes with its deployment too (the deployment's cascading `vlans`); a row of a device that no longer needs the
+  # segment is deleted by the next reconcile.
   #
   # The row's one routed realization, its SVI (a role-svi DcimVirtualInterface of the same switch), is a member of the
   # same edge, written by the VRF pass (generators/helpers/svi.py): the SVI's VLAN is its row's, not read off its name.
-  # checks/interface_layers.py R3, R6, R10 hold it (a plain generic edge, not a Component of the row).
+  # checks/devices/interface_layers.py R3, R6, R10 hold it (a plain generic edge, not a Component of the row).
   # The switch ports (physical, LAG) of the row's device that carry the segment are its interface `capabilities`
   # (ManagedGenericInterfaces, the interface edge): a port is a member of its switch's row, so the VLAN of a port is
   # its row's vlan_id and the VNI and segment come through `segment_deployment`: the REALIZATION. Only the reconcile
-  # (generators/topology/segment_ports.py) writes these edges, AFTER the rows: for the ports its components derive and
+  # (generators/segments/segment_ports.py) writes these edges, AFTER the rows: for the ports its components derive and
   # the ports assigned to the deployment (a person's intent lives there, never on this edge). A port then shows both in
   # its `capabilities`, its deployment (asked) and its row (realized); a reader of a port's segment reads the row. The
-  # schema holds no same-switch rule on the edge (no common_parent); checks/interface_layers.py holds a port of the
-  # row's own switch (R6), a physical port or LAG only, one row of a segment per port, and reports a membership
+  # schema holds no same-switch rule on the edge (no common_parent); checks/devices/interface_layers.py holds a port of
+  # the row's own switch (R6), a physical port or LAG only, one row of a segment per port, and reports a membership
   # nobody asked for.
   # Read by: the switch transforms, from the device's `vlans` and the port's capabilities.
   - name: SegmentVlan

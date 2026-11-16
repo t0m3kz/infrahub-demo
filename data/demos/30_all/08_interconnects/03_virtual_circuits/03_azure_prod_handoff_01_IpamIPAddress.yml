@@ -1,0 +1,9 @@
+# IpamIPAddress declarations in recursive dependency order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.255.143.253/31"
+      description: "Azure side of the PROD ExpressRoute private peering er-30all-weu.private"
+      ip_namespace: "default"

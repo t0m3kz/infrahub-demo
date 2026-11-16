@@ -73,7 +73,7 @@ def _office(
     return clean_data(
         {
             "owner": raw_owner(owner),
-            "sdwan_gateway": {"node": _raw_gateway(gateway, namespace)} if gateway else {"node": None},
+            "sdwan_gateways": {"edges": [{"node": _raw_gateway(gateway, namespace)}] if gateway else []},
             "vrfs": {"edges": [{"node": _raw_vrf(zone, "OFFICE")} for zone in sorted({zone for _, zone in hosted})]},
             "lan_prefixes": {
                 "edges": [
@@ -191,7 +191,7 @@ class TestSdwanGatewayPrefixes:
         assert found == {"Ethernet1/13.1900": {"C002": ["10.210.2.0/24", "10.210.5.0/24"]}}
 
     def test_offices_of_another_gateway_or_none_are_excluded(self) -> None:
-        """Only offices whose sdwan_gateway is the far end of this handoff count."""
+        """Only offices whose sdwan_gateways is the far end of this handoff count."""
         offices = [
             _office(_GW1, ("10.210.5.0/24", "PROD")),
             _office("EQX-AM5-SDWAN-GW1", ("10.210.9.0/24", "PROD")),
@@ -240,7 +240,7 @@ class TestSdwanGatewayPrefixes:
     def test_multizone_gateway_does_not_register_office_lans_into_nonprod(self) -> None:
         """Office LAN authority is the PROD gateway handoff, never every handoff on that gateway."""
         office = _office(_GW1, ("10.210.2.0/24", "PROD"))
-        office["sdwan_gateway"]["interfaces"].extend(clean_data(_raw_gateway(_GW1, "NONPROD"))["interfaces"])
+        office["sdwan_gateways"][0]["interfaces"].extend(clean_data(_raw_gateway(_GW1, "NONPROD"))["interfaces"])
         registered = office_registered(office)
         assert [(registration.prefix["prefix"], registration.zone["name"]) for registration in registered] == [
             ("10.210.2.0/24", "PROD")
@@ -256,6 +256,21 @@ class TestSdwanGatewayPrefixes:
             "Ethernet1/13.1900": {"C002": ["10.210.2.0/24"]},
             "Ethernet1/13.1901": {},
         }
+
+    def test_each_of_an_offices_gateways_accepts_its_lan_on_its_own_session(self) -> None:
+        """An office behind two gateways registers its LAN behind each: each gateway's session accepts it."""
+        office = _office(_GW1, ("10.210.2.0/24", "PROD"))
+        office["sdwan_gateways"].append(_office("GW2")["sdwan_gateways"][0])
+        for gateway, interface in ((_GW1, "Ethernet1/13.1900"), ("GW2", "Ethernet1/14.1900")):
+            found = get_external_peer_prefixes(
+                [_subif(interface, "PROD")],
+                "eg-fr201",
+                device_capabilities=_bgp_facing((interface, gateway)),
+                offices=[office],
+                tunnels=None,
+            )
+            assert found == {interface: {"C002": ["10.210.2.0/24"]}}
+        assert len(office_registered(office)) == 1
 
     def test_office_lan_requires_an_explicit_prod_gateway_handoff(self) -> None:
         """A NONPROD-only gateway cannot supply the missing PROD office context."""

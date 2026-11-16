@@ -1,0 +1,23 @@
+---
+# The shared transit hub of eu-central-1 PROD and the Direct Connect gateway its link towards us lands on (the
+# hybrid attachment, 06_hub_link.yml). The hub is data: add_customer_deployment_cloud attaches every `transit` footprint
+# of the region and environment to it (its own route table rt-<footprint> and one attachment per network). The
+# authored rest of the link (the private VIF dxcon-fr2.1000, its cable to eg-fr201 and the handoff) is in
+# 08_interconnects.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGateway
+  data:
+    - name: "tgw-30all-euc1"
+      cloud_id: "tgw-0a1b2c3d4e5f60718"
+      description: "30_all shared transit gateway hub, AWS eu-central-1"
+      status: active
+      gateway_type: hub
+      region: "eu-central-1"
+      account: "net-hub-aws-prod"
+    - name: "dxgw-30all"
+      description: "30_all Direct Connect gateway (global): the on-prem link lands here, associated with the hub"
+      status: active
+      gateway_type: edge
+      account: "net-hub-aws-prod"

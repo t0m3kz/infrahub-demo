@@ -27,17 +27,14 @@ _GENERATORS = Path(__file__).resolve().parents[3] / "generators"
 
 # The module that reads each policy -> the policy names it imports from utils.limits.
 _USERS: dict[str, tuple[str, ...]] = {
-    "generators.mixins.common": ("PARENT_GENERATOR_WAIT",),
+    "generators.base": ("PARENT_GENERATOR_WAIT", "RESOURCE_LOCK"),
+    "generators.change.open_change_request": ("ARTIFACT_VALIDATOR_WAIT",),
     "generators.helpers.common": ("NODE_SAVE_RETRY",),
-    "generators.mixins.connections": ("WAIT_FOR_PEER_GENERATOR",),
-    "generators.mixins.lb_vip": ("LB_VIP_REREAD",),
-    "generators.mixins.pools": ("RESOURCE_LOCK", "WAIT_FOR_PEER_GENERATOR"),
-    "generators.mixins.rack": ("WAIT_FOR_PEER_GENERATOR",),
-    "generators.mixins.routing": ("WAIT_FOR_PEER_GENERATOR",),
-    "generators.mixins.segment_firewall": ("RULE_SAVE_ATTEMPTS",),
-    "generators.fabric.office_fabric": ("OFFICE_EDGE_WAIT",),
-    "generators.fabric.pod": ("BORDER_LEAF_WAIT", "WAIT_FOR_PEER_GENERATOR"),
-    "generators.fabric.pod_mesh": ("WAIT_FOR_PEER_GENERATOR",),
+    "generators.applications.lb_vip": ("LB_VIP_REREAD",),
+    "generators.ipam.pools": ("WAIT_FOR_PEER_GENERATOR",),
+    "generators.dc.rack": ("WAIT_FOR_PEER_GENERATOR",),
+    "generators.dc.pod": ("BORDER_LEAF_WAIT", "WAIT_FOR_PEER_GENERATOR"),
+    "generators.dc.pod_mesh": ("WAIT_FOR_PEER_GENERATOR",),
 }
 
 _RETRY_CONSTANT = re.compile(r"RETR|ATTEMPT|DELAY|INTERVAL|STALE|POLL")
@@ -48,7 +45,7 @@ class TestPolicyValues:
 
     def test_a_waiter_outlasts_a_lock_that_is_still_to_become_stale(self) -> None:
         """A lock whose release failed stays until it is stale_after old; the waiters, backing off to the cap of
-        generators/pools.py (10 s), must still be trying then, or every one of them fails on it."""
+        generators/base.py (10 s), must still be trying then, or every one of them fails on it."""
         waited = sum(min(RESOURCE_LOCK.delay * 2**attempt, 10.0) for attempt in range(RESOURCE_LOCK.attempts))
 
         assert waited > RESOURCE_LOCK.stale_after

@@ -259,7 +259,7 @@ def raw_service_port(
                 "interfaces": edges(uplink, *subs),
             }
         },
-        "encapsulations": edges(),
+        "sub_interfaces": edges(),
     }
     own = {
         "__typename": "DcimPhysicalInterface",

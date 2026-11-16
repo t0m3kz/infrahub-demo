@@ -1,0 +1,10 @@
+---
+# A dedicated 3-spine element: the ["2", "spine", ...] one is shared with the other DC6 pods.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyElement
+  data:
+    - quantity: 3
+      role: spine
+      template: N9K-C9336C-FX2_SPINE

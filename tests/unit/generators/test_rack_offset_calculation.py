@@ -6,8 +6,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generators.fabric.rack import RackGenerator, TopologyRackData
-from generators.mixins.pod_config import spine_downlink_layout, tor_rack_slots_per_row
+from generators.dc.rack import RackGenerator
+from generators.dc.rack_data import TopologyRackData
+from generators.model.pod_profile import spine_downlink_layout, tor_rack_slots_per_row
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, POD_DESIGN_NAMES, pod_design
 
 
@@ -50,6 +51,8 @@ def _build_generator(
     }
 
     generator = RackGenerator.__new__(RackGenerator)
+
+    generator._controllers = []
     generator.data = cast(TopologyRackData, rack)
     generator.logger = MagicMock()
     generator.client = cast(Any, SimpleNamespace())  # Not used by calculate_cabling_offsets

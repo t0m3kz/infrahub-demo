@@ -6,7 +6,7 @@
 #
 # `locations`: the cage and the DC. In 30_all only the cage is listed because add_circuit derives the other end from
 # the end device's deployment; no generator runs on this sample's data, and a carrier needs its two locations to be
-# valid (checks/circuit_placement.py), so both are authored.
+# valid (checks/connectivity/circuit_placement.py), so both are authored.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

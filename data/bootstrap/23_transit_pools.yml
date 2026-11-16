@@ -1,5 +1,5 @@
 # Per-VRF /29 transit pools for firewall-context legs (see
-# generators/firewall_context.py and utils/exchange_transit.py). Each pool
+# generators/customers/firewall_context.py and utils/exchange_transit.py). Each pool
 # and its resource prefix use built-in default IPAM; the pool name selects
 # the routing domain, whose SecurityZone is defined in 24_security_zones.yml.
 # One pool per fixed VRF, RFC 6598 100.66.0.0/18 split in /20s:

@@ -1,5 +1,6 @@
 ---
-# The attachments. The target is exactly one of `virtual_network` and `peer_gateway` (checks/cloud_connection.py R1).
+# The attachments. The target is exactly one of `virtual_network` and `peer_gateway`
+# (checks/connectivity/cloud_connection.py R1).
 # `allowed_prefixes` is the direction cloud -> us: what the association lets through towards on-prem (the Direct
 # Connect gateway association announces the VPC block). The direction us -> cloud is `advertised_prefixes` of a public
 # peering.

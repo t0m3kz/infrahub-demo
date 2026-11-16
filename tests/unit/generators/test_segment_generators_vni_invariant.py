@@ -8,11 +8,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
 from generators.protocols import ManagedSegmentDeployment
 from tests.unit.segment_generators_helpers import _DEP_1, _DEP_2, _make_gen, _seg_response
 
 # TestSegmentVniInvariant — behaviour of generate() against a stateful fake
+
+pytestmark = pytest.mark.usefixtures("generator_steps")
 
 
 class _FakeSegmentDeploymentStore:
@@ -30,6 +32,7 @@ class _FakeSegmentDeploymentStore:
 
     def _store(self, deployment_id: str, vni: int | None) -> MagicMock:
         record = MagicMock()
+        record.id = f"segdep-{deployment_id}"
         record.deployment.id = deployment_id
         record.vni.value = vni
         record.save = AsyncMock()
@@ -45,6 +48,9 @@ class _FakeSegmentDeploymentStore:
 
     async def create(self, *, kind: Any, data: dict[str, Any]) -> MagicMock:
         assert kind == ManagedSegmentDeployment
+        if "deployment" not in data:
+            # An existing record registered with the tracker by id alone: nothing new is stored
+            return MagicMock(id=data["id"], save=AsyncMock())
         self.created_payloads.append(data)
         vni = data.get("vni")
         if isinstance(vni, dict):

@@ -1,4 +1,4 @@
-"""Unit tests for CommonGenerator.acquire_resource_lock / release_resource_lock."""
+"""Unit tests for BaseGenerator.acquire_resource_lock / release_resource_lock."""
 
 from __future__ import annotations
 
@@ -10,18 +10,17 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.exceptions import GraphQLError
 
-from generators.mixins.common import CommonGenerator
-from generators.mixins.logger import GeneratorError
-from generators.mixins.pools import PoolMixin
+from generators.base import BaseGenerator
+from generators.model.errors import GeneratorError
 from utils.limits import RESOURCE_LOCK
 
 
-class _Gen(PoolMixin, CommonGenerator):
+class _Gen(BaseGenerator):
     pass
 
 
 def _build_gen() -> Any:
-    """Return a PoolMixin+CommonGenerator instance typed as Any so ty allows mock attribute assignments."""
+    """Return a BaseGenerator instance typed as Any so ty allows mock attribute assignments."""
     gen = _Gen.__new__(_Gen)
     gen.logger = MagicMock()
     gen.client = MagicMock()
@@ -83,7 +82,7 @@ class TestAcquireResourceLock:
         gen.client.create = AsyncMock(side_effect=_uniqueness_error())
         gen.client.execute_graphql = AsyncMock(return_value={"CoreStandardGroup": {"edges": []}})
         monkeypatch.setattr("asyncio.sleep", AsyncMock())
-        monkeypatch.setattr("generators.mixins.pools.RESOURCE_LOCK", replace(RESOURCE_LOCK, attempts=2))
+        monkeypatch.setattr("generators.base.RESOURCE_LOCK", replace(RESOURCE_LOCK, attempts=2))
 
         with pytest.raises(GeneratorError):
             await gen.acquire_resource_lock("res-1")

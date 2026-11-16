@@ -4,8 +4,8 @@
 
 This guide explains how the data center generators turn a fabric design into devices, cables and names. It is
 written for network architects and operators who author topology data (and for whoever inherits the fabric after
-them). For the full data model rules see
-[AGENTS.md](AGENTS.md); for the development workflow see [CONTRIBUTING.md](CONTRIBUTING.md).
+them).
+For the development workflow see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Table of Contents
 
@@ -22,9 +22,9 @@ them). For the full data model rules see
 ## Fabric Designs
 
 Two required design templates bound every fabric. They hold only the envelope (the `max_*` values); the records
-live in [data/bootstrap/14b_fabric_templates.yml](data/bootstrap/14b_fabric_templates.yml). Every pool size, port
+live in [tests/integration/data/bootstrap/14b_fabric_templates.yml](/data/bootstrap/14b_fabric_templates.yml). Every pool size, port
 stride and loopback or technical prefix is derived from them by
-[generators/mixins/fabric_sizing.py](generators/mixins/fabric_sizing.py) before any rack exists.
+[generators/model/sizing.py](generators/model/sizing.py) before any rack exists.
 
 ### Data center designs (`TopologyDataCenter.design`, `TopologyTemplateDC`)
 
@@ -61,7 +61,7 @@ The number of switches per tier follows from the envelope:
 
 Pick one before the procurement committee picks the switches for you. The deployment type of a pod is **derived from
 its design, never stored**
-([generators/mixins/pod_config.py](generators/mixins/pod_config.py) `pod_deployment_type`):
+([generators/model/pod_profile.py](generators/model/pod_profile.py) `pod_deployment_type`):
 
 | Design has | Deployment type |
 | ---------- | --------------- |
@@ -69,7 +69,7 @@ its design, never stored**
 | ToRs and no leafs | `tor` |
 | ToRs and leafs | `mixed` |
 
-The roles a rack may hold depend on the type ([generators/mixins/rack.py](generators/mixins/rack.py)
+The roles a rack may hold depend on the type ([generators/dc/rack_support.py](generators/dc/rack_support.py)
 `ROLES_BY_DEPLOYMENT_TYPE`):
 
 | Deployment type | Roles a rack may hold |
@@ -80,7 +80,7 @@ The roles a rack may hold depend on the type ([generators/mixins/rack.py](genera
 
 `tor` and `l2_leaf`/`access_leaf` are mutually exclusive in one rack: a ToR cables to the spines, an L2 or access
 leaf cables to a local leaf pair, and no cabling plan does both. Border-leafs, firewalls and load balancers are not
-rack-level roles: they are declared on network `LocationRack` `fabric_templates` under the data center and placed by the DC generator.
+rack-level roles: they are declared on the data center's own `fabric_templates` and placed by the DC generator.
 
 ### Middle rack
 
@@ -153,7 +153,7 @@ compromise, in rack form.
 
 Every leaf, ToR and border-leaf takes one downlink port on every spine of its pod. The ports are laid out in fixed
 blocks computed from the **design envelope, not from what is built**, so the blocks never overlap however a pod
-fills up ([generators/mixins/pod_config.py](generators/mixins/pod_config.py) `spine_downlink_layout`):
+fills up ([generators/model/pod_profile.py](generators/model/pod_profile.py) `spine_downlink_layout`):
 
 | Block | Middle rack / Mixed | ToR |
 | ----- | ------------------- | --- |

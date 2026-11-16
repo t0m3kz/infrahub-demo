@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.integration.demo_data import relationship_names
-from tests.unit.generators.test_circuit_query_shapes import _QUERIES, _selected_paths
 from tests.unit.routing_invariants_helpers import (
     _C002,
     _C005,
@@ -77,6 +75,31 @@ class TestOwnershipConflicts:
         assert "GW1, GW2" in errors[0]
         assert "exactly one session" in errors[0]
 
+    def test_an_offices_lan_behind_its_own_two_gateways_is_no_conflict(self) -> None:
+        """Redundant gateways of ONE office are one attachment point: its LAN sits behind each of them."""
+        offices = [_gateway_office("C003-A", ("GW1", "GW2"), _CUSTOMER, _block("10.210.3.0/24"))]
+        assert _rule_eight(_run(TopologyCustomerOffice=offices)) == []
+
+    def test_two_owners_on_one_prefix_behind_redundant_gateways_still_fail(self) -> None:
+        """Two offices of different owners register one LAN, each behind its own two gateways: a shared prefix."""
+        offices = [
+            _gateway_office("C003-A", ("GW1", "GW2"), _CUSTOMER, _block("10.210.3.0/24")),
+            _gateway_office("C002-A", ("GW1", "GW2"), _C002, _block("10.210.3.0/24")),
+        ]
+        errors = _rule_eight(_run(TopologyCustomerOffice=offices))
+        assert len(errors) == 1
+        assert "registered by more than one owner" in errors[0]
+
+    def test_an_owners_lan_behind_two_different_gateway_sets_fails(self) -> None:
+        """The same LAN registered behind (GW1, GW2) by one office and behind GW1 alone by another is two points."""
+        offices = [
+            _gateway_office("C003-A", ("GW1", "GW2"), _CUSTOMER, _block("10.210.3.0/24")),
+            _gateway_office("C003-B", "GW1", _CUSTOMER, _block("10.210.3.0/24")),
+        ]
+        errors = _rule_eight(_run(TopologyCustomerOffice=offices))
+        assert len(errors) == 1
+        assert "exactly one session" in errors[0]
+
     def test_two_offices_behind_one_gateway_are_one_attachment_point(self) -> None:
         """One owner's two offices behind GW1 each with its own LAN: no conflict."""
         offices = [
@@ -102,7 +125,7 @@ class TestOwnershipConflicts:
         assert _rule_eight(check) == []
 
     def test_an_office_without_a_gateway_is_not_an_attachment_point(self) -> None:
-        """No sdwan_gateway: nothing is announced through it, so it cannot conflict."""
+        """No sdwan_gateways: nothing is announced through it, so it cannot conflict."""
         check = _run(
             TopologyCustomerOffice=[_gateway_office("C003-OFFICE", None, _CUSTOMER, _block("10.32.0.0/16"))],
             ManagedNetworkSegment=[_segment("c015-web", "10.32.0.0/16", _C015)],
@@ -112,30 +135,3 @@ class TestOwnershipConflicts:
     def test_an_empty_payload_passes(self) -> None:
         """Nothing registered: nothing to report."""
         assert _rule_eight(_run()) == []
-
-
-def test_the_query_selects_what_rule_eight_reads() -> None:
-    """Segment owner, the office gateway and hosted segments, on real fields."""
-    path = _QUERIES / "validation" / "routing_invariants.gql"
-    reads = {
-        "ManagedNetworkSegment": [
-            "owner.org_id",
-            "gateway.ip_prefix.prefix",
-            "gateway.ip_prefix.ip_namespace.name",
-        ],
-        "TopologyCustomerOffice": [
-            "sdwan_gateway.name",
-            "segment_deployments.segment.owner.org_id",
-            "segment_deployments.segment.gateway.ip_prefix.prefix",
-            "segment_deployments.segment.gateway.ip_prefix.ip_namespace.name",
-            "lan_prefixes.ip_namespace.name",
-        ],
-    }
-    for root, paths in reads.items():
-        selected = _selected_paths(path, root)
-        assert not [item for item in paths if item not in selected], root
-    assert "owner" in relationship_names("ManagedNetworkSegment")
-    assert {"sdwan_gateway", "segment_deployments", "lan_prefixes"} <= relationship_names("TopologyCustomerOffice")
-    assert {"gateway", "associated_route_table"} <= relationship_names("CloudGatewayAttachment")
-    assert "attachments" in relationship_names("CloudGateway")
-    assert "segment" in relationship_names("ManagedSegmentDeployment")

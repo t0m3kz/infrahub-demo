@@ -80,3 +80,67 @@ class TestCloudLegRender:
         output = _run_edge(_cloud_fixture(scope="public", advertised=(prefix("198.51.100.0/24"),)))
         assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-IN") == []
         assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT") == ["198.51.100.0/24"]
+
+
+def _hub_fixture() -> dict[str, Any]:
+    """The cloud leg on a shared hub: the transport is our network account's (a provider owns it), and two customers'
+    networks sit behind the hub, each attachment owned by its network's account.
+    """
+    data = _cloud_fixture(account_owner="P028", account_owner_type="OrganizationProvider")
+    data["CloudGatewayAttachment"] = edges(
+        attachment("tgwa-dxgw", "tgw", peer="dxgw", table="shared"),
+        attachment(
+            "tgw-nordix",
+            "tgw",
+            network="nordix-vpc-prod",
+            blocks=(prefix("10.10.0.0/16"),),
+            propagates=("shared",),
+            network_owner="C001",
+        ),
+        attachment(
+            "tgw-c005",
+            "tgw",
+            network="c005-vpc-prod",
+            blocks=(prefix("10.50.0.0/16"),),
+            propagates=("shared",),
+            network_owner="C005",
+        ),
+    )
+    return data
+
+
+class TestSharedHubRender:
+    """A hub session has one owner per attachment: IN accepts each owner's networks, OUT is one list per owner."""
+
+    def test_the_session_is_owned_by_each_customer_behind_the_hub(self) -> None:
+        output = _run_edge(_hub_fixture())
+        assert "! VRF-PROD-EQXFR2-AWS-EUC1: owners C001, C005\n" in output
+        assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-IN") == ["10.10.0.0/16", "10.50.0.0/16"]
+
+    def test_each_owner_is_announced_its_own_space_only(self) -> None:
+        output = _run_edge(_hub_fixture())
+        c001 = _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT-C001")
+        c005 = _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT-C005")
+        assert "198.18.0.0/24" in c001 and "198.18.0.0/24" not in c005
+        assert "10.176.5.0/24" in c005 and "10.176.5.0/24" not in c001
+        assert _prefix_list(output, "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT") == []
+        assert "route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT permit 10\n" in output
+        assert "route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT permit 20\n" in output
+        assert "route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-OUT deny 30\n" in output
+
+    def test_a_single_owner_session_keeps_one_out_list(self) -> None:
+        """Byte-identical shape for every existing leg: no per-owner list for one owner."""
+        output = _run_edge(_cloud_fixture())
+        assert "PL-VRF-PROD-EQXFR2-AWS-EUC1-OUT-C001" not in output
+
+
+def test_what_the_session_advertises_is_its_own_entry_after_the_owners() -> None:
+    """An advertised prefix of a multi-owner session is no owner's: the last entry, ADVERTISED."""
+    from transforms.helpers.bgp_external import _out_owners
+
+    entries = _out_owners({"C001": ["10.1.0.0/24"], "C005": []}, ["10.1.0.0/24", "198.51.100.0/24"])
+
+    assert [(e["name"], e["prefixes"]) for e in entries] == [
+        ("C001", ["10.1.0.0/24"]),
+        ("ADVERTISED", ["198.51.100.0/24"]),
+    ]

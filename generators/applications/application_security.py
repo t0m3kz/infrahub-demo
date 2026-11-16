@@ -1,41 +1,55 @@
-"""Security rule generators derived from application dependencies."""
+"""Security rules derived from application dependencies, written as one plan per application: the group tags of the
+segments and components it touches, the isolation modes, the VIPs of its load balanced components, the segment and
+load balancer SecurityPolicyRules and the ZTNA proxy rules."""
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
+from generators.applications.lb_vip import LoadBalancing, await_lb_inputs, plan_load_balancing
+from generators.applications.policy_rules import (
+    RuleRequest,
+    plan_policy_rules,
+    read_policy_facts,
+    segment_policy_target,
+)
+from generators.applications.proxy_rules import (
+    ProxyRuleRequest,
+    egress_request,
+    plan_proxy_rules,
+    private_access_requests,
+    proxy_lock_keys,
+    read_proxy_facts,
+)
+from generators.base import BaseGenerator
+from generators.helpers.common import gather_bounded
 from generators.helpers.lb_vip import is_cloud_component
-from generators.helpers.routing_tag import ensure_segment_routing_tag
+from generators.helpers.routing_tag import segment_routing_tag_spec
 from generators.helpers.rules import RulesPlanner
-from generators.helpers.security_tag import clear_component_tag, ensure_security_tag, ensure_segment_tag
-from generators.mixins.common import CommonGenerator
-from generators.mixins.connections import CablingMixin
-from generators.mixins.lb_vip import LoadbalancerVipMixin
-from generators.mixins.named_objects import GetOrCreateByNameMixin
-from generators.mixins.pools import PoolMixin
-from generators.mixins.segment_firewall import SegmentFirewallMixin
-from generators.mixins.ztna import ZtnaMixin
+from generators.helpers.security_tag import (
+    component_target,
+    plan_clear_component_tag,
+    plan_security_tags,
+    read_tag_pool,
+    segment_target,
+    tag_lock_keys,
+)
+from generators.plan import NodeRef, NodeSpec, TopologyPlan
 from generators.protocols import AppComponent
 from utils.data_cleaning import clean_data
 from utils.group_policy import is_microsegmented
-from utils.ports import PortProfileHelper
+from utils.ports import PortProfileHelper, PortSpec
 
-# The segment kind add_vxlan_segment addresses (generators/topology/segment.py).
+Edge = tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
+
+# The segment kind add_vxlan_segment addresses (generators/segments/segment.py).
 VXLAN_SEGMENT_KIND = "ManagedVxlanSegment"
 
 
-class AppApplicationGenerator(
-    ZtnaMixin,
-    SegmentFirewallMixin,
-    LoadbalancerVipMixin,
-    GetOrCreateByNameMixin,
-    CablingMixin,
-    PoolMixin,
-    CommonGenerator,
-):
-    """Generate segment-scoped security rules from app dependencies (orchestration only; logic is in the mixins).
-    Touched routed tenant segments get their group tag, microsegmented components their component tag."""
+class AppApplicationGenerator(BaseGenerator):
+    """Generate segment-scoped security rules from app dependencies (orchestration; the planners are in
+    generators/applications/). Touched routed tenant segments get their group tag, microsegmented components their
+    component tag."""
 
     async def run(self, identifier: str, data: dict[str, Any] | None = None) -> None:
         """Track generated policy objects per application; only an AppApplication payload saves anything."""
@@ -97,12 +111,12 @@ class AppApplicationGenerator(
                 if segment.get("id") and segment.get("typename") == VXLAN_SEGMENT_KIND and not segment.get("gateway")
             }
         )
-        if pending:
-            await asyncio.gather(*(self.wait_for_parent_generators(("add_vxlan_segment",), sid) for sid in pending))
+        # The waits are independent; the data is re-read once, after all of them
+        waited = await gather_bounded(self.wait_for_parent_generators(("add_vxlan_segment",), sid) for sid in pending)
+        if any(waited):
             refreshed = await self.collect_data()
             if refreshed is not None:
-                unpacked = refreshed.get("data") or refreshed
-                app = (clean_data(unpacked).get("AppApplication") or [app])[0]
+                app = (clean_data(refreshed).get("AppApplication") or [app])[0]
         return app
 
     async def _fan_out(self, app_ids: list[str]) -> None:
@@ -149,6 +163,9 @@ class AppApplicationGenerator(
         return str(app_id)
 
     async def _reconcile_application_rules(self, app: dict[str, Any]) -> None:
+        """Plan the application's tags, isolation modes, VIPs and rules, then write the plan once, under the locks of
+        what it decides from. Whatever cannot be written is reported before the first write.
+        """
         planner = RulesPlanner()
 
         app_name: str = app.get("name", "")
@@ -161,27 +178,15 @@ class AppApplicationGenerator(
             return
 
         edges = self._dependency_edges_from_components(components)
+        segments = self._used_segments(components, edges)
+        plan = TopologyPlan(root_id=None)
+        locks: list[str] = []
 
         # Per component, even without edges: tags and isolation mode for every segment used and each edge target's (it
         # may belong to an application that has not run yet).
-        segments = self._used_segments(components, edges)
-        # A segment without an id is a component without one.
-        unique_segments = list({seg["id"]: seg for seg in segments if seg.get("id")}.values())
-
-        async def _tag_segment(seg: dict[str, Any]) -> None:
-            await asyncio.gather(
-                ensure_segment_tag(self.client, self.resource_lock, segment=seg),
-                ensure_segment_routing_tag(self.client, segment=seg),
-            )
-
-        if unique_segments:
-            await asyncio.gather(*(_tag_segment(seg) for seg in unique_segments))
-        await asyncio.gather(
-            *(
-                self._ensure_segment_isolation_mode(comp.get("network_segment") or {}, app_security_profile)
-                for comp in components
-            )
-        )
+        self._plan_routing_tags(plan, segments)
+        for component in components:
+            self._plan_isolation_mode(plan, component.get("network_segment") or {}, app_security_profile)
         # An edge target on those segments is a second dict of it; the rules below read its mode
         modes = {
             segment["id"]: segment.get("isolation_mode")
@@ -191,179 +196,277 @@ class AppApplicationGenerator(
         for segment in segments:
             if segment.get("id") in modes:
                 segment["isolation_mode"] = modes[segment["id"]]
-        # After the isolation modes and before the rules, which carry the component tags
-        await self._ensure_component_tags(components, edges)
+        # After the isolation modes (microsegmentation is decided from them) and before the rules, which carry the tags
+        callers = await self._plan_tags(plan, segments, components, edges, locks)
 
-        # After the tags (R_server carries the backend's) and before the rules (R_client reads the VIPs); errors fail
-        # the run last
-        rule_indexes: dict[str, set[int]] = {}
-        lb_vips, lb_errors = await self._reconcile_load_balancing(
-            components, edges, rule_indexes, security_profile=app_security_profile
-        )
+        # Before the rules (R_client reads the VIPs); its errors fail the run
+        await await_lb_inputs(self, components, edges)
+        balancing = plan_load_balancing(plan, components, edges, security_profile=app_security_profile)
+        locks.extend(balancing.locks)
+        requests = list(balancing.requests)
 
         # Access-profile grants hang off the target component, so publish them with or without edges
-        rules_created, rules_skipped = await self._reconcile_private_access_components(app_name, components)
-
-        if not edges:
+        proxy_requests, rules_skipped = private_access_requests(self.logger, app_name, components)
+        if edges:
+            self.logger.info("Found %d dependency edge(s) for %s", len(edges), app_name)
+        else:
             self.logger.info("Application %s has no depends_on edges - no rules to generate", app_name)
-            self._fail_on_lb_errors(app_name, lb_errors)
+        for src_comp, dep, dst_comp in edges:
+            skipped = self._plan_dependency(
+                app_name,
+                app_security_profile,
+                planner,
+                (src_comp, dep, dst_comp),
+                balancing,
+                requests,
+                proxy_requests,
+            )
+            rules_skipped += skipped
+        if balancing.errors:
+            self.fail(f"Application {app_name}: load balancing: {'; '.join(balancing.errors)}")
+
+        locks.extend(request.policy.lock for request in requests)
+        locks.extend(proxy_lock_keys(proxy_requests))
+        async with self.plan_locks(*locks):
+            facts = await read_policy_facts(
+                self.client,
+                [request.policy for request in requests],
+                sorted({name for request in requests if (name := request.profile_name)}),
+            )
+            try:
+                created, existing = plan_policy_rules(plan, facts, requests)
+            except ValueError as exc:
+                self.fail(f"Application {app_name}: {exc}")
+            proxy_planned, proxy_skipped = plan_proxy_rules(
+                plan, self.logger, proxy_requests, await read_proxy_facts(self.client, proxy_requests)
+            )
+            await self.apply_plan(plan)
+        self.logger.info(
+            "Application %s: %d rule(s) created, %d already existed, %d proxy rule(s), %d skipped",
+            app_name,
+            created,
+            existing,
+            proxy_planned,
+            rules_skipped + proxy_skipped,
+        )
+        # Rules from other applications carry the component's tag; a component tagged only now needs them to run again
+        if callers:
+            self.logger.info("  Re-reconciling %d calling application(s) of newly tagged components", len(callers))
+            await self._fan_out(sorted(callers))
+
+    def _plan_dependency(
+        self,
+        app_name: str,
+        app_security_profile: str,
+        planner: RulesPlanner,
+        edge: Edge,
+        balancing: LoadBalancing,
+        requests: list[RuleRequest],
+        proxy_requests: list[ProxyRuleRequest],
+    ) -> int:
+        """The rule requests of one dependency edge, one per port (and per VIP of a load-balanced target); returns how
+        many were skipped.
+        """
+        src_comp, dep, dst_comp = edge
+        dep_ref = dep.get("name", dep.get("id", "?"))
+        authorized, auth_reason = planner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+        if not authorized:
+            self.logger.warning(
+                "  Dependency '%s' (%s -> %s) is not authorized: %s",
+                dep_ref,
+                src_comp.get("name", "?"),
+                dst_comp.get("name") or dep.get("target_fqdn") or "?",
+                auth_reason or "missing approval",
+            )
+            return 1
+
+        if dep.get("target_fqdn"):
+            request = egress_request(self.logger, app_name, src_comp, dep)
+            if request is None:
+                return 1
+            proxy_requests.append(request)
+            return 0
+
+        try:
+            ports = PortProfileHelper.resolve_dependency_ports(dep, dst_comp)
+        except ValueError as exc:
+            self.logger.warning("  Dependency '%s': %s - skipping rule creation", dep_ref, exc)
+            return 1
+        if not ports:
+            self.logger.warning(
+                "  Dependency '%s' (%s -> %s) has no ports and its target lists none - skipping rule creation",
+                dep_ref,
+                src_comp.get("name", "?"),
+                dst_comp.get("name", "?"),
+            )
+            return 1
+
+        # Strict load balancing: on-prem load_balanced targets are reached through VIPs only; a cloud one keeps the
+        # direct rule
+        strict = dst_comp.get("load_balanced") and not is_cloud_component(dst_comp)
+        target_vips = balancing.vips.get(dst_comp.get("id") or "", {}) if strict else None
+        skipped = 0
+        for port in ports:
+            # One R_client per VIP (context) of the port; None is the direct rule.
+            vips: list[tuple[str, NodeRef] | None] = [None]
+            if target_vips is not None:
+                vips = list((target_vips.get(port) or {}).items())
+                if not vips:
+                    balancing.errors.append(
+                        f"dependency '{dep_ref}': load-balanced target {dst_comp.get('fqdn', '?')} has no VIP "
+                        f"on {PortProfileHelper.format_port_spec(port)}"
+                    )
+                    skipped += 1
+                    continue
+            for vip in vips:
+                request = self._segment_rule_request(
+                    app_name, app_security_profile, planner, (src_comp, dep, dst_comp), port, vip
+                )
+                if request is None:
+                    skipped += 1
+                else:
+                    requests.append(request)
+        return skipped
+
+    def _segment_rule_request(
+        self,
+        app_name: str,
+        app_security_profile: str,
+        planner: RulesPlanner,
+        edge: Edge,
+        port: PortSpec,
+        vip: tuple[str, NodeRef] | None,
+    ) -> RuleRequest | None:
+        """Segment-to-segment dependency rule for one edge and port, or None (warned) without both segments; ``vip``
+        makes it R_client.
+        """
+        src_comp, dep, dst_comp = edge
+        src_seg = src_comp.get("network_segment") or {}
+        dst_seg = dst_comp.get("network_segment") or {}
+        src_seg_id = src_seg.get("id")
+        if not src_seg_id or not dst_seg.get("id") or not str(src_seg.get("name") or src_seg_id):
+            self.logger.warning(
+                "Dependency %s -> %s: one or both components lack a network_segment - skipping",
+                src_comp.get("name", "?"),
+                dst_comp.get("name", "?"),
+            )
+            return None
+
+        rule_name = planner.rule_name(app_name, src_comp, dst_comp, dep, port)
+        if vip:
+            # Own name per VIP, so a target turning load-balanced gets new rules and tracking deletes the old
+            rule_name = f"{rule_name}-vip-{planner.name_part(vip[0])}"
+        protocol, port_start, port_end = port
+
+        src_zone, dst_zone, cross_zone = planner.zone_context(src_seg=src_seg, dst_seg=dst_seg)
+        if src_zone is None or dst_zone is None:
+            cross_zone = True
+            self.logger.warning(
+                "  Dependency '%s' has incomplete zone mapping (%s -> %s); treating as cross-zone",
+                dep.get("name", dep.get("id", "?")),
+                src_zone or "<missing>",
+                dst_zone or "<missing>",
+            )
+        payload = planner.build_rule_payload(
+            rule_name=rule_name,
+            dep=dep,
+            src_comp=src_comp,
+            dst_comp=dst_comp,
+            src_seg=src_seg,
+            dst_seg=dst_seg,
+            protocol=protocol,
+            port_start=port_start,
+            port_end=port_end,
+            cross_zone=cross_zone,
+            vip_id=vip[1] if vip else None,
+        )
+        return RuleRequest(
+            segment_policy_target(src_seg),
+            rule_name,
+            payload,
+            planner.pick_profile_name(app_security_profile, cross_zone),
+        )
+
+    def _plan_routing_tags(self, plan: TopologyPlan, segments: list[dict[str, Any]]) -> None:
+        """The routing tag of every routed tenant segment that has none, once per segment."""
+        drawn: set[str] = set()
+        for segment in segments:
+            # A segment without an id is a component without one
+            if segment.get("id") and segment["id"] not in drawn and (spec := segment_routing_tag_spec(segment)):
+                drawn.add(segment["id"])
+                plan.add(spec)
+
+    def _plan_isolation_mode(self, plan: TopologyPlan, segment: dict[str, Any], app_security_profile: str) -> None:
+        """Derive a segment's isolation_mode from its application's security_profile; an author-set non-default is kept,
+        cloud segments skipped. The mode is recorded in the dict so this run's tags and rules use it.
+        """
+        seg_id = segment.get("id")
+        seg_typename = segment.get("typename")
+        if not seg_id or not seg_typename or seg_typename == "CloudNetworkSegment":
             return
 
-        self.logger.info("Found %d dependency edge(s) for %s", len(edges), app_name)
+        current = segment.get("isolation_mode")
+        derived = RulesPlanner.pick_isolation_mode(app_security_profile)
+        if (current and current != "normal") or current == derived:
+            return
+        key = f"isolation-{seg_id}"
+        if not any(isinstance(spec, NodeSpec) and spec.key == key for spec in plan.specs):
+            plan.add(NodeSpec(key, seg_typename, {"id": seg_id, "isolation_mode": derived}, ownership="shared"))
+            self.logger.info("  Derived isolation_mode '%s' for segment %s", derived, segment.get("name", seg_id))
+        segment["isolation_mode"] = derived
 
-        segment_policies: dict[str, Any] = {}
-        proxy_policies: dict[str, str] = {}
-
-        rules_failed = 0
-        for src_comp, dep, dst_comp in edges:
-            dep_ref = dep.get("name", dep.get("id", "?"))
-            authorized, auth_reason = planner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
-            if not authorized:
-                self.logger.warning(
-                    "  Dependency '%s' (%s -> %s) is not authorized: %s",
-                    dep_ref,
-                    src_comp.get("name", "?"),
-                    dst_comp.get("name") or dep.get("target_fqdn") or "?",
-                    auth_reason or "missing approval",
-                )
-                rules_skipped += 1
-                continue
-
-            if dep.get("target_fqdn"):
-                if await self._reconcile_proxy_rule(
-                    app_name=app_name,
-                    src_comp=src_comp,
-                    dep=dep,
-                    proxy_policies=proxy_policies,
-                ):
-                    rules_created += 1
-                else:
-                    rules_skipped += 1
-                continue
-
-            try:
-                ports = PortProfileHelper.resolve_dependency_ports(dep, dst_comp)
-            except ValueError as exc:
-                self.logger.warning("  Dependency '%s': %s - skipping rule creation", dep_ref, exc)
-                rules_skipped += 1
-                continue
-            if not ports:
-                self.logger.warning(
-                    "  Dependency '%s' (%s -> %s) has no ports and its target lists none - skipping rule creation",
-                    dep_ref,
-                    src_comp.get("name", "?"),
-                    dst_comp.get("name", "?"),
-                )
-                rules_skipped += 1
-                continue
-
-            src_seg = src_comp.get("network_segment") or {}
-            dst_seg = dst_comp.get("network_segment") or {}
-            # Strict load balancing: on-prem load_balanced targets are reached through VIPs only; a cloud one keeps the
-            # direct rule
-            strict = dst_comp.get("load_balanced") and not is_cloud_component(dst_comp)
-            target_vips = lb_vips.get(dst_comp.get("id") or "", {}) if strict else None
-
-            for port in ports:
-                # One R_client per VIP (context) of the port; None is the direct rule.
-                vips: list[tuple[str, str] | None] = [None]
-                if target_vips is not None:
-                    vips = list((target_vips.get(port) or {}).items())
-                    if not vips:
-                        lb_errors.append(
-                            f"dependency '{dep_ref}': load-balanced target {dst_comp.get('fqdn', '?')} has no VIP "
-                            f"on {PortProfileHelper.format_port_spec(port)}"
-                        )
-                        rules_skipped += 1
-                        continue
-                for vip in vips:
-                    try:
-                        created, skipped = await self._reconcile_segment_rule(
-                            app_name=app_name,
-                            app_security_profile=app_security_profile,
-                            src_comp=src_comp,
-                            dst_comp=dst_comp,
-                            dep=dep,
-                            src_seg=src_seg,
-                            dst_seg=dst_seg,
-                            planner=planner,
-                            segment_policies=segment_policies,
-                            rule_indexes=rule_indexes,
-                            port=port,
-                            vip=vip,
-                        )
-                    except Exception as exc:
-                        rules_failed += 1
-                        self.logger.error("  Dependency '%s' %s: rule failed: %s", dep_ref, port, exc)
-                        continue
-                    rules_created += int(created)
-                    rules_skipped += int(skipped)
-
-        self.logger.info(
-            "Application %s: %d rule(s) created, %d already existed, %d failed",
-            app_name,
-            rules_created,
-            rules_skipped,
-            rules_failed,
-        )
-        self._fail_on_lb_errors(app_name, lb_errors)
-        if rules_failed:
-            raise RuntimeError(f"Application {app_name}: {rules_failed} rule(s) failed")
-
-    def _fail_on_lb_errors(self, app_name: str, errors: list[str]) -> None:
-        """Fail the run with every load balancing error at once; a failed run keeps its tracking group as is."""
-        if errors:
-            self.fail(f"Application {app_name}: load balancing: {'; '.join(errors)}")
-
-    async def _ensure_component_tags(
+    async def _plan_tags(
         self,
+        plan: TopologyPlan,
+        segments: list[dict[str, Any]],
         components: list[dict[str, Any]],
-        edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
-    ) -> None:
-        """Tag every component of a microsegmented segment and record the tag on the dicts. Own components get the tag
-        (one with a tag elsewhere loses it), edge targets are tagged too, and other applications calling a newly tagged
-        component are reconciled again.
+        edges: list[Edge],
+        locks: list[str],
+    ) -> set[str]:
+        """Tag every routed tenant segment, and every component of a microsegmented segment (own components, and edge
+        targets), recording the tag on the dicts for the rules. An own component with a tag elsewhere loses it. The tags
+        are written under ``locks`` (added to); returns the other applications calling a component tagged only now,
+        which are reconciled again after the write.
         """
         microsegmented = {
             segment["id"]
             for component in components
             if (segment := component.get("network_segment") or {}).get("id") and is_microsegmented(segment)
         }
-        targets = [dst for _src, _dep, dst in edges if dst.get("id")]
         own = {id(component) for component in components}
-        tag_ids: dict[str, str] = {}
+        targets = [target for segment in segments if segment.get("id") and (target := segment_target(segment))]
+        seen: set[str] = set()
         callers: set[str] = set()
-        unique_components: list[dict[str, Any]] = []
-        seen_comp_ids: set[str] = set()
-        for component in [*components, *targets]:
-            cid = component.get("id")
-            if cid and cid not in seen_comp_ids:
-                seen_comp_ids.add(cid)
-                unique_components.append(component)
-
-        async def _sync_comp_tag(component: dict[str, Any]) -> None:
-            component_id = component["id"]
+        for component in [*components, *(dst for _src, _dep, dst in edges if dst.get("id"))]:
+            component_id = component.get("id")
+            if not component_id or component_id in seen:
+                continue
+            seen.add(component_id)
             if (component.get("network_segment") or {}).get("id") in microsegmented:
-                untagged = not (component.get("security_tag") or {}).get("id")
-                tag_ids[component_id] = await ensure_security_tag(
-                    self.client, self.resource_lock, kind=AppComponent, node=component, name=component.get("fqdn")
-                )
-                if untagged and id(component) in own:
+                if not (component.get("security_tag") or {}).get("id") and id(component) in own:
                     callers.update(self._calling_application_ids(component))
+                targets.append(component_target(component))
             elif id(component) in own and (component.get("security_tag") or {}).get("id"):
-                await clear_component_tag(self.client, component_id=component_id)
+                plan_clear_component_tag(plan, component_id)
                 component["security_tag"] = None
                 self.logger.info("  Component %s left its microsegmented segment - tag detached", component_id)
-
-        if unique_components:
-            await asyncio.gather(*(_sync_comp_tag(comp) for comp in unique_components))
-        for component in [*components, *targets]:
-            if component.get("id") in tag_ids:
-                component["security_tag"] = {"id": tag_ids[component["id"]]}
-        # Rules from other applications carry the component's tag; a component tagged only now needs them to run again
-        if callers:
-            self.logger.info("  Re-reconciling %d calling application(s) of newly tagged components", len(callers))
-            await self._fan_out(sorted(callers))
+        if any(not (target.node.get("security_tag") or {}).get("id") for target in targets):
+            locks.extend(
+                tag_lock_keys(
+                    target.name for target in targets if not (target.node.get("security_tag") or {}).get("id")
+                )
+            )
+            plan_security_tags(plan, targets, await read_tag_pool(self.client))
+        # A second dict of a component (an edge target of the application) carries the tag as well
+        tagged = {
+            target.node["id"]: target.node["security_tag"]
+            for target in targets
+            if target.kind is AppComponent and target.node.get("security_tag")
+        }
+        for component in [*components, *(dst for _src, _dep, dst in edges)]:
+            if component.get("id") in tagged:
+                component["security_tag"] = tagged[component["id"]]
+        return callers
 
     @staticmethod
     def _calling_application_ids(component: dict[str, Any]) -> list[str]:

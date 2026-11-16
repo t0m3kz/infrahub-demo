@@ -36,7 +36,84 @@ query bgp_expectations {
               name {
                 value
               }
-              ...InterfaceRoutingZoneFields
+              ... on DcimInterface {
+                zone_capabilities: capabilities {
+                  edges {
+                    node {
+                      __typename
+                      ... on ManagedVRF {
+                        id
+                        deployment {
+                          node {
+                            id
+                            name {
+                              value
+                            }
+                          }
+                        }
+                        security_zone {
+                          node {
+                            ... on SecurityZone {
+                              id
+                              name {
+                                value
+                              }
+                              vrf_type {
+                                value
+                              }
+                              l3_vni {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                      ... on TopologySessionCircuit {
+                        circuit_type {
+                          value
+                        }
+                        vrf {
+                          node {
+                            ... on ManagedVRF {
+                              id
+                              deployment {
+                                node {
+                                  id
+                                  name {
+                                    value
+                                  }
+                                }
+                              }
+                              security_zone {
+                                node {
+                                  ... on SecurityZone {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                    vrf_type {
+                                      value
+                                    }
+                                    l3_vni {
+                                      value
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      ... on ManagedSegmentVlan {
+                        id
+                        vlan_id {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+              }
               ... on DcimPhysicalInterface {
                 ip_address {
                   node {
@@ -134,7 +211,12 @@ query bgp_expectations {
         ... on DcimPhysicalDevice {
           deployment {
             node {
-              ...EvpnRtAsOnDeploymentFields
+              ... on TopologyDeployment {
+                ...bgp_expectations__F1
+                ...bgp_expectations__F2
+                ...bgp_expectations__F3
+                ...bgp_expectations__F4
+              }
             }
           }
         }
@@ -146,7 +228,18 @@ query bgp_expectations {
                 ... on ManagedVRF {
                   security_zone {
                     node {
-                      ...RoutingZoneFields
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
                     }
                   }
                 }
@@ -164,7 +257,84 @@ query bgp_expectations {
                 role {
                   value
                 }
-                ...InterfaceRoutingZoneFields
+                ... on DcimInterface {
+                  zone_capabilities: capabilities {
+                    edges {
+                      node {
+                        __typename
+                        ... on ManagedVRF {
+                          id
+                          deployment {
+                            node {
+                              id
+                              name {
+                                value
+                              }
+                            }
+                          }
+                          security_zone {
+                            node {
+                              ... on SecurityZone {
+                                id
+                                name {
+                                  value
+                                }
+                                vrf_type {
+                                  value
+                                }
+                                l3_vni {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                        ... on TopologySessionCircuit {
+                          circuit_type {
+                            value
+                          }
+                          vrf {
+                            node {
+                              ... on ManagedVRF {
+                                id
+                                deployment {
+                                  node {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                  }
+                                }
+                                security_zone {
+                                  node {
+                                    ... on SecurityZone {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      vrf_type {
+                                        value
+                                      }
+                                      l3_vni {
+                                        value
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                        ... on ManagedSegmentVlan {
+                          id
+                          vlan_id {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
                 ... on DcimPhysicalInterface {
                   ip_address {
                     node {
@@ -207,7 +377,84 @@ query bgp_expectations {
   DcimVirtualInterface(role__value: "multisite-vip") {
     edges {
       node {
-        ...InterfaceRoutingZoneFields
+        ... on DcimInterface {
+          zone_capabilities: capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedVRF {
+                  id
+                  deployment {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                    }
+                  }
+                  security_zone {
+                    node {
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on TopologySessionCircuit {
+                  circuit_type {
+                    value
+                  }
+                  vrf {
+                    node {
+                      ... on ManagedVRF {
+                        id
+                        deployment {
+                          node {
+                            id
+                            name {
+                              value
+                            }
+                          }
+                        }
+                        security_zone {
+                          node {
+                            ... on SecurityZone {
+                              id
+                              name {
+                                value
+                              }
+                              vrf_type {
+                                value
+                              }
+                              l3_vni {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on ManagedSegmentVlan {
+                  id
+                  vlan_id {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
         ip_address {
           node {
             address {
@@ -231,7 +478,84 @@ query bgp_expectations {
                   role {
                     value
                   }
-                  ...InterfaceRoutingZoneFields
+                  ... on DcimInterface {
+                    zone_capabilities: capabilities {
+                      edges {
+                        node {
+                          __typename
+                          ... on ManagedVRF {
+                            id
+                            deployment {
+                              node {
+                                id
+                                name {
+                                  value
+                                }
+                              }
+                            }
+                            security_zone {
+                              node {
+                                ... on SecurityZone {
+                                  id
+                                  name {
+                                    value
+                                  }
+                                  vrf_type {
+                                    value
+                                  }
+                                  l3_vni {
+                                    value
+                                  }
+                                }
+                              }
+                            }
+                          }
+                          ... on TopologySessionCircuit {
+                            circuit_type {
+                              value
+                            }
+                            vrf {
+                              node {
+                                ... on ManagedVRF {
+                                  id
+                                  deployment {
+                                    node {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                    }
+                                  }
+                                  security_zone {
+                                    node {
+                                      ... on SecurityZone {
+                                        id
+                                        name {
+                                          value
+                                        }
+                                        vrf_type {
+                                          value
+                                        }
+                                        l3_vni {
+                                          value
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                          ... on ManagedSegmentVlan {
+                            id
+                            vlan_id {
+                              value
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                   ... on DcimVirtualInterface {
                     ip_address {
                       node {
@@ -261,7 +585,256 @@ query bgp_expectations {
   environment_zones: SecurityZone {
     edges {
       node {
-        ...EnvironmentRoutingZoneFields
+        ... on SecurityZone {
+          ...bgp_expectations__F5
+          network_segments {
+            edges {
+              node {
+                ... on ManagedNetworkSegment {
+                  security_zone {
+                    node {
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
+                    }
+                  }
+                  gateway {
+                    node {
+                      ip_prefix {
+                        node {
+                          id
+                          prefix {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          vrfs {
+            edges {
+              node {
+                ... on ManagedVRF {
+                  id
+                  deployment {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                    }
+                  }
+                  security_zone {
+                    node {
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+                session_circuits {
+                  edges {
+                    node {
+                      name {
+                        value
+                      }
+                      vrf {
+                        node {
+                          ... on ManagedVRF {
+                            id
+                            deployment {
+                              node {
+                                id
+                                name {
+                                  value
+                                }
+                              }
+                            }
+                            security_zone {
+                              node {
+                                ... on SecurityZone {
+                                  id
+                                  name {
+                                    value
+                                  }
+                                  vrf_type {
+                                    value
+                                  }
+                                  l3_vni {
+                                    value
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      link_prefix {
+                        node {
+                          id
+                          prefix {
+                            value
+                          }
+                        }
+                      }
+                      registered_prefixes {
+                        edges {
+                          node {
+                            id
+                            prefix {
+                              value
+                            }
+                          }
+                        }
+                      }
+                      originated_prefixes {
+                        edges {
+                          node {
+                            id
+                            prefix {
+                              value
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                capabilities {
+                  edges {
+                    node {
+                      ... on DcimInterface {
+                        zone_capabilities: capabilities {
+                          edges {
+                            node {
+                              __typename
+                              ... on ManagedVRF {
+                                id
+                                deployment {
+                                  node {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                  }
+                                }
+                                security_zone {
+                                  node {
+                                    ... on SecurityZone {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      vrf_type {
+                                        value
+                                      }
+                                      l3_vni {
+                                        value
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on TopologySessionCircuit {
+                                circuit_type {
+                                  value
+                                }
+                                vrf {
+                                  node {
+                                    ... on ManagedVRF {
+                                      id
+                                      deployment {
+                                        node {
+                                          id
+                                          name {
+                                            value
+                                          }
+                                        }
+                                      }
+                                      security_zone {
+                                        node {
+                                          ... on SecurityZone {
+                                            id
+                                            name {
+                                              value
+                                            }
+                                            vrf_type {
+                                              value
+                                            }
+                                            l3_vni {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on ManagedSegmentVlan {
+                                id
+                                vlan_id {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      ... on DcimHasIPAddress {
+                        ip_address {
+                          node {
+                            ip_prefix {
+                              node {
+                                id
+                                prefix {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      ... on CloudPeeringInterface {
+                        advertised_prefixes {
+                          edges {
+                            node {
+                              id
+                              prefix {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -270,7 +843,18 @@ query bgp_expectations {
       node {
         security_zone {
           node {
-            ...RoutingZoneFields
+            ... on SecurityZone {
+              id
+              name {
+                value
+              }
+              vrf_type {
+                value
+              }
+              l3_vni {
+                value
+              }
+            }
           }
         }
         shared_devices {
@@ -296,7 +880,18 @@ query bgp_expectations {
         id
         security_zone {
           node {
-            ...RoutingZoneFields
+            ... on SecurityZone {
+              id
+              name {
+                value
+              }
+              vrf_type {
+                value
+              }
+              l3_vni {
+                value
+              }
+            }
           }
         }
         gateway {
@@ -312,5 +907,220 @@ query bgp_expectations {
         }
       }
     }
+  }
+}
+
+fragment bgp_expectations__F1 on TopologySegmentHosting {
+  evpn_rt_as {
+    node {
+      asn {
+        value
+      }
+    }
+  }
+  evpn_anycast_gateway_mac {
+    value
+  }
+  routing_filter_enforce {
+    value
+  }
+  ... on TopologyDataCenter {
+    loopback_pool {
+      node {
+        resources {
+          edges {
+            node {
+              prefix {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ... on TopologyColocationMetro {
+    loopback_pool {
+      node {
+        resources {
+          edges {
+            node {
+              prefix {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment bgp_expectations__F2 on TopologyPod {
+  parent {
+    node {
+      ... on TopologySegmentHosting {
+        evpn_rt_as {
+          node {
+            asn {
+              value
+            }
+          }
+        }
+        evpn_anycast_gateway_mac {
+          value
+        }
+        routing_filter_enforce {
+          value
+        }
+        ... on TopologyDataCenter {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on TopologyColocationMetro {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment bgp_expectations__F3 on TopologyColocationZone {
+  parent {
+    node {
+      ... on TopologySegmentHosting {
+        evpn_rt_as {
+          node {
+            asn {
+              value
+            }
+          }
+        }
+        evpn_anycast_gateway_mac {
+          value
+        }
+        routing_filter_enforce {
+          value
+        }
+        ... on TopologyDataCenter {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on TopologyColocationMetro {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment bgp_expectations__F4 on TopologyVirtualColocation {
+  parent {
+    node {
+      ... on TopologySegmentHosting {
+        evpn_rt_as {
+          node {
+            asn {
+              value
+            }
+          }
+        }
+        evpn_anycast_gateway_mac {
+          value
+        }
+        routing_filter_enforce {
+          value
+        }
+        ... on TopologyDataCenter {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on TopologyColocationMetro {
+          loopback_pool {
+            node {
+              resources {
+                edges {
+                  node {
+                    prefix {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment bgp_expectations__F5 on SecurityZone {
+  id
+  name {
+    value
+  }
+  vrf_type {
+    value
+  }
+  l3_vni {
+    value
   }
 }

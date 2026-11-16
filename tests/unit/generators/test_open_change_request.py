@@ -10,12 +10,14 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 
+from generators.change import open_change_request as oc
 from generators.change.open_change_request import (
     OpenChangeRequestGenerator,
     change_request_name,
 )
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
 from tests.integration.demo_data import ROOT
+from utils.limits import PollPolicy
 
 BRANCH = "feat/leaf"
 
@@ -55,8 +57,10 @@ class FakeNode(SimpleNamespace):
 class FakeClient:
     """Answers filters/get/create/execute_graphql and records the writes."""
 
-    def __init__(self, existing: list[Any] | None = None) -> None:
+    def __init__(self, existing: list[Any] | None = None, polls: list[dict[str, Any] | None] | None = None) -> None:
         self.existing = existing or []
+        self.polls = list(polls or [])
+        self.polled = 0
         self.saved: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
         self.queries: list[tuple[dict[str, Any], str | None]] = []
         self.filters_calls: list[dict[str, Any]] = []
@@ -76,9 +80,23 @@ class FakeClient:
         return FakeNode(self, kind=kind, **fields)
 
     async def execute_graphql(self, query: str, variables: dict[str, Any], branch_name: str | None = None) -> Any:
-        """Record a generator run."""
+        """The validator re-read of the wait (the next of ``polls``), or record a generator run."""
+        if "open_change_request" in query:
+            self.polled += 1
+            row = self.polls.pop(0) if self.polls else None
+            return {"CoreArtifactValidator": {"edges": [{"node": row}] if row else []}}
         self.queries.append((variables, branch_name))
         return {"CoreGeneratorDefinitionRun": {"ok": True}}
+
+
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The wait polls without waiting."""
+
+    async def instant(_: float) -> None:
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", instant)
 
 
 def _run(client: FakeClient, row: dict[str, Any]) -> Any:
@@ -118,17 +136,63 @@ def test_an_existing_change_request_is_derived_again_without_a_new_comment() -> 
 
 @pytest.mark.parametrize(
     "row",
-    [validator_row(state="in_progress"), validator_row(pc_state="merged"), validator_row(branch=None)],
-    ids=["validator-running", "pc-not-open", "no-source-branch"],
+    [validator_row(pc_state="merged"), validator_row(branch=None), validator_row(state="unknown")],
+    ids=["pc-not-open", "no-source-branch", "other-terminal-state"],
 )
-def test_nothing_is_written_until_the_validator_completes_on_an_open_pc(row: dict[str, Any]) -> None:
-    """A running validator, a closed PC or no source branch: no lookup, no write, the target still tracked."""
+def test_nothing_is_written_for_a_closed_pc_no_branch_or_a_state_that_never_completes(row: dict[str, Any]) -> None:
+    """A closed PC, no source branch or a validator in no running state: no wait, no lookup, no write, the target still tracked."""
     client = FakeClient()
 
     _run(client, row)
 
     assert (client.saved, client.queries, client.filters_calls) == ([], [], [])
     assert client.group_context.related_node_ids == ["v1"]
+
+
+def test_a_running_validator_is_waited_for_then_acts() -> None:
+    """The group trigger starts the run when the validator is created: it polls its own validator until completed."""
+    client = FakeClient(polls=[validator_row(state="in_progress"), validator_row()])
+
+    _run(client, validator_row(state="queued"))
+
+    assert client.polled == 2
+    assert [kind for kind, _, _ in client.saved] == ["ChangeRequest"]
+    assert client.group_context.related_node_ids == ["v1"]
+
+
+def test_a_validator_that_never_completes_gives_up_without_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """After the wait policy's timeout the run logs a warning, writes nothing and does not fail; the target is tracked."""
+    monkeypatch.setattr(oc, "ARTIFACT_VALIDATOR_WAIT", PollPolicy(interval=3, timeout=9))
+    client = FakeClient(polls=[validator_row(state="in_progress")] * 10)
+
+    gen = _run(client, validator_row(state="in_progress"))
+
+    assert client.polled == 3
+    assert (client.saved, client.queries, client.filters_calls) == ([], [], [])
+    gen.logger.warning.assert_called_once()
+    assert client.group_context.related_node_ids == ["v1"]
+
+
+def test_a_validator_that_vanishes_or_ends_otherwise_while_waited_for_is_dropped() -> None:
+    """Deleted (no row) or another state on a re-read: nothing is written."""
+    for polls in ([], [validator_row(state="failed")], [validator_row(state="in_progress", pc_state="closed")]):
+        client = FakeClient(polls=list(polls))
+        _run(client, validator_row(state="in_progress"))
+        assert (client.saved, client.queries) == ([], [])
+        assert client.group_context.related_node_ids == ["v1"]
+
+
+def test_the_wait_has_a_policy_and_the_rule_is_a_group_trigger() -> None:
+    """The completed node rule is gone; joining artifact_validators on the default branch runs open_change_request."""
+    rules = yaml.safe_load((ROOT / "data" / "events" / "99_group_triggers.yml").read_text())["spec"]["data"]
+    (rule,) = [r for r in rules if r["group"] == "artifact_validators"]
+    assert (rule["member_update"], rule["action"], rule["branch_scope"]) == (
+        "added",
+        "run-open-change-request",
+        "default_branch",
+    )
+    nodes = yaml.safe_load((ROOT / "data" / "events" / "99_actions.yml").read_text())["spec"]["data"]
+    assert [r["name"] for r in nodes if r.get("action") == "run-open-change-request"] == []
 
 
 def test_only_the_last_artifact_validator_of_the_pc_acts() -> None:

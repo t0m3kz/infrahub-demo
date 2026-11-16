@@ -1,4 +1,4 @@
-"""Pure planning for the load balancer VIP producer (generators/lb_vip.py).
+"""Pure planning for the load balancer VIP producer (generators/applications/lb_vip.py).
 Inputs are cleaned application.gql data: a component with ``ports``, ``instances`` and ``network_segment``,
 whose footprints carry the ``serving_loadbalancer_context`` of each data center the segment is activated in."""
 

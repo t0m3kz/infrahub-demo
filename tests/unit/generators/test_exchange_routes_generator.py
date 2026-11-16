@@ -9,9 +9,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.connectivity.context_routes import ContextRoutesGenerator
-from generators.mixins.exchange_routes import route_name
+from generators.connectivity.exchange_routes import BorderDevice, plan_routes, route_name
+from generators.model.errors import GeneratorError
+from generators.plan import NodeSpec
 from tests.unit.encapsulation_helpers import raw_encapsulation
 from utils.exchange_transit import BORDER_ROLE_FOR_SERVICES
+
+pytestmark = pytest.mark.usefixtures("generator_steps")
 
 
 def _value(value: Any) -> dict[str, Any]:
@@ -152,7 +156,7 @@ def _loadbalancer(*, vip_prefix: str | None = "100.68.0.0/26") -> dict:
 
 def test_the_generator_has_the_lock_and_the_failure_helper_it_calls() -> None:
     """A real class, not a mock:"""
-    for attribute in ("resource_lock", "fail", "reconcile_vrfs", "write_routes"):
+    for attribute in ("resource_lock", "plan_locks", "fail", "apply_plan"):
         assert callable(getattr(ContextRoutesGenerator, attribute)), attribute
 
 
@@ -162,7 +166,8 @@ class _Gen(ContextRoutesGenerator):
     def __init__(self, devices: list[Any], vrf_namespaces: tuple[str, ...] = ("PROD", "INTERNET")) -> None:
         self.log = MagicMock()
         self.logger = self.log
-        self.client = MagicMock()
+        client: Any = MagicMock()
+        self.client = client
         self.saved: list[tuple[dict[str, Any], dict[str, Any]]] = []
         self.devices, self.vrf_namespaces = devices, vrf_namespaces
         self.vrfs = AsyncMock()
@@ -196,7 +201,7 @@ class _Gen(ContextRoutesGenerator):
             node.save = save
             return node
 
-        self.client.filters, self.client.create = filters, create
+        client.filters, client.create = filters, create
 
 
 def _device(device_id: str, role: str = "border-leaf") -> SimpleNamespace:
@@ -264,19 +269,22 @@ async def test_a_load_balancer_context_without_a_vip_prefix_writes_nothing() -> 
     assert gen.saved == []
 
 
-async def test_a_device_in_no_vrf_instance_fails_the_run() -> None:
-    """The instance follows the legs; a route with no VRF to sit in is reported, not skipped."""
-    gen = _Gen([_device("bl-1")], vrf_namespaces=())
-    await gen.generate(_firewall())
-    assert gen.saved == [] and gen.log.error.called
+async def test_a_device_in_no_vrf_instance_fails_the_run_before_any_write() -> None:
+    """The instance follows the legs; a route with no VRF to sit in is reported, not skipped, and none of the others is
+    written either.
+    """
+    gen = _Gen([_device("bl-1"), _device("bl-2")], vrf_namespaces=())
+    with pytest.raises(GeneratorError, match="bl-1 is in no VRF instance of PROD"):
+        await gen.generate(_firewall(ports=("bl-1", "bl-2")))
+    assert gen.saved == []
 
 
 async def test_a_failed_save_is_reported_with_the_route_name() -> None:
     """The error names the route and the device."""
     gen = _Gen([_device("bl-1")])
     gen.client.create = AsyncMock(side_effect=RuntimeError("boom"))
-    await gen.generate(_firewall())
-    assert "bl-1" in gen.log.error.call_args.args[0] and "rt:shared-fw-prod:bl-1" in gen.log.error.call_args.args[0]
+    with pytest.raises(GeneratorError, match="rt:shared-fw-prod:bl-1"):
+        await gen.generate(_firewall())
 
 
 async def test_a_response_without_a_context_fails() -> None:
@@ -285,3 +293,24 @@ async def test_a_response_without_a_context_fails() -> None:
     gen.fail = MagicMock(side_effect=RuntimeError("no context"))
     with pytest.raises(RuntimeError):
         await gen.generate({"ManagedFirewallContext": {"edges": []}, "ManagedLoadbalancerContext": {"edges": []}})
+
+
+def test_a_route_listed_twice_is_one_upsert_and_the_later_spec_wins() -> None:
+    """The same route name twice for a device is one node of the plan, with the later spec's values, as sequential
+    upserts did. The plan rejects a node declared twice; the dc6 contexts list the default route of a namespace more
+    than once.
+    """
+    first = {"namespace": "PROD", "prefix": "0.0.0.0/0", "nexthop": "100.66.0.4", "local_only": False}
+    later = {**first, "nexthop": "100.66.0.8"}
+
+    plan = plan_routes(
+        context_name="ctx",
+        devices=[BorderDevice("bl-1", "bl-1", False)],
+        instances={("bl-1", "PROD"): "vrf-1"},
+        specs_for={False: [first, later], True: []},
+        leg_interfaces={},
+    )
+
+    assert [(spec.data["prefix"], spec.data["next_hop"], spec.tracked) for spec in plan.of(NodeSpec)] == [
+        ("0.0.0.0/0", "100.66.0.8", True)
+    ]

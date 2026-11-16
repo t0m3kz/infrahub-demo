@@ -5,7 +5,7 @@
 # computed: {OWNER}-OFFICE (C900-OFFICE). Its devices are hand-written: the SD-WAN branch edge
 # (20_C900/Office/03_edge.yml,
 # `bcn-office-edge-01` as add_sdwan_edge would name it) and the campus below it (05_switches_and_aps.yml); nothing is
-# generated for it (no `member_of_groups`, no `sdwan_gateway`).
+# generated for it (no `member_of_groups`, no `sdwan_gateways`).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

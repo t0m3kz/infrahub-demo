@@ -5,9 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.fabric.rack import RackGenerator, TopologyRackData
+from generators.dc.rack import RackGenerator
+from generators.dc.rack_data import TopologyRackData
+from generators.dc.rack_support import spine_bgp_readiness_role
 from generators.helpers.rack import RackRolesHelper, pod_row_racks
-from generators.mixins.rack import spine_bgp_readiness_role
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 
 
@@ -61,6 +62,8 @@ def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mix
     }
 
     gen = RackGenerator.__new__(RackGenerator)
+
+    gen._controllers = []
     gen.data = cast(TopologyRackData, rack)
     gen.logger = MagicMock()
     gen.client = MagicMock()
@@ -82,7 +85,6 @@ def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mix
     gen._p2p_prefix_length = 31
     gen._routing_options = {"design": object(), "asn_pool": "asn-pool"}
     gen._created_device_names = set()
-    gen._leaf_row_cache = None
 
     return gen
 
@@ -109,15 +111,6 @@ class TestRackRolesHelper:
         assert with_loopback["loopback_pool"] == "lo-pool"
         assert with_loopback["loopback_prefix_length"] == 32
         assert without_loopback["allocate_loopback"] is False
-
-    def test_overlay_only_routing_options(self) -> None:
-        """border_leafs_per_rack() was deleted along with border-leaf's rack-level generation"""
-        gen = _build_gen()
-        helper = RackRolesHelper(gen)
-
-        overlay = helper.overlay_only_routing_options()
-        assert overlay["skip_underlay"] is True
-        assert "skip_underlay" not in gen._routing_options
 
 
 def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None) -> MagicMock:
@@ -169,7 +162,7 @@ class TestRackMixinAdditional:
         gen = _build_gen()
         gen.data["deployment"]["loopback_pool"] = None
         gen.client.get = AsyncMock(return_value=_mock_pod_pools(loopback_id=None, prefix_id=None))
-        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.dc.rack.asyncio.sleep", AsyncMock())
 
         with pytest.raises(RuntimeError, match="loopback_pool"):
             await gen._prepare_generation_context()
@@ -189,7 +182,7 @@ class TestRackMixinAdditional:
             ]
         )
         sleep_mock = AsyncMock()
-        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", sleep_mock)
+        monkeypatch.setattr("generators.dc.rack.asyncio.sleep", sleep_mock)
 
         await gen._prepare_generation_context()
 
@@ -214,7 +207,7 @@ class TestRackMixinAdditional:
         )
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value={"TopologyPod": []})
         sleep_mock = AsyncMock()
-        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", sleep_mock)
+        monkeypatch.setattr("generators.dc.rack.asyncio.sleep", sleep_mock)
 
         await gen._prepare_generation_context()
 
@@ -246,7 +239,7 @@ class TestRackMixinAdditional:
             TopologyDataCenter=[_mock_dc_pool(asn_id=None), _mock_dc_pool(asn_id="asn-pool-late")]
         )
         sleep_mock = AsyncMock()
-        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", sleep_mock)
+        monkeypatch.setattr("generators.dc.rack.asyncio.sleep", sleep_mock)
 
         await gen._prepare_generation_context()
 
@@ -267,7 +260,7 @@ class TestRackMixinAdditional:
             TopologyPod=_mock_pod_pools(loopback_id="lo-pool-late", prefix_id="p2p-pool"),
             TopologyDataCenter=_mock_dc_pool(asn_id="asn-pool-late"),
         )
-        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.dc.rack.asyncio.sleep", AsyncMock())
 
         await gen._prepare_generation_context()
 
@@ -298,7 +291,7 @@ class TestRackMixinAdditional:
         gen = _build_gen()
         gen.data["deployment"]["parent"]["fabric_asn_pool"] = None
         gen.client.get = _kind_dispatch(TopologyDataCenter=_mock_dc_pool(asn_id=None))
-        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.dc.rack.asyncio.sleep", AsyncMock())
 
         with pytest.raises(RuntimeError, match="dc.fabric_asn_pool") as excinfo:
             await gen._prepare_generation_context()
@@ -315,7 +308,7 @@ class TestRackMixinAdditional:
         gen = _build_gen()
         gen.data["deployment"]["loopback_pool"] = None
         gen.client.get = _kind_dispatch(TopologyPod=_mock_pod_pools(loopback_id=None, prefix_id="p2p-pool"))
-        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.dc.rack.asyncio.sleep", AsyncMock())
 
         with pytest.raises(RuntimeError, match="pod.loopback_pool") as excinfo:
             await gen._prepare_generation_context()

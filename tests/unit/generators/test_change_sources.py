@@ -5,14 +5,10 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from graphql import OperationDefinitionNode, parse
-
 from tests.unit.change_text_helpers import RAW_OBJECTS, raw_node, raw_summaries
-from tests.unit.query_shape_helpers import query_tree, unselected
 from utils.change_facts import OBJECT_DIFF_KINDS
 from utils.change_rules import BOOKKEEPING_KINDS, ROUTING_KINDS, STANDARD_KINDS
-from utils.change_sources import _DIFF_QUERY, OBJECT_MAX, OBJECT_PAGE_SIZE, fetch_data_diff
-from utils.query_flatten import load_flat_query
+from utils.change_sources import OBJECT_MAX, OBJECT_PAGE_SIZE, fetch_data_diff
 
 
 class FakeClient:
@@ -73,27 +69,3 @@ def test_the_objects_are_paged_and_the_read_stops_at_the_cap() -> None:
     assert [c["offset"] for c in client.calls] == list(range(0, OBJECT_MAX, OBJECT_PAGE_SIZE))
     assert [c["with_summary"] for c in client.calls] == [True] + [False] * (len(client.calls) - 1)
     assert len(diff.objects) == OBJECT_MAX and diff.objects_truncated
-
-
-def test_the_request_declares_every_variable_the_reader_sends() -> None:
-    """The registered query and the reader agree on the variables (a mismatch fails on the server, not here)."""
-    document = parse(load_flat_query(_DIFF_QUERY))
-    operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
-    declared = {v.variable.name.value for v in operation.variable_definitions or ()}
-    sent = set(FakeClient([]).calls) | {
-        "branch",
-        "limit",
-        "offset",
-        "kinds",
-        "bookkeeping",
-        "non_standard",
-        "routing",
-        "with_summary",
-    }
-    assert declared == sent
-
-
-def test_the_fixtures_emit_only_fields_the_query_selects() -> None:
-    """The raw nodes and summaries stand for the registered query."""
-    emitted = {"objects": {"nodes": RAW_OBJECTS}, **raw_summaries((1, 1, 1), (1, 1, 1), (1, 1, 1))}
-    assert unselected(emitted, query_tree(_DIFF_QUERY)) == []

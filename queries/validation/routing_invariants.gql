@@ -18,7 +18,84 @@ query routing_invariants {
   InternetPhysicalInterfaces: DcimPhysicalInterface {
     edges {
       node {
-        ...InterfaceRoutingZoneFields
+        ... on DcimInterface {
+          zone_capabilities: capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedVRF {
+                  id
+                  deployment {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                    }
+                  }
+                  security_zone {
+                    node {
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on TopologySessionCircuit {
+                  circuit_type {
+                    value
+                  }
+                  vrf {
+                    node {
+                      ... on ManagedVRF {
+                        id
+                        deployment {
+                          node {
+                            id
+                            name {
+                              value
+                            }
+                          }
+                        }
+                        security_zone {
+                          node {
+                            ... on SecurityZone {
+                              id
+                              name {
+                                value
+                              }
+                              vrf_type {
+                                value
+                              }
+                              l3_vni {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on ManagedSegmentVlan {
+                  id
+                  vlan_id {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
         __typename
         id
         name {
@@ -61,7 +138,84 @@ query routing_invariants {
   InternetVirtualInterfaces: DcimVirtualInterface {
     edges {
       node {
-        ...InterfaceRoutingZoneFields
+        ... on DcimInterface {
+          zone_capabilities: capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedVRF {
+                  id
+                  deployment {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                    }
+                  }
+                  security_zone {
+                    node {
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on TopologySessionCircuit {
+                  circuit_type {
+                    value
+                  }
+                  vrf {
+                    node {
+                      ... on ManagedVRF {
+                        id
+                        deployment {
+                          node {
+                            id
+                            name {
+                              value
+                            }
+                          }
+                        }
+                        security_zone {
+                          node {
+                            ... on SecurityZone {
+                              id
+                              name {
+                                value
+                              }
+                              vrf_type {
+                                value
+                              }
+                              l3_vni {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on ManagedSegmentVlan {
+                  id
+                  vlan_id {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
         __typename
         id
         name {
@@ -104,7 +258,84 @@ query routing_invariants {
   InternetLagInterfaces: DcimLAGInterface {
     edges {
       node {
-        ...InterfaceRoutingZoneFields
+        ... on DcimInterface {
+          zone_capabilities: capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedVRF {
+                  id
+                  deployment {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                    }
+                  }
+                  security_zone {
+                    node {
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on TopologySessionCircuit {
+                  circuit_type {
+                    value
+                  }
+                  vrf {
+                    node {
+                      ... on ManagedVRF {
+                        id
+                        deployment {
+                          node {
+                            id
+                            name {
+                              value
+                            }
+                          }
+                        }
+                        security_zone {
+                          node {
+                            ... on SecurityZone {
+                              id
+                              name {
+                                value
+                              }
+                              vrf_type {
+                                value
+                              }
+                              l3_vni {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on ManagedSegmentVlan {
+                  id
+                  vlan_id {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
         __typename
         id
         name {
@@ -149,7 +380,18 @@ query routing_invariants {
       node {
         security_zone {
           node {
-            ...RoutingZoneFields
+            ... on SecurityZone {
+              id
+              name {
+                value
+              }
+              vrf_type {
+                value
+              }
+              l3_vni {
+                value
+              }
+            }
           }
         }
         __typename
@@ -243,27 +485,132 @@ query routing_invariants {
   TopologyCustomerOffice {
     edges {
       node {
-        sdwan_gateway {
-          node {
-            name {
-              value
-            }
-            ... on DcimDevice {
-              interfaces {
-                edges {
-                  node {
-                    ...InterfaceRoutingZoneFields
-                    capabilities {
-                      edges {
-                        node {
-                          __typename
-                          ... on TopologySessionCircuit {
-                            circuit_type {
-                              value
+        sdwan_gateways {
+          edges {
+            node {
+              name {
+                value
+              }
+              ... on DcimDevice {
+                interfaces {
+                  edges {
+                    node {
+                      ... on DcimInterface {
+                        zone_capabilities: capabilities {
+                          edges {
+                            node {
+                              __typename
+                              ... on ManagedVRF {
+                                id
+                                deployment {
+                                  node {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                  }
+                                }
+                                security_zone {
+                                  node {
+                                    ... on SecurityZone {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      vrf_type {
+                                        value
+                                      }
+                                      l3_vni {
+                                        value
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on TopologySessionCircuit {
+                                circuit_type {
+                                  value
+                                }
+                                vrf {
+                                  node {
+                                    ... on ManagedVRF {
+                                      id
+                                      deployment {
+                                        node {
+                                          id
+                                          name {
+                                            value
+                                          }
+                                        }
+                                      }
+                                      security_zone {
+                                        node {
+                                          ... on SecurityZone {
+                                            id
+                                            name {
+                                              value
+                                            }
+                                            vrf_type {
+                                              value
+                                            }
+                                            l3_vni {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on ManagedSegmentVlan {
+                                id
+                                vlan_id {
+                                  value
+                                }
+                              }
                             }
-                            vrf {
-                              node {
-                                ...RoutingVrfFields
+                          }
+                        }
+                      }
+                      capabilities {
+                        edges {
+                          node {
+                            __typename
+                            ... on TopologySessionCircuit {
+                              circuit_type {
+                                value
+                              }
+                              vrf {
+                                node {
+                                  ... on ManagedVRF {
+                                    id
+                                    deployment {
+                                      node {
+                                        id
+                                        name {
+                                          value
+                                        }
+                                      }
+                                    }
+                                    security_zone {
+                                      node {
+                                        ... on SecurityZone {
+                                          id
+                                          name {
+                                            value
+                                          }
+                                          vrf_type {
+                                            value
+                                          }
+                                          l3_vni {
+                                            value
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
                               }
                             }
                           }
@@ -279,7 +626,33 @@ query routing_invariants {
         vrfs {
           edges {
             node {
-              ...RoutingVrfFields
+              ... on ManagedVRF {
+                id
+                deployment {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+                security_zone {
+                  node {
+                    ... on SecurityZone {
+                      id
+                      name {
+                        value
+                      }
+                      vrf_type {
+                        value
+                      }
+                      l3_vni {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -310,7 +683,18 @@ query routing_invariants {
                 node {
                   security_zone {
                     node {
-                      ...RoutingZoneFields
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
                     }
                   }
                   owner {
@@ -371,7 +755,33 @@ query routing_invariants {
       node {
         vrf {
           node {
-            ...RoutingVrfFields
+            ... on ManagedVRF {
+              id
+              deployment {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+              security_zone {
+                node {
+                  ... on SecurityZone {
+                    id
+                    name {
+                      value
+                    }
+                    vrf_type {
+                      value
+                    }
+                    l3_vni {
+                      value
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         id
@@ -562,13 +972,116 @@ query routing_invariants {
                 }
                 vrf {
                   node {
-                    ...RoutingVrfFields
+                    ... on ManagedVRF {
+                      id
+                      deployment {
+                        node {
+                          id
+                          name {
+                            value
+                          }
+                        }
+                      }
+                      security_zone {
+                        node {
+                          ... on SecurityZone {
+                            id
+                            name {
+                              value
+                            }
+                            vrf_type {
+                              value
+                            }
+                            l3_vni {
+                              value
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
                 capabilities {
                   edges {
                     node {
-                      ...InterfaceRoutingZoneFields
+                      ... on DcimInterface {
+                        zone_capabilities: capabilities {
+                          edges {
+                            node {
+                              __typename
+                              ... on ManagedVRF {
+                                id
+                                deployment {
+                                  node {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                  }
+                                }
+                                security_zone {
+                                  node {
+                                    ... on SecurityZone {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      vrf_type {
+                                        value
+                                      }
+                                      l3_vni {
+                                        value
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on TopologySessionCircuit {
+                                circuit_type {
+                                  value
+                                }
+                                vrf {
+                                  node {
+                                    ... on ManagedVRF {
+                                      id
+                                      deployment {
+                                        node {
+                                          id
+                                          name {
+                                            value
+                                          }
+                                        }
+                                      }
+                                      security_zone {
+                                        node {
+                                          ... on SecurityZone {
+                                            id
+                                            name {
+                                              value
+                                            }
+                                            vrf_type {
+                                              value
+                                            }
+                                            l3_vni {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on ManagedSegmentVlan {
+                                id
+                                vlan_id {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
                       name {
                         value
                       }
@@ -621,6 +1134,15 @@ query routing_invariants {
                 }
                 environment {
                   value
+                }
+                owner {
+                  node {
+                    __typename
+                    org_id {
+                      value
+                    }
+                    display_label
+                  }
                 }
               }
             }

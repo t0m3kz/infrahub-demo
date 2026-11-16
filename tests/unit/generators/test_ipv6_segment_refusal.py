@@ -1,4 +1,4 @@
-"""What a transform still refuses for an IPv6 segment (utils/segment_addressing.py)."""
+"""How the transforms treat an IPv6 segment: rendered where IPv6 exists, left out of the IPv4-only parts."""
 
 from __future__ import annotations
 
@@ -12,15 +12,17 @@ import pytest
 
 from tests.smoke.fixture_builders.common import run_transform
 from tests.unit.cisco_xe_platform_helpers import _golden_input
+from tests.unit.firewall_helpers_shared import _make_context_leg, _make_pbr_activation
 from tests.unit.segment_port_helpers import raw_port_segments
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.firewall import Firewall, apply_context_routes
 from transforms.config.leaf import Leaf
+from transforms.helpers.pbr import get_customer_pbr_rules
 from transforms.helpers.policy import rule_endpoint
 from transforms.helpers.segments import get_vlans
 from transforms.topology.office_firewall_policy import build_office_policy
-from utils.segment_addressing import Ipv6SegmentNotRenderedError, has_ipv6_gateway, refuse_ipv6_segment
+from utils.segment_addressing import has_ipv6_gateway
 
 _TEMPLATES = Path(__file__).resolve().parents[3] / "templates" / "configs" / "common"
 
@@ -51,21 +53,9 @@ class TestTheSignal:
         assert has_ipv6_gateway(_segment(address=address, prefix=prefix)) is expected
 
     def test_a_segment_without_a_gateway_key_is_not_ipv6(self) -> None:
-        """An L2-only segment (or a query that does not select the gateway) has nothing to refuse."""
+        """An L2-only segment (or a query that does not select the gateway) is not IPv6."""
         assert has_ipv6_gateway({"name": "l2"}) is False
         assert has_ipv6_gateway({"name": "l2", "gateway": None}) is False
-
-    def test_the_refusal_names_the_segment_and_the_consumer(self) -> None:
-        """The message the owner reads: segment, renderer, 'not rendered ... yet'."""
-        with pytest.raises(
-            Ipv6SegmentNotRenderedError, match=r"Segment 'web': IPv6 segments are not rendered by the X yet"
-        ):
-            refuse_ipv6_segment(_segment(), "the X")
-        refuse_ipv6_segment(_segment(address="10.1.0.1/24", prefix="10.1.0.0/24"), "the X")
-
-    def test_the_refusal_is_a_value_error(self) -> None:
-        """The transforms raise ValueError for what they refuse (VrfRealizationError, the LISP renderer): so does this."""
-        assert issubclass(Ipv6SegmentNotRenderedError, ValueError)
 
 
 class TestTheAllowedPath:
@@ -146,18 +136,15 @@ class TestTheSwitchRendersIpv6:
         _flip_to_ipv6(data)
         assert expected in run_transform(transform, data)
 
-    def test_a_segment_that_would_be_steered_to_a_firewall_context_is_refused(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """PBR needs the context's IPv4 leg: an IPv6 segment that gets a PBR rule is refused, never left unsteered."""
-        data = _golden_input("leaf_cisco_nxos_ebgp_ebgp")
-        _flip_to_ipv6(data)
-        monkeypatch.setattr(
-            "transforms.common.get_customer_pbr_rules",
-            lambda *args, **kwargs: [{"vlan_id": 100, "fw_nexthop": "1.1.1.1"}],
-        )
-        with pytest.raises(Ipv6SegmentNotRenderedError, match="PBR to a firewall context"):
-            run_transform(Leaf, data)
+    def test_an_ipv6_segment_gets_no_pbr_rule_and_an_ipv4_one_keeps_its_rule(self) -> None:
+        """The PBR ACLs and the context next hops are IPv4: an IPv6 segment is not steered, an IPv4 one still is."""
+        ipv4 = _make_pbr_activation(vlan_id=100, security_policies=[])
+        ipv6 = _make_pbr_activation(vlan_id=200, security_policies=[])
+        ipv6["segment"]["gateway"] = {"address": "fd5a:1760::1/64", "ip_prefix": {"prefix": "fd5a:1760::/64"}}
+
+        rules = get_customer_pbr_rules([ipv4, ipv6], [_make_context_leg()])
+
+        assert [rule["vlan_id"] for rule in rules] == [100]
 
 
 _FIREWALLS = [
@@ -180,11 +167,15 @@ class TestTheFirewallRendersIpv6:
         rendered = run_transform(Firewall, data)
         assert "addr-fd5a-1760---64" in rendered
 
-    def test_a_context_with_transit_legs_refuses_an_ipv6_segment(self) -> None:
-        """The legs, their VIPs and anycast next hops are IPv4: an IPv6 segment has no next hop to be routed through."""
-        context = {
-            "legs": [{"ns_type": "prod", "zone": "PROD", "anycast": "100.66.0.1", "interface": "e1.1", "vrf": "PROD"}],
-            "segments": [_segment()],
-        }
-        with pytest.raises(Ipv6SegmentNotRenderedError, match="transit legs of a firewall context"):
-            apply_context_routes(context, {})
+    def test_a_context_with_transit_legs_routes_its_ipv4_segment_and_leaves_the_ipv6_one_out(self) -> None:
+        """The legs, their VIPs and anycast next hops are IPv4: an IPv6 segment gets no transit route, nothing raises."""
+        leg = {"ns_type": "prod", "zone": "PROD", "anycast": "100.66.0.1", "interface": "e1.1", "vrf": "PROD"}
+        ipv4 = _segment(name="app", address="10.1.0.1/24", prefix="10.1.0.0/24")
+        ipv4["security_zone"] = {"name": "PROD"}
+        context = {"legs": [leg], "segments": [_segment(), ipv4]}
+
+        apply_context_routes(context, {})
+
+        destinations = [route["destination"] for route in context["routes"]]
+        assert "10.1.0.0/24" in destinations
+        assert not any(":" in destination for destination in destinations)

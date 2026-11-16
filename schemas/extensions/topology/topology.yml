@@ -97,7 +97,7 @@ generics:
   # ApplianceHosting: a customer cloud is not a provider-hosted function: it hosts instances, and its accounts are the
   # CloudAccounts it is built from.
   # Optional because only a presence whose provider order needs it (a billing account) has one
-  # (checks/colocation_placement.py).
+  # (checks/customers/colocation_placement.py).
   - name: BilledAccount
     namespace: Topology
     description: "Deployment whose provider-hosted appliances are ordered under one provider account"

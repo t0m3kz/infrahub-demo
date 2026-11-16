@@ -6,11 +6,16 @@ spec:
   data:
     - name: DC5
       index: 1
-      parent: Data Center
+      parent: "Data Center"
       design: L
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: flat
+      fabric_templates:
+        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+        - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
+        - ["2", "internal-firewall", "PA-5260_FIREWALL"]
+        - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -19,222 +24,131 @@ spec:
         data:
           - index: 1
             design: S_MIDDLE
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
-                - name: NY-1-S-1-R1-2
-                  index: 2
-                  shortname: ny-1-s-1-r-1-2
-                  rack_type: network
-                  parent: ny-1-s-1-row-1
-                  member_of_groups:
-                    - topologies_rack
-                  fabric_templates:
-                    - - "2"
-                      - spine
-                      - N9K-C9336C-FX2_SPINE
                 - name: NY-1-SUITE-1-R1-1
                   index: 1
+                  row_index: 1
                   shortname: ny-1-s-1-r-1-1
                   rack_type: network
-                  parent: ny-1-s-1-row-1
-                  member_of_groups:
-                    - topologies_rack
+                  parent: ny-1-s-1
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - leaf
-                      - N9K-C9336C-FX2_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - N9K-C9336C-FX2_TOR
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
                 - name: NY-1-SUITE-1-R2-1
                   index: 1
+                  row_index: 2
                   shortname: ny-1-s-1-r-2-1
                   rack_type: network
-                  parent: ny-1-s-1-row-2
-                  member_of_groups:
-                    - topologies_rack
+                  parent: ny-1-s-1
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - leaf
-                      - N9K-C9336C-FX2_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - N9K-C9336C-FX2_TOR
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
                 - name: NY-1-SUITE-1-R3-1
                   index: 1
+                  row_index: 3
                   rack_type: network
                   shortname: ny-1-s-1-r-3-1
-                  parent: ny-1-s-1-row-3
-                  member_of_groups:
-                    - topologies_rack
+                  parent: ny-1-s-1
+                  member_of_groups: [topologies_rack]
           - index: 2
             design: S_MIDDLE
+            fabric_templates:
+              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
-                - name: NY-1-S-2-R1-2
-                  index: 2
-                  shortname: ny-1-s-2-r-1-2
-                  rack_type: network
-                  parent: ny-1-s-2-row-1
-                  member_of_groups:
-                    - topologies_rack
-                  fabric_templates:
-                    - - "2"
-                      - spine
-                      - DCS-7050CX3-32C-R_SPINE
                 - name: NY-1-SUITE-2-R1-1
                   index: 1
+                  row_index: 1
                   shortname: ny-1-s-2-r-1-1
                   rack_type: network
-                  parent: ny-1-s-2-row-1
-                  member_of_groups:
-                    - topologies_rack
+                  parent: ny-1-s-2
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - leaf
-                      - DCS-7050CX3-32C-R_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - DCS-7050CX3-32C-R_TOR
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
                 - name: NY-1-SUITE-2-R2-1
                   index: 1
+                  row_index: 2
                   shortname: ny-1-s-2-r-2-1
                   rack_type: network
-                  parent: ny-1-s-2-row-2
-                  member_of_groups:
-                    - topologies_rack
+                  parent: ny-1-s-2
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - leaf
-                      - DCS-7050CX3-32C-R_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - DCS-7050CX3-32C-R_TOR
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
                 - name: NY-1-SUITE-2-R3-1
                   index: 1
+                  row_index: 3
                   rack_type: network
                   shortname: ny-1-s-2-r-3-1
-                  parent: ny-1-s-2-row-3
-                  member_of_groups:
-                    - topologies_rack
+                  parent: ny-1-s-2
+                  member_of_groups: [topologies_rack]
           - index: 3
             design: S_MIDDLE
+            fabric_templates:
+              - ["2", "spine", "PowerSwitch-S5232F-ON_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
-                - name: NY-1-S-3-R1-2
-                  index: 2
-                  shortname: ny-1-s-3-r-1-2
-                  rack_type: network
-                  parent: ny-1-s-3-row-1
-                  member_of_groups:
-                    - topologies_rack
-                  fabric_templates:
-                    - - "2"
-                      - spine
-                      - PowerSwitch-S5232F-ON_SPINE
                 - name: NY-1-SUITE-3-R1-1
                   index: 1
+                  row_index: 1
                   shortname: ny-1-s-3-r-1-1
                   rack_type: network
-                  parent: ny-1-s-3-row-1
-                  member_of_groups:
-                    - topologies_rack
+                  parent: ny-1-s-3
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - leaf
-                      - PowerSwitch-S5232F-ON_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - PowerSwitch-S5224F-ON_TOR
+                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
                 - name: NY-1-SUITE-3-R2-1
                   index: 1
+                  row_index: 2
                   shortname: ny-1-s-3-r-2-1
                   rack_type: network
-                  parent: ny-1-s-3-row-2
-                  member_of_groups:
-                    - topologies_rack
+                  parent: ny-1-s-3
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - leaf
-                      - PowerSwitch-S5232F-ON_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - PowerSwitch-S5224F-ON_TOR
+                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
           - index: 4
             design: S_MIDDLE
+            fabric_templates:
+              - ["2", "spine", "Edgecore-7726-32X-O_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
-                - name: NY-1-S-4-R1-1
+                - name: NY-1-SUITE-4-R1-1
                   index: 1
+                  row_index: 1
                   shortname: ny-1-s-4-r-1-1
                   rack_type: network
-                  parent: ny-1-s-4-row-1
-                  member_of_groups:
-                    - topologies_rack
+                  parent: ny-1-s-4
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - spine
-                      - Edgecore-7726-32X-O_SPINE
-                - name: NY-1-SUITE-4-R1-1
-                  index: 2
-                  shortname: ny-1-s-4-r-1-2
-                  rack_type: network
-                  parent: ny-1-s-4-row-1
-                  member_of_groups:
-                    - topologies_rack
-                  fabric_templates:
-                    - - "2"
-                      - leaf
-                      - Edgecore-7726-32X-O_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - Edgecore-7AS7326-56X-O-48V-F_TOR
+                    - ["2", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
+                    - ["2", "l2-leaf", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
                 - name: NY-1-SUITE-4-R2-1
                   index: 1
+                  row_index: 2
                   shortname: ny-1-s-4-r-2-1
                   rack_type: network
-                  parent: ny-1-s-4-row-2
-                  member_of_groups:
-                    - topologies_rack
+                  parent: ny-1-s-4
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - leaf
-                      - Edgecore-7726-32X-O_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - Edgecore-7AS7326-56X-O-48V-F_TOR
-      racks:
-        kind: LocationRack
-        data:
-          - name: NY-1-S-4-R1-3
-            index: 3
-            shortname: ny-1-s-4-r-1-3
-            rack_type: network
-            parent: ny-1-s-4-row-1
-            member_of_groups:
-              - topologies_rack
-            fabric_templates:
-              - - "2"
-                - super-spine
-                - N9K-C9336C-FX2_SUPER_SPINE
-              - - "2"
-                - border-leaf
-                - N9K-C9336C-FX2_BORDER_LEAF
-              - - "2"
-                - internal-firewall
-                - PA-5260_FIREWALL
-              - - "2"
-                - load-balancer
-                - BIG-IP-i5800_LOAD_BALANCER
+                    - ["2", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
+                    - ["2", "l2-leaf", "Edgecore-7AS7326-56X-O-48V-F_TOR"]

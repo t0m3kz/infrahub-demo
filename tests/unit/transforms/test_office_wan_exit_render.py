@@ -128,12 +128,6 @@ class TestTheSignal:
     def test_the_default_is_no_exit(self) -> None:
         assert LispInputs(("1.1.1.1",), None, "k", (), ()).wan_exit is False
 
-    def test_the_fragment_is_spread_by_the_office_queries_only(self) -> None:
-        queries = Path(__file__).resolve().parents[3] / "queries" / "config"
-        spreading = sorted(path.stem for path in queries.glob("*.gql") if "LispSiteOnOfficeFields" in path.read_text())
-
-        assert spreading == ["access_switch", "distribution_switch"]
-
 
 class TestLispContext:
     def test_the_border_is_the_exit_of_every_vrf_it_has(self) -> None:

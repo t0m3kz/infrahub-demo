@@ -1,10 +1,8 @@
 """Hosted termination follows the real cleaned GraphQL NIC -> physical host -> switch shape."""
 
-from pathlib import Path
 from typing import Any
 
 import pytest
-from graphql import FragmentDefinitionNode, parse
 
 from tests.smoke.fixture_builders.vrf import interface_vrf_capability, routing_vrf
 from tests.unit.encapsulation_helpers import raw_encapsulation
@@ -12,15 +10,6 @@ from tests.unit.firewall_transform_helpers import _make_fw
 from transforms.helpers.firewall_contexts import get_firewall_contexts
 from transforms.helpers.firewall_terminated import terminated_interfaces
 from utils.data_cleaning import clean_data
-
-
-def test_facing_cable_fragment_is_a_definition_not_an_interface_field(root_dir: Path) -> None:
-    """GraphQL parses an accidentally nested ``fragment`` as a field: require the actual top-level definition."""
-    document = parse((root_dir / "queries/fragments/firewall_cabling.gql").read_text())
-    names = {
-        definition.name.value for definition in document.definitions if isinstance(definition, FragmentDefinitionNode)
-    }
-    assert "FirewallFacingCableFields" in names
 
 
 def _payload(

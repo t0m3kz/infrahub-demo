@@ -1,4 +1,5 @@
-"""Addressed service legs retain their explicit pool-compatible prefixes without fresh allocation."""
+"""Addressed service legs retain their explicit pool-compatible prefixes without fresh allocation
+(generators/customers/firewall_transit.py ``existing_transit_prefix``, the plan of generators/customers/context_plan.py)."""
 
 from types import SimpleNamespace
 from typing import Any
@@ -10,11 +11,10 @@ from infrahub_sdk.config import Config
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.node import InfrahubNode
 
-from generators.mixins.firewall_context_spec import FIREWALL_CONTEXT
-from generators.mixins.firewall_transit import TransitLegsMixin
+from generators.customers.firewall_transit import existing_transit_prefix
 
 
-def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
+def _fixture() -> tuple[Any, dict[str, Any], SimpleNamespace]:
     """A real-shaped addressed pair with an explicit prefix parent and IPv4 pool resource."""
     prefix = SimpleNamespace(
         id="prefix",
@@ -34,17 +34,10 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
             name=SimpleNamespace(value=f"eth1/1.{3001}"),
             device=SimpleNamespace(id=m.device_id),
             ip_address=SimpleNamespace(id=f"ip-{m.offset}"),
+            parent=SimpleNamespace(id="trunk"),  # each leg rides on the trunk with the transit tag
+            vlan_id=SimpleNamespace(value=3001),
         )
         for m in members
-    ]
-    # Each leg rides on the trunk with the transit tag: its encapsulation.
-    encapsulations = [
-        SimpleNamespace(
-            parent=SimpleNamespace(id="trunk"),
-            vlan_id=SimpleNamespace(value=3001),
-            capabilities=SimpleNamespace(peers=[SimpleNamespace(id=leg.id)]),
-        )
-        for leg in interfaces
     ]
     # The legs' VRF instance with its zone: it lists the legs in its capabilities (the interface edge).
     vrfs = {
@@ -68,8 +61,6 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
     async def filters(*, kind: Any, **kwargs: Any) -> list[Any]:
         """Answer each read by its kind, so the order of the reads is free."""
         name = getattr(kind, "__name__", str(kind))
-        if name == "ManagedInterfaceEncapsulation":
-            return encapsulations
         if name == "DcimVirtualInterface":
             return interfaces
         if name == "ManagedVRF":
@@ -82,18 +73,13 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
     client.filters = AsyncMock(side_effect=filters)
     client.get = AsyncMock(return_value=prefix)
     client.allocate_next_ip_prefix = AsyncMock()
-    gen = TransitLegsMixin()
-    gen.client = client
-    gen.logger = MagicMock()
-    gen.upsert_prefix_addresses = AsyncMock(return_value={5: addresses[0], 6: addresses[1]})
+    gen = SimpleNamespace(client=client, logger=MagicMock())
     args = {
-        "context_obj": SimpleNamespace(id="ctx", name=SimpleNamespace(value="dedicated")),
         "namespace": SimpleNamespace(id="prod", name=SimpleNamespace(value="PROD")),
         "pool": SimpleNamespace(resources=SimpleNamespace(peers=[SimpleNamespace(id="resource")])),
         "members": members,
         "vlan_id": 3001,
         "leg_type": "prod",
-        "track": True,
     }
     return (
         gen,
@@ -104,7 +90,6 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
             interfaces=interfaces,
             vrfs=vrfs,
             resource=resource,
-            upsert=gen.upsert_prefix_addresses,
             logger=gen.logger,
         ),
     )
@@ -112,13 +97,16 @@ def _fixture() -> tuple[TransitLegsMixin, dict[str, Any], SimpleNamespace]:
 
 @pytest.mark.asyncio
 async def test_authored_leg_retains_its_prefix_without_allocator_identifier() -> None:
-    """No allocator mutation or prefix rewrite is needed; addresses still receive the normal tracked upsert."""
+    """No allocator mutation or prefix rewrite is needed: the leg's prefix, namespace and the addresses it has are
+    what the plan upserts."""
     gen, args, model = _fixture()
-    result = await gen._allocate_transit_addresses(FIREWALL_CONTEXT, **args)
+
+    result = await existing_transit_prefix(gen, **args)
+
     assert result is not None
+    assert (result.network, result.namespace_id, result.namespace_name) == ("100.66.0.40/29", "default", "default")
+    assert dict(result.address_ids) == {5: "ip-5", 6: "ip-6"}
     gen.client.allocate_next_ip_prefix.assert_not_awaited()
-    assert model.upsert.await_args.args[0] is model.prefix
-    assert model.upsert.await_args.kwargs["track"] is True
 
 
 @pytest.mark.parametrize(
@@ -145,9 +133,8 @@ async def test_inconsistent_addressed_leg_never_allocates_around_the_error(fault
     else:
         model.addresses[0].ip_prefix.id = None
     with pytest.raises(ValueError, match="Existing transit"):
-        await gen._allocate_transit_addresses(FIREWALL_CONTEXT, **args)
+        await existing_transit_prefix(gen, **args)
     gen.client.allocate_next_ip_prefix.assert_not_awaited()
-    model.upsert.assert_not_awaited()
     model.logger.error.assert_not_called()
 
 
@@ -156,9 +143,10 @@ async def test_a_leg_in_no_vrf_yet_keeps_its_prefix() -> None:
     """A leg's VRF edge is written after its save: one in no instance yet is healed by the run, not rejected."""
     gen, args, model = _fixture()
     model.vrfs["vrf-prod"].capabilities.peers.pop(0)
-    assert await gen._allocate_transit_addresses(FIREWALL_CONTEXT, **args) is not None
+    result = await existing_transit_prefix(gen, **args)
+
+    assert result is not None and result.network == "100.66.0.40/29"
     gen.client.allocate_next_ip_prefix.assert_not_awaited()
-    assert model.upsert.await_args.args[0] is model.prefix
 
 
 @pytest.mark.asyncio
@@ -167,30 +155,28 @@ async def test_existing_prefix_read_failure_propagates_before_any_allocation() -
     gen, args, model = _fixture()
     gen.client.filters = AsyncMock(side_effect=RuntimeError("prefix read failed"))
     with pytest.raises(RuntimeError, match="prefix read failed"):
-        await gen._allocate_transit_addresses(FIREWALL_CONTEXT, **args)
+        await existing_transit_prefix(gen, **args)
     gen.client.allocate_next_ip_prefix.assert_not_awaited()
-    model.upsert.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_unaddressed_leg_uses_the_existing_identifier_based_allocator() -> None:
-    """A new context still takes the production pool allocation path."""
-    gen, args, model = _fixture()
+async def test_an_unaddressed_leg_has_no_prefix_yet() -> None:
+    """A new context takes the production pool allocation path: its plan allocates the leg (test_context_plan)."""
+    gen, args, _ = _fixture()
     gen.client.filters = AsyncMock(return_value=[])
-    gen.client.allocate_next_ip_prefix.return_value = model.prefix
-    assert await gen._allocate_transit_addresses(FIREWALL_CONTEXT, **args) is not None
-    assert gen.client.allocate_next_ip_prefix.await_args.kwargs["identifier"] == "ctx-PROD-transit"
-    assert gen.client.allocate_next_ip_prefix.await_args.kwargs["data"] == {"role": "technical"}
+
+    assert await existing_transit_prefix(gen, **args) is None
+    gen.client.allocate_next_ip_prefix.assert_not_awaited()
 
 
-class _GuardGenerator(TransitLegsMixin, InfrahubGenerator):
+class _GuardGenerator(InfrahubGenerator):
     """Exercise the actual installed SDK run/exit path with the production prefix guard."""
 
     args: dict[str, Any]
 
     async def generate(self, data: dict[str, Any]) -> None:
         """An invalid existing leg must raise before a successful tracking exit."""
-        await self._allocate_transit_addresses(FIREWALL_CONTEXT, **self.args)
+        await existing_transit_prefix(self, **self.args)
 
 
 @pytest.mark.asyncio
@@ -209,7 +195,6 @@ async def test_sdk_full_run_propagates_invalid_prefix_without_cleaning_prior_out
     cleanup = AsyncMock(side_effect=prior_outputs.clear)
     monkeypatch.setattr(type(client.group_context), "update_group", cleanup)
     gen.args = args
-    gen.upsert_prefix_addresses = model.upsert
     with pytest.raises(ValueError, match="Existing transit prefix"):
         await gen.run("failure-proof", data={"unused": {}})
     cleanup.assert_not_awaited()

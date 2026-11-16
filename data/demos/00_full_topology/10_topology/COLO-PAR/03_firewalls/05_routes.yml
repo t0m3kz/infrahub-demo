@@ -3,7 +3,7 @@
 # default route to the floating address of the pair's PROD leg (100.66.0.24/29, VIP .28), kept local to the edge (an
 # edge resolves the VIP over its own transit L2VNI), and the return route of the pair's public address (SNAT
 # 192.0.2.30/32) to the pair's INTERNET leg (100.66.32.24/29, VIP .28). On 30_all the context generator writes the
-# same routes (generators/topology/context_routes.py, tracked); here they are plain data.
+# same routes (generators/connectivity/context_routes.py, tracked); here they are plain data.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

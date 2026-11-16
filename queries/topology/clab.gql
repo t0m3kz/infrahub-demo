@@ -9,16 +9,22 @@ query topology_info($name: String!) {
           devices {
             edges {
               node {
-                name { value }
+                name {
+                  value
+                }
                 platform {
                   node {
-                    containerlab_os { value }
+                    containerlab_os {
+                      value
+                    }
                   }
                 }
                 ... on DcimSoftwareRunner {
                   software_image {
                     node {
-                      containerlab_image { value }
+                      containerlab_image {
+                        value
+                      }
                     }
                   }
                 }
@@ -26,7 +32,9 @@ query topology_info($name: String!) {
                   interfaces {
                     edges {
                       node {
-                        name { value }
+                        name {
+                          value
+                        }
                         ... on DcimPhysicalInterface {
                           cable {
                             node {
@@ -34,12 +42,22 @@ query topology_info($name: String!) {
                                 edges {
                                   node {
                                     ... on DcimPhysicalInterface {
-                                      name { value }
+                                      name {
+                                        value
+                                      }
                                       device {
                                         node {
-                                          name { value }
+                                          name {
+                                            value
+                                          }
                                           ... on DcimDeviceManaged {
-                                            platform { node { containerlab_os { value } } }
+                                            platform {
+                                              node {
+                                                containerlab_os {
+                                                  value
+                                                }
+                                              }
+                                            }
                                           }
                                         }
                                       }
@@ -56,7 +74,7 @@ query topology_info($name: String!) {
                 }
               }
             }
-        }
+          }
         }
       }
     }

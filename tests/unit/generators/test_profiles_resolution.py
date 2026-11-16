@@ -1,10 +1,10 @@
-"""generators/pod_config.py: a pod's deployment type and rack-grid profile, derived from its design."""
+"""generators/model/pod_profile.py: a pod's deployment type and rack-grid profile, derived from its design."""
 
 from __future__ import annotations
 
 import pytest
 
-from generators.mixins.pod_config import pod_deployment_type, pod_profile, spine_downlink_layout
+from generators.model.pod_profile import pod_deployment_type, pod_profile, spine_downlink_layout
 from tests.unit.simulators.fabric_designs import POD_DESIGN_NAMES, custom_pod_design, pod_design
 
 _EXPECTED_DEPLOYMENT_TYPE = {

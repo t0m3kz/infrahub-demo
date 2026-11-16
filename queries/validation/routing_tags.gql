@@ -1,30 +1,69 @@
-# validate_routing_tags (checks/routing_tags.py): every customer and every segment
-# with its routing tag (the number behind its community), and for a segment what
-# decides whether it is a routed tenant segment (utils/exchange_transit.
-# is_routed_tenant_segment: kind, gateway namespace type, zone) and its owner.
 query routing_tags {
   OrganizationCustomer {
     edges {
       node {
         id
-        org_id { value }
-        routing_tag { value }
+        org_id {
+          value
+        }
+        routing_tag {
+          value
+        }
       }
     }
   }
-
   ManagedNetworkSegment {
     edges {
       node {
         __typename
         id
-        name { value }
-        routing_tag { value }
-        owner { node { id } }
-        security_zone { node { ...RoutingZoneFields } }
-        gateway { node { ip_prefix { node { ip_namespace { node { name { value }  } } } } } }
-        # A terminated segment has no SVI: it is no routed tenant segment.
-        ... on ManagedVxlanSegment { firewall_gateway { value } }
+        name {
+          value
+        }
+        routing_tag {
+          value
+        }
+        owner {
+          node {
+            id
+          }
+        }
+        security_zone {
+          node {
+            ... on SecurityZone {
+              id
+              name {
+                value
+              }
+              vrf_type {
+                value
+              }
+              l3_vni {
+                value
+              }
+            }
+          }
+        }
+        gateway {
+          node {
+            ip_prefix {
+              node {
+                ip_namespace {
+                  node {
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedVxlanSegment {
+          firewall_gateway {
+            value
+          }
+        }
       }
     }
   }

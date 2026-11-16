@@ -1,4 +1,4 @@
-"""The assertions of a suite kick stage (`expect`), parsed and evaluated as tasks.run_kick's after_stage.
+"""The assertions of a suite kick stage (`expect`), parsed and evaluated as tests.integration.utils.kicks.run_kick's after_stage.
 
 A stage's `expect` holds four optional keys:
 
@@ -28,7 +28,7 @@ from typing import Any
 from infrahub_sdk import InfrahubClientSync
 from infrahub_sdk.task.models import TaskState
 
-from tests.integration.proposed_change import DIFF_TASK_TIMEOUT
+from tests.integration.utils.proposed_change import DIFF_TASK_TIMEOUT
 
 OPERATORS = {"equals": "==", "min": ">=", "max": "<="}
 _EXPECT_KEYS = {"count", "unchanged", "added", "removed"}
@@ -148,7 +148,7 @@ def parse_expect(raw: Any, where: str) -> Expectation:
 
 
 def parse_expectations(raw: Mapping[tuple[str, str], Any]) -> dict[tuple[str, str], Expectation]:
-    """Every raw `expect` of tasks.kicks.load_suite_kicks, parsed, by (kick, stage)."""
+    """Every raw `expect` of tests.integration.utils.kicks.load_suite_kicks, parsed, by (kick, stage)."""
     return {(kick, stage): parse_expect(value, f"{kick}/{stage}") for (kick, stage), value in raw.items()}
 
 
@@ -261,7 +261,7 @@ def refresh_branch_diff(client: InfrahubClientSync, branch: str) -> None:
 
 
 class StageChecker:
-    """tasks.run_kick's after_stage: snapshots at "before", asserts at "branch" and "main"."""
+    """tests.integration.utils.kicks.run_kick's after_stage: snapshots at "before", asserts at "branch" and "main"."""
 
     def __init__(
         self,

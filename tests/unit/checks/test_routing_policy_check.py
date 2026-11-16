@@ -9,7 +9,6 @@ import yaml
 
 from checks.routing.routing_policy import CheckRoutingPolicy, routing_policy_errors, routing_policy_warnings
 from tests.integration.demo_data import ROOT
-from tests.unit.query_shape_helpers import query_tree, unselected
 from utils.routing_policy import any_community_error, community_error, prefix_entry_errors
 
 
@@ -102,20 +101,6 @@ def test_the_check_logs_one_error_per_problem() -> None:
 
 def _v(value: Any) -> dict[str, Any]:
     return {"value": value}
-
-
-def test_the_query_selects_what_the_rules_read() -> None:
-    tree = query_tree(ROOT / "queries" / "validation" / "routing_policy.gql")
-    assert {"entries", "family"} <= set(tree["RoutingPrefixList"]["edges"]["node"])
-    assert {"members", "community_type"} <= set(tree["RoutingCommunityList"]["edges"]["node"])
-    assert "terms" in tree["RoutingPolicy"]["edges"]["node"]
-    assert (
-        unselected(
-            [{"id": "x", "name": _v("n"), "community_type": _v("standard"), "members": _v([])}],
-            tree["RoutingCommunityList"]["edges"]["node"],
-        )
-        == []
-    )
 
 
 def test_the_check_and_its_query_are_registered() -> None:

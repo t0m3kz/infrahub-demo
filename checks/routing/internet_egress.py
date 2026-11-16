@@ -1,7 +1,7 @@
 """Check that traffic to the internet goes through a complete firewall of ours.
 
 Each enabled ``destination_zone`` INTERNET rule is followed to every DC and colocation footprint of its source. See
-AGENTS.md "Internet egress".
+domain-model.md "Internet egress".
 """
 
 from __future__ import annotations

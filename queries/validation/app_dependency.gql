@@ -1,28 +1,40 @@
-# validate_app_dependency: every dependency names exactly one source and one
-# target, and opens ports that parse and that its target actually listens on;
-# an approved dependency between two owners' components lists its ports and
-# its decision_reason (each side's owner is its application's); a
-# load_balanced component lists ports, no port range (one VIP per port) and
-# has instances (its pool members).
 query app_dependency_validation {
   AppComponent {
     edges {
       node {
-        fqdn { value }
-        ports { value }
-        load_balanced { value }
-        instances { count }
+        fqdn {
+          value
+        }
+        ports {
+          value
+        }
+        load_balanced {
+          value
+        }
+        instances {
+          count
+        }
       }
     }
   }
   AppDependency {
     edges {
       node {
-        name { value }
-        ports { value }
-        target_fqdn { value }
-        access_status { value }
-        decision_reason { value }
+        name {
+          value
+        }
+        ports {
+          value
+        }
+        target_fqdn {
+          value
+        }
+        access_status {
+          value
+        }
+        decision_reason {
+          value
+        }
         source_profile {
           node {
             id
@@ -32,16 +44,38 @@ query app_dependency_validation {
           node {
             id
             ... on AppComponent {
-              fqdn { value }
-              network_segment { node { name { value } environment { value } security_zone { node { name { value } } } } }
+              fqdn {
+                value
+              }
+              network_segment {
+                node {
+                  name {
+                    value
+                  }
+                  environment {
+                    value
+                  }
+                  security_zone {
+                    node {
+                      name {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
               parent {
                 node {
                   __typename
                   ... on AppApplication {
                     owner {
                       node {
-                        name { value }
-                        org_id { value }
+                        name {
+                          value
+                        }
+                        org_id {
+                          value
+                        }
                         egress_service {
                           node {
                             id
@@ -59,14 +93,43 @@ query app_dependency_validation {
           node {
             id
             ... on AppComponent {
-              fqdn { value }
-              ports { value }
-              network_segment { node { name { value } environment { value } security_zone { node { name { value } } } } }
+              fqdn {
+                value
+              }
+              ports {
+                value
+              }
+              network_segment {
+                node {
+                  name {
+                    value
+                  }
+                  environment {
+                    value
+                  }
+                  security_zone {
+                    node {
+                      name {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
               parent {
                 node {
                   __typename
                   ... on AppApplication {
-                    owner { node { name { value } org_id { value } } }
+                    owner {
+                      node {
+                        name {
+                          value
+                        }
+                        org_id {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
               }

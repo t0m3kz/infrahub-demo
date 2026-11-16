@@ -7,14 +7,8 @@ import asyncio
 import pytest
 from infrahub_sdk.exceptions import GraphQLError
 
-from generators.mixins.logger import GeneratorError
-from tests.unit.segment_customer_pool_helpers import (
-    Client,
-    customer_pool,
-    footprint,
-    make_gen,
-    segment_data,
-)
+from generators.model.errors import GeneratorError
+from tests.unit.segment_customer_pool_helpers import Client, customer_pool, footprint, make_gen, segment_data
 from utils.limits import SEGMENT_HOST_COUNT_MAX
 from utils.segment_addressing import addressing_footprint, customer_pool_name, segment_prefix_length
 

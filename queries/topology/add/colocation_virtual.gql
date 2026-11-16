@@ -1,16 +1,3 @@
-# The kit a virtual colocation (provider-hosted presence) declares (fabric_templates), turned into devices by
-# generators/topology/colocation_fabric.py. The pools it attaches are written, not
-# read, so they are not selected. The parent metro supplies the naming convention,
-# the ASN pool of its one EVPN site AS and the AS itself once drawn (evpn_rt_as: read so the
-# generator skips re-attaching it; the metro is a parent the generator never tracks). Its own design (the envelope: most
-# edges, firewalls and load balancers) and the metro's size the pools
-# (generators/fabric_sizing.py); both are optional. template_kind is aliased deliberately:
-# clean_data() strips "__" out of any key it finds, so a bare __typename would
-# arrive as "typename". The generator reads template_kind to tell a physical
-# template from a virtual one and to refuse the kind this node cannot host.
-# Provider-hosted appliance templates only (a physical one is skipped by the generator, so it is not selected beyond
-# its kind). A provider-hosted device is never cabled, so its template's interfaces are not read. The account is the
-# one the appliances are ordered under: the generator sets it on each appliance it creates.
 query topology_virtual_colocation($name: String!) {
   TopologyVirtualColocation(name__value: $name) {
     edges {
@@ -107,6 +94,13 @@ query topology_virtual_colocation($name: String!) {
                         id
                         name {
                           value
+                        }
+                        os_capabilities {
+                          node {
+                            config_dialect {
+                              value
+                            }
+                          }
                         }
                       }
                     }

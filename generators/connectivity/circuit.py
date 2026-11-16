@@ -1,4 +1,4 @@
-"""add_circuit: the derived facility locations of a TopologyCarrierCircuit (see AGENTS.md Circuit placement). Adds
+"""add_circuit: the derived facility locations of a TopologyCarrierCircuit (see domain-model.md Circuit placement). Adds
 derived locations with one untracked RelationshipAdd (at most two; a contradiction fails before any write) and converges
 the ends' VRF instances. Fires add_virtual_circuit without waiting for session circuits on its ports; it writes only
 ``locations``, so no loop.
@@ -9,11 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from generators.base import BaseGenerator
+from generators.capabilities.vrf import reconcile_vrfs
 from generators.helpers.encapsulation import riding_interface_ids
-from generators.helpers.vrf import VrfMixin
-from generators.mixins.common import CommonGenerator
-from generators.mixins.pools import PoolMixin
-from generators.protocols import TopologyCarrierCircuit
+from generators.plan import EdgesSpec, TopologyPlan
 from utils.circuit_underlay import INTERNET_KIND, session_circuits_on
 from utils.data_cleaning import clean_data
 from utils.limits import CIRCUIT_ENDS
@@ -22,7 +21,7 @@ CARRIER_CIRCUIT_GENERATOR = "add_circuit"
 VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
 
 # Deployments that are themselves the facility a circuit end terminates on (zone, virtual colocation); not an office
-# (sdwan_edge.py authors those locations).
+# (an office's circuit lists that location itself).
 _DERIVABLE_FACILITY_KINDS = frozenset(
     {
         "TopologyDataCenter",
@@ -141,7 +140,7 @@ def plan_locations(
     return missing, None
 
 
-class CarrierCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
+class CarrierCircuitGenerator(BaseGenerator):
     """add_circuit — a TopologyCarrierCircuit's derived facility locations."""
 
     client: Any
@@ -168,7 +167,7 @@ class CarrierCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
         await self._add_locations(circuit["id"], circuit_name, missing_locations)
         # Authored INTERNET addresses of a cage edge are loaded just before the circuit; this run converges the VRF
         # instances
-        await self.reconcile_vrfs({endpoint.device_id for endpoint in endpoints if endpoint.device_id})
+        await reconcile_vrfs(self, {endpoint.device_id for endpoint in endpoints if endpoint.device_id})
         await self._fan_out_sessions(endpoints, circuit_name)
         self.logger.info(f"Carrier circuit {circuit_name} — completed")
 
@@ -176,8 +175,11 @@ class CarrierCircuitGenerator(PoolMixin, VrfMixin, CommonGenerator):
         """Add the derived locations the circuit lacks: one untracked RelationshipAdd, never dropping an authored one."""
         if not locations:
             return
-        node = await self.client.get(kind=TopologyCarrierCircuit, id=circuit_id)
-        await node.add_relationships(relation_to_update="locations", related_nodes=[loc.id for loc in locations])
+        await self.apply_plan(
+            TopologyPlan(
+                root_id=None, specs=[EdgesSpec(circuit_id, "locations", tuple(location.id for location in locations))]
+            )
+        )
         self.logger.info(f"  {circuit_name}: derived location(s) {', '.join(loc.label for loc in locations)}")
 
     async def _fan_out_sessions(self, endpoints: list[CircuitEndpoint], circuit_name: str) -> None:

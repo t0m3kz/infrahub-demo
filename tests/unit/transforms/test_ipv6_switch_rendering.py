@@ -253,7 +253,7 @@ class TestFamilyAwareGuards:
 
     def test_a_vrf_static_of_the_exchange_is_ipv4_by_design(self) -> None:
         """The exchange statics run through the IPv4 legs of a context: an IPv6 static is refused, not dropped."""
-        from transforms.helpers.static_routes import get_static_routes
+        from transforms.helpers.static_route import get_static_routes
 
         cap = {
             "typename": "ManagedStaticRoute",

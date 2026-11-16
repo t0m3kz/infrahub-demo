@@ -138,7 +138,7 @@ def _segment(
 
 def _gateway_office(
     name: str,
-    gateway: str | None,
+    gateway: str | tuple[str, ...] | None,
     owner: tuple[str, str, str] | None,
     *lans: dict[str, Any],
     hosted: tuple[tuple[str, tuple[str, str, str] | None], ...] = (),
@@ -146,7 +146,11 @@ def _gateway_office(
     """An office behind an SD-WAN gateway with its LANs and hosted segments, (prefix, owner) each (PROD)."""
     return {
         **_office(name, *lans, owner=owner),
-        "sdwan_gateway": {"node": _raw_gateway(gateway)} if gateway else {"node": None},
+        "sdwan_gateways": {
+            "edges": [
+                {"node": _raw_gateway(each)} for each in ((gateway,) if isinstance(gateway, str) else gateway or ())
+            ]
+        },
         "vrfs": {"edges": [{"node": _raw_vrf("PROD", name)}]},
         "segment_deployments": {
             "edges": [

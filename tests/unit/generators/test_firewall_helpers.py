@@ -9,7 +9,7 @@ from transforms.helpers.firewall import (
     get_firewall_static_routes,
     get_firewall_zones,
 )
-from transforms.helpers.firewall_pbr import get_customer_pbr_rules
+from transforms.helpers.pbr import get_customer_pbr_rules
 from utils.exchange_transit import EXCHANGE_PEERS, exchange_peer_zones
 
 # Helpers — zone data

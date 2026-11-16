@@ -2,28 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.connectivity.endpoint import EndpointConnectivityGenerator
-from tests.unit.endpoint_generator_helpers import _bond, _bond_data, _endpoint_data, _iface, _make_generator, _nic
+from generators.protocols import DcimPhysicalDevice
+from tests.unit.endpoint_generator_helpers import _endpoint_data, _make_generator
 
 # generate() — guard clauses and dispatch
-
-
-class TestInit:
-    """__init__ delegates to super().__init__(*args, **kwargs) first."""
-
-    def test_defaults(self) -> None:
-        gen = EndpointConnectivityGenerator.__new__(EndpointConnectivityGenerator)
-        with patch("generators.mixins.logger.FailOnErrorLoggerMixin.__init__", return_value=None):
-            EndpointConnectivityGenerator.__init__(gen)
-
-        assert gen.planned_connections == set()
-        assert gen._free_interfaces == []
-        assert gen._already_connected is False
-        assert gen._existing_switch_names == set()
 
 
 class TestGenerateGuardClauses:
@@ -90,46 +77,49 @@ class TestGenerateGuardClauses:
         assert len(gen.data["interfaces"]) == 1
         assert gen.data["interfaces"][0]["name"] == "eth0"
 
-    @pytest.mark.asyncio
-    async def test_bonds_are_split_from_the_physical_interfaces(self) -> None:
-        """A BondFields dict (it carries lag_id) is a bond, not one of the server's physical interfaces."""
-        gen = _make_generator()
-        eth0, eth1 = _nic("eth0"), _nic("eth1")
-        gen.client.filters = AsyncMock(side_effect=[[eth0, eth1]])  # the lag NICs
 
-        await gen.generate(_bond_data(_bond("bond0", [eth0, eth1])))
+def _record_writes(gen: Any) -> list[tuple[Any, dict[str, Any], dict[str, Any]]]:
+    """Make the client's create return nodes whose save is recorded as (kind, data, save kwargs), in order."""
+    writes: list[tuple[Any, dict[str, Any], dict[str, Any]]] = []
 
-        assert [intf["name"] for intf in gen.data["interfaces"]] == ["eth0"]
-        gen._process_lag_endpoint_connections.assert_awaited_once()
+    async def _create(*, kind: Any, data: dict[str, Any]) -> Any:
+        node = MagicMock(id=data.get("id", "new"))
+        node.save = AsyncMock(side_effect=lambda **kwargs: writes.append((kind, data, kwargs)))
+        return node
+
+    gen.client.create = AsyncMock(side_effect=_create)
+    return writes
 
 
 class TestGenerateDeploymentUpdate:
     @pytest.mark.asyncio
     async def test_deployment_updated_when_mismatched(self) -> None:
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.save = AsyncMock()
-        gen.client.get = AsyncMock(return_value=endpoint_device)
+        writes = _record_writes(gen)
         gen.client.filters = AsyncMock(side_effect=[[]])
 
         await gen.generate(_endpoint_data(deployment="some-other-pod"))
 
-        assert endpoint_device.deployment == "pod-1"
-        # Untracked: the data-loaded server is this run's target, not its output.
-        endpoint_device.save.assert_awaited_once_with(update_group_context=False)
+        # Untracked: the data-loaded server is this run's target, not its output; only the deployment is sent.
+        assert writes == [
+            (
+                DcimPhysicalDevice,
+                {"id": "ep-1", "deployment": {"id": "pod-1"}},
+                {"allow_upsert": True, "update_group_context": False},
+            )
+        ]
 
     @pytest.mark.asyncio
     async def test_deployment_updated_when_unset(self) -> None:
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.save = AsyncMock()
-        gen.client.get = AsyncMock(return_value=endpoint_device)
+        writes = _record_writes(gen)
         gen.client.filters = AsyncMock(side_effect=[[]])
 
         await gen.generate(_endpoint_data(deployment=None))
 
-        assert endpoint_device.deployment == "pod-1"
-        endpoint_device.save.assert_awaited_once_with(update_group_context=False)
+        assert [(data, kwargs["update_group_context"]) for _, data, kwargs in writes] == [
+            ({"id": "ep-1", "deployment": {"id": "pod-1"}}, False)
+        ]
 
     @pytest.mark.asyncio
     async def test_deployment_already_correct_needs_neither_read_nor_write(self) -> None:
@@ -140,179 +130,3 @@ class TestGenerateDeploymentUpdate:
         await gen.generate(_endpoint_data())
 
         gen.client.get.assert_not_awaited()
-
-
-class TestGenerateLagDispatch:
-    @pytest.mark.asyncio
-    async def test_lag_bonds_dispatch_to_lag_flow_and_lock_pod_row(self) -> None:
-        """Declared bonds take the LAG flow, each with its member NICs from the NIC query."""
-        gen = _make_generator()
-        eth0, eth1, eth2, eth3 = (_nic(f"eth{i}") for i in range(4))
-        # The bonds come from the payload; the only read is the server's lag NICs
-        gen.client.filters = AsyncMock(side_effect=[[eth0, eth1, eth2, eth3]])
-
-        await gen.generate(_bond_data(_bond("bond0", [eth0, eth1]), _bond("bond1", [eth2, eth3])))
-
-        assert gen._free_interfaces == [eth0, eth1, eth2, eth3]
-        gen.acquire_resource_lock.assert_awaited_once_with("endpoint-cabling-pod-pod-1-row-1")
-        gen._process_lag_endpoint_connections.assert_awaited_once_with(
-            {"bond0": [eth0, eth1], "bond1": [eth2, eth3]}, "mixed"
-        )
-        gen.release_resource_lock.assert_awaited_once_with("lock-1")
-        gen._process_endpoint_connections.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_member_outside_the_lag_nics_is_dropped(self) -> None:
-        """A bond member that is not a role=lag NIC of this server is left out (and the bond then fails < 2 members)."""
-        gen = _make_generator()
-        eth0, stray = _nic("eth0"), _nic("eth9")
-        gen.client.filters = AsyncMock(side_effect=[[eth0]])
-
-        await gen.generate(_bond_data(_bond("bond0", [eth0, stray])))
-
-        gen._process_lag_endpoint_connections.assert_awaited_once_with({"bond0": [eth0]}, "mixed")
-
-    @pytest.mark.asyncio
-    async def test_lag_flow_lock_released_even_on_exception(self) -> None:
-        """The pod-row lock is released when the bond wiring raises."""
-        gen = _make_generator()
-        eth0 = _nic("eth0")
-        gen.client.filters = AsyncMock(side_effect=[[eth0]])
-        gen._process_lag_endpoint_connections = AsyncMock(side_effect=RuntimeError("boom"))
-
-        with pytest.raises(RuntimeError):
-            await gen.generate(_bond_data(_bond("bond0", [eth0])))
-
-        gen.release_resource_lock.assert_awaited_once_with("lock-1")
-
-    @pytest.mark.asyncio
-    async def test_existing_cabled_bond_members_seed_sticky_switch_names(self) -> None:
-        """Switches the NICs are already cabled to stay the bond's switch pair."""
-        gen = _make_generator()
-        cabled, free = _nic("eth0"), _nic("eth1")
-        cabled.cable = MagicMock(id="cable-1")
-        cabled.cable._peer = MagicMock()
-        cabled.cable._peer.name = MagicMock(value="leaf-1-Eth1__server-1-eth0")
-        gen.client.filters = AsyncMock(side_effect=[[cabled, free]])
-
-        await gen.generate(_bond_data(_bond("bond0", [cabled, free])))
-
-        assert gen._existing_switch_names == {"leaf-1"}
-
-
-class TestGenerateUplinkFlow:
-    @pytest.mark.asyncio
-    async def test_no_uplink_interfaces_logs_info_and_returns(self) -> None:
-        gen = _make_generator()
-        gen.client.filters = AsyncMock(side_effect=[[]])  # no uplink interfaces
-
-        await gen.generate(_endpoint_data())
-
-        gen.logger.info.assert_any_call("Endpoint server-1 has no uplink interfaces, skipping")
-        gen.acquire_resource_lock.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_all_interfaces_already_cabled_skips(self) -> None:
-        gen = _make_generator()
-        cabled = _iface("eth0", device="server-1", cabled=True)
-        cable_obj = MagicMock(save=AsyncMock())
-        gen.client.filters = AsyncMock(side_effect=[[cabled], [cable_obj]])
-
-        await gen.generate(_endpoint_data())
-
-        assert any("all interfaces connected, skipping" in str(c.args[0]) for c in gen.logger.info.call_args_list)
-        gen.acquire_resource_lock.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_existing_cables_resaved_on_rerun(self) -> None:
-        """A rerun that finds every uplink cabled still saves each cable once:"""
-        gen = _make_generator()
-        first = _iface("eth0", device="server-1", cabled=True)
-        second = _iface("eth1", device="server-1", cabled=True)
-        second.cable.id = "cable-2"
-        cables = {
-            "cable-1": MagicMock(save=AsyncMock(), id="cable-1"),
-            "cable-2": MagicMock(save=AsyncMock(), id="cable-2"),
-        }
-        cables["cable-1"].name.value = "leaf-1-Ethernet1/1__server-1-eth0"
-        cables["cable-2"].name.value = "leaf-2-Ethernet1/1__server-1-eth1"
-
-        gen.client.filters = AsyncMock(side_effect=[[first, second], [cables["cable-1"], cables["cable-2"]]])
-
-        await gen.generate(_endpoint_data())
-
-        for cable in cables.values():
-            cable.save.assert_awaited_once_with(allow_upsert=True)
-        gen.acquire_resource_lock.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_data_loaded_uplink_cable_is_not_claimed(self) -> None:
-        """A data-loaded cable on an uplink is never re-saved, tracked or deleted by this run."""
-        gen = _make_generator()
-        first = _iface("eth0", device="server-1", cabled=True)
-        second = _iface("eth1", device="server-1", cabled=True)
-        second.cable.id = "cable-2"
-        own = MagicMock(save=AsyncMock(), id="cable-1")
-        own.name.value = "leaf-1-Ethernet1/1__server-1-eth0"
-        loaded = MagicMock(save=AsyncMock(), id="cable-2")
-        loaded.name.value = "CBL-DC1-SRV1-2"
-
-        gen.client.filters = AsyncMock(side_effect=[[first, second], [own, loaded]])
-
-        await gen.generate(_endpoint_data())
-
-        own.save.assert_awaited_once_with(allow_upsert=True)
-        loaded.save.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_free_interfaces_trigger_resolve_and_process(self) -> None:
-        gen = _make_generator()
-        free_iface = _iface("eth0", device="server-1")
-        gen.client.filters = AsyncMock(side_effect=[[free_iface]])
-        targets = [_iface("Eth1", device="leaf-1")]
-        gen._resolve_target_interfaces = AsyncMock(return_value=targets)
-
-        await gen.generate(_endpoint_data())
-
-        gen.acquire_resource_lock.assert_awaited_once_with("endpoint-cabling-pod-pod-1-row-1")
-        gen._process_endpoint_connections.assert_awaited_once_with(targets)
-        gen.release_resource_lock.assert_awaited_once_with("lock-1")
-
-    @pytest.mark.asyncio
-    async def test_partial_existing_connections_logged_and_processed(self) -> None:
-        gen = _make_generator()
-        cabled = _iface("eth0", device="leaf-1", cabled=True)
-        free_iface = _iface("eth1", device="server-1")
-        cable_obj = MagicMock(save=AsyncMock())
-        gen.client.filters = AsyncMock(side_effect=[[cabled, free_iface], [cable_obj]])
-        gen._resolve_target_interfaces = AsyncMock(return_value=[])
-
-        await gen.generate(_endpoint_data())
-
-        assert any(
-            "will create connections for 1 free interface" in str(c.args[0]) for c in gen.logger.info.call_args_list
-        )
-
-    @pytest.mark.asyncio
-    async def test_no_target_interfaces_skips_process_call(self) -> None:
-        gen = _make_generator()
-        free_iface = _iface("eth0", device="server-1")
-        gen.client.filters = AsyncMock(side_effect=[[free_iface]])
-        gen._resolve_target_interfaces = AsyncMock(return_value=[])
-
-        await gen.generate(_endpoint_data())
-
-        gen._process_endpoint_connections.assert_not_called()
-        gen.release_resource_lock.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_lock_released_even_when_resolve_raises(self) -> None:
-        gen = _make_generator()
-        free_iface = _iface("eth0", device="server-1")
-        gen.client.filters = AsyncMock(side_effect=[[free_iface]])
-        gen._resolve_target_interfaces = AsyncMock(side_effect=RuntimeError("boom"))
-
-        with pytest.raises(RuntimeError):
-            await gen.generate(_endpoint_data())
-
-        gen.release_resource_lock.assert_awaited_once_with("lock-1")

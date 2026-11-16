@@ -1,6 +1,6 @@
 """The one derivation of the VRF instances (ManagedVRF) a device needs, and of the segment SVIs it carries.
 
-Demand-driven membership in the non-``default`` namespaces a device routes in; see AGENTS.md "VRF instances".
+Demand-driven membership in the non-``default`` namespaces a device routes in; see domain-model.md "VRF instances".
 """
 
 from __future__ import annotations

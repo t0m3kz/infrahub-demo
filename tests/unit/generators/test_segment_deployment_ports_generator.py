@@ -7,12 +7,16 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from generators.segments.segment_deployment_ports import SegmentDeploymentPortsGenerator
+
+pytestmark = pytest.mark.usefixtures("generator_steps")
 
 
 def _gen() -> Any:
     """A generator with a mocked reconcile and logger (no client)."""
-    gen = SegmentDeploymentPortsGenerator.__new__(SegmentDeploymentPortsGenerator)
+    gen: Any = SegmentDeploymentPortsGenerator.__new__(SegmentDeploymentPortsGenerator)
     gen.logger = MagicMock()
     gen.reconcile_vxlan_segment = AsyncMock(return_value=(1, 0))
     return gen

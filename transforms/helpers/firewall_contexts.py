@@ -173,7 +173,7 @@ def _edge_customers(footprints: list[dict[str, Any]]) -> list[dict[str, Any]]:
         customers.append(
             {
                 "name": footprint.get("name"),
-                # The translated sources: NAT is IPv4 only by design (an IPv6 source is not translated, AGENTS.md).
+                # The translated sources: NAT is IPv4 only by design (an IPv6 source is not translated, domain-model.md).
                 "prefixes": sorted(
                     {prefix for segment in footprint["segments"] if (prefix := segment_prefix(segment, IPV4))}
                 ),

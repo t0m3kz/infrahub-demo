@@ -1,4 +1,4 @@
-"""Unit tests for generators/helpers/vrf.py and svi.py: the one writer of VRF instances and segment SVIs."""
+"""Unit tests for generators/capabilities/vrf.py and dcim/svi.py: the one writer of VRF instances and segment SVIs."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from typing import Any
 
 import pytest
 
-from generators.helpers.svi import plan_svis
+from generators.capabilities.vrf import prune_empty_vrfs, reconcile_vrfs, vrfs_held
+from generators.dcim.svi import svi_changes
 from tests.unit.vrf_instances_helpers import (
     facts_of,
     raw_device,
@@ -19,6 +20,8 @@ from tests.unit.vrf_instances_helpers import (
 from tests.unit.vrf_reconcile_helpers import FakeVrf, VrfHost, response
 
 _UNTRACKED = {"allow_upsert": True, "update_group_context": False}
+_LEAF = {"hfid": ["leaf-1"], "kind": "DcimPhysicalDevice"}
+"""The switch a plan names by its HFID: ``leaf-1`` (id ``d1``)."""
 
 
 def _leaf(**kwargs: Any) -> dict[str, Any]:
@@ -36,14 +39,14 @@ def _settled() -> dict[str, Any]:
 
 def _ensure(host: VrfHost, needs: dict[str, set[str]]) -> None:
     async def _hold() -> None:
-        async with host.vrfs_held(needs):
+        async with vrfs_held(host, needs):
             pass
 
     asyncio.run(_hold())
 
 
 def _reconcile(host: VrfHost, ids: list[str]) -> None:
-    asyncio.run(host.reconcile_vrfs(ids))
+    asyncio.run(reconcile_vrfs(host, ids))
 
 
 def test_a_routed_row_creates_the_instance_and_its_svi() -> None:
@@ -58,7 +61,7 @@ def test_a_routed_row_creates_the_instance_and_its_svi() -> None:
             "name": "dc1-vrf-prod",
             "deployment": {"id": "dc-1"},
             "security_zone": {"id": "ns-PROD"},
-            "shared_devices": [{"id": "d1"}],
+            "shared_devices": [_LEAF],
             "status": "active",
         }
     ]
@@ -67,7 +70,7 @@ def test_a_routed_row_creates_the_instance_and_its_svi() -> None:
     assert host.written("DcimVirtualInterface") == [
         {
             "name": "Vlan100",
-            "device": {"id": "d1"},
+            "device": _LEAF,
             "role": "svi",
             "status": "active",
             # It carries the segment's anycast gateway (the one address object of the segment).
@@ -166,7 +169,7 @@ def test_ensure_never_deletes_and_creates_what_the_caller_is_about_to_need() -> 
     _ensure(host, {"d1": {"PROD", "default"}})
 
     assert [data["name"] for data in host.written("ManagedVRF")] == ["dc1-vrf-prod"]
-    assert [data["shared_devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
+    assert [data["shared_devices"] for data in host.written("ManagedVRF")] == [[_LEAF]]
     assert host.edge_ops == []
     assert host.deleted == []
     assert host.store.vrfs["vrf-2"].members == {"d1"}
@@ -201,7 +204,7 @@ def test_a_changed_gateway_updates_the_svi_address_in_place() -> None:
         {
             "id": "svi-1",
             "name": "Vlan100",
-            "device": {"id": "d1"},
+            "device": _LEAF,
             "role": "svi",
             "status": "active",
             "ip_address": {"id": "gw-seg"},
@@ -280,7 +283,7 @@ def test_plan_svis_is_empty_for_a_settled_device() -> None:
     """The pure planner: the settled device needs no write."""
     facts = facts_of(_settled())
 
-    assert not plan_svis(facts, {"PROD": "vrf-1"})
+    assert not svi_changes(facts, {"PROD": "vrf-1"})
 
 
 def test_locks_are_taken_once_each_in_sorted_order_and_the_query_runs_by_path() -> None:
@@ -419,7 +422,7 @@ def test_a_moved_device_leaves_the_old_topology_and_joins_the_new_one() -> None:
     _reconcile(host, ["d1"])
 
     assert [data["deployment"] for data in host.written("ManagedVRF")] == [{"id": "dc-2"}]
-    assert [data["shared_devices"] for data in host.written("ManagedVRF")] == [[{"id": "d1"}]]
+    assert [data["shared_devices"] for data in host.written("ManagedVRF")] == [[_LEAF]]
     assert host.edge_ops == [("remove", "vrf-old", "shared_devices", ["d1"])]
     assert host.written("DcimVirtualInterface")[0]["id"] == "svi-1"
     assert host.written("DcimVirtualInterface")[0]["capabilities"] == [{"id": "new-1"}]
@@ -446,7 +449,7 @@ def test_an_instance_still_used_by_an_svi_is_not_deleted() -> None:
     host = VrfHost(response(instances=(raw_root_instance(empty),)))
     host.store.svi_refs["vrf-1"] = {"svi-x"}
 
-    asyncio.run(host.prune_empty_vrfs(["dc-1"]))
+    asyncio.run(prune_empty_vrfs(host, ["dc-1"]))
 
     assert host.deleted == []
 
@@ -467,7 +470,7 @@ def test_external_reference_retains_instance_until_truly_unused(reference: str) 
     assert host.client.get.await_args.kwargs["include"] == ["capabilities", "session_circuits"]
     host.store.external_refs["vrf-1"][reference].clear()
 
-    asyncio.run(host.prune_empty_vrfs(["dc-1"]))
+    asyncio.run(prune_empty_vrfs(host, ["dc-1"]))
 
     assert host.deleted == [("ManagedVRF", "vrf-1")]
     assert "vrf-1" not in host.store.vrfs
@@ -499,7 +502,7 @@ def test_prune_empty_vrfs_without_deployments_reads_nothing() -> None:
     """No deployment: no read."""
     host = VrfHost(response())
 
-    asyncio.run(host.prune_empty_vrfs([]))
+    asyncio.run(prune_empty_vrfs(host, []))
 
     host.client.filters.assert_not_awaited()
 
@@ -551,8 +554,8 @@ def test_an_instance_kept_alive_by_a_non_svi_interface_is_never_deleted() -> Non
     host = VrfHost(response(instances=(raw_root_instance(empty),)))
     host.store.svi_refs["vrf-1"] = {"lo-1"}
 
-    asyncio.run(host.prune_empty_vrfs(["dc-1"]))
-    asyncio.run(host.prune_empty_vrfs(["dc-1"]))
+    asyncio.run(prune_empty_vrfs(host, ["dc-1"]))
+    asyncio.run(prune_empty_vrfs(host, ["dc-1"]))
 
     assert host.deleted == []
     assert "vrf-1" in host.store.vrfs
@@ -578,7 +581,7 @@ def test_the_create_carries_shared_devices_and_no_separate_add_follows() -> None
     _reconcile(host, ["d1"])
 
     (created,) = host.written("ManagedVRF")
-    assert created["shared_devices"] == [{"id": "d1"}]
+    assert created["shared_devices"] == [_LEAF]
     assert "devices" not in created
     assert host.edge_ops == []
 

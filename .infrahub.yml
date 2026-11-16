@@ -143,53 +143,11 @@ artifact_definitions:
       controller: name__value
       controller_type: controller_type__value
       vendor: platform__name__value
-  - name: topology_orchestrator_ansible_inventory
-    artifact_name: ansible-inventory
-    content_type: text/plain
-    targets: topology_ansible
-    transformation: topology-orchestrator-ansible
-    parameters:
-      name: name__value
   - name: office_firewall_policy
     artifact_name: office-firewall-policy
     content_type: application/json
     targets: customer_deployments_office
     transformation: office-firewall-policy
-    parameters:
-      name: name__value
-  - name: topology_orchestrator_argocd_manifest
-    artifact_name: argocd-application
-    content_type: application/json
-    targets: topology_argocd
-    transformation: topology-orchestrator-argocd
-    parameters:
-      name: name__value
-  - name: topology_orchestrator_github_actions_dispatch
-    artifact_name: github-actions-dispatch
-    content_type: application/json
-    targets: topology_github_actions
-    transformation: topology-orchestrator-github-actions
-    parameters:
-      name: name__value
-  - name: application_orchestrator_ansible_inventory
-    artifact_name: ansible-inventory
-    content_type: text/plain
-    targets: application_ansible
-    transformation: application-orchestrator-ansible
-    parameters:
-      name: name__value
-  - name: application_orchestrator_argocd_manifest
-    artifact_name: argocd-application
-    content_type: application/json
-    targets: application_argocd
-    transformation: application-orchestrator-argocd
-    parameters:
-      name: name__value
-  - name: application_orchestrator_github_actions_dispatch
-    artifact_name: github-actions-dispatch
-    content_type: application/json
-    targets: application_github_actions
-    transformation: application-orchestrator-github-actions
     parameters:
       name: name__value
 
@@ -254,12 +212,6 @@ check_definitions:
     targets: firewalls
     parameters:
       device: name__value
-  - name: validate_sdwan_orchestrator
-    class_name: CheckSdwanOrchestrator
-    file_path: checks/devices/sdwan.py
-    targets: sdwan_orchestrators
-    parameters:
-      controller: name__value
   - name: validate_segment_placement
     class_name: CheckSegmentPlacement
     file_path: checks/segments/segment_placement.py
@@ -275,30 +227,18 @@ check_definitions:
   - name: validate_pbr_firewall_reachability
     class_name: CheckPbrFirewallReachability
     file_path: checks/routing/pbr_firewall_reachability.py
-  - name: validate_reference_fabric
-    class_name: CheckReferenceFabric
-    file_path: checks/routing/reference_fabric.py
   - name: validate_routing_tags
     class_name: CheckRoutingTags
     file_path: checks/routing/routing_tags.py
-  - name: validate_bgp_expectations
-    class_name: CheckBgpExpectations
-    file_path: checks/routing/bgp_expectations.py
   - name: validate_mlag_domains
     class_name: CheckMlagDomains
     file_path: checks/routing/mlag_domains.py
   - name: validate_vrf_instances
     class_name: CheckVrfInstances
     file_path: checks/routing/vrf_instances.py
-  - name: validate_routing_invariants
-    class_name: CheckRoutingInvariants
-    file_path: checks/routing/routing_invariants.py
   - name: validate_evpn_fabric
     class_name: CheckEvpnFabric
     file_path: checks/routing/evpn_fabric.py
-  - name: validate_lisp_fabric
-    class_name: CheckLispFabric
-    file_path: checks/routing/lisp_fabric.py
   - name: validate_carrier_circuit_ports
     class_name: CheckCarrierCircuitPorts
     file_path: checks/connectivity/carrier_circuit_ports.py
@@ -504,54 +444,6 @@ python_transforms:
       files:
         - transforms/
         - utils/
-  - name: topology-orchestrator-ansible
-    class_name: TopologyOrchestratorAnsible
-    file_path: transforms/topology/orchestrator_routing.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
-  - name: topology-orchestrator-argocd
-    class_name: TopologyOrchestratorArgoCD
-    file_path: transforms/topology/orchestrator_routing.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
-  - name: topology-orchestrator-github-actions
-    class_name: TopologyOrchestratorGitHubActions
-    file_path: transforms/topology/orchestrator_routing.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
-  - name: application-orchestrator-ansible
-    class_name: ApplicationOrchestratorAnsible
-    file_path: transforms/topology/orchestrator_routing.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
-  - name: application-orchestrator-argocd
-    class_name: ApplicationOrchestratorArgoCD
-    file_path: transforms/topology/orchestrator_routing.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
-  - name: application-orchestrator-github-actions
-    class_name: ApplicationOrchestratorGitHubActions
-    file_path: transforms/topology/orchestrator_routing.py
-    watch:
-      files:
-        - transforms/
-        - templates/
-        - utils/
   - name: change_request_servicenow
     class_name: ChangeRequestServiceNow
     file_path: transforms/change/servicenow.py
@@ -559,207 +451,193 @@ python_transforms:
       files:
         - transforms/
         - utils/
-graphql_fragments:
-  - name: all_fragments
-    file_path: queries/fragments/
-
 queries:
   - name: endpoint_connectivity
-    file_path: queries/flat/topology/add/endpoint.gql
+    file_path: queries/topology/add/endpoint.gql
   - name: topology_dc
-    file_path: queries/flat/topology/add/dc.gql
+    file_path: queries/topology/add/dc.gql
   - name: topology_pod
-    file_path: queries/flat/topology/add/pod.gql
+    file_path: queries/topology/add/pod.gql
   - name: rack
-    file_path: queries/flat/topology/add/rack.gql
-  - name: colocation_rack
-    file_path: queries/flat/topology/add/colocation_rack.gql
+    file_path: queries/topology/add/rack.gql
   - name: topology_pop
-    file_path: queries/flat/topology/add/pop.gql
+    file_path: queries/topology/add/pop.gql
   - name: topology_simulator
-    file_path: queries/flat/topology/clab.gql
+    file_path: queries/topology/clab.gql
   - name: topology_cabling
-    file_path: queries/flat/topology/cabling.gql
+    file_path: queries/topology/cabling.gql
 
   - name: leaf_config
-    file_path: queries/flat/config/leaf.gql
+    file_path: queries/config/leaf.gql
   - name: border_leaf_config
-    file_path: queries/flat/config/border_leaf.gql
+    file_path: queries/config/border_leaf.gql
   - name: access_switch_config
-    file_path: queries/flat/config/access_switch.gql
+    file_path: queries/config/access_switch.gql
   - name: distribution_switch_config
-    file_path: queries/flat/config/distribution_switch.gql
+    file_path: queries/config/distribution_switch.gql
   - name: border_spine_config
-    file_path: queries/flat/config/border_spine.gql
+    file_path: queries/config/border_spine.gql
   - name: spine_config
-    file_path: queries/flat/config/spine.gql
+    file_path: queries/config/spine.gql
   - name: super_spine_config
-    file_path: queries/flat/config/super_spine.gql
+    file_path: queries/config/super_spine.gql
   - name: edge_config
-    file_path: queries/flat/config/edge.gql
+    file_path: queries/config/edge.gql
   - name: loadbalancer_config
-    file_path: queries/flat/config/loadbalancer.gql
+    file_path: queries/config/loadbalancer.gql
   - name: proxy_cloud_config
-    file_path: queries/flat/config/proxy_cloud.gql
+    file_path: queries/config/proxy_cloud.gql
   - name: firewall_config
-    file_path: queries/flat/config/firewall.gql
+    file_path: queries/config/firewall.gql
   - name: firewall_rules
-    file_path: queries/flat/config/firewall_rules.gql
+    file_path: queries/config/firewall_rules.gql
   - name: firewall_rule_segments
-    file_path: queries/flat/config/firewall_rule_segments.gql
+    file_path: queries/config/firewall_rule_segments.gql
   - name: controller_payload
-    file_path: queries/flat/config/controller.gql
+    file_path: queries/config/controller.gql
   - name: pod_decommission
-    file_path: queries/flat/topology/decomission/pod.gql
+    file_path: queries/topology/decomission/pod.gql
   - name: application
-    file_path: queries/flat/topology/add/application.gql
+    file_path: queries/topology/add/application.gql
   - name: app_dependency
-    file_path: queries/flat/topology/add/app_dependency.gql
+    file_path: queries/topology/add/app_dependency.gql
   - name: customer_routing_tag
-    file_path: queries/flat/topology/add/customer_routing_tag.gql
+    file_path: queries/topology/add/customer_routing_tag.gql
   - name: transit_policy
-    file_path: queries/flat/topology/add/transit_policy.gql
+    file_path: queries/topology/add/transit_policy.gql
   - name: app_component
-    file_path: queries/flat/topology/add/app_component.gql
+    file_path: queries/topology/add/app_component.gql
   - name: app_component_segment
-    file_path: queries/flat/topology/add/app_component_segment.gql
+    file_path: queries/topology/add/app_component_segment.gql
   - name: segment_deployment_ports
-    file_path: queries/flat/topology/add/segment_deployment_ports.gql
+    file_path: queries/topology/add/segment_deployment_ports.gql
   - name: lb_segment_gateways
-    file_path: queries/flat/topology/add/lb_segment_gateways.gql
+    file_path: queries/topology/add/lb_segment_gateways.gql
   - name: lb_serving_contexts
-    file_path: queries/flat/topology/add/lb_serving_contexts.gql
+    file_path: queries/topology/add/lb_serving_contexts.gql
   - name: segment_components
-    file_path: queries/flat/topology/add/segment_components.gql
+    file_path: queries/topology/add/segment_components.gql
   - name: segment_vlans
-    file_path: queries/flat/topology/add/segment_vlans.gql
+    file_path: queries/topology/add/segment_vlans.gql
   - name: vxlan_segment_data
-    file_path: queries/flat/topology/add/vxlan_segment.gql
+    file_path: queries/topology/add/vxlan_segment.gql
   - name: colocation_metro_data
-    file_path: queries/flat/topology/add/colocation_metro.gql
+    file_path: queries/topology/add/colocation_metro.gql
   - name: colocation_zone_data
-    file_path: queries/flat/topology/add/colocation_zone.gql
+    file_path: queries/topology/add/colocation_zone.gql
   - name: virtual_colocation_data
-    file_path: queries/flat/topology/add/colocation_virtual.gql
+    file_path: queries/topology/add/colocation_virtual.gql
   - name: office_fabric_data
-    file_path: queries/flat/topology/add/office_fabric.gql
+    file_path: queries/topology/add/office_fabric.gql
   - name: circuit_data
-    file_path: queries/flat/topology/add/circuit.gql
+    file_path: queries/topology/add/circuit.gql
   - name: virtual_circuit_data
-    file_path: queries/flat/topology/add/virtual_circuit.gql
-  - name: connectivity_request_data
-    file_path: queries/flat/topology/add/connectivity_request.gql
+    file_path: queries/topology/add/virtual_circuit.gql
   - name: patch_panel_data
-    file_path: queries/flat/topology/add/patch_panel.gql
+    file_path: queries/topology/add/patch_panel.gql
   - name: context_routes
-    file_path: queries/flat/topology/add/context_routes.gql
+    file_path: queries/topology/add/context_routes.gql
   - name: segment_placement
-    file_path: queries/flat/validation/segment_placement.gql
+    file_path: queries/validation/segment_placement.gql
   - name: segment_security
-    file_path: queries/flat/validation/segment_security.gql
+    file_path: queries/validation/segment_security.gql
   - name: customer_quota
-    file_path: queries/flat/validation/customer_quota.gql
+    file_path: queries/validation/customer_quota.gql
   - name: tenant_svi_protection
-    file_path: queries/flat/validation/tenant_svi_protection.gql
+    file_path: queries/validation/tenant_svi_protection.gql
   - name: pbr_firewall_reachability
-    file_path: queries/flat/validation/pbr_firewall_reachability.gql
+    file_path: queries/validation/pbr_firewall_reachability.gql
   - name: reference_fabric
-    file_path: queries/flat/validation/reference_fabric.gql
+    file_path: queries/validation/reference_fabric.gql
   - name: routing_tags
-    file_path: queries/flat/validation/routing_tags.gql
+    file_path: queries/validation/routing_tags.gql
   - name: bgp_expectations
-    file_path: queries/flat/validation/bgp_expectations.gql
+    file_path: queries/validation/bgp_expectations.gql
   - name: mlag_domains
-    file_path: queries/flat/validation/mlag_domains.gql
+    file_path: queries/validation/mlag_domains.gql
   - name: vrf_instances
-    file_path: queries/flat/validation/vrf_instances.gql
+    file_path: queries/validation/vrf_instances.gql
   - name: routing_invariants
-    file_path: queries/flat/validation/routing_invariants.gql
+    file_path: queries/validation/routing_invariants.gql
   - name: evpn_fabric
-    file_path: queries/flat/validation/evpn_fabric.gql
+    file_path: queries/validation/evpn_fabric.gql
   - name: lisp_fabric
-    file_path: queries/flat/validation/lisp_fabric.gql
+    file_path: queries/validation/lisp_fabric.gql
   - name: carrier_circuit_ports
-    file_path: queries/flat/validation/carrier_circuit_ports.gql
+    file_path: queries/validation/carrier_circuit_ports.gql
   - name: circuit_placement
-    file_path: queries/flat/validation/circuit_placement.gql
+    file_path: queries/validation/circuit_placement.gql
   - name: customer_cloud_account
-    file_path: queries/flat/validation/customer_cloud_account.gql
+    file_path: queries/validation/customer_cloud_account.gql
   - name: cloud_connection
-    file_path: queries/flat/validation/cloud_connection.gql
+    file_path: queries/validation/cloud_connection.gql
   - name: cluster
-    file_path: queries/flat/validation/cluster.gql
+    file_path: queries/validation/cluster.gql
   - name: shared_vlan
-    file_path: queries/flat/validation/shared_vlan.gql
+    file_path: queries/validation/shared_vlan.gql
   - name: routing_policy
-    file_path: queries/flat/validation/routing_policy.gql
+    file_path: queries/validation/routing_policy.gql
   - name: software_lifecycle
-    file_path: queries/flat/validation/software_lifecycle.gql
+    file_path: queries/validation/software_lifecycle.gql
   - name: office_firewall_policy
-    file_path: queries/flat/config/office_firewall_policy.gql
+    file_path: queries/config/office_firewall_policy.gql
   - name: virtual_switch
-    file_path: queries/flat/validation/virtual_switch.gql
+    file_path: queries/validation/virtual_switch.gql
   - name: patch_panel_pairing
-    file_path: queries/flat/validation/patch_panel_pairing.gql
+    file_path: queries/validation/patch_panel_pairing.gql
   - name: suite_capacity
-    file_path: queries/flat/validation/suite_capacity.gql
+    file_path: queries/validation/suite_capacity.gql
   - name: colocation_placement
-    file_path: queries/flat/validation/colocation_placement.gql
+    file_path: queries/validation/colocation_placement.gql
   - name: internet_egress
-    file_path: queries/flat/validation/internet_egress.gql
+    file_path: queries/validation/internet_egress.gql
   - name: app_dependency_validation
-    file_path: queries/flat/validation/app_dependency.gql
+    file_path: queries/validation/app_dependency.gql
   - name: hypervisor_environment
-    file_path: queries/flat/validation/hypervisor_environment.gql
+    file_path: queries/validation/hypervisor_environment.gql
   - name: virtual_device_placement
-    file_path: queries/flat/validation/virtual_device_placement.gql
+    file_path: queries/validation/virtual_device_placement.gql
   - name: interface_parents
-    file_path: queries/flat/validation/interface_parents.gql
+    file_path: queries/validation/interface_parents.gql
   - name: interface_layers
-    file_path: queries/flat/validation/interface_layers.gql
+    file_path: queries/validation/interface_layers.gql
   - name: pool_utilization
-    file_path: queries/flat/validation/pool_utilization.gql
+    file_path: queries/validation/pool_utilization.gql
   - name: loadbalancer_validation
-    file_path: queries/flat/validation/lb.gql
+    file_path: queries/validation/lb.gql
 
   - name: mlag_domain_data
-    file_path: queries/flat/topology/add/mlag_domain.gql
+    file_path: queries/topology/add/mlag_domain.gql
   - name: customer_dc
-    file_path: queries/flat/topology/add/customer_dc.gql
+    file_path: queries/topology/add/customer_dc.gql
   - name: customer_colocation
-    file_path: queries/flat/topology/add/customer_colocation.gql
+    file_path: queries/topology/add/customer_colocation.gql
   - name: customer_cloud
-    file_path: queries/flat/topology/add/customer_cloud.gql
+    file_path: queries/topology/add/customer_cloud.gql
   - name: cloud_attachment_range
-    file_path: queries/flat/topology/add/cloud_attachment_range.gql
-  - name: customer_office_sdwan
-    file_path: queries/flat/topology/add/customer_office_sdwan.gql
+    file_path: queries/topology/add/cloud_attachment_range.gql
   - name: application_orchestrator_routing
-    file_path: queries/flat/topology/add/application_orchestrator_routing.gql
+    file_path: queries/topology/add/application_orchestrator_routing.gql
   - name: customer_deployment_orchestrator_routing
-    file_path: queries/flat/topology/add/customer_deployment_orchestrator_routing.gql
-  - name: topology_orchestrator_routing_data
-    file_path: queries/flat/topology/add/topology_orchestrator_routing_data.gql
-  - name: application_orchestrator_routing_data
-    file_path: queries/flat/topology/add/application_orchestrator_routing_data.gql
+    file_path: queries/topology/add/customer_deployment_orchestrator_routing.gql
   - name: change_request
-    file_path: queries/flat/change/change_request.gql
+    file_path: queries/change/change_request.gql
   - name: open_change_request
-    file_path: queries/flat/change/open_change_request.gql
+    file_path: queries/change/open_change_request.gql
   - name: change_request_diff
-    file_path: queries/flat/change/change_request_diff.gql
+    file_path: queries/change/change_request_diff.gql
   - name: change_request_facts
-    file_path: queries/flat/change/change_request_facts.gql
+    file_path: queries/change/change_request_facts.gql
   - name: change_request_peers
-    file_path: queries/flat/change/change_request_peers.gql
+    file_path: queries/change/change_request_peers.gql
   - name: change_request_validation
-    file_path: queries/flat/change/change_request_validation.gql
+    file_path: queries/change/change_request_validation.gql
   - name: change_request_servicenow
-    file_path: queries/flat/change/change_request_servicenow.gql
+    file_path: queries/change/change_request_servicenow.gql
 
 generator_definitions:
   - name: add_dc
-    file_path: generators/fabric/dc.py
+    file_path: generators/dc/dc.py
     targets: topologies_dc
     query: topology_dc
     class_name: DCTopologyGenerator
@@ -768,7 +646,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_pod
-    file_path: generators/fabric/pod.py
+    file_path: generators/dc/pod.py
     targets: topologies_pod
     query: topology_pod
     class_name: PodTopologyGenerator
@@ -777,7 +655,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: dc_pod_cascade
-    file_path: generators/fabric/dc_pod_cascade.py
+    file_path: generators/dc/dc_pod_cascade.py
     targets: topologies_dc
     query: topology_dc
     class_name: DCPodCascadeGenerator
@@ -786,7 +664,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: pod_rack_cascade
-    file_path: generators/fabric/pod_rack_cascade.py
+    file_path: generators/dc/pod_rack_cascade.py
     targets: topologies_pod
     query: topology_pod
     class_name: PodRackCascadeGenerator
@@ -804,17 +682,10 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_rack
-    file_path: generators/fabric/rack.py
+    file_path: generators/dc/rack.py
     targets: topologies_rack
     query: rack
     class_name: RackGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-  - name: add_colocation_rack
-    file_path: generators/colocation/colocation_rack.py
-    targets: topologies_rack
-    query: colocation_rack
-    class_name: ColocationRackGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
@@ -873,15 +744,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: add_connectivity_request
-    file_path: generators/connectivity/request.py
-    targets: connectivity_requests
-    query: connectivity_request_data
-    class_name: ConnectivityRequestGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
   - name: add_context_routes
     file_path: generators/connectivity/context_routes.py
     targets: service_contexts
@@ -901,7 +763,7 @@ generator_definitions:
     parameters:
       panel_id: panel_id__value
   - name: add_mlag
-    file_path: generators/fabric/mlag.py
+    file_path: generators/capabilities/mlag.py
     targets: mlag_domains
     query: mlag_domain_data
     class_name: MLAGGenerator
@@ -982,7 +844,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_cloud_attachment_range
-    file_path: generators/colocation/cloud_attachment_range.py
+    file_path: generators/cloud/cloud_attachment_range.py
     targets: cloud_attachment_ranges
     query: cloud_attachment_range
     class_name: CloudAttachmentRangeGenerator
@@ -1018,19 +880,10 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_office_fabric
-    file_path: generators/fabric/office_fabric.py
+    file_path: generators/office/office_fabric.py
     targets: customer_deployments_office
     query: office_fabric_data
     class_name: OfficeFabricGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: add_sdwan_edge
-    file_path: generators/fabric/sdwan_edge.py
-    targets: customer_deployments_office
-    query: customer_office_sdwan
-    class_name: SdwanEdgeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

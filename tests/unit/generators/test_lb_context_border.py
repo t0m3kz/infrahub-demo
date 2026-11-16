@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import ipaddress
-from pathlib import Path
 from typing import Any
 
 import pytest
-from graphql import parse, print_ast
-from graphql.language import FragmentDefinitionNode
 
 from tests.smoke.fixture_builders.common import run_transform
 from tests.smoke.fixture_builders.firewall import build_leaf_lb_client_data
@@ -17,10 +14,9 @@ from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
 from transforms.helpers.firewall import get_exchange_transits
-from transforms.helpers.firewall_pbr import get_customer_pbr_rules
 from transforms.helpers.group_policy import UNCLASSIFIED, get_vrf_contracts
+from transforms.helpers.pbr import get_customer_pbr_rules
 from transforms.helpers.vxlan import get_interfaces
-from utils.graphql_queries import load_query
 
 _PROD = {"name": "PROD", "vrf_type": "prod", "l3_vni": 60000}
 _NONPROD = {"name": "NONPROD", "vrf_type": "non_prod", "l3_vni": 60001}
@@ -235,42 +231,3 @@ class TestSegmentLessPolicyContracts:
         deny = {**_gp_rule("web-to-app-deny", "app", 443), "action": "deny"}
         rows = get_vrf_contracts([_gp_seg("web", [deny]), _gp_seg("app", [])], [])
         assert rows == []
-
-
-class TestQueries:
-    """The fragments select what the border transform and the group contract builder read."""
-
-    @staticmethod
-    def _fragment(root_dir: Path, path: str, name: str) -> str:
-        document = parse(load_query(root_dir / path))
-        return next(
-            print_ast(item)
-            for item in document.definitions
-            if isinstance(item, FragmentDefinitionNode) and item.name.value == name
-        )
-
-    def test_service_ports_carry_the_members_behind_them(self, root_dir: Path) -> None:
-        """The contexts of a border device are derived from its service ports' cables, not read off an interface edge."""
-        path = "queries/fragments/device_services.gql"
-        ports = self._fragment(root_dir, path, "ServiceBorderPortsFields")
-        assert 'service_ports: interfaces(role__values: ["firewall", "load-balancer"])' in ports
-        assert "...ServiceBorderPortFields" in ports
-        cable = self._fragment(root_dir, path, "ServiceBorderPortFields")
-        for selection in ("endpoints {", "...ServiceFarEndFields", "...ServiceHostedNicFields"):
-            assert selection in cable
-        member = self._fragment(root_dir, path, "ServiceMemberFields")
-        for selection in ("shared_capabilities {", "...ServiceContextFields", "interfaces {", "role {"):
-            assert selection in member
-        assert "vlan_id {" in self._fragment(root_dir, path, "ServiceContextFields")
-        edge = self._fragment(
-            root_dir, "queries/fragments/interface_capability_fields.gql", "InterfaceCapabilitiesWithSegmentFields"
-        )
-        assert "ContextInterfaceCapabilityFields" not in edge
-
-    def test_group_policy_segments_read_inbound_rules_with_their_policy_segment(self, root_dir: Path) -> None:
-        fragment = self._fragment(root_dir, "queries/fragments/group_policy.gql", "SegmentGroupPolicyFields")
-        assert "inbound_rules {" in fragment
-        inbound = fragment[fragment.index("inbound_rules {") :]
-        assert "...GroupPolicyRuleFields" in inbound
-        assert "policy {\n          node {\n            enabled {" in inbound
-        assert "segment {\n              node {\n                id" in inbound

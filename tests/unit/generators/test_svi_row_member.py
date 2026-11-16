@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from generators.helpers.svi import plan_svis
+from generators.capabilities.vrf import reconcile_vrfs
+from generators.dcim.svi import svi_changes
 from tests.unit.vrf_instances_helpers import facts_of, raw_device, raw_instance, raw_row, raw_svi
 from tests.unit.vrf_reconcile_helpers import VrfHost, response
 from utils.segment_vlan import svi_rows
@@ -16,7 +17,7 @@ def _leaf(**kwargs: Any) -> dict[str, Any]:
 
 
 def _reconcile(host: VrfHost) -> None:
-    asyncio.run(host.reconcile_vrfs(["d1"]))
+    asyncio.run(reconcile_vrfs(host, ["d1"]))
 
 
 def _edge_calls(host: VrfHost, mutation: str) -> list[dict[str, Any]]:
@@ -129,6 +130,6 @@ def test_plan_pairs_each_row_with_one_svi_and_the_second_is_stale() -> None:
         )
     )
 
-    plan = plan_svis(facts, {"PROD": "vrf-1"})
+    plan = svi_changes(facts, {"PROD": "vrf-1"})
 
     assert plan.stale_ids == ("svi-b",) and plan.writes == () and plan.recreate_ids == ()

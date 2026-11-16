@@ -64,7 +64,7 @@ generics:
   # The shared branch of the device edge: objects several devices are members of (a VRF of a topology; later an SNMP
   # profile, NTP, syslog, AAA). Its edge never cascades: deleting a member never deletes the object and deleting the
   # object leaves its devices. Anything that must die with its device stays on GenericDevice. A kind inherits exactly
-  # one of the two device-edge generics (tests/unit/test_capability_edge_names.py). Members are written from this side,
+  # one of the two device-edge generics. Members are written from this side,
   # edge by edge (RelationshipAdd / RelationshipRemove), never as a saved list; the object's lifecycle owner is a
   # Parent (ManagedVRF.deployment) or a data file.
   - name: GenericSharedDevice

@@ -5,7 +5,7 @@ generics:
   # The kit a zone or a virtual colocation declares and the pools its
   # addresses come from. Shared by the two kinds because both turn
   # `fabric_templates` into devices with the same generator mixin
-  # (generators/topology/colocation_fabric.py); what differs is which template
+  # (generators/colocation/colocation_fabric.py); what differs is which template
   # kind each may host (a zone: TemplateDcimPhysicalDevice, a virtual
   # colocation: TemplateDcimVirtualDevice) and whether the devices are cabled.
   #
@@ -26,7 +26,7 @@ generics:
     relationships:
       # Optional: without one the zone is sized with the generator's fixed
       # fallback and nothing caps its fabric_templates;
-      # checks/colocation_placement.py asks for a design whenever a zone or
+      # checks/customers/colocation_placement.py asks for a design whenever a zone or
       # virtual colocation declares kit.
       - name: design
         peer: TopologyTemplateColocationZone
@@ -37,6 +37,15 @@ generics:
         optional: true
         identifier: "colocation_fabric__design"
         order_weight: 200
+      - name: fabric_templates
+        peer: TopologyElement
+        label: "Elements"
+        description: "Edge-router, firewall, and load-balancer templates for this zone's own devices"
+        optional: true
+        cardinality: many
+        kind: Attribute
+        identifier: "colocation_fabric__fabric_templates"
+        order_weight: 1100
       - name: loopback_pool
         peer: CoreIPAddressPool
         label: "Loopback Pool"
@@ -130,7 +139,7 @@ nodes:
         description: "Geographic location mapping for this region"
       # Optional: a metro without a design declares no envelope, so its zones size
       # and slice their own pools from the bootstrap pools directly (the fallback
-      # of generators/topology/colocation_fabric.py). With one, the metro holds
+      # of generators/colocation/colocation_fabric.py). With one, the metro holds
       # supernets sized for max_zones zones of the largest zone design and each
       # zone slices its pools out of them, exactly as a pod slices its DC's.
       - name: design
@@ -254,21 +263,11 @@ nodes:
     uniqueness_constraints:
       - [name__value, parent]
     include_in_menu: false
-    relationships:
-      - name: fabric_templates
-        peer: TopologyElement
-        label: "Elements"
-        description: "Edge-router, firewall, and load-balancer templates for this virtual colocation's appliances"
-        optional: true
-        cardinality: many
-        kind: Attribute
-        identifier: "virtual_colocation__fabric_templates"
-        order_weight: 1100
 
   # The envelope of a metro and of a zone or virtual colocation, the colocation
   # counterparts of TopologyTemplateDC / TopologyTemplatePod (topology_dc.yml).
   # Only the maxima live here: every pool a colocation owns is sized for its
-  # envelope before any device exists, derived by generators/fabric_sizing.py,
+  # envelope before any device exists, derived by generators/mixins/fabric_sizing.py,
   # never from the devices built so far. The rows live in
   # data/bootstrap/14c_colocation_templates.yml.
   - name: TemplateColocationMetro

@@ -140,7 +140,6 @@ query circuit_placement {
                       }
                     }
                   }
-                  # A provider's own router has no deployment: its provider is its owner.
                   ... on DcimDeviceManaged {
                     owner {
                       node {
@@ -193,7 +192,33 @@ query circuit_placement {
         }
         vrf {
           node {
-            ...RoutingVrfFields
+            ... on ManagedVRF {
+              id
+              deployment {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+              security_zone {
+                node {
+                  ... on SecurityZone {
+                    id
+                    name {
+                      value
+                    }
+                    vrf_type {
+                      value
+                    }
+                    l3_vni {
+                      value
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         password {
@@ -211,68 +236,124 @@ query circuit_placement {
         capabilities {
           edges {
             node {
-              ...VirtualPort
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-fragment VirtualPort on DcimInterface {
-  id
-  __typename
-  name {
-    value
-  }
-  capabilities {
-    edges {
-      node {
-        __typename
-        ... on TopologyCarrierCircuit {
-          ...Carrier
-        }
-      }
-    }
-  }
-  ... on DcimPhysicalInterface {
-    cable {
-      node {
-        id
-      }
-    }
-    ip_address {
-      node {
-        id
-      }
-    }
-  }
-  # What the end rides on and its tag (a sub-interface or a cloud peering; utils/interface_encapsulation.py): the parent
-  # with its cable and the carrier circuits that end on it.
-  encapsulation_capabilities: capabilities {
-    edges {
-      node {
-        __typename
-        ... on ManagedInterfaceEncapsulation {
-          vlan_id {
-            value
-          }
-          parent {
-            node {
-              ... on DcimPhysicalInterface {
-                cable {
+              ... on DcimInterface {
+                id
+                __typename
+                name {
+                  value
+                }
+                capabilities {
+                  edges {
+                    node {
+                      __typename
+                      ... on TopologyCarrierCircuit {
+                        ...circuit_placement__F1
+                      }
+                    }
+                  }
+                }
+                ...circuit_placement__F2
+                device {
                   node {
                     id
+                    __typename
+                    name {
+                      value
+                    }
+                    ... on DcimPhysicalDevice {
+                      deployment {
+                        node {
+                          id
+                          __typename
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                    ... on DcimVirtualDevice {
+                      deployment {
+                        node {
+                          id
+                          __typename
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                    ... on CloudNetworkAppliance {
+                      deployment {
+                        node {
+                          id
+                          __typename
+                          ... on TopologyDeployment {
+                            name {
+                              value
+                            }
+                          }
+                        }
+                      }
+                    }
+                    ... on CloudTransport {
+                      region {
+                        node {
+                          id
+                          __typename
+                          name {
+                            value
+                          }
+                        }
+                      }
+                      saas_region {
+                        node {
+                          id
+                          __typename
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                    ... on DcimDeviceManaged {
+                      capabilities {
+                        edges {
+                          node {
+                            __typename
+                            ... on ManagedBGP {
+                              process_role {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
-              capabilities {
-                edges {
+              ... on DcimSubInterface {
+                vlan_id {
+                  value
+                }
+                parent {
                   node {
-                    __typename
-                    ... on TopologyCarrierCircuit {
-                      ...Carrier
+                    ... on DcimPhysicalInterface {
+                      cable {
+                        node {
+                          id
+                        }
+                      }
+                    }
+                    capabilities {
+                      edges {
+                        node {
+                          __typename
+                          ... on TopologyCarrierCircuit {
+                            ...circuit_placement__F3
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -283,78 +364,41 @@ fragment VirtualPort on DcimInterface {
       }
     }
   }
-  device {
-    node {
-      id
-      __typename
-      name {
-        value
+}
+
+fragment circuit_placement__F1 on TopologyCarrierCircuit {
+  id
+  name {
+    value
+  }
+  status {
+    value
+  }
+  circuit_type {
+    value
+  }
+  locations {
+    edges {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
       }
-      ... on DcimPhysicalDevice {
-        deployment {
+    }
+  }
+  capabilities {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        device {
           node {
-            id
-            __typename
             name {
               value
-            }
-          }
-        }
-      }
-      ... on DcimVirtualDevice {
-        deployment {
-          node {
-            id
-            __typename
-            name {
-              value
-            }
-          }
-        }
-      }
-      ... on CloudNetworkAppliance {
-        deployment {
-          node {
-            id
-            __typename
-            ... on TopologyDeployment {
-              name {
-                value
-              }
-            }
-          }
-        }
-      }
-      ... on CloudTransport {
-        region {
-          node {
-            id
-            __typename
-            name {
-              value
-            }
-          }
-        }
-        saas_region {
-          node {
-            id
-            __typename
-            name {
-              value
-            }
-          }
-        }
-      }
-      ... on DcimDeviceManaged {
-        capabilities {
-          edges {
-            node {
-              __typename
-              ... on ManagedBGP {
-                process_role {
-                  value
-                }
-              }
             }
           }
         }
@@ -363,7 +407,20 @@ fragment VirtualPort on DcimInterface {
   }
 }
 
-fragment Carrier on TopologyCarrierCircuit {
+fragment circuit_placement__F2 on DcimPhysicalInterface {
+  cable {
+    node {
+      id
+    }
+  }
+  ip_address {
+    node {
+      id
+    }
+  }
+}
+
+fragment circuit_placement__F3 on TopologyCarrierCircuit {
   id
   name {
     value

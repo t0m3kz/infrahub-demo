@@ -11,12 +11,8 @@ spec:
       scope: private
       routing: bgp
       bfd: true
-      capabilities:
-        - kind: ManagedInterfaceEncapsulation
-          data:
-            name: "dx-30all-euc1-fr2:dxcon-fr2.1000"
-            vlan_id: 1000
-            parent: ["EXT-AWS-DX-FR2", "dxcon-fr2"]
+      parent: ["EXT-AWS-DX-FR2", "dxcon-fr2"]
+      vlan_id: 1000
       gateway: "dxgw-30all"
       auth: "eqx-fr2-aws-euc1-key"
       peer_ip: ["10.255.143.255/31", "default"]

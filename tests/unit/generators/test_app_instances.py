@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from generators.applications.app_instance_segment import AppInstanceSegmentGenerator
 from generators.connectivity.endpoint import HOSTED_INSTANCE_KINDS
+from generators.segments import segment_ports
 from utils.app_instances import HOSTED_INSTANCE_TYPENAMES, PHYSICAL_INSTANCE_TYPENAMES, physical_host
 
 
@@ -48,4 +48,4 @@ class TestPhysicalHost:
         ]
         for instance in instances:
             host = physical_host(instance)
-            assert AppInstanceSegmentGenerator._resolve_physical_device_id(instance) == (host or {}).get("id")
+            assert segment_ports._resolve_physical_device_id(instance) == (host or {}).get("id")

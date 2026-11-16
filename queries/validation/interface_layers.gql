@@ -2,7 +2,84 @@ query interface_layers {
   DcimPhysicalInterface {
     edges {
       node {
-        ...InterfaceRoutingZoneFields
+        ... on DcimInterface {
+          zone_capabilities: capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedVRF {
+                  id
+                  deployment {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                    }
+                  }
+                  security_zone {
+                    node {
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on TopologySessionCircuit {
+                  circuit_type {
+                    value
+                  }
+                  vrf {
+                    node {
+                      ... on ManagedVRF {
+                        id
+                        deployment {
+                          node {
+                            id
+                            name {
+                              value
+                            }
+                          }
+                        }
+                        security_zone {
+                          node {
+                            ... on SecurityZone {
+                              id
+                              name {
+                                value
+                              }
+                              vrf_type {
+                                value
+                              }
+                              l3_vni {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on ManagedSegmentVlan {
+                  id
+                  vlan_id {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
         id
         name {
           value
@@ -24,25 +101,17 @@ query interface_layers {
             id
           }
         }
-        # A sub-interface (the interfaces of its encapsulations) is routed (an L3 signal) unless it is a VM NIC pinned to this host port (generators/virtual_nics.py
-        # is_host_nic): its role and the kind of its device say which.
-        encapsulations {
+        sub_interfaces {
           edges {
             node {
-              capabilities {
-                edges {
+              __typename
+              ... on DcimVirtualInterface {
+                role {
+                  value
+                }
+                device {
                   node {
                     __typename
-                    ... on DcimVirtualInterface {
-                      role {
-                        value
-                      }
-                      device {
-                        node {
-                          __typename
-                        }
-                      }
-                    }
                   }
                 }
               }
@@ -53,7 +122,6 @@ query interface_layers {
           edges {
             node {
               __typename
-              # A VLAN row of its switch is the port's switchport membership (utils/segment_vlan.py port_rows).
               ... on ManagedSegmentVlan {
                 id
                 vlan_id {
@@ -81,7 +149,84 @@ query interface_layers {
   DcimLAGInterface {
     edges {
       node {
-        ...InterfaceRoutingZoneFields
+        ... on DcimInterface {
+          zone_capabilities: capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedVRF {
+                  id
+                  deployment {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                    }
+                  }
+                  security_zone {
+                    node {
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on TopologySessionCircuit {
+                  circuit_type {
+                    value
+                  }
+                  vrf {
+                    node {
+                      ... on ManagedVRF {
+                        id
+                        deployment {
+                          node {
+                            id
+                            name {
+                              value
+                            }
+                          }
+                        }
+                        security_zone {
+                          node {
+                            ... on SecurityZone {
+                              id
+                              name {
+                                value
+                              }
+                              vrf_type {
+                                value
+                              }
+                              l3_vni {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                ... on ManagedSegmentVlan {
+                  id
+                  vlan_id {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
         id
         name {
           value
@@ -98,25 +243,17 @@ query interface_layers {
             id
           }
         }
-        # A sub-interface (the interfaces of its encapsulations) is routed (an L3 signal) unless it is a VM NIC pinned to this host port (generators/virtual_nics.py
-        # is_host_nic): its role and the kind of its device say which.
-        encapsulations {
+        sub_interfaces {
           edges {
             node {
-              capabilities {
-                edges {
+              __typename
+              ... on DcimVirtualInterface {
+                role {
+                  value
+                }
+                device {
                   node {
                     __typename
-                    ... on DcimVirtualInterface {
-                      role {
-                        value
-                      }
-                      device {
-                        node {
-                          __typename
-                        }
-                      }
-                    }
                   }
                 }
               }
@@ -127,7 +264,6 @@ query interface_layers {
           edges {
             node {
               __typename
-              # A VLAN row of its switch is the port's switchport membership (utils/segment_vlan.py port_rows).
               ... on ManagedSegmentVlan {
                 id
                 vlan_id {
@@ -152,9 +288,6 @@ query interface_layers {
       }
     }
   }
-  # R3, R5: every VLAN row with its ports (any kind), the ports assigned to its deployment (the request) and, per port,
-  # the far ends of its cable (of a LAG: of its members' cables), so the check can tell a membership nobody asked for:
-  # neither assigned nor derived from a component's hosts nor a firewall service port of a terminated segment.
   ManagedSegmentVlan {
     edges {
       node {
@@ -214,7 +347,25 @@ query interface_layers {
               ... on DcimPhysicalInterface {
                 cable {
                   node {
-                    ...InterfaceLayersCableEndsFields
+                    ... on DcimCable {
+                      endpoints {
+                        edges {
+                          node {
+                            id
+                            ... on DcimPhysicalInterface {
+                              role {
+                                value
+                              }
+                              device {
+                                node {
+                                  id
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -228,7 +379,25 @@ query interface_layers {
                       }
                       cable {
                         node {
-                          ...InterfaceLayersCableEndsFields
+                          ... on DcimCable {
+                            endpoints {
+                              edges {
+                                node {
+                                  id
+                                  ... on DcimPhysicalInterface {
+                                    role {
+                                      value
+                                    }
+                                    device {
+                                      node {
+                                        id
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -241,8 +410,6 @@ query interface_layers {
       }
     }
   }
-  # R7 to R9: every OSPF interface setting with its interfaces (all of one device), and through its peering the devices
-  # of the OSPF processes that run it. The setting has no device of its own.
   RoutingOSPFInterface {
     edges {
       node {
@@ -292,7 +459,6 @@ query interface_layers {
       }
     }
   }
-  # R3: every segment deployment with the ports assigned to it (the request), any kind.
   ManagedSegmentDeployment {
     edges {
       node {
@@ -332,7 +498,6 @@ query interface_layers {
       }
     }
   }
-  # R5: the hosts each component's instances stand on (utils/app_instances.py physical_host), per segment.
   AppComponent {
     edges {
       node {
@@ -361,26 +526,6 @@ query interface_layers {
                   }
                 }
               }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-fragment InterfaceLayersCableEndsFields on DcimCable {
-  endpoints {
-    edges {
-      node {
-        id
-        ... on DcimPhysicalInterface {
-          role {
-            value
-          }
-          device {
-            node {
-              id
             }
           }
         }

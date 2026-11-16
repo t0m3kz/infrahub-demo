@@ -8,9 +8,14 @@ from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from generators.applications.app_instance_segment import AppInstanceSegmentGenerator
+from generators.segments import segment_ports
 
 # Harness helpers
+
+pytestmark = pytest.mark.usefixtures("generator_steps")
 
 
 def _make_gen() -> Any:
@@ -200,30 +205,30 @@ class TestGenerate:
 class TestResolvePhysicalDeviceId:
     def test_physical_device_resolves_to_itself(self) -> None:
         instance = {"id": "dev-1", "typename": "DcimPhysicalDevice"}
-        assert AppInstanceSegmentGenerator._resolve_physical_device_id(instance) == "dev-1"
+        assert segment_ports._resolve_physical_device_id(instance) == "dev-1"
 
     def test_physical_controller_resolves_to_itself(self) -> None:
         instance = {"id": "ctrl-1", "typename": "ManagedControllerPhysical"}
-        assert AppInstanceSegmentGenerator._resolve_physical_device_id(instance) == "ctrl-1"
+        assert segment_ports._resolve_physical_device_id(instance) == "ctrl-1"
 
     def test_virtual_device_resolves_to_hosting_device(self) -> None:
         instance = {"id": "vm-1", "typename": "DcimVirtualDevice", "hosting_device": {"id": "host-1"}}
-        assert AppInstanceSegmentGenerator._resolve_physical_device_id(instance) == "host-1"
+        assert segment_ports._resolve_physical_device_id(instance) == "host-1"
 
     def test_virtual_controller_resolves_to_hosting_device(self) -> None:
         instance = {"id": "ctrl-vm-1", "typename": "ManagedControllerVirtual", "hosting_device": {"id": "host-2"}}
-        assert AppInstanceSegmentGenerator._resolve_physical_device_id(instance) == "host-2"
+        assert segment_ports._resolve_physical_device_id(instance) == "host-2"
 
     def test_virtual_device_without_hosting_device_returns_none(self) -> None:
         instance = {"id": "vm-1", "typename": "DcimVirtualDevice", "hosting_device": None}
-        assert AppInstanceSegmentGenerator._resolve_physical_device_id(instance) is None
+        assert segment_ports._resolve_physical_device_id(instance) is None
 
     def test_cloud_instance_returns_none(self) -> None:
         instance = {"id": "cloud-1", "typename": "CloudInstance"}
-        assert AppInstanceSegmentGenerator._resolve_physical_device_id(instance) is None
+        assert segment_ports._resolve_physical_device_id(instance) is None
 
     def test_unknown_typename_returns_none(self) -> None:
-        assert AppInstanceSegmentGenerator._resolve_physical_device_id({"id": "x", "typename": "Something"}) is None
+        assert segment_ports._resolve_physical_device_id({"id": "x", "typename": "Something"}) is None
 
 
 # _derived_segment_ports / _port_devices / _reconcile_segment_port_rows
@@ -260,7 +265,7 @@ class TestDerivedSegmentPorts:
         )
         gen._customer_facing_target_ids = AsyncMock(return_value={"if-a", "po-b"})
 
-        assert asyncio.run(gen._derived_segment_port_ids("seg-1", "seg", {})) == {"if-a", "po-b"}
+        assert asyncio.run(segment_ports._derived_segment_port_ids(gen, "seg-1", "seg", {})) == {"if-a", "po-b"}
         # One resolution for every host of the segment (a VM resolves to its host, deduped).
         gen._customer_facing_target_ids.assert_awaited_once_with(["dev-1", "dev-2"])
         assert gen.client.execute_graphql.call_args.kwargs["variables"] == {"segment_id": "seg-1"}
@@ -273,7 +278,7 @@ class TestDerivedSegmentPorts:
         )
         gen._customer_facing_target_ids = AsyncMock(return_value=set())
 
-        assert asyncio.run(gen._derived_segment_port_ids("seg-1", "seg", {})) == set()
+        assert asyncio.run(segment_ports._derived_segment_port_ids(gen, "seg-1", "seg", {})) == set()
         gen._customer_facing_target_ids.assert_awaited_once_with([])
 
 
@@ -283,7 +288,7 @@ class TestPortDevices:
         gen = _make_gen()
         gen.client.execute_graphql = AsyncMock()
 
-        assert asyncio.run(gen._port_devices(set())) == {}
+        assert asyncio.run(segment_ports._port_devices(gen, set())) == {}
         gen.client.execute_graphql.assert_not_awaited()
 
     def test_one_read_maps_each_port_to_its_device(self) -> None:
@@ -293,7 +298,7 @@ class TestPortDevices:
             return_value={"DcimInterface": {"edges": [{"node": {"id": "if-a", "device": {"node": {"id": "sw-1"}}}}]}}
         )
 
-        assert asyncio.run(gen._port_devices({"if-a", "if-gone"})) == {"if-a": "sw-1", "if-gone": None}
+        assert asyncio.run(segment_ports._port_devices(gen, {"if-a", "if-gone"})) == {"if-a": "sw-1", "if-gone": None}
         gen.client.execute_graphql.assert_awaited_once()
         assert gen.client.execute_graphql.call_args.kwargs["variables"] == {"ids": ["if-a", "if-gone"]}
 
@@ -328,7 +333,8 @@ class TestReconcileSegmentPortRows:
         """Reconcile with ``current`` port edges ``{port id: row id}`` and the rows ``{device id: (row id."""
         ports = [{"id": port_id, "device_id": "sw-1", "row_id": row_id} for port_id, row_id in current.items()]
         return asyncio.run(
-            gen._reconcile_segment_port_rows(
+            segment_ports._reconcile_segment_port_rows(
+                gen,
                 segment_name="seg",
                 ports=ports,
                 port_devices=port_devices,
@@ -422,7 +428,7 @@ class TestCustomerFacingTargets:
         gen = _make_gen()
         gen.client.filters = AsyncMock()
 
-        assert asyncio.run(gen._customer_facing_target_ids([])) == set()
+        assert asyncio.run(segment_ports._customer_facing_target_ids(gen, [])) == set()
 
         gen.client.filters.assert_not_awaited()
 
@@ -430,7 +436,7 @@ class TestCustomerFacingTargets:
         gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0", cabled=False)])
 
-        assert asyncio.run(gen._customer_facing_target_ids(["dev-1"])) == set()
+        assert asyncio.run(segment_ports._customer_facing_target_ids(gen, ["dev-1"])) == set()
         assert gen.client.filters.await_count == 1  # no cable, so no far-end lookup
 
     def test_uplink_far_end_is_a_target(self) -> None:
@@ -438,7 +444,7 @@ class TestCustomerFacingTargets:
         nic = _iface("eth0")
         gen.client.filters = AsyncMock(side_effect=[[nic], [self._cable_of(nic, "far-1")], [self._far_end("far-1")]])
 
-        assert asyncio.run(gen._customer_facing_target_ids(["dev-1"])) == {"far-1"}
+        assert asyncio.run(segment_ports._customer_facing_target_ids(gen, ["dev-1"])) == {"far-1"}
 
     def test_bonded_members_dedup_to_one_port_channel(self) -> None:
         """Two bond members resolving to the SAME port-channel give one target."""
@@ -455,7 +461,7 @@ class TestCustomerFacingTargets:
             ]
         )
 
-        assert asyncio.run(gen._customer_facing_target_ids(["dev-1"])) == {"po-1"}
+        assert asyncio.run(segment_ports._customer_facing_target_ids(gen, ["dev-1"])) == {"po-1"}
 
     def test_every_device_is_resolved_in_three_queries(self) -> None:
         """Three devices, five cabled NICs: one NIC query, one cable query, one far-end query."""
@@ -469,7 +475,7 @@ class TestCustomerFacingTargets:
             ]
         )
 
-        targets = asyncio.run(gen._customer_facing_target_ids(["dev-1", "dev-2", "dev-3"]))
+        targets = asyncio.run(segment_ports._customer_facing_target_ids(gen, ["dev-1", "dev-2", "dev-3"]))
 
         assert targets == {f"far-eth{n}" for n in range(5)}
         assert gen.client.filters.await_count == 3
@@ -483,7 +489,7 @@ class TestCustomerFacingTargets:
         cable.endpoints.peers = [MagicMock(id=nic.id)]  # only the near end
         gen.client.filters = AsyncMock(side_effect=[[nic], [cable]])
 
-        assert asyncio.run(gen._customer_facing_target_ids(["dev-1"])) == set()
+        assert asyncio.run(segment_ports._customer_facing_target_ids(gen, ["dev-1"])) == set()
 
 
 # _customer_facing_target_id
@@ -495,7 +501,7 @@ class TestCustomerFacingTargetId:
         far_end = MagicMock(id="far-1")
         far_end.role = MagicMock(value="customer")
 
-        assert gen._customer_facing_target_id(far_end) == "far-1"
+        assert segment_ports._customer_facing_target_id(gen, far_end) == "far-1"
 
     def test_lag_far_end_resolves_to_its_port_channel(self) -> None:
         gen = _make_gen()
@@ -503,7 +509,7 @@ class TestCustomerFacingTargetId:
         far_end.role = MagicMock(value="lag")
         far_end.lag = MagicMock(peer=MagicMock(id="po-1"))
 
-        assert gen._customer_facing_target_id(far_end) == "po-1"
+        assert segment_ports._customer_facing_target_id(gen, far_end) == "po-1"
 
     def test_lag_far_end_without_port_channel_warns_and_returns_none(self) -> None:
         gen = _make_gen()
@@ -511,5 +517,5 @@ class TestCustomerFacingTargetId:
         far_end.role = MagicMock(value="lag")
         far_end.lag = MagicMock(peer=None)
 
-        assert gen._customer_facing_target_id(far_end) is None
+        assert segment_ports._customer_facing_target_id(gen, far_end) is None
         gen.logger.warning.assert_called_once()

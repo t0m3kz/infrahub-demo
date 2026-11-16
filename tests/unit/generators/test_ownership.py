@@ -227,3 +227,17 @@ class TestCircuitOwner:
         """A handoff or carrier circuit: no office, no owner."""
         assert circuit_owner([]) is None
         assert circuit_owner([None]) is None
+
+
+class TestOutByOwner:
+    """A session with several owners: what each owner is announced, never another owner's space."""
+
+    def test_a_hub_of_two_owners_announces_each_its_own(self) -> None:
+        policies = exchange_policies(
+            {"C003": ["10.5.10.0/24"], "C015": ["10.7.10.0/24"]},
+            {_HUB: {"C003": ["10.30.0.0/16"], "C015": ["10.32.0.0/16"]}},
+            announced={_HUB: ["198.51.100.0/24"]},
+        )
+        by_owner = policies[_HUB]["out_by_owner"]
+        assert by_owner == {"C003": frozenset({"10.5.10.0/24"}), "C015": frozenset({"10.7.10.0/24"})}
+        assert policies[_HUB]["out"] == frozenset({"10.5.10.0/24", "10.7.10.0/24", "198.51.100.0/24"})

@@ -10,21 +10,20 @@ from infrahub_sdk.exceptions import NodeNotFoundError
 from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool
 from infrahub_sdk.task.models import TaskState
 
-from generators.fabric.dc import DCTopologyGenerator
-from generators.fabric.dc_pod_cascade import DCPodCascadeGenerator
-from generators.fabric.pod_rack_cascade import PodRackCascadeGenerator
-from generators.mixins.common import CommonGenerator
-from generators.mixins.logger import GeneratorError
-from generators.mixins.pools import PoolMixin
+from generators.base import BaseGenerator
+from generators.dc.dc import DCTopologyGenerator
+from generators.dc.dc_pod_cascade import DCPodCascadeGenerator
+from generators.dc.pod_rack_cascade import PodRackCascadeGenerator
+from generators.ipam.pools import get_parent_pool
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 
 
-class _CommonGen(PoolMixin, CommonGenerator):
+class _CommonGen(BaseGenerator):
     pass
 
 
 def _build_common_gen() -> Any:
-    """Return a PoolMixin+CommonGenerator instance typed as Any so ty allows mock attribute assignments."""
+    """Return a BaseGenerator instance typed as Any so ty allows mock attribute assignments."""
     gen = _CommonGen.__new__(_CommonGen)
     gen.logger = MagicMock()
     gen.client = MagicMock()
@@ -161,6 +160,37 @@ class TestWaitForParentGeneratorAndRefetch:
         gen.collect_data.assert_awaited_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("ended", [TaskState.FAILED, TaskState.CRASHED, TaskState.CANCELLED])
+    async def test_a_parent_run_that_ends_failed_fails_the_child_at_once(self, ended: TaskState) -> None:
+        """A child that waited for its parent's run does not build on it when that run failed: an error (which raises
+        under the generator's logger) names the parent and how its run ended.
+        """
+        gen = _build_common_gen()
+        gen.client.task = MagicMock()
+        gen.client.task.filter = AsyncMock(return_value=[_mock_task(id="t-1", title="Run generator add_dc")])
+        gen.client.task.wait_for_completion = AsyncMock(return_value=_mock_task(id="t-1", title="x", state=ended))
+
+        await gen.wait_for_parent_generators("add_dc", "dc-1")
+
+        gen.logger.error.assert_called_once()
+        message = gen.logger.error.call_args.args[0]
+        assert "'add_dc' failed for dc-1" in message
+        assert ended.value in message
+
+    @pytest.mark.asyncio
+    async def test_a_parent_run_that_completes_lets_the_child_go_on(self) -> None:
+        """A completed parent run is no error."""
+        gen = _build_common_gen()
+        gen.client.task = MagicMock()
+        gen.client.task.filter = AsyncMock(return_value=[_mock_task(id="t-1", title="Run generator add_dc")])
+        gen.client.task.wait_for_completion = AsyncMock(
+            return_value=_mock_task(id="t-1", title="x", state=TaskState.COMPLETED)
+        )
+
+        assert await gen.wait_for_parent_generators("add_dc", "dc-1") is True
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_finished_task_is_not_waited_on(self) -> None:
         """A completed parent run is history, not something to wait for."""
         gen = _build_common_gen()
@@ -186,8 +216,8 @@ class TestWaitForParentGeneratorAndRefetch:
             ]
         )
 
-        with pytest.raises(GeneratorError, match="last run failed"):
-            await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1")
+        assert await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1") is None
+        gen.logger.error.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_failure_followed_by_success_is_not_an_error(self) -> None:
@@ -230,7 +260,7 @@ class TestGetParentPoolWithRetry:
         pool = MagicMock()
         gen.client.get = AsyncMock(return_value=pool)
 
-        result = await gen._get_parent_pool_with_retry("dc5-technical-pool")
+        result = await get_parent_pool(gen, "dc5-technical-pool")
 
         assert result is pool
         gen.client.get.assert_awaited_once()
@@ -247,9 +277,9 @@ class TestGetParentPoolWithRetry:
             ]
         )
         sleep_mock = AsyncMock()
-        monkeypatch.setattr("generators.mixins.pools.asyncio.sleep", sleep_mock)
+        monkeypatch.setattr("generators.ipam.pools.asyncio.sleep", sleep_mock)
 
-        result = await gen._get_parent_pool_with_retry("dc5-technical-pool")
+        result = await get_parent_pool(gen, "dc5-technical-pool")
 
         assert result is pool
         sleep_mock.assert_awaited_once()
@@ -258,10 +288,10 @@ class TestGetParentPoolWithRetry:
     async def test_pool_never_appears_raises_after_exhausting_retries(self, monkeypatch: pytest.MonkeyPatch) -> None:
         gen = _build_common_gen()
         gen.client.get = AsyncMock(side_effect=NodeNotFoundError(identifier={"name__value": ["dc5-technical-pool"]}))
-        monkeypatch.setattr("generators.mixins.pools.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.ipam.pools.asyncio.sleep", AsyncMock())
 
         with pytest.raises(NodeNotFoundError):
-            await gen._get_parent_pool_with_retry("dc5-technical-pool")
+            await get_parent_pool(gen, "dc5-technical-pool")
 
         assert gen.client.get.await_count == 10
 
@@ -274,7 +304,7 @@ class TestGetParentPoolWithRetryKind:
         gen = _build_common_gen()
         gen.client.get = AsyncMock(return_value=MagicMock())
 
-        await gen._get_parent_pool_with_retry("dc5-technical-pool")
+        await get_parent_pool(gen, "dc5-technical-pool")
 
         assert gen.client.get.await_args_list[-1].kwargs["kind"] is CoreIPPrefixPool
 
@@ -284,7 +314,7 @@ class TestGetParentPoolWithRetryKind:
         pool = MagicMock()
         gen.client.get = AsyncMock(return_value=pool)
 
-        result = await gen._get_parent_pool_with_retry("fr-asn-pool", kind=CoreNumberPool)
+        result = await get_parent_pool(gen, "fr-asn-pool", kind=CoreNumberPool)
 
         assert result is pool
         gen.client.get.assert_awaited_once_with(kind=CoreNumberPool, name__value="fr-asn-pool")
@@ -298,9 +328,9 @@ class TestGetParentPoolWithRetryKind:
         pool = MagicMock()
         gen.client.get = AsyncMock(side_effect=[NodeNotFoundError(identifier={"name__value": ["fr-asn-pool"]}), pool])
         sleep_mock = AsyncMock()
-        monkeypatch.setattr("generators.mixins.pools.asyncio.sleep", sleep_mock)
+        monkeypatch.setattr("generators.ipam.pools.asyncio.sleep", sleep_mock)
 
-        result = await gen._get_parent_pool_with_retry("fr-asn-pool", kind=CoreNumberPool)
+        result = await get_parent_pool(gen, "fr-asn-pool", kind=CoreNumberPool)
 
         assert result is pool
         sleep_mock.assert_awaited_once()
@@ -313,10 +343,10 @@ class TestGetParentPoolWithRetryKind:
         """The caller (the zone generator) turns the final NodeNotFoundError into a failed run."""
         gen = _build_common_gen()
         gen.client.get = AsyncMock(side_effect=NodeNotFoundError(identifier={"name__value": ["fr-asn-pool"]}))
-        monkeypatch.setattr("generators.mixins.pools.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.ipam.pools.asyncio.sleep", AsyncMock())
 
         with pytest.raises(NodeNotFoundError):
-            await gen._get_parent_pool_with_retry("fr-asn-pool", kind=CoreNumberPool)
+            await get_parent_pool(gen, "fr-asn-pool", kind=CoreNumberPool)
 
         assert gen.client.get.await_count == 10
 
@@ -353,7 +383,7 @@ class TestDCPodCascadeGenerator:
     async def test_fans_out_to_every_existing_pod(self, monkeypatch: pytest.MonkeyPatch) -> None:
         gen = _build_dc_cascade_gen()
         monkeypatch.setattr(
-            "generators.fabric.dc.DCTopologyGenerator.generate",
+            "generators.dc.dc.DCTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
         pod1, pod2 = _pod("POD-1"), _pod("POD-2")
@@ -373,7 +403,7 @@ class TestDCPodCascadeGenerator:
     async def test_no_existing_pods_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
         gen = _build_dc_cascade_gen()
         monkeypatch.setattr(
-            "generators.fabric.dc.DCTopologyGenerator.generate",
+            "generators.dc.dc.DCTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
 
@@ -386,7 +416,7 @@ class TestDCPodCascadeGenerator:
         """If the inherited bootstrap bails out early, self.data stays unset and nothing fans out."""
         gen = _build_dc_cascade_gen()
         monkeypatch.setattr(
-            "generators.fabric.dc.DCTopologyGenerator.generate",
+            "generators.dc.dc.DCTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
 
@@ -456,7 +486,7 @@ class TestPodRackCascadeGenerator:
     async def test_middle_rack_fans_out_to_every_rack(self, monkeypatch: pytest.MonkeyPatch) -> None:
         gen = _build_pod_rack_cascade_gen()
         monkeypatch.setattr(
-            "generators.fabric.pod.PodTopologyGenerator.generate",
+            "generators.dc.pod.PodTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
         network_rack = _mock_rack("NET-1", "network")
@@ -472,7 +502,7 @@ class TestPodRackCascadeGenerator:
     async def test_tor_fans_out_to_every_rack(self, monkeypatch: pytest.MonkeyPatch) -> None:
         gen = _build_pod_rack_cascade_gen()
         monkeypatch.setattr(
-            "generators.fabric.pod.PodTopologyGenerator.generate",
+            "generators.dc.pod.PodTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
         tor_rack = _mock_rack("TOR-1", "tor")
@@ -487,7 +517,7 @@ class TestPodRackCascadeGenerator:
         """mixed's tor/compute racks are started by their network rack's own _fan_out_to_row_dependent_racks()."""
         gen = _build_pod_rack_cascade_gen()
         monkeypatch.setattr(
-            "generators.fabric.pod.PodTopologyGenerator.generate",
+            "generators.dc.pod.PodTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
         network_rack = _mock_rack("NET-1", "network")
@@ -504,7 +534,7 @@ class TestPodRackCascadeGenerator:
     async def test_no_racks_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
         gen = _build_pod_rack_cascade_gen()
         monkeypatch.setattr(
-            "generators.fabric.pod.PodTopologyGenerator.generate",
+            "generators.dc.pod.PodTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
         gen.client.filters = AsyncMock(return_value=[])
@@ -518,7 +548,7 @@ class TestPodRackCascadeGenerator:
         """If the inherited bootstrap bails out early, self.data stays unset and nothing fans out."""
         gen = _build_pod_rack_cascade_gen()
         monkeypatch.setattr(
-            "generators.fabric.pod.PodTopologyGenerator.generate",
+            "generators.dc.pod.PodTopologyGenerator.generate",
             lambda self, data: gen._bootstrap_generate(data),
         )
         gen.client.filters = AsyncMock(return_value=[])

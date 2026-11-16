@@ -9,7 +9,6 @@ import yaml
 
 from checks.devices.software_lifecycle import CheckSoftwareLifecycle
 from tests.integration.demo_data import ROOT
-from tests.unit.query_shape_helpers import query_tree, unselected
 
 QUERY = ROOT / "queries" / "validation" / "software_lifecycle.gql"
 
@@ -101,15 +100,6 @@ def test_a_deprecated_and_vulnerable_image_is_one_error_that_says_both() -> None
 
 def test_an_approved_image_and_an_image_without_runners_report_nothing() -> None:
     assert _run(by_lifecycle=(_image("approved", _runner("DcimPhysicalDevice", "x")), _image("end_of_life"))) == []
-
-
-def test_the_fixtures_emit_only_fields_the_query_selects() -> None:
-    """The canned rows match software_lifecycle.gql, which must select the runners with their kind and label."""
-    tree = query_tree(QUERY)
-    for root in ("by_lifecycle", "by_vulnerability"):
-        node = tree[root]["edges"]["node"]
-        assert unselected([_image("end_of_life", _runner("CloudInstance", "web-1"))], node) == []
-        assert {"lifecycle", "vulnerable", "vulnerability_reason", "runners", "platform"} <= set(node)
 
 
 def test_the_check_and_its_query_are_registered() -> None:

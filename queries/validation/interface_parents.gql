@@ -1,38 +1,56 @@
-# validate_interface_parents: every encapsulation (ManagedInterfaceEncapsulation: the object an interface that rides on
-# another one has among its capabilities) with the interface it rides on (parent), the interfaces that carry it
-# (capabilities: one is expected) and the device of both.
-# A VM NIC's parent is a port of its hosting device (with the cable of that port); a sub-interface's parent is a NIC, a port or a
-# LAG of its own device; a peering's parent is a port or LAG of its transport or of the provider connect that holds the cloud's port.
-# Small on purpose: it covers every interface that rides on another, and the per-interface rules (at most one, not its
-# own parent, left behind) come from the same rows.
 query interface_parents {
-  ManagedInterfaceEncapsulation {
+  DcimSubInterface {
     edges {
       node {
-        id
-        name { value }
+        __typename
+        ... on DcimInterface {
+          id
+          name {
+            value
+          }
+          role {
+            value
+          }
+          device {
+            node {
+              id
+              __typename
+              name {
+                value
+              }
+              ... on DcimVirtualDevice {
+                hosting_device {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         parent {
           node {
             id
             __typename
-            name { value }
-            device { node { id __typename name { value } } }
-            ... on DcimPhysicalInterface { cable { node { id } } }
-          }
-        }
-        capabilities {
-          edges {
-            node {
-              id
-              __typename
-              name { value }
-              role { value }
-              device {
+            name {
+              value
+            }
+            device {
+              node {
+                id
+                __typename
+                name {
+                  value
+                }
+              }
+            }
+            ... on DcimPhysicalInterface {
+              cable {
                 node {
                   id
-                  __typename
-                  name { value }
-                  ... on DcimVirtualDevice { hosting_device { node { id name { value } } } }
                 }
               }
             }

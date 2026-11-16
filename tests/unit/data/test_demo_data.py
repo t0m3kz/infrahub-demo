@@ -64,7 +64,7 @@ spec:
       parent: "Campus and Office"
       member_of_groups:
         - customer_deployments_office
-      sdwan_gateway: "GW1"
+      sdwan_gateways: ["GW1"]
 """
 
 _APPLICATION = """\
@@ -209,7 +209,7 @@ class TestDistinct:
         assert len(distinct(objects)) == 2
 
     def test_rack_identity_falls_back_to_the_unique_attribute_not_the_parent_pair(self) -> None:
-        """LocationRack declares no human_friendly_id and is unique on (parent, name) and on shortname."""
+        """LocationRack and LocationSuite declare no human_friendly_id: their identity is the unique shortname."""
         assert human_friendly_id("LocationRack") == ("shortname__value",)
         assert human_friendly_id("LocationSuite") == ("shortname__value",)
 
@@ -231,8 +231,8 @@ class TestCreatedDispatches:
     """A load dispatches one run per distinct object that joins the target group."""
 
     def test_counts_members_of_the_target_group_once(self, demo: Path) -> None:
-        """Two declarations of one office are one add_sdwan_edge run."""
-        assert created_dispatches("add_sdwan_edge", demo) == 1
+        """Two declarations of one office are one add_office_fabric run."""
+        assert created_dispatches("add_office_fabric", demo) == 1
 
     def test_non_members_are_not_counted(self, demo: Path) -> None:
         """The outsider application is not in app_applications, so no group trigger starts a run for it."""

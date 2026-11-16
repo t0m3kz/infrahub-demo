@@ -1,30 +1,27 @@
 """Generator assigning a segment to the switch interface an AppComponent's instance is cabled to (no DC-wide fallback,
 see segment.py). A physical instance is used directly, a virtual one via its hosting_device, a bonded one on the switch
 port-channel; CloudInstance is skipped. Reconciled per segment (desired ports are the union over its components plus
-assigned ports), via SegmentPortTagMixin.
+assigned ports), via reconcile_vxlan_segment (segment_ports.py).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from generators.mixins.common import CommonGenerator
-from generators.mixins.connections import CablingMixin
-from generators.mixins.pools import PoolMixin
+from generators.base import BaseGenerator
 from generators.protocols import ManagedVxlanSegment
-from generators.segments.segment_addressing import SegmentAddressingMixin
-from generators.segments.segment_ports import SegmentPortTagMixin
+from generators.segments.segment_addressing import ensure_segment_addressing
+from generators.segments.segment_ports import reconcile_vxlan_segment
 from utils.data_cleaning import clean_data
 
 
-class AppInstanceSegmentGenerator(
-    PoolMixin, CablingMixin, SegmentAddressingMixin, SegmentPortTagMixin, CommonGenerator
-):
+class AppInstanceSegmentGenerator(BaseGenerator):
     """Reconcile a segment's customer-port tags from its components' instances, then its VLAN rows (and MLAG peers);
     untracked.
     """
 
     graphql_root_key = "AppComponent"
+    ensure_segment_addressing = ensure_segment_addressing
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
@@ -53,7 +50,7 @@ class AppInstanceSegmentGenerator(
             self.logger.info(f"Component {fqdn}: no instances set — reconciling segment '{segment_name}' anyway")
 
         await self.ensure_segment_addressing(segment)
-        tags = await self.reconcile_vxlan_segment(segment_id, segment_name)
+        tags = await reconcile_vxlan_segment(self, segment_id, segment_name)
         if tags is None:
             # The segment is gone or not VXLAN: nothing to assign
             self.logger.info(f"Component {fqdn}: segment {segment_id} is not a VXLAN segment — nothing to assign")

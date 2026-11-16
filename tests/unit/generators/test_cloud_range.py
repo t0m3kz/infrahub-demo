@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from generators.colocation.cloud_attachment_range import CloudAttachmentRangeGenerator
+from generators.cloud.cloud_attachment_range import CloudAttachmentRangeGenerator
+from generators.cloud.cloud_range import CloudNetwork, ensure_cloud_ranges, plan_cloud_ranges, read_cloud_ranges
 from generators.customers.customer_cloud import CustomerDeploymentCloudGenerator
+from generators.plan import CustomerSliceSpec, TopologyPlan
 from tests.unit.cloud_range_helpers import ACCOUNT, REGION_ID, CloudClient, attachment, footprint, network
 from tests.unit.segment_customer_pool_helpers import make_gen
 from utils.limits import CLOUD_RANGE_PREFIX_LENGTH
@@ -15,7 +17,7 @@ from utils.limits import CLOUD_RANGE_PREFIX_LENGTH
 
 def _run(client: CloudClient, **overrides: Any) -> Any:
     gen = make_gen(client, CustomerDeploymentCloudGenerator)
-    asyncio.run(gen.ensure_cloud_ranges(footprint(**overrides)))
+    asyncio.run(ensure_cloud_ranges(gen, footprint(**overrides)))
     return gen
 
 
@@ -160,7 +162,7 @@ class TestAttachmentGenerator:
         gen.logger = MagicMock()
         gen.client = MagicMock()
         gen.client.filters = AsyncMock(return_value=footprints)
-        gen.ensure_cloud_ranges = AsyncMock()
+        gen.client.group_context.related_node_ids = []
         return gen
 
     @staticmethod
@@ -201,11 +203,13 @@ class TestAttachmentGenerator:
         """The footprint is found by the account of the attachment's network and handed to ensure_cloud_ranges."""
         gen = self._generator([self._footprint_node()])
 
-        asyncio.run(gen.generate(self._data()))
+        with patch("generators.cloud.cloud_attachment_range.ensure_cloud_ranges", AsyncMock()) as ensure:
+            asyncio.run(gen.generate(self._data()))
 
         kwargs = gen.client.filters.await_args.kwargs
         assert kwargs["account__ids"] == ["acc-1"]
-        gen.ensure_cloud_ranges.assert_awaited_once_with(
+        ensure.assert_awaited_once_with(
+            gen,
             {
                 "id": "cloud-1",
                 "name": "C003-P-X",
@@ -214,31 +218,93 @@ class TestAttachmentGenerator:
                 "design": {"name": "S", "address_prefix_length": 28},
                 "account": ACCOUNT | {"name": "vaultex-aws", "id": "acc-1"},
                 "parent": {"id": REGION_ID},
-            }
+            },
+            root_id="a1",
         )
-        gen.client.group_context.related_node_ids.append.assert_called_once_with("a1")
 
     def test_an_attachment_to_a_gateway_is_left_alone(self) -> None:
         """No virtual network: logged, no footprint lookup, nothing ranged."""
         gen = self._generator([self._footprint_node()])
 
-        asyncio.run(gen.generate(self._data(vn={"node": None})))
+        with patch("generators.cloud.cloud_attachment_range.ensure_cloud_ranges", AsyncMock()) as ensure:
+            asyncio.run(gen.generate(self._data(vn={"node": None})))
 
         gen.client.filters.assert_not_awaited()
-        gen.ensure_cloud_ranges.assert_not_awaited()
+        ensure.assert_not_awaited()
+        assert gen.client.group_context.related_node_ids == ["a1"]
 
     def test_a_network_of_an_account_without_a_footprint_is_left_alone(self) -> None:
         """A hub account has no footprint: logged, nothing ranged."""
         gen = self._generator([])
 
-        asyncio.run(gen.generate(self._data()))
+        with patch("generators.cloud.cloud_attachment_range.ensure_cloud_ranges", AsyncMock()) as ensure:
+            asyncio.run(gen.generate(self._data()))
 
-        gen.ensure_cloud_ranges.assert_not_awaited()
+        ensure.assert_not_awaited()
+        assert gen.client.group_context.related_node_ids == ["a1"]
 
     def test_a_response_without_the_kind_is_ignored(self) -> None:
         """Not this generator's kind: an info log."""
         gen = self._generator([])
 
-        asyncio.run(gen.generate({}))
+        with patch("generators.cloud.cloud_attachment_range.ensure_cloud_ranges", AsyncMock()) as ensure:
+            asyncio.run(gen.generate({}))
 
-        gen.ensure_cloud_ranges.assert_not_awaited()
+        ensure.assert_not_awaited()
+        assert gen.client.group_context.related_node_ids == []
+
+
+class TestPlanCloudRanges:
+    """The plan of the ranges as data (generators/cloud/cloud_range.py): what ``ensure_cloud_ranges`` applies."""
+
+    def test_the_pool_is_boarded_first_then_a_slice_per_network_and_an_edge_per_attachment(self) -> None:
+        plan = TopologyPlan(root_id="cloud-1")
+
+        plan_cloud_ranges(plan, footprint(), [CloudNetwork("vpc-a", ("a1", "a2")), CloudNetwork("vpc-b", ("a3",))])
+
+        specs: list[Any] = plan.specs
+        pools, first, *edges_a, second, edge_b = specs
+        edges = [*edges_a, edge_b]
+        assert (pools.kind, pools.org_id, pools.environment, pools.footprint_name) == (
+            "TopologyCustomerCloud",
+            "C003",
+            "p",
+            "C003-P-VAULTEX-AWS-EU-CENTRAL-1",
+        )
+        assert (first.identifier, first.pool, first.global_pool, first.length) == (
+            "vaultex-aws/vpc-a",
+            "c003-p-cloud-ipv4",
+            "Tenant-PROD-IPv4",
+            CLOUD_RANGE_PREFIX_LENGTH,
+        )
+        assert second.identifier == "vaultex-aws/vpc-b" and first.block_length == 28
+        assert [(edge.node_id, edge.relation, edge.peer_prefix) for edge in edges] == [
+            ("a1", "allowed_prefixes", "vaultex-aws/vpc-a"),
+            ("a2", "allowed_prefixes", "vaultex-aws/vpc-a"),
+            ("a3", "allowed_prefixes", "vaultex-aws/vpc-b"),
+        ]
+        plan.validate()
+
+    def test_a_footprint_with_no_network_to_range_only_boards_its_pool(self) -> None:
+        plan = TopologyPlan(root_id="cloud-1")
+
+        plan_cloud_ranges(plan, footprint(), [])
+
+        assert len(plan.specs) == 1
+
+    def test_every_network_is_read_with_its_bare_attachments(self) -> None:
+        """A network whose attachments all have prefixes is read with none; the plan then leaves it out."""
+        client = CloudClient(
+            [network("n1", "vpc-a"), network("n2", "vpc-b")],
+            [attachment("a1", "n1"), attachment("a2", "n2", prefixes=("prefix-1",)), attachment("a3", "n1")],
+        )
+
+        read = asyncio.run(read_cloud_ranges(client, footprint()))
+
+        assert [(n.name, n.id, n.attachment_ids, n.attachment_names) for n in read] == [
+            ("vpc-a", "n1", ("a1", "a3"), ("tgwa-a1", "tgwa-a3")),
+            ("vpc-b", "n2", (), ()),
+        ]
+        plan = TopologyPlan(root_id="cloud-1")
+        plan_cloud_ranges(plan, footprint(), read)
+        assert [spec.identifier for spec in plan.of(CustomerSliceSpec)] == ["vaultex-aws/vpc-a"]

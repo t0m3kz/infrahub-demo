@@ -1,4 +1,4 @@
-"""generators/fabric_sizing.py: every fabric pool size, derived from the design envelope."""
+"""generators/model/sizing.py: every fabric pool size, derived from the design envelope."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from generators.helpers.routing import underlay_pool_is_ipv6
-from generators.mixins.fabric_sizing import (
+from generators.model.sizing import (
     bits_to_hold,
     bits_with_headroom,
     dc_loopback_bits,

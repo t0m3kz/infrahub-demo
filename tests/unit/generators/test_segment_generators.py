@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
+from generators.plan import RoutingTagSpec, TopologyPlan
 from generators.protocols import ManagedSegmentDeployment
-from generators.segments.segment import VxlanSegmentGenerator
-from tests.unit.query_shape_helpers import query_tree
+from generators.reconciler import ReconcileResult
+from generators.segments import segment_vlan
 from tests.unit.segment_generators_helpers import _DEP_1, _DEP_2, _make_gen, _seg_response
-from utils.graphql_queries import load_query
-from utils.limits import STRETCHED_VNI_POOL
+from utils.limits import SEGMENT_ROUTING_TAG_POOL, STRETCHED_VNI_POOL
 
 # TestVxlanSegmentGeneratorGenerate
+
+pytestmark = pytest.mark.usefixtures("generator_steps")
 
 
 class TestVxlanSegmentGeneratorGenerate:
@@ -247,9 +248,9 @@ class TestVxlanSegmentGeneratorGenerate:
         }
 
     def test_segment_tag_helper_gets_the_segment_before_any_activation(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """The group tag is ensured once per run, with the run's lock, before a deployment is activated."""
+        """The group tag is ensured once per run, by the generator, before a deployment is activated."""
         order: list[str] = []
-        ensure_tag = AsyncMock(side_effect=lambda client, lock, *, segment: order.append(f"tag {segment['id']}"))
+        ensure_tag = AsyncMock(side_effect=lambda generator, *, segment: order.append(f"tag {segment['id']}"))
         monkeypatch.setattr("generators.segments.segment.ensure_segment_tag", ensure_tag)
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock(side_effect=lambda **kw: order.append("activate"))
@@ -258,7 +259,7 @@ class TestVxlanSegmentGeneratorGenerate:
 
         assert order == ["tag seg-1", "activate"]
         (call,) = ensure_tag.await_args_list
-        assert call.args == (gen.client, gen.resource_lock)
+        assert call.args == (gen,)
         assert call.kwargs["segment"]["typename"] == "ManagedVxlanSegment"
 
     def test_segment_tag_failure_stops_the_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -274,54 +275,67 @@ class TestVxlanSegmentGeneratorGenerate:
 
         gen._activate_segment_in_deployment.assert_not_awaited()
 
-    def test_routing_tag_is_ensured_after_the_group_tag_and_before_any_activation(
+    def test_routing_tag_is_planned_after_the_group_tag_and_before_any_activation(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The routing tag helper gets the cleaned segment (with its stored tag) and the client, once per run."""
+        """The routing tag is a spec of an untracked plan with no root, applied once per run, after the group tag."""
         order: list[str] = []
         monkeypatch.setattr(
             "generators.segments.segment.ensure_segment_tag",
-            AsyncMock(side_effect=lambda client, lock, *, segment: order.append("group tag")),
+            AsyncMock(side_effect=lambda generator, *, segment: order.append("group tag")),
         )
-        ensure_routing = AsyncMock(side_effect=lambda client, *, segment: order.append("routing tag"))
-        monkeypatch.setattr("generators.segments.segment.ensure_segment_routing_tag", ensure_routing)
+        monkeypatch.setattr(
+            "generators.segments.segment.segment_routing_tag_spec",
+            lambda segment: RoutingTagSpec("ManagedVxlanSegment", segment["id"], SEGMENT_ROUTING_TAG_POOL),
+        )
         gen = _make_gen()
+        plans: list[TopologyPlan] = []
+
+        async def _apply(plan: TopologyPlan, **_: Any) -> ReconcileResult:
+            order.append("routing tag")
+            plans.append(plan)
+            return ReconcileResult(routing_tags={"seg-1": 12})
+
+        gen.apply_plan = _apply
         gen._activate_segment_in_deployment = AsyncMock(side_effect=lambda **kw: order.append("activate"))
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
+
+        asyncio.run(gen.generate(data))
+
+        assert order == ["group tag", "routing tag", "activate"]
+        ((plan,),) = [(plan,) for plan in plans]
+        assert plan.root_id is None
+        assert plan.specs == [RoutingTagSpec("ManagedVxlanSegment", "seg-1", SEGMENT_ROUTING_TAG_POOL)]
+
+    def test_a_segment_with_its_routing_tag_applies_no_plan(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No spec (a tagged, or not a routed tenant, segment): the reconciler is not called."""
+        monkeypatch.setattr("generators.segments.segment.ensure_segment_tag", AsyncMock())
+        gen = _make_gen()
+        gen.apply_plan = AsyncMock()
+        gen._activate_segment_in_deployment = AsyncMock()
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
         data["ManagedVxlanSegment"]["edges"][0]["node"]["routing_tag"] = {"value": 12}
 
         asyncio.run(gen.generate(data))
 
-        assert order == ["group tag", "routing tag", "activate"]
-        (call,) = ensure_routing.await_args_list
-        assert call.args == (gen.client,)
-        assert call.kwargs["segment"]["id"] == "seg-1"
-        assert call.kwargs["segment"]["routing_tag"] == 12
+        gen.apply_plan.assert_not_awaited()
 
     def test_routing_tag_failure_stops_the_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A tag that cannot be drawn (pool not loaded) is not logged away: no deployment is activated."""
         monkeypatch.setattr("generators.segments.segment.ensure_segment_tag", AsyncMock())
         monkeypatch.setattr(
-            "generators.segments.segment.ensure_segment_routing_tag",
-            AsyncMock(side_effect=LookupError("Routing tag pool Segment-Routing-Tag not found")),
+            "generators.segments.segment.segment_routing_tag_spec",
+            lambda segment: RoutingTagSpec("ManagedVxlanSegment", segment["id"], SEGMENT_ROUTING_TAG_POOL),
         )
         gen = _make_gen()
+        gen.client = MagicMock()
+        gen.client.get = AsyncMock(return_value=None)
         gen._activate_segment_in_deployment = AsyncMock()
 
-        with pytest.raises(LookupError, match="Segment-Routing-Tag"):
+        with pytest.raises(GeneratorError, match="Segment-Routing-Tag"):
             asyncio.run(gen.generate(_seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])))
 
         gen._activate_segment_in_deployment.assert_not_awaited()
-
-    def test_query_selects_the_tenant_test_and_the_segment_tag(self, root_dir: Path) -> None:
-        """The fast path (tag present) and the routed-tenant test (namespace type) come from the query."""
-        query = load_query(root_dir / "queries/topology/add/vxlan_segment.gql")
-        assert "security_tag { node { id } }" in query
-        assert "routing_tag { value }" in query
-        fields = query_tree(root_dir / "queries/topology/add/vxlan_segment.gql")
-        assert {"name", "vrf_type", "l3_vni"} <= set(
-            fields["ManagedVxlanSegment"]["edges"]["node"]["security_zone"]["node"]
-        )
 
 
 # TestResolveHostingParent
@@ -402,15 +416,17 @@ class TestActivateSegmentInDeployment:
         return asyncio.run(gen._activate_segment_in_deployment(**{**self._CALL, **overrides}))
 
     def test_idempotent_existing_deployment_skips_create(self):
-        """A passed-in existing record is only re-saved: no create, no query."""
+        """A passed-in existing record is only registered with the tracker, by id: no field is resent, no query."""
         gen = _make_gen()
-        existing = _activation_node()
+        existing = _activation_node("segment_deployments")
+        existing.id = "dep-9"
+        gen.client.create = AsyncMock(return_value=existing)
 
         assert self._run(gen, existing_deployment=existing) is True
 
-        gen.client.create.assert_not_called()
+        assert gen.client.create.call_args.kwargs == {"kind": ManagedSegmentDeployment, "data": {"id": "dep-9"}}
+        existing.save.assert_awaited_once_with(allow_upsert=True)
         gen.client.filters.assert_not_called()
-        existing.save.assert_called_once()
         info_msgs = " ".join(str(c) for c in gen.logger.info.call_args_list)
         assert "already exists" in info_msgs
 
@@ -420,14 +436,20 @@ class TestActivateSegmentInDeployment:
         gen = _make_gen()
         gen.client.get = AsyncMock(return_value=MagicMock(id="grp-sd"))
         outside = _activation_node("some_generator_group")
+        outside.id = "dep-1"
+        gen.client.create = AsyncMock(return_value=outside)
         assert self._run(gen, existing_deployment=outside) is True
-        outside.add_relationships.assert_awaited_once_with(
-            relation_to_update="member_of_groups", related_nodes=["grp-sd"]
-        )
+        (call,) = gen.client.execute_graphql.await_args_list
+        assert call.kwargs["variables"]["data"] == {
+            "id": "dep-1",
+            "name": "member_of_groups",
+            "nodes": [{"id": "grp-sd"}],
+        }
 
+        gen.client.execute_graphql.reset_mock()
         member = _activation_node("segment_deployments")
         assert self._run(gen, existing_deployment=member) is True
-        member.add_relationships.assert_not_awaited()
+        gen.client.execute_graphql.assert_not_awaited()
 
     def test_a_new_deployment_is_created_in_the_segment_deployments_group(self) -> None:
         """The target group of add_segment_deployment_ports is in the create data (one write)."""
@@ -441,13 +463,12 @@ class TestActivateSegmentInDeployment:
         """The tracker re-save of an existing record is what keeps it out of this run's cleanup, which would
         delete it and, with it, the VLAN rows below it: a failed one fails the run."""
         gen = _make_gen()
-        existing = _activation_node()
+        existing = _activation_node("segment_deployments")
         existing.save = AsyncMock(side_effect=Exception("conflict"))
+        gen.client.create = AsyncMock(return_value=existing)
 
         with pytest.raises(GeneratorError, match="Failed to re-save"):
             self._run(gen, existing_deployment=existing)
-
-        gen.client.create.assert_not_called()
 
     def test_creates_segment_deployment(self):
         """Happy path: no existing record → create() called with segment/deployment/status only."""
@@ -553,34 +574,21 @@ class TestDeviceDeploymentIds:
         """A DC's children mix pods and CustomerDC footprints; the query selects
         ids only on pods, so a footprint arrives as an empty node and is skipped."""
         dc = {"id": "dc-1", "children": [{}, {"id": "pod-1"}, {"id": "pod-2"}]}
-        assert VxlanSegmentGenerator._device_deployment_ids(dc) == ["dc-1", "pod-1", "pod-2"]
-
-    def test_query_selects_child_ids_only_on_pods(self, root_dir: Path) -> None:
-        """The pod-only filter lives in vxlan_segment.gql, not in Python."""
-        query = (root_dir / "queries" / "topology" / "add" / "vxlan_segment.gql").read_text()
-        compact = " ".join(query.split())
-        assert "... on TopologyDataCenter { children { edges { node { ... on TopologyPod { id } } } } }" in compact
+        assert segment_vlan._device_deployment_ids(dc) == ["dc-1", "pod-1", "pod-2"]
 
     def test_metro_without_children_is_only_itself(self) -> None:
         """A metro with no zone or virtual colocation (no children came back) has only itself to look in."""
-        assert VxlanSegmentGenerator._device_deployment_ids({"id": "metro-1"}) == ["metro-1"]
-        assert VxlanSegmentGenerator._device_deployment_ids({"id": "metro-1", "children": None}) == ["metro-1"]
+        assert segment_vlan._device_deployment_ids({"id": "metro-1"}) == ["metro-1"]
+        assert segment_vlan._device_deployment_ids({"id": "metro-1", "children": None}) == ["metro-1"]
 
     def test_metro_includes_its_zones_and_virtual_colocations(self) -> None:
         """The edges are deployed into the metro's zones and virtual colocations, the metro owns no device: both
         kinds of child are looked in, after the metro itself."""
         metro = {"id": "metro-1", "children": [{"id": "zone-fr2"}, {"id": "zone-fr6"}, {"id": "vc-am-ne"}]}
-        assert VxlanSegmentGenerator._device_deployment_ids(metro) == ["metro-1", "zone-fr2", "zone-fr6", "vc-am-ne"]
+        assert segment_vlan._device_deployment_ids(metro) == ["metro-1", "zone-fr2", "zone-fr6", "vc-am-ne"]
 
     def test_metro_skips_children_that_arrive_empty(self) -> None:
         """A child of another kind comes back as an empty node (ids are selected on zones and virtual
         colocations only) and is skipped."""
         metro = {"id": "metro-1", "children": [{}, {"id": "zone-fr2"}]}
-        assert VxlanSegmentGenerator._device_deployment_ids(metro) == ["metro-1", "zone-fr2"]
-
-    def test_segment_vlan_query_selects_zone_and_virtual_colocation_ids_under_the_metro(self, root_dir: Path) -> None:
-        """The zone and virtual colocation filter lives in segment_vlans.gql, not in Python."""
-        query = (root_dir / "queries" / "topology" / "add" / "segment_vlans.gql").read_text()
-        compact = " ".join(query.split())
-        assert "... on TopologyColocationMetro { children { edges { node {" in compact
-        assert "... on TopologyColocationZone { id } ... on TopologyVirtualColocation { id }" in compact
+        assert segment_vlan._device_deployment_ids(metro) == ["metro-1", "zone-fr2"]

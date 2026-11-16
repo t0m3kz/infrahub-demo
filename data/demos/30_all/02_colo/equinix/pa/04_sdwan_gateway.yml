@@ -1,0 +1,18 @@
+---
+# Second shared SD-WAN gateway, in the PA4 cage (Paris): an office lists it next to EQX-FR2-SDWAN-GW1 in
+# `sdwan_gateways` for redundancy. Built like the Frankfurt one (../fr/04_sdwan_gateway.yml); loads before the offices
+# that name it. Amsterdam (AM-NE) is a provider-hosted virtual colocation that hosts no physical device, so the
+# second gateway stands in the Paris cage.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "EQX-PA4-SDWAN-GW1"
+      object_template: VCG-VA_GATEWAY
+      status: active
+      owner: "P028"
+      description: "Shared SD-WAN gateway in the Equinix PA4 cage (offices <-> hub, redundant to EQX-FR2-SDWAN-GW1)"
+      deployment: "PA4"
+      member_of_groups:
+        - sdwan_gateways

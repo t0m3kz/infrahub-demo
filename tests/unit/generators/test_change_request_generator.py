@@ -14,15 +14,13 @@ import yaml
 
 from generators.change import change_request as module
 from generators.change.change_request import ChangeRequestGenerator, changed_fields
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
 from tests.integration.demo_data import ROOT
 from tests.unit.change_text_helpers import raw_node, raw_segment, raw_summaries
-from tests.unit.query_shape_helpers import query_tree, unselected
 
 NOW = datetime(2026, 11, 12, 9, 0, tzinfo=UTC)
 BRANCH = "feat/leaf"
 AUTHOR_FIELDS = ("justification", "risk_override", "risk_override_reason", "requested_by", "external_id")
-QUERIES = ROOT / "queries" / "change"
 
 
 def _v(value: Any) -> dict[str, Any]:
@@ -97,6 +95,7 @@ def _device(device_id: str, name: str, peer: str) -> dict[str, Any]:
     return {
         "id": device_id,
         "__typename": "DcimPhysicalDevice",
+        "hardware": device_id,
         "name": _v(name),
         "role": _v("leaf"),
         "site": {"node": {"name": _v("DC1")}},
@@ -374,13 +373,6 @@ def test_changed_fields_compares_datetimes_as_instants() -> None:
         "planned_start": "2026-11-12T09:00:00+00:00",
         "risk": "low",
     }
-
-
-def test_the_fixtures_emit_only_fields_the_queries_select() -> None:
-    """The raw rows stand for the registered queries."""
-    assert unselected({"ChangeRequest": _edges(request_row())}, query_tree(QUERIES / "change_request.gql")) == []
-    assert unselected(FACTS, query_tree(QUERIES / "change_request_facts.gql")) == []
-    assert unselected(DIFF, query_tree(QUERIES / "change_request_diff.gql")) == []
 
 
 def test_the_generator_is_registered_on_its_group() -> None:

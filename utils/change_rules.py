@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -100,8 +100,7 @@ HOTFIX_PREFIX = "hotfix/"
 DESCRIPTION_MAX_CHARS = 4000
 SECTION_MAX_ITEMS = 15
 DEVICE_MAX_ITEMS = 30
-OTHER_KINDS_MAX = 12
-"""The caps of the text fields: the listing of a description, the items of a section, the kinds counted as other."""
+"""The caps of the text fields: the listing of a description, the items of a section and of the devices."""
 DIFF_TRUNCATED_NOTE = "(more objects changed than the part read: the lists above are the first ones)"
 
 
@@ -112,7 +111,6 @@ class ArtifactChange:
     id: str
     action: str
     target_id: str
-    target_kind: str
     target: str
     definition: str
     checksum_new: str | None
@@ -184,6 +182,13 @@ class ChangeInputs:
     """The segments, rules, cables, circuits, footprints and applications of the data diff, with their values."""
     objects_truncated: bool = False
     """The objects were read up to a cap (utils/change_sources.py): more changed than are described."""
+    hardware_artifacts: Sequence[ArtifactChange] | None = None
+    """The artifact diff as it touches hardware (``hardware_changes``); None: the targets are the devices."""
+
+    @property
+    def device_artifacts(self) -> Sequence[ArtifactChange]:
+        """The artifacts by affected device: ``hardware_artifacts``, else ``artifacts``."""
+        return self.artifacts if self.hardware_artifacts is None else self.hardware_artifacts
 
 
 # --- parsing ---
@@ -207,7 +212,6 @@ def parse_artifact_diff(payload: Mapping[str, Any] | None) -> list[ArtifactChang
                 id=str(entry.get("id") or artifact_id),
                 action=str(entry.get("action") or ""),
                 target_id=str(target.get("id") or ""),
-                target_kind=str(target.get("kind") or ""),
                 target=target_label,
                 definition=definition,
                 checksum_new=new.get("checksum"),
@@ -340,8 +344,43 @@ def device_facts(row: Mapping[str, Any]) -> DeviceFacts:
     )
 
 
+def _id(value: Any) -> str | None:
+    """The id of a cleaned relationship value (a bare id or a node dict)."""
+    if isinstance(value, Mapping):
+        value = value.get("id")
+    return value if isinstance(value, str) and value else None
+
+
+def hosting_device_ids(rows: Iterable[Mapping[str, Any]]) -> set[str]:
+    """The ids of the hardware that hosts a virtual device of ``rows``."""
+    return {host for row in rows if (host := _id(row.get("hosting_device")))}
+
+
+def hardware_changes(
+    artifacts: Iterable[ArtifactChange], rows: Iterable[Mapping[str, Any]]
+) -> tuple[list[ArtifactChange], list[Mapping[str, Any]]]:
+    """The artifact diff as it touches hardware, and the rows of that hardware, from the ``DcimDeviceManaged`` rows
+    of change_request_facts.gql (a virtual device's host included): a physical target is itself, a virtual device is
+    its ``hosting_device`` (two VMs of one host are one host), any other target (a provider-hosted appliance, a device
+    hosted on nothing) is left out. A kept artifact names the hardware as its target.
+    """
+    by_id = {str(row.get("id")): row for row in rows}
+    changes: list[ArtifactChange] = []
+    hardware: dict[str, Mapping[str, Any]] = {}
+    for artifact in artifacts:
+        row = by_id.get(artifact.target_id)
+        if row is not None and not row.get("hardware"):
+            row = by_id.get(_id(row.get("hosting_device")) or "")
+        if row is None or not row.get("hardware"):
+            continue
+        hardware[str(row["id"])] = row
+        changes.append(replace(artifact, target_id=str(row["id"]), target=str(row.get("name") or row["id"])))
+    return changes, list(hardware.values())
+
+
 def affected_customers(cleaned: Mapping[str, Any], objects: Iterable[ObjectDiff] = ()) -> dict[str, str]:
-    """Customer id -> name: owners of the devices, their footprints and the changed objects."""
+    """Customer id -> name: owners of the devices (the hardware that hosts a virtual device included, its rows are in
+    ``cleaned``; only an OrganizationCustomer counts), their footprints and the changed objects."""
     owners = []
     for row in cleaned.get("DcimDeviceManaged") or []:
         owners += [row.get("owner"), (row.get("deployment") or {}).get("owner")]
@@ -452,7 +491,7 @@ def change_type(inputs: ChangeInputs, risk: str) -> str:
 def artifacts_by_target(inputs: ChangeInputs) -> dict[str, list[ArtifactChange]]:
     """The artifact diff by target name."""
     by_target: dict[str, list[ArtifactChange]] = defaultdict(list)
-    for artifact in inputs.artifacts:
+    for artifact in inputs.device_artifacts:
         by_target[artifact.target].append(artifact)
     return by_target
 

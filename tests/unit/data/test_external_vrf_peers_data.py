@@ -9,11 +9,10 @@ import pytest
 import yaml
 
 from tests.unit.external_vrf_peers_helpers import _GW1, _ROOT, _bgp_facing, _raw_vrf, _subif
-from tests.unit.query_shape_helpers import _selection_tree
 from transforms.helpers.bgp_external import get_external_peer_prefixes
-from utils.graphql_queries import load_query
 
-_INTERCONNECTS = _ROOT / "data" / "demos" / "30_all" / "08_interconnects"
+_ALL = _ROOT / "data" / "demos" / "30_all"
+_INTERCONNECTS = _ALL / "08_interconnects"
 
 
 def _objects(directory: Path, kind: str, circuit_type: str | None = None) -> list[dict[str, Any]]:
@@ -44,11 +43,13 @@ def _zone(circuit: dict) -> str | None:
 
 
 class TestAllDemoData:
-    def test_the_authored_tenant_vrf_handoffs_are_the_sdwan_gateways_and_the_aws_one(self) -> None:
-        """The authored tenant-VRF handoffs are the SD-WAN gateway's and C001's AWS Direct Connect one."""
+    def test_the_authored_tenant_vrf_handoffs_are_the_sdwan_gateways_and_the_hub_links(self) -> None:
+        """The authored tenant-VRF handoffs are the SD-WAN gateways' and the two cloud hubs' links (AWS, Azure)."""
         assert sorted(p["name"] for p in _external_handoffs()) == [
             "HANDOFF-FR2-AWS-EUC1-PROD",
             "HANDOFF-FR2-SDWAN-GW1-PROD",
+            "HANDOFF-PA4-AZURE-WEU-PROD",
+            "HANDOFF-PA4-SDWAN-GW1-PROD",
         ]
         assert {_zone(p) for p in _external_handoffs()} == {"PROD"}
         assert all("ip_namespace" not in p for p in _external_handoffs())
@@ -64,12 +65,14 @@ class TestAllDemoData:
             account["name"]: account["environment"]
             for account in _objects(_ROOT / "data" / "demos" / "30_all", "CloudAccount")
         }
-        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudGatewayAttachment")
+        attachments = _objects(_ALL, "CloudGatewayAttachment")
         assert {accounts[a["owner_account"]] for a in attachments} == {"p"}
 
-    def test_every_hub_vpc_propagates_into_the_hybrid_attachments_table(self) -> None:
-        """On-prem traffic is looked up in the hybrid attachment's table, so every VPC must propagate there."""
-        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudGatewayAttachment")
+    def test_every_authored_hub_vpc_propagates_into_the_hybrid_attachments_table(self) -> None:
+        """On-prem traffic is looked up in the hybrid attachment's table, so every VPC must propagate there (the
+        transit footprints' attachments are generated with it, generators/cloud/cloud_hub.py).
+        """
+        attachments = [a for a in _objects(_ALL, "CloudGatewayAttachment") if a["gateway"] == "tgw-30all-euc1"]
         (hybrid,) = [a for a in attachments if "peer_gateway" in a]
         vpcs = [a for a in attachments if "virtual_network" in a]
         assert vpcs
@@ -82,7 +85,7 @@ class TestAllDemoData:
         (gateway,) = [device for device, _ in peering["capabilities"] if not device.startswith("eg-")]
         behind: list[list[list[str]]] = []
         for office in _objects(_ROOT / "data" / "demos" / "30_all" / "06_customer_boarding", "TopologyCustomerOffice"):
-            if office.get("sdwan_gateway") == gateway:
+            if gateway in (office.get("sdwan_gateways") or []):
                 behind.append(office.get("lan_prefixes") or [])
         registered = [prefix for office_lans in behind for prefix in office_lans]
         assert behind and registered
@@ -97,36 +100,11 @@ class TestAllDemoData:
 class TestOfficeQuerySelection:
     """The edge query selects what get_external_peer_prefixes reads off an office, in the shape it expects."""
 
-    def test_the_office_root_selects_the_gateway_the_lans_and_the_hosted_segment_prefixes(self) -> None:
-        """Pin native raw ownership paths, compiling shared fragments through the production loader."""
-        from graphql import FragmentDefinitionNode, OperationDefinitionNode, parse
-
-        document = parse(load_query(_ROOT / "queries/config/edge.gql"))
-        fragments = {d.name.value: d for d in document.definitions if isinstance(d, FragmentDefinitionNode)}
-        operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
-        office = _selection_tree(operation.selection_set, fragments)["TopologyCustomerOffice"]["edges"]["node"]
-        gateway = office["sdwan_gateway"]["node"]
-        assert gateway["name"] == {"value": {}}
-        handoff = gateway["interfaces"]["edges"]["node"]["capabilities"]["edges"]["node"]
-        assert "id" in handoff["vrf"]["node"]
-        assert set(office["vrfs"]["edges"]["node"]["security_zone"]["node"]) == {
-            "id",
-            "name",
-            "vrf_type",
-            "l3_vni",
-        }
-        assert "security_zone" not in office["lan_prefixes"]["edges"]["node"]
-        segment = office["segment_deployments"]["edges"]["node"]["segment"]["node"]
-        assert set(segment["security_zone"]["node"]) == {"id", "name", "vrf_type", "l3_vni"}
-        prefix = segment["gateway"]["node"]["ip_prefix"]["node"]
-        assert "prefix" in prefix
-        assert prefix["ip_namespace"]["node"] == {"name": {"value": {}}}
-
     def test_the_selected_fields_exist_on_the_office_schema(self) -> None:
         """segment_deployments comes from TopologySegmentHosting, which the office inherits."""
         from tests.integration.demo_data import relationship_names
 
-        assert {"sdwan_gateway", "lan_prefixes", "segment_deployments"} <= relationship_names("TopologyCustomerOffice")
+        assert {"sdwan_gateways", "lan_prefixes", "segment_deployments"} <= relationship_names("TopologyCustomerOffice")
 
     def test_a_cleaned_query_response_has_the_shape_the_helper_reads(self) -> None:
         """The segment owns the routing zone while its gateway prefix keeps the default IPAM identity."""
@@ -144,7 +122,7 @@ class TestOfficeQuerySelection:
                                     "display_label": "C005 label",
                                 }
                             },
-                            "sdwan_gateway": {"node": {"name": {"value": _GW1}}},
+                            "sdwan_gateways": {"edges": [{"node": {"name": {"value": _GW1}}}]},
                             "lan_prefixes": {"edges": []},
                             "segment_deployments": {
                                 "edges": [

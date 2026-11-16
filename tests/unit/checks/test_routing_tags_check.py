@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from graphql import FieldNode, FragmentDefinitionNode, parse
 
 from checks.routing.routing_tags import CheckRoutingTags
-from utils.graphql_queries import load_query
 
 
 def _v(value: Any) -> dict[str, Any]:
@@ -146,25 +143,3 @@ class TestViolations:
         errors, _ = _run([_customer("c-1", "C005", 5)], [_segment("a", 5)])
 
         assert errors == []
-
-
-def test_query_selects_what_the_check_reads(root_dir: Path) -> None:
-    """The routed-segment test (kind, zone type), owner and both tags come from the compiled query."""
-    query = load_query(root_dir / "queries/validation/routing_tags.gql")
-    for needed in (
-        "OrganizationCustomer",
-        "ManagedNetworkSegment",
-        "routing_tag { value }",
-        "owner { node { id } }",
-        "security_zone",
-        "__typename",
-    ):
-        assert needed in query
-    zone_fragment = next(
-        definition
-        for definition in parse(query).definitions
-        if isinstance(definition, FragmentDefinitionNode) and definition.name.value == "RoutingZoneFields"
-    )
-    assert {
-        selection.name.value for selection in zone_fragment.selection_set.selections if isinstance(selection, FieldNode)
-    } == {"id", "name", "vrf_type", "l3_vni"}

@@ -8,7 +8,7 @@ nodes:
   # `deployment`). It is a TopologyDeployment like every place, so it lives in the topology tree: the singleton
   # `INTERNET` sits under the label "Internet". It has no role, platform,
   # address, VRF, routing or artifact: the addresses and prefixes live in the INTERNET namespace. It has ONE
-  # interface, a TopologyInternetInterface (utils/internet_object.py, held by checks/circuit_placement.py).
+  # interface, a TopologyInternetInterface (utils/internet_object.py, held by checks/connectivity/circuit_placement.py).
   - name: Internet
     namespace: Topology
     label: Internet
@@ -34,8 +34,8 @@ nodes:
         order_weight: 950
 
   # The one interface of THE INTERNET: the end every internet attachment shares. Its kind is what lets many carrier
-  # circuits end on it (checks/carrier_circuit_ports.py exempts it by kind from "a port is an end of at most one
-  # carrier"), so each attachment keeps a carrier circuit of its own and the graph says who is attached.
+  # circuits end on it (checks/connectivity/carrier_circuit_ports.py exempts it by kind from "a port is an end of at
+  # most one carrier"), so each attachment keeps a carrier circuit of its own and the graph says who is attached.
   - name: InternetInterface
     namespace: Topology
     label: Internet Interface

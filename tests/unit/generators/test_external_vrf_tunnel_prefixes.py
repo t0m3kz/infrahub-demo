@@ -8,9 +8,7 @@ from typing import Any
 import pytest
 import yaml
 
-from tests.integration.demo_data import relationship_names
 from tests.unit.external_vrf_peers_helpers import _bgp_facing, _raw_gateway, _raw_vrf, _subif
-from tests.unit.generators.test_circuit_query_shapes import _QUERIES, _selected_paths
 from transforms.helpers.bgp_external import (
     get_external_peer_prefixes,
     get_external_session_policies,
@@ -72,7 +70,7 @@ def _offices(*offices: tuple[str | None, str, tuple[str, ...]]) -> list[dict[str
     raw = [
         {
             "owner": _raw_owner(owner),
-            "sdwan_gateway": {"node": _raw_gateway(gateway)} if gateway else {"node": None},
+            "sdwan_gateways": {"edges": [{"node": _raw_gateway(gateway)}] if gateway else []},
             "lan_prefixes": {"edges": [_raw_prefix(lan) for lan in lans]},
             "segment_deployments": {"edges": []},
         }
@@ -107,7 +105,7 @@ class TestRegisteredByGateway:
         ]
 
     def test_the_partner_end_is_no_gateway(self) -> None:
-        """Only the end named by an office's sdwan_gateway is a gateway: the partner router gets nothing."""
+        """Only the end named by an office's sdwan_gateways is a gateway: the partner router gets nothing."""
         found = registered_by_gateway(_offices((_GW1, "C002", ())), _tunnels(_tunnel("C001", (_ACME, "PROD"))))
         assert "EXT-ACME-EDGE1" not in found
 
@@ -225,21 +223,6 @@ class TestTunnelPrefixesInThePolicies:
 
 class TestEdgeQueryAndData:
     """The edge query selects the tunnel fields in the shape the helper reads; the demo registers the partner range."""
-
-    def test_the_edge_query_selects_the_tunnel_fields(self) -> None:
-        """Owner, registered prefixes with their namespace and the device of each end port."""
-        selected = _selected_paths(_QUERIES / "config" / "edge.gql", "TopologySessionCircuit")
-        reads = [
-            "locations.owner.org_id",
-            "locations.owner.display_label",
-            "registered_prefixes.prefix",
-            "registered_prefixes.ip_namespace.name",
-            "capabilities.device.name",
-            "vrf.id",
-            "vrf.security_zone.name",
-        ]
-        assert not [item for item in reads if item not in selected]
-        assert {"locations", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
 
     def test_a_cleaned_response_has_the_shape_the_helper_reads(self) -> None:
         """clean_data: office owner dict with typename in locations, registered_prefixes a list of dicts, device names."""

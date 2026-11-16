@@ -171,7 +171,7 @@ def with_interface_vrfs(data: Any) -> Any:
 
 
 def _pbr_node(device_name: str) -> dict[str, Any]:
-    """The raw ManagedPBR capability of a device that steers (generators/helpers/vrf.py ``sync_pbr`` writes it)."""
+    """The raw ManagedPBR capability of a device that steers (generators/capabilities/pbr.py ``plan_pbr`` writes it)."""
     return {
         "__typename": PBR_KIND,
         "id": f"fixture-pbr-{device_name}",

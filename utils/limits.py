@@ -1,6 +1,6 @@
 """Design ranges, limits, setup-data names, vendor limits and the retry policy, defined once.
 
-A constant here mirrors the schema or ``data/bootstrap`` (``tests/unit/test_limits_consistency.py``).
+A constant here mirrors the schema or ``data/bootstrap`` (``tests/unit/generators/test_limits_consistency.py``).
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ SEGMENT_PREFIX_LENGTH_MIN = 22
 SEGMENT_RESERVED_ADDRESSES = 3
 SEGMENT_HOST_COUNT_MAX = 2 ** (32 - SEGMENT_PREFIX_LENGTH_MIN) - SEGMENT_RESERVED_ADDRESSES
 
-# Routed range of one cloud virtual network (generators/topology/cloud_range.py): a slice of the footprint pool.
+# Routed range of one cloud virtual network (generators/cloud/cloud_range.py): a slice of the footprint pool.
 CLOUD_RANGE_PREFIX_LENGTH = 29
 
 # Host offsets inside a transit /29 and the segment anycast gateway: .1 anycast gateway, .2/.3 reserved, .4 VIP, .5/.6
@@ -147,12 +147,9 @@ GROUP_APP_COMPONENTS = "app_components"
 GROUP_CARRIER_CIRCUITS = "carrier_circuits"
 # Every session circuit: the target group of add_virtual_circuit.
 GROUP_VIRTUAL_CIRCUITS = "virtual_circuits"
-GROUP_CONNECTIVITY_REQUESTS = "connectivity_requests"
 # Devices that are never a border gateway of a VLAN domain.
 GROUP_SDWAN_GATEWAYS = "sdwan_gateways"
 GROUP_PROVIDER_STUBS = "provider_stubs"
-# Every DcimPatchPanel: the target group of add_patch_panel.
-GROUP_PATCH_PANELS = "patch_panels"
 # Every firewall and load-balancer context: the target group of add_context_routes.
 GROUP_SERVICE_CONTEXTS = "service_contexts"
 # Every segment deployment add_vxlan_segment builds: the target group of add_segment_deployment_ports.
@@ -167,7 +164,7 @@ ROLE_GROUP_NAMES: dict[str, str] = {
     "distribution-switch": "distribution-switches",
 }
 
-# orchestrator -> the group its artifact definitions target (generators/topology/orchestrator_routing.py).
+# orchestrator -> its routing group (generators/connectivity/orchestrator_routing.py); no artifact targets these.
 TOPOLOGY_ORCHESTRATOR_GROUPS: dict[str, str] = {
     "ansible_automation_platform": "topology_ansible",
     "github_actions": "topology_github_actions",
@@ -205,11 +202,27 @@ class ResourceLockPolicy(RetryPolicy):
     stale_after: int
 
 
+# Parallel writes of one kind inside one run (generators/helpers/common.py gather_bounded, the plan reconciler's
+# semaphore); allocations from a pool and anything under a resource lock stay sequential.
+WRITE_CONCURRENCY = 8
+
 # Wait for data another generator of the same load is still writing: ten tries from 3 s.
 WAIT_FOR_PEER_GENERATOR = RetryPolicy(attempts=10, delay=3.0)
 
-# Wait for a generator run in flight (Infrahub task poll): every 3 s, at most 30 min.
+# Wait for a generator run in flight (Infrahub task poll): every 3 s, at most 30 min. The kick runner (tests/integration/utils/) waits for
+# the run of a stage's `run` the same way.
 PARENT_GENERATOR_WAIT = PollPolicy(interval=3, timeout=1800)
+
+# Wait for the artifact validator of a Proposed Change (the target of open_change_request) to complete: polled every 3 s,
+# at most 30 min, like a generator run (artifact generation is what it waits for).
+ARTIFACT_VALIDATOR_WAIT = PollPolicy(interval=3, timeout=1800)
+
+# Wait for the task queue of a branch to settle (tests/integration/utils/: the generators of a stage, a proposed change, a merge): polled
+# like a generator run, at most 40 min (the 30_all foundation is the longest), settled when nothing was in flight for
+# QUEUE_QUIET_SECONDS. The task history of three kick stages shows a cascade (add_dc -> add_pod -> add_rack) quiet for
+# 13 s at most between two waves, so 30 s is more than twice that.
+QUEUE_SETTLE = PollPolicy(interval=PARENT_GENERATOR_WAIT.interval, timeout=2400)
+QUEUE_QUIET_SECONDS = 30
 
 # Resource lock of cabling and IP allocation. Waiters must keep trying longer than stale_after, or a failed release
 # blocks them.
@@ -221,14 +234,5 @@ NODE_SAVE_RETRY = RetryPolicy(attempts=5, delay=2.0)
 # Re-read of load balancer inputs another generator may still write: fixed interval.
 LB_VIP_REREAD = RetryPolicy(attempts=12, delay=5.0)
 
-# add_sdwan_edge runs beside the office fabric generator: wait for the edge it creates.
-OFFICE_EDGE_WAIT = RetryPolicy(attempts=8, delay=3.0)
-
 # Short on purpose: most pods host no border-leaf, so this fires on every pod bootstrap.
 BORDER_LEAF_WAIT = RetryPolicy(attempts=3, delay=2.0)
-
-# Retries of a security policy rule save whose generated index collided.
-RULE_SAVE_ATTEMPTS = 5
-
-# Default max concurrent Infrahub API writes in PlanReconciler.
-RECONCILE_CONCURRENCY = 8

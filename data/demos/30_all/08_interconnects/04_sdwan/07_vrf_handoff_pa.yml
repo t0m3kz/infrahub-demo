@@ -1,0 +1,35 @@
+# L3 handoff between the Paris SD-WAN gateway and the PA4 cage's border gateway, in routing zone PROD: the twin of
+# the Frankfurt handoff (06_vrf_handoff.yml), so an office behind both gateways registers its LAN behind each. GW1
+# reaches eg-pa401 over eth0 <-> Ethernet1/12 (a cable in the cage,
+# ../01_colo_onramp/10_cage_cabling.yml) and a dot1q sub-interface on each side (VLAN 1900). The circuit is the
+# handoff and nothing else is authored for the session: add_virtual_circuit allocates the /31 and upserts the eBGP
+# session HANDOFF-PA4-SDWAN-GW1-PROD-bgp.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/12.1900"
+      device: "eg-pa401"
+      role: uplink
+      status: active
+      description: "PROD handoff to EQX-PA4-SDWAN-GW1"
+      parent: ["eg-pa401", "Ethernet1/12"]
+      vlan_id: 1900
+    - name: "eth0.1900"
+      device: "EQX-PA4-SDWAN-GW1"
+      role: uplink
+      status: active
+      description: "PROD handoff to eg-pa401"
+      parent: ["EQX-PA4-SDWAN-GW1", "eth0"]
+      vlan_id: 1900
+    # The gateway's router-id, clear of the handoff pools like GW1's (10.255.64.2).
+    - name: "Loopback0"
+      device: "EQX-PA4-SDWAN-GW1"
+      role: loopback
+      status: active
+      description: "Router-id of the SD-WAN gateway"
+      ip_address:
+        data:
+          address: "10.255.64.3/32"
+          ip_namespace: "default"

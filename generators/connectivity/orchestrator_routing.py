@@ -4,7 +4,8 @@ from typing import Any
 
 from infrahub_sdk.exceptions import NodeNotFoundError
 
-from generators.mixins.common import CommonGenerator
+from generators.base import BaseGenerator
+from generators.plan import NodeRef, NodeSpec, TopologyPlan
 from utils.data_cleaning import clean_data
 from utils.limits import APPLICATION_ORCHESTRATOR_GROUPS, TOPOLOGY_ORCHESTRATOR_GROUPS
 
@@ -16,9 +17,9 @@ _NODE_GROUPS_QUERY = (
 )
 
 
-class BaseOrchestratorRoutingGenerator(CommonGenerator):
+class BaseOrchestratorRoutingGenerator(BaseGenerator):
     """Synchronize routing groups from an orchestrator dropdown field; every write is untracked (the group is shared,
-    the node is the target).
+    the node is the target); the group (when missing) and the node's membership are ``NodeSpec`` upserts.
     """
 
     query_roots: tuple[str, ...] = ()
@@ -32,20 +33,12 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
                 return nodes[0]
         return None
 
-    async def _ensure_group(self, group_name: str) -> Any:
+    async def _find_group(self, group_name: str) -> Any | None:
+        """The routing group by name, None when it does not exist (the plan then creates it)."""
         try:
             return await self.client.get(kind="CoreStandardGroup", name__value=group_name)
         except NodeNotFoundError:
-            group = await self.client.create(
-                kind="CoreStandardGroup",
-                data={
-                    "name": group_name,
-                    "description": f"Auto-created orchestrator routing group {group_name}",
-                },
-            )
-            await group.save(allow_upsert=True, update_group_context=False)
-            self.logger.info(f"Created missing routing group '{group_name}'")
-            return group
+            return None
 
     async def _current_groups(self, node_id: str) -> list[dict[str, Any]]:
         """The groups the node is a member of (see _NODE_GROUPS_QUERY)."""
@@ -84,10 +77,11 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
             group["id"] for group in current_groups if group.get("id") and group.get("name") not in routing_group_names
         ]
 
-        final_group_ids = list(retained_group_ids)
+        plan = TopologyPlan(root_id=None)
+        final_group_ids: list[str | NodeRef] = list(retained_group_ids)
         if routing_group_name:
             # The groups read above already name the routing group: no lookup.
-            routing_group_id = next(
+            routing_group_id: str | NodeRef | None = next(
                 (
                     group["id"]
                     for group in current_groups
@@ -96,7 +90,22 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
                 None,
             )
             if routing_group_id is None:
-                routing_group_id = (await self._ensure_group(routing_group_name)).id
+                found = await self._find_group(routing_group_name)
+                if found is not None:
+                    routing_group_id = found.id
+                else:
+                    plan.add(
+                        NodeSpec(
+                            "routing-group",
+                            "CoreStandardGroup",
+                            {
+                                "name": routing_group_name,
+                                "description": f"Auto-created orchestrator routing group {routing_group_name}",
+                            },
+                        )
+                    )
+                    routing_group_id = NodeRef("routing-group")
+                    self.logger.info(f"Creating missing routing group '{routing_group_name}'")
             if routing_group_id not in final_group_ids:
                 final_group_ids.append(routing_group_id)
 
@@ -104,14 +113,14 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
             self.logger.info(f"{node_kind} '{node_name}' already has correct routing groups")
             return
 
-        obj = await self.client.create(
-            kind=node_kind,
-            data={
-                "id": node_id,
-                "member_of_groups": [{"id": group_id} for group_id in final_group_ids],
-            },
+        plan.add(
+            NodeSpec(
+                "node",
+                node_kind,
+                {"id": node_id, "member_of_groups": [{"id": group_id} for group_id in final_group_ids]},
+            )
         )
-        await obj.save(allow_upsert=True, update_group_context=False)
+        await self.apply_plan(plan)
         self.logger.info(
             f"Updated routing groups for {node_kind} '{node_name}' -> {routing_group_name or 'manual/no-routing-group'}"
         )

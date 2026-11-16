@@ -6,19 +6,20 @@ import asyncio
 import ipaddress
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from infrahub_sdk.exceptions import NodeNotFoundError
 from infrahub_sdk.protocols import CoreIPPrefixPool, IpamNamespace
 
 from generators.applications.application_security import AppApplicationGenerator
-from generators.mixins.logger import GeneratorError
-from generators.protocols import IpamPrefix
+from generators.model.errors import GeneratorError
+from generators.protocols import IpamIPAddress
 from generators.segments.segment import VxlanSegmentGenerator
 from tests.integration.demo_data import ROOT, declared, name
 from utils.exchange_transit import is_exchange_zone, namespace_type_for_environment
-from utils.limits import OFFSET_ANYCAST
 from utils.routing_domain import RoutingDomainError
 from utils.segment_addressing import tenant_pool_name
 
@@ -52,20 +53,28 @@ class _Client:
         self.allocations: list[dict[str, Any]] = []
         self.created: list[tuple[str, dict[str, Any]]] = []
         self.saves: list[dict[str, Any]] = []
+        self.addresses: list[dict[str, Any]] = []  # the gateway address writes: its data and the kwargs of its save
+        self.group_context = SimpleNamespace(related_node_ids=[])
 
     async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
-        """IpamNamespace by vrf_type, CoreIPPrefixPool by name."""
+        """IpamNamespace by vrf_type."""
+        if kind is IpamIPAddress:  # the find-before-create read of the gateway address: none exists, not a pool read
+            return []
         self.filter_calls.append((kind, kwargs))
         if kind is IpamNamespace:
             return [_namespace(kwargs["namespace_type__value"]) for _ in range(self.namespaces)]
-        if kind is CoreIPPrefixPool:
-            if not self.pool_exists:
-                return []
-            pool = MagicMock(id=f"pool-{kwargs['name__value']}")
-            pool.name.value = kwargs["name__value"]
-            pool.default_prefix_length.value = 24  # 23b_tenant_pools.yml: an office segment takes the pool's default
-            return [pool]
         raise AssertionError(f"unexpected filters({kind})")
+
+    async def get(self, *, kind: Any, **kwargs: Any) -> Any:
+        """The tenant pool by name (``resolve_pool``); a missing one is not found."""
+        self.filter_calls.append((kind, kwargs))
+        assert kind is CoreIPPrefixPool
+        if not self.pool_exists:
+            raise NodeNotFoundError(branch_name="main", node_type="CoreIPPrefixPool", identifier=kwargs)
+        pool = MagicMock(id=f"pool-{kwargs['name__value']}")
+        pool.name.value = kwargs["name__value"]
+        pool.default_prefix_length.value = 24  # 23b_tenant_pools.yml: an office segment takes the pool's default
+        return pool
 
     async def allocate_next_ip_prefix(self, **kwargs: Any) -> Any:
         """The pool's next prefix for the identifier (None: exhausted)."""
@@ -76,6 +85,11 @@ class _Client:
 
     async def create(self, *, kind: str, data: dict[str, Any]) -> Any:
         """A node whose save records its kwargs."""
+        if kind is IpamIPAddress:
+            address = MagicMock(id="gw-1")
+            address.address.value = data["address"]
+            address.save = AsyncMock(side_effect=lambda **kwargs: self.addresses.append({**data, "save": kwargs}))
+            return address
         self.created.append((kind, data))
         node = MagicMock()
         node.save = AsyncMock(side_effect=lambda **kwargs: self.saves.append(kwargs))
@@ -100,16 +114,6 @@ def _make_gen(client: _Client) -> Any:
         yield
 
     gen.resource_lock = lock
-
-    async def upsert(prefix: Any, *, offsets: tuple[int, ...], description: str, track: bool) -> dict[int, Any]:
-        gen.upserts.append({"offsets": offsets, "description": description, "track": track})
-        network = ipaddress.ip_network(prefix.prefix.value)
-        address = MagicMock(id="gw-1")
-        address.address.value = f"{network[offsets[0]]}/{network.prefixlen}"
-        return {offsets[0]: address}
-
-    gen.upserts = []
-    gen.upsert_prefix_addresses = upsert
     return gen
 
 
@@ -141,14 +145,13 @@ class TestEnsureSegmentAddressing:
         ]
         (allocation,) = client.allocations
         assert allocation["identifier"] == "c008-trade-portal-local-dc10-p"
-        assert allocation["kind"] is IpamPrefix
         assert allocation["member_type"] == "address"
         assert allocation["data"] == {"role": "customer", "status": "active", "description": segment["name"]}
         # No host_count and no design (an office): the pool's own default_prefix_length, a /24.
         assert allocation["prefix_length"] == 24
-        assert gen.upserts == [
-            {"offsets": (OFFSET_ANYCAST,), "description": f"{segment['name']} anycast gateway", "track": False}
-        ]
+        (gateway,) = client.addresses
+        assert gateway["address"] == "10.176.0.1/24" and gateway["description"] == f"{segment['name']} anycast gateway"
+        assert gateway["save"] == {"allow_upsert": True, "update_group_context": False}  # untracked
 
     def test_non_prod_segment_is_addressed_from_the_non_prod_pool(self) -> None:
         """Every environment but p is nonprod: Tenant-NONPROD-IPv4."""
@@ -252,7 +255,7 @@ class TestGenerateOrder:
         order: list[str] = []
         seen: list[Any] = []
 
-        async def tag(client: Any, lock: Any, *, segment: dict[str, Any]) -> None:
+        async def tag(generator: Any, *, segment: dict[str, Any]) -> None:
             order.append("tag")
             seen.append(segment.get("gateway"))
 
@@ -260,7 +263,6 @@ class TestGenerateOrder:
         gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()
-        gen.branch = "main"
 
         async def address(segment: dict[str, Any]) -> None:
             order.append("address")
@@ -346,12 +348,11 @@ class TestAppWaitsForSegmentAddressing:
 
     @staticmethod
     def _gen(refetched: dict[str, Any] | None) -> Any:
-        """An AppApplicationGenerator whose wait helper returns ``refetched`` (raw query data)."""
+        """An AppApplicationGenerator whose wait finds a run in flight when ``refetched`` is given; collect_data returns it."""
         gen: Any = AppApplicationGenerator.__new__(AppApplicationGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()
-        gen.branch = "main"
-        gen.wait_for_parent_generators = AsyncMock()
+        gen.wait_for_parent_generators = AsyncMock(return_value=refetched is not None)
         gen.collect_data = AsyncMock(return_value=refetched)
         return gen
 

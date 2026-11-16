@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrahub_sdk.exceptions import GraphQLError
-
+from generators.base import BaseGenerator
 from generators.helpers.patch_panel import audit
-from generators.mixins.common import CommonGenerator
-from generators.mixins.pools import PoolMixin
+from generators.plan import NodeRef, NodeSpec, TopologyPlan
 from utils.data_cleaning import clean_data
 
 PANEL_KIND = "DcimPatchPanel"
@@ -16,9 +14,10 @@ REAR_PORT_KIND = "DcimRearPatchPanelPort"
 FRONT_PORT_KIND = "DcimFrontPatchPanelPort"
 
 
-class PatchPanelGenerator(PoolMixin, CommonGenerator):
+class PatchPanelGenerator(BaseGenerator):
     """Create the ports `panel_type` asks for and pair every front port with its rear port; never deletes or re-pairs.
-    Untracked, one lock per panel, every port an upsert by [panel, name]; mismatches are warned about
+    Untracked, one lock per panel, every port a ``NodeSpec`` upsert by [panel, name] (one retry covers a concurrent
+    create); mismatches are warned about
     (checks/connectivity/patch_panel_pairing.py).
     """
 
@@ -30,7 +29,7 @@ class PatchPanelGenerator(PoolMixin, CommonGenerator):
             self.fail(f"No {self.graphql_root_key} data in GraphQL response")
         panel = panels[0]
         label = panel.get("panel_id") or panel.get("name")
-        async with self.resource_lock(f"patch-panel-{panel['id']}"):
+        async with self.plan_locks(f"patch-panel-{panel['id']}"):
             await self._build(panel, label)
 
     async def _build(self, panel: dict[str, Any], label: str) -> None:
@@ -40,25 +39,43 @@ class PatchPanelGenerator(PoolMixin, CommonGenerator):
         if result.problem or result.panel_type is None:
             self.fail(f"Patch panel {label}: cannot build its ports ({result.problem})")
         panel_type = result.panel_type
-        rear_ids = {int(str(port["name"])): port["id"] for port in rears}
+        rear_ids: dict[int, str | NodeRef] = {int(str(port["name"])): port["id"] for port in rears}
 
+        plan = TopologyPlan(root_id=None)
         for number in result.missing_rears:
-            rear_ids[number] = await self._upsert(
-                REAR_PORT_KIND,
-                {"name": str(number), "connector": panel_type.rear_connector, "panel": {"id": panel["id"]}},
+            plan.add(
+                NodeSpec(
+                    f"rear-{number}",
+                    REAR_PORT_KIND,
+                    {"name": str(number), "connector": panel_type.rear_connector, "panel": {"id": panel["id"]}},
+                    retry_on_conflict=True,
+                )
             )
+            rear_ids[number] = NodeRef(f"rear-{number}")
         for number in result.missing_fronts:
-            await self._upsert(
-                FRONT_PORT_KIND,
-                {
-                    "name": str(number),
-                    "connector": panel_type.front_connector,
-                    "panel": {"id": panel["id"]},
-                    "rear_port": {"id": rear_ids[panel_type.rear_of(number)]},
-                },
+            plan.add(
+                NodeSpec(
+                    f"front-{number}",
+                    FRONT_PORT_KIND,
+                    {
+                        "name": str(number),
+                        "connector": panel_type.front_connector,
+                        "panel": {"id": panel["id"]},
+                        "rear_port": {"id": rear_ids[panel_type.rear_of(number)]},
+                    },
+                    retry_on_conflict=True,
+                )
             )
         for front_id, rear_number in result.to_pair.items():
-            await self._upsert(FRONT_PORT_KIND, {"id": front_id, "rear_port": {"id": rear_ids[rear_number]}})
+            plan.add(
+                NodeSpec(
+                    f"pair-{front_id}",
+                    FRONT_PORT_KIND,
+                    {"id": front_id, "rear_port": {"id": rear_ids[rear_number]}},
+                    retry_on_conflict=True,
+                )
+            )
+        await self.apply_plan(plan)
 
         for kind, names in (
             ("not in its type", result.extra),
@@ -72,13 +89,3 @@ class PatchPanelGenerator(PoolMixin, CommonGenerator):
             f"{len(result.missing_rears)} rear and {len(result.missing_fronts)} front port(s), "
             f"paired {len(result.to_pair)}"
         )
-
-    async def _upsert(self, kind: str, data: dict[str, Any]) -> str:
-        """Save one port as an untracked upsert and return its id; one retry covers a concurrent create."""
-        port = await self.client.create(kind=kind, data=data)
-        try:
-            await port.save(allow_upsert=True, update_group_context=False)
-        except GraphQLError:
-            port = await self.client.create(kind=kind, data=data)
-            await port.save(allow_upsert=True, update_group_context=False)
-        return port.id

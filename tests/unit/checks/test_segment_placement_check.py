@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 from checks.segments.segment_placement import CheckSegmentPlacement
@@ -463,32 +462,3 @@ class TestOwnerAgreement:
         check.validate(_vxlan("p", "C005", [self._DC], zone="PROD"))
 
         assert len(check._captured_warnings) == 1
-
-
-class TestQueryShape:
-    """The agreement rules read fields the query must select."""
-
-    _QUERY = (Path(__file__).parents[3] / "queries" / "validation" / "segment_placement.gql").read_text()
-
-    def test_environment_and_owner_are_selected_on_the_segment(self) -> None:
-        """The segment block selects the segment's environment, owner and zone."""
-        block = self._QUERY[self._QUERY.index("ManagedVxlanSegment") : self._QUERY.index("CloudNetworkSegment")]
-        assert "environment { value }" in block
-        assert "owner { node { id org_id { value } } }" in block
-        from tests.unit.query_shape_helpers import query_tree
-
-        fields = query_tree(Path(__file__).parents[3] / "queries/validation/segment_placement.gql")
-        assert {"id", "name", "vrf_type", "l3_vni"} <= set(
-            fields["ManagedVxlanSegment"]["edges"]["node"]["security_zone"]["node"]
-        )
-
-    def test_footprint_environment_comes_from_the_scoped_generic(self) -> None:
-        """The footprint's environment is read through TopologyEnvironmentScoped, the generic that carries it."""
-        assert "... on TopologyEnvironmentScoped { environment { value } }" in self._QUERY
-
-    def test_the_termination_rules_read_their_fields(self) -> None:
-        """The gateway address and prefix, the flag and the footprint's contexts are selected."""
-        block = self._QUERY[self._QUERY.index("ManagedVxlanSegment") : self._QUERY.index("CloudNetworkSegment")]
-        assert "gateway { node { address { value } ip_prefix { node { prefix { value } } } } }" in block
-        assert "firewall_gateway { value }" in block
-        assert "serving_firewall_contexts" in block

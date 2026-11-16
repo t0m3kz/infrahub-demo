@@ -3,37 +3,144 @@ query segment_placement {
     edges {
       node {
         id
-        name { value }
-        # An exchange-zone segment may sit on a TopologyCustomerDC; a tenant one may not.
-        security_zone { node { ...RoutingZoneFields } }
-        # environment/owner: the segment agrees with the footprint it names (environment ERROR, owner WARNING).
-        environment { value }
-        owner { node { id org_id { value } } }
-        stretch_scope { value }
-        # firewall_gateway: the firewall pair of the one DC footprint owns the gateway (a floating VIP inside the segment
-        # prefix); the footprint's serving_firewall_contexts below say which.
-        gateway { node { address { value } ip_prefix { node { prefix { value } } } } }
-        firewall_gateway { value }
+        name {
+          value
+        }
+        security_zone {
+          node {
+            ... on SecurityZone {
+              id
+              name {
+                value
+              }
+              vrf_type {
+                value
+              }
+              l3_vni {
+                value
+              }
+            }
+          }
+        }
+        environment {
+          value
+        }
+        owner {
+          node {
+            id
+            org_id {
+              value
+            }
+          }
+        }
+        stretch_scope {
+          value
+        }
+        gateway {
+          node {
+            address {
+              value
+            }
+            ip_prefix {
+              node {
+                prefix {
+                  value
+                }
+              }
+            }
+          }
+        }
+        firewall_gateway {
+          value
+        }
         customer_deployments {
           edges {
             node {
               id
               __typename
-              name { value }
-              ... on TopologyEnvironmentScoped { environment { value } }
-              ... on TopologyCustomer { owner { node { id __typename org_id { value } } } }
-              ... on TopologyCustomerOffice { owner { node { id __typename org_id { value } } } }
+              name {
+                value
+              }
+              ... on TopologyEnvironmentScoped {
+                environment {
+                  value
+                }
+              }
+              ... on TopologyCustomer {
+                owner {
+                  node {
+                    id
+                    __typename
+                    org_id {
+                      value
+                    }
+                  }
+                }
+              }
+              ... on TopologyCustomerOffice {
+                owner {
+                  node {
+                    id
+                    __typename
+                    org_id {
+                      value
+                    }
+                  }
+                }
+              }
               ... on TopologyCustomerDC {
-                parent { node { id __typename name { value } } }
+                parent {
+                  node {
+                    id
+                    __typename
+                    name {
+                      value
+                    }
+                  }
+                }
                 serving_firewall_contexts {
-                  edges { node { id name { value } shared_devices { edges { node { ... on DcimDeviceManaged { role { value } } } } } } }
+                  edges {
+                    node {
+                      id
+                      name {
+                        value
+                      }
+                      shared_devices {
+                        edges {
+                          node {
+                            ... on DcimDeviceManaged {
+                              role {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
               ... on TopologyCustomerColocation {
-                parent { node { id __typename name { value } } }
+                parent {
+                  node {
+                    id
+                    __typename
+                    name {
+                      value
+                    }
+                  }
+                }
               }
               ... on TopologyCustomerCloud {
-                parent { node { id __typename name { value } } }
+                parent {
+                  node {
+                    id
+                    __typename
+                    name {
+                      value
+                    }
+                  }
+                }
               }
             }
           }
@@ -42,12 +149,16 @@ query segment_placement {
           edges {
             node {
               id
-              vni { value }
+              vni {
+                value
+              }
               deployment {
                 node {
                   id
                   __typename
-                  name { value }
+                  name {
+                    value
+                  }
                 }
               }
             }
@@ -56,17 +167,20 @@ query segment_placement {
       }
     }
   }
-
   CloudNetworkSegment {
     edges {
       node {
         id
-        name { value }
+        name {
+          value
+        }
         customer_deployment {
           node {
             id
             __typename
-            name { value }
+            name {
+              value
+            }
           }
         }
       }

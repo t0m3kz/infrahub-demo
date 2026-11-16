@@ -1,6 +1,6 @@
 """Validate the ports a carrier circuit ends on: two physical ends, a port in at most one circuit.
 
-Exemptions (virtual connection, internet attachment, THE INTERNET's interface): see AGENTS.md Circuit placement.
+Exemptions (virtual connection, internet attachment, THE INTERNET's interface): see domain-model.md Circuit placement.
 """
 
 from __future__ import annotations

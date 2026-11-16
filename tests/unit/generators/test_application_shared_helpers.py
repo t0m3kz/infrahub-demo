@@ -19,7 +19,6 @@ class TestRulesPlannerNamingAndPayload:
     def test_build_rule_payload_optional_fields(self) -> None:
         """Ports and expiry are set only when present; microsegmentation on either side applies on switch."""
         payload = RulesPlanner.build_rule_payload(
-            policy_id="policy-1",
             rule_name="app-a-to-b",
             dep={"access_expires_at": "2026-12-31T00:00:00+00:00"},
             src_comp={"name": "a"},
@@ -32,7 +31,6 @@ class TestRulesPlannerNamingAndPayload:
             cross_zone=True,
         )
 
-        assert payload["policy"] == {"id": "policy-1"}
         assert payload["name"] == "app-a-to-b"
         assert payload["action"] == "permit"
         assert payload["protocol"] == "tcp"
@@ -46,7 +44,6 @@ class TestRulesPlannerNamingAndPayload:
     def test_build_rule_payload_without_expiry_or_microsegmentation(self) -> None:
         """No expiry key without access_expires_at; normal/missing isolation never applies on switch."""
         payload = RulesPlanner.build_rule_payload(
-            policy_id="policy-1",
             rule_name="r",
             dep={},
             src_comp={},

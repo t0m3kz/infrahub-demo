@@ -7,15 +7,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from generators.mixins.common import CommonGenerator
-from generators.mixins.connections import CablingMixin
-from generators.mixins.pools import PoolMixin
+from generators.base import BaseGenerator
 from generators.protocols import ManagedVxlanSegment
-from generators.segments.segment_ports import SegmentPortTagMixin
+from generators.segments.segment_ports import reconcile_vxlan_segment
 from utils.data_cleaning import clean_data
 
 
-class SegmentDeploymentPortsGenerator(PoolMixin, CablingMixin, SegmentPortTagMixin, CommonGenerator):
+class SegmentDeploymentPortsGenerator(BaseGenerator):
     """Reconciles the segment of a deployment whose assigned ports changed; writes untracked."""
 
     graphql_root_key = "ManagedSegmentDeployment"
@@ -32,7 +30,7 @@ class SegmentDeploymentPortsGenerator(PoolMixin, CablingMixin, SegmentPortTagMix
         if segment.get("typename") != ManagedVxlanSegment.__name__ or not segment_id:
             self.logger.info(f"Deployment {where}: segment '{segment_name}' is no VXLAN segment — nothing to reconcile")
             return
-        tags = await self.reconcile_vxlan_segment(segment_id, segment_name)
+        tags = await reconcile_vxlan_segment(self, segment_id, segment_name)
         if tags is None:
             self.logger.info(f"Deployment {where}: segment {segment_id} is gone — nothing to reconcile")
             return

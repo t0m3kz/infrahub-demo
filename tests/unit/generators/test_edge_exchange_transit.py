@@ -88,13 +88,6 @@ class TestEdgeExchangeTransit:
         assert _undefined_route_maps(_render(Edge, _load(name))) == set()
 
 
-def _flatten(interface: dict[str, Any]) -> dict[str, Any]:
-    """The cleaned interface shape get_exchange_routes consumes (what clean_data produces)."""
-    from utils.data_cleaning import clean_data
-
-    return clean_data(interface)
-
-
 class TestTransitRouteTargetSeparation:
     @staticmethod
     def _imports(site_asn: int) -> set[str]:

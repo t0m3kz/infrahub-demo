@@ -11,3 +11,6 @@ spec:
       customer_name: "demo-aws"
       parent: "eu-central-1"
       design: "M"
+      # connection dedicated: its own Direct Connect dx-c900-fra-lag (and the VPN vpn-c900-aws-euc1) in its
+      # account; the hub tgw-c900-euc1 is in its account too
+      connection: dedicated

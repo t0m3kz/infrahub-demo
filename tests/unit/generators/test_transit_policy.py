@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from generators.connectivity.transit_policy import TransitPolicyGenerator
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
+from tests.unit.plan_reconciler_helpers import FakeClient, kind_name, make_generator_of
 from utils.transit_policy import (
     IN_POLICY,
     LEARNED_LIST,
@@ -72,29 +73,53 @@ def test_the_tag_is_a_valid_standard_community() -> None:
     assert transit_spec([])["community_lists"][0]["members"] == [TRANSIT_COMMUNITY]
 
 
-def _generator(prefixes: list[str] | None = None) -> tuple[TransitPolicyGenerator, MagicMock, list[tuple[str, dict]]]:
-    """A generator over a mocked client, the saved (kind, data) pairs and the peering node it attaches to."""
-    saved: list[tuple[str, dict]] = []
-    generator = TransitPolicyGenerator.__new__(TransitPolicyGenerator)
-    client = MagicMock()
+class _Policies(FakeClient):
+    """The shared fake client plus what transit policy reads: its entries and terms by parent, the peering's edges."""
 
-    async def _create(*, kind: str, data: dict) -> Any:
-        saved.append((kind, data))
-        node = MagicMock()
-        node.id = f"{kind}:{data.get('name') or data.get('seq')}"
-        node.save = AsyncMock()
+    peering: Any
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.edge_calls: list[dict[str, Any]] = []
+
+    async def filters(self, kind: Any, **flt: Any) -> list[Any]:
+        name = kind_name(kind)
+        if name == "ManagedBGPPeering":
+            return [self.peering]
+        for parent in ("prefix_list", "policy"):
+            if f"{parent}__ids" in flt:
+                return [
+                    node
+                    for node in self.store.values()
+                    if node.kind == name and node.data.get(parent) in flt[f"{parent}__ids"]
+                ]
+        return await super().filters(kind, **flt)
+
+    async def create(self, kind: Any, data: dict[str, Any]) -> Any:
+        """Upsert by the object's key like the server (name; list and seq; policy and seq): the same key, the same id."""
+
+        def key(item: dict[str, Any]) -> tuple[Any, ...]:
+            return (item.get("name"), item.get("prefix_list"), item.get("policy"), item.get("seq"))
+
+        node = await super().create(kind, data)
+        for existing in self.store.values():
+            if existing.kind == node.kind and key(existing.data) == key(node.data):
+                node.id = existing.id
+                break
         return node
 
-    peering = MagicMock()
-    peering.import_policies.peers = []
-    peering.export_policies.peers = []
-    peering.save = AsyncMock()
-    client.create = AsyncMock(side_effect=_create)
-    client.filters = AsyncMock(return_value=[])
-    client.get = AsyncMock(return_value=peering)
-    generator.client = client
-    generator.logger = MagicMock()
-    return generator, peering, saved
+    async def execute_graphql(self, query: str, variables: dict[str, Any], **_: Any) -> dict[str, Any]:
+        self.edge_calls.append(variables["data"])
+        return {}
+
+
+def _generator() -> tuple[TransitPolicyGenerator, _Policies]:
+    """A generator over the in-memory client; the peering starts with no policy attached."""
+    client = _Policies()
+    client.peering = SimpleNamespace(
+        id="peer-1", import_policies=SimpleNamespace(peers=[]), export_policies=SimpleNamespace(peers=[])
+    )
+    return make_generator_of(TransitPolicyGenerator, client), client
 
 
 def _data(prefixes: list[str]) -> dict[str, Any]:
@@ -116,53 +141,114 @@ def _data(prefixes: list[str]) -> dict[str, Any]:
     }
 
 
+_OWNED = ("RoutingPrefixListEntry", "RoutingPolicyTerm")
+"""The kinds the run owns: tracked, so the group cleanup removes the one a later run no longer saves."""
+
+
 async def test_the_generator_writes_the_objects_and_attaches_both_policies() -> None:
-    """Lists, entries, community list, policies and terms are saved; each policy joins its direction once."""
-    generator, peering, saved = _generator()
+    """The shared lists and policies are saved untracked, their entries and terms tracked; each policy joins its
+    direction once."""
+    generator, client = _generator()
     await generator.generate(_data(["192.0.2.0/24"]))
 
-    kinds = [kind for kind, _ in saved]
-    assert {
+    assert {kind for kind, *_ in client.saves} == {
         "RoutingPrefixList",
         "RoutingPrefixListEntry",
         "RoutingCommunityList",
         "RoutingPolicy",
         "RoutingPolicyTerm",
-    } == set(kinds)
-    policies = {data["name"]: data for kind, data in saved if kind == "RoutingPolicy"}
-    assert {data["origin"] for data in policies.values()} == {"generated"}
-    peering.import_policies.add.assert_called_once_with("RoutingPolicy:transit-in")
-    peering.export_policies.add.assert_called_once_with("RoutingPolicy:transit-out")
-    peering.save.assert_awaited_once()
+    }
+    assert {kind: kwargs for kind, _, _, kwargs in client.saves if kind not in _OWNED} == {
+        kind: {"allow_upsert": True, "update_group_context": False}
+        for kind in {k for k, *_ in client.saves} - set(_OWNED)
+    }
+    assert all(kwargs == {"allow_upsert": True} for kind, _, _, kwargs in client.saves if kind in _OWNED)
+    policies = {data["name"]: (node_id, data) for kind, node_id, data, _ in client.saves if kind == "RoutingPolicy"}
+    assert {data["origin"] for _, data in policies.values()} == {"generated"}
+    assert [(call["id"], call["name"], [node["id"] for node in call["nodes"]]) for call in client.edge_calls] == [
+        ("peer-1", "import_policies", [policies["transit-in"][0]]),
+        ("peer-1", "export_policies", [policies["transit-out"][0]]),
+    ]
+
+
+async def test_a_term_points_at_the_ids_of_its_policy_and_lists() -> None:
+    """Refs are resolved: a term carries the saved ids of its policy and prefix list, an entry those of its list."""
+    generator, client = _generator()
+    await generator.generate(_data([]))
+
+    by_kind = {kind: (node_id, data) for kind, node_id, data, _ in client.saves}
+    plist_id = next(node_id for kind, node_id, _, _ in client.saves if kind == "RoutingPrefixList")
+    assert by_kind["RoutingPrefixListEntry"][1]["prefix_list"] == plist_id
+    term = next(
+        data for kind, _, data, _ in client.saves if kind == "RoutingPolicyTerm" and "match_prefix_list" in data
+    )
+    assert term["match_prefix_list"] in {node_id for kind, node_id, _, _ in client.saves if kind == "RoutingPrefixList"}
+    assert term["policy"] in {node_id for kind, node_id, _, _ in client.saves if kind == "RoutingPolicy"}
 
 
 async def test_an_attached_policy_is_not_added_again() -> None:
-    """A re-run adds nothing to a peering that already has the policy."""
-    generator, peering, _ = _generator()
-    peering.import_policies.peers = [MagicMock(id="RoutingPolicy:transit-in")]
-    peering.export_policies.peers = [MagicMock(id="RoutingPolicy:transit-out")]
+    """A re-run adds nothing to a peering that already has the policies (same ids: the first run saved them)."""
+    generator, client = _generator()
+    await generator.generate(_data([]))
+    saved_ids = {data["name"]: node_id for kind, node_id, data, _ in client.saves if kind == "RoutingPolicy"}
+    client.edge_calls.clear()
+    client.peering.import_policies.peers = [SimpleNamespace(id=saved_ids["transit-in"])]
+    client.peering.export_policies.peers = [SimpleNamespace(id=saved_ids["transit-out"])]
     await generator.generate(_data([]))
 
-    peering.import_policies.add.assert_not_called()
-    peering.export_policies.add.assert_not_called()
+    assert client.edge_calls == []
 
 
-async def test_entries_the_public_space_no_longer_has_are_deleted() -> None:
-    """A list entry whose seq is not wanted any more goes; a wanted one stays."""
-    generator, _, _ = _generator()
-    stale, kept = MagicMock(), MagicMock()
-    stale.seq.value, kept.seq.value = 30, 10
-    stale.delete, kept.delete = AsyncMock(), AsyncMock()
-    generator.client.filters = AsyncMock(return_value=[stale, kept])
+async def test_an_entry_or_term_nobody_generated_is_never_deleted() -> None:
+    """A person's entry in a generated list and a person's term in a generated policy stay: the run deletes only what
+    it owns (its group), never every entry of a list.
+    """
+    generator, client = _generator()
+    await generator.generate(_data(["192.0.2.0/24"]))
+    plist_id = next(node_id for kind, node_id, data, _ in client.saves if kind == "RoutingPrefixList")
+    policy_id = next(node_id for kind, node_id, data, _ in client.saves if kind == "RoutingPolicy")
+    entry = client.seed("RoutingPrefixListEntry", seq=30, prefix_list=plist_id)
+    term = client.seed("RoutingPolicyTerm", seq=99, policy=policy_id)
     await generator.generate(_data(["192.0.2.0/24"]))
 
-    stale.delete.assert_awaited()
-    kept.delete.assert_not_awaited()
+    assert client.deleted == []
+    assert {entry.id, term.id} <= set(client.store)
+
+
+async def test_the_entries_the_run_wrote_are_the_ones_it_owns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An entry the spec no longer has is not rewritten, so the group cleanup of the next run removes it: only the
+    wanted seqs are saved.
+    """
+    generator, client = _generator()
+    origins = ["192.0.2.0/24", "198.51.100.0/24"]
+    monkeypatch.setattr("generators.connectivity.transit_policy.get_internet_prefixes", lambda _: origins)
+    await generator.generate(_data([]))
+    client.saves.clear()
+    origins.pop()
+    await generator.generate(_data([]))
+
+    public = [
+        data["seq"]
+        for kind, _, data, _ in client.saves
+        if kind == "RoutingPrefixListEntry" and data.get("prefix") in ("192.0.2.0/24", "198.51.100.0/24")
+    ]
+    assert public == [10]
+
+
+async def test_a_second_run_saves_the_same_objects_and_deletes_nothing() -> None:
+    """Idempotent: the same nodes by key, the same ids, nothing pruned."""
+    generator, client = _generator()
+    await generator.generate(_data(["192.0.2.0/24"]))
+    first = {(kind, node_id) for kind, node_id, *_ in client.saves}
+    await generator.generate(_data(["192.0.2.0/24"]))
+
+    assert client.deleted == []
+    assert {(kind, node_id) for kind, node_id, *_ in client.saves} >= first
 
 
 async def test_a_response_without_the_peering_fails_the_run() -> None:
     """No peering in the query data is an error, not a silent no-op."""
-    generator, _, _ = _generator()
+    generator, _ = _generator()
     with pytest.raises(GeneratorError):
         await generator.generate({"ManagedBGPPeering": {"edges": []}})
 

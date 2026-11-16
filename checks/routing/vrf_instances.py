@@ -1,6 +1,6 @@
 """VRF instances (ManagedVRF) match what each device routes in, and its segment SVIs match its VLAN rows.
 
-Pure rules (a)-(i) and S1-S5 over ``DeviceVrfFacts``; see utils/vrf_demand.py and AGENTS.md "VRF instances".
+Pure rules (a)-(i) and S1-S5 over ``DeviceVrfFacts``; see utils/vrf_demand.py and domain-model.md "VRF instances".
 """
 
 from __future__ import annotations

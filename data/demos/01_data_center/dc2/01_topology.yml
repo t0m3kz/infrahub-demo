@@ -6,12 +6,16 @@ spec:
   data:
     - name: DC2
       index: 2
-      parent: Data Center
+      parent: "Data Center"
       design: M
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: hierarchical
       connectivity_mode: pbr
+      fabric_templates:
+        - ["2", "border-leaf", "DCS-7050CX3-32C-R_BORDER_LEAF"]
+        - ["2", "internal-firewall", "PA-5260_FIREWALL"]
+        - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -20,149 +24,77 @@ spec:
         data:
           - index: 1
             design: S_MIDDLE
+            fabric_templates:
+              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
-                - name: PAR-1-S-1-R1-2
-                  index: 2
-                  shortname: par-1-s-1-r-1-2
-                  rack_type: network
-                  parent: par-1-s-1-row-1
-                  member_of_groups:
-                    - topologies_rack
-                  fabric_templates:
-                    - - "2"
-                      - spine
-                      - DCS-7050CX3-32C-R_SPINE
                 - name: PAR-1-SUITE-1-R1-1
                   index: 1
+                  row_index: 1
                   shortname: par-1-s-1-r-1-1
                   rack_type: network
-                  parent: par-1-s-1-row-1
-                  member_of_groups:
-                    - topologies_rack
+                  parent: par-1-s-1
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - leaf
-                      - DCS-7050CX3-32C-R_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - DCS-7050CX3-32C-R_TOR
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 2
             design: S_MIDDLE
+            fabric_templates:
+              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
-                - name: PAR-1-S-2-R1-2
-                  index: 2
-                  shortname: par-1-s-2-r-1-2
-                  rack_type: network
-                  parent: par-1-s-2-row-1
-                  member_of_groups:
-                    - topologies_rack
-                  fabric_templates:
-                    - - "2"
-                      - spine
-                      - DCS-7050CX3-32C-R_SPINE
                 - name: PAR-1-SUITE-2-R1-1
                   index: 1
+                  row_index: 1
                   shortname: par-1-s-2-r-1-1
                   rack_type: network
-                  parent: par-1-s-2-row-1
-                  member_of_groups:
-                    - topologies_rack
+                  parent: par-1-s-2
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - leaf
-                      - DCS-7050CX3-32C-R_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - DCS-7050CX3-32C-R_TOR
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 3
             design: S_MIDDLE
+            fabric_templates:
+              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
-                - name: PAR-1-S-3-R1-2
-                  index: 2
-                  shortname: par-1-s-3-r-1-2
-                  rack_type: network
-                  parent: par-1-s-3-row-1
-                  member_of_groups:
-                    - topologies_rack
-                  fabric_templates:
-                    - - "2"
-                      - spine
-                      - DCS-7050CX3-32C-R_SPINE
                 - name: PAR-1-SUITE-3-R1-1
                   index: 1
+                  row_index: 1
                   shortname: par-1-s-3-r-1-1
                   rack_type: network
-                  parent: par-1-s-3-row-1
-                  member_of_groups:
-                    - topologies_rack
+                  parent: par-1-s-3
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - leaf
-                      - DCS-7050CX3-32C-R_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - DCS-7050CX3-32C-R_TOR
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 4
             design: S_MIDDLE
+            fabric_templates:
+              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
               kind: LocationRack
               data:
-                - name: PAR-1-S-4-R1-1
+                - name: PAR-1-SUITE-4-R1-1
                   index: 1
+                  row_index: 1
                   shortname: par-1-s-4-r-1-1
                   rack_type: network
-                  parent: par-1-s-4-row-1
-                  member_of_groups:
-                    - topologies_rack
+                  parent: par-1-s-4
+                  member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - - "2"
-                      - spine
-                      - DCS-7050CX3-32C-R_SPINE
-                - name: PAR-1-SUITE-4-R1-1
-                  index: 2
-                  shortname: par-1-s-4-r-1-2
-                  rack_type: network
-                  parent: par-1-s-4-row-1
-                  member_of_groups:
-                    - topologies_rack
-                  fabric_templates:
-                    - - "2"
-                      - leaf
-                      - DCS-7050CX3-32C-R_LEAF_MR
-                    - - "2"
-                      - l2-leaf
-                      - DCS-7050CX3-32C-R_TOR
-      racks:
-        kind: LocationRack
-        data:
-          - name: PAR-1-S-4-R1-3
-            index: 3
-            shortname: par-1-s-4-r-1-3
-            rack_type: network
-            parent: par-1-s-4-row-1
-            member_of_groups:
-              - topologies_rack
-            fabric_templates:
-              - - "2"
-                - border-leaf
-                - DCS-7050CX3-32C-R_BORDER_LEAF
-              - - "2"
-                - internal-firewall
-                - PA-5260_FIREWALL
-              - - "2"
-                - load-balancer
-                - NetScaler-MPX-26000-100G_LOAD_BALANCER
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]

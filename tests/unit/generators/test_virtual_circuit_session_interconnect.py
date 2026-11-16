@@ -293,15 +293,22 @@ class TestInterconnectSession:
         }
 
     @pytest.mark.asyncio
-    async def test_a_second_run_writes_no_interface_again(self) -> None:
-        """Idempotency: a rerun does not save the already configured interfaces again."""
+    async def test_a_second_run_leaves_the_interfaces_as_they_are(self) -> None:
+        """Idempotency: a rerun puts the same configuration on the same two interfaces."""
         client = FakeClient()
         await _run(client, interconnect_payload())
-        first_interface_saves = _interface_saves(client)
+        first = {
+            port: (node.ip_address.id, node.description.value, node.mtu.value)
+            for port, node in client.interfaces.items()
+        }
 
         await _run(client, interconnect_payload())
 
-        assert _interface_saves(client) == first_interface_saves
+        assert set(_interface_saves(client)) == {"if-eg", "if-bl"}
+        assert {
+            port: (node.ip_address.id, node.description.value, node.mtu.value)
+            for port, node in client.interfaces.items()
+        } == first
 
     @pytest.mark.parametrize(
         ("payload", "message"),

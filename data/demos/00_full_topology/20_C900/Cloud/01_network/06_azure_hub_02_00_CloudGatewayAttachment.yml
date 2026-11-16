@@ -2,7 +2,8 @@
 # The connections of the Azure Virtual WAN hub, the same shape as the AWS transit gateway's
 # (05_gateway_attachments.yml): a VNet connection per VNet (a cross-subscription one lives in the spoke subscription),
 # each joining the default route table and propagating its block into it, and the association of the ExpressRoute
-# gateway, whose `allowed_prefixes` are what it announces on-prem (checks/cloud_connection.py R1: one target each).
+# gateway, whose `allowed_prefixes` are what it announces on-prem (checks/connectivity/cloud_connection.py R1: one
+# target each).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

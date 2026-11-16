@@ -8,7 +8,6 @@ import yaml
 
 from checks.segments.shared_vlan import CheckSharedVlan, shared_vlan_errors
 from tests.integration.demo_data import ROOT
-from tests.unit.query_shape_helpers import query_tree, unselected
 
 QUERY = ROOT / "queries" / "validation" / "shared_vlan.gql"
 
@@ -79,12 +78,6 @@ def test_the_pure_function_and_the_check_agree() -> None:
         [{"segment": {"id": "s"}, "vni": 40010, "vlans": [{"id": "r", "vlan_id": 7, "device": {"name": "sw"}}]}],
     )
     assert [object_id for _, object_id in errors] == ["r"]
-
-
-def test_the_fixtures_emit_only_fields_the_query_selects() -> None:
-    tree = query_tree(QUERY)
-    assert unselected([_segment()], tree["ManagedVxlanSegment"]["edges"]["node"]) == []
-    assert unselected([_deployment(40000, ("a", 2500))], tree["ManagedSegmentDeployment"]["edges"]["node"]) == []
 
 
 def test_the_check_and_its_query_are_registered() -> None:

@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
-from generators.mixins.fabric_sizing import (
+from generators.model.sizing import (
     COLO_ZONE_LOOPBACK_IPV6_BITS,
     COLO_ZONE_TECHNICAL_IPV6_BITS,
     colo_metro_loopback_bits,
@@ -33,12 +33,12 @@ from utils.limits import (
 )
 
 # Prefix lengths a zone WITHOUT a design slices from the bootstrap pools; with a design they come from
-# generators/fabric_sizing.py (ColoPoolSlot.zone_length).
+# generators/model/sizing.py (ColoPoolSlot.zone_length).
 _COLO_LOOPBACK_PREFIX_LENGTH = 28
 _COLO_TECHNICAL_PREFIX_LENGTH = 26
 _COLO_MANAGEMENT_PREFIX_LENGTH = 28
 
-# Host-bit sizing functions of generators/fabric_sizing.py, by tier.
+# Host-bit sizing functions of generators/model/sizing.py, by tier.
 ZoneBits = Callable[[Mapping[str, Any]], int]
 MetroBits = Callable[[Mapping[str, Any]], int]
 
@@ -149,5 +149,5 @@ class ColocationFabricData(TypedDict, total=False):
     name: str
     parent: dict[str, Any]
     design: dict[str, Any] | None
-    account: dict[str, Any] | None
+    account: dict[str, Any] | str | None
     fabric_templates: list[dict[str, Any]]

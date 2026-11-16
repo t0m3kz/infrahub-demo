@@ -176,10 +176,6 @@ def segment_family(seg: dict[str, Any]) -> str | None:
     return IPV4 if seg.get("cidr_block") else None
 
 
-class Ipv6SegmentNotRenderedError(ValueError):
-    """A renderer met a segment with an IPv6 gateway that it cannot render completely."""
-
-
 class AddressFamilyMismatchError(ValueError):
     """A rule joins an endpoint of one address family to a segment of the other: no ACL of either family matches it."""
 
@@ -191,11 +187,3 @@ def has_ipv6_gateway(seg: dict[str, Any]) -> bool:
     gateway = seg.get("gateway") or {}
     address = gateway.get("address") or (gateway.get("ip_prefix") or {}).get("prefix")
     return bool(address) and ":" in address
-
-
-def refuse_ipv6_segment(seg: dict[str, Any], consumer: str) -> None:
-    """Raise when ``seg`` has an IPv6 gateway: ``consumer`` renders IPv4 only (AGENTS.md "IPv6 segments")."""
-    if has_ipv6_gateway(seg):
-        raise Ipv6SegmentNotRenderedError(
-            f"Segment '{seg.get('name')}': IPv6 segments are not rendered by {consumer} yet; refusing incomplete config"
-        )

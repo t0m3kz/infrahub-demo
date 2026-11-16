@@ -60,7 +60,7 @@ def peer_devices_errors(domains: list[dict[str, Any]]) -> list[str]:
             errors.append(
                 f"MLAG domain '{domain.get('name')}' has peer_devices '{stored}', expected '{expected}' "
                 "(rule: peer_devices is the sorted member device names joined with a comma). "
-                "Re-run the pod or DC generator that created the pair (generators/domain_pairing.py) "
+                "Re-run the pod or DC generator that created the pair (generators/capabilities/mlag.py) "
                 "so peer_devices is rewritten"
             )
     return errors
@@ -135,7 +135,7 @@ def listed_interface_errors(domains: list[dict[str, Any]], peer_links: list[dict
                 errors.append(
                     f"{where}: member '{member_name}' has no peer-link listed "
                     "(rule: each member's peer-link is on the domain's interfaces). "
-                    "Re-run the pod or DC generator that created the pair (generators/mlag.py)"
+                    "Re-run the pod or DC generator that created the pair (generators/capabilities/mlag.py)"
                 )
             for interface in peer_links:
                 on_member = str((interface.get("device") or {}).get("id")) == member_id
@@ -179,7 +179,7 @@ def mlag_lag_errors(domains: list[dict[str, Any]], lags: list[dict[str, Any]]) -
 
 
 class CheckMlagDomains(InfrahubCheck):
-    """MLAG domains are well formed (M1 to M6, ERRORs); see AGENTS.md "MLAG peer pair uniqueness"."""
+    """MLAG domains are well formed (M1 to M6, ERRORs); see domain-model.md "MLAG peer pair uniqueness"."""
 
     query = "mlag_domains"
 

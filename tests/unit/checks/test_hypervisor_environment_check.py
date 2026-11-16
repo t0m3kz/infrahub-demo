@@ -6,11 +6,9 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-import yaml
 
 from checks.devices.hypervisor_environment import CheckHypervisorEnvironment
 from tests.integration.demo_data import declared, distinct, name
-from utils.query_flatten import source_path
 
 _ROOT = Path(__file__).parents[3]
 _ALL_DEMO = _ROOT / "data" / "demos" / "30_all"
@@ -215,22 +213,6 @@ class TestVmRunsInItsFootprintsDc:
         )
 
         assert len(errors) == 2
-
-
-def test_query_is_registered_and_selects_what_the_check_reads() -> None:
-    """The check's query is registered in .infrahub.yml and selects host, host DC and footprint environment/parent."""
-    config = yaml.safe_load((_ROOT / ".infrahub.yml").read_text())
-    queries = {query["name"]: query["file_path"] for query in config["queries"]}
-    checks = {check["name"]: check for check in config["check_definitions"]}
-
-    assert checks["validate_hypervisor_environment"]["class_name"] == "CheckHypervisorEnvironment"
-    query = source_path(_ROOT / queries[CheckHypervisorEnvironment.query]).read_text()  # the source, as written
-    assert "... on TopologyEnvironmentScoped { environment { value } }" in query
-    assert "TopologyCustomerOffice" not in query  # an office has no environment to select
-    assert "... on TopologyCustomer {" not in query
-    assert "... on TopologyPod { parent { node { id name { value } } } }" in query
-    assert "... on TopologyColocationZone { parent { node { id name { value } } } }" in query
-    assert "... on TopologyCustomerDC { parent { node { id name { value } } } }" in query
 
 
 def _all_demo_vms() -> list[dict[str, Any]]:

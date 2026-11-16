@@ -48,7 +48,7 @@ nodes:
         optional: false
         default_value: approved
         order_weight: 210
-        description: "The vendor's support status; checks/software_lifecycle.py reports what runs a bad one"
+        description: "The vendor's support status; checks/devices/software_lifecycle.py reports what runs a bad one"
         choices:
           - name: approved
             label: Approved

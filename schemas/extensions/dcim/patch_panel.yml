@@ -8,7 +8,7 @@ version: "1.0"
 # list, artifact (CoreArtifactTarget) and none of the capability edges (DcimDeviceManaged: `capabilities` and
 # `shared_capabilities`), no VRF demand and no VLAN row. Its two port kinds inherit DcimEndpoint only: the `cable` edge
 # is all it takes for a DcimCable to join a panel port to an interface (DcimCable.endpoints peers DcimEndpoint).
-# tests/unit/test_patch_panel_schema.py guards both.
+# tests/unit/schemas/test_patch_panel_schema.py guards both.
 #
 # A jack has two faces and a DcimEndpoint carries one cable, so a jack is two port nodes: a rear port
 # (DcimRearPatchPanelPort) and a front port (DcimFrontPatchPanelPort), both components of the panel, so the panel lists
@@ -18,8 +18,9 @@ version: "1.0"
 #
 # A panel names its `panel_type` and nothing else about its ports: add_patch_panel builds the rear and front ports the
 # type holds, each front port on its rear port (jack or cassette, generators/helpers/patch_panel.py PANEL_TYPES), and
-# checks/patch_panel_pairing.py guards the result. There is no object template: a template copies an attribute
-# relationship as it is and cannot point a front port at its sibling (measured on 1.11.9), so it could not pair them.
+# checks/connectivity/patch_panel_pairing.py guards the result. There is no object template: a template copies an
+# attribute relationship as it is and cannot point a front port at its sibling (measured on 1.11.9), so it could not
+# pair them.
 #
 # A panel is unique by its rack and its name (`PP-01` may exist in every rack), so the rack is mandatory: the server
 # refuses a uniqueness constraint on an optional relationship. The panel's HFID is [rack shortname, name]. The HFID

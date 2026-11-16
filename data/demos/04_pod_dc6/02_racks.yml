@@ -1,36 +1,37 @@
 ---
+# Initial network racks for POD-4
+#
+# POD-4 is mlag_create: virtual, so its pairs are NX-OS (vPC fabric peering
+# over the loopback). SONiC MC-LAG needs a physical peer-link LAG and cannot
+# render a virtual domain; access-leaf templates carry no mlag-peer ports, so
+# they cannot go back-to-back either. Same pairing as 30_all's DC10-DC12.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: LocationRack
   data:
+    # Network rack in POD-4 Row 1
     - name: KTW-1-SUITE-4-R1-1
       index: 1
+      row_index: 1
       shortname: ktw-1-s-4-r-1-1
       rack_type: network
       deployment: DC6-1-POD-4
-      parent: ktw-1-s-4-row-1
-      member_of_groups:
-        - topologies_rack
+      parent: ktw-1-s-4
+      member_of_groups: [topologies_rack]
       fabric_templates:
-        - - '2'
-          - leaf
-          - N9K-C9336C-FX2_LEAF_MR
-        - - '2'
-          - access-leaf
-          - N9K-C93180YC-EX_ACCESS
+        - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+        - ["2", "access-leaf", "N9K-C93180YC-EX_ACCESS"]
+
+    # Network rack in POD-4 Row 2
     - name: KTW-1-SUITE-4-R2-1
       index: 1
+      row_index: 2
       shortname: ktw-1-s-4-r-2-1
       rack_type: network
       deployment: DC6-1-POD-4
-      parent: ktw-1-s-4-row-2
-      member_of_groups:
-        - topologies_rack
+      parent: ktw-1-s-4
+      member_of_groups: [topologies_rack]
       fabric_templates:
-        - - '2'
-          - leaf
-          - N9K-C9336C-FX2_LEAF_MR
-        - - '2'
-          - access-leaf
-          - N9K-C93180YC-EX_ACCESS
+        - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+        - ["2", "access-leaf", "N9K-C93180YC-EX_ACCESS"]

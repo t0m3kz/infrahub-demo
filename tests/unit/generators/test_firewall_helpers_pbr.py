@@ -1,11 +1,10 @@
-"""Unit tests for the customer PBR rules in transforms/helpers/firewall_pbr.py."""
+"""Unit tests for the customer PBR rules in transforms/helpers/pbr.py."""
 
 import pytest
 
-from tests.unit.firewall_helpers_shared import _make_pbr_activation
-from tests.unit.routing_helpers import in_vrf, make_vrf
+from tests.unit.firewall_helpers_shared import _make_context_leg, _make_pbr_activation
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
-from transforms.helpers.firewall_pbr import get_customer_pbr_rules, refuse_unresolvable_contexts
+from transforms.helpers.pbr import get_customer_pbr_rules, refuse_unresolvable_contexts
 from utils.routing_domain import RoutingDomainError
 
 
@@ -14,26 +13,6 @@ def _make_pbr_rule(*, action: str = "permit", dst_prefix: str | None = "10.0.2.0
     if dst_prefix:
         rule["destination_segment"] = {"gateway": {"ip_prefix": {"prefix": dst_prefix}}}
     return rule
-
-
-def _make_context_leg(
-    *, fw_ip: str = "10.65.0.5/29", tenant_id: str | None = None, served: list[str] | None = None
-) -> dict:
-    """A ManagedFirewallContext dict as returned by _flatten_deployment_firewall_contexts()."""
-    ctx: dict = {
-        "legs": [
-            {
-                **in_vrf(make_vrf({"name": "PROD"})),
-                "device": {"role": "internal-firewall"},
-                "ip_address": {"address": fw_ip, "ip_namespace": {"node": {"name": {"value": "default"}}}},
-            }
-        ],
-    }
-    if tenant_id:
-        ctx["tenant"] = {"id": tenant_id}
-    if served is not None:
-        ctx["served_deployments"] = [{"id": d} for d in served]
-    return ctx
 
 
 # _flatten_deployment_firewall_contexts()

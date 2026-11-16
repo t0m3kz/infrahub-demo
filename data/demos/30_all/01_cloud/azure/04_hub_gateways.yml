@@ -1,0 +1,23 @@
+---
+# The shared virtual WAN hub of westeurope PROD and the ExpressRoute gateway its link towards us lands on
+# (06_hub_link.yml). The C004 and C016 footprints are `transit` on it; the authored rest of the link (the private
+# peering on the primary MSEE port, the carrier XC-EQXPA4-AZURE-WEU-PRI to eg-pa401 and the handoff) is in
+# 08_interconnects/03_virtual_circuits.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGateway
+  data:
+    - name: "vhub-30all-weu"
+      cloud_id: "vhub-30all-westeurope"
+      description: "30_all shared virtual WAN hub, Azure westeurope"
+      status: active
+      gateway_type: hub
+      region: "westeurope"
+      account: "net-hub-azure-prod"
+    - name: "ergw-30all-weu"
+      description: "30_all ExpressRoute gateway of the hub: the on-prem private peering lands here"
+      status: active
+      gateway_type: edge
+      region: "westeurope"
+      account: "net-hub-azure-prod"

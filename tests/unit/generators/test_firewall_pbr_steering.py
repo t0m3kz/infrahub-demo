@@ -7,7 +7,7 @@ from typing import Any
 from tests.unit.firewall_helpers_shared import _make_pbr_activation
 from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
-from transforms.helpers.firewall_pbr import get_customer_pbr_rules
+from transforms.helpers.pbr import get_customer_pbr_rules
 from utils.fabric_roles import EXTERNAL_FIREWALL_ROLE, INTERNAL_FIREWALL_ROLE
 
 

@@ -1,230 +1,179 @@
-"""EVPN Multi-Site for a colocation zone or virtual colocation: border-gateway processes and the edge pair.
-ColocationFabricGenerator steps after the device pass: ``_ensure_evpn`` and ``_ensure_edge_pair`` (iBGP FABRIC)."""
+"""EVPN Multi-Site for a colocation zone or virtual colocation as plan builders: the border-gateway processes of the
+edges and, for a pair of physical edges, their interlink and the iBGP FABRIC session. Pure functions of what the caller
+read (generators/plan.py): no write, no read of anything the run creates; ``ColocationFabricGenerator`` applies them in
+the plan of its zone.
+"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 
-from infrahub_sdk.exceptions import NodeNotFoundError
-from infrahub_sdk.protocols import CoreNumberPool
-
-from generators.colocation.colocation_pools import TECHNICAL_IPV6_SLOT, ColocationFabricData, ColoPoolSlot
-from generators.helpers import get_loopback_name
+from generators.capabilities.bgp import (
+    EVPN_AF,
+    IPV6_UNICAST_AF,
+    plan_address_family,
+    plan_password,
+    plan_process,
+    plan_session_peering,
+)
+from generators.capabilities.common import Ref, id_ref
+from generators.dcim.cabling_plan import ChainHop, ChainPorts, Link, plan_chain_legs
+from generators.dcim.device_plan import LOOPBACK_KIND, device_hfid
+from generators.helpers.cable_attributes import RackPosition
+from generators.helpers.interface_naming import get_loopback_name
 from generators.helpers.routing import p2p_prefix_length
-from generators.mixins.routing import EVPN_AF
-from generators.mixins.types import CablingOptions
-from generators.protocols import DcimVirtualInterface, ManagedBGP
-
-if TYPE_CHECKING:
-    from generators.mixins.common import CommonGenerator
-    from generators.mixins.connections import CablingMixin
-    from generators.mixins.pools import PoolMixin
-    from generators.mixins.routing import RoutingMixin
-    from generators.mixins.shared_routing import SharedRoutingObjectsMixin
+from generators.plan import AddressAllocationSpec, Hfid, NodeRef, NodeSpec, TopologyPlan
 
 # EVPN Multi-Site border gateway: a tunnel forms only between VTEPs of one address family and the fabrics run an IPv6
 # underlay, so the VTEP is a dedicated IPv6 loopback (the IPv4 Loopback0 stays the 32-bit router-id).
-_COLO_VTEP_LOOPBACK_INDEX = 1
+COLO_VTEP_LOOPBACK_INDEX = 1
 # The two edges of a zone share no fabric: one direct link (role `interlink`) carries a /127 and the iBGP FABRIC
 # session.
-_COLO_INTERLINK_ROLE = "interlink"
-_COLO_P2P_IPV6_PREFIX_LENGTH = p2p_prefix_length("ipv6")
-_COLO_FABRIC_UNICAST_AF = ("ipv6", "unicast")
+COLO_INTERLINK_ROLE = "interlink"
+COLO_P2P_IPV6_PREFIX_LENGTH = p2p_prefix_length("ipv6")
+COLO_FABRIC_AFS = (IPV6_UNICAST_AF, EVPN_AF)
 
 
-class ColocationEvpnMixin:
-    """The EVPN Multi-Site and edge-pair steps of ColocationFabricGenerator; needs ``_slice_pool`` and the mixed-in
-    bases.
+def site_as_description(metro_name: str) -> str:
+    """The description that keys the AS every zone of the metro shares as its EVPN site AS."""
+    return f"{metro_name.lower()} EVPN site ASN"
+
+
+def fabric_key_name(fabric_name: str) -> str:
+    return f"{fabric_name}-fabric-key"
+
+
+def overlay_process_ref(edge_name: str) -> NodeRef:
+    """The overlay process ``plan_edge_borders`` plans for ``edge_name``."""
+    return NodeRef(f"bgp:{edge_name}-bgp-overlay")
+
+
+@dataclass(frozen=True)
+class EvpnEdge:
+    """An edge of the zone: its name, its platform (it names the VTEP loopback) and the kind of device it is."""
+
+    name: str
+    platform: str
+    device_kind: str
+
+
+@dataclass(frozen=True)
+class EdgePairReads:
+    """What the edge pair needs of the edges that exist: the ports of the two edges (the live ones, else their
+    template's) and their rack positions.
     """
 
-    # Annotations and TYPE_CHECKING aliases of the host's other bases; nothing is defined at runtime
-    client: Any
-    logger: Any
-    data: ColocationFabricData
-    fabric_name: str
-    _label: ClassVar[str]
-    _edge_devices: dict[str, str]
-    _vtep_pool: Any
-    if TYPE_CHECKING:
-        _ensure_routing_password = SharedRoutingObjectsMixin._ensure_routing_password
-        _get_parent_pool_with_retry = PoolMixin._get_parent_pool_with_retry
-        attach_refs = PoolMixin.attach_refs
-        create_chain_cabling = CablingMixin.create_chain_cabling
-        ensure_address_family = RoutingMixin.ensure_address_family
-        ensure_shared_as = SharedRoutingObjectsMixin.ensure_shared_as
-        fail = CommonGenerator.fail
-        resource_lock = PoolMixin.resource_lock
-        upsert_bgp_peering = RoutingMixin.upsert_bgp_peering
-        wait_for_parent_generators = CommonGenerator.wait_for_parent_generators
+    ports: ChainPorts
+    positions: Mapping[str, RackPosition | None] = field(default_factory=dict)
 
-    if TYPE_CHECKING:
-        # The generator's own method; a stub for the type checker
-        async def _slice_pool(self, slot: ColoPoolSlot) -> Any: ...
 
-    async def _metro_asn_pool_id(self) -> str:
-        """The id of the parent metro's ASN pool; waits for add_colocation_metro, then looks it up by name with bounded
-        retry.
-        """
-        metro = self.data.get("parent") or {}
-        pool = metro.get("fabric_asn_pool") or {}
-        if pool.get("id"):
-            return pool["id"]
-
-        metro_name = metro.get("name", "")
-        await self.wait_for_parent_generators(("add_colocation_metro",), metro["id"])
-        try:
-            found = await self._get_parent_pool_with_retry(f"{metro_name.lower()}-asn-pool", kind=CoreNumberPool)
-        except NodeNotFoundError:
-            self.fail(
-                f"Colocation {self._label} {self.fabric_name}: metro {metro_name} has no ASN pool "
-                f"'{metro_name.lower()}-asn-pool' (add_colocation_metro creates it) — cannot draw the metro's "
-                "EVPN site AS"
-            )
-        return found.id
-
-    async def _ensure_evpn(self) -> dict[str, str]:
-        """Make this node's edges EVPN Multi-Site border gateways: the metro's site ASN, an overlay ManagedBGP and an
-        IPv6 VTEP loopback per edge. DCI sessions and the Multi-Site VIP are not built here. Returns edge name ->
-        overlay process id (avoids a by-name re-query).
-        """
-        name = self.fabric_name
-        process_ids: dict[str, str] = {}
-        edge_devices: dict[str, str] = getattr(self, "_edge_devices", {})
-        if not edge_devices:
-            return process_ids
-        metro = self.data["parent"]
-        # Untracked: every zone of the metro shares this AS, so no tracking group may own it
-        site_as_id = await self.ensure_shared_as(
-            description=f"{metro['name'].lower()} EVPN site ASN",
-            asn_pool_id=await self._metro_asn_pool_id(),
-            track=False,
+def plan_edge_borders(
+    plan: TopologyPlan,
+    *,
+    edges: Sequence[EvpnEdge],
+    site_as: Ref,
+    routers: Mapping[str, Ref | None],
+    vtep_pool: Ref,
+) -> None:
+    """Make the ``edges`` EVPN Multi-Site border gateways: an IPv6 VTEP loopback each (a /128 from ``vtep_pool``, keyed
+    by the edge: the same on a re-run) and an overlay ``ManagedBGP`` process in the metro's ``site_as`` with the edge's
+    loopback address (``routers``: edge name -> the address, an id or a ``NodeRef`` of the plan) as router id. DCI
+    sessions and the Multi-Site VIP are not built here.
+    """
+    for edge in edges:
+        router_id = routers.get(edge.name)
+        if router_id is None:
+            raise ValueError(f"{edge.name} has no addressed loopback: it cannot be an EVPN border gateway")
+        address = AddressAllocationSpec(
+            key=f"vtep-address:{edge.name}",
+            identifier=f"{edge.name}-vtep",
+            prefix_length=128,
+            description=f"EVPN VTEP loopback for {edge.name}",
+            ownership="shared",
+            pool_id=vtep_pool,
         )
-        # The query read the metro's site AS: a re-run with it attached costs no get and no save
-        await self.attach_refs(
-            kind="TopologySegmentHosting",
-            node_id=metro["id"],
-            refs={"evpn_rt_as": site_as_id},
-            current={"evpn_rt_as": (metro.get("evpn_rt_as") or {}).get("id")},
-        )
-
-        loopbacks = await self.client.filters(
-            kind=DcimVirtualInterface,
-            device__name__values=sorted(edge_devices),
-            role__values=["loopback", "loopback-vtep"],
-            include=["device", "ip_address"],
-        )
-        by_device: dict[tuple[str, str], Any] = {
-            (loopback.device.peer.name.value, loopback.role.value): loopback for loopback in loopbacks
-        }
-        for edge_name, platform in sorted(edge_devices.items()):
-            router_loopback = by_device.get((edge_name, "loopback"))
-            if router_loopback is None or not router_loopback.ip_address.initialized:
-                self.logger.error(
-                    f"Colocation {self._label} {name}: {edge_name} has no addressed loopback — skipping its EVPN process"
-                )
-                continue
-            device = router_loopback.device.peer
-            vtep = by_device.get((edge_name, "loopback-vtep"))
-            vtep_ip: Any
-            if vtep is not None and vtep.ip_address.initialized:
-                vtep_ip = {"id": vtep.ip_address.id}
-            else:
-                vtep_ip = await self.client.allocate_next_ip_address(
-                    resource_pool=self._vtep_pool,
-                    identifier=f"{edge_name}-vtep",
-                    prefix_length=128,
-                    data={"description": f"EVPN VTEP loopback for {edge_name}"},
-                )
-            vtep_obj = await self.client.create(
-                kind=DcimVirtualInterface,
+        plan.add(address)
+        vtep_name = get_loopback_name(edge.platform, COLO_VTEP_LOOPBACK_INDEX)
+        plan.add(
+            NodeSpec(
+                key=f"vtep:{edge.name}",
+                kind=LOOPBACK_KIND,
                 data={
-                    **({"id": vtep.id} if vtep is not None else {}),
-                    "name": get_loopback_name(platform, _COLO_VTEP_LOOPBACK_INDEX),
+                    "name": vtep_name,
                     "description": "EVPN VTEP source (IPv6)",
-                    "device": {"id": device.id},
+                    "device": device_hfid(edge.name, edge.device_kind),
                     "status": "active",
                     "role": "loopback-vtep",
-                    "ip_address": vtep_ip,
+                    "ip_address": NodeRef(address.key),
                 },
+                ownership="owned",
+                hfid=Hfid(LOOPBACK_KIND, (edge.name, vtep_name)),
             )
-            await vtep_obj.save(allow_upsert=True)
-            bgp = await self.client.create(
-                kind=ManagedBGP,
-                data={
-                    "name": f"{edge_name}-bgp-overlay",
-                    "description": f"EVPN Multi-Site border-gateway process for {edge_name}",
-                    "status": "active",
-                    "local_as": {"id": site_as_id},
-                    "router_id": {"id": router_loopback.ip_address.id},
-                    "capabilities": [{"id": device.id}],
-                    "process_role": "overlay",
-                },
-            )
-            await bgp.save(allow_upsert=True)
-            process_ids[edge_name] = bgp.id
-            self.logger.info(f"Colocation {self._label} {name}: ensured EVPN VTEP + overlay BGP for {edge_name}")
-        return process_ids
+        )
+        plan_process(
+            plan,
+            device=device_hfid(edge.name, edge.device_kind),
+            name=edge.name,
+            suffix="overlay",
+            kind="bgp",
+            description=f"EVPN Multi-Site border-gateway process for {edge.name}",
+            data={"local_as": id_ref(site_as), "router_id": id_ref(router_id), "process_role": "overlay"},
+        )
 
-    async def _ensure_edge_pair(self, *, physical_edge_names: list[str], overlay_process_ids: dict[str, str]) -> None:
-        """Link a zone's two physical edges and peer them over that link (iBGP FABRIC: IPv6 unicast and l2vpn evpn).
-        Only for exactly two physical edges; everything is zone-owned and keyed deterministically, under one lock."""
-        name = self.fabric_name
-        if len(physical_edge_names) != 2:
-            self.logger.info(
-                f"Colocation {self._label} {name}: {len(physical_edge_names)} physical edge(s) — an edge pair "
-                "needs exactly 2, no interlink or FABRIC session"
-            )
-            return
-        first, second = sorted(physical_edge_names)
-        processes = [overlay_process_ids.get(first), overlay_process_ids.get(second)]
-        if not all(processes):
-            self.logger.warning(
-                f"Colocation {self._label} {name}: {first}/{second} have no overlay BGP process from this run — "
-                "skipping the edge pair (see the EVPN step above)"
-            )
-            return
 
-        async with self.resource_lock(f"edge-pair-{name}"):
-            pool = await self._slice_pool(TECHNICAL_IPV6_SLOT)
-            legs = await self.create_chain_cabling(
-                hops=[
-                    {"devices": [first], "down_role": _COLO_INTERLINK_ROLE},
-                    {"devices": [second], "up_role": _COLO_INTERLINK_ROLE},
-                ],
-                options=CablingOptions(pool=pool, p2p_prefix_length=_COLO_P2P_IPV6_PREFIX_LENGTH),
-            )
-            pairs = legs[0] if legs else []
-            if not pairs:
-                self.logger.warning(
-                    f"Colocation {self._label} {name}: no {_COLO_INTERLINK_ROLE}-role port pair on "
-                    f"{first}/{second} — no FABRIC session"
-                )
-                return
-            interface_ids = [iface.id for pair in pairs for iface in pair]
-
-            key_id = await self._ensure_routing_password(
-                name=f"{name}-fabric-key", description=f"iBGP FABRIC session auth key for {self._label} {name}"
-            )
-            if key_id is None:
-                return
-            address_families = [
-                await self.ensure_address_family(*_COLO_FABRIC_UNICAST_AF),
-                await self.ensure_address_family(*EVPN_AF),
-            ]
-            await self.upsert_bgp_peering(
-                name=f"FABRIC-{first}-{second}",
-                description=(
-                    f"Colocation {self._label} {name} edge pair {first} <-> {second}: "
-                    "IPv6 unicast + EVPN over the interlink"
-                ),
-                status="active",
-                session_type="IBGP",
-                peering_role="fabric",
-                process_ids=[str(process_id) for process_id in processes],
-                address_family_ids=address_families,
-                password_id=key_id,
-                interface_ids=interface_ids,
-            )
-            self.logger.info(
-                f"Colocation {self._label} {name}: ensured edge pair {first} <-> {second} (interlink + FABRIC session)"
-            )
+def plan_edge_pair(
+    plan: TopologyPlan,
+    *,
+    first: str,
+    second: str,
+    label: str,
+    fabric_name: str,
+    reads: EdgePairReads,
+    interlink_pool: Ref,
+    families: Mapping[tuple[str, str], str],
+    deployment_id: str,
+    problems: list[str],
+) -> list[Link]:
+    """Link two physical edges and peer them over that link (iBGP FABRIC: IPv6 unicast and l2vpn evpn): the interlink
+    cable (a /127 from ``interlink_pool``), the zone's FABRIC key and the session between the two overlay processes of
+    ``plan_edge_borders``. A pair without a port of role ``interlink`` is a problem the caller raises before anything is
+    written. Returns the links (none: no session).
+    """
+    links = plan_chain_legs(
+        plan,
+        hops=(
+            ChainHop(devices=[first], down_role=COLO_INTERLINK_ROLE),
+            ChainHop(devices=[second], up_role=COLO_INTERLINK_ROLE),
+        ),
+        ports=reads.ports,
+        deployment_id=deployment_id,
+        positions=reads.positions,
+        problems=problems,
+        pool_id=interlink_pool,
+        p2p_prefix_length=COLO_P2P_IPV6_PREFIX_LENGTH,
+    )
+    if not links:
+        return links
+    key = plan_password(
+        plan,
+        name=fabric_key_name(fabric_name),
+        description=f"iBGP FABRIC session auth key for {label} {fabric_name}",
+    )
+    plan_session_peering(
+        plan,
+        name=f"FABRIC-{first}-{second}",
+        description=(
+            f"Colocation {label} {fabric_name} edge pair {first} <-> {second}: IPv6 unicast + EVPN over the interlink"
+        ),
+        status="active",
+        session_type="IBGP",
+        peering_role="fabric",
+        process_ids=[overlay_process_ref(first), overlay_process_ref(second)],
+        address_families=[plan_address_family(plan, family, families) for family in COLO_FABRIC_AFS],
+        interface_ids=[
+            NodeRef(f"port:{port.device_name}/{port.port_name}") for link in links for port in (link.bottom, link.top)
+        ],
+        password=key,
+    )
+    return links

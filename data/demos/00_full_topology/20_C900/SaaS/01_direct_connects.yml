@@ -26,12 +26,8 @@ spec:
             routing: bgp
             bfd: false
             service_id: webex-org-c900
-            capabilities:
-              - kind: ManagedInterfaceEncapsulation
-                data:
-                  name: "webex-c900-fra-xc:webex-c900-fra"
-                  vlan_id: 300
-                  parent: ["EXT-WEBEX-PAR", "wbx-port-1"]
+            parent: ["EXT-WEBEX-PAR", "wbx-port-1"]
+            vlan_id: 300
             auth: c900-webex-bgp-key
             peer_ip:
               data:

@@ -1,21 +1,14 @@
-# add_circuit (generators/topology/circuit.py). Filters on circuit_id, the circuit's key and the
-# generator's registered parameter (.infrahub.yml `circuit_id: circuit_id__value`): the query targets one
-# circuit, so a change regenerates only that circuit's ends. `name` is a display label, not a key.
-#
-# A carrier circuit's ends are one list, capabilities: exactly two
-# interfaces by schema (min_count 1, max_count 2) and by check (two), one per end. Each endpoint
-# carries its device's deployment: the deployment's kind places that end (a DC,
-# cloud region, colocation zone or virtual colocation deployment is the
-# circuit's location there), checked against the circuit's current locations. A cloud
-# transport (the device of a cloud port) is placed by its region or SaaS region instead. THE INTERNET object is a
-# device and a facility at once: the device itself is the location of its end (hence __typename and display_label).
 query circuit_data($circuit_id: String!) {
   TopologyCarrierCircuit(circuit_id__value: $circuit_id) {
     edges {
       node {
         id
-        name { value }
-        circuit_id { value }
+        name {
+          value
+        }
+        circuit_id {
+          value
+        }
         locations {
           edges {
             node {
@@ -28,48 +21,88 @@ query circuit_data($circuit_id: String!) {
         capabilities {
           edges {
             node {
-              ...CircuitEndpoint
+              ... on DcimInterface {
+                id
+                name {
+                  value
+                }
+                device {
+                  node {
+                    id
+                    __typename
+                    display_label
+                    name {
+                      value
+                    }
+                    ... on DcimPhysicalDevice {
+                      deployment {
+                        node {
+                          ... on TopologyDeployment {
+                            id
+                            __typename
+                            display_label
+                          }
+                        }
+                      }
+                    }
+                    ... on DcimVirtualDevice {
+                      deployment {
+                        node {
+                          ... on TopologyDeployment {
+                            id
+                            __typename
+                            display_label
+                          }
+                        }
+                      }
+                    }
+                    ... on CloudNetworkAppliance {
+                      deployment {
+                        node {
+                          ... on TopologyDeployment {
+                            id
+                            __typename
+                            display_label
+                          }
+                        }
+                      }
+                    }
+                    ... on CloudTransport {
+                      region {
+                        node {
+                          ... on TopologyDeployment {
+                            id
+                            __typename
+                            display_label
+                          }
+                        }
+                      }
+                      saas_region {
+                        node {
+                          ... on TopologyDeployment {
+                            id
+                            __typename
+                            display_label
+                          }
+                        }
+                      }
+                    }
+                    ... on TopologyProviderConnect {
+                      location {
+                        node {
+                          id
+                          __typename
+                          display_label
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
       }
     }
   }
-}
-
-fragment CircuitEndpoint on DcimInterface {
-  id
-  name { value }
-  device {
-    node {
-      id
-      __typename
-      display_label
-      name { value }
-      ... on DcimPhysicalDevice {
-        deployment { node { ...CircuitDeployment } }
-      }
-      ... on DcimVirtualDevice {
-        deployment { node { ...CircuitDeployment } }
-      }
-      ... on CloudNetworkAppliance {
-        deployment { node { ...CircuitDeployment } }
-      }
-      # A cloud transport has no deployment: its facility is its region or its SaaS region.
-      ... on CloudTransport {
-        region { node { ...CircuitDeployment } }
-        saas_region { node { ...CircuitDeployment } }
-      }
-      # The provider's connect device has none either: its facility is its location (a zone, a region, a SaaS region).
-      ... on TopologyProviderConnect {
-        location { node { id __typename display_label } }
-      }
-    }
-  }
-}
-
-fragment CircuitDeployment on TopologyDeployment {
-  id
-  __typename
-  display_label
 }

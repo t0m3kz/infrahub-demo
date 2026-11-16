@@ -1,4 +1,5 @@
-"""Pure Office fabric model compiler: validates office fabric_templates and derives pool/role intent without I/O."""
+"""The office fabric model: which fabric_templates entries an office acts on and the sizes of its pools (pure, no
+I/O)."""
 
 from __future__ import annotations
 
@@ -6,45 +7,46 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from generators.mixins.types import NamingConvention, naming_convention_of
+from generators.helpers.naming import NamingConvention, naming_convention_of
 from utils.fabric_roles import CAMPUS_FABRIC_ROLES, LISP_BORDER_ROLES
 
 ACCESS_ROLE = "access-switch"
 DISTRIBUTION_ROLE = "distribution-switch"
-OFFICE_VALID_FABRIC_ROLES = CAMPUS_FABRIC_ROLES | LISP_BORDER_ROLES
+SDWAN_EDGE_ROLE = "sdwan-edge"
+"""The role of the entry that builds the office's SD-WAN edge: at most one device, whatever its template."""
+OFFICE_VALID_FABRIC_ROLES = CAMPUS_FABRIC_ROLES | LISP_BORDER_ROLES | {SDWAN_EDGE_ROLE}
+
 PHYSICAL_TEMPLATE_KIND = "TemplateDcimPhysicalDevice"
+
+# IPv4 and not design-driven (contrast the DC model), sized for a campus: a /28 for loopbacks and management, a /27 for
+# the /31 links.
+OFFICE_LOOPBACK_PREFIX_LENGTH = 28
+OFFICE_MANAGEMENT_PREFIX_LENGTH = 28
+OFFICE_TECHNICAL_PREFIX_LENGTH = 27
 
 
 @dataclass(frozen=True)
 class OfficeFabricModel:
-    """Compiled, immutable blueprint of an Office LISP fabric's valid templates and warnings."""
+    """What a TopologyCustomerOffice declares, compiled: the usable switch entries, the SD-WAN edge's template (the
+    ``sdwan-edge`` entry, if any) and a warning per dropped entry; ``errors`` are declarations the run cannot act on."""
 
     office_id: str
     office_name: str
     fabric_name: str
     naming_convention: NamingConvention
     usable_templates: tuple[dict[str, Any], ...]
+    edge_template: dict[str, Any] | None
     warnings: tuple[str, ...]
-    access_quantity: int
-    distribution_quantity: int
-
-    @property
-    def is_requested(self) -> bool:
-        return len(self.usable_templates) > 0
+    errors: tuple[str, ...]
 
     @classmethod
     def compile(cls, data: Mapping[str, Any]) -> OfficeFabricModel:
-        """Compile a clean_data() TopologyCustomerOffice dictionary into a validated OfficeFabricModel."""
-        office_id: str = data["id"]
-        office_name: str = data.get("name") or office_id
-        fabric_name = office_name.lower()
-
+        """Compile one clean_data() TopologyCustomerOffice entry; a missing id or name raises KeyError."""
+        fabric_name = data["name"].lower()
         usable: list[dict[str, Any]] = []
         warnings: list[str] = []
+        errors: list[str] = []
         seen_roles: set[str] = set()
-        access_qty = 0
-        dist_qty = 0
-
         for entry in data.get("fabric_templates") or []:
             role = entry.get("role")
             if role not in OFFICE_VALID_FABRIC_ROLES:
@@ -53,11 +55,10 @@ class OfficeFabricModel:
                     f"office fabric (expected one of {sorted(OFFICE_VALID_FABRIC_ROLES)}) — skipping this entry."
                 )
                 continue
-            qty = entry.get("quantity", 0)
-            if not (isinstance(qty, int) and qty > 0):
+            if not entry.get("quantity", 0) > 0:
                 warnings.append(
                     f"Office {fabric_name}: fabric_templates entry for role={role!r} has quantity "
-                    f"{qty!r} — skipping this entry."
+                    f"{entry.get('quantity')!r} — skipping this entry."
                 )
                 continue
             template = entry.get("template")
@@ -80,20 +81,22 @@ class OfficeFabricModel:
                     "entry per role is supported (device names derive from the role), skipping it."
                 )
                 continue
+            if role == SDWAN_EDGE_ROLE and entry["quantity"] > 1:
+                errors.append(
+                    f"Office {data['name']}: fabric_templates entry for role={role!r} has quantity "
+                    f"{entry['quantity']} — an office has one SD-WAN edge (set quantity 1)."
+                )
+                continue
             seen_roles.add(role)
             usable.append(entry)
-            if role == ACCESS_ROLE:
-                access_qty = qty
-            elif role == DISTRIBUTION_ROLE:
-                dist_qty = qty
-
+        edge = next((entry["template"] for entry in usable if entry["role"] == SDWAN_EDGE_ROLE), None)
         return cls(
-            office_id=office_id,
-            office_name=office_name,
+            office_id=data["id"],
+            office_name=data["name"],
             fabric_name=fabric_name,
-            naming_convention=naming_convention_of(data, lower=False),
-            usable_templates=tuple(usable),
+            naming_convention=naming_convention_of(data),
+            usable_templates=tuple(entry for entry in usable if entry["role"] != SDWAN_EDGE_ROLE),
+            edge_template=edge,
             warnings=tuple(warnings),
-            access_quantity=access_qty,
-            distribution_quantity=dist_qty,
+            errors=tuple(errors),
         )

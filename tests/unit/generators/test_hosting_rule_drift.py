@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from generators.mixins.segment_vlan import SegmentVlanMixin
+from generators.segments import segment_vlan
 from utils.segment_addressing import hosting_deployment
 
 _DC = "TopologyDataCenter"
@@ -43,7 +43,7 @@ def test_the_device_side_and_the_row_side_pick_the_same_hosting_node(child_type:
         device_deployment["id"] = "host-1"
     children = ["child-1"] if parent_type else []
 
-    mapping = SegmentVlanMixin._deployment_by_device_deployment(_state("host-1", children))
+    mapping = segment_vlan._deployment_by_device_deployment(_state("host-1", children))
     hosting = hosting_deployment(device_deployment)
 
     assert hosting is not None

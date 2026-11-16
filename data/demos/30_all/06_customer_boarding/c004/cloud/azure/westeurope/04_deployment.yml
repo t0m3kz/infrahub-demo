@@ -1,0 +1,18 @@
+---
+# C004 cloud footprint in westeurope (data/demos/11_cloud/), named C004-P-PEAKORA-AZURE-WESTEUROPE.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner: "C004"
+      environment: "p"
+      account: "peakora-azure-prod"
+      customer_name: "peakora-azure"
+      parent: "westeurope"
+      design: "S"
+      # Loaded after its virtual networks (03_virtual_network.yml): the boarding attaches the networks it finds.
+      # Attached to the shared hub of its region and environment (01_cloud/azure/04_hub_gateways.yml) by
+      # add_customer_deployment_cloud: its own route table on the hub and one attachment per virtual network.
+      connection: transit
+      member_of_groups: [customer_deployments_cloud]

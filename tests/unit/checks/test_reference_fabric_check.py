@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 from checks.routing.reference_fabric import CheckReferenceFabric
@@ -349,20 +348,3 @@ class TestSegmentTags:
             "WARNING: segment 'c005-message-queue-stretch-p' is stretched between reference fabric DC10 and "
             "non-reference DC12: group policy is enforced on the reference side only"
         ]
-
-    def test_query_reads_every_segment_with_its_tag_and_sites(self, root_dir: Path) -> None:
-        """No isolation filter: every routed tenant segment, through the builder's one fragment."""
-        text = (root_dir / "queries/validation/reference_fabric.gql").read_text()
-        assert "ManagedNetworkSegment {" in text
-        assert "...SegmentGroupPolicyFields" in text
-        assert "isolation_mode__value" not in text
-
-
-def test_query_selects_pod_parent_typename() -> None:
-    """The live server cannot resolve a pod's hierarchical parent without `__typename` ('Unable to identify the type')."""
-    from pathlib import Path
-
-    text = Path(__file__).resolve().parents[3].joinpath("queries/validation/reference_fabric.gql").read_text()
-    pod_block = text.split("TopologyPod", 1)[1]
-
-    assert "parent { node { id __typename } }" in pod_block

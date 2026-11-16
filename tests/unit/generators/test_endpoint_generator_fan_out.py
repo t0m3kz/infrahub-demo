@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.unit.endpoint_generator_helpers import _bond, _bond_data, _endpoint_data, _iface, _make_generator, _nic
+from generators.connectivity.endpoint import EndpointConnectivityGenerator
+from generators.model.errors import GeneratorError
+from tests.unit.endpoint_generator_helpers import _bond, _bond_data, _endpoint_data, _make_generator
+from tests.unit.endpoint_world import SERVER_ID, EndpointWorld
+from tests.unit.plan_graph_helpers import make_hfid_generator
+from tests.unit.simulators.circuit_fakes import raising_logger
 
 # Component segment fan-out — when generate() calls it, and what it dispatches
 
@@ -15,38 +20,49 @@ from tests.unit.endpoint_generator_helpers import _bond, _bond_data, _endpoint_d
 class TestGenerateFansOutComponentSegments:
     """generate() hands the fan-out the NICs cabled before the run."""
 
+    @staticmethod
+    def _generator(world: EndpointWorld) -> Any:
+        gen = make_hfid_generator(world, cls=EndpointConnectivityGenerator)
+        gen.logger = raising_logger()
+        gen._fan_out_component_segments = AsyncMock()
+        return gen
+
     @pytest.mark.asyncio
     async def test_plain_flow_fans_out_after_cabling_with_previously_cabled_ids(self) -> None:
         """Free uplinks that found target ports: fan out, passing the already-cabled NIC ids."""
-        gen = _make_generator()
-        cabled = _iface("eth0", device="server-1", cabled=True)
-        cabled.id = "nic-0"
-        free_iface = _iface("eth1", device="server-1")
-        free_iface.id = "nic-1"
-        gen.client.filters = AsyncMock(side_effect=[[cabled, free_iface], [MagicMock(save=AsyncMock())]])
-        gen._resolve_target_interfaces = AsyncMock(return_value=[_iface("Eth1", device="leaf-1")])
+        world = EndpointWorld()
+        server = world.add_device("server-1", "endpoint", device_id=SERVER_ID)
+        cabled, _free = world.add_ports(server, ["eth0", "eth1"], role="uplink")
+        switches = world.add_switches()
+        world.cable(cabled, world.ports(switches[0].data["name"])["Ethernet1/4"], "tor-1-Ethernet1/4__server-1-eth0")
+        gen = self._generator(world)
 
         await gen.generate(_endpoint_data())
 
-        gen._fan_out_component_segments.assert_awaited_once_with({"nic-0"})
+        gen._fan_out_component_segments.assert_awaited_once_with({cabled.id})
 
     @pytest.mark.asyncio
     async def test_plain_flow_without_target_ports_does_not_fan_out(self) -> None:
-        """Nothing to cable into means nothing was cabled: no fan-out."""
-        gen = _make_generator()
-        gen.client.filters = AsyncMock(side_effect=[[_iface("eth0", device="server-1")]])
-        gen._resolve_target_interfaces = AsyncMock(return_value=[])
+        """Nothing to cable into is an error, and nothing was cabled: no fan-out."""
+        world = EndpointWorld()
+        server = world.add_device("server-1", "endpoint", device_id=SERVER_ID)
+        world.add_ports(server, ["eth0"], role="uplink")
+        gen = self._generator(world)
 
-        await gen.generate(_endpoint_data())
+        with pytest.raises(GeneratorError):
+            await gen.generate(_endpoint_data())
 
         gen._fan_out_component_segments.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_plain_flow_rerun_with_everything_cabled_does_not_fan_out(self) -> None:
         """A rerun that finds every uplink cabled returns before cabling, so dispatches nothing."""
-        gen = _make_generator()
-        cabled = _iface("eth0", device="server-1", cabled=True)
-        gen.client.filters = AsyncMock(side_effect=[[cabled], [MagicMock(save=AsyncMock())]])
+        world = EndpointWorld()
+        server = world.add_device("server-1", "endpoint", device_id=SERVER_ID)
+        (nic,) = world.add_ports(server, ["eth0"], role="uplink")
+        (switch, _other) = world.add_switches()
+        world.cable(nic, world.ports(switch.data["name"])["Ethernet1/1"], "tor-1-Ethernet1/1__server-1-eth0")
+        gen = self._generator(world)
 
         await gen.generate(_endpoint_data())
 
@@ -55,31 +71,34 @@ class TestGenerateFansOutComponentSegments:
     @pytest.mark.asyncio
     async def test_lag_flow_with_an_uncabled_member_fans_out(self) -> None:
         """A bond member still to cable: fan out after the bond wiring, with the cabled member's id."""
-        gen = _make_generator()
-        cabled, free = _nic("eth0"), _nic("eth1")
-        cabled.cable = MagicMock(id="cable-1")
-        cabled.cable._peer = MagicMock()
-        cabled.cable._peer.name = MagicMock(value="leaf-1-Eth1__server-1-eth0")
-        gen.client.filters = AsyncMock(side_effect=[[cabled, free]])
+        world = EndpointWorld()
+        server = world.add_device("server-1", "endpoint", device_id=SERVER_ID)
+        cabled, free = world.add_ports(server, ["eth0", "eth1"], role="lag")
+        tor1, tor2 = world.add_switches()
+        world.add_mlag_domain(tor1, tor2)
+        world.cable(cabled, world.ports("tor-1")["Ethernet1/1"], "tor-1-Ethernet1/1__server-1-eth0")
+        gen = self._generator(world)
 
         await gen.generate(_bond_data(_bond("bond0", [cabled, free])))
 
-        gen._fan_out_component_segments.assert_awaited_once_with({"id-eth0"})
+        gen._fan_out_component_segments.assert_awaited_once_with({cabled.id})
+        assert world.ports("tor-2")["Ethernet1/1"].data["description"] == "server-1-eth1__tor-2-Ethernet1/1"
 
     @pytest.mark.asyncio
     async def test_lag_flow_with_every_member_cabled_does_not_fan_out(self) -> None:
         """A rerun over fully cabled bonds re-touches them but dispatches nothing."""
-        gen = _make_generator()
-        eth0, eth1 = _nic("eth0"), _nic("eth1")
-        for nic in (eth0, eth1):
-            nic.cable = MagicMock(id=f"cable-{nic.id}")
-            nic.cable._peer = MagicMock()
-            nic.cable._peer.name = MagicMock(value=f"leaf-1-Eth1__server-1-{nic.name.value}")
-        gen.client.filters = AsyncMock(side_effect=[[eth0, eth1]])
+        world = EndpointWorld()
+        server = world.add_device("server-1", "endpoint", device_id=SERVER_ID)
+        eth0, eth1 = world.add_ports(server, ["eth0", "eth1"], role="lag")
+        tor1, tor2 = world.add_switches()
+        world.add_mlag_domain(tor1, tor2)
+        world.cable(eth0, world.ports("tor-1")["Ethernet1/1"], "tor-1-Ethernet1/1__server-1-eth0")
+        world.cable(eth1, world.ports("tor-2")["Ethernet1/1"], "tor-2-Ethernet1/1__server-1-eth1")
+        gen = self._generator(world)
 
         await gen.generate(_bond_data(_bond("bond0", [eth0, eth1])))
 
-        gen._process_lag_endpoint_connections.assert_awaited_once()
+        assert len(world.of_kind("DcimLAGInterface")) == 2
         gen._fan_out_component_segments.assert_not_awaited()
 
 

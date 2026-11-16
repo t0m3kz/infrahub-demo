@@ -1,0 +1,17 @@
+# The link of the westeurope virtual WAN hub (01_cloud/azure) towards us, authored by hand like the AWS one
+# (02_aws_prod_handoff.yml): eg-pa401 Ethernet1/13.1100 <-> the private peering `er-30all-weu.private` of the
+# ExpressRoute circuit er-30all-weu (../01_colo_onramp/03_cloud_transports.yml), riding on the primary MSEE port
+# msee-pri of EXT-AZURE-ER-WEU, which the virtual connection XC-EQXPA4-AZURE-WEU-PRI (../01_colo_onramp/
+# 08_carrier_circuits.yml) carries to Ethernet1/13. The peering lands on the ExpressRoute gateway ergw-30all-weu; the
+# hub's connection to it (vhub-30all-weu-ergw) is the hub's link, so the session accepts the routed range of every
+# transit footprint of the hub, each for its own owner (C004, C016). Our /31 is the link below the AWS one in
+# Handoff-PROD-IPv4; the provider side is the peering's peer_ip and peer_asn (AS12076, Microsoft).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.255.143.252/31"
+      description: "PROD handoff eg-pa401 <-> Azure ExpressRoute private peering er-30all-weu.private (hub link)"
+      status: active
+      ip_namespace: "default"

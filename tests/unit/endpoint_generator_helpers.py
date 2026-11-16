@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -65,22 +66,15 @@ def _make_generator() -> Any:
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()
     gen.client.group_context.related_node_ids = []
-    gen.planned_connections = set()
-    gen._free_interfaces = []
-    gen._already_connected = False
-    gen._existing_switch_names = set()
 
     gen.client.get = AsyncMock()
     gen.client.filters = AsyncMock(return_value=[])
     gen.acquire_resource_lock = AsyncMock(return_value="lock-1")
     gen.release_resource_lock = AsyncMock()
-    gen._process_endpoint_connections = AsyncMock()
-    gen._process_lag_endpoint_connections = AsyncMock()
     # Covered on its own in TestFanOutComponentSegments; mocked here so the generate() tests' filters side_effect lists
     # stay the cabling queries only.
     gen._fan_out_component_segments = AsyncMock()
     gen.run_generator = AsyncMock()
-    gen.create_cabling = AsyncMock(return_value=[("server-port", "switch-port")])
     return gen
 
 
@@ -105,7 +99,7 @@ def _iface(
     return intf
 
 
-def _bond(name: str, members: list[MagicMock]) -> dict:
+def _bond(name: str, members: Sequence[Any]) -> dict:
     """A server bond as the payload carries it (endpoint.gql's BondFields): members by id."""
     return {
         "id": f"id-{name}",

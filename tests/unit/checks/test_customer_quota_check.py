@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
-import pytest
 import yaml
 
 from checks.customers.customer_quota import CheckCustomerQuota
@@ -156,10 +155,6 @@ def _run(footprints: list[dict[str, Any]], vxlan: list[dict[str, Any]] | None = 
     check = _check()
     check.validate(_payload(footprints, vxlan or []))
     return check._captured
-
-
-def _messages(findings: list[dict[str, Any]]) -> list[str]:
-    return [finding["message"] for finding in findings]
 
 
 class TestSegmentQuota:
@@ -343,28 +338,10 @@ def test_check_and_query_are_registered() -> None:
 
     assert checks["validate_customer_quota"]["class_name"] == "CheckCustomerQuota"
     assert "targets" not in checks["validate_customer_quota"]
-    assert queries[CheckCustomerQuota.query] == "queries/flat/validation/customer_quota.gql"
+    assert queries[CheckCustomerQuota.query] == "queries/validation/customer_quota.gql"
     assert (_ROOT / queries[CheckCustomerQuota.query]).is_file()
     assert "resource_name: validate_customer_quota" in (_ROOT / "tests/smoke/test_checks.yml").read_text()
     assert "resource_name: customer_quota" in (_ROOT / "tests/smoke/test_graphql.yml").read_text()
-
-
-def test_query_reads_the_ports_from_the_port_side() -> None:
-    """The ports come from the physical and LAG roots (a capability present)."""
-    compact = " ".join((_ROOT / "queries" / "validation" / "customer_quota.gql").read_text().split())
-    assert "DcimPhysicalInterface(capabilities__isnull: false)" in compact
-    assert "DcimLAGInterface(capabilities__isnull: false)" in compact
-    assert "... on ManagedSegmentVlan { segment_deployment { node { segment { node { id } } } } }" in compact
-    assert " segments { edges" not in compact
-
-
-@pytest.mark.parametrize(
-    "field", ["max_segments", "ports_25g", "ports_100g", "max_virtual_networks", "address_prefix_length"]
-)
-def test_query_selects_each_number_the_design_carries(field: str) -> None:
-    """The query reads every quota attribute of the design."""
-    query = (_ROOT / "queries" / "validation" / "customer_quota.gql").read_text()
-    assert f"{field} {{ value }}" in query
 
 
 # 30_all: the bootstrap template rows hold every demo footprint

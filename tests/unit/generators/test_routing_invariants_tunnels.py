@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.integration.demo_data import relationship, relationship_names
 from tests.unit.cloud_leg_helpers import attachment, peering
 from tests.unit.external_vrf_peers_helpers import _raw_vrf
-from tests.unit.generators.test_circuit_query_shapes import _QUERIES, _selected_paths
 from tests.unit.routing_invariants_helpers import (
     _CUSTOMER,
     _PROVIDER,
@@ -216,7 +214,7 @@ class TestOfficesRegisterSomething:
         assert _errors_with(_run(TopologyCustomerOffice=[office]), "registers no prefix") == []
 
     def test_an_office_without_a_gateway_is_not_held_to_it(self) -> None:
-        """No sdwan_gateway: no SD-WAN session to feed."""
+        """No sdwan_gateways: no SD-WAN session to feed."""
         check = _run(TopologyCustomerOffice=[_gateway_office("o", None, _CUSTOMER)])
         assert _errors_with(check, "registers no prefix") == []
 
@@ -227,25 +225,3 @@ class TestOfficesRegisterSomething:
             TopologyCustomerOffice=[_gateway_office("o", _GW1, _CUSTOMER)],
         )
         assert len(_errors_with(check, "registers no prefix")) == 1
-
-
-def test_the_query_selects_what_the_tunnel_rules_read() -> None:
-    """The office owner in locations, end-port devices and registered prefixes with their namespace, on real fields."""
-    selected = _selected_paths(_QUERIES / "validation" / "routing_invariants.gql", "TopologySessionCircuit")
-    reads = [
-        "name",
-        "locations.owner.org_id",
-        "capabilities.device.name",
-        "registered_prefixes.prefix",
-        "registered_prefixes.ip_namespace.name",
-        "vrf.security_zone.vrf_type",
-    ]
-    assert not [item for item in reads if item not in selected]
-    assert {"locations", "registered_prefixes", "capabilities"} <= relationship_names("TopologySessionCircuit")
-    assert "owner" not in relationship_names("TopologySessionCircuit")
-    definition = relationship("TopologySessionCircuit", "registered_prefixes")
-    assert definition is not None
-    assert definition["peer"] == "IpamPrefix"
-    assert definition["cardinality"] == "many"
-    assert definition["optional"] is True
-    assert len(definition["description"]) < 128

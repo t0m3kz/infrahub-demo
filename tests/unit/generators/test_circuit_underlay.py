@@ -89,7 +89,7 @@ def test_the_session_types_are_the_dci_the_handoff_and_the_vpn_never_the_tunnel(
 
 
 def test_the_kind_and_the_types_are_those_of_the_schema() -> None:
-    """The kind is the protocol class; the types are the choices tests/unit/test_circuit_schema.py pins."""
+    """The kind is the protocol class; the types are the choices of the schema."""
     from generators.protocols import TopologySessionCircuit
 
     assert SESSION_CIRCUIT == TopologySessionCircuit.__name__

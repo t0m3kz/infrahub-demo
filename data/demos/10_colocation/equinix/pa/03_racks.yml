@@ -1,4 +1,5 @@
 ---
+# Paris Equinix racks: PA4 and PA6
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -16,29 +17,18 @@ spec:
             rows: 1
             racks_per_row: 2
             children:
-              kind: LocationRackRow
+              kind: LocationRack
               data:
-                - name: PA4-PA4-ROW-1
+                - name: PA4-PA4-R1-1
+                  shortname: pa4-s1-r-1
                   index: 1
-                  shortname: pa4-s1-row-1
-                  parent: pa4-s1
-                  children:
-                    kind: LocationRack
-                    data:
-                      - name: PA4-PA4-R1-1
-                        shortname: pa4-s1-r-1
-                        index: 1
-                        deployment: PA4
-                        member_of_groups:
-                          - topologies_rack
-                        fabric_templates:
-                          - ["2", "edge", "N9K-C9316D-GX_EDGE"]
-                        parent: pa4-s1-row-1
-                      - name: PA4-PA4-R1-2
-                        shortname: pa4-s1-r-2
-                        index: 2
-                        deployment: PA4
-                        parent: pa4-s1-row-1
+                  row_index: 1
+                  deployment: PA4
+                - name: PA4-PA4-R1-2
+                  shortname: pa4-s1-r-2
+                  index: 2
+                  row_index: 1
+                  deployment: PA4
     - name: PA6
       shortname: pa6
       parent: par
@@ -51,22 +41,15 @@ spec:
             rows: 1
             racks_per_row: 2
             children:
-              kind: LocationRackRow
+              kind: LocationRack
               data:
-                - name: PA6-PA6-ROW-1
+                - name: PA6-PA6-R1-1
+                  shortname: pa6-s1-r-1
                   index: 1
-                  shortname: pa6-s1-row-1
-                  parent: pa6-s1
-                  children:
-                    kind: LocationRack
-                    data:
-                      - name: PA6-PA6-R1-1
-                        shortname: pa6-s1-r-1
-                        index: 1
-                        deployment: PA6
-                        parent: pa6-s1-row-1
-                      - name: PA6-PA6-R1-2
-                        shortname: pa6-s1-r-2
-                        index: 2
-                        deployment: PA6
-                        parent: pa6-s1-row-1
+                  row_index: 1
+                  deployment: PA6
+                - name: PA6-PA6-R1-2
+                  shortname: pa6-s1-r-2
+                  index: 2
+                  row_index: 1
+                  deployment: PA6

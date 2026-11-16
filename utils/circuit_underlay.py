@@ -1,13 +1,15 @@
 """The physical carrier of a virtual circuit, derived and never declared (shared by the generator and the checks).
 
 A port is carried by a carrier circuit (``port_underlay``) or a cable (``port_cabled``); ``has_carrier`` is either.
+Both look at the port, its parent and the member ports of a LAG among them (utils/path_trace.py ``physical_ports``,
+the path tracer's first hops), so a sub-interface on a LAG is carried by the cables of the LAG's members.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from utils.interface_encapsulation import parent_of
+from utils.path_trace import physical_ports
 
 DECOMMISSIONED = "decommissioned"
 CARRIER_CIRCUIT = "TopologyCarrierCircuit"
@@ -59,15 +61,12 @@ def is_cloud_end(port: dict[str, Any]) -> bool:
     )
 
 
-def _port_and_parent(port: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The port and, when it is a sub-interface, its parent interface (else an empty dict)."""
-    return port, parent_of(port) or {}
-
-
 def port_underlay(port: dict[str, Any]) -> list[dict[str, Any]]:
-    """The carrier circuits on a port or its encapsulation parent, deduplicated by id, whatever their status."""
+    """The carrier circuits on a port, its encapsulation parent or the members of a LAG among them, deduplicated by id,
+    whatever their status.
+    """
     circuits: dict[str, dict[str, Any]] = {}
-    for interface in _port_and_parent(port):
+    for interface in physical_ports(port):
         for cap in interface.get("capabilities") or []:
             if isinstance(cap, dict) and cap.get("typename") == CARRIER_CIRCUIT and cap.get("id"):
                 circuits.setdefault(cap["id"], cap)
@@ -75,17 +74,21 @@ def port_underlay(port: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def cabled_port(port: dict[str, Any]) -> dict[str, Any] | None:
-    """The port carrying a cable, directly or through its parent (a sub-interface or a hosted VM NIC)."""
-    return next((interface for interface in _port_and_parent(port) if interface.get("cable")), None)
+    """The port carrying a cable: the port itself, its parent (a sub-interface or a hosted VM NIC), or a member port of
+    a LAG among them.
+    """
+    return next((interface for interface in physical_ports(port) if interface.get("cable")), None)
 
 
 def port_cabled(port: dict[str, Any]) -> bool:
-    """A DcimCable terminates on the port, or on its parent interface (one level)."""
+    """A DcimCable terminates on the port, its parent interface, or a member of a LAG among them."""
     return cabled_port(port) is not None
 
 
 def has_carrier(port: dict[str, Any]) -> bool:
-    """The port is carried: a carrier circuit (whatever its status) or a cable at the port or its parent."""
+    """The port is carried: a carrier circuit (whatever its status) or a cable at the port, its parent or a LAG
+    member.
+    """
     return bool(port_underlay(port)) or port_cabled(port)
 
 

@@ -205,3 +205,37 @@ class TestTopologyOrchestratorRoutingGenerator:
 
         gen.logger.error.assert_called_once()
         gen.client.create.assert_not_called()
+
+
+class TestMissingRoutingGroupIsCreatedByThePlan:
+    def test_a_missing_group_is_saved_before_the_node_points_at_it(self) -> None:
+        """The group is a NodeSpec of the same plan: created untracked first, then the node's membership names its id."""
+        from infrahub_sdk.exceptions import NodeNotFoundError  # noqa: PLC0415
+
+        gen = _make_app_gen()
+        order: list[tuple[str, dict[str, Any]]] = []
+
+        async def _create(*, kind: str, data: dict[str, Any]) -> Any:
+            node = MagicMock(id="g-new" if kind == "CoreStandardGroup" else data["id"])
+            node.save = AsyncMock(side_effect=lambda **kw: order.append((kind, {**data, **kw})))
+            return node
+
+        gen.client.get = AsyncMock(side_effect=NodeNotFoundError("x", "CoreStandardGroup", "none"))
+        gen.client.create = AsyncMock(side_effect=_create)
+        payload = {
+            "AppApplication": [
+                {
+                    "id": "app-1",
+                    "typename": "AppApplication",
+                    "name": "c005-payment-core-p",
+                    "application_orchestrator": "github_actions",
+                }
+            ]
+        }
+        _with_groups(gen, [_group("g-base", "app_applications")])
+
+        asyncio.run(gen.generate(payload))
+
+        assert [kind for kind, _ in order] == ["CoreStandardGroup", "AppApplication"]
+        assert order[0][1]["update_group_context"] is False and order[1][1]["update_group_context"] is False
+        assert order[1][1]["member_of_groups"] == [{"id": "g-base"}, {"id": "g-new"}]

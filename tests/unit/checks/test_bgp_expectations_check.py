@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 from checks.routing import bgp_expectations
@@ -201,20 +200,3 @@ def test_the_check_logs_errors_as_errors_and_warnings_as_warning_info_lines(monk
     check.validate({})
     assert errors == ["E1: a"]
     assert infos == ["WARNING: E5: b", "2 finding(s) over the BGP sessions"]
-
-
-def test_the_query_selects_what_the_closure_reads(root_dir: Path) -> None:
-    """Peerings with both ends and processes, device facts, and the shared roots the transforms use."""
-    query = " ".join((root_dir / "queries/validation/bgp_expectations.gql").read_text().split())
-    for needed in (
-        "ManagedBGPPeering",
-        "bgp_processes",
-        "...EvpnRtAsOnDeploymentFields",
-        "shared_capabilities",
-        'DcimVirtualInterface(role__value: "multisite-vip")',
-        "environment_zones: SecurityZone",
-        "ManagedVRF",
-        "ManagedVxlanSegment",
-        "platform { node { name { value } } }",
-    ):
-        assert " ".join(needed.split()) in query

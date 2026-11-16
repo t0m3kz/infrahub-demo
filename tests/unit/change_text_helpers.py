@@ -244,7 +244,6 @@ def artifact(target: str, *, new: str = "n1", previous: str | None = "p1", actio
         id=f"art-{target}",
         action=action,
         target_id=f"id-{target}",
-        target_kind="DcimPhysicalDevice",
         target=target,
         definition="leaf_config",
         checksum_new=new,

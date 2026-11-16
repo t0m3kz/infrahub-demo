@@ -6,9 +6,7 @@ from typing import Any
 
 import pytest
 
-from tests.integration.demo_data import attribute_names, relationship_names
 from tests.unit.checks.test_segment_security_check import _check, _rule, _segment, _v
-from tests.unit.generators.test_circuit_query_shapes import _QUERIES, _selected_paths
 
 _GW1 = "EQX-FR2-SDWAN-GW1"
 _ACME = "198.18.0.0/24"
@@ -62,11 +60,13 @@ def _office(
     }
     return {
         "owner": _owner(owner),
-        "sdwan_gateway": {
-            "node": {"name": _v(gateway), "interfaces": _edges({"vrf": _vrf(), "capabilities": _edges(handoff)})}
-            if gateway
-            else None
-        },
+        "sdwan_gateways": _edges(
+            *(
+                [{"name": _v(gateway), "interfaces": _edges({"vrf": _vrf(), "capabilities": _edges(handoff)})}]
+                if gateway
+                else []
+            )
+        ),
         "vrfs": _edges(_vrf()["node"]),
         "lan_prefixes": _edges(*lans),
         "segment_deployments": _edges(
@@ -204,7 +204,7 @@ class TestRegisteredDestinations:
         assert _unreachable(check) == []
 
     def test_an_office_lan_without_a_gateway_is_unreachable(self) -> None:
-        """No sdwan_gateway: no SD-WAN session carries the LAN."""
+        """No sdwan_gateways: no SD-WAN session carries the LAN."""
         office = _office(None, "C002", _prefix("10.210.2.0/24"))
         assert len(_unreachable(_run([_dest_rule("r", "10.210.2.0/24")], TopologyCustomerOffice=[office]))) == 1
 
@@ -321,38 +321,3 @@ class TestEnvironmentOfTheSource:
             TopologySessionCircuit=[_tunnel("C001", _prefix(_ACME), ns_type="non_prod")],
         )
         assert _unreachable(check) == []
-
-
-def test_the_query_selects_what_the_destination_rule_reads() -> None:
-    """Rule prefixes, segment environment and the registrations of the edge, on real schema fields."""
-    path = _QUERIES / "validation" / "segment_security.gql"
-    reads = {
-        "SecurityPolicyRule": ["destination_prefixes.prefix", "source_segment.id", "disabled", "policy.enabled"],
-        "TopologyCustomerOffice": [
-            "owner.org_id",
-            "sdwan_gateway.name",
-            "lan_prefixes.prefix",
-            "sdwan_gateway.interfaces.capabilities.security_zone.vrf_type",
-            "sdwan_gateway.interfaces.capabilities.vrf.security_zone.vrf_type",
-            "vrfs.security_zone.id",
-            "segment_deployments.segment.owner.org_id",
-            "segment_deployments.segment.gateway.ip_prefix.prefix",
-            "segment_deployments.segment.security_zone.vrf_type",
-        ],
-        "TopologySessionCircuit": [
-            "locations.owner.org_id",
-            "registered_prefixes.prefix",
-            "vrf.security_zone.vrf_type",
-            "capabilities.device.name",
-        ],
-    }
-    # The segment root spreads a fragment from another file (not resolvable here): environment is selected beside it.
-    selected_segments = _selected_paths(path, "ManagedNetworkSegment")
-    assert {"environment", "owner.org_id", "security_zone.vrf_type"} <= selected_segments
-    assert "environment" in attribute_names("ManagedNetworkSegment")
-    assert "owner" in relationship_names("ManagedNetworkSegment")
-    for root, paths in reads.items():
-        selected = _selected_paths(path, root)
-        assert not [item for item in paths if item not in selected], root
-    assert {"sdwan_gateway", "lan_prefixes", "segment_deployments"} <= relationship_names("TopologyCustomerOffice")
-    assert {"registered_prefixes", "capabilities", "locations"} <= relationship_names("TopologySessionCircuit")

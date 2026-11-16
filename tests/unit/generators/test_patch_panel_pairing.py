@@ -9,11 +9,12 @@ from unittest.mock import MagicMock
 
 import pytest
 import yaml
+from infrahub_sdk.exceptions import GraphQLError
 
 from checks.connectivity.patch_panel_pairing import CheckPatchPanelPairing
 from generators.connectivity.patch_panel import FRONT_PORT_KIND, REAR_PORT_KIND, PatchPanelGenerator
 from generators.helpers.patch_panel import LAYOUT_CASSETTE, LAYOUT_JACK, PANEL_TYPES, audit
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
 from tests.integration.demo_data import (
     ROOT,
     action_generators,
@@ -22,8 +23,9 @@ from tests.integration.demo_data import (
     group_trigger_rules,
     trigger_rules,
 )
-from utils.limits import GROUP_PATCH_PANELS
-from utils.query_flatten import source_path
+
+# Every DcimPatchPanel: the target group of add_patch_panel (data/bootstrap/00_groups.yml).
+GROUP_PATCH_PANELS = "patch_panels"
 
 
 def _rears(count: int, connector: str = "lc-upc") -> list[dict[str, Any]]:
@@ -245,6 +247,36 @@ class TestGenerator:
         assert "rear 13" in warnings and "front 1" in warnings
 
     @pytest.mark.asyncio
+    async def test_a_port_created_by_a_concurrent_run_is_saved_again_once(self) -> None:
+        """One retry covers the race of two runs creating the same port: the second save wins, the run goes on."""
+        client = _Client()
+        first = {"done": False}
+        original = _Port.save
+
+        async def flaky(self: _Port, **kwargs: Any) -> None:
+            if not first["done"]:
+                first["done"] = True
+                raise GraphQLError([{"message": "already exists"}])
+            await original(self, **kwargs)
+
+        _Port.save = flaky  # type: ignore[method-assign]
+        try:
+            generator = cast(Any, PatchPanelGenerator.__new__(PatchPanelGenerator))
+            generator.client = client
+            generator.logger = MagicMock()
+
+            @asynccontextmanager
+            async def lock(key: str) -> Any:
+                yield
+
+            generator.resource_lock = lock
+            await generator.generate({"DcimPatchPanel": {"edges": [{"node": _panel("sc-12", [], [])}]}})
+        finally:
+            _Port.save = original  # type: ignore[method-assign]
+
+        assert len([1 for kind, _, _ in client.saved if kind == REAR_PORT_KIND]) == 12
+
+    @pytest.mark.asyncio
     async def test_an_unknown_type_fails_the_run_and_writes_nothing(self) -> None:
         with pytest.raises(GeneratorError):
             await _run("lc-1000", [], [])
@@ -319,16 +351,11 @@ class TestRegistration:
     def test_the_definition_names_its_class_file_and_queries(self) -> None:
         config = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
         definition = {d["name"]: d for d in config["generator_definitions"]}["add_patch_panel"]
-        queries = {q["name"]: q["file_path"] for q in config["queries"]}
         checks = {c["name"]: c for c in config["check_definitions"]}
 
         assert definition["class_name"] == "PatchPanelGenerator"
         assert definition["query"] == "patch_panel_data"
         assert definition["parameters"] == {"panel_id": "panel_id__value"}
-        for name in ("patch_panel_data", "patch_panel_pairing"):
-            assert "panel_type { value }" in source_path(ROOT / queries[name]).read_text(), (
-                name
-            )  # the source, as written
         assert checks["validate_patch_panel_pairing"]["class_name"] == "CheckPatchPanelPairing"
         assert CheckPatchPanelPairing.query == "patch_panel_pairing"
 

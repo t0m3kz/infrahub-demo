@@ -1,18 +1,18 @@
-"""Check what an interface rides on (the ``parent`` of its ``ManagedInterfaceEncapsulation``).
+"""Check what an interface rides on (the ``parent`` of a ``DcimSubInterface``).
 
-The schema holds no same-device rule, so this does; see AGENTS.md "Interface encapsulation".
+The schema holds no same-device rule, so this does; see domain-model.md "Interface encapsulation".
 """
 
 from __future__ import annotations
 
-from collections import Counter
 from typing import Any
 
 from checks.base import WarningCheck
-from generators.mixins.virtual_nics import is_host_nic
+from generators.dcim.virtual_nics import is_host_nic
 from utils.data_cleaning import clean_data
-from utils.interface_encapsulation import ENCAPSULATION_KIND
+from utils.interface_encapsulation import parent_of
 
+SUB_INTERFACE_KIND = "DcimSubInterface"
 _PHYSICAL_INTERFACE = "DcimPhysicalInterface"
 _UPLINK_ROLE = "uplink"
 _PEERING = "CloudPeeringInterface"
@@ -67,43 +67,21 @@ class CheckInterfaceParents(WarningCheck):
     query = "interface_parents"
 
     def validate(self, data: Any) -> None:
-        encapsulations = clean_data(data).get(ENCAPSULATION_KIND) or []
-        per_interface = Counter(
-            iface.get("id") for encapsulation in encapsulations for iface in encapsulation.get("capabilities") or []
-        )
-        reported: set[str] = set()
-        for encapsulation in encapsulations:
-            parent = encapsulation.get("parent")
-            ifaces = encapsulation.get("capabilities") or []
-            if not ifaces:
-                self.log_warning(f"encapsulation '{_label(encapsulation)}' is on no interface: it was left behind.")
-            if len(ifaces) > 1:
+        for iface in clean_data(data).get(SUB_INTERFACE_KIND) or []:
+            parent = parent_of(iface)
+            if parent is None:
+                continue
+            where = f"{_label(iface.get('device') or {})} {_label(iface)}"
+            if parent.get("id") == iface.get("id"):
                 self.log_error(
-                    message=f"encapsulation '{_label(encapsulation)}' is on {len(ifaces)} interfaces: it is one "
-                    "interface's.",
-                    object_id=encapsulation.get("id"),
-                    object_type=ENCAPSULATION_KIND,
+                    message=f"{where} is its own parent.",
+                    object_id=iface.get("id"),
+                    object_type=iface.get("typename") or SUB_INTERFACE_KIND,
                 )
-            for iface in ifaces:
-                where = f"{_label(iface.get('device') or {})} {_label(iface)}"
-                if per_interface[iface.get("id")] > 1 and iface.get("id") not in reported:
-                    reported.add(iface.get("id"))
-                    self.log_error(
-                        message=f"{where} has {per_interface[iface.get('id')]} encapsulations: an interface rides "
-                        "on one.",
-                        object_id=iface.get("id"),
-                        object_type=iface.get("typename") or ENCAPSULATION_KIND,
-                    )
-                if isinstance(parent, dict) and parent.get("id") == iface.get("id"):
-                    self.log_error(
-                        message=f"{where} is its own parent.",
-                        object_id=iface.get("id"),
-                        object_type=iface.get("typename") or ENCAPSULATION_KIND,
-                    )
-                    continue
-                for message in interface_parent_errors(iface, parent):
-                    self.log_error(
-                        message=message,
-                        object_id=iface.get("id"),
-                        object_type=iface.get("typename") or ENCAPSULATION_KIND,
-                    )
+                continue
+            for message in interface_parent_errors(iface, parent):
+                self.log_error(
+                    message=message,
+                    object_id=iface.get("id"),
+                    object_type=iface.get("typename") or SUB_INTERFACE_KIND,
+                )

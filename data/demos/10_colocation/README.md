@@ -52,7 +52,7 @@ A metro is the Multi-Site site: it is no facility and owns no devices. Its child
 ## The On-Ramp Is Generated, Not Written
 
 No on-ramp router appears in these files as a device. Each **zone** (or virtual colocation) **declares** what it
-wants and `add_colocation_zone` (or `add_virtual_colocation`), both in `generators/topology/colocation_fabric.py`,
+wants and `add_colocation_zone` (or `add_virtual_colocation`), both in `generators/colocation/colocation_fabric.py`,
 builds it:
 
 ```yaml

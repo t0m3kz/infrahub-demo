@@ -1,317 +1,333 @@
-"""Unit tests for the VIP producer and the server rule of the load balancer."""
+"""The VIP producer and the R_server rule of the load balancer: the plan ``plan_load_balancing`` builds, the plan applied
+on the HFID fake, and the inputs another generator may still be writing (``await_lb_inputs``)."""
 
 from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, patch
 
+import pytest
+from infrahub_sdk.protocols import CoreIPAddressPool
+
+from generators.applications.lb_vip import await_lb_inputs
 from generators.helpers.lb_vip import leg_zone
 from generators.helpers.rules import RulesPlanner
-from generators.mixins.segment_firewall import SegmentFirewallMixin
-from generators.protocols import SecurityPolicy
+from generators.model.errors import GeneratorError
+from generators.plan import AddressAllocationSpec, NodeRef, NodeSpec
+from generators.protocols import LoadbalancerVIP
+from tests.unit.app_plan_helpers import AppClient, make_app_generator
 from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.lb_vip_helpers import (
     _client_comp,
-    _cloud_frontend,
     _context,
     _dep,
     _instance,
-    _lb_gen,
-    _reconcile,
     _segment,
-    _vip_gen,
-    _vip_payloads,
     _web,
+    application,
+    plan_lb,
+    run_application,
+    specs_of,
+    vip_data,
 )
 from utils.limits import LB_VIP_REREAD
 
+UNTRACKED = {"allow_upsert": True, "update_group_context": False}
 
-class TestVipProducer:
-    def test_one_vip_per_port_with_members_health_checks_and_component(self) -> None:
-        gen = _vip_gen()
 
-        vips, errors = _reconcile(gen, [_web(ports=["tcp/443", "tcp/8443"])])
+def addresses(plan: Any) -> dict[str, AddressAllocationSpec]:
+    """The address allocations of the plan by identifier."""
+    return {spec.identifier: spec for spec in plan.of(AddressAllocationSpec)}
 
-        assert errors == []
-        assert vips == {
+
+class TestVipPlan:
+    def test_one_vip_per_port_with_members_health_checks_and_the_address_the_plan_allocates(self) -> None:
+        plan, balancing = plan_lb([_web(ports=["tcp/443", "tcp/8443"])])
+
+        assert balancing.errors == []
+        assert balancing.vips == {
             "comp-web": {
-                ("tcp", 443, None): {"dc10-lb-PROD": "ip:comp-web-tcp-443-vip"},
-                ("tcp", 8443, None): {"dc10-lb-PROD": "ip:comp-web-tcp-8443-vip"},
+                ("tcp", 443, None): {"dc10-lb-PROD": NodeRef("vip-address-lb-vip-vip-pfx-1-comp-web-tcp-443-vip")},
+                ("tcp", 8443, None): {"dc10-lb-PROD": NodeRef("vip-address-lb-vip-vip-pfx-1-comp-web-tcp-8443-vip")},
             }
         }
-        payloads = _vip_payloads(gen)
-        assert [(p["protocol"], p["port"]) for p in payloads] == [("tcp", 443), ("tcp", 8443)]
-        first = payloads[0]
+        first, second = vip_data(plan)
+        assert [(first["protocol"], first["port"]), (second["protocol"], second["port"])] == [
+            ("tcp", 443),
+            ("tcp", 8443),
+        ]
         assert first["hostname"] == "web.c001.example"
         assert first["load_balancer"] == {"id": "ctx-1"}
-        assert first["vip_ip"] == {"id": "ip:comp-web-tcp-443-vip"}
-        assert "component" not in first
+        assert first["vip_ip"] == {"id": balancing.vips["comp-web"][("tcp", 443, None)]["dc10-lb-PROD"]}
         assert first["health_checks"] == ["hc-1"]
-        # The members are the servers, sorted by name; each got its address in the segment prefix as primary address.
+        # The members are the servers, sorted by name
         assert first["pool_members"] == ["vm-1", "vm-2"]
-        assert [(c.kwargs["node_id"], c.kwargs["refs"]) for c in gen.attach_refs.await_args_list] == [
-            ("vm-1", {"primary_address": "ip:vm-1-seg-web-lb-member"}),
-            ("vm-2", {"primary_address": "ip:vm-2-seg-web-lb-member"}),
-        ]
-        member_calls = [
-            c.kwargs for c in gen.allocate_prefix_address.await_args_list if "member" in c.kwargs["identifier"]
-        ]
-        assert {c["prefix_length"] for c in member_calls} == {24}
-        vip_calls = [
-            c.kwargs for c in gen.allocate_prefix_address.await_args_list if c.kwargs["identifier"].endswith("-vip")
-        ]
-        assert {c["prefix_length"] for c in vip_calls} == {32}
+        assert all(spec.ownership == "owned" for spec in specs_of(plan, LoadbalancerVIP))
 
-    def test_server_with_a_primary_address_keeps_it_and_reserves_nothing(self) -> None:
-        """The member is the server and its address its primary address, wherever that is: nothing is reserved."""
-        gen = _vip_gen()
+    def test_the_vips_are_drawn_as_a_32_and_each_server_gets_an_address_in_the_segment_prefix_as_primary(self) -> None:
+        plan, _ = plan_lb([_web()])
+
+        allocated = addresses(plan)
+        assert {identifier: spec.prefix_length for identifier, spec in allocated.items()} == {
+            "comp-web-tcp-443-vip": 32,
+            "vm-1-seg-web-lb-member": 24,
+            "vm-2-seg-web-lb-member": 24,
+        }
+        assert all(spec.ownership == "shared" for spec in allocated.values())
+        primaries = {
+            spec.data["id"]: spec.data["primary_address"]
+            for spec in plan.of(NodeSpec)
+            if spec.key.startswith("primary-address-")
+        }
+        assert primaries == {
+            "vm-1": {"id": NodeRef("member-address-lb-members-pfx-seg-web-vm-1-seg-web-lb-member")},
+            "vm-2": {"id": NodeRef("member-address-lb-members-pfx-seg-web-vm-2-seg-web-lb-member")},
+        }
+
+    def test_a_server_with_a_primary_address_keeps_it_and_reserves_nothing(self) -> None:
         instances = [
             {**_instance("vm-1", _context()), "primary_address": {"id": "ip-existing-1"}},
             _instance("vm-2", _context()),
         ]
 
-        _vips, errors = _reconcile(gen, [_web(instances=instances)])
+        plan, balancing = plan_lb([_web(instances=instances)])
 
-        assert errors == []
-        assert _vip_payloads(gen)[0]["pool_members"] == ["vm-1", "vm-2"]
-        assert [c.kwargs["node_id"] for c in gen.attach_refs.await_args_list] == ["vm-2"]
-        reserved = [c.kwargs["identifier"] for c in gen.allocate_prefix_address.await_args_list]
-        assert "vm-1-seg-web-lb-member" not in reserved and "vm-2-seg-web-lb-member" in reserved
+        assert balancing.errors == []
+        assert vip_data(plan)[0]["pool_members"] == ["vm-1", "vm-2"]
+        assert "vm-1-seg-web-lb-member" not in addresses(plan)
+        assert "vm-2-seg-web-lb-member" in addresses(plan)
 
-    def test_a_server_that_cannot_get_an_address_is_not_a_member(self) -> None:
-        gen = _vip_gen()
-        real = gen.allocate_prefix_address.side_effect
-        gen.allocate_prefix_address = AsyncMock(
-            side_effect=lambda **kw: None if kw["identifier"].startswith("vm-1-") else real(**kw)
-        )
+    def test_the_pools_are_shared_over_the_vip_range_and_the_segment_prefix_in_their_namespace(self) -> None:
+        plan, balancing = plan_lb([_web()])
 
-        _vips, _errors = _reconcile(gen, [_web()])
-
-        assert _vip_payloads(gen)[0]["pool_members"] == ["vm-2"]
-
-    def test_vip_is_tracked_by_the_run(self) -> None:
-        """Saved as a plain upsert: the run's group claims it, so it is deleted once no longer produced."""
-        gen = _vip_gen()
-
-        _reconcile(gen, [_web()])
-
-        vip = gen.client.create.return_value
-        vip.save.assert_awaited_once_with(allow_upsert=True)
-
-    def test_second_run_writes_the_same_vip(self) -> None:
-        """Idempotent: same allocation identifiers, same payloads."""
-        first, second = _vip_gen(), _vip_gen()
-
-        _reconcile(first, [_web()])
-        _reconcile(second, [_web()])
-
-        assert _vip_payloads(first) == _vip_payloads(second)
-        assert [c.kwargs["identifier"] for c in first.allocate_prefix_address.await_args_list] == [
-            c.kwargs["identifier"] for c in second.allocate_prefix_address.await_args_list
-        ]
-
-    def test_shared_pools_are_untracked_and_created_under_their_lock(self) -> None:
-        """The VIP range and the segment prefix serve every application: never claimed by one run."""
-        gen = _vip_gen()
-
-        _reconcile(gen, [_web()])
-
-        pools = {c.kwargs["pool_name"]: c.kwargs for c in gen.ensure_prefix_address_pool.await_args_list}
+        pools = {spec.data["name"]: spec for spec in specs_of(plan, CoreIPAddressPool)}
         assert set(pools) == {"lb-vip-vip-pfx-1", "lb-members-pfx-seg-web"}
-        assert all(kwargs["track"] is False for kwargs in pools.values())
-        assert pools["lb-vip-vip-pfx-1"]["prefix_length"] == 32
-        assert "address-pool-lb-vip-vip-pfx-1" in gen.locks
+        assert all(spec.ownership == "shared" for spec in pools.values())
+        vip_pool = pools["lb-vip-vip-pfx-1"]
+        assert vip_pool.create_only["default_prefix_length"] == 32
+        assert vip_pool.create_only["resources"] == ["vip-pfx-1"]
+        assert vip_pool.create_only["ip_namespace"] == {"id": "ns-prod"}
+        assert balancing.locks == ["address-pool-lb-vip-vip-pfx-1", "address-pool-lb-members-pfx-seg-web"]
 
-    def test_existing_pool_is_reused_without_the_lock(self) -> None:
-        gen = _vip_gen()
-        gen.client.filters = AsyncMock(return_value=[MagicMock()])
+    def test_a_range_is_refused_and_the_single_ports_still_get_their_vip(self) -> None:
+        plan, balancing = plan_lb([_web(ports=["tcp/443", "udp/30000-30010"])])
 
-        _reconcile(gen, [_web()])
+        assert [data["port"] for data in vip_data(plan)] == [443]
+        assert len(balancing.errors) == 1
+        assert "udp/30000-30010" in balancing.errors[0]
 
-        gen.ensure_prefix_address_pool.assert_not_awaited()
-        assert not any(key.startswith("address-pool-") for key in gen.locks)
+    def test_an_instance_with_no_serving_context_is_an_error_and_writes_no_vip(self) -> None:
+        plan, balancing = plan_lb([_web(instances=[_instance("vm-1", None)])])
 
-    def test_range_is_refused_and_the_single_ports_still_get_their_vip(self) -> None:
-        gen = _vip_gen()
+        assert "is in no data center" in balancing.errors[0]
+        assert vip_data(plan) == []
 
-        vips, errors = _reconcile(gen, [_web(ports=["tcp/443", "udp/30000-30010"])])
+    def test_a_context_without_a_vip_prefix_is_an_error(self) -> None:
+        _, balancing = plan_lb([_web(instances=[_instance("vm-1", _context(vip_prefix=None))])])
 
-        assert list(vips["comp-web"]) == [("tcp", 443, None)]
-        assert [p["port"] for p in _vip_payloads(gen)] == [443]
-        assert len(errors) == 1
-        assert "udp/30000-30010" in errors[0]
+        assert any("has no VIP prefix in a namespace" in error for error in balancing.errors)
 
-    def test_missing_serving_context_is_an_error_and_writes_nothing(self) -> None:
-        gen = _vip_gen()
-
-        vips, errors = _reconcile(gen, [_web(instances=[_instance("vm-1", None)])])
-
-        assert vips == {"comp-web": {}}
-        assert "serving load balancer context" in errors[0]
-        gen.client.create.assert_not_awaited()
-        gen._upsert_policy_rule.assert_not_awaited()
-
-    def test_context_without_vip_prefix_is_an_error(self) -> None:
-        gen = _vip_gen()
-        context = _context(vip_prefix=None)
-
-        _vips, errors = _reconcile(gen, [_web(instances=[_instance("vm-1", context)])])
-
-        assert "has no VIP prefix in a namespace" in errors[0]
-        gen.client.create.assert_not_awaited()
-
-    def test_vip_pool_is_in_the_tenant_namespace_of_the_context(self) -> None:
-        """The VIP /32 lives in the namespace of the context's VIP range, never `default`."""
-        gen = _vip_gen()
-
-        _reconcile(gen, [_web()])
-
-        vip_pool = next(
-            c.kwargs
-            for c in gen.ensure_prefix_address_pool.await_args_list
-            if c.kwargs["pool_name"].startswith("lb-vip-")
-        )
-        assert (vip_pool["namespace_id"], vip_pool["prefix_length"]) == ("ns-prod", 32)
-
-    def test_vip_prefix_without_namespace_is_an_error(self) -> None:
-        gen = _vip_gen()
+    def test_a_vip_prefix_without_a_namespace_is_an_error(self) -> None:
         context = _context()
-        context["vip_prefix"]["ip_namespace"] = None
+        context["vip_prefix"] = {"id": "vip-pfx-1", "ip_namespace": None}
 
-        _vips, errors = _reconcile(gen, [_web(instances=[_instance("vm-1", context)])])
+        _, balancing = plan_lb([_web(instances=[_instance("vm-1", context)])])
 
-        assert "has no VIP prefix in a namespace" in errors[0]
-        gen.ensure_prefix_address_pool.assert_not_awaited()
+        assert any("has no VIP prefix in a namespace" in error for error in balancing.errors)
 
-    def test_segment_without_prefix_is_an_error(self) -> None:
-        gen = _vip_gen()
+    def test_a_segment_without_a_prefix_is_an_error(self) -> None:
+        plan, balancing = plan_lb([_web(segment=_segment("seg-web", prefix=False))])
 
-        _vips, errors = _reconcile(gen, [_web(segment=_segment("seg-l2", prefix=False))])
+        assert any("has no gateway prefix for the pool members" in error for error in balancing.errors)
+        assert vip_data(plan) == []
 
-        assert "no gateway prefix" in errors[0]
-        gen.client.create.assert_not_awaited()
+    def test_a_component_that_is_not_load_balanced_touches_nothing(self) -> None:
+        plan, balancing = plan_lb([_web(load_balanced=False)])
 
-    def test_component_that_is_not_load_balanced_touches_nothing(self) -> None:
-        gen = _vip_gen()
-
-        vips, errors = _reconcile(gen, [_web(load_balanced=False)])
-
-        assert (vips, errors) == ({}, [])
-        gen.client.filters.assert_not_awaited()
-        gen.client.create.assert_not_awaited()
-        gen.allocate_prefix_address.assert_not_awaited()
+        assert plan.specs == []
+        assert balancing.errors == [] and balancing.vips == {}
 
     def test_two_contexts_give_two_vips_per_port(self) -> None:
-        """Instances in two DCs: a VIP on each context, each with its own instances."""
-        gen = _vip_gen()
-        a, b = (
-            _context("ctx-a", "dc10-lb-PROD", vip_prefix="vip-a"),
-            _context("ctx-b", "dc12-lb-PROD", vip_prefix="vip-b"),
-        )
+        other = _context("ctx-2", "dc12-lb-PROD", leg="leg-2", vip_prefix="vip-pfx-2")
+        instances = [_instance("vm-1", _context()), _instance("vm-2", other)]
 
-        vips, _errors = _reconcile(gen, [_web(instances=[_instance("vm-a", a), _instance("vm-b", b)])])
+        plan, balancing = plan_lb([_web(instances=instances)])
 
-        assert vips["comp-web"][("tcp", 443, None)] == {
-            "dc10-lb-PROD": "ip:comp-web-tcp-443-vip",
-            "dc12-lb-PROD": "ip:comp-web-tcp-443-vip",
-        }
-        by_context = {p["load_balancer"]["id"]: p["pool_members"] for p in _vip_payloads(gen)}
-        assert by_context == {"ctx-a": ["vm-a"], "ctx-b": ["vm-b"]}
+        assert sorted(data["load_balancer"]["id"] for data in vip_data(plan)) == ["ctx-1", "ctx-2"]
+        assert set(balancing.vips["comp-web"][("tcp", 443, None)]) == {"dc10-lb-PROD", "dc12-lb-PROD"}
+        assert [request.policy.name for request in balancing.requests] == ["lb-dc10-lb-PROD", "lb-dc12-lb-PROD"]
 
-    def test_target_of_another_application_only_resolves_its_vip_addresses(self) -> None:
-        """No VIP object, member or R_server: those belong to the target's own application run."""
-        gen = _vip_gen()
+    def test_a_target_of_another_application_only_resolves_its_vip_addresses(self) -> None:
         web = _web()
 
-        vips, errors = _reconcile(gen, [_client_comp(_dep(web))], edges=[({}, {}, web)])
+        plan, balancing = plan_lb([_client_comp(_dep(web))], edges=[({}, {}, web)])
 
-        assert errors == []
-        assert vips == {"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "ip:comp-web-tcp-443-vip"}}}
-        gen.client.create.assert_not_awaited()
-        gen._upsert_policy_rule.assert_not_awaited()
-        assert not any("member" in c.kwargs["identifier"] for c in gen.allocate_prefix_address.await_args_list)
+        assert balancing.errors == []
+        assert vip_data(plan) == []
+        assert balancing.requests == []
+        assert set(balancing.vips["comp-web"][("tcp", 443, None)]) == {"dc10-lb-PROD"}
+        # Its VIP is drawn under the same identifier as its own run draws it
+        assert list(addresses(plan)) == ["comp-web-tcp-443-vip"]
 
-    def test_errors_of_a_target_of_another_application_are_not_this_runs(self) -> None:
-        """A misconfigured target fails its own run; its callers only miss the VIPs it cannot have."""
-        gen = _vip_gen()
-        web = _web(
-            ports=["tcp/443", "udp/30000-30010"],
-            instances=[_instance("vm-1", _context()), _instance("vm-2", None, footprint=False)],
-        )
+    def test_the_errors_of_a_target_of_another_application_are_not_this_runs(self) -> None:
+        web = _web(instances=[_instance("vm-1", None)])
 
-        vips, errors = _reconcile(gen, [_client_comp(_dep(web))], edges=[({}, {}, web)])
+        _, balancing = plan_lb([_client_comp(_dep(web))], edges=[({}, {}, web)])
 
-        assert errors == []
-        assert vips == {"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "ip:comp-web-tcp-443-vip"}}}
+        assert balancing.errors == []
 
-    def test_target_without_a_vip_prefix_resolves_no_vip_and_no_error(self) -> None:
-        gen = _vip_gen()
+    def test_a_target_without_a_vip_prefix_resolves_no_vip_and_no_error(self) -> None:
         web = _web(instances=[_instance("vm-1", _context(vip_prefix=None))])
 
-        vips, errors = _reconcile(gen, [_client_comp(_dep(web))], edges=[({}, {}, web)])
+        _, balancing = plan_lb([_client_comp(_dep(web))], edges=[({}, {}, web)])
 
-        assert (vips, errors) == ({"comp-web": {}}, [])
+        assert balancing.errors == []
+        assert balancing.vips == {"comp-web": {}}
 
-    def test_own_component_also_called_by_a_sibling_keeps_its_errors(self) -> None:
-        """A component that is both a child and an edge target is the application's own."""
-        gen = _vip_gen()
-        web = _web(ports=["udp/30000-30010"])
+    def test_an_own_component_also_called_by_a_sibling_keeps_its_errors(self) -> None:
+        web = _web(instances=[_instance("vm-1", None)])
 
-        _vips, errors = _reconcile(gen, [_client_comp(_dep(web)), web], edges=[({}, {}, web)])
+        _, balancing = plan_lb([web, _client_comp(_dep(web))], edges=[({}, {}, web)])
 
-        assert len(errors) == 1
-        assert "udp/30000-30010" in errors[0]
+        assert any("is in no data center" in error for error in balancing.errors)
 
-    def test_failed_vip_save_is_logged_with_its_listener_and_gets_no_r_server(self) -> None:
-        gen = _vip_gen()
-        gen.client.create.return_value.save = AsyncMock(side_effect=RuntimeError("boom"))
+    def test_an_unwired_leg_is_an_error_and_writes_no_vip(self) -> None:
+        plan, balancing = plan_lb([_web(instances=[_instance("vm-1", _context(leg=None))])])
 
-        vips, _errors = _reconcile(gen, [_web()])
-
-        message = gen.logger.error.call_args.args[0]
-        assert "web.c001.example tcp/443 on dc10-lb-PROD" in message
-        assert "boom" in message
-        gen._upsert_policy_rule.assert_not_awaited()
-        # The address is still the caller's VIP: the allocation identifier holds it for the next run.
-        assert vips == {"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "ip:comp-web-tcp-443-vip"}}}
+        assert "no single leg prefix" in balancing.errors[0]
+        assert plan.specs == [
+            spec for spec in plan.specs if isinstance(spec, NodeSpec) and spec.kind is CoreIPAddressPool
+        ]
 
 
-def _second_backend() -> dict[str, Any]:
-    """Another load-balanced component on the same context as _web()."""
-    return {**_web(segment=_segment("seg-api")), "id": "comp-api", "name": "api", "fqdn": "api.c001.example"}
+class TestVipWrites:
+    """The plan applied: what is written, tracked or not."""
+
+    def test_the_run_writes_the_vip_tracked_and_the_shared_objects_untracked(self) -> None:
+        _, client = run_application(application(_web(ports=["tcp/443", "tcp/8443"])))
+
+        assert [(data["protocol"], data["port"]) for data in client.saved("LoadbalancerVIP")] == [
+            ("tcp", 443),
+            ("tcp", 8443),
+        ]
+        assert client.save_kwargs("LoadbalancerVIP") == [{"allow_upsert": True}] * 2
+        assert {data["name"] for data in client.saved("CoreIPAddressPool")} == {
+            "lb-vip-vip-pfx-1",
+            "lb-members-pfx-seg-web",
+        }
+        assert set(map(tuple, (sorted(kw.items()) for kw in client.save_kwargs("CoreIPAddressPool")))) == {
+            tuple(sorted(UNTRACKED.items()))
+        }
+        # Each server has its address in the segment prefix as primary address, untracked
+        primaries = {data["id"]: data["primary_address"] for data in client.saved("DcimVirtualDevice")}
+        assert set(primaries) == {"vm-1", "vm-2"}
+        assert client.save_kwargs("DcimVirtualDevice") == [UNTRACKED] * 2
+        identifiers = {node.data["identifier"] for node in client.address_pool_allocations.values()}
+        assert identifiers == {
+            "comp-web-tcp-443-vip",
+            "comp-web-tcp-8443-vip",
+            "vm-1-seg-web-lb-member",
+            "vm-2-seg-web-lb-member",
+        }
+        vip = client.saved("LoadbalancerVIP")[0]
+        vip_address = next(
+            node
+            for node in client.address_pool_allocations.values()
+            if node.data["identifier"] == "comp-web-tcp-443-vip"
+        )
+        assert vip["vip_ip"] == {"id": vip_address.id}
+
+    def test_a_second_run_writes_the_same_vips_and_allocates_nothing_new(self) -> None:
+        _, client = run_application(application(_web()))
+        objects = {node.id for node in client.store.values()}
+        first = client.saved("LoadbalancerVIP")
+        client.saves.clear()
+
+        run_application(application(_web()), client)
+
+        assert client.saved("LoadbalancerVIP") == first
+        assert {node.id for node in client.store.values()} - objects <= {
+            node.id for node in client.store.values() if node.kind in {"LoadbalancerVIP", "SecurityPolicyRule"}
+        }
+        assert client.saved("CoreIPAddressPool") == []
+        assert client.saved("SecurityPolicy") == []
+
+    def test_an_existing_pool_is_reused_and_not_written(self) -> None:
+        client = AppClient()
+        client.seed("CoreIPAddressPool", name="lb-vip-vip-pfx-1", resources=[{"id": "vip-pfx-1"}])
+        client.seed("CoreIPAddressPool", name="lb-members-pfx-seg-web", resources=[{"id": "pfx-seg-web"}])
+
+        run_application(application(_web()), client)
+
+        assert client.saved("CoreIPAddressPool") == []
+        assert len(client.saved("LoadbalancerVIP")) == 1
+
+    def test_the_run_takes_the_locks_of_the_shared_objects_it_may_create(self) -> None:
+        gen, _ = run_application(application(_web()))
+
+        assert "address-pool-lb-vip-vip-pfx-1" in gen.locked_keys
+        assert gen.locked_keys.count("lb-policy-dc10-lb-PROD") == 1
+
+    def test_a_load_balancing_error_fails_the_run_before_any_write(self) -> None:
+        client = AppClient()
+        client.execute_graphql = AsyncMock(return_value={})
+
+        with (
+            patch("generators.applications.lb_vip.asyncio.sleep", AsyncMock()),
+            pytest.raises(GeneratorError, match="load balancing: .*no single leg prefix"),
+        ):
+            run_application(application(_web(instances=[_instance("vm-1", _context(leg=None))])), client)
+
+        assert client.saves == []
 
 
 class TestServerRule:
-    def test_r_server_written_once_per_vip_port_under_the_policy_lock(self) -> None:
-        gen = _vip_gen()
+    def test_one_r_server_per_vip_port_in_the_segment_less_context_policy(self) -> None:
+        _, client = run_application(application(_web(ports=["tcp/443", "tcp/8443"])))
 
-        _reconcile(gen, [_web(ports=["tcp/443", "tcp/8443"])])
-
-        assert gen.locks.count("lb-policy-dc10-lb-PROD") == 1
-        assert "lb-context-dc10-lb-PROD" not in gen.locks
-        assert gen._upsert_policy_rule.await_count == 2
-        names = [c.kwargs["rule_name"] for c in gen._upsert_policy_rule.await_args_list]
-        assert names == ["web.c001.example-tcp-443", "web.c001.example-tcp-8443"]
-        data = gen._upsert_policy_rule.await_args_list[0].kwargs["rule_data"]
-        assert data["policy"] == {"id": "pol-lb"}
+        (policy,) = client.saved("SecurityPolicy")
+        assert policy["name"] == "lb-dc10-lb-PROD"
+        assert "segment" not in policy
+        assert client.save_kwargs("SecurityPolicy") == [UNTRACKED]
+        rules = {data["name"]: data for data in client.saved("SecurityPolicyRule")}
+        assert list(rules) == ["web.c001.example-tcp-443", "web.c001.example-tcp-8443"]
+        data = rules["web.c001.example-tcp-443"]
         assert data["source_prefixes"] == [{"id": "leg-1"}]
         assert data["destination_segment"] == {"id": "seg-web"}
-        assert (data["protocol"], data["port_start"]) == ("tcp", 443)
+        assert (data["protocol"], data["port_start"], data["index"]) == ("tcp", 443, 100)
+        assert rules["web.c001.example-tcp-8443"]["index"] == 110
         assert data["expires_at"] is None
         assert "source_segment" not in data
         # The leg /29 has no segment: the zone of the leg's VLAN slot qualifies it (transforms/helpers/policy.py).
         assert data["source_zone"] == {"hfid": ["PROD"]}
+        assert client.save_kwargs("SecurityPolicyRule") == [{"allow_upsert": True}] * 2
+
+    def test_two_backends_on_one_context_share_the_policy_and_follow_its_indexes(self) -> None:
+        client = AppClient()
+        policy = client.seed("SecurityPolicy", name="lb-dc10-lb-PROD")
+        client.seed("SecurityPolicyRule", name="hand", index=100, policy={"id": policy.id})
+        other = {
+            **_web(segment=_segment("seg-api"), instances=[_instance("vm-3", _context())]),
+            "id": "comp-api",
+            "name": "api",
+            "fqdn": "api.c001.example",
+        }
+
+        _, client = run_application(application(_web(), other), client)
+
+        assert client.saved("SecurityPolicy") == []
+        assert {data["name"]: data["index"] for data in client.saved("SecurityPolicyRule")} == {
+            "web.c001.example-tcp-443": 110,
+            "api.c001.example-tcp-443": 120,
+        }
 
     def test_the_source_zone_is_the_zone_of_the_context_leg(self) -> None:
-        """leg_zone reads the zone of the leg's VLAN slot; no leg (or two zones) names none."""
         assert leg_zone(_context()) == "PROD"
         assert leg_zone(_context(leg=None)) is None
 
     def test_a_leg_with_no_zone_leaves_the_source_zone_out(self) -> None:
-        """No zone is invented: the payload names none and checks/segments/segment_security.py reports the rule."""
         payload = RulesPlanner.build_lb_server_rule_payload(
-            policy_id="pol-lb",
             rule_name="web",
             context_name="dc10-lb-PROD",
             component={"fqdn": "web"},
@@ -323,90 +339,9 @@ class TestServerRule:
 
         assert "source_zone" not in payload
 
-    def test_policy_is_segment_less_and_untracked(self) -> None:
-        gen = _vip_gen()
-
-        _reconcile(gen, [_web()])
-
-        kwargs = gen._get_or_create_by_name.await_args.kwargs
-        assert kwargs["kind"] is SecurityPolicy
-        assert kwargs["name"] == "lb-dc10-lb-PROD"
-        assert "segment" not in kwargs["create_data"]
-        assert kwargs["track"] is False
-
-    def test_policy_indexes_are_read_again_inside_the_lock(self) -> None:
-        """Another application's run may have added a rule since this run cached the indexes."""
-        gen = _vip_gen()
-        rule_indexes = {"pol-lb": {100}}
-
-        asyncio.run(gen._reconcile_load_balancing([_web()], [], rule_indexes, security_profile="internal_standard"))
-
-        assert "pol-lb" not in rule_indexes
-
-    def test_one_lock_and_one_policy_read_per_context_for_every_backend(self) -> None:
-        """Two backends on one context: the policy is read once and its indexes once, inside one lock."""
-        gen = _vip_gen()
-        rule_indexes: dict[str, set[int]] = {"pol-lb": {7}}
-        written: list[int] = []
-
-        async def upsert(**kwargs: Any) -> int:
-            index = 100 + len(written)
-            kwargs["rule_indexes"].setdefault(kwargs["policy_id"], set()).add(index)
-            written.append(index)
-            return index
-
-        gen._upsert_policy_rule = AsyncMock(side_effect=upsert)
-
-        asyncio.run(
-            gen._reconcile_load_balancing(
-                [_web(), _second_backend()], [], rule_indexes, security_profile="internal_standard"
-            )
-        )
-
-        assert gen.locks.count("lb-policy-dc10-lb-PROD") == 1
-        gen._get_or_create_by_name.assert_awaited_once()
-        assert [c.kwargs["rule_name"] for c in gen._upsert_policy_rule.await_args_list] == [
-            "web.c001.example-tcp-443",
-            "api.c001.example-tcp-443",
-        ]
-        # The stale cache is dropped once, and the first backend's index is kept for the second.
-        assert rule_indexes == {"pol-lb": {100, 101}}
-
-    def test_r_server_runs_after_every_vip_of_the_run(self) -> None:
-        gen = _vip_gen()
-        order: list[str] = []
-        gen.client.create.return_value.save = AsyncMock(side_effect=lambda **_kw: order.append("vip"))
-        gen._upsert_policy_rule = AsyncMock(side_effect=lambda **_kw: order.append("rule") or 100)
-
-        _reconcile(gen, [_web(), _second_backend()])
-
-        assert order == ["vip", "vip", "rule", "rule"]
-
-    def test_failed_r_server_is_logged_and_the_next_one_still_written(self) -> None:
-        gen = _vip_gen()
-        gen._upsert_policy_rule = AsyncMock(side_effect=[RuntimeError("index taken"), 101])
-
-        _reconcile(gen, [_web(ports=["tcp/443", "tcp/8443"])])
-
-        message = gen.logger.error.call_args.args[0]
-        assert "web.c001.example tcp/443 on dc10-lb-PROD" in message
-        assert "index taken" in message
-        assert gen._upsert_policy_rule.await_count == 2
-
-    def test_unwired_leg_is_an_error_and_writes_no_vip(self) -> None:
-        gen = _vip_gen()
-        context = _context(leg=None)
-
-        _vips, errors = _reconcile(gen, [_web(instances=[_instance("vm-1", context)])])
-
-        assert "no single leg prefix" in errors[0]
-        gen.client.create.assert_not_awaited()
-        gen._upsert_policy_rule.assert_not_awaited()
-
-    def test_microsegmented_backend_carries_its_component_tag(self) -> None:
+    def test_a_microsegmented_backend_carries_its_component_tag(self) -> None:
         segment = {**_segment("seg-web"), "isolation_mode": "microsegmented"}
         payload = RulesPlanner.build_lb_server_rule_payload(
-            policy_id="pol-lb",
             rule_name="web",
             context_name="dc10-lb-PROD",
             component={"fqdn": "web", "security_tag": {"id": "tag-web"}},
@@ -478,196 +413,118 @@ def _context_read(dep_id: str, *, linked: bool = True) -> dict[str, Any]:
     return {"TopologyCustomerDC": {"edges": [{"node": node}]}}
 
 
+def _awaiting() -> Any:
+    """A generator with nothing in flight and a client whose re-reads are set by the test."""
+    gen = make_app_generator()
+    gen.client.execute_graphql = AsyncMock(return_value={})
+    return gen
+
+
+def _await(gen: Any, components: list[dict[str, Any]], edges: list[Any] | None = None) -> AsyncMock:
+    """``await_lb_inputs`` with a recorded sleep between two re-reads."""
+    sleep = AsyncMock()
+    with patch("generators.applications.lb_vip.asyncio.sleep", sleep):
+        asyncio.run(await_lb_inputs(gen, components, edges or []))
+    return sleep
+
+
 def _reads(gen: Any) -> list[dict[str, Any]]:
     """The variables of every re-read query, in order."""
     return [call.kwargs["variables"] for call in gen.client.execute_graphql.await_args_list]
 
 
 class TestConcurrentInputs:
-    def test_segment_prefix_written_by_the_second_read_gets_the_members(self) -> None:
+    def test_a_segment_prefix_written_by_the_second_read_gets_the_members(self) -> None:
         """add_vxlan_segment addresses the segment while this run reads it: the second read sees the prefix."""
-        gen = _vip_gen()
+        gen = _awaiting()
         gen.client.execute_graphql = AsyncMock(
             side_effect=[_segment_read("seg-web", prefix=False), _segment_read("seg-web", prefix=True)]
         )
+        web = _web(segment=_segment("seg-web", prefix=False))
 
-        _vips, errors = _reconcile(gen, [_web(segment=_segment("seg-web", prefix=False))])
+        sleep = _await(gen, [web])
 
-        assert errors == []
         gen.wait_for_parent_generators.assert_awaited_once_with(("add_vxlan_segment",), "seg-web")
         assert _reads(gen) == [{"ids": ["seg-web"]}, {"ids": ["seg-web"]}]
-        gen.lb_reread_sleep.assert_awaited_once_with(LB_VIP_REREAD.delay)
-        assert _vip_payloads(gen)[0]["pool_members"] == ["vm-1", "vm-2"]
+        sleep.assert_awaited_once_with(LB_VIP_REREAD.delay)
+        plan, balancing = plan_lb([web])
+        assert balancing.errors == []
+        assert vip_data(plan)[0]["pool_members"] == ["vm-1", "vm-2"]
 
-    def test_segment_prefix_that_never_lands_is_the_error_after_the_last_read(self) -> None:
+    def test_a_segment_prefix_that_never_lands_is_the_error_after_the_last_read(self) -> None:
         """Bounded: LB_VIP_REREAD.attempts reads with a sleep between two, then the error the payload alone gave."""
-        gen = _vip_gen()
+        gen = _awaiting()
         gen.client.execute_graphql = AsyncMock(return_value=_segment_read("seg-web", prefix=False))
+        web = _web(segment=_segment("seg-web", prefix=False))
 
-        _vips, errors = _reconcile(gen, [_web(segment=_segment("seg-web", prefix=False))])
+        sleep = _await(gen, [web])
 
-        assert errors == ["web.c001.example: segment seg-web-name has no gateway prefix for the pool members"]
         assert gen.client.execute_graphql.await_count == LB_VIP_REREAD.attempts
-        assert gen.lb_reread_sleep.await_count == LB_VIP_REREAD.attempts - 1
-        gen.client.create.assert_not_awaited()
+        assert sleep.await_count == LB_VIP_REREAD.attempts - 1
+        assert "still missing" in gen.logger.warning.call_args.args[0]
+        _, balancing = plan_lb([web])
+        assert balancing.errors == ["web.c001.example: segment seg-web-name has no gateway prefix for the pool members"]
 
     def test_two_components_on_one_segment_share_one_read(self) -> None:
         """One wait and one read per attempt for the segment, written into both components' dicts."""
-        gen = _vip_gen()
+        gen = _awaiting()
         gen.client.execute_graphql = AsyncMock(return_value=_segment_read("seg-web", prefix=True))
-        api = {**_web(segment=_segment("seg-web", prefix=False)), "id": "comp-api", "fqdn": "api.c001.example"}
+        web = _web(segment=_segment("seg-web", prefix=False))
+        api: dict[str, Any] = {
+            **_web(segment=_segment("seg-web", prefix=False)),
+            "id": "comp-api",
+            "fqdn": "api.c001.example",
+        }
 
-        _vips, errors = _reconcile(gen, [_web(segment=_segment("seg-web", prefix=False)), api])
+        sleep = _await(gen, [web, api])
 
-        assert errors == []
         gen.wait_for_parent_generators.assert_awaited_once()
         assert _reads(gen) == [{"ids": ["seg-web"]}]
-        gen.lb_reread_sleep.assert_not_awaited()
-        assert {p["hostname"] for p in _vip_payloads(gen)} == {"web.c001.example", "api.c001.example"}
+        sleep.assert_not_awaited()
+        assert all(component.get("network_segment", {}).get("gateway") for component in (web, api))
 
     def test_ready_inputs_are_never_re_read(self) -> None:
         """The normal run: the payload has the prefix and the context, no extra round trip."""
-        gen = _vip_gen()
+        gen = _awaiting()
 
-        _vips, errors = _reconcile(gen, [_web()])
+        _await(gen, [_web()])
 
-        assert errors == []
         gen.wait_for_parent_generators.assert_not_awaited()
         gen.client.execute_graphql.assert_not_awaited()
 
-    def test_cloud_component_is_never_re_read(self) -> None:
-        """A cloud segment has no gateway prefix and a cloud instance no context: nothing to wait for."""
-        gen = _lb_gen()
-
-        _vips, errors = _reconcile(gen, [_cloud_frontend()])
-
-        assert errors == []
-        gen.wait_for_parent_generators.assert_not_awaited()
-        gen.client.execute_graphql.assert_not_awaited()
-        gen.lb_reread_sleep.assert_not_awaited()
-
-    def test_serving_context_linked_by_the_second_read_gets_the_vips(self) -> None:
+    def test_a_serving_context_linked_by_the_second_read_gets_the_vips(self) -> None:
         """add_customer_deployment_dc boards the deployment while this run reads it."""
-        gen = _vip_gen()
+        gen = _awaiting()
         gen.client.execute_graphql = AsyncMock(
             side_effect=[_context_read("dep-c001", linked=False), _context_read("dep-c001")]
         )
+        web = _web(instances=[_instance("vm-1", None), _instance("vm-2", None)])
 
-        vips, errors = _reconcile(gen, [_web(instances=[_instance("vm-1", None), _instance("vm-2", None)])])
+        _await(gen, [web])
 
-        assert errors == []
         gen.wait_for_parent_generators.assert_awaited_once_with(("add_customer_deployment_dc",), "dep-c001")
         assert _reads(gen) == [{"ids": ["dep-c001"]}, {"ids": ["dep-c001"]}]
-        assert vips == {"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "ip:comp-web-tcp-443-vip"}}}
-        gen._upsert_policy_rule.assert_awaited_once()
+        _, balancing = plan_lb([web])
+        assert balancing.errors == []
+        assert set(balancing.vips["comp-web"][("tcp", 443, None)]) == {"dc10-lb-PROD"}
 
-    def test_context_without_its_vip_range_yet_is_re_read(self) -> None:
+    def test_a_context_without_its_vip_range_yet_is_re_read(self) -> None:
         """The boarding run links the context before it allocates the VIP range and wires the leg."""
-        gen = _vip_gen()
+        gen = _awaiting()
         gen.client.execute_graphql = AsyncMock(return_value=_context_read("dep-c001"))
 
-        _vips, errors = _reconcile(gen, [_web(instances=[_instance("vm-1", _context(vip_prefix=None))])])
+        _await(gen, [_web(instances=[_instance("vm-1", _context(vip_prefix=None))])])
 
-        assert errors == []
         assert _reads(gen) == [{"ids": ["dep-c001"]}]
 
-    def test_context_of_an_edge_target_is_re_read_for_its_vip_addresses(self) -> None:
+    def test_the_context_of_an_edge_target_is_re_read_for_its_vip_addresses(self) -> None:
         """The target's VIPs are this run's R_client rules: its context is waited for too."""
-        gen = _vip_gen()
+        gen = _awaiting()
         gen.client.execute_graphql = AsyncMock(return_value=_context_read("dep-c001"))
         web = _web(instances=[_instance("vm-1", None)])
 
-        vips, errors = _reconcile(gen, [_client_comp(_dep(web))], edges=[({}, {}, web)])
+        _await(gen, [_client_comp(_dep(web))], [({}, {}, web)])
 
-        assert errors == []
-        assert vips == {"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "ip:comp-web-tcp-443-vip"}}}
-
-
-def _manager(peer_ids: list[str]) -> Any:
-    manager = MagicMock()
-    manager.peer_ids = list(peer_ids)
-    return manager
-
-
-def _existing_rule(*, vip_ids: list[str], destination_segment: str | None = None) -> Any:
-    rule = MagicMock()
-    rule.log.value = False
-    rule.apply_on_switch.value = False
-    for field, peer_id in (
-        ("destination_segment", destination_segment),
-        ("security_profile", None),
-        ("source_security_tag", None),
-        ("destination_security_tag", None),
-    ):
-        getattr(rule, field).initialized = peer_id is not None
-        getattr(rule, field).id = peer_id
-    rule.destination_ip_addresses = _manager(vip_ids)
-    return rule
-
-
-class TestSelectorReconciliation:
-    _CLIENT_RULE = {"log": False, "apply_on_switch": False}
-
-    def test_a_rule_without_its_selector_zone_gets_it(self) -> None:
-        """An R_client written before the zone was derived is given it, compared by HFID."""
-        rule = _existing_rule(vip_ids=["vip-a"])
-        rule.destination_zone.initialized = False
-        rule.source_zone.initialized = False
-        data = {
-            **self._CLIENT_RULE,
-            "destination_ip_addresses": [{"id": "vip-a"}],
-            "destination_zone": {"hfid": ["PROD"]},
-        }
-
-        assert SegmentFirewallMixin._reconcile_rule_payload(rule, data, keep_profile=False) == ["destination_zone"]
-        assert rule.destination_zone == {"hfid": ["PROD"]}
-
-    def test_a_selector_zone_in_the_desired_state_is_not_modified(self) -> None:
-        rule = _existing_rule(vip_ids=["vip-a"])
-        rule.destination_zone.initialized = True
-        rule.destination_zone.hfid = ["PROD"]
-        rule.source_zone.initialized = False
-        data = {
-            **self._CLIENT_RULE,
-            "destination_ip_addresses": [{"id": "vip-a"}],
-            "destination_zone": {"hfid": ["PROD"]},
-        }
-
-        assert SegmentFirewallMixin._reconcile_rule_payload(rule, data, keep_profile=False) == []
-
-    def test_stale_vip_set_is_brought_to_the_new_one(self) -> None:
-        rule = _existing_rule(vip_ids=["vip-old", "vip-a"])
-        data = {**self._CLIENT_RULE, "destination_ip_addresses": [{"id": "vip-a"}, {"id": "vip-b"}]}
-
-        changed = SegmentFirewallMixin._reconcile_rule_payload(rule, data, keep_profile=False)
-
-        assert changed == ["destination_ip_addresses"]
-        rule.destination_ip_addresses.remove.assert_called_once_with("vip-old")
-        rule.destination_ip_addresses.extend.assert_called_once_with(["vip-b"])
-
-    def test_vip_set_in_the_desired_state_is_not_modified(self) -> None:
-        rule = _existing_rule(vip_ids=["vip-a"])
-        data = {**self._CLIENT_RULE, "destination_ip_addresses": [{"id": "vip-a"}]}
-
-        assert SegmentFirewallMixin._reconcile_rule_payload(rule, data, keep_profile=False) == []
-        rule.destination_ip_addresses.extend.assert_not_called()
-
-    def test_rule_without_a_destination_segment_has_it_cleared(self) -> None:
-        """A rule that turned from A->B into R_client loses B's segment."""
-        rule = _existing_rule(vip_ids=["vip-a"], destination_segment="seg-web")
-        data = {**self._CLIENT_RULE, "destination_ip_addresses": [{"id": "vip-a"}]}
-
-        changed = SegmentFirewallMixin._reconcile_rule_payload(rule, data, keep_profile=False)
-
-        assert changed == ["destination_segment"]
-        assert rule.destination_segment is None
-
-    def test_destination_segment_follows_a_moved_target(self) -> None:
-        rule = _existing_rule(vip_ids=[], destination_segment="seg-old")
-        data = {**self._CLIENT_RULE, "destination_segment": {"id": "seg-new"}}
-
-        changed = SegmentFirewallMixin._reconcile_rule_payload(rule, data, keep_profile=False)
-
-        assert changed == ["destination_segment"]
-        assert rule.destination_segment == {"id": "seg-new"}
-        rule.destination_ip_addresses.extend.assert_not_called()
+        assert _reads(gen) == [{"ids": ["dep-c001"]}]
+        _, balancing = plan_lb([_client_comp(_dep(web))], [({}, {}, web)])
+        assert set(balancing.vips["comp-web"][("tcp", 443, None)]) == {"dc10-lb-PROD"}

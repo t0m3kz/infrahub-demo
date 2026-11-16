@@ -9,7 +9,7 @@ import pytest
 
 from generators.connectivity.circuit import CARRIER_CIRCUIT_GENERATOR
 from generators.connectivity.virtual_circuit import SessionEnd, VirtualCircuitSessionGenerator
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
 from tests.unit.simulators.circuit_fakes import (
     VC_ID,
     FakeClient,

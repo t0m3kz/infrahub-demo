@@ -16,7 +16,7 @@ from tests.unit.vrf_instances_helpers import raw_device, raw_footprint, raw_row
 from transforms.common import BaseDeviceTransform
 from transforms.config.leaf import Leaf
 from transforms.helpers.firewall import get_exchange_transits, get_leaf_firewall_transits
-from transforms.helpers.firewall_pbr import get_customer_pbr_rules
+from transforms.helpers.pbr import get_customer_pbr_rules
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import transit_vlan
 from utils.routing_domain import interface_vrf

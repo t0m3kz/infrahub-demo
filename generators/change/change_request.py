@@ -11,21 +11,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from generators.helpers.edges import add_edges, remove_edge
-from generators.mixins.common import CommonGenerator
+from generators.base import BaseGenerator
+from generators.plan import EdgesSpec, PruneEdgesSpec, TopologyPlan
 from utils.change_rules import (
     CHANGE_REQUEST_KIND,
     ChangeInputs,
     affected_customers,
     device_facts,
     effective_risk,
+    hardware_changes,
+    hosting_device_ids,
     parse_datetime,
     prod_objects,
 )
 from utils.change_sources import fetch_artifact_diff, fetch_data_diff
 from utils.change_text import derive_change_request, render_pc_comment
 from utils.data_cleaning import clean_data
-from utils.query_flatten import load_flat_query
 
 _QUERIES = Path(__file__).resolve().parents[2] / "queries" / "change"
 FACTS_QUERY = _QUERIES / "change_request_facts.gql"
@@ -71,7 +72,7 @@ def changed_fields(current: Mapping[str, Any], derived: Mapping[str, Any]) -> di
     return changes
 
 
-class ChangeRequestGenerator(CommonGenerator):
+class ChangeRequestGenerator(BaseGenerator):
     """add_change_request: the derived fields and the affected devices and customers of one change request."""
 
     async def generate(self, data: dict[str, Any]) -> None:
@@ -99,7 +100,14 @@ class ChangeRequestGenerator(CommonGenerator):
         artifacts = await fetch_artifact_diff(self.client, branch)
         diff = await fetch_data_diff(self.client, branch)
         facts = await self._facts(branch, sorted({a.target_id for a in artifacts if a.target_id}))
-        devices = [device_facts(row) for row in facts.get("DcimDeviceManaged") or []]
+        # The hardware a virtual target runs on is read too: it is what the change touches (its role, place and pair)
+        rows = facts.get("DcimDeviceManaged") or []
+        known = {row.get("id") for row in rows}
+        if hosts := sorted(hosting_device_ids(rows) - known):
+            rows = [*rows, *(await self._facts(branch, hosts)).get("DcimDeviceManaged", [])]
+        facts = {**facts, "DcimDeviceManaged": rows}
+        hardware_artifacts, hardware = hardware_changes(artifacts, rows)
+        devices = [device_facts(row) for row in hardware]
         customers = affected_customers(facts, diff.objects)
         derived = derive_change_request(
             ChangeInputs(
@@ -118,7 +126,8 @@ class ChangeRequestGenerator(CommonGenerator):
                 prod_objects=prod_objects(diff.objects),
                 conflicts=await self._conflicts(pc["id"], branch),
                 current_planned_start=parse_datetime(request.get("planned_start")),
-                rows=facts,
+                rows={**facts, "DcimDeviceManaged": hardware},
+                hardware_artifacts=hardware_artifacts,
             )
         )
         await self._write(request, derived, {d.id for d in devices}, set(customers))
@@ -160,13 +169,13 @@ class ChangeRequestGenerator(CommonGenerator):
         if not device_ids:
             return {}
         result = await self.client.execute_graphql(
-            query=load_flat_query(FACTS_QUERY), branch_name=branch, variables={"device_ids": device_ids}
+            query=FACTS_QUERY.read_text(), branch_name=branch, variables={"device_ids": device_ids}
         )
         return clean_data(result)
 
     async def _conflicts(self, pc_id: str, branch: str) -> dict[str, list[str]]:
         """``<pc name> (<branch>)`` -> the devices its request lists, for every other open proposed change."""
-        query = load_flat_query(PEERS_QUERY)
+        query = PEERS_QUERY.read_text()
         own = clean_data(await self.client.execute_graphql(query=query, branch_name=branch))
         found: dict[str, list[str]] = {}
         for other in own.get("CoreProposedChange") or []:
@@ -190,16 +199,27 @@ class ChangeRequestGenerator(CommonGenerator):
     async def _write(
         self, request: Mapping[str, Any], derived: Mapping[str, Any], device_ids: set[str], customer_ids: set[str]
     ) -> None:
-        """Write the changed fields (one mutation) and the changed edge peers (one add, removes one by one)."""
+        """Write the changed fields (one mutation) and the changed edge peers (an ``EdgesSpec`` add, a ``PruneEdgesSpec`` for the removes)."""
         changes = changed_fields(request, derived)
         if changes:
             await self.client.execute_graphql(
                 query=_UPDATE_MUTATION,
                 variables={"data": {"id": request["id"], **{name: {"value": v} for name, v in changes.items()}}},
             )
+        plan = TopologyPlan(root_id=request["id"])
         for relation, desired in (("affected_devices", device_ids), ("affected_customers", customer_ids)):
             current = _ids(request.get(relation))
             if missing := sorted(desired - current):
-                await add_edges(self.client, node_id=request["id"], relation=relation, peer_ids=missing)
-            for stale in sorted(current - desired):
-                await remove_edge(self.client, node_id=request["id"], relation=relation, peer_id=stale)
+                plan.add(EdgesSpec(request["id"], relation, tuple(missing)))
+            if current - desired:
+                plan.add(
+                    PruneEdgesSpec(
+                        CHANGE_REQUEST_KIND,
+                        request["id"],
+                        relation,
+                        keep_peer_ids=frozenset(desired),
+                        known_peer_ids=frozenset(current),
+                    )
+                )
+        if plan.specs:
+            await self.apply_plan(plan)

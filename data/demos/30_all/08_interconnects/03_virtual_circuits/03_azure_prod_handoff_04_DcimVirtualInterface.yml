@@ -1,0 +1,21 @@
+# Our side: the sub-interface of the cage port that carries the virtual connection, with our end of the /31.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/13.1100"
+      device: "eg-pa401"
+      role: cloud
+      status: active
+      description: "PROD handoff to the Azure ExpressRoute private peering (the westeurope hub's link)"
+      parent: ["eg-pa401", "Ethernet1/13"]
+      vlan_id: 1100
+      capabilities:
+        # Its VRF instance, authored like the AWS handoff's (add_virtual_circuit builds nothing for a cloud end).
+        - kind: ManagedVRF
+          data: {name: "pa-vrf-prod", deployment: PA, security_zone: "PROD"}
+      ip_address:
+        data:
+          address: "10.255.143.252/31"
+          ip_namespace: "default"

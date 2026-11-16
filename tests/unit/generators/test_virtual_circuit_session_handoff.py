@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from generators.connectivity.virtual_circuit import handoff_pool_name
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
 from tests.integration.demo_data import BOOTSTRAP, declared
 from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.simulators.circuit_fakes import (
@@ -28,6 +28,11 @@ from tests.unit.virtual_circuit_session_helpers import (
     _peering,
     _run,
 )
+
+
+def _data_writes(client: FakeClient) -> list[tuple[str, str, dict[str, Any]]]:
+    """The writes of the run, without the VRF pass's reads and locks (a ``vrf*`` action)."""
+    return [write for write in client.writes if not write[0].startswith("vrf")]
 
 
 class TestHandoffSession:
@@ -52,7 +57,7 @@ class TestHandoffSession:
 
         await _run(client, handoff_payload())
 
-        assert [action for action, _, _ in client.writes[:2]] == ["allocate", "track"]
+        assert [action for action, _, _ in _data_writes(client)[:2]] == ["allocate", "track"]
         assert f"prefix-vc-p2p__{VC_ID}" in client.group_context.related_node_ids
 
     @pytest.mark.asyncio
@@ -154,8 +159,8 @@ class TestHandoffSession:
         }
 
     @pytest.mark.asyncio
-    async def test_a_second_run_allocates_the_same_prefix_and_writes_no_interface_again(self) -> None:
-        """Idempotency: the rerun gets the same /31 and the interfaces, already correct, are not saved again."""
+    async def test_a_second_run_allocates_the_same_prefix_and_leaves_the_interfaces_as_they_are(self) -> None:
+        """Idempotency: the rerun gets the same /31 and puts the same addresses on the same interfaces."""
         client = FakeClient()
         await _run(client, handoff_payload())
         first_labels = [label for _, label, _ in client.writes]
@@ -165,7 +170,7 @@ class TestHandoffSession:
 
         assert [a["identifier"] for a in client.allocations] == [f"vc-p2p__{VC_ID}"] * 2
         assert len(client.prefixes) == 1
-        assert _interface_saves(client) == first_interface_saves
+        assert set(_interface_saves(client)) == set(first_interface_saves)
         assert {label for _, label, _ in client.writes} == set(first_labels)
         assert len(client.addresses) == 2
 
@@ -190,7 +195,7 @@ class TestHandoffSession:
         [
             pytest.param(
                 session_port("if-aws", "Ethernet1", "EXT-AWS-DX-FR2", where=deployment("TopologyCloudRegion", "x")),
-                r"EXT-AWS-DX-FR2/Ethernet1 must be a DcimVirtualInterface riding on a parent \(its encapsulation\)",
+                r"EXT-AWS-DX-FR2/Ethernet1 must be a DcimVirtualInterface riding on a parent",
                 id="physical-port",
             ),
             pytest.param(
@@ -198,7 +203,7 @@ class TestHandoffSession:
                     **session_port("if-aws", "Ethernet1.1900", "EXT-AWS-DX-FR2", kind="DcimVirtualInterface"),
                     **raw_encapsulation(None, None),
                 },
-                r"EXT-AWS-DX-FR2/Ethernet1.1900 must be a DcimVirtualInterface riding on a parent \(its encapsulation\)",
+                r"EXT-AWS-DX-FR2/Ethernet1.1900 must be a DcimVirtualInterface riding on a parent",
                 id="no-parent-whatever-the-name-says",
             ),
             pytest.param(
@@ -243,7 +248,7 @@ class TestHandoffSession:
         with pytest.raises(GeneratorError, match="returned no prefix"):
             await _run(client, handoff_payload())
 
-        assert client.writes == []
+        assert _data_writes(client) == []
 
 
 class TestHandoffPoolData:

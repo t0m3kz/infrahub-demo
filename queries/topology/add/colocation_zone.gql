@@ -1,5 +1,3 @@
-# The kit a colocation zone (cage) declares on its physical racks (fabric_templates or pre-created devices),
-# turned into devices by generators/colocation/colocation_fabric.py.
 query topology_colocation_zone($name: String!) {
   TopologyColocationZone(name__value: $name) {
     edges {
@@ -72,145 +70,50 @@ query topology_colocation_zone($name: String!) {
             }
           }
         }
-        racks {
+        fabric_templates {
           edges {
             node {
-              id
-              name {
-                value
-              }
-              index {
-                value
-              }
-              rack_type {
-                value
-              }
-              fabric_templates {
-                edges {
-                  node {
-                    role {
-                      value
-                    }
-                    quantity {
-                      value
-                    }
-                    template {
-                      node {
-                        id
-                        template_kind: __typename
-                        ... on TemplateDcimPhysicalDevice {
-                          platform {
-                            node {
-                              id
-                              name {
-                                value
-                              }
-                            }
-                          }
-                          device_type {
-                            node {
-                              id
-                            }
-                          }
-                          interfaces {
-                            edges {
-                              node {
-                                name {
-                                  value
-                                }
-                                role {
-                                  value
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              devices {
-                edges {
-                  node {
-                    id
-                    name {
-                      value
-                    }
-                    role {
-                      value
-                    }
-                    ... on DcimPhysicalDevice {
-                      object_template {
-                        node {
-                          ... on TemplateDcimPhysicalDevice {
-                            interfaces {
-                              edges {
-                                node {
-                                  name { value }
-                                  role { value }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                    ... on DcimPhysicalDevice {
-                      interfaces {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                            role {
-                              value
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        devices {
-          edges {
-            node {
-              id
-              name {
-                value
-              }
               role {
                 value
               }
-              ... on DcimPhysicalDevice {
-                object_template {
-                        node {
-                          ... on TemplateDcimPhysicalDevice {
-                            interfaces {
-                              edges {
-                                node {
-                                  name { value }
-                                  role { value }
-                                }
-                              }
+              quantity {
+                value
+              }
+              template {
+                node {
+                  id
+                  template_kind: __typename
+                  ... on TemplateDcimPhysicalDevice {
+                    platform {
+                      node {
+                        id
+                        name {
+                          value
+                        }
+                        os_capabilities {
+                          node {
+                            config_dialect {
+                              value
                             }
                           }
                         }
                       }
-              }
-              ... on DcimPhysicalDevice {
-                interfaces {
-                  edges {
-                    node {
-                      name {
-                        value
+                    }
+                    device_type {
+                      node {
+                        id
                       }
-                      role {
-                        value
+                    }
+                    interfaces {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                        }
                       }
                     }
                   }

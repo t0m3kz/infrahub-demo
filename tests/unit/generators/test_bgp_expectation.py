@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from generators.mixins import fabric_sizing
+from generators.model import sizing as fabric_sizing
 from utils.bgp_expectation import (
     DCI,
     DCI_UNDERLAY,
@@ -223,7 +223,7 @@ class TestUnderlay:
 
 
 class TestSizing:
-    """Max-prefix comes from the model, sized by generators/fabric_sizing.py."""
+    """Max-prefix comes from the model, sized by generators/model/sizing.py."""
 
     @staticmethod
     def _dc(super_spines: int) -> dict[str, object]:

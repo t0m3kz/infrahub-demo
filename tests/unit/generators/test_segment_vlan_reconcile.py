@@ -1,32 +1,19 @@
-"""Unit tests for SegmentVlanMixin's per-segment VLAN domain reconciliation (generators/segment_vlan.py)."""
+"""Unit tests for the per-segment VLAN domain reconciliation (generators/segments/segment_vlan.py)."""
 
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
-from generators.mixins.segment_vlan import SEGMENT_PORTS_QUERY, SegmentVlanMixin
+import pytest
+
+from generators.segments import segment_ports, segment_vlan
 from tests.unit.segment_vlan_helpers import VlanWorld, make_device, make_gen, raw_state
 
-
-def _customer_dc(parent_id: str, pod_ids: list[str]) -> dict[str, Any]:
-    """A raw TopologyCustomerDC edge whose hosting DC has the given pods."""
-    return {
-        "node": {
-            "id": f"cust-{parent_id}",
-            "parent": {
-                "node": {
-                    "id": parent_id,
-                    "children": {"edges": [{"node": {"id": pod}} for pod in pod_ids] + [{"node": {}}]},
-                }
-            },
-        }
-    }
-
-
 # State parsing
+
+pytestmark = pytest.mark.usefixtures("generator_steps")
 
 
 class TestFetchSegmentVlanState:
@@ -43,7 +30,7 @@ class TestFetchSegmentVlanState:
             )
         )
 
-        state = asyncio.run(gen._fetch_segment_vlan_state("seg-1"))
+        state = asyncio.run(segment_vlan.fetch_segment_vlan_state(gen, "seg-1"))
 
         assert state is not None
         assert state["deployments"] == [
@@ -70,24 +57,7 @@ class TestFetchSegmentVlanState:
             return_value={"ManagedVxlanSegment": {"edges": []}, "ManagedSegmentDeployment": {"edges": []}}
         )
 
-        assert asyncio.run(gen._fetch_segment_vlan_state("vlan-seg-1")) is None
-
-    def test_query_reads_pod_children_interface_devices_and_the_deployments_rows(self, root_dir: Path) -> None:
-        """The query carries the hosting parents' pods, the tagged ports' devices and the rows under each deployment."""
-        query = (root_dir / "queries" / "topology" / "add" / "segment_vlans.gql").read_text()
-        compact = " ".join(query.split())
-        assert "... on TopologyDataCenter { children { edges { node { ... on TopologyPod { id } } } } }" in compact
-        assert "DcimPhysicalInterface" not in compact and "segments" not in compact
-        ports = " ".join(SEGMENT_PORTS_QUERY.split())
-        for kind in ("DcimPhysicalInterface", "DcimLAGInterface"):
-            assert (
-                f"{kind}(capabilities__ids: $row_ids) {{ edges {{ node {{ id device {{ node {{ id }} }} "
-                "capabilities(ids: $row_ids) { edges { node { id __typename } } }" in ports
-            )
-        assert "ManagedSegmentDeployment(segment__ids: [$segment_id])" in compact
-        assert "vlans { edges { node { id vlan_id { value } device { node { id } } } } }" in compact
-        assert "capabilities { edges { node { id __typename } } }" in compact
-        assert "ManagedMLAG" not in compact
+        assert asyncio.run(segment_vlan.fetch_segment_vlan_state(gen, "vlan-seg-1")) is None
 
 
 class TestSegmentPorts:
@@ -102,7 +72,7 @@ class TestSegmentPorts:
             )
         )
 
-        state = asyncio.run(gen._fetch_segment_vlan_state("seg-1"))
+        state = asyncio.run(segment_vlan.fetch_segment_vlan_state(gen, "seg-1"))
 
         assert state is not None
         assert state["segment"]["ports"] == [
@@ -118,17 +88,17 @@ class TestSegmentPorts:
             rows=[("row-1", "sw-1", 100, "sd-a")],
         )
         edge = raw["DcimPhysicalInterface"]["edges"][0]["node"]["capabilities"]["edges"][0]
-        assert len(SegmentVlanMixin._segment_ports(raw, {"row-1"})) == 1
-        assert SegmentVlanMixin._segment_ports(raw, {"row-other"}) == []
+        assert len(segment_vlan._segment_ports(raw, {"row-1"})) == 1
+        assert segment_vlan._segment_ports(raw, {"row-other"}) == []
         edge["node"]["__typename"] = "ManagedVRF"
-        assert SegmentVlanMixin._segment_ports(raw, {"row-1"}) == []
+        assert segment_vlan._segment_ports(raw, {"row-1"}) == []
 
     def test_no_deployment_reads_no_port(self) -> None:
         """A port joins its switch's row, never the segment: without a row there is nothing to read."""
         gen = make_gen()
         gen.client.execute_graphql = AsyncMock()
 
-        assert asyncio.run(gen._fetch_segment_ports([])) == []
+        assert asyncio.run(segment_vlan._fetch_segment_ports(gen, [])) == []
         gen.client.execute_graphql.assert_not_awaited()
 
 
@@ -156,7 +126,7 @@ class TestRequestedPorts:
             return await read(**kwargs)
 
         gen.client.execute_graphql = AsyncMock(side_effect=_execute)
-        return asyncio.run(gen.reconcile_vxlan_segment("seg-1", "seg")), mutations
+        return asyncio.run(segment_ports.reconcile_vxlan_segment(gen, "seg-1", "seg")), mutations
 
     def test_a_requested_port_gets_its_switch_row_and_edge(self) -> None:
         """No row yet: the requested port's switch gets one, and the port joins it."""

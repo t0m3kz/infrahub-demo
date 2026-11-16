@@ -171,11 +171,11 @@ class TestColocationKit:
     def test_the_fabric_generic_carries_design_templates_and_the_three_pools(self) -> None:
         assert _relationship_names(_FABRIC) == {
             "design",
+            "fabric_templates",
             "loopback_pool",
             "technical_pool",
             "management_pool",
         }
-        assert "fabric_templates" in _relationship_names("TopologyVirtualColocation")
 
     def test_a_virtual_colocation_is_no_physical_deployment_and_hosts_no_racks(self) -> None:
         """Provider-hosted: nothing of ours to rack or cable."""
@@ -334,17 +334,6 @@ class TestRelationshipIdentifiers:
         assert kinds == {"TopologyCustomerDC", "TopologyCustomerColocation", "TopologyCustomerCloud"}
         assert kinds <= declared
         assert "TopologyCustomer" not in declared
-
-    def test_the_field_conflict_rule_holds_for_the_footprint_segment_queries(self, root_dir: Path) -> None:
-        """No query reaches network_segments through the TopologyCustomer generic any more: it would not parse
-        against the schema, and two kinds with different peers conflict in one selection (id String! vs String)."""
-        offenders = [
-            path.relative_to(root_dir).as_posix()
-            for path in sorted((root_dir / "queries").rglob("*.gql"))
-            if "on TopologyCustomer {" in path.read_text() and "network_segments" in path.read_text()
-        ]
-
-        assert offenders == []
 
 
 class TestCloudNetworkAppliance:

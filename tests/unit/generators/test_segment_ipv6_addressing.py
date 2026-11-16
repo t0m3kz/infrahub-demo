@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from generators.mixins.logger import GeneratorError
+from generators.model.errors import GeneratorError
 from tests.unit.segment_customer_pool_helpers import Client, customer_pool, footprint, make_gen, segment_data
 
 _POOL = "c005-p-dc-ipv6"

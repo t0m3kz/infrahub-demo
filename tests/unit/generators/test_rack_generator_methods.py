@@ -1,97 +1,24 @@
 from __future__ import annotations
 
-from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.fabric.rack import RackGenerator, TopologyRackData
-from generators.mixins.pools import PoolMixin
+from generators.dc.rack_plan import RowLeafs
+from generators.dcim.cabling_plan import PortFacts
+from generators.dcim.template_interfaces import TemplatePort
+from generators.plan import NodeSpec, TopologyPlan
+from tests.unit.rack_generator_helpers import build_rack_generator, rack_reads
 from tests.unit.simulators.fabric_designs import pod_design
 
 
-def test_rack_generator_mixes_in_pool_mixin() -> None:
-    """create_devices()'s MLAG-pairing path"""
-    assert issubclass(RackGenerator, PoolMixin)
-
-
-def _build_gen() -> Any:
-    parent = {
-        "id": "dc-1",
-        "name": "DC1",
-        "index": 1,
-        "naming_convention": "standard",
-        "management_pool": {"id": "mgmt-pool", "name": "mgmt"},
-    }
-    pod = {
-        "id": "pod-1",
-        "name": "pod-1",
-        "index": 1,
-        "parent": parent,
-        "leaf_interface_sorting_method": "top_down",
-        "spine_interface_sorting_method": "bottom_up",
-        "loopback_pool": {"id": "lo-pool", "name": "lo"},
-        "prefix_pool": {"id": "p2p-pool", "name": "p2p"},
-        "design": pod_design("S_MIXED"),
-        "fabric_templates": [
-            {
-                "role": "spine",
-                "quantity": 2,
-                "template": {"id": "tmpl-spine", "interfaces": [{"name": "Eth1/10"}, {"name": "Eth1/11"}]},
-            }
-        ],
-    }
-    suite = {"index": 1}
-    leaf_t = {"id": "tmpl-leaf", "interfaces": [{"name": "Eth1/1"}, {"name": "Eth1/2"}]}
-    tor_t = {"id": "tmpl-tor", "interfaces": [{"name": "Eth1/47", "role": "uplink"}]}
-
-    rack = {
-        "id": "rack-1",
-        "name": "RACK-1",
-        "index": 2,
-        "rack_type": "network",
-        "row_index": 1,
-        "parent": suite,
-        "deployment": pod,
-        "leafs": [{"role": "leaf", "quantity": 2, "template": leaf_t}],
-        "tors": [{"role": "tor", "quantity": 1, "template": tor_t}],
-        "l2_leafs": [],
-        "access_leafs": [],
-    }
-
-    gen = RackGenerator.__new__(RackGenerator)
-    gen.data = cast(TopologyRackData, rack)
-    gen.logger = MagicMock()
-    gen.client = MagicMock()
-    gen.client.group_context = MagicMock()
-    gen.client.group_context.related_node_ids = []
-
-    gen.fabric_name = "dc1"
-    gen._naming_conv = "standard"
-    gen._device_indexes = [1, 1, 1, 1, 2]
-    gen._loopback_pool_id = "lo-pool"
-    gen._management_pool_id = "mgmt-pool"
-    gen._loopback_prefix_length = 32
-    gen._spine_device_names = ["dc1-pod1-spine-01", "dc1-pod1-spine-02"]
-    gen._spine_interfaces = ["Eth1/10", "Eth1/11"]
-    gen._technical_pool_id = "p2p-pool"
-    gen._p2p_prefix_length = 31
-    gen._routing_options = {"design": object()}
-    gen._created_device_names = set()
-    gen._leaf_row_cache = None
-
-    return gen
-
-
 class TestRackGeneratorMethods:
-    def test_has_role_template_helpers(self) -> None:
-        gen = _build_gen()
-        assert gen._has_role_templates([]) is False
-        assert gen._has_role_templates(gen.data["leafs"]) is True
+    def test_present_roles_lists_the_positive_quantity_roles(self) -> None:
+        gen = build_rack_generator()
         assert gen._present_roles() == {"leaf", "tor"}
 
     def test_planned_previous_row_rack_slots_uses_design_capacity(self) -> None:
-        gen = _build_gen()
+        gen = build_rack_generator()
 
         gen.data["row_index"] = 3
         # 8 compute + 1 network rack positions per row: a mixed row numbers both.
@@ -107,7 +34,7 @@ class TestRackGeneratorMethods:
         assert gen._planned_previous_row_rack_slots() == 0
 
     def test_validate_profile_capacity_limits_accepts_valid_network_rack(self) -> None:
-        gen = _build_gen()
+        gen = build_rack_generator()
         gen.data["deployment"]["design"] = pod_design("S_MIXED")
         gen.data["rack_type"] = "network"
         gen.data["row_index"] = 1
@@ -121,7 +48,7 @@ class TestRackGeneratorMethods:
         assert errors == []
 
     def test_validate_profile_capacity_limits_rejects_excess_tors_per_compute_rack(self) -> None:
-        gen = _build_gen()
+        gen = build_rack_generator()
         gen.data["deployment"]["design"] = pod_design("S_MIXED")  # max_tors_per_compute_rack = 2
         gen.data["rack_type"] = "compute"
         gen.data["tors"] = [
@@ -133,7 +60,7 @@ class TestRackGeneratorMethods:
         assert any("max_tors_per_compute_rack" in err for err in errors)
 
     def test_validate_profile_capacity_limits_rejects_row_overflow(self) -> None:
-        gen = _build_gen()
+        gen = build_rack_generator()
         gen.data["deployment"]["design"] = pod_design("S_MIXED")  # rows = 2
         gen.data["row_index"] = 3
 
@@ -143,25 +70,26 @@ class TestRackGeneratorMethods:
 
     @pytest.mark.asyncio
     async def test_get_leaf_devices_in_row_success(self) -> None:
-        gen = _build_gen()
+        gen = build_rack_generator()
         rack_obj = MagicMock(id="rack-a")
         leaf_dev = MagicMock()
         leaf_dev.name = MagicMock(value="leaf-01")
         leaf_if = MagicMock()
         leaf_if.name = MagicMock(value="Eth1/1")
+        leaf_if.device.peer.name.value = "leaf-01"
+        leaf_if.interface_type.value = "10gbase-x-sfpp"
 
         gen.client.filters = AsyncMock(side_effect=[[rack_obj], [leaf_dev], [leaf_if]])
 
-        devices, interfaces = await gen._get_leaf_devices_in_row("pod-1", 1)
+        row = await gen._read_row_leafs("pod-1", 1)
 
-        assert devices == ["leaf-01"]
-        assert interfaces == ["Eth1/1"]
+        assert row == RowLeafs(["leaf-01"], [PortFacts("leaf-01", "Eth1/1", "10gbase-x-sfpp")])
 
     @pytest.mark.asyncio
     async def test_get_leaf_devices_in_row_takes_the_racks_from_the_pod_payload(self) -> None:
         """With the row's network rack in the pod projection the racks are not read at all,
         not even once per retry attempt: only the devices and their interfaces are."""
-        gen = _build_gen()
+        gen = build_rack_generator()
         gen.data["deployment"]["racks"] = [
             {"id": "rack-net", "name": "NET", "index": 1, "row_index": 1, "rack_type": "network"},
             {"id": "rack-c1", "name": "C1", "index": 2, "row_index": 1, "rack_type": "compute"},
@@ -171,11 +99,13 @@ class TestRackGeneratorMethods:
         leaf_dev.name = MagicMock(value="leaf-01")
         leaf_if = MagicMock()
         leaf_if.name = MagicMock(value="Eth1/1")
+        leaf_if.device.peer.name.value = "leaf-01"
+        leaf_if.interface_type.value = "10gbase-x-sfpp"
         gen.client.filters = AsyncMock(side_effect=[[leaf_dev], [leaf_if]])
 
-        devices, interfaces = await gen._get_leaf_devices_in_row("pod-1", 1)
+        row = await gen._read_row_leafs("pod-1", 1)
 
-        assert (devices, interfaces) == (["leaf-01"], ["Eth1/1"])
+        assert (row.names, [port.port_name for port in row.downlinks]) == (["leaf-01"], ["Eth1/1"])
         assert gen.client.filters.await_args_list[0].kwargs["rack__ids"] == ["rack-net", "rack-c1"]
         assert gen.client.filters.await_count == 2
 
@@ -185,7 +115,7 @@ class TestRackGeneratorMethods:
     ) -> None:
         """The row's network rack missing from the payload (created in the same load, after the
         query ran) is the race the retry loop waits out: the racks are re-read per attempt."""
-        gen = _build_gen()
+        gen = build_rack_generator()
         gen.data["deployment"]["racks"] = [
             {"id": "rack-c1", "name": "C1", "index": 2, "row_index": 1, "rack_type": "compute"}
         ]
@@ -193,6 +123,8 @@ class TestRackGeneratorMethods:
         leaf_dev.name = MagicMock(value="leaf-01")
         leaf_if = MagicMock()
         leaf_if.name = MagicMock(value="Eth1/1")
+        leaf_if.device.peer.name.value = "leaf-01"
+        leaf_if.interface_type.value = "10gbase-x-sfpp"
         gen.client.filters = AsyncMock(
             side_effect=[
                 [MagicMock(id="rack-c1")],
@@ -202,22 +134,22 @@ class TestRackGeneratorMethods:
                 [leaf_if],
             ]
         )
-        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.dc.rack.asyncio.sleep", AsyncMock())
 
-        devices, interfaces = await gen._get_leaf_devices_in_row("pod-1", 1)
+        row = await gen._read_row_leafs("pod-1", 1)
 
-        assert (devices, interfaces) == (["leaf-01"], ["Eth1/1"])
+        assert (row.names, [port.port_name for port in row.downlinks]) == (["leaf-01"], ["Eth1/1"])
         assert gen.client.filters.await_args_list[3].kwargs["rack__ids"] == ["rack-c1", "rack-net"]
 
     @pytest.mark.asyncio
     async def test_get_leaf_devices_in_row_no_racks_logs_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # The mocked logger does not raise as the real one does, so only the first call is asserted. Nothing appears
         # across every retry attempt: the error fires after retries are exhausted.
-        gen = _build_gen()
+        gen = build_rack_generator()
         gen.client.filters = AsyncMock(return_value=[])
-        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.dc.rack.asyncio.sleep", AsyncMock())
 
-        await gen._get_leaf_devices_in_row("pod-1", 1)
+        await gen._read_row_leafs("pod-1", 1)
 
         first_call_message = gen.logger.error.call_args_list[0].args[0]
         assert "no racks" in first_call_message.lower()
@@ -225,112 +157,105 @@ class TestRackGeneratorMethods:
     @pytest.mark.asyncio
     async def test_get_leaf_devices_in_row_recovers_after_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Nothing found on the first attempt, everything present on the second — no error."""
-        gen = _build_gen()
+        gen = build_rack_generator()
         rack_obj = MagicMock(id="rack-a")
         leaf_dev = MagicMock()
         leaf_dev.name = MagicMock(value="leaf-01")
         leaf_if = MagicMock()
         leaf_if.name = MagicMock(value="Eth1/1")
+        leaf_if.device.peer.name.value = "leaf-01"
+        leaf_if.interface_type.value = "10gbase-x-sfpp"
 
         gen.client.filters = AsyncMock(side_effect=[[], [], [rack_obj], [leaf_dev], [leaf_if]])
         sleep_mock = AsyncMock()
-        monkeypatch.setattr("generators.mixins.rack.asyncio.sleep", sleep_mock)
+        monkeypatch.setattr("generators.dc.rack.asyncio.sleep", sleep_mock)
 
-        devices, interfaces = await gen._get_leaf_devices_in_row("pod-1", 1)
+        row = await gen._read_row_leafs("pod-1", 1)
 
-        assert devices == ["leaf-01"]
-        assert interfaces == ["Eth1/1"]
+        assert row == RowLeafs(["leaf-01"], [PortFacts("leaf-01", "Eth1/1", "10gbase-x-sfpp")])
         sleep_mock.assert_awaited_once()
         gen.logger.error.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_resolve_local_leaf_target_with_created_leafs(self) -> None:
-        gen = _build_gen()
-        iface = MagicMock()
-        iface.name = MagicMock(value="Eth1/1")
-        gen.client.filters = AsyncMock(return_value=[iface])
+    def test_the_local_leaf_target_is_the_downlinks_of_the_leafs_of_this_plan(self) -> None:
+        gen = build_rack_generator()
+        gen._leaf_ports = {
+            "leaf-01": [TemplatePort("Eth1/1", "downlink", "10gbase-x-sfpp"), TemplatePort("Eth1/2", "uplink", None)]
+        }
 
-        target = await gen._resolve_local_leaf_cabling_target(
-            created_leaf_devices=["leaf-01"],
-            leaf_row_cache=None,
-            devices_per_rack=2,
-            role_label="l2-leaf",
-        )
+        target = gen._local_leaf_target(rack_reads(), ["leaf-01"], 2, "l2-leaf")
 
         assert target is not None
-        devs, ifaces, offset, strategy = target
-        assert devs == ["leaf-01"]
-        assert ifaces == ["Eth1/1"]
-        assert offset == 0
-        assert strategy == "intra_rack_middle"
+        ports, leafs, offset, strategy = target
+        assert [(port.device_name, port.port_name) for port in ports] == [("leaf-01", "Eth1/1")]
+        assert (leafs, offset, strategy) == (["leaf-01"], 0, "intra_rack_middle")
 
-    @pytest.mark.asyncio
-    async def test_cable_and_route_with_and_without_design(self) -> None:
-        gen = _build_gen()
-        gen.create_cabling = AsyncMock(return_value=[("a", "b")])
-        gen.create_routing = AsyncMock()
+    def test_leafs_without_a_downlink_are_a_problem_raised_before_any_write(self) -> None:
+        gen = build_rack_generator()
+        gen._leaf_ports = {"leaf-01": [TemplatePort("Eth1/2", "uplink", None)]}
 
-        await gen._cable_and_route(
-            bottom_devices=["leaf-01"],
-            bottom_interfaces=["Eth1/1"],
-            top_devices=["spine-01"],
-            top_interfaces=["Eth1/10"],
-            strategy="rack",
-            offset=0,
-            bottom_role="leaf",
-            top_role="spine",
-        )
-        gen.create_routing.assert_awaited_once()
+        assert gen._local_leaf_target(rack_reads(), ["leaf-01"], 2, "l2-leaf") is None
+        assert gen._problems == ["No downlink interfaces on leafs — cannot cable l2-leafs."]
 
-        gen._routing_options = {}
-        gen.create_routing = AsyncMock()
-        await gen._cable_and_route(
-            bottom_devices=["leaf-01"],
-            bottom_interfaces=["Eth1/1"],
-            top_devices=["spine-01"],
-            top_interfaces=["Eth1/10"],
-            strategy="rack",
-            offset=0,
-            bottom_role="leaf",
-            top_role="spine",
-        )
-        gen.create_routing.assert_not_awaited()
+    def test_a_compute_rack_cables_to_the_leafs_of_its_row_from_its_own_slot(self) -> None:
+        gen = build_rack_generator()
+        gen.data["index"] = 3
+        row = RowLeafs(["leaf-a", "leaf-b"], [PortFacts("leaf-a", "Eth1/1", None)])
 
-    @pytest.mark.asyncio
-    async def test_generate_leafs_success_and_duplicate_skip(self) -> None:
-        gen = _build_gen()
-        gen.create_devices = AsyncMock(return_value=["leaf-a", "leaf-b"])
-        gen._cable_and_route = AsyncMock()
-        gen.calculate_cabling_offsets = MagicMock(return_value=3)
+        target = gen._local_leaf_target(rack_reads(row_leafs=row), [], 2, "access-leaf")
+
+        assert target is not None
+        ports, leafs, offset, strategy = target
+        assert (ports, leafs, offset, strategy) == (row.downlinks, ["leaf-a", "leaf-b"], 4, "intra_rack_mixed")
+
+    def test_a_compute_rack_without_row_leafs_has_a_problem(self) -> None:
+        gen = build_rack_generator()
+
+        assert gen._local_leaf_target(rack_reads(), [], 2, "access-leaf") is None
+        assert "No middle-rack leafs in row 1" in gen._problems[0]
+
+    def test_plan_leafs_plans_the_devices_and_skips_a_duplicate_template(self) -> None:
+        gen = build_rack_generator()
+        gen.calculate_cabling_offsets = MagicMock(return_value=0)
+        plan = TopologyPlan(root_id="rack-1")
 
         created: list[str] = []
-        await gen._generate_leafs(created)
+        gen._plan_leafs(plan, rack_reads(), created)
 
-        assert created == ["leaf-a", "leaf-b"]
-        gen._cable_and_route.assert_awaited_once()
+        devices = [spec for spec in plan.of(NodeSpec) if spec.kind == "DcimPhysicalDevice"]
+        assert created == [spec.data["name"] for spec in devices] and len(created) == 2
+        # The pod's mlag_create and the rack reach the device; the pod's sorting reaches the pairing
+        assert gen._mlag_groups == []
+        assert {spec.data["rack"]["id"] for spec in devices} == {"rack-1"}
+        (layer,) = gen._layers
+        assert layer.bottom_devices == tuple(created) and layer.top_role == "spine"
+        assert len(layer.links) == 4
+        # The pod sorts the leaf ports top-down: the first leaf's first link leaves its Eth1/2
+        assert layer.links[0].bottom.port_name == "Eth1/2"
 
-        # second pass should skip as duplicate
-        await gen._generate_leafs(created)
+        # second pass finds its names already created this run and plans nothing more
+        before = len(plan.specs)
+        gen._plan_leafs(plan, rack_reads(), created)
+        assert len(plan.specs) == before
 
     # The "no spine devices" guard moved to _derive_spine_info(); see TestDeriveSpineInfo.
 
-    @pytest.mark.asyncio
-    async def test_generate_tors_uses_planned_slots_without_live_sibling_query(self) -> None:
-        gen = _build_gen()
+    def test_plan_tors_uses_planned_slots_without_live_sibling_query(self) -> None:
+        gen = build_rack_generator()
         gen.data["row_index"] = 2
         gen.data["deployment"]["design"] = pod_design("S_MIXED")  # 8 compute + 1 network rack positions per row
         gen._spine_device_names = ["spine-01"]
 
         gen.client.filters = AsyncMock(side_effect=AssertionError("live sibling query should not be used"))
-        gen.calculate_cabling_offsets = MagicMock(return_value=123)
-        gen._generate_spine_attached_role = AsyncMock()
+        gen.calculate_cabling_offsets = MagicMock(return_value=0)
+        plan = TopologyPlan(root_id="rack-1")
 
-        await gen._generate_tors()
+        gen._plan_tors(plan, rack_reads())
 
         gen.calculate_cabling_offsets.assert_called_once_with(
             device_count=1,
             device_type="tor",
             racks_in_previous_rows=9,
         )
+        assert gen._layers and gen._layers[0].bottom_role == "tor"
 
-    # Border-leaf generation moved to the DC; see tests/unit/test_dc_firewall_lb.py.
+    # Border-leaf generation moved to the DC; see tests/unit/generators/test_dc_firewall_lb.py.

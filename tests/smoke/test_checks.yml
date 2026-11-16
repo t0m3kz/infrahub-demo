@@ -52,20 +52,6 @@ infrahub_tests:
           kind: check-smoke
 
   - resource: Check
-    resource_name: validate_sdwan_orchestrator
-    tests:
-      - name: syntax_check
-        spec:
-          kind: check-smoke
-
-  - resource: Check
-    resource_name: validate_reference_fabric
-    tests:
-      - name: syntax_check
-        spec:
-          kind: check-smoke
-
-  - resource: Check
     resource_name: validate_hypervisor_environment
     tests:
       - name: syntax_check
@@ -74,13 +60,6 @@ infrahub_tests:
 
   - resource: Check
     resource_name: validate_virtual_device_placement
-    tests:
-      - name: syntax_check
-        spec:
-          kind: check-smoke
-
-  - resource: Check
-    resource_name: validate_lisp_fabric
     tests:
       - name: syntax_check
         spec:
@@ -116,13 +95,6 @@ infrahub_tests:
 
   - resource: Check
     resource_name: validate_pool_utilization
-    tests:
-      - name: syntax_check
-        spec:
-          kind: check-smoke
-
-  - resource: Check
-    resource_name: validate_bgp_expectations
     tests:
       - name: syntax_check
         spec:

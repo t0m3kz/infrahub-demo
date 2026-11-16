@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from collections.abc import Mapping
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field
+
+NamingConvention = Literal["standard", "hierarchical", "flat", "computed"]
+
+
+def naming_convention_of(data: Mapping[str, Any], *, lower: bool = True) -> NamingConvention:
+    """A deployment's naming_convention ("standard" when unset), lower-cased unless lower=False."""
+    value = data.get("naming_convention") or "standard"
+    return cast(NamingConvention, value.lower() if lower else value)
+
 
 # Physical location hierarchy, outermost to innermost, for DeviceNameContext.from_indexes(). Position 0 ("fab") is
 # TopologyDataCenter.index, not fabric_name: a DC can host several fabrics under one name.
@@ -36,7 +46,7 @@ def _role_code(device_role: str) -> str:
 
 def sdwan_edge_name(office_name: str) -> str:
     """The SD-WAN branch edge of an office footprint (``C005-OFFICE`` -> ``C005-OFFICE-EDGE1``).
-    add_sdwan_edge creates it and add_office_fabric looks it up by this name."""
+    add_office_fabric creates it and builds its WAN exit by this name."""
     return f"{office_name}-EDGE1"
 
 

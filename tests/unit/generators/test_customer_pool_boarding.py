@@ -1,21 +1,21 @@
-"""The customer's pools are created when the footprint is boarded (generators/segments/segment_addressing.py)."""
+"""The customer's pools are created when the footprint is boarded (generators/ipam/customer_pool.py)."""
 
 from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from generators.customers.customer_cloud import CustomerDeploymentCloudGenerator
 from generators.customers.customer_colocation import CustomerDeploymentColocationExchangeGenerator
 from generators.customers.customer_dc import CustomerDeploymentDCExchangeGenerator
-from generators.mixins.logger import GeneratorError
-from generators.segments.segment_addressing import SegmentAddressingMixin
+from generators.ipam.customer_pool import ensure_customer_pools
+from generators.model.errors import GeneratorError
 from tests.unit.cloud_range_helpers import CloudClient
 from tests.unit.customer_generator_helpers import make_generator
-from tests.unit.segment_customer_pool_helpers import Client, customer_pool, make_gen, segment_data
+from tests.unit.segment_customer_pool_helpers import Client, CustomerPoolsHost, customer_pool, make_gen, segment_data
 
 _DC = "TopologyCustomerDC"
 _COLO = "TopologyCustomerColocation"
@@ -26,8 +26,8 @@ _CLOUD_DESIGN = {"name": "S", "address_prefix_length": 28}
 
 def _board(gen: Any, kind: str, *, design: dict[str, Any], environment: str = "p", org_id: str = "C005") -> None:
     asyncio.run(
-        gen.ensure_customer_pools(
-            kind=kind, org_id=org_id, environment=environment, design=design, footprint_name=f"{org_id}-FP"
+        ensure_customer_pools(
+            gen, kind=kind, org_id=org_id, environment=environment, design=design, footprint_name=f"{org_id}-FP"
         )
     )
 
@@ -38,7 +38,7 @@ class TestPoolsCreatedAtBoarding:
     @pytest.mark.parametrize("kind", [_DC, _COLO])
     def test_dc_and_colocation_get_an_ipv4_and_an_ipv6_pool_of_their_tiers_lengths(self, kind: str) -> None:
         """M: a /21 from Tenant-PROD-IPv4 and a /58 from Tenant-PROD-IPv6, named for the facility kind."""
-        gen = make_gen(Client())
+        gen = make_gen(Client(), CustomerPoolsHost)
 
         _board(gen, kind, design=_DESIGN)
 
@@ -53,7 +53,7 @@ class TestPoolsCreatedAtBoarding:
 
     def test_a_cloud_footprint_gets_the_ipv4_routed_range_only(self) -> None:
         """The cloud tier's address_prefix_length (S /28) from the tenant pool; no IPv6 pool."""
-        gen = make_gen(Client())
+        gen = make_gen(Client(), CustomerPoolsHost)
 
         _board(gen, _CLOUD, design=_CLOUD_DESIGN)
 
@@ -68,7 +68,7 @@ class TestPoolsCreatedAtBoarding:
         self, environment: str, zone: str
     ) -> None:
         """`p` is PROD, every other environment NONPROD; the environment letter is in the customer pool's name."""
-        gen = make_gen(Client())
+        gen = make_gen(Client(), CustomerPoolsHost)
 
         _board(gen, _DC, design=_DESIGN, environment=environment)
 
@@ -82,7 +82,7 @@ class TestPoolsCreatedAtBoarding:
         client = Client(
             pools={"c005-p-dc-ipv4": customer_pool("c005-p-dc-ipv4"), "c005-p-dc-ipv6": customer_pool("c005-p-dc-ipv6")}
         )
-        gen = make_gen(client)
+        gen = make_gen(client, CustomerPoolsHost)
 
         _board(gen, _DC, design=_DESIGN)
 
@@ -91,7 +91,7 @@ class TestPoolsCreatedAtBoarding:
     def test_another_kind_or_customer_gets_its_own_pools(self) -> None:
         """The pool is per (customer, environment, facility kind): the colocation footprint of the same customer is new."""
         client = Client(pools={"c005-p-dc-ipv4": customer_pool("c005-p-dc-ipv4")})
-        gen = make_gen(client)
+        gen = make_gen(client, CustomerPoolsHost)
 
         _board(gen, _COLO, design=_DESIGN)
         _board(gen, _DC, design=_DESIGN, org_id="C006")
@@ -106,7 +106,7 @@ class TestPoolsCreatedAtBoarding:
     def test_boarding_twice_is_idempotent(self) -> None:
         """The second run finds what the first created (the client answers for the created pool)."""
         client = Client()
-        gen = make_gen(client)
+        gen = make_gen(client, CustomerPoolsHost)
 
         _board(gen, _DC, design=_DESIGN)
         _board(gen, _DC, design=_DESIGN)
@@ -125,7 +125,7 @@ class TestPoolsCreatedAtBoarding:
         self, kind: str, design: dict[str, Any], missing: str
     ) -> None:
         """A tier row cannot lack its required numbers; if the query data does, the run fails and names it."""
-        gen = make_gen(Client())
+        gen = make_gen(Client(), CustomerPoolsHost)
 
         with pytest.raises(
             GeneratorError, match=rf"C005-FP: its design {design['name']} has no {missing} block length"
@@ -133,8 +133,7 @@ class TestPoolsCreatedAtBoarding:
             _board(gen, kind, design=design)
 
     def test_the_pool_is_still_repaired_by_a_segment_that_finds_it_missing(self) -> None:
-        """One implementation: ensure_segment_addressing creates the pool through the same function when it is missing."""
-        assert SegmentAddressingMixin._find_or_create_customer_pool is not None
+        """One implementation: the segment's plan creates the pool through the same function as the boarding when it is missing."""
         client = Client()
         gen = make_gen(client)
         asyncio.run(gen.ensure_segment_addressing(segment_data()))
@@ -146,20 +145,16 @@ class TestTheBoardingGenerators:
     """The footprint generators board the pools first; the cloud generator does only that."""
 
     @pytest.mark.parametrize(
-        "cls", [CustomerDeploymentDCExchangeGenerator, CustomerDeploymentColocationExchangeGenerator]
-    )
-    def test_the_dc_and_colocation_generators_inherit_the_one_implementation(self, cls: Any) -> None:
-        """No copy: they get ensure_customer_pools from SegmentAddressingMixin through CustomerFacilityMixin."""
-        assert cls.ensure_customer_pools is SegmentAddressingMixin.ensure_customer_pools
-
-    @pytest.mark.parametrize(
         ("cls", "kind"),
         [(CustomerDeploymentDCExchangeGenerator, _DC), (CustomerDeploymentColocationExchangeGenerator, _COLO)],
     )
-    def test_generate_boards_the_pools_from_the_footprints_design(self, cls: Any, kind: str) -> None:
+    def test_generate_boards_the_pools_from_the_footprints_design(
+        self, cls: Any, kind: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """generate() passes the kind, the owner, the environment and the design to ensure_customer_pools, first."""
         gen = make_generator(cls)
-        gen.ensure_customer_pools = AsyncMock()
+        boarding = AsyncMock()
+        monkeypatch.setattr("generators.reconciler.ensure_customer_pools", boarding)
         payload = {
             kind: [
                 {
@@ -175,8 +170,8 @@ class TestTheBoardingGenerators:
 
         asyncio.run(gen.generate(payload))
 
-        gen.ensure_customer_pools.assert_awaited_once()
-        call = gen.ensure_customer_pools.await_args
+        boarding.assert_awaited_once()
+        call = boarding.await_args
         assert call is not None
         kwargs = call.kwargs
         assert (kwargs["kind"], kwargs["org_id"], kwargs["environment"], kwargs["footprint_name"]) == (
@@ -188,23 +183,23 @@ class TestTheBoardingGenerators:
         assert kwargs["design"]["address_prefix_length"] == 21
 
     def test_the_cloud_generator_hands_the_footprint_to_the_one_range_function(self) -> None:
-        """generate() passes the cleaned footprint to ensure_cloud_ranges; the footprint joins the tracking group."""
+        """generate() passes the cleaned footprint to ensure_cloud_ranges, whose plan tracks it (the root)."""
         gen = CustomerDeploymentCloudGenerator.__new__(CustomerDeploymentCloudGenerator)
         gen.logger = MagicMock()
         gen.client = MagicMock()
-        gen.ensure_cloud_ranges = AsyncMock()
         footprint = {
             "id": "cloud-1",
             "name": "C003-P-VAULTEX-AWS-EU-CENTRAL-1",
             "environment": "p",
+            "connection": "dedicated",
             "owner": {"org_id": "C003"},
             "design": {"name": "S", "address_prefix_length": 28},
         }
 
-        asyncio.run(gen.generate({_CLOUD: [footprint]}))
+        with patch("generators.customers.customer_cloud.ensure_cloud_ranges", AsyncMock()) as ensure:
+            asyncio.run(gen.generate({_CLOUD: [footprint]}))
 
-        gen.client.group_context.related_node_ids.append.assert_called_once_with("cloud-1")
-        gen.ensure_cloud_ranges.assert_awaited_once_with(footprint)
+        ensure.assert_awaited_once_with(gen, footprint, hub=None)
 
     def test_the_cloud_generator_creates_the_real_pool_end_to_end(self) -> None:
         """With the real mixins and a recording client: one IPv4 pool of the cloud tier, no IPv6 pool."""
@@ -218,6 +213,7 @@ class TestTheBoardingGenerators:
                     "id": "cloud-1",
                     "name": "C003-P-X",
                     "environment": "n",
+                    "connection": "dedicated",
                     "owner": {"org_id": "C003"},
                     "account": {"id": "acc-1", "name": "vaultex-aws"},
                     "parent": {"id": "region-1", "name": "eu-central-1"},
@@ -238,20 +234,20 @@ class TestTheBoardingGenerators:
         gen = CustomerDeploymentCloudGenerator.__new__(CustomerDeploymentCloudGenerator)
         gen.logger = MagicMock()
         gen.client = MagicMock()
-        gen.ensure_cloud_ranges = AsyncMock()
 
-        asyncio.run(gen.generate(payload))
+        with patch("generators.customers.customer_cloud.ensure_cloud_ranges", AsyncMock()) as ensure:
+            asyncio.run(gen.generate(payload))
 
-        gen.ensure_cloud_ranges.assert_not_awaited()
+        ensure.assert_not_awaited()
 
     def test_the_cloud_generator_refuses_a_footprint_without_an_id(self) -> None:
         """No id: the error is logged and nothing is carved."""
         gen = CustomerDeploymentCloudGenerator.__new__(CustomerDeploymentCloudGenerator)
         gen.logger = MagicMock()
         gen.client = MagicMock()
-        gen.ensure_cloud_ranges = AsyncMock()
 
-        asyncio.run(gen.generate({_CLOUD: [{"name": "C003-P-X"}]}))
+        with patch("generators.customers.customer_cloud.ensure_cloud_ranges", AsyncMock()) as ensure:
+            asyncio.run(gen.generate({_CLOUD: [{"name": "C003-P-X"}]}))
 
         gen.logger.error.assert_called_once()
-        gen.ensure_cloud_ranges.assert_not_awaited()
+        ensure.assert_not_awaited()

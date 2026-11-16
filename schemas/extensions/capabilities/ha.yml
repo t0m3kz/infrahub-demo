@@ -398,7 +398,7 @@ nodes:
       - name: service_type
         kind: Dropdown
         label: "Service Type"
-        description: "Vendor alone can't disambiguate (e.g. Zscaler ZIA vs ZPA) — see AGENTS.md notes for rationale"  # yamllint disable-line rule:line-length
+        description: "Vendor alone can't disambiguate (e.g. Zscaler ZIA vs ZPA) — see domain-model.md notes for rationale"  # yamllint disable-line rule:line-length
         optional: false
         default_value: web_gateway
         order_weight: 1460
@@ -456,7 +456,7 @@ extensions:
           description: "Every FirewallContext enforcing its policy: the context of each zone with a firewall pair"
 
     # Deployment side of LoadbalancerContext.served_deployments. Only a DC footprint is load balanced:
-    # a colocation metro has no LB uplinks (generators/topology/customer_colocation.py).
+    # a colocation metro has no LB uplinks (generators/customers/customer_colocation.py).
     - kind: TopologyCustomerDC
       relationships:
         - name: serving_firewall_contexts

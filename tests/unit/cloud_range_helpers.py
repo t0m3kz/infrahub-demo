@@ -21,6 +21,7 @@ def network(network_id: str, name: str) -> MagicMock:
 def attachment(attachment_id: str, network_id: str, prefixes: tuple[str, ...] = ()) -> MagicMock:
     """A CloudGatewayAttachment node to a network, with ``prefixes`` ids already on its allowed_prefixes."""
     node = MagicMock(id=attachment_id)
+    node.name.value = f"tgwa-{attachment_id}"
     node.virtual_network.id = network_id
     node.allowed_prefixes.peer_ids = list(prefixes)
     return node

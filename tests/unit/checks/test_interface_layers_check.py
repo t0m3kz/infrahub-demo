@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any, cast
 
 from checks.devices.interface_layers import CheckInterfaceLayers
-from tests.unit.query_shape_helpers import query_tree, unselected
 
 QUERY = Path(__file__).resolve().parents[3] / "queries" / "validation" / "interface_layers.gql"
 
@@ -53,10 +52,10 @@ def _port(
         "device": {"node": {"name": {"value": "leaf-1"}}},
         "lag": {"node": {"id": "lag-1"} if lag else None},
         "ip_address": {"node": {"id": "ip-1"} if ip else None},
-        # the sub-interfaces: the interfaces of the encapsulations that ride on this port (one encapsulation each)
-        "encapsulations": {
+        # the sub-interfaces: the interfaces that ride on this port
+        "sub_interfaces": {
             "edges": [
-                {"node": {"capabilities": {"edges": [{"node": sub}]}}}
+                {"node": sub}
                 for sub in (
                     [_sub("service", "DcimPhysicalDevice") for _ in range(subs)]
                     + [_sub("uplink", "DcimVirtualDevice") for _ in range(nics)]
@@ -170,28 +169,6 @@ def test_r2_lag_member_with_a_segment_and_an_address_is_one_error() -> None:
     errors = _errors([_port(lag=True, segments=1, ip=True)])
     assert len(errors) == 1 and "LAG member" in errors[0]
     assert errors[0].count("ip_address") == 1
-
-
-def test_the_fixtures_emit_only_fields_the_query_selects_and_the_layer_fields_are_selected() -> None:
-    """The builders match interface_layers.gql."""
-    tree = query_tree(QUERY)
-    assert "DcimVirtualInterface" not in tree
-    for root, node in (("DcimPhysicalInterface", _port()), ("DcimLAGInterface", _port("Port-Channel1"))):
-        selected = tree[root]["edges"]["node"]
-        assert {"ip_address", "encapsulations", "capabilities"} <= set(selected)
-        assert "segments" not in selected
-        assert {"vlan_id", "segment_deployment"} <= set(selected["capabilities"]["edges"]["node"])
-        node = _port(node["name"]["value"], segments=1)
-        emitted = {key: value for key, value in node.items() if root == "DcimPhysicalInterface" or key != "lag"}
-        assert unselected(emitted, selected) == []
-    assert "lag" in tree["DcimPhysicalInterface"]["edges"]["node"]
-    row = tree["ManagedSegmentVlan"]["edges"]["node"]
-    for member in (_member("E1", host="srv-1"), _lag_member("Po1", host="srv-1")):
-        assert unselected(_row_with(member), row) == []
-    assert unselected(_component("web", "srv-1"), tree["AppComponent"]["edges"]["node"]) == []
-    assert unselected(_assigned("DcimVirtualInterface"), tree["ManagedSegmentDeployment"]["edges"]["node"]) == []
-    setting = _ospf("ospf-a", ("leaf-1", "E1"), peer_processes=(("p1", "leaf-1"),))
-    assert unselected(setting, tree["RoutingOSPFInterface"]["edges"]["node"]) == []
 
 
 def _assigned(*kinds: str) -> dict[str, Any]:

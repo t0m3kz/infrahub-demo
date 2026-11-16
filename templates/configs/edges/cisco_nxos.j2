@@ -117,6 +117,20 @@ route-map RM-{{ session.name }}-IN permit 10
 route-map RM-{{ session.name }}-IN deny 10
 {%- endif %}
 {%- endif %}
+{%- if _policy.get('out_owners') %}
+{#- A session with several owners (a shared cloud hub): one list per owner, each announced its own space only. #}
+{%- for owner in _policy.out_owners %}
+{%- for prefix in owner.prefixes %}
+ip prefix-list PL-{{ session.name }}-OUT-{{ owner.name }} seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+route-map RM-{{ session.name }}-OUT permit {{ loop.index * 10 }}
+  match ip address prefix-list PL-{{ session.name }}-OUT-{{ owner.name }}
+{%- if _policy.get('identity') %}
+  set comm-list CL-ROUTING-IDENTITY delete
+{%- endif %}
+{%- endfor %}
+route-map RM-{{ session.name }}-OUT deny {{ (_policy.out_owners | length + 1) * 10 }}
+{%- else %}
 {%- for prefix in _out %}
 ip prefix-list PL-{{ session.name }}-OUT seq {{ loop.index * 10 }} permit {{ prefix }}
 {%- endfor %}
@@ -129,6 +143,7 @@ route-map RM-{{ session.name }}-OUT permit 10
 route-map RM-{{ session.name }}-OUT deny 20
 {%- else %}
 route-map RM-{{ session.name }}-OUT deny 10
+{%- endif %}
 {%- endif %}
 !
 {%- endfor %}

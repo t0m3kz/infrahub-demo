@@ -56,7 +56,6 @@ def _artifact(
         id=f"art-{target}-{definition}",
         action=action,
         target_id=f"id-{target}",
-        target_kind="DcimPhysicalDevice",
         target=target,
         definition=definition,
         checksum_new=new,

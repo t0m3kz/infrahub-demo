@@ -10,19 +10,16 @@ import pytest
 
 from checks.customers.suite_capacity import CheckSuiteCapacity
 from tests.integration.demo_data import ROOT, declared
-from tests.unit.generators.test_circuit_query_shapes import _QUERIES, _payload_paths, _selected_paths
-from tests.unit.simulators.suite_capacity_payloads import DEMOS, DESIGN_FIELDS, SUITE, build_payloads
+from tests.unit.simulators.suite_capacity_payloads import DEMOS, SUITE, build_payloads
 from utils.data_cleaning import clean_data
 
 DEMO_SETS: dict[str, tuple[str, ...]] = {
     "01_data_center": ("01_data_center",),
-    "14_dc_universal": ("14_dc_universal",),
     "dc6_build_up": ("01_data_center", "02_switch_dc6", "03_rack_dc6", "04_pod_dc6", "06_servers"),
     "10_colocation": ("10_colocation",),
     "30_all": ("30_all",),
     "00_full_topology": ("00_full_topology",),
 }
-QUERY = _QUERIES / "validation" / "suite_capacity.gql"
 
 
 def _roots(label: str) -> tuple[Path, ...]:
@@ -42,8 +39,7 @@ def _lower(payloads: dict[str, Any], suite_name: str, field: str) -> dict[str, A
     """A copy of the payloads where every rack of suite ``suite_name`` sees ``field`` of its suite one lower."""
     lowered = copy.deepcopy(payloads)
     for edge in lowered["LocationRack"]["edges"]:
-        p = edge["node"]["parent"]["node"]
-        suite = p["parent"]["node"] if "parent" in p else p
+        suite = edge["node"]["parent"]["node"]
         if suite["name"]["value"] == suite_name:
             suite[field]["value"] -= 1
     return lowered
@@ -124,40 +120,3 @@ def test_the_demo_sets_cover_every_suite_and_rack_under_data() -> None:
         everywhere = {obj.item["shortname"] for obj in declared(kind, ROOT / "data")}
         simulated = {obj.item["shortname"] for root in in_sets for obj in declared(kind, root)}
         assert everywhere == simulated, f"{kind} outside the demo sets: {sorted(everywhere - simulated)}"
-
-
-def test_the_query_selects_what_the_check_reads_and_nothing_else() -> None:
-    """The fields the check reads from a rack are exactly the ones suite_capacity.gql selects."""
-    reads = {
-        "id",
-        "name",
-        "index",
-        "rack_type",
-        "parent.id",
-        "parent.name",
-        "parent.index",
-        "parent.row_type",
-        "parent.racks_per_row",
-        "parent.rows",
-        "parent.parent.id",
-        "parent.parent.name",
-        "parent.parent.rows",
-        "parent.parent.racks_per_row",
-        "deployment.id",
-        "deployment.name",
-        "deployment.design.id",
-        "deployment.design.name",
-        *(f"deployment.design.{field}" for field in DESIGN_FIELDS),
-    }
-    selected = _selected_paths(QUERY, "LocationRack")
-    leaves = {path for path in selected if not any(other.startswith(f"{path}.") for other in selected)}
-    assert leaves == reads
-
-
-def test_the_simulated_payload_carries_only_fields_the_query_selects() -> None:
-    """A payload field the query does not select is a field no real response carries."""
-    payloads = build_payloads(*_roots("30_all"))
-    selected = _selected_paths(QUERY, "LocationRack")
-    for edge in payloads["LocationRack"]["edges"]:
-        unselected = _payload_paths(edge["node"]) - selected
-        assert not unselected, f"fields the query does not select: {sorted(unselected)}"

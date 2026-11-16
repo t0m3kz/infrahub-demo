@@ -13,7 +13,7 @@ from tests.smoke.fixture_builders.transit import build_overlay_pbr_bl_data
 from tests.smoke.fixture_builders.vrf import with_vrf_objects
 from transforms.config.border_leaf import BorderLeaf
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
-from transforms.helpers.firewall_pbr import get_overlay_pbr_rules
+from transforms.helpers.pbr import get_overlay_pbr_rules
 from utils.device_services import overlay_pbr_bindings
 from utils.service_contexts import device_services
 

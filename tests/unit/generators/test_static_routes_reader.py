@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from transforms.helpers.static_routes import get_static_routes
+from transforms.helpers.static_route import get_static_routes
 
 
 def _cap(

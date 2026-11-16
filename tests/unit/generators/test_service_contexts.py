@@ -1,5 +1,5 @@
 """Unit tests for utils/service_contexts.py: the legs and border ports of a service context derived from the devices
-(the nested shape of fragments/device_services.gql)."""
+(the nested shape of the config queries' services selection)."""
 
 from __future__ import annotations
 
@@ -171,20 +171,20 @@ def test_virtual_member_is_tagged_through_its_host_port() -> None:
         "name": "p1",
         "role": "uplink",
         "device": {"id": "host", "name": "host", "role": "server", "shared_capabilities": [], "interfaces": []},
-        "encapsulations": [{"capabilities": [nic]}],
+        "sub_interfaces": [nic],
     }
     assert _border_port_ids(make_switch({"Ethernet1/25": ("firewall", [host_port])})) == {"Ethernet1/25": ["ctx"]}
 
 
 def test_unpinned_nic_is_not_a_member_port() -> None:
-    """A NIC that is not pinned to the host port is not in its ``encapsulations``: the border port is untagged."""
+    """A NIC that is not pinned to the host port is not in its ``sub_interfaces``: the border port is untagged."""
     host_port = {
         "typename": "DcimPhysicalInterface",
         "id": "host:p1",
         "name": "p1",
         "role": "uplink",
         "device": {"id": "host", "name": "host", "role": "server", "shared_capabilities": [], "interfaces": []},
-        "encapsulations": [],
+        "sub_interfaces": [],
     }
     assert _border_port_ids(make_switch({"Ethernet1/25": ("firewall", [host_port])})) == {}
 

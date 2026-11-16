@@ -4,9 +4,10 @@
 # eg-fr201 -> EVPN type-5 -> DC10. The segment itself is never extended to the
 # office at L2; only its PROD prefix is.
 #
-# The per-office tunnels are not here: add_sdwan_edge (generators/topology/
-# sdwan_edge.py) builds each office's `<office>-SDWAN-FR2` tunnel circuit and its
-# `INET-<office>` internet underlay when the office opts in with sdwan_gateway. The
+# The per-office tunnels are not here: add_office_fabric (generators/office/
+# office_fabric.py) builds each office's `<office>-SDWAN-<gateway>` tunnel circuits when the office has an
+# sdwan-edge entry and sdwan_gateways; its `INET-<office>` internet underlay is authored in
+# ../05_office_internet/01_circuits.yml. The
 # gateway has no backhaul circuit into the cloud: a cloud leg is a handoff of its own, not the gateway's.
 #
 # GW1 reaches eg-fr201 over its own cage port: eth0 <-> Ethernet1/12, a cable in one
@@ -14,7 +15,7 @@
 # sub-interface on each side (VLAN 1900). Ethernet1/13 is the AWS cross-connect and is not shared.
 #
 # The circuit is the handoff and nothing else is authored for the session. The two
-# sub-interfaces carry no address: add_virtual_circuit (generators/topology/virtual_circuit.py)
+# sub-interfaces carry no address: add_virtual_circuit (generators/connectivity/virtual_circuit.py)
 # allocates a /31 from Handoff-PROD-IPv4 (data/bootstrap/26_handoff_pools.yml), addresses
 # BOTH ends from it (eg-fr201, with the overlay process, the lower) and upserts the eBGP
 # session HANDOFF-FR2-SDWAN-GW1-PROD-bgp between eg-fr201's overlay process and
@@ -32,23 +33,15 @@ spec:
       role: uplink
       status: active
       description: "PROD handoff to EQX-FR2-SDWAN-GW1"
-      capabilities:
-        - kind: ManagedInterfaceEncapsulation
-          data:
-            name: "eg-fr201:Ethernet1/12.1900"
-            vlan_id: 1900
-            parent: ["eg-fr201", "Ethernet1/12"]
+      parent: ["eg-fr201", "Ethernet1/12"]
+      vlan_id: 1900
     - name: "eth0.1900"
       device: "EQX-FR2-SDWAN-GW1"
       role: uplink
       status: active
       description: "PROD handoff to eg-fr201"
-      capabilities:
-        - kind: ManagedInterfaceEncapsulation
-          data:
-            name: "EQX-FR2-SDWAN-GW1:eth0.1900"
-            vlan_id: 1900
-            parent: ["EQX-FR2-SDWAN-GW1", "eth0"]
+      parent: ["EQX-FR2-SDWAN-GW1", "eth0"]
+      vlan_id: 1900
     # GW1's router-id: a loopback, not a handoff address (those are generated at circuit
     # creation). 10.255.64.0/24 holds the loopbacks of the party devices modelled as stubs,
     # clear of the handoff pools.

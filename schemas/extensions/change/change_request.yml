@@ -7,7 +7,7 @@ version: "1.0"
 # and merges into main as history. The generator add_change_request (generators/change/change_request.py) derives
 # every field it can from the model (utils/change_rules.py); the AUTHOR fields (justification, risk_override,
 # risk_override_reason, requested_by) and the external_id (written by the service that files the CHG) are never written
-# by it. checks/change_request.py gates the PC on it; transforms/change/servicenow.py renders it as a ServiceNow
+# by it. checks/change/change_request.py gates the PC on it; transforms/change/servicenow.py renders it as a ServiceNow
 # change_request payload.
 # ============================================================================
 
@@ -176,7 +176,7 @@ nodes:
         identifier: change_request__requested_by
         order_weight: 1150
       - name: affected_devices
-        peer: DcimDeviceManaged
+        peer: DcimPhysicalDevice
         label: Affected Devices
         cardinality: many
         kind: Generic

@@ -1,0 +1,18 @@
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudPeeringInterface
+  data:
+    - name: "er-30all-weu.private"
+      device: "er-30all-weu"
+      description: "Azure private peering of the ExpressRoute circuit (lands on ergw-30all-weu, the hub's link)"
+      status: active
+      scope: private
+      routing: bgp
+      bfd: true
+      parent: ["EXT-AZURE-ER-WEU", "msee-pri"]
+      vlan_id: 1100
+      gateway: "ergw-30all-weu"
+      auth: "eqx-pa4-azure-weu-key"
+      peer_ip: ["10.255.143.253/31", "default"]
+      peer_asn: "AS12076"

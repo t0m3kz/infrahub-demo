@@ -10,11 +10,11 @@ version: "1.0"
 # (`{evpn_rt_as}:{l3_vni}`). One per (deployment, security_zone), named `{deployment lower}-vrf-{zone name lower}`
 # (dc10-vrf-prod, dc10-vrf-nonprod). Its members are the devices that route in the zone, demand-driven
 # (utils/vrf_demand.py, the one derivation), written edge by edge by generators/helpers/vrf.py and checked by
-# checks/vrf_instances.py. Nothing else is stored: the RD, the RT, the L3 VNI SVI VLAN and whether a member realizes
-# it as EVPN or VRF-lite are derived (transforms/helpers/overlay.py); the L3 VNI stays on SecurityZone.
+# checks/routing/vrf_instances.py. Nothing else is stored: the RD, the RT, the L3 VNI SVI VLAN and whether a member
+# realizes it as EVPN or VRF-lite are derived (transforms/helpers/overlay.py); the L3 VNI stays on SecurityZone.
 # A firewall or a load balancer is never a member: its VRF is the context.
 # Its interfaces (an SVI, a handoff sub-interface, a service leg) are its `capabilities` (ManagedGenericInterfaces, the
-# interface edge); an interface is in at most one VRF (checks/vrf_instances.py).
+# interface edge); an interface is in at most one VRF (checks/routing/vrf_instances.py).
 # ============================================================================
 
 nodes:

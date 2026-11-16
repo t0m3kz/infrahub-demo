@@ -3,33 +3,117 @@ query topology_office_fabric($name: String!) {
     edges {
       node {
         id
-        name { value }
-        naming_convention { value }
-        # sdwan_gateway says its SD-WAN edge is coming, so the generator waits for it
-        # instead of skipping the exit on a race. An office is always PROD (no environment).
-        sdwan_gateway { node { id } }
-        # The opt-in: an office with no fabric_templates has no fabric and the
-        # generator no-ops (the same entries as a colocation zone's, see
-        # colocation_zone.gql). template_kind is aliased because clean_data()
-        # strips "__" out of any key it finds, so a bare __typename would arrive
-        # as "typename".
+        name {
+          value
+        }
+        naming_convention {
+          value
+        }
+        owner {
+          node {
+            id
+            ... on OrganizationCustomer {
+              name {
+                value
+              }
+            }
+          }
+        }
+        lan_prefixes {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        sdwan_gateways {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              owner {
+                node {
+                  id
+                  __typename
+                }
+              }
+              ... on DcimPhysicalDevice {
+                deployment {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+              ... on DcimDevice {
+                interfaces {
+                  edges {
+                    node {
+                      __typename
+                      id
+                      name {
+                        value
+                      }
+                      role {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         fabric_templates {
           edges {
             node {
-              role { value }
-              quantity { value }
+              role {
+                value
+              }
+              quantity {
+                value
+              }
               template {
                 node {
                   id
+                  template_name {
+                    value
+                  }
                   template_kind: __typename
                   ... on TemplateDcimPhysicalDevice {
-                    platform { node { id name { value } } }
-                    device_type { node { id } }
+                    platform {
+                      node {
+                        id
+                        name {
+                          value
+                        }
+                        os_capabilities {
+                          node {
+                            config_dialect {
+                              value
+                            }
+                          }
+                        }
+                      }
+                    }
+                    device_type {
+                      node {
+                        id
+                      }
+                    }
                     interfaces {
                       edges {
                         node {
-                          name { value }
-                          role { value }
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
                         }
                       }
                     }

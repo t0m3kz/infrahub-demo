@@ -209,10 +209,10 @@ nodes:
       # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
       # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
       # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
-      # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
-      # checks/circuit_placement.py hold the rest. A cloud transport is a device of its own (CloudDirectConnect,
-      # CloudVPNConnection) whose ports, LAGs and virtual interfaces are DcimInterface, so the far end of a cloud
-      # circuit is an interface on this same edge.
+      # The cap holds when the circuit side is written; checks/connectivity/carrier_circuit_ports.py and
+      # checks/connectivity/circuit_placement.py hold the rest. A cloud transport is a device of its own
+      # (CloudDirectConnect, CloudVPNConnection) whose ports, LAGs and virtual interfaces are DcimInterface, so the far
+      # end of a cloud circuit is an interface on this same edge.
       - name: capabilities
         peer: DcimInterface
         label: "Interface Ends"
@@ -227,7 +227,7 @@ nodes:
 
   # One kind for every circuit that rides a carrier, told apart by `circuit_type` (the role is an attribute,
   # not a kind). The session generator builds the ManagedBGPPeerings of dci and handoff; a tunnel is an
-  # inventory record. What each type may carry is held by checks/circuit_placement.py, not by the schema:
+  # inventory record. What each type may carry is held by checks/connectivity/circuit_placement.py, not by the schema:
   #   dci      DCI between two EVPN Multi-Site border gateways (DC border leafs and colocation edges); the
   #            generator builds an underlay eBGP session on a /31 or /127 (peering_role dci-underlay) and a
   #            loopback-to-loopback EVPN session (peering_role dci) over it. Unowned.
@@ -287,10 +287,10 @@ nodes:
       # The two ends. ManagedGenericInterfaces carries the interface-side edge (a circuit in a port's `capabilities`);
       # this re-declares the circuit side with a count. It cannot be hoisted onto TopologyCircuit: a node that
       # inherits two generics declaring `capabilities` with a different min_count is refused (measured on 1.11.9).
-      # The cap holds when the circuit side is written; checks/carrier_circuit_ports.py and
-      # checks/circuit_placement.py hold the rest. A cloud transport is a device of its own (CloudDirectConnect,
-      # CloudVPNConnection) whose ports, LAGs and virtual interfaces are DcimInterface, so the far end of a cloud
-      # circuit is an interface on this same edge.
+      # The cap holds when the circuit side is written; checks/connectivity/carrier_circuit_ports.py and
+      # checks/connectivity/circuit_placement.py hold the rest. A cloud transport is a device of its own
+      # (CloudDirectConnect, CloudVPNConnection) whose ports, LAGs and virtual interfaces are DcimInterface, so the far
+      # end of a cloud circuit is an interface on this same edge.
       - name: capabilities
         peer: DcimInterface
         label: "Interface Ends"

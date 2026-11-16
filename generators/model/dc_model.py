@@ -1,4 +1,4 @@
-"""Pure Data Center fabric model compiler: derives pool sizes, ASN ranges, and role counts without I/O."""
+"""The Data Center fabric model: pool prefix lengths, ASN range, tier quantities (pure, no I/O)."""
 
 from __future__ import annotations
 
@@ -6,27 +6,30 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from generators.helpers import name_to_asn_range
 from generators.helpers.routing import RoutingStrategy, underlay_pool_is_ipv6
-from generators.mixins.fabric_sizing import (
+from generators.ipam.pools import name_to_asn_range
+from generators.model.pod_profile import templates_by_role
+from generators.model.sizing import (
     dc_loopback_bits,
     dc_management_bits,
     dc_technical_bits,
     fabric_loopback_bits,
     host_bits_to_prefix_length,
 )
-from generators.mixins.pod_config import templates_by_role
 
 DC_VALID_FABRIC_ROLES = frozenset(
     {"super-spine", "hyper-spine", "border-leaf", "internal-firewall", "external-firewall", "load-balancer"}
 )
+
+# The pool slot of the DC-scoped tiers' loopbacks (super-spine, hyper-spine, border-leaf)
+DC_FABRIC_LOOPBACK = "dc-fabric-loopback"
 
 _EBGP_STRATEGIES = frozenset({RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value})
 
 
 @dataclass(frozen=True)
 class DcFabricModel:
-    """Compiled, immutable blueprint of a Data Center's pools, ASN envelope, and device role counts."""
+    """What a TopologyDataCenter declares, compiled: the pools to slice, the ASN range, the DC-tier quantities."""
 
     dc_id: str
     dc_name: str
@@ -35,77 +38,89 @@ class DcFabricModel:
     design_mode: Literal["back-to-back", "super-spine"]
     underlay_protocol: str
     routing_strategy: str
+    # pool slot -> prefix length, in allocation order (technical, loopback, management, then dc-fabric-loopback)
     pools_to_allocate: dict[str, int]
-    asn_range: tuple[int, int]
+    asn_start: int
+    asn_end: int
     requires_asn_pool: bool
-    role_quantities: dict[str, int]
+    max_super_spines: int
+    max_hyper_spines: int
+    super_spine_quantity: int
+    hyper_spine_quantity: int
+    # fabric_templates roles no DC tier can place, in entry order (the generator warns and skips them)
+    invalid_roles: tuple[Any, ...]
 
     @classmethod
     def compile(cls, data: Mapping[str, Any]) -> DcFabricModel:
-        """Compile a clean_data() TopologyDataCenter dictionary into a validated DcFabricModel."""
-        dc_id: str = data["id"]
+        """Compile one clean_data() TopologyDataCenter entry; a missing required key raises KeyError."""
         dc_name: str = data["name"]
-        dc_index: int = data["index"]
         dc_design: Mapping[str, Any] = data["design"]
-
-        technical_bits = dc_technical_bits(dc_design)
-        loopback_bits = dc_loopback_bits(dc_design)
-        management_bits = dc_management_bits(dc_design)
-        tier_loopback_bits = fabric_loopback_bits(dc_design)
-
-        fabric_templates: list[dict[str, Any]] = list(data.get("fabric_templates") or [])
-        role_quantities: dict[str, int] = {}
-        for entry in fabric_templates:
-            role = entry.get("role")
-            if role not in DC_VALID_FABRIC_ROLES:
-                raise ValueError(
-                    f"DC {dc_name.upper()}: invalid fabric template role {role!r}; "
-                    f"valid roles: {sorted(DC_VALID_FABRIC_ROLES)}"
-                )
-            role_quantities[role] = role_quantities.get(role, 0) + int(entry.get("quantity", 0))
-
-        super_spines = sum(entry["quantity"] for entry in templates_by_role(fabric_templates, "super-spine"))
-        max_super_spines = dc_design["max_super_spines_per_fabric"]
-        if super_spines > max_super_spines:
-            raise RuntimeError(
-                f"DC {dc_name.upper()} requests {super_spines} super-spines but the assigned "
-                f"design allows at most {max_super_spines}"
-            )
-
         underlay_protocol: str = data.get("underlay_protocol", "ipv6")
-        pools_to_allocate: dict[str, int] = {
+        routing_strategy: str = data.get("routing_strategy", "ebgp-ebgp")
+        fabric_templates: list[dict[str, Any]] = data.get("fabric_templates", [])
+
+        # Host bits become a prefix length in the family each pool is sliced from; management is always IPv4.
+        pools: dict[str, int] = {
             "technical": host_bits_to_prefix_length(
-                technical_bits, ipv6=underlay_pool_is_ipv6(underlay_protocol, "technical")
+                dc_technical_bits(dc_design), ipv6=underlay_pool_is_ipv6(underlay_protocol, "technical")
             ),
             "loopback": host_bits_to_prefix_length(
-                loopback_bits, ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
+                dc_loopback_bits(dc_design), ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
             ),
-            "management": host_bits_to_prefix_length(management_bits, ipv6=False),
+            "management": host_bits_to_prefix_length(dc_management_bits(dc_design), ipv6=False),
         }
+        # One DC-scoped loopback pool for the DC-level tiers, sized from the design's max caps.
+        tier_loopback_bits = fabric_loopback_bits(dc_design)
         if tier_loopback_bits is not None:
-            pools_to_allocate["dc-fabric-loopback"] = host_bits_to_prefix_length(
+            pools[DC_FABRIC_LOOPBACK] = host_bits_to_prefix_length(
                 tier_loopback_bits, ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
             )
 
-        design_mode: Literal["back-to-back", "super-spine"] = "back-to-back" if max_super_spines == 0 else "super-spine"
-        routing_strategy: str = data.get("routing_strategy", "ebgp-ebgp")
-        asn_range = name_to_asn_range(
+        max_super_spines = dc_design["max_super_spines_per_fabric"]
+        asn_start, asn_end = name_to_asn_range(
             dc_name=dc_name,
             max_pods=dc_design["max_pods"],
             max_border_leafs_per_fabric=dc_design["max_border_leafs_per_fabric"],
         )
-        requires_asn_pool = routing_strategy in _EBGP_STRATEGIES
-
         return cls(
-            dc_id=dc_id,
+            dc_id=data["id"],
             dc_name=dc_name,
             fabric_name=dc_name.lower(),
-            dc_index=dc_index,
-            design_mode=design_mode,
+            dc_index=data["index"],
+            design_mode="back-to-back" if max_super_spines == 0 else "super-spine",
             underlay_protocol=underlay_protocol,
             routing_strategy=routing_strategy,
-            pools_to_allocate=pools_to_allocate,
-            asn_range=asn_range,
-            requires_asn_pool=requires_asn_pool,
-            role_quantities=role_quantities,
+            pools_to_allocate=pools,
+            asn_start=asn_start,
+            asn_end=asn_end,
+            requires_asn_pool=routing_strategy in _EBGP_STRATEGIES,
+            max_super_spines=max_super_spines,
+            max_hyper_spines=dc_design["max_hyper_spines_per_fabric"],
+            super_spine_quantity=_quantity(fabric_templates, "super-spine"),
+            hyper_spine_quantity=_quantity(fabric_templates, "hyper-spine"),
+            invalid_roles=tuple(
+                entry["role"] for entry in fabric_templates if entry["role"] not in DC_VALID_FABRIC_ROLES
+            ),
         )
+
+    def super_spine_error(self) -> str | None:
+        """Why the requested super-spines exceed the design, None when they fit."""
+        if self.super_spine_quantity > self.max_super_spines:
+            return (
+                f"DC {self.fabric_name.upper()} requests {self.super_spine_quantity} super-spines but the assigned "
+                f"design allows at most {self.max_super_spines}"
+            )
+        return None
+
+    def hyper_spine_error(self) -> str | None:
+        """Why the requested hyper-spines exceed the design, None when they fit."""
+        if self.hyper_spine_quantity > self.max_hyper_spines:
+            return (
+                f"DC {self.fabric_name.upper()} requests {self.hyper_spine_quantity} hyper-spines but the assigned "
+                f"design allows at most {self.max_hyper_spines}"
+            )
+        return None
+
+
+def _quantity(fabric_templates: list[dict[str, Any]], role: str) -> int:
+    return sum(entry["quantity"] for entry in templates_by_role(fabric_templates, role))

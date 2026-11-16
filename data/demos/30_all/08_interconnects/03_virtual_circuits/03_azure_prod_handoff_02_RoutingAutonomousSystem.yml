@@ -1,0 +1,8 @@
+# The Microsoft side of an ExpressRoute private peering.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 12076
+      description: "Azure ExpressRoute AS (Microsoft side)"

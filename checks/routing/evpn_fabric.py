@@ -253,7 +253,7 @@ class CheckEvpnFabric(InfrahubCheck):
                     message=(
                         f"L3 VNI {vni} is shared by {len(ns_names)} namespaces: {sorted(ns_names)}. "
                         "The L3 VNI is the tenant's transit VNI, so these VRFs would route into "
-                        "each other. l3_vni is fixed per namespace in data/bootstrap/22_namespaces.yml; "
+                        "each other. l3_vni is fixed per namespace in data/bootstrap/24_security_zones.yml; "
                         "correct the conflicting namespace value."
                     )
                 )
@@ -274,7 +274,7 @@ class CheckEvpnFabric(InfrahubCheck):
                     message=(
                         f"L3 VNI {vni} for namespace(s) {sorted(ns_names)} sits in the exchange transit "
                         f"VNI band {TRANSIT_VNI_MIN}-{TRANSIT_VNI_MAX}. l3_vni is fixed per namespace in "
-                        "data/bootstrap/22_namespaces.yml; move it out of the band."
+                        "data/bootstrap/24_security_zones.yml; move it out of the band."
                     )
                 )
 
@@ -288,7 +288,7 @@ class CheckEvpnFabric(InfrahubCheck):
                         f"{sorted(l3_by_vni[vni])}. A VNI on the wire carries no L2/L3 "
                         "discriminator, so bridged and routed traffic would share one VNI. Make "
                         "the L2 VNI pools clear of the fixed namespace l3_vni (correct the namespace value in "
-                        "data/bootstrap/22_namespaces.yml or move the conflicting L2 pool)."
+                        "data/bootstrap/24_security_zones.yml or move the conflicting L2 pool)."
                     )
                 )
 

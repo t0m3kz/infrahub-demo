@@ -16,16 +16,14 @@ from utils.segment_addressing import segment_namespace
 LISP_PLATFORM = "cisco_xe"
 
 
-def platform_supports_lisp(platform: dict[str, Any] | str | None) -> bool:
-    """Honor DcimPlatformCapabilityProfile.supports_lisp when present; fall back to LISP_PLATFORM."""
-    if isinstance(platform, dict):
-        os_caps = platform.get("os_capabilities")
-        if isinstance(os_caps, dict) and "supports_lisp" in os_caps:
-            return bool(os_caps["supports_lisp"])
-        return platform.get("name") == LISP_PLATFORM
-    if isinstance(platform, str):
-        return platform == LISP_PLATFORM
-    return False
+def platform_supports_lisp(platform: dict[str, Any] | None) -> bool:
+    """Honor DcimPlatformCapabilityProfile.supports_lisp when the platform has a profile; else LISP_PLATFORM."""
+    if not isinstance(platform, dict):
+        return False
+    os_caps = platform.get("os_capabilities")
+    if isinstance(os_caps, dict) and "supports_lisp" in os_caps:
+        return bool(os_caps["supports_lisp"])
+    return platform.get("name") == LISP_PLATFORM
 
 
 OFFICE_FABRIC_ROLES = CAMPUS_FABRIC_ROLES | LISP_BORDER_ROLES
@@ -33,7 +31,7 @@ OFFICE_FABRIC_ROLES = CAMPUS_FABRIC_ROLES | LISP_BORDER_ROLES
 MIN_DISTRIBUTION_SWITCHES = 1
 """Distribution switches are the office's map-servers; a single one is enough for the demo site."""
 EDGE_ROLE = "edge"
-"""The office's SD-WAN edge (add_sdwan_edge): the far end of the WAN exit of the distribution switches."""
+"""The office's SD-WAN edge (add_office_fabric): the far end of the WAN exit of the distribution switches."""
 
 
 def _gateway_problems(activations: list[dict[str, Any]]) -> list[str]:
@@ -106,11 +104,11 @@ class CheckLispFabric(InfrahubCheck):
             )
 
         for device in fabric:
-            platform = (device.get("platform") or {}).get("name")
-            if platform != LISP_PLATFORM:
+            platform = device.get("platform")
+            if not platform_supports_lisp(platform):
                 problems.append(
-                    f"{device.get('role')} '{device.get('name', '<unnamed-device>')}' is on platform {platform}, "
-                    f"LISP renders {LISP_PLATFORM} only"
+                    f"{device.get('role')} '{device.get('name', '<unnamed-device>')}' is on platform "
+                    f"{(platform or {}).get('name')}, LISP renders {LISP_PLATFORM} only"
                 )
 
         if fabric and not office.get("lisp_site_key"):

@@ -96,7 +96,7 @@ def _make_transform(device_role: str) -> BaseDeviceTransform:
 
 
 def _office_data(role: str, platform: str = "cisco_xe") -> dict[str, Any]:
-    """A cleaned device with the office deployment the LISP queries return (queries/fragments/lisp_fabric.gql)."""
+    """A cleaned device with the office deployment the LISP queries return."""
     deployment: dict[str, Any] = {
         "name": "C005-OFFICE",
         "lisp_map_servers": _MAP_SERVERS,
@@ -179,12 +179,12 @@ class TestRenderedEdge:
 
 
 class TestContentRefusals:
-    def test_an_ipv6_gateway_is_refused(self) -> None:
+    def test_an_ipv6_gateway_is_rendered_without_lisp_and_nothing_raises(self) -> None:
+        """The LISP overlay is IPv4 only: an SVI with an IPv6 gateway is left out of it, the config still renders."""
         activation = _activation()
         activation["segment"]["gateway"]["address"] = "2001:db8::1/64"
 
-        with pytest.raises(ValueError, match=r"VLAN 100 has an IPv6 gateway \(service ipv6 is not rendered\)"):
-            get_lisp_config(_device(), "access-switch", [activation], _inputs())
+        assert get_lisp_config(_device(), "access-switch", [activation], _inputs()) is not None
 
     def test_a_gateway_outside_a_vrf_with_an_l3_instance_is_refused(self) -> None:
         activation = _activation(namespace={"name": "default"})
@@ -210,13 +210,15 @@ class TestContentRefusals:
         with pytest.raises(ValueError, match="LISP map-server ds-c005-office01 has no loopback address"):
             build_lisp_inputs(deployment, "access-switch")
 
-    def test_an_ipv6_segment_prefix_on_a_border_is_refused(self) -> None:
-        deployment = {
-            "segment_deployments": [{"vni": 10100, "segment": {"gateway": {"ip_prefix": {"prefix": "2001:db8::/64"}}}}]
-        }
+    def test_an_ipv6_segment_prefix_on_a_border_gets_no_eid_record(self) -> None:
+        """The border's EID records are IPv4: an IPv6 segment is left out, nothing raises."""
+        zone = {"name": "PROD", "l3_vni": 50001}
+        segment = {"security_zone": zone, "gateway": {"ip_prefix": {"security_zone": zone, "prefix": "2001:db8::/64"}}}
+        deployment = {"segment_deployments": [{"vni": 10100, "segment": segment}]}
 
-        with pytest.raises(ValueError, match=r"has an IPv6 prefix \(service ipv6 is not rendered\)"):
-            build_lisp_inputs(deployment, "distribution-switch")
+        inputs = build_lisp_inputs(deployment, "distribution-switch")
+
+        assert inputs.l3_records == ()
 
 
 # Context content

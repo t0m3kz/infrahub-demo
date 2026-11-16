@@ -1,4 +1,4 @@
-"""Unit tests for the per-context rendering of transforms/firewall.py."""
+"""Unit tests for the per-context rendering of transforms/config/firewall.py."""
 
 from __future__ import annotations
 

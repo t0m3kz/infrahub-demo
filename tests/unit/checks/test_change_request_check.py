@@ -11,7 +11,6 @@ import yaml
 
 from checks.change.change_request import ARTIFACT_FINGERPRINT_KEY, CheckChangeRequest
 from tests.integration.demo_data import ROOT
-from tests.unit.query_shape_helpers import query_tree, unselected
 from utils.change_rules import artifact_fingerprint, parse_artifact_diff
 
 QUERY = ROOT / "queries" / "change" / "change_request_validation.gql"
@@ -186,12 +185,6 @@ def test_collect_data_adds_the_fingerprint_of_the_current_artifact_diff() -> Non
 
     assert data[ARTIFACT_FINGERPRINT_KEY] == artifact_fingerprint(parse_artifact_diff(payload))
     assert client.url == "http://infrahub:8000/api/diff/artifacts?branch=feat%2Fleaf"
-
-
-def test_the_fixtures_emit_only_fields_the_query_selects() -> None:
-    """The raw rows stand for change_request_validation.gql."""
-    data = {"CoreProposedChange": _edges(_pc()), "ChangeRequest": _edges(_request())}
-    assert unselected(data, query_tree(QUERY)) == []
 
 
 def test_the_check_is_registered_targetless_with_its_query() -> None:

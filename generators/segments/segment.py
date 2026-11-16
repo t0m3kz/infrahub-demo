@@ -9,28 +9,27 @@ from typing import Any
 
 from infrahub_sdk.protocols import CoreNumberPool, CoreStandardGroup
 
-from generators.helpers.routing_tag import ensure_segment_routing_tag
+from generators.base import BaseGenerator
+from generators.helpers.routing_tag import segment_routing_tag_spec
 from generators.helpers.security_tag import ensure_segment_tag
-from generators.mixins.common import CommonGenerator
-from generators.mixins.connections import CablingMixin
-from generators.mixins.pools import PoolMixin
-from generators.mixins.segment_firewall import SegmentPolicyMixin
-from generators.protocols import (
-    ManagedSegmentDeployment,
-)
-from generators.segments.segment_addressing import SegmentAddressingMixin
-from generators.segments.segment_ports import SegmentPortTagMixin
+from generators.plan import EdgesSpec, Hfid, NodeSpec, TopologyPlan
+from generators.protocols import ManagedSegmentDeployment
+from generators.segments.segment_addressing import ensure_segment_addressing
+from generators.segments.segment_policy import ensure_segment_policy
+from generators.segments.segment_ports import reconcile_vxlan_segment
 from utils.data_cleaning import clean_data
 from utils.limits import GROUP_SEGMENT_DEPLOYMENTS, STRETCHED_VNI_POOL
 
 
-class VxlanSegmentGenerator(
-    PoolMixin, CablingMixin, SegmentAddressingMixin, SegmentPortTagMixin, SegmentPolicyMixin, CommonGenerator
-):
-    """VXLAN segment generator: allocates a VNI per deployment and reconciles the segment's VLAN rows."""
+class VxlanSegmentGenerator(BaseGenerator):
+    """VXLAN segment generator: allocates a VNI per deployment and reconciles the segment's VLAN rows. The addressing
+    and the policy are plans (segment_addressing.py, segment_policy.py) the class holds as methods.
+    """
 
     graphql_root_key = "ManagedVxlanSegment"
     _deployments_group: Any = None
+    ensure_segment_addressing = ensure_segment_addressing
+    ensure_segment_policy = ensure_segment_policy
 
     async def _get_stretched_vni_pool(self) -> dict[str, Any] | None:
         """Return the global stretched-segment VNI pool as {"id", "name"}, or None."""
@@ -79,9 +78,12 @@ class VxlanSegmentGenerator(
         # Its default-deny policy, created with the segment: a segment is closed before any rule opens it.
         await self.ensure_segment_policy(segment)
         # The segment's group tag (routed tenant segment only), before any segment lock: the helper takes its own.
-        await ensure_segment_tag(self.client, self.resource_lock, segment=segment)
+        await ensure_segment_tag(self, segment=segment)
         # And its routing tag (the number of its segment community), same segments, one write when absent.
-        await ensure_segment_routing_tag(self.client, segment=segment)
+        if (tag_spec := segment_routing_tag_spec(segment)) is not None:
+            segment["routing_tag"] = (await self.apply_plan(TopologyPlan(root_id=None, specs=[tag_spec]))).routing_tags[
+                tag_spec.node_id
+            ]
 
         target_deployments = self._resolve_target_deployments(segment, segment_name)
         if not target_deployments:
@@ -178,8 +180,8 @@ class VxlanSegmentGenerator(
                 "State may be partially applied."
             )
 
-        # LOCAL VLAN ID per device: reconciled from scratch, written untracked (SegmentPortTagMixin).
-        await self.reconcile_vxlan_segment(segment_id, segment_name)
+        # LOCAL VLAN ID per device: reconciled from scratch, written untracked (segment_ports.py).
+        await reconcile_vxlan_segment(self, segment_id, segment_name)
 
     def _resolve_target_deployments(self, segment: dict[str, Any], segment_name: str) -> list[dict[str, Any]]:
         """Resolve segment.customer_deployments to their hosting nodes (see _resolve_hosting_parent)."""
@@ -227,15 +229,6 @@ class VxlanSegmentGenerator(
             )
         return self._deployments_group
 
-    async def _join_segment_deployments(self, deployment: Any) -> None:
-        """Add an existing deployment to GROUP_SEGMENT_DEPLOYMENTS if not a member (one RelationshipAdd keeps its other
-        groups).
-        """
-        if any(peer.hfid == [GROUP_SEGMENT_DEPLOYMENTS] for peer in deployment.member_of_groups.peers):
-            return
-        group = await self._segment_deployments_group()
-        await deployment.add_relationships(relation_to_update="member_of_groups", related_nodes=[group.id])
-
     async def _activate_segment_in_deployment(
         self,
         segment_id: str,
@@ -254,8 +247,23 @@ class VxlanSegmentGenerator(
         if existing_deployment:
             self.logger.info(f"  [{deployment_name}] SegmentDeployment already exists for {segment_name} — skipping")
             try:
-                await existing_deployment.save(allow_upsert=True)  # register with tracker
-                await self._join_segment_deployments(existing_deployment)
+                # Saved by id alone (registers it with the tracker); joins the group when it is not a member yet
+                plan = TopologyPlan(root_id=None)
+                plan.add(
+                    NodeSpec(
+                        "deployment",
+                        ManagedSegmentDeployment,
+                        {"id": existing_deployment.id},
+                        hfid=Hfid("ManagedSegmentDeployment", (segment_name, deployment_name)),
+                        ownership="owned",
+                    )
+                )
+                if not any(
+                    peer.hfid == [GROUP_SEGMENT_DEPLOYMENTS] for peer in existing_deployment.member_of_groups.peers
+                ):
+                    group = await self._segment_deployments_group()
+                    plan.add(EdgesSpec(existing_deployment.id, "member_of_groups", (group.id,)))
+                await self.apply_plan(plan)
             except Exception as exc:
                 # Not registered, the record would be deleted by this run's cleanup and take its VLAN rows with it.
                 self.fail(f"  [{deployment_name}] Failed to re-save existing activation: {exc}")
@@ -292,11 +300,20 @@ class VxlanSegmentGenerator(
             activation_data["vni"] = vni_from_pool
 
         try:
-            activation = await self.client.create(
-                kind=ManagedSegmentDeployment,
-                data=activation_data,
+            await self.apply_plan(
+                TopologyPlan(
+                    root_id=None,
+                    specs=[
+                        NodeSpec(
+                            "deployment",
+                            ManagedSegmentDeployment,
+                            activation_data,
+                            hfid=Hfid("ManagedSegmentDeployment", (segment_name, deployment_name)),
+                            ownership="owned",
+                        )
+                    ],
+                )
             )
-            await activation.save(allow_upsert=True)
             self.logger.info(
                 f"  [{deployment_name}] SegmentDeployment saved "
                 f"(segment={segment_name}, vni={'from_pool' if vni_from_pool else 'none'})"

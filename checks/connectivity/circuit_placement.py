@@ -1,6 +1,6 @@
 """Validate where a circuit terminates and what carries it, per circuit type: locations, owner, carrier, environment.
 
-Rules by type (carrier, tunnel, dci, handoff, vpn) and the known gaps: see AGENTS.md Circuit placement.
+Rules by type (carrier, tunnel, dci, handoff, vpn) and the known gaps: see domain-model.md Circuit placement.
 """
 
 from __future__ import annotations
@@ -374,7 +374,9 @@ class CheckCircuitPlacement(InfrahubCheck):
                 circuit,
                 TUNNEL,
                 f"Tunnel circuit '{name}' end '{_port_label(port)}' rides no live internet carrier circuit (one "
-                f"of circuit_type {INTERNET_CARRIER}): {found}. Every end of a tunnel has its own internet access.",
+                f"of circuit_type {INTERNET_CARRIER}): {found}. Every end of a tunnel has its own internet access: author the "
+                f"carrier from '{_port_label(port)}' to the ISP's router (an office's is INET-<office>, from its edge's "
+                "WAN port).",
             )
 
     # Interconnect circuits

@@ -6,21 +6,23 @@ built is an error, never a silent move onto the shared context.
 
 from __future__ import annotations
 
-from generators.customers.customer_facility import CustomerFacilityMixin
-from generators.fabric.fabric_shared import DC_GENERATORS
-from generators.mixins.common import CommonGenerator
-from generators.mixins.connections import CablingMixin
-from generators.mixins.devices import DeviceMixin
-from generators.mixins.firewall_context import EDGE_CONTEXT, FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
-from generators.mixins.pools import PoolMixin
+from typing import Any
+
+from generators.base import BaseGenerator
+from generators.capabilities.ha import DC_GENERATORS, EDGE_CONTEXT, FIREWALL_CONTEXT
+from generators.customers.customer_facility import FacilityConfig, board_customer
+from generators.customers.firewall_context_spec import BOARDED_LOADBALANCER_CONTEXT
+
+DC_FACILITY = FacilityConfig(
+    customer_kind="TopologyCustomerDC",
+    parent_label="Data Center",
+    parent_generators=DC_GENERATORS,
+    context_specs=(FIREWALL_CONTEXT, EDGE_CONTEXT, BOARDED_LOADBALANCER_CONTEXT),
+)
 
 
-class CustomerDeploymentDCExchangeGenerator(
-    CustomerFacilityMixin, PoolMixin, DeviceMixin, CablingMixin, CommonGenerator
-):
+class CustomerDeploymentDCExchangeGenerator(BaseGenerator):
     """add_customer_deployment_dc: Firewall and Loadbalancer contexts and their legs for TopologyCustomerDC."""
 
-    _customer_kind = "TopologyCustomerDC"
-    _parent_label = "Data Center"
-    _parent_generators = DC_GENERATORS
-    _context_specs = (FIREWALL_CONTEXT, EDGE_CONTEXT, LOADBALANCER_CONTEXT)
+    async def generate(self, data: dict[str, Any]) -> None:
+        await board_customer(self, data, DC_FACILITY)

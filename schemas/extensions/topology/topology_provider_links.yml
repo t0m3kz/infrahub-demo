@@ -3,8 +3,8 @@ version: "1.0"
 
 # The reverse of the edges that name a provider or an owner. Each forward edge is declared on one side only (the device,
 # the circuit, the port, the endpoint), so the provider lists nothing by itself; these reverses give the UI and the
-# readers one place to look at an ISP's routers and circuits. Each reuses the forward edge's identifier and peer kind
-# (tests/unit/test_provider_links_schema.py). Nothing is stored twice: a reverse edge is the same edge.
+# readers one place to look at an ISP's routers and circuits. Each reuses the forward edge's identifier and peer kind.
+# Nothing is stored twice: a reverse edge is the same edge.
 extensions:
   nodes:
     - kind: OrganizationEntity

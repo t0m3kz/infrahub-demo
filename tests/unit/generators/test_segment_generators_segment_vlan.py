@@ -1,10 +1,10 @@
-"""Unit tests for the MLAG lookup of a device that SegmentVlanMixin pairs rows by."""
+"""Unit tests for the MLAG lookup of a device that generators/segments/segment_vlan.py pairs rows by."""
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from tests.unit.segment_generators_helpers import _make_gen
+from generators.segments import segment_vlan
 
 
 def _device(dev_id: str, mlag_id: str | None = None, *, with_capabilities: bool = True) -> MagicMock:
@@ -28,10 +28,10 @@ class TestMlagOf:
     """_mlag_of: the id of the MLAG a device is in, without a read."""
 
     def test_device_with_mlag_capability_is_in_the_mlag(self) -> None:
-        assert _make_gen()._mlag_of(_device("dev-1", "mlag-1")) == "mlag-1"
+        assert segment_vlan._mlag_of(_device("dev-1", "mlag-1")) == "mlag-1"
 
     def test_device_without_mlag_capability_has_none(self) -> None:
-        assert _make_gen()._mlag_of(_device("dev-1")) is None
+        assert segment_vlan._mlag_of(_device("dev-1")) is None
 
     def test_device_with_no_capabilities_has_none(self) -> None:
-        assert _make_gen()._mlag_of(_device("dev-1", with_capabilities=False)) is None
+        assert segment_vlan._mlag_of(_device("dev-1", with_capabilities=False)) is None

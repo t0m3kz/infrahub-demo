@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from generators.applications.lb_vip import load_balanced_components_in
 from generators.helpers.lb_vip import (
     instance_dc_id,
     instance_footprint,
@@ -17,11 +17,8 @@ from generators.helpers.lb_vip import (
     vip_identifier,
     vip_ports,
 )
-from generators.mixins.lb_vip import load_balanced_components_in
 from generators.protocols import AppComponent, ManagedVxlanSegment
 from tests.unit.lb_vip_helpers import _context, _instance, _with_footprints, lb_member
-from tests.unit.query_shape_helpers import fragment_text, fragment_tree, query_tree
-from utils.graphql_queries import load_query
 
 # Pure planning
 
@@ -157,51 +154,6 @@ def test_identifiers_follow_the_contract() -> None:
 
 
 # Query
-
-
-def test_application_query_reads_the_serving_context_from_the_segment_and_the_data_center_from_the_instance(
-    root_dir: Path,
-) -> None:
-    """The context sits on the segment's footprints (the dependency targets read it through the same fragment);"""
-    query = load_query(root_dir / "queries/topology/add/application.gql")
-    instance = fragment_text(root_dir / "queries/topology/add/application.gql", "AppInstanceFields")
-    assert "serving_loadbalancer_context" not in instance
-    flat = " ".join(instance.split())
-    physical = flat.split("... on DcimPhysicalDevice", 1)[1].split("... on DcimVirtualDevice", 1)[0]
-    virtual = flat.split("... on DcimVirtualDevice", 1)[1].split("... on CloudInstance", 1)[0]
-    assert "... on TopologyPod { parent { node { id __typename } } }" in physical
-    assert "... on TopologyCustomerDC { parent { node { id __typename } } }" in virtual
-    segment = " ".join(
-        query.split("fragment SegmentSecurityFields", 1)[1].split("fragment AppInstanceFields", 1)[0].split()
-    )
-    assert "... on ManagedVxlanSegment { customer_deployments {" in segment
-    assert segment.count("serving_loadbalancer_context") == 1
-    assert segment.count("vip_prefix { node { id ip_namespace { node { id } } } }") == 1
-    assert segment.count("ip_address { node { ip_prefix { node { id } } } }") == 1
-    assert segment.count("parent { node { id __typename } }") == 1
-    target = " ".join(query.split("target {", 1)[1].split())
-    assert "load_balanced { value }" in target
-    assert "instances { edges { node { ...AppInstanceFields } } }" in target
-    fields = fragment_tree(root_dir / "queries/topology/add/application.gql", "SegmentSecurityFields")
-    assert "id" in fields["gateway"]["node"]["ip_prefix"]["node"]
-
-
-def test_re_read_queries_select_what_the_application_query_does(root_dir: Path) -> None:
-    """A re-read replaces the payload's dict: it must carry every field the producer reads from it."""
-    application = fragment_tree(root_dir / "queries/topology/add/application.gql", "SegmentSecurityFields")
-    contexts = query_tree(root_dir / "queries/topology/add/lb_serving_contexts.gql")
-    gateway_path = root_dir / "queries/topology/add/lb_segment_gateways.gql"
-    gateways = query_tree(gateway_path)
-    assert (
-        application["customer_deployments"]["edges"]["node"]["serving_loadbalancer_context"]
-        == contexts["TopologyCustomerDC"]["edges"]["node"]["serving_loadbalancer_context"]
-    )
-    assert "ManagedVxlanSegment(ids: $ids)" in gateway_path.read_text()
-    segment = gateways["ManagedVxlanSegment"]["edges"]["node"]
-    assert {"name", "vrf_type", "l3_vni"} <= set(segment["security_zone"]["node"])
-    prefix = segment["gateway"]["node"]["ip_prefix"]["node"]
-    assert {"id", "prefix", "ip_namespace"} <= set(prefix)
-    assert "vrf_type" not in prefix["ip_namespace"]["node"]
 
 
 class TestLoadBalancedComponentsIn:

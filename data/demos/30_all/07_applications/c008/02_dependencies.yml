@@ -4,7 +4,7 @@
 # cross-owner flow opens only once its target's owner approves it
 # (generators/helpers/rules.py), so access_status is approved, and an approved
 # one must name the ports it opens and its decision_reason
-# (checks/app_dependency.py). Source and target are component fqdns; without
+# (checks/applications/app_dependency.py). Source and target are component fqdns; without
 # ports an own-owner dependency opens every port its target component lists.
 apiVersion: infrahub.app/v1
 kind: Object

@@ -1,0 +1,15 @@
+---
+# The shared Azure network account, owned by the Infrastructure Services pseudo-customer (INFRA): the region's virtual
+# WAN hub (04_hub_gateways.yml) and the ExpressRoute circuit towards our PA4 cage
+# (08_interconnects/01_colo_onramp/03_cloud_transports.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "net-hub-azure-prod"
+      account_id: "99001122-3344-5566-7788-99aabbccddee"
+      description: "Shared Azure network account: the 30_all virtual WAN hub and its ExpressRoute circuit"
+      environment: "p"
+      provider: "P005"
+      owner: "INFRA"

@@ -311,7 +311,6 @@ class TestBuildRulePayload:
         dst_seg = {"id": "seg-dst", "isolation_mode": "microsegmented"}
 
         payload = RulesPlanner.build_rule_payload(
-            policy_id="policy-1",
             rule_name="rule-1",
             dep=dep,
             src_comp=src_comp,
@@ -324,7 +323,6 @@ class TestBuildRulePayload:
             cross_zone=True,
         )
 
-        assert payload["policy"] == {"id": "policy-1"}
         assert payload["source_segment"] == {"id": "seg-src"}
         assert payload["destination_segment"] == {"id": "seg-dst"}
         assert payload["apply_on_switch"] is True
@@ -377,7 +375,6 @@ class TestRuleTags:
 
     def test_payload_of_an_intra_segment_rule_includes_the_tags(self) -> None:
         payload = RulesPlanner.build_rule_payload(
-            policy_id="policy-1",
             rule_name="scoring-to-cache-tcp-6379",
             dep={"description": None, "access_status": "auto"},
             src_comp=self._SRC,

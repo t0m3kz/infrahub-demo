@@ -4,40 +4,26 @@ kind: Object
 spec:
   kind: LocationMetro
   data:
-    - name: Amsterdam
-      shortname: ams
+    - name: "Amsterdam"
+      shortname: "ams"
       parent: nl
       children:
         kind: LocationFacility
         data:
-          - name: AMS-1
-            shortname: ams-1
+          - name: "AMS-1"
+            shortname: "ams-1"
             children:
               kind: LocationSuite
               data:
                 - name: AMS-1-Suite-1
                   index: 1
-                  shortname: ams-1-s-1
+                  shortname: "ams-1-s-1"
                   parent: ams-1
                   rows: 1
-                  racks_per_row: 2
-                  children:
-                    kind: LocationRackRow
-                    data:
-                      - name: AMS-1-SUITE-1-ROW-1
-                        index: 1
-                        shortname: ams-1-s-1-row-1
-                        parent: ams-1-s-1
+                  racks_per_row: 1
                 - name: AMS-1-Suite-2
                   index: 2
-                  shortname: ams-1-s-2
+                  shortname: "ams-1-s-2"
                   parent: ams-1
                   rows: 1
-                  racks_per_row: 2
-                  children:
-                    kind: LocationRackRow
-                    data:
-                      - name: AMS-1-SUITE-2-ROW-1
-                        index: 1
-                        shortname: ams-1-s-2-row-1
-                        parent: ams-1-s-2
+                  racks_per_row: 1

@@ -71,4 +71,4 @@ Pod 1 is a middle_rack pod, so a network rack carries its own leafs:
 4. **No spine regeneration needed** - the CablingPlanner picks the next free spine ports
 
 Row 4 is past the 3 rows of racks the DC6 data already builds in suite `ktw-1-s-1`, but within the 4 rows the suite
-declares (`rows: 4`, `racks_per_row: 9`, the pod's M_MIDDLE design envelope; checks/suite_capacity.py enforces both).
+declares (`rows: 4`, `racks_per_row: 9`, the pod's M_MIDDLE design envelope; checks/customers/suite_capacity.py enforces both).

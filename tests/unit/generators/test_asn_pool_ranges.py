@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from generators.helpers.pools import calculate_fabric_asn_block_size, name_to_asn_range
+from generators.ipam.pools import calculate_fabric_asn_block_size, name_to_asn_range
 from utils.limits import PRIVATE_ASN32_START
 
 

@@ -4,114 +4,38 @@ kind: Object
 spec:
   kind: LocationMetro
   data:
-    - name: London
-      shortname: lon
+    - name: "London"
+      shortname: "lon"
       parent: uk
       children:
         kind: LocationFacility
         data:
-          - name: LON-1
-            shortname: lon-1
+          - name: "LON-1"
+            shortname: "lon-1"
             children:
               kind: LocationSuite
               data:
                 - name: LON-1-Room-1
                   index: 1
-                  shortname: lon-1-s-1
+                  shortname: "lon-1-s-1"
                   parent: lon-1
                   rows: 4
                   racks_per_row: 9
-                  children:
-                    kind: LocationRackRow
-                    data:
-                      - name: LON-1-ROOM-1-ROW-1
-                        index: 1
-                        shortname: lon-1-s-1-row-1
-                        parent: lon-1-s-1
-                      - name: LON-1-ROOM-1-ROW-2
-                        index: 2
-                        shortname: lon-1-s-1-row-2
-                        parent: lon-1-s-1
-                      - name: LON-1-ROOM-1-ROW-3
-                        index: 3
-                        shortname: lon-1-s-1-row-3
-                        parent: lon-1-s-1
-                      - name: LON-1-ROOM-1-ROW-4
-                        index: 4
-                        shortname: lon-1-s-1-row-4
-                        parent: lon-1-s-1
                 - name: LON-1-Room-2
                   index: 2
-                  shortname: lon-1-s-2
+                  shortname: "lon-1-s-2"
                   parent: lon-1
                   rows: 4
                   racks_per_row: 9
-                  children:
-                    kind: LocationRackRow
-                    data:
-                      - name: LON-1-ROOM-2-ROW-1
-                        index: 1
-                        shortname: lon-1-s-2-row-1
-                        parent: lon-1-s-2
-                      - name: LON-1-ROOM-2-ROW-2
-                        index: 2
-                        shortname: lon-1-s-2-row-2
-                        parent: lon-1-s-2
-                      - name: LON-1-ROOM-2-ROW-3
-                        index: 3
-                        shortname: lon-1-s-2-row-3
-                        parent: lon-1-s-2
-                      - name: LON-1-ROOM-2-ROW-4
-                        index: 4
-                        shortname: lon-1-s-2-row-4
-                        parent: lon-1-s-2
                 - name: LON-1-Room-3
                   index: 3
-                  shortname: lon-1-s-3
+                  shortname: "lon-1-s-3"
                   parent: lon-1
                   rows: 4
                   racks_per_row: 9
-                  children:
-                    kind: LocationRackRow
-                    data:
-                      - name: LON-1-ROOM-3-ROW-1
-                        index: 1
-                        shortname: lon-1-s-3-row-1
-                        parent: lon-1-s-3
-                      - name: LON-1-ROOM-3-ROW-2
-                        index: 2
-                        shortname: lon-1-s-3-row-2
-                        parent: lon-1-s-3
-                      - name: LON-1-ROOM-3-ROW-3
-                        index: 3
-                        shortname: lon-1-s-3-row-3
-                        parent: lon-1-s-3
-                      - name: LON-1-ROOM-3-ROW-4
-                        index: 4
-                        shortname: lon-1-s-3-row-4
-                        parent: lon-1-s-3
                 - name: LON-1-Room-4
                   index: 4
-                  shortname: lon-1-s-4
+                  shortname: "lon-1-s-4"
                   parent: lon-1
                   rows: 4
                   racks_per_row: 9
-                  children:
-                    kind: LocationRackRow
-                    data:
-                      - name: LON-1-ROOM-4-ROW-1
-                        index: 1
-                        shortname: lon-1-s-4-row-1
-                        parent: lon-1-s-4
-                      - name: LON-1-ROOM-4-ROW-2
-                        index: 2
-                        shortname: lon-1-s-4-row-2
-                        parent: lon-1-s-4
-                      - name: LON-1-ROOM-4-ROW-3
-                        index: 3
-                        shortname: lon-1-s-4-row-3
-                        parent: lon-1-s-4
-                      - name: LON-1-ROOM-4-ROW-4
-                        index: 4
-                        shortname: lon-1-s-4-row-4
-                        parent: lon-1-s-4

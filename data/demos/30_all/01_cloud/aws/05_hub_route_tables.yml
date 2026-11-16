@@ -1,0 +1,24 @@
+---
+# The hub's own routing domains. rt-hub-shared is the table of the link towards us (the hybrid attachment): every
+# network that on-prem must reach propagates into it, and no network attachment is associated with it (R13: a table a
+# customer's network is associated with learns that owner's routes only). rt-hub-isolated is the domain of C001's
+# VPC, which has no footprint (08_interconnects/02_cloud_hub/05_attachments.yml). Each transit footprint gets its own
+# table rt-<footprint> from add_customer_deployment_cloud.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudGatewayRouteTable
+  data:
+    - name: "rt-hub-shared"
+      cloud_id: "tgw-rtb-00shared0euc1"
+      description: "The hybrid attachment's table: the networks on-prem reaches propagate here"
+      status: active
+      is_default: true
+      gateway: "tgw-30all-euc1"
+
+    - name: "rt-hub-isolated"
+      cloud_id: "tgw-rtb-00isolated0euc1"
+      description: "C001's routing domain: on-prem reachable, no tenant-to-tenant path"
+      status: active
+      is_default: false
+      gateway: "tgw-30all-euc1"

@@ -80,7 +80,7 @@ def make_far(
 ) -> dict[str, Any]:
     """The far end of a cable as the query returns it: a physical port, its device and its pinned NICs."""
     device = {k: device_[k] for k in ("id", "name", "role", "shared_capabilities", "interfaces")}
-    return {**port, "device": device, "encapsulations": [{"capabilities": nics or []}]}
+    return {**port, "device": device, "sub_interfaces": nics or []}
 
 
 def make_switch(ports: dict[str, tuple[str, list[dict[str, Any]]]]) -> dict[str, Any]:

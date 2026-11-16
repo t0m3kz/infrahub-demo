@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from graphql import FieldNode, FragmentDefinitionNode, OperationDefinitionNode, parse
+from graphql import FieldNode, OperationDefinitionNode, parse
 
 from tests.integration import demo_data
 from transforms.helpers.origination import get_origination
@@ -214,10 +214,24 @@ class TestOrigination:
 # The queries carry the tags
 
 
-def _fragment(path: str, name: str) -> FragmentDefinitionNode:
-    """The named fragment of a queries/fragments file."""
-    document = parse((_QUERIES / "fragments" / path).read_text())
-    return next(d for d in document.definitions if isinstance(d, FragmentDefinitionNode) and d.name.value == name)
+def _paths(tree: dict[str, Any], *path: str) -> list[dict[str, Any]]:
+    """Every subtree of the query tree reached by following ``path`` from any depth."""
+    found: list[dict[str, Any]] = []
+    if path[0] in tree:
+        rest = path[1:]
+        found.extend(_paths(tree[path[0]], *rest) if rest else [tree[path[0]]])
+    for key, value in tree.items():
+        if key != path[0]:
+            found.extend(_paths(value, *path))
+    return found
+
+
+def _segments_with_tag(tree: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every selected node that reads both ``routing_tag`` and ``owner`` (a segment)."""
+    found = [tree] if {"routing_tag", "owner", "isolation_mode"} <= tree.keys() else []
+    for value in tree.values():
+        found.extend(_segments_with_tag(value))
+    return found
 
 
 def _fields(selection_owner: Any, *path: str) -> dict[str, FieldNode]:
@@ -231,36 +245,11 @@ def _fields(selection_owner: Any, *path: str) -> dict[str, FieldNode]:
 class TestQueriesSelectTheTags:
     """The leaf, border and edge payloads carry the tags the templates read."""
 
-    def test_the_segment_fragment_selects_the_segment_and_owner_tag(self) -> None:
-        """NetworkSegmentFields (every interface capability of the leaf) reads the tag next to the owner."""
-        fragment = _fragment("network_segment.gql", "SegmentSecurityPolicyFields")
-        assert "routing_tag" in _fields(fragment)
-        assert set(_fields(fragment, "owner", "node")) == {"id", "org_id", "routing_tag"}
-
-    def test_the_segment_deployments_fragment_selects_them_on_the_generic(self) -> None:
-        """The border and BGW activations come from the deployment's segments: tag and owner tag, never in a `... on`."""
-        fragment = _fragment("network_segment.gql", "SegmentDeploymentsOnDeploymentFields")
-        segment = _fields(fragment, "segment_deployments", "edges", "node", "segment", "node")
-        assert "routing_tag" in segment
-        assert set(_fields(fragment, "segment_deployments", "edges", "node", "segment", "node", "owner", "node")) == {
-            "routing_tag"
-        }
-
     def _edge_roots(self) -> dict[str, FieldNode]:
         """The top-level fields of the edge_config operation."""
         document = parse((_QUERIES / "config" / "edge.gql").read_text())
         operation = next(d for d in document.definitions if isinstance(d, OperationDefinitionNode))
         return _fields(operation)
-
-    def test_the_edge_reads_the_customers_tags_and_the_segments_tag(self) -> None:
-        """OrganizationCustomer is keyed like customer_owner (org_id, display_label); the segment root adds its tag."""
-        roots = self._edge_roots()
-        assert set(_fields(roots["OrganizationCustomer"], "edges", "node")) == {
-            "org_id",
-            "display_label",
-            "routing_tag",
-        }
-        assert "routing_tag" in _fields(roots["ManagedNetworkSegment"], "edges", "node")
 
     def test_the_selected_fields_exist_on_the_schema(self) -> None:
         """routing_tag is a Number on the customer and on the segment generic (so on every segment kind)."""

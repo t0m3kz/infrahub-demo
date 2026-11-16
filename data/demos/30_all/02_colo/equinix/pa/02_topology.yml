@@ -27,6 +27,8 @@ spec:
                   design: "EDGE"
                   member_of_groups:
                     - colocation_zones
+                  fabric_templates:
+                    - ["2", "edge", "N9K-C9316D-GX_EDGE"]
                 - name: PA6
                   member_of_groups:
                     - colocation_zones
