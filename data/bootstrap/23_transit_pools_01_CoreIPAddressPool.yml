@@ -1,5 +1,5 @@
 # One public SNAT /32 per FirewallContext with an INTERNET leg
-# (generators/firewall_context.py). RFC 5737 TEST-NET-1 stands in for the
+# (generators/customers/firewall_context.py). RFC 5737 TEST-NET-1 stands in for the
 # provider-assigned public block; the edge aggregates it into the ISP sessions.
 apiVersion: infrahub.app/v1
 kind: Object

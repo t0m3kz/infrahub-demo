@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
-import ipaddress
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncGenerator, Generator
+from contextlib import asynccontextmanager, contextmanager
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from infrahub_sdk.exceptions import GraphQLError
+from infrahub_sdk.exceptions import GraphQLError, NodeNotFoundError
 from infrahub_sdk.protocols import CoreIPPrefixPool
 
-from generators.logger import GeneratorError
-from generators.topology.segment import VxlanSegmentGenerator
+from generators.base import BaseGenerator
+from generators.model.errors import GeneratorError
+from generators.protocols import IpamIPAddress
+from generators.segments.segment import VxlanSegmentGenerator
+
+
+class CustomerPoolsHost(BaseGenerator):
+    """What a footprint generator is to the customer pools: the generator base."""
 
 
 def footprint(kind: str, name: str) -> dict[str, Any]:
@@ -57,13 +63,24 @@ class Client:
         self.created: list[tuple[str, dict[str, Any]]] = []
         self.known: dict[tuple[str, str], MagicMock] = {}
         self.refill_on_edge: dict[str, int] = {}
+        self.group_context = SimpleNamespace(related_node_ids=[])
+        self.sliced: list[dict[str, Any]] = []  # the pools carved from a tenant pool (``recording_pool_functions``)
 
     async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
+        if kind is IpamIPAddress:  # the find-before-create read of a prefix's addresses: none exist yet
+            return []
         assert kind is CoreIPPrefixPool
         name = kwargs["name__value"]
         if name in self.tenants:
             return [self.tenants[name]]
         return [self.pools[name]] if name in self.pools else []
+
+    async def get(self, *, kind: Any, **kwargs: Any) -> Any:
+        """``resolve_pool``'s read of a tenant pool by name (a missing one is not found)."""
+        assert kind is CoreIPPrefixPool
+        if kwargs["name__value"] not in self.tenants:
+            raise NodeNotFoundError(branch_name="main", node_type="CoreIPPrefixPool", identifier=kwargs)
+        return self.tenants[kwargs["name__value"]]
 
     async def allocate_next_ip_prefix(self, **kwargs: Any) -> Any:
         """A prefix per (pool, identifier): the same identifier returns the same prefix; a length change is refused."""
@@ -93,7 +110,12 @@ class Client:
         self.known[key] = node
         return node
 
-    async def create(self, *, kind: str, data: dict[str, Any]) -> Any:
+    async def create(self, *, kind: Any, data: dict[str, Any]) -> Any:
+        if kind is IpamIPAddress:  # an address of an allocated prefix: the gateway, not recorded in ``created``
+            address = MagicMock(id="gw-1")
+            address.address.value = data["address"]
+            address.save = AsyncMock()
+            return address
         self.created.append((kind, data))
         node = MagicMock()
         node.save = AsyncMock()
@@ -131,24 +153,31 @@ def make_gen(client: Client, cls: Any = VxlanSegmentGenerator) -> Any:
 
     gen.resource_lock = lock
 
-    async def create_pool(**kwargs: Any) -> MagicMock:
-        gen.sliced.append(kwargs)
+    gen.sliced = client.sliced
+    return gen
+
+
+@contextmanager
+def recording_pool_functions() -> Generator[None]:
+    """The two functions ``generators/ipam/customer_pool.py`` boards a pool with, answered by the recording ``Client``: the
+    parent is the tenant pool by name, the carve is recorded (``Client.sliced``, with the parent's name) and the pool
+    it makes is found from then on.
+    """
+
+    async def carve(client: Any, _logger: Any, parent: Any, **kwargs: Any) -> MagicMock:
+        client.sliced.append({**kwargs, "parent_pool_name": parent.name.value})
         pool = customer_pool(kwargs["pool_name"])
         client.pools[kwargs["pool_name"]] = pool
         return pool
 
-    gen.sliced = []
-    gen.ensure_sliced_pool = create_pool
-    gen._get_parent_pool_with_retry = AsyncMock(side_effect=lambda name: client.tenants[name])
+    async def parent_pool(gen: Any, name: str) -> Any:
+        return gen.client.tenants[name]
 
-    async def upsert(prefix: Any, *, offsets: tuple[int, ...], description: str, track: bool) -> dict[int, Any]:
-        address = MagicMock(id="gw-1")
-        network = ipaddress.ip_network(prefix.prefix.value)
-        address.address.value = f"{network[offsets[0]]}/{network.prefixlen}"
-        return {offsets[0]: address}
-
-    gen.upsert_prefix_addresses = upsert
-    return gen
+    with (
+        patch("generators.ipam.customer_pool.ensure_sliced_pool", carve),
+        patch("generators.ipam.customer_pool.get_parent_pool", parent_pool),
+    ):
+        yield
 
 
 def segment_data(

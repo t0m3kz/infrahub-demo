@@ -1,7 +1,8 @@
-"""A generator host and a fake client for the tests of generators/helpers/vrf.py and the callers that use it."""
+"""A generator host and a fake client for the tests of generators/capabilities/vrf.py and the callers that use it."""
 
 from __future__ import annotations
 
+import functools
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -9,7 +10,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.helpers.vrf import VrfMixin
+from generators.plan import TopologyPlan
+from generators.reconciler import PlanReconciler, ReconcileResult
 from tests.unit.vrf_instances_helpers import edges, raw_response
 
 NAMESPACES = ("PROD", "NONPROD", "INTERNET", "MANAGEMENT")
@@ -75,6 +77,7 @@ class VrfStore:
     external_refs: dict[str, dict[str, set[str]]] = field(default_factory=dict)
     edge_ops: list[tuple[str, str, str, list[str]]] = field(default_factory=list)
     deleted: list[tuple[str, str]] = field(default_factory=list)
+    device_ids: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_response(cls, data: dict[str, Any]) -> VrfStore:
@@ -92,6 +95,8 @@ class VrfStore:
                 )
             )
         for dev_edge in (data.get("DcimDevice") or {}).get("edges", []):
+            device = dev_edge["node"]
+            store.device_ids[(device.get("name") or {}).get("value", device["id"])] = device["id"]
             for if_edge in dev_edge["node"]["interfaces"]["edges"]:
                 iface = if_edge["node"]
                 for cap in (iface.get("zone_capabilities") or {}).get("edges", []):
@@ -106,8 +111,8 @@ class VrfStore:
         return vrf
 
 
-class VrfHost(VrfMixin):
-    """The mixin on its own, over a mocked client; every write is recorded by kind."""
+class VrfHost:
+    """A generator host for generators/capabilities/vrf.py over a mocked client; every write is recorded by kind."""
 
     def __init__(self, *responses: dict[str, Any], store: VrfStore | None = None) -> None:
         self.logger = MagicMock()
@@ -119,29 +124,58 @@ class VrfHost(VrfMixin):
         self._responses = list(responses)
         self.store = store or VrfStore.from_response(responses[0] if responses else {})
         self.client = MagicMock()
-        self.client.execute_graphql = AsyncMock(side_effect=self._execute)
+        self.client.execute_graphql = AsyncMock(side_effect=self._execute_and_register)
         self.client.create = AsyncMock(side_effect=self._create)
         self.client.delete = AsyncMock(side_effect=self._delete)
         self.client.filters = AsyncMock(side_effect=self._filters)
         self.client.get = AsyncMock(side_effect=self._get)
+
+    async def apply_plan(self, plan: TopologyPlan) -> ReconcileResult:
+        """BaseGenerator.apply_plan: the reconciler on this host."""
+        return await PlanReconciler(self).apply(plan)
 
     @property
     def edge_ops(self) -> list[tuple[str, str, str, list[str]]]:
         """The membership mutations: ``(add | remove, instance id, relationship, device ids)``."""
         return self.store.edge_ops
 
+    async def _execute_and_register(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+        """The query's answer; the devices in it can be named by an HFID reference from then on."""
+        answer = await self._execute(query, variables)
+        for edge in (answer.get("DcimDevice") or {}).get("edges", []):
+            device = edge["node"]
+            self.store.device_ids[(device.get("name") or {}).get("value", device["id"])] = device["id"]
+        return answer
+
     async def _execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         self.queries.append({"query": query, "variables": variables})
         return self._responses[min(len(self.queries), len(self._responses)) - 1]
 
-    async def _filters(self, kind: type, **kwargs: Any) -> list[Any]:
-        """ManagedVRF by ids, deployment, namespace, member and interface; the routed exchanges naming an instance."""
+    def device_id(self, value: Any) -> str:
+        """The id of a device reference: ``{"id": ...}`` as it is, an HFID reference by the name the response gave it."""
+        return value["id"] if "id" in value else self.store.device_ids[value["hfid"][0]]
+
+    async def _filters(self, kind: type | str, **kwargs: Any) -> list[Any]:
+        """ManagedVRF by ids, deployment, namespace, member and interface; the routed exchanges naming an instance;
+        the devices an HFID reference names (the reconciler checks they exist)."""
+        if kind == "DcimPhysicalDevice":
+            return [
+                SimpleNamespace(id=self.store.device_ids[name], name=SimpleNamespace(value=name))
+                for name in kwargs["name__values"]
+            ]
+        assert not isinstance(kind, str), kind
         if kind.__name__ == "TopologyExchangeGateway":
             wanted = {*kwargs.get("vrf_a__ids", ()), *kwargs.get("vrf_z__ids", ())}
             return [
                 SimpleNamespace(id=exchange)
                 for vrf in sorted(wanted)
                 for exchange in sorted(self.store.external_refs.get(vrf, {}).get("exchanges", ()))
+            ]
+        if kind.__name__ == "DcimVirtualInterface":
+            # The SVIs a prune reads: each one deletes itself through the client, like a stored node
+            return [
+                SimpleNamespace(id=svi_id, delete=functools.partial(self._delete, kind, svi_id))
+                for svi_id in kwargs.get("ids", ())
             ]
         found = list(self.store.vrfs.values())
         if "ids" in kwargs:
@@ -199,7 +233,7 @@ class VrfHost(VrfMixin):
         if kind.__name__ != "ManagedVRF":
             return SimpleNamespace(id=node_id, save=_save)
         # The created instance is the same object a later read returns, with the SDK's empty member list.
-        members = {member["id"] for member in data.get("shared_devices") or []}
+        members = {self.device_id(member) for member in data.get("shared_devices") or []}
         vrf = FakeVrf(
             node_id, data["name"], data["deployment"]["id"], data["security_zone"]["id"].removeprefix("ns-"), members
         )
@@ -217,12 +251,12 @@ class VrfHost(VrfMixin):
 
     @asynccontextmanager
     async def resource_lock(self, key: str) -> AsyncGenerator[None]:
-        """Records the key; the lock itself is the PoolMixin's."""
+        """Records the key; the lock itself is the BaseGenerator's."""
         self.lock_keys.append(key)
         yield
 
     def fail(self, message: str) -> Any:
-        """CommonGenerator.fail: log and raise."""
+        """BaseGenerator.fail: log and raise."""
         raise RuntimeError(message)
 
     def written(self, kind: str) -> list[dict[str, Any]]:

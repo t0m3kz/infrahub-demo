@@ -17,7 +17,7 @@
 #
 # default_action: deny means nothing beyond the explicit permits reaches
 # AWS/Acme/the internet from this segment. How each flow is enforced follows
-# leaf PBR (transforms/helpers/firewall_pbr.py::get_customer_pbr_rules): a permit to a
+# leaf PBR (transforms/helpers/pbr.py::get_customer_pbr_rules): a permit to a
 # prefix in the segment's own VRF (the AWS VPC block and the Acme range, PROD prefixes the
 # tenant VRF routes because the border learns them) is bypassed — it stays on the fabric and
 # the leaf ACL enforces it; a permit to the internet zone (the Zscaler rule) is never

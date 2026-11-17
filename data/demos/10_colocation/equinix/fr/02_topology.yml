@@ -11,7 +11,7 @@ spec:
         kind: TopologyColocationMetro
         data:
           # Frankfurt's on-ramp is declared, not hand-written, and on the zone
-          # that holds it: add_colocation_zone (generators/topology/colocation_fabric.py)
+          # that holds it: add_colocation_zone (generators/colocation/colocation_fabric.py)
           # creates the devices plus FR2's own loopback/management/technical
           # pools, sliced out of the global bootstrap supernets. The metro FR
           # only keeps the EVPN Multi-Site site (its VNI and ASN pools, from

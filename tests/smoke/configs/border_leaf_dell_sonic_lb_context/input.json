@@ -1374,29 +1374,20 @@
                                           "role": {
                                             "value": "service"
                                           },
-                                          "encapsulation_capabilities": {
-                                            "edges": [
-                                              {
+                                          "vlan_id": {
+                                            "value": 3100
+                                          },
+                                          "parent": {
+                                            "node": {
+                                              "name": {
+                                                "value": "ethernet1/1"
+                                              },
+                                              "device": {
                                                 "node": {
-                                                  "__typename": "ManagedInterfaceEncapsulation",
-                                                  "vlan_id": {
-                                                    "value": 3100
-                                                  },
-                                                  "parent": {
-                                                    "node": {
-                                                      "name": {
-                                                        "value": "ethernet1/1"
-                                                      },
-                                                      "device": {
-                                                        "node": {
-                                                          "id": "member-dc1-lb-01"
-                                                        }
-                                                      }
-                                                    }
-                                                  }
+                                                  "id": "member-dc1-lb-01"
                                                 }
                                               }
-                                            ]
+                                            }
                                           }
                                         }
                                       },
@@ -1456,29 +1447,20 @@
                                           "role": {
                                             "value": "service"
                                           },
-                                          "encapsulation_capabilities": {
-                                            "edges": [
-                                              {
+                                          "vlan_id": {
+                                            "value": 3301
+                                          },
+                                          "parent": {
+                                            "node": {
+                                              "name": {
+                                                "value": "ethernet1/1"
+                                              },
+                                              "device": {
                                                 "node": {
-                                                  "__typename": "ManagedInterfaceEncapsulation",
-                                                  "vlan_id": {
-                                                    "value": 3301
-                                                  },
-                                                  "parent": {
-                                                    "node": {
-                                                      "name": {
-                                                        "value": "ethernet1/1"
-                                                      },
-                                                      "device": {
-                                                        "node": {
-                                                          "id": "member-dc1-lb-01"
-                                                        }
-                                                      }
-                                                    }
-                                                  }
+                                                  "id": "member-dc1-lb-01"
                                                 }
                                               }
-                                            ]
+                                            }
                                           }
                                         }
                                       }
@@ -1486,7 +1468,7 @@
                                   }
                                 }
                               },
-                              "encapsulations": {
+                              "sub_interfaces": {
                                 "edges": []
                               }
                             }

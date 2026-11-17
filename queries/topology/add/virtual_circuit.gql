@@ -15,7 +15,33 @@ query virtual_circuit_data($name: String!) {
         }
         vrf {
           node {
-            ...RoutingVrfFields
+            ... on ManagedVRF {
+              id
+              deployment {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+              security_zone {
+                node {
+                  ... on SecurityZone {
+                    id
+                    name {
+                      value
+                    }
+                    vrf_type {
+                      value
+                    }
+                    l3_vni {
+                      value
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         password {
@@ -38,28 +64,26 @@ query virtual_circuit_data($name: String!) {
                   }
                 }
               }
-              encapsulation_capabilities: capabilities {
-                edges {
+              ... on DcimSubInterface {
+                vlan_id {
+                  value
+                }
+                parent {
                   node {
-                    __typename
-                    ... on ManagedInterfaceEncapsulation {
-                      vlan_id { value }
-                      parent {
+                    id
+                    ... on DcimPhysicalInterface {
+                      cable {
                         node {
                           id
-                          ... on DcimPhysicalInterface {
-                            cable {
-                              node {
-                                id
-                              }
-                            }
-                          }
-                          capabilities {
-                            edges {
-                              node {
-                                ...VirtualCircuitCarrier
-                              }
-                            }
+                        }
+                      }
+                    }
+                    capabilities {
+                      edges {
+                        node {
+                          ... on ManagedGenericInterfaces {
+                            __typename
+                            ...virtual_circuit_data__F1
                           }
                         }
                       }
@@ -70,7 +94,10 @@ query virtual_circuit_data($name: String!) {
               capabilities {
                 edges {
                   node {
-                    ...VirtualCircuitCarrier
+                    ... on ManagedGenericInterfaces {
+                      __typename
+                      ...virtual_circuit_data__F2
+                    }
                   }
                 }
               }
@@ -84,21 +111,30 @@ query virtual_circuit_data($name: String!) {
                   ... on DcimPhysicalDevice {
                     deployment {
                       node {
-                        ...VirtualCircuitDeployment
+                        ... on TopologyDeployment {
+                          __typename
+                          ...virtual_circuit_data__F3
+                        }
                       }
                     }
                   }
                   ... on DcimVirtualDevice {
                     deployment {
                       node {
-                        ...VirtualCircuitDeployment
+                        ... on TopologyDeployment {
+                          __typename
+                          ...virtual_circuit_data__F4
+                        }
                       }
                     }
                   }
                   ... on CloudNetworkAppliance {
                     deployment {
                       node {
-                        ...VirtualCircuitDeployment
+                        ... on TopologyDeployment {
+                          __typename
+                          ...virtual_circuit_data__F5
+                        }
                       }
                     }
                   }
@@ -153,30 +189,55 @@ query virtual_circuit_data($name: String!) {
   }
 }
 
-fragment VirtualCircuitCarrier on ManagedGenericInterfaces {
-  __typename
-  ... on TopologyCarrierCircuit {
-    id
-    name {
-      value
-    }
-    circuit_id {
-      value
-    }
-    status {
-      value
-    }
+fragment virtual_circuit_data__F1 on TopologyCarrierCircuit {
+  id
+  name {
+    value
+  }
+  circuit_id {
+    value
+  }
+  status {
+    value
   }
 }
 
-fragment VirtualCircuitDeployment on TopologyDeployment {
-  __typename
-  ... on TopologyDataCenter {
-    name {
-      value
-    }
-    underlay_protocol {
-      value
-    }
+fragment virtual_circuit_data__F2 on TopologyCarrierCircuit {
+  id
+  name {
+    value
+  }
+  circuit_id {
+    value
+  }
+  status {
+    value
+  }
+}
+
+fragment virtual_circuit_data__F3 on TopologyDataCenter {
+  name {
+    value
+  }
+  underlay_protocol {
+    value
+  }
+}
+
+fragment virtual_circuit_data__F4 on TopologyDataCenter {
+  name {
+    value
+  }
+  underlay_protocol {
+    value
+  }
+}
+
+fragment virtual_circuit_data__F5 on TopologyDataCenter {
+  name {
+    value
+  }
+  underlay_protocol {
+    value
   }
 }

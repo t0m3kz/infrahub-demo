@@ -2,8 +2,7 @@
 # yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
-# Inter-zone (inter-VRF) traffic exchange. Full design writeup,
-# data-flow diagram, and demo walkthrough: docs/exchange_gateway.md.
+# Inter-zone (inter-VRF) traffic exchange.
 #
 # Inter-VRF traffic is exchanged by an inspected hop through a firewall
 # context, modeled as a concrete realization of one generic:

@@ -30,7 +30,7 @@ def build_mlag_device_data(
     if domain_name is None:
         domain_name = f"POD1-{device_name.split('-')[-1].upper()}-{peer_name.split('-')[-1].upper()}-MLAG"
 
-    # MLAG control session addressing mirrors generators/mlag.py: SONiC gets an IPv4 /31 (ICCP)
+    # MLAG control session addressing mirrors generators/capabilities/mlag.py: SONiC gets an IPv4 /31 (ICCP)
     if platform in {"sonic", "dell_sonic"}:
         control_addresses: tuple[str, str] | None = ("10.254.0.0/31", "10.254.0.1/31")
     elif platform == "cisco_nxos":

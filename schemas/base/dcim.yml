@@ -225,9 +225,26 @@ generics:
         on_delete: no-action
         order_weight: 1900
 
+  # Interfaces that have a MAC address: a physical and a virtual interface. A marker like DcimHasIPAddress, because
+  # a LAG, a cloud peering, a provider interface and the interface of THE INTERNET do not carry a MAC of their own.
+  # Not unique: a virtual, anycast or shared MAC (a gateway, an MLAG pair) is the same on several interfaces.
+  - name: HasMacAddress
+    namespace: Dcim
+    label: Has MAC Address
+    description: "Interface that has a MAC address"
+    include_in_menu: false
+    attributes:
+      - name: mac_address
+        label: MAC Address
+        kind: Text
+        optional: true
+        order_weight: 1320
+        regex: "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"
+        description: "MAC address of the interface, colon-separated (burned-in or configured)"
+
   # Ports that can be switchport members of VXLAN segments: a physical port and a LAG (a marker: a port's membership is
-  # its switch's VLAN row, a ManagedSegmentVlan among its interface `capabilities`, checks/interface_layers.py holds the
-  # kinds; a virtual switch's `uplinks` peer it).
+  # its switch's VLAN row, a ManagedSegmentVlan among its interface `capabilities`, checks/devices/interface_layers.py
+  # holds the kinds; a virtual switch's `uplinks` peer it).
   - name: SwitchedInterface
     namespace: Dcim
     label: Switched Interface
@@ -426,6 +443,50 @@ generics:
         cardinality: many
         kind: Attribute
         order_weight: 3000
+      - name: sub_interfaces
+        label: Sub-Interfaces
+        peer: DcimSubInterface
+        optional: true
+        cardinality: many
+        kind: Attribute  # shown with the port's attributes, not in a tab of its own
+        identifier: "dcim_sub_interface__parent"
+        direction: inbound
+        on_delete: no-action
+        order_weight: 1475
+        description: "The interfaces that ride on this one: its sub-interfaces, the NICs of its VMs, the peerings of a transport"  # yamllint disable-line rule:line-length
+
+  # Interfaces that can ride on another interface (a sub-interface, a firewall context leg on a trunk, the NIC of a VM
+  # pinned to a host port, a cloud peering on a port or LAG of the provider connect, the end of a provider connection
+  # on a provider port): the parent and the VLAN tag are fields of the riding interface itself, so they go with it. An
+  # interface WITHOUT a parent (an SVI, a loopback, a tunnel) is untagged and has none. A marker like DcimHasIPAddress:
+  # a kind lists it in its `inherit_from`. No common_parent: a NIC's parent is on another device
+  # (checks/devices/interface_parents.py holds the same-device rule).
+  - name: SubInterface
+    namespace: Dcim
+    label: Sub Interface
+    description: "Interface that can ride on another interface, with a VLAN tag"
+    include_in_menu: false
+    attributes:
+      - name: vlan_id
+        kind: Number
+        label: "VLAN ID"
+        optional: true
+        order_weight: 1410
+        description: "VLAN tag on the parent, unset is untagged (a VM NIC, a LAG peering)"
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: parent
+        label: Parent Interface
+        peer: DcimInterface
+        optional: true
+        cardinality: one
+        kind: Attribute
+        identifier: "dcim_sub_interface__parent"
+        direction: outbound
+        order_weight: 1400
+        description: "The interface it rides on: the host port for a VM NIC, else a port, LAG or NIC of the same device (interface_parents check)"  # yamllint disable-line rule:line-length
 
   # What runs software from the catalogue (DcimSoftwareImage, schemas/extensions/dcim/software_image.yml, which adds the
   # `software_image` edge to this generic): a device, a cluster, a cloud instance. A kind lists it in its `inherit_from`
@@ -626,6 +687,7 @@ nodes:
       - DcimInterface
       - DcimEndpoint
       - DcimHasIPAddress
+      - DcimHasMacAddress
       - DcimSwitchedInterface
     include_in_menu: false
     attributes:
@@ -714,6 +776,8 @@ nodes:
     inherit_from:
       - DcimInterface
       - DcimHasIPAddress
+      - DcimHasMacAddress
+      - DcimSubInterface
     include_in_menu: false
 
   - name: LAGInterface

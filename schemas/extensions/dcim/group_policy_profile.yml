@@ -16,11 +16,11 @@ version: "1.0"
 # SecurityTag.group_id is drawn from; the rows naming one must all name the
 # same (generators/helpers/security_tag.py). unclassified_group_id and
 # unaware_group_id are the platform's reserved groups a deny-by-default
-# contract set needs rows for (transforms/helpers/group_policy.py): kept here,
+# contract set needs rows for (transforms/helpers/group_policy/): kept here,
 # per platform, so no reserved number lives in code; both must sit outside
-# the tag pool band (checks/segment_security.py).
+# the tag pool band (checks/segments/segment_security.py).
 #
-# Read by checks/reference_fabric.py, checks/segment_security.py, the
+# Read by checks/routing/reference_fabric.py, checks/segments/segment_security.py, the
 # NX-OS and EOS device configs and the group tag generator helper.
 # ============================================================================
 

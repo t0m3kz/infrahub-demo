@@ -73,7 +73,245 @@ query internet_egress {
         serving_firewall_contexts {
           edges {
             node {
-              ...InternetEgressContext
+              ... on ManagedFirewallContext {
+                id
+                name {
+                  value
+                }
+                tenant {
+                  node {
+                    id
+                  }
+                }
+                vlan_id {
+                  value
+                }
+                snat_address {
+                  node {
+                    id
+                    address {
+                      value
+                    }
+                  }
+                }
+                shared_devices {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      name {
+                        value
+                      }
+                      ... on DcimDeviceManaged {
+                        role {
+                          value
+                        }
+                        shared_capabilities {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              ... on ManagedSecurityContext {
+                                vlan_id {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      ... on DcimDevice {
+                        interfaces {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              name {
+                                value
+                              }
+                              role {
+                                value
+                              }
+                              ... on DcimInterface {
+                                zone_capabilities: capabilities {
+                                  edges {
+                                    node {
+                                      __typename
+                                      ... on ManagedVRF {
+                                        id
+                                        deployment {
+                                          node {
+                                            id
+                                            name {
+                                              value
+                                            }
+                                          }
+                                        }
+                                        security_zone {
+                                          node {
+                                            ... on SecurityZone {
+                                              id
+                                              name {
+                                                value
+                                              }
+                                              vrf_type {
+                                                value
+                                              }
+                                              l3_vni {
+                                                value
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                      ... on TopologySessionCircuit {
+                                        circuit_type {
+                                          value
+                                        }
+                                        vrf {
+                                          node {
+                                            ... on ManagedVRF {
+                                              id
+                                              deployment {
+                                                node {
+                                                  id
+                                                  name {
+                                                    value
+                                                  }
+                                                }
+                                              }
+                                              security_zone {
+                                                node {
+                                                  ... on SecurityZone {
+                                                    id
+                                                    name {
+                                                      value
+                                                    }
+                                                    vrf_type {
+                                                      value
+                                                    }
+                                                    l3_vni {
+                                                      value
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                      ... on ManagedSegmentVlan {
+                                        id
+                                        vlan_id {
+                                          value
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on DcimSubInterface {
+                                vlan_id {
+                                  value
+                                }
+                                parent {
+                                  node {
+                                    id
+                                    __typename
+                                    name {
+                                      value
+                                    }
+                                    device {
+                                      node {
+                                        id
+                                      }
+                                    }
+                                    ... on DcimPhysicalInterface {
+                                      cable {
+                                        node {
+                                          id
+                                          endpoints {
+                                            edges {
+                                              node {
+                                                __typename
+                                                ... on DcimPhysicalInterface {
+                                                  id
+                                                  role {
+                                                    value
+                                                  }
+                                                  device {
+                                                    node {
+                                                      ... on DcimDeviceManaged {
+                                                        role {
+                                                          value
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on DcimPhysicalInterface {
+                                cable {
+                                  node {
+                                    id
+                                    endpoints {
+                                      edges {
+                                        node {
+                                          __typename
+                                          ... on DcimPhysicalInterface {
+                                            id
+                                            role {
+                                              value
+                                            }
+                                            device {
+                                              node {
+                                                ... on DcimDeviceManaged {
+                                                  role {
+                                                    value
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on DcimVirtualInterface {
+                                ip_address {
+                                  node {
+                                    id
+                                    address {
+                                      value
+                                    }
+                                    ip_namespace {
+                                      node {
+                                        name {
+                                          value
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -111,7 +349,245 @@ query internet_egress {
         serving_firewall_contexts {
           edges {
             node {
-              ...InternetEgressContext
+              ... on ManagedFirewallContext {
+                id
+                name {
+                  value
+                }
+                tenant {
+                  node {
+                    id
+                  }
+                }
+                vlan_id {
+                  value
+                }
+                snat_address {
+                  node {
+                    id
+                    address {
+                      value
+                    }
+                  }
+                }
+                shared_devices {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      name {
+                        value
+                      }
+                      ... on DcimDeviceManaged {
+                        role {
+                          value
+                        }
+                        shared_capabilities {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              ... on ManagedSecurityContext {
+                                vlan_id {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      ... on DcimDevice {
+                        interfaces {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              name {
+                                value
+                              }
+                              role {
+                                value
+                              }
+                              ... on DcimInterface {
+                                zone_capabilities: capabilities {
+                                  edges {
+                                    node {
+                                      __typename
+                                      ... on ManagedVRF {
+                                        id
+                                        deployment {
+                                          node {
+                                            id
+                                            name {
+                                              value
+                                            }
+                                          }
+                                        }
+                                        security_zone {
+                                          node {
+                                            ... on SecurityZone {
+                                              id
+                                              name {
+                                                value
+                                              }
+                                              vrf_type {
+                                                value
+                                              }
+                                              l3_vni {
+                                                value
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                      ... on TopologySessionCircuit {
+                                        circuit_type {
+                                          value
+                                        }
+                                        vrf {
+                                          node {
+                                            ... on ManagedVRF {
+                                              id
+                                              deployment {
+                                                node {
+                                                  id
+                                                  name {
+                                                    value
+                                                  }
+                                                }
+                                              }
+                                              security_zone {
+                                                node {
+                                                  ... on SecurityZone {
+                                                    id
+                                                    name {
+                                                      value
+                                                    }
+                                                    vrf_type {
+                                                      value
+                                                    }
+                                                    l3_vni {
+                                                      value
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                      ... on ManagedSegmentVlan {
+                                        id
+                                        vlan_id {
+                                          value
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on DcimSubInterface {
+                                vlan_id {
+                                  value
+                                }
+                                parent {
+                                  node {
+                                    id
+                                    __typename
+                                    name {
+                                      value
+                                    }
+                                    device {
+                                      node {
+                                        id
+                                      }
+                                    }
+                                    ... on DcimPhysicalInterface {
+                                      cable {
+                                        node {
+                                          id
+                                          endpoints {
+                                            edges {
+                                              node {
+                                                __typename
+                                                ... on DcimPhysicalInterface {
+                                                  id
+                                                  role {
+                                                    value
+                                                  }
+                                                  device {
+                                                    node {
+                                                      ... on DcimDeviceManaged {
+                                                        role {
+                                                          value
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on DcimPhysicalInterface {
+                                cable {
+                                  node {
+                                    id
+                                    endpoints {
+                                      edges {
+                                        node {
+                                          __typename
+                                          ... on DcimPhysicalInterface {
+                                            id
+                                            role {
+                                              value
+                                            }
+                                            device {
+                                              node {
+                                                ... on DcimDeviceManaged {
+                                                  role {
+                                                    value
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              ... on DcimVirtualInterface {
+                                ip_address {
+                                  node {
+                                    id
+                                    address {
+                                      value
+                                    }
+                                    ip_namespace {
+                                      node {
+                                        name {
+                                          value
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -135,12 +611,64 @@ query internet_egress {
         }
         vrf_a {
           node {
-            ...RoutingVrfFields
+            ... on ManagedVRF {
+              id
+              deployment {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+              security_zone {
+                node {
+                  ... on SecurityZone {
+                    id
+                    name {
+                      value
+                    }
+                    vrf_type {
+                      value
+                    }
+                    l3_vni {
+                      value
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         vrf_z {
           node {
-            ...RoutingVrfFields
+            ... on ManagedVRF {
+              id
+              deployment {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+              security_zone {
+                node {
+                  ... on SecurityZone {
+                    id
+                    name {
+                      value
+                    }
+                    vrf_type {
+                      value
+                    }
+                    l3_vni {
+                      value
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

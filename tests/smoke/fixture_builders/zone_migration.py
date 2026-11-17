@@ -45,8 +45,8 @@ def migrate_zone_owners(data: dict[str, Any]) -> dict[str, Any]:
                     item["vrf"] = {"node": {**routing_vrf(name, deployment), "security_zone": relation}}
                     item.pop("security_zone")
                 elif kind == "TopologyCustomerOffice" or "lan_prefixes" in item:
-                    gateway = (item.get("sdwan_gateway") or {}).get("node")
-                    if gateway:
+                    for edge in (item.get("sdwan_gateways") or {}).get("edges") or []:
+                        gateway = edge["node"]
                         gateway.setdefault("interfaces", {"edges": []})["edges"].append(
                             {
                                 "node": {

@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from generators.connectivity.circuit import CircuitEndpoint, CircuitLocation, plan_locations
 from generators.helpers.naming import sdwan_edge_name
-from generators.topology.circuit import CircuitEndpoint, CircuitLocation, plan_locations
 from tests.integration.demo_data import ROOT, Declared, declared, distinct, name
 from tests.unit.encapsulation_helpers import raw_encapsulation
 from tests.unit.external_vrf_peers_helpers import _raw_vrf
@@ -42,7 +42,7 @@ _PLACE_KINDS = (
     "TopologyCustomerOffice",
     "TopologySaasRegion",
 )
-# add_sdwan_edge: the edge uplink, the ISP access device of the offices' internet underlay and its first free ports.
+# add_office_fabric's edge: the edge uplink, the ISP access device of the offices' internet underlay and its first free ports.
 EDGE_UPLINK = "GE1"
 ISP_ACCESS_DEVICE = "EXT-ORANGE"
 ISP_ACCESS_PROVIDER = "P019"  # owner of the ISP access device: the provider of the offices' INET circuits
@@ -54,15 +54,8 @@ def _edges(nodes: Iterable[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _encapsulation_data(item: dict[str, Any]) -> dict[str, Any] | None:
-    """The ``data`` of the ManagedInterfaceEncapsulation an interface object file item authors under ``capabilities``."""
-    return next(
-        (
-            capability["data"]
-            for capability in item.get("capabilities") or []
-            if isinstance(capability, dict) and capability.get("kind") == "ManagedInterfaceEncapsulation"
-        ),
-        None,
-    )
+    """The ``parent`` and ``vlan_id`` an interface object file item authors, None when it rides on nothing."""
+    return {key: item[key] for key in ("parent", "vlan_id") if key in item} if item.get("parent") else None
 
 
 def _all(kind: str) -> list[Declared]:
@@ -82,7 +75,7 @@ class _Model:
         self.places = self._places()
         self.providers = {str(p.item["org_id"]) for p in distinct(declared("OrganizationProvider", BOOTSTRAP))}
         self.namespaces = {name(ns): str(ns.value("vrf_type")) for ns in distinct(declared("SecurityZone", BOOTSTRAP))}
-        self.sdwan_offices = [office for office in _all("TopologyCustomerOffice") if office.item.get("sdwan_gateway")]
+        self.sdwan_offices = [office for office in _all("TopologyCustomerOffice") if office.item.get("sdwan_gateways")]
         self.devices: dict[str, dict[str, Any]] = {}
         self._add_declared_devices()
         self._add_generated_devices()
@@ -184,23 +177,8 @@ class _Model:
     # -- carrier circuits ---------------------------------------------------------------------------------------
 
     def _carrier_circuits(self) -> list[dict[str, Any]]:
-        """Declared carrier circuits plus each office's INET-<office>, locations completed as add_circuit does."""
+        """Declared carrier circuits (each office's INET-<office> is one), locations completed as add_circuit does."""
         rows: list[dict[str, Any]] = []
-        for index, office in enumerate(self.sdwan_offices):
-            rows.append(
-                {
-                    "name": f"INET-{name(office)}",
-                    "circuit_type": "internet",
-                    "status": "active",
-                    "owner": str(office.item["owner"]),
-                    "locations": [name(office)],
-                    "provider": ISP_ACCESS_PROVIDER,
-                    "ends": [
-                        (sdwan_edge_name(name(office)), EDGE_UPLINK),
-                        (ISP_ACCESS_DEVICE, f"xe-0/1/{index}"),
-                    ],
-                }
-            )
         for circuit in _all(CARRIER):
             rows.append(
                 {
@@ -410,12 +388,13 @@ def build_payloads(without_cables: bool = False, without_circuits: Iterable[str]
 
     tunnels = [
         model.virtual_payload(
-            f"{name(office)}-SDWAN-{model.devices[str(office.item['sdwan_gateway'])]['deployment']}",
-            [name(office), str(model.devices[str(office.item["sdwan_gateway"])]["deployment"])],
-            [(str(office.item["sdwan_gateway"]), GATEWAY_PUBLIC_PORT), (sdwan_edge_name(name(office)), EDGE_UPLINK)],
+            f"{name(office)}-SDWAN-{gateway}",
+            [name(office), str(model.devices[str(gateway)]["deployment"])],
+            [(str(gateway), GATEWAY_PUBLIC_PORT), (sdwan_edge_name(name(office)), EDGE_UPLINK)],
             owner=str(office.item["owner"]),
         )
         for office in model.sdwan_offices
+        for gateway in office.item["sdwan_gateways"]
     ]
     tunnels += [
         model.virtual_payload(

@@ -3,10 +3,9 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping
 from typing import Any
 
+from generators.dcim.device_plan import DeviceOptions
+from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
 from utils.data_cleaning import clean_data
-
-from ..types import DeviceOptions, RoutingOptions
-from .naming import DeviceNameContext, DeviceNamingConfig
 
 
 def pod_row_racks(
@@ -102,7 +101,3 @@ class RackRolesHelper:
             options["mlag_create"] = self.ctx.data["deployment"].get("mlag_create", "no")
             options["mlag_supports_virtual"] = mlag_supports_virtual
         return options
-
-    def overlay_only_routing_options(self) -> RoutingOptions:
-        """Routing options payload for overlay-only access-leaf peering."""
-        return {**self.ctx._routing_options, "skip_underlay": True}

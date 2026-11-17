@@ -5,12 +5,35 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from collections.abc import Awaitable, Callable
-from typing import Any
+from collections.abc import Awaitable, Callable, Iterable
+from typing import Any, TypeVar
 
 from infrahub_sdk.exceptions import GraphQLError
 
-from utils.limits import NODE_SAVE_RETRY
+from utils.limits import NODE_SAVE_RETRY, WRITE_CONCURRENCY
+
+T = TypeVar("T")
+
+
+async def gather_bounded(awaitables: Iterable[Awaitable[T]], *, sem: asyncio.Semaphore | None = None) -> list[T]:
+    """Await independent writes together, at most ``WRITE_CONCURRENCY`` (or the shared ``sem``) at a time. The results come back in the
+    order of ``awaitables``. Every item runs to its end; when some fail, the first failure in that order is raised
+    (the others are noted on it), so the outcome does not depend on timing.
+    """
+    gate = sem or asyncio.Semaphore(WRITE_CONCURRENCY)
+
+    async def run(awaitable: Awaitable[T]) -> T:
+        async with gate:
+            return await awaitable
+
+    results = await asyncio.gather(*(run(awaitable) for awaitable in awaitables), return_exceptions=True)
+    failures = [result for result in results if isinstance(result, BaseException)]
+    if failures:
+        first = failures[0]
+        if len(failures) > 1:
+            first.add_note(f"{len(failures) - 1} more item(s) failed: {[repr(failure) for failure in failures[1:]]}")
+        raise first
+    return results  # ty: ignore[invalid-return-type]
 
 
 def retry_delay(base: float, attempt: int, cap: float = 20.0) -> float:
@@ -61,3 +84,10 @@ async def call_with_node_not_found_retry(
                 f"retrying in {delay:.2f}s (attempt {attempt + 1}/{max_attempts})"
             )
             await asyncio.sleep(delay)
+
+
+def tracked_save_kwargs(track: bool) -> dict[str, Any]:
+    """save() kwargs for a write the run owns (track) or does not (not track). track=False adds
+    update_group_context=False so delete_unused_nodes never reclaims the node; track=True is the plain upsert.
+    """
+    return {"allow_upsert": True} if track else {"allow_upsert": True, "update_group_context": False}

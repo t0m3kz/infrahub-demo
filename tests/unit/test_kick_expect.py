@@ -8,7 +8,6 @@ from typing import Any, cast
 
 import pytest
 
-from tasks.kicks import load_suite_kicks
 from tests.integration import demo_data
 from tests.integration.kick_expect import (
     SNAPSHOT_PAGE,
@@ -20,7 +19,6 @@ from tests.integration.kick_expect import (
     diff_object_counts,
     filter_name,
     parse_expect,
-    parse_expectations,
     snapshot_query,
 )
 
@@ -300,36 +298,3 @@ def test_a_stage_without_expect_is_not_checked() -> None:
 def _known_fields(kind: str) -> set[str]:
     """The fields a filter or an unchanged list may name on a kind of schemas/ (parent of a hierarchical kind too)."""
     return demo_data.attribute_names(kind) | demo_data.relationship_names(kind) | {"parent"}
-
-
-def test_every_suite_expect_parses_and_names_fields_of_the_schema() -> None:
-    """Each stage's expect follows the format and names only fields its kind has (kinds of schemas/)."""
-    kicks, raw = load_suite_kicks()
-    expectations = parse_expectations(raw)
-    assert set(expectations) <= {(name, stage.name) for name, pb in kicks.items() for stage in pb.stages}
-    for (kick, stage), expectation in expectations.items():
-        named = [(count.kind, key.split("__")[0]) for count in expectation.counts for key, _ in count.filters]
-        named += [(kind, field) for kind, fields in expectation.unchanged.items() for field in fields]
-        for kind, field in named:
-            if kind in demo_data.schema():
-                assert field in _known_fields(kind), f"{kick}/{stage}: {kind} has no field '{field}'"
-        for kind in [*expectation.added, *expectation.unchanged, *(count.kind for count in expectation.counts)]:
-            assert kind in demo_data.schema() or kind.startswith("Core"), f"{kick}/{stage}: unknown kind {kind}"
-
-
-def test_the_dc6_suite_reproduces_the_dc6_kick_in_order() -> None:
-    """dc6-suite is the fabric, then each growth and tenant change, one merged change per stage."""
-    kick = load_suite_kicks()[0]["dc6-suite"]
-    assert [stage.name for stage in kick.stages] == [
-        "fabric",
-        "switch",
-        "rack",
-        "pod",
-        "spine",
-        "segments",
-        "endpoints",
-        "application",
-        "port-assign",
-        "port-withdraw",
-    ]
-    assert not kick.staged and all(stage.merge for stage in kick.stages)

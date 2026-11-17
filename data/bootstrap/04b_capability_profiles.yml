@@ -1,0 +1,29 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPlatformCapabilityProfile
+  data:
+    - name: eos-fabric
+      supports_lisp: false
+      config_dialect: eos
+
+    - name: nxos-fabric
+      supports_lisp: false
+      config_dialect: nxos
+
+    - name: sonic-fabric
+      supports_lisp: false
+      config_dialect: sonic
+
+    # LISP renders for cisco_xe only (templates/configs/*/cisco_xe.j2)
+    - name: iosxe-lisp
+      supports_lisp: true
+      config_dialect: iosxe
+
+    - name: iosxe-routing
+      supports_lisp: false
+      config_dialect: iosxe
+
+    - name: no-lisp
+      supports_lisp: false

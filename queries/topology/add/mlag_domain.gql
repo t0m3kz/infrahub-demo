@@ -3,7 +3,9 @@ query mlag_domain_data($name: String!) {
     edges {
       node {
         id
-        name { value }
+        name {
+          value
+        }
       }
     }
   }

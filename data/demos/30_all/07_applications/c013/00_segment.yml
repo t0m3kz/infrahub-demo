@@ -6,7 +6,7 @@
 # repeat it on the segment itself.
 #
 # No switch ports here: add_app_component_segment
-# (generators/topology/app_instance_segment.py) tags the cage switch ports the
+# (generators/applications/app_instance_segment.py) tags the cage switch ports the
 # components' instances' hosts are cabled to (../../06_customer_boarding/
 # c013/colo/*/*/03_cabling.yml), as it does a DC segment's leaf ports.
 apiVersion: infrahub.app/v1

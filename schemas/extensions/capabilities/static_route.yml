@@ -2,7 +2,7 @@
 version: "1.0"
 # A static route of a device, in the default routing table or in a VRF. A device capability like OSPF: it belongs to the
 # device (the device edge, cascades with it) and names the interface it leaves by. It does not take the interface edge
-# as well: a kind cannot inherit both. docs/routing_capabilities_plan.md holds the model.
+# as well: a kind cannot inherit both.
 
 nodes:
   - name: StaticRoute

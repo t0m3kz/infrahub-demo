@@ -5,7 +5,7 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClientSync
 
-from tasks.proposed_change import wait_for_no_running_tasks
+from tests.integration.utils.proposed_change import wait_for_quiet
 
 from .conftest import TestInfrahubDockerWithClient
 
@@ -59,7 +59,7 @@ class TestSetup(TestInfrahubDockerWithClient):
 
         # Loading a schema queues background flows that recompute the HFIDs and display labels of every kind it touches
         # ("Trigger updates for HFID / display labels for ...").
-        wait_for_no_running_tasks(client_main, branch=None)
+        wait_for_quiet(client_main, None)
 
     @pytest.mark.order(3)
     @pytest.mark.dependency(scope="session", name="menu_load", depends=["schema_extensions"])

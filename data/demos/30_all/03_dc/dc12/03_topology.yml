@@ -2,7 +2,7 @@
 # DC12 — controller-managed fabric AND firewall AND load-balancer, all at
 # once ("all of them" — compare DC11's firewall/LB-only split): DCNM
 # governs the cisco_nxos switching fabric (controller_type: dcnm, fabric
-# roles match by controller_type alone — see generators/devices.py's
+# roles match by controller_type alone — see generators/dcim/device_plan.py's
 # _FABRIC_CONTROLLER_TYPES); Check Point SMS governs the checkpoint_gaia
 # firewall pair (security_manager); F5 BIG-IQ governs the f5_tmos
 # load-balancer pair (lb_manager). Every device this DC creates —

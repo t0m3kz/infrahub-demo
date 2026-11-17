@@ -1,12 +1,9 @@
-"""Shared builders for the ``test_dc_generator*`` modules: a DC deployment payload and a generator with its mixins mocked."""
+"""Shared builders for the DC generator tests: a DC deployment payload."""
 
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
-from generators.shared_routing import SharedRoutingIds
-from generators.topology.dc import DCTopologyGenerator
 from tests.unit.simulators.fabric_designs import custom_dc_design, dc_design
 
 
@@ -92,31 +89,3 @@ def _deployment(
             }
         ]
     }
-
-
-def _make_generator() -> Any:
-    gen = DCTopologyGenerator.__new__(DCTopologyGenerator)
-    gen.logger = MagicMock()
-    gen.client = MagicMock()
-    gen.client.group_context = MagicMock()
-    gen.client.group_context.related_node_ids = []
-    gen.client.filters = AsyncMock(return_value=[])
-    # The DC node attach_refs fetches by id (the generator's own target).
-    gen.client.get = AsyncMock(return_value=MagicMock(save=AsyncMock()))
-
-    # Stub out every CommonGenerator/RoutingMixin collaborator generate() calls — these are exercised by their own
-    # dedicated test modules.
-    gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
-    gen.release_resource_lock = AsyncMock()
-    gen.allocate_resource_pools = AsyncMock(
-        return_value={name: MagicMock(id=f"{name}-pool-1") for name in ("loopback", "management", "technical")}
-    )
-    gen.upsert_asn_pool = AsyncMock(return_value=MagicMock(id="asn-pool-1"))
-    gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="num-pool-1"))
-    gen.create_devices = AsyncMock(return_value=[])
-    gen.create_routing = AsyncMock()
-    gen.create_cabling = AsyncMock(return_value=[])
-    gen._create_shared_routing_objects = AsyncMock(
-        return_value=SharedRoutingIds(super_spine_as_id=None, overlay_as_id="fabric-as-1")
-    )
-    return gen

@@ -1,42 +1,3 @@
-fragment CablingInterfaceFields on DcimPhysicalInterface {
-  hfid
-  name {
-    value
-  }
-  device {
-    node {
-      ... on DcimPhysicalDevice {
-        name {
-          value
-        }
-        rack {
-          node {
-            name {
-              value
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-fragment CableFields on DcimCable {
-  __typename
-  id
-  display_label
-  type {
-    value
-  }
-  endpoints {
-    edges {
-      node {
-        ...CablingInterfaceFields
-      }
-    }
-  }
-}
-
 query topology_cabling($id: ID!) {
   TopologyPhysicalDeployment(ids: [$id]) {
     edges {
@@ -44,12 +5,47 @@ query topology_cabling($id: ID!) {
         cables {
           edges {
             node {
-              ...CableFields
+              ... on DcimCable {
+                __typename
+                id
+                display_label
+                type {
+                  value
+                }
+                endpoints {
+                  edges {
+                    node {
+                      ... on DcimPhysicalInterface {
+                        hfid
+                        name {
+                          value
+                        }
+                        device {
+                          node {
+                            ... on DcimPhysicalDevice {
+                              name {
+                                value
+                              }
+                              rack {
+                                node {
+                                  name {
+                                    value
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
-        ... on TopologyDeployment{
-          name{
+        ... on TopologyDeployment {
+          name {
             value
           }
         }

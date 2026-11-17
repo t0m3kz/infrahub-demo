@@ -81,15 +81,19 @@ def attachment(
     allowed: tuple[dict[str, Any], ...] = (),
     table: str | None = None,
     propagates: tuple[str, ...] = (),
+    network_owner: str | None = None,
 ) -> dict[str, Any]:
-    """A CloudGatewayAttachment of gateway ``on``: to a virtual network (``blocks`` its CIDRs) or to ``peer``."""
+    """A CloudGatewayAttachment of gateway ``on``: to a virtual network (``blocks`` its CIDRs; ``network_owner`` the
+    owner of the network's account) or to ``peer``.
+    """
+    virtual_network: dict[str, Any] = {"id": f"vn-{network}", "name": v(network), "cidr_blocks": edges(*blocks)}
+    if network_owner:
+        virtual_network["account"] = node({"owner": owner(network_owner)})
     return {
         "name": v(name),
         "gateway": gateway(on),
         "peer_gateway": gateway(peer) if peer else node(None),
-        "virtual_network": node({"id": f"vn-{network}", "name": v(network), "cidr_blocks": edges(*blocks)})
-        if network
-        else node(None),
+        "virtual_network": node(virtual_network) if network else node(None),
         "allowed_prefixes": edges(*allowed),
         "associated_route_table": node({"id": f"rt-{table}", "name": v(table)}) if table else node(None),
         "propagates_to_route_tables": edges(*({"id": f"rt-{t}", "name": v(t)} for t in propagates)),

@@ -150,12 +150,6 @@ spec:
       group: virtual_colocations
       action: run-virtual-colocation-generator
 
-    - name: trigger-customer-office-sdwan-on-added
-      branch_scope: "other_branches"
-      member_update: added
-      group: customer_deployments_office
-      action: run-sdwan-edge-generator
-
     - name: trigger-customer-office-fabric-on-added
       branch_scope: "other_branches"
       member_update: added
@@ -191,3 +185,10 @@ spec:
       member_update: added
       group: change_requests
       action: run-change-request-generator
+
+    # Validators live on main, so the rule is scoped to the default branch; the run waits for the validator to complete
+    - name: trigger-open-change-request-on-added
+      branch_scope: "default_branch"
+      member_update: added
+      group: artifact_validators
+      action: run-open-change-request

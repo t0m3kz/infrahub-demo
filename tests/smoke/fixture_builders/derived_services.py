@@ -171,7 +171,7 @@ def _service_port(interface: dict[str, Any], contexts: list[dict[str, Any]]) -> 
         "name": {"value": UPLINK},
         "role": {"value": "uplink"},
         "device": {"node": member},
-        "encapsulations": _edges(),
+        "sub_interfaces": _edges(),
     }
     own = {
         "__typename": _PHYSICAL,
@@ -219,7 +219,7 @@ def _own_contexts(device: dict[str, Any]) -> None:
             owner = _value(((leg.get("device") or {}).get("node") or {}).get("name"))
             iface = own.get(_value(leg.get("name")))
             if iface is not None and owner == _value(device.get("name")):
-                for key in ("ip_address", "zone_capabilities", "encapsulation_capabilities"):
+                for key in ("ip_address", "zone_capabilities", "parent", "vlan_id"):
                     if key in leg and not iface.get(key):
                         iface[key] = leg[key]
         context.pop("capabilities", None)

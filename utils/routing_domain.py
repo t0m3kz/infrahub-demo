@@ -9,7 +9,7 @@ VRF_KIND = "ManagedVRF"
 """The kind of a VRF instance: a shared device capability, and an interface capability of the interfaces in it."""
 
 INTERFACE_CAPABILITY_KEYS = ("zone_capabilities", "capabilities")
-"""The keys of an interface's ``capabilities`` in cleaned query data: queries/fragments/routing_zone.gql selects the VRF
+"""The keys of an interface's ``capabilities`` in cleaned query data: the queries select the VRF
 and the session circuits under the alias ``zone_capabilities``, so they never collide with a query's own
 ``capabilities`` selection (the server answers only the first selection of a field)."""
 

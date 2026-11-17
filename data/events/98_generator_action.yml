@@ -100,15 +100,12 @@ spec:
     - name: run-virtual-colocation-generator
       description: Create a virtual colocation's resource pools and its virtual on-ramp devices
       generator: add_virtual_colocation
-    - name: run-sdwan-edge-generator
-      description: Provision an SD-WAN Edge, tunnel, and circuits for a customer office that opted in
-      generator: add_sdwan_edge
     - name: run-office-fabric-generator
-      description: Create an office's LISP fabric (pools, switches, cabling, OSPF underlay) when fabric_templates is set
+      description: Build an office (LISP fabric, SD-WAN edge, tunnels, WAN exit) from its fabric_templates
       generator: add_office_fabric
     - name: run-change-request-generator
       description: Derive a change request from its Proposed Change (data and artifact diffs, devices, customers)
       generator: add_change_request
     - name: run-open-change-request
-      description: Create or re-derive the change request of a Proposed Change whose artifacts are computed
+      description: Wait for an artifact validator to complete, then create or re-derive its PC's change request
       generator: open_change_request

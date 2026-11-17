@@ -1,0 +1,13 @@
+# The Paris gateway's own BGP process (its config is pushed by the Orchestrator): the remote AS of the generated
+# session. Its only ManagedBGP process.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "EQX-PA4-SDWAN-GW1-bgp"
+      status: active
+      local_as: "AS65029"
+      router_id: ["10.255.64.3/32", "default"]
+      capabilities:
+        - "EQX-PA4-SDWAN-GW1"

@@ -1,0 +1,241 @@
+from __future__ import annotations
+
+import asyncio
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
+
+from generators.connectivity.orchestrator_routing import (
+    ApplicationOrchestratorRoutingGenerator,
+    TopologyOrchestratorRoutingGenerator,
+)
+
+
+def _make_app_gen() -> Any:
+    gen = ApplicationOrchestratorRoutingGenerator.__new__(ApplicationOrchestratorRoutingGenerator)
+    gen.client = AsyncMock()
+    gen.logger = MagicMock()
+    return gen
+
+
+def _make_topology_gen() -> Any:
+    gen = TopologyOrchestratorRoutingGenerator.__new__(TopologyOrchestratorRoutingGenerator)
+    gen.client = AsyncMock()
+    gen.logger = MagicMock()
+    return gen
+
+
+def _group(group_id: str, name: str) -> dict[str, str]:
+    return {"id": group_id, "name": name}
+
+
+def _with_groups(gen: Any, groups: list[dict[str, str]]) -> None:
+    """The node's current groups, as the generator reads them (its own query, not the definition query)."""
+    edges = [{"node": {"id": g["id"], "name": {"value": g["name"]}}} for g in groups]
+    gen.client.execute_graphql = AsyncMock(
+        return_value={"CoreNode": {"edges": [{"node": {"member_of_groups": {"edges": edges}}}]}}
+    )
+
+
+def _saved_obj() -> MagicMock:
+    obj = MagicMock()
+    obj.save = AsyncMock()
+    return obj
+
+
+class TestApplicationOrchestratorRoutingGenerator:
+    def test_assigns_github_actions_group(self) -> None:
+        gen = _make_app_gen()
+        app_group = MagicMock(id="g-app-gha")
+        updated = _saved_obj()
+        gen.client.get = AsyncMock(return_value=app_group)
+        gen.client.create = AsyncMock(return_value=updated)
+
+        payload = {
+            "AppApplication": [
+                {
+                    "id": "app-1",
+                    "typename": "AppApplication",
+                    "name": "c005-payment-core-p",
+                    "application_orchestrator": "github_actions",
+                }
+            ]
+        }
+
+        _with_groups(gen, [_group("g-base", "app_applications")])
+        asyncio.run(gen.generate(payload))
+
+        call = gen.client.create.call_args.kwargs
+        assert call["kind"] == "AppApplication"
+        assert call["data"]["member_of_groups"] == [{"id": "g-base"}, {"id": "g-app-gha"}]
+        updated.save.assert_called_once()
+
+    def test_manual_removes_routing_group(self) -> None:
+        gen = _make_app_gen()
+        updated = _saved_obj()
+        gen.client.create = AsyncMock(return_value=updated)
+
+        payload = {
+            "AppApplication": [
+                {
+                    "id": "app-2",
+                    "typename": "AppApplication",
+                    "name": "c003-custody-api-p",
+                    "application_orchestrator": "manual",
+                }
+            ]
+        }
+
+        _with_groups(
+            gen,
+            [
+                _group("g-base", "app_applications"),
+                _group("g-argo", "application_argocd"),
+            ],
+        )
+        asyncio.run(gen.generate(payload))
+
+        call = gen.client.create.call_args.kwargs
+        assert call["data"]["member_of_groups"] == [{"id": "g-base"}]
+        updated.save.assert_called_once()
+
+
+class TestTopologyOrchestratorRoutingGenerator:
+    def test_assigns_github_actions_group_for_cloud(self) -> None:
+        gen = _make_topology_gen()
+        gh_group = MagicMock(id="g-topo-gh")
+        updated = _saved_obj()
+        gen.client.get = AsyncMock(return_value=gh_group)
+        gen.client.create = AsyncMock(return_value=updated)
+
+        payload = {
+            "TopologyCustomerCloud": [
+                {
+                    "id": "dep-1",
+                    "typename": "TopologyCustomerCloud",
+                    "name": "C003-P-VAULTEX-AWS-EU-CENTRAL-1",
+                    "infrastructure_orchestrator": "github_actions",
+                }
+            ]
+        }
+
+        _with_groups(gen, [_group("g-base", "customer_deployments_cloud")])
+        asyncio.run(gen.generate(payload))
+
+        call = gen.client.create.call_args.kwargs
+        assert call["kind"] == "TopologyCustomerCloud"
+        assert call["data"]["member_of_groups"] == [{"id": "g-base"}, {"id": "g-topo-gh"}]
+        updated.save.assert_called_once()
+
+    def test_skips_save_when_membership_is_already_correct(self) -> None:
+        gen = _make_topology_gen()
+        gen.client.get = AsyncMock()
+        gen.client.create = AsyncMock()
+
+        payload = {
+            "TopologyCustomerDC": [
+                {
+                    "id": "dep-2",
+                    "typename": "TopologyCustomerDC",
+                    "name": "C005-P-DC10",
+                    "infrastructure_orchestrator": "argocd",
+                }
+            ]
+        }
+
+        _with_groups(
+            gen,
+            [
+                _group("g-base", "customer_deployments_dc"),
+                _group("g-topo-argo", "topology_argocd"),
+            ],
+        )
+        asyncio.run(gen.generate(payload))
+
+        gen.client.create.assert_not_called()
+        # The routing group is read off the node's own groups in the payload: no lookup.
+        gen.client.get.assert_not_called()
+
+    def test_routing_group_already_on_the_node_is_not_looked_up_when_another_group_changes(self) -> None:
+        """A switched orchestrator:"""
+        gen = _make_topology_gen()
+        updated = _saved_obj()
+        gen.client.get = AsyncMock()
+        gen.client.create = AsyncMock(return_value=updated)
+
+        payload = {
+            "TopologyCustomerDC": [
+                {
+                    "id": "dep-4",
+                    "typename": "TopologyCustomerDC",
+                    "name": "C005-P-DC10",
+                    "infrastructure_orchestrator": "argocd",
+                }
+            ]
+        }
+
+        _with_groups(
+            gen,
+            [
+                _group("g-topo-argo", "topology_argocd"),
+                _group("g-topo-gh", "topology_github_actions"),
+            ],
+        )
+        asyncio.run(gen.generate(payload))
+
+        gen.client.get.assert_not_called()
+        assert gen.client.create.call_args.kwargs["data"]["member_of_groups"] == [{"id": "g-topo-argo"}]
+
+    def test_unsupported_customer_orchestrator_is_an_error_and_leaves_the_node_alone(self) -> None:
+        gen = _make_topology_gen()
+        gen.client.create = AsyncMock()
+
+        payload = {
+            "TopologyCustomerDC": [
+                {
+                    "id": "dep-3",
+                    "typename": "TopologyCustomerDC",
+                    "name": "C005-P-DC10",
+                    "infrastructure_orchestrator": "pulumi",
+                }
+            ]
+        }
+
+        _with_groups(gen, [_group("g-base", "customer_deployments_dc")])
+        asyncio.run(gen.generate(payload))
+
+        gen.logger.error.assert_called_once()
+        gen.client.create.assert_not_called()
+
+
+class TestMissingRoutingGroupIsCreatedByThePlan:
+    def test_a_missing_group_is_saved_before_the_node_points_at_it(self) -> None:
+        """The group is a NodeSpec of the same plan: created untracked first, then the node's membership names its id."""
+        from infrahub_sdk.exceptions import NodeNotFoundError  # noqa: PLC0415
+
+        gen = _make_app_gen()
+        order: list[tuple[str, dict[str, Any]]] = []
+
+        async def _create(*, kind: str, data: dict[str, Any]) -> Any:
+            node = MagicMock(id="g-new" if kind == "CoreStandardGroup" else data["id"])
+            node.save = AsyncMock(side_effect=lambda **kw: order.append((kind, {**data, **kw})))
+            return node
+
+        gen.client.get = AsyncMock(side_effect=NodeNotFoundError("x", "CoreStandardGroup", "none"))
+        gen.client.create = AsyncMock(side_effect=_create)
+        payload = {
+            "AppApplication": [
+                {
+                    "id": "app-1",
+                    "typename": "AppApplication",
+                    "name": "c005-payment-core-p",
+                    "application_orchestrator": "github_actions",
+                }
+            ]
+        }
+        _with_groups(gen, [_group("g-base", "app_applications")])
+
+        asyncio.run(gen.generate(payload))
+
+        assert [kind for kind, _ in order] == ["CoreStandardGroup", "AppApplication"]
+        assert order[0][1]["update_group_context"] is False and order[1][1]["update_group_context"] is False
+        assert order[1][1]["member_of_groups"] == [{"id": "g-base"}, {"id": "g-new"}]

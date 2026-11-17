@@ -1,24 +1,40 @@
-# The gateway prefix of VXLAN segments, the gateway selection of
-# application.gql's SegmentSecurityFields. Re-read by the load balancer VIP
-# producer (generators/lb_vip.py) while add_vxlan_segment of the same load is
-# still addressing the segment of a load_balanced component: its pool members
-# are reserved in that prefix. Read by id from Python, not a generator
-# definition's own query.
 query lb_segment_gateways($ids: [ID!]!) {
   ManagedVxlanSegment(ids: $ids) {
     edges {
       node {
- security_zone { node { ...RoutingZoneFields } }
-
+        security_zone {
+          node {
+            ... on SecurityZone {
+              id
+              name {
+                value
+              }
+              vrf_type {
+                value
+              }
+              l3_vni {
+                value
+              }
+            }
+          }
+        }
         id
         gateway {
           node {
             ip_prefix {
               node {
-
                 id
-                prefix { value }
-                ip_namespace { node { id name { value }  } }
+                prefix {
+                  value
+                }
+                ip_namespace {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
               }
             }
           }

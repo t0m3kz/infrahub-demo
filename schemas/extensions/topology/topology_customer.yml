@@ -26,9 +26,9 @@ generics:
   # The automation system that provisions the infrastructure of a deployment:
   # one definition for everything that is routed by it. The customer footprints
   # (TopologyCustomerDC / Colocation / Cloud / Office) inherit it, and
-  # generators/topology/orchestrator_routing.py puts each into the routing group of
+  # generators/connectivity/orchestrator_routing.py puts each into the routing group of
   # its value (artifact definitions target those groups). TopologyVirtualColocation
-  # inherits it too but is not routed (checks/colocation_placement.py reads it). A
+  # inherits it too but is not routed (checks/customers/colocation_placement.py reads it). A
   # generic cannot inherit another generic, so every node lists it.
   - name: OrchestratorScoped
     namespace: Topology
@@ -178,19 +178,19 @@ generics:
         default_value: false
         order_weight: 310
 
-      # Network-segment quota of the footprint, enforced by checks/customer_quota.py (an ERROR above the limit; not
-      # used for sizing).
+      # Network-segment quota of the footprint, enforced by checks/customers/customer_quota.py (an ERROR above the
+      # limit; not used for sizing).
       - name: max_segments
         kind: Number
         label: "Max Segments"
-        description: "Network-segment quota of the footprint, enforced by checks/customer_quota.py"
+        description: "Network-segment quota of the footprint, enforced by checks/customers/customer_quota.py"
         optional: false
         parameters:
           min_value: 1
         order_weight: 320
 
       # DC and colocation: the block the customer's prefix pool is carved from the environment's tenant pool in
-      # (generators/topology/segment_ports.py); a segment takes a prefix out of it, sized from its host_count.
+      # (generators/segments/segment_ports.py); a segment takes a prefix out of it, sized from its host_count.
       - name: address_prefix_length
         kind: Number
         label: "Address Block Prefix Length"
@@ -376,7 +376,7 @@ nodes:
       # all, the same reason SecurityTagRule expresses intent as tier-to-tier
       # rules rather than per-host-pair firewall rules (see
       # schemas/extensions/security/security_tags.yml). One Dropdown per
-      # office is the whole knob — only meaningful once sdwan_gateway below
+      # office is the whole knob — only meaningful once sdwan_gateways below
       # is also set.
       - name: branch_to_branch
         kind: Dropdown
@@ -425,25 +425,24 @@ nodes:
         optional: true
         identifier: "customer_office__lan_prefixes"
         order_weight: 1150
-      - name: sdwan_gateway
+      - name: sdwan_gateways
         peer: DcimDeviceManaged
-        label: "SD-WAN Gateway"
-        description: "Gateway device to attach to — presence opts this office into automated SD-WAN edge provisioning"  # yamllint disable-line rule:line-length
-        cardinality: one
+        label: "SD-WAN Gateways"
+        description: "Gateways to attach to, several for redundancy — one SD-WAN tunnel each from the office's edge, all managed by one controller"  # yamllint disable-line rule:line-length
+        cardinality: many
         kind: Attribute
         optional: true
-        identifier: "customer_office__sdwan_gateway"
+        identifier: "customer_office__sdwan_gateways"
         order_weight: 1220
       # The office's own switching fabric, the opt-in of add_office_fabric
-      # (generators/topology/office_fabric.py): the same intent surface as a
+      # (generators/office/office_fabric.py): the same intent surface as a
       # colocation zone's fabric_templates ("2 x distribution-switch on template
-      # X"), validated against the campus roles only. Absent means the office has
-      # no fabric and the generator no-ops, as add_sdwan_edge does without a
-      # gateway.
+      # X"), validated against the campus roles and `sdwan-edge` (the office's
+      # SD-WAN edge, one) only. Absent means the office builds nothing.
       - name: fabric_templates
         peer: TopologyElement
         label: "Office Fabric Elements"
-        description: "Access-switch and distribution-switch templates for this office's own LISP fabric (opts the office into add_office_fabric)"  # yamllint disable-line rule:line-length
+        description: "Access and distribution switches of the office's LISP fabric and its SD-WAN edge (sdwan-edge): the add_office_fabric opt-in"  # yamllint disable-line rule:line-length
         optional: true
         cardinality: many
         kind: Attribute
@@ -486,7 +485,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     # The environment is the footprint's own (TopologyEnvironmentScoped) and must be the one of its CloudAccount
-    # (checks/customer_cloud_account.py CA3), which its segments and resources reference.
+    # (checks/customers/customer_cloud_account.py CA3), which its segments and resources reference.
     # One footprint per account: the account is mandatory, so it can carry the constraint.
     uniqueness_constraints:
       - ["name__value", "parent"]
@@ -504,6 +503,29 @@ nodes:
         kind: Text
         optional: false
         order_weight: 110
+      # How the footprint reaches us. The hub of `transit` is data (a CloudGateway of type hub in the footprint's
+      # region and environment); add_customer_deployment_cloud attaches the footprint's networks to it. A `dedicated`
+      # or `vpn` connection is authored (checks/connectivity/cloud_connection.py R12-R16).
+      - name: connection
+        kind: Dropdown
+        label: "Connection"
+        optional: false
+        default_value: transit
+        order_weight: 240
+        description: "How the footprint connects to us: the region's shared hub, its own connection, or IPsec tunnels"
+        choices:
+          - name: transit
+            label: Shared Transit
+            description: "Attached to the shared hub gateway of its region and environment (transit gateway, virtual WAN hub, DRG)"  # yamllint disable-line rule:line-length
+            color: "#3498DB"
+          - name: dedicated
+            label: Dedicated
+            description: "Its own private connection (Direct Connect, ExpressRoute, Interconnect) with its own peering"
+            color: "#8E44AD"
+          - name: vpn
+            label: VPN
+            description: "IPsec tunnels over the internet to one of our edges"
+            color: "#D35400"
     relationships:
       # checks pin owner == account.owner and the footprint's segments to virtual networks of this account
       - name: account
@@ -525,9 +547,10 @@ nodes:
 
   # The service tier of a customer footprint, referenced by the footprint's `design`: one kind per facility
   # (data center, colocation, cloud), tiers S, M, L and XL in each. The numbers live once, in the template rows
-  # (data/bootstrap/21_customer_templates.yml); max_segments and the ports are enforced by checks/customer_quota.py,
-  # the address block by generators/topology/segment_ports.py (the customer's prefix pool), the dedicated flags by
-  # generators/firewall_context.py.
+  # (data/bootstrap/21_customer_templates.yml); max_segments and the ports are enforced by
+  # checks/customers/customer_quota.py,
+  # the address block by generators/segments/segment_ports.py (the customer's prefix pool), the dedicated flags by
+  # generators/customers/firewall_context.py.
   - name: CustomerTemplateDC
     namespace: Topology
     description: "Data center customer service tier: dedicated devices, segment quota, ports, address block (S/M shared, L/XL dedicated)"  # yamllint disable-line rule:line-length
@@ -547,7 +570,7 @@ nodes:
     attributes:
       # ports_<speed>g: number of host-facing leaf/access ports of that speed
       # the customer may have tagged with its segments; 0 = none of this speed
-      # allowed. Enforced by checks/customer_quota.py. One attribute per
+      # allowed. Enforced by checks/customers/customer_quota.py. One attribute per
       # server-NIC speed in the model: the server device types carry 25G and
       # 100G NICs only (utils/interface_speed.py derives the speed from
       # interface_type).
@@ -603,11 +626,12 @@ nodes:
     uniqueness_constraints:
       - [name__value]
     attributes:
-      # The CloudVirtualNetworks of the footprint's account (in its region), enforced by checks/customer_quota.py.
+      # The CloudVirtualNetworks of the footprint's account (in its region), enforced by
+      # checks/customers/customer_quota.py.
       - name: max_virtual_networks
         kind: Number
         label: "Max Virtual Networks"
-        description: "Virtual networks the footprint's account may have in the footprint's region, enforced by checks/customer_quota.py"  # yamllint disable-line rule:line-length
+        description: "Virtual networks the footprint's account may have in the footprint's region, enforced by checks/customers/customer_quota.py"  # yamllint disable-line rule:line-length
         optional: false
         parameters:
           min_value: 1

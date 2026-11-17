@@ -42,19 +42,9 @@ def _edges(nodes: list[dict]) -> dict:
 
 
 def _encapsulation(vlan_id: int | None, parent: dict | None = None) -> dict:
-    """The ``encapsulation_capabilities`` of an interface that rides on ``parent`` (a raw interface node: name, device)
-    with the tag ``vlan_id``, as queries/fragments/interface_encapsulation.gql returns it."""
-    return {
-        "encapsulation_capabilities": _edges(
-            [
-                {
-                    "__typename": "ManagedInterfaceEncapsulation",
-                    "vlan_id": _v(vlan_id),
-                    "parent": _node(parent),
-                }
-            ]
-        )
-    }
+    """The ``vlan_id`` and ``parent`` of an interface that rides on ``parent`` (a raw interface node: name, device),
+    as the queries return them."""
+    return {"vlan_id": _v(vlan_id), "parent": _node(parent)}
 
 
 def _af_edges(*pairs: tuple[str, str]) -> dict:

@@ -60,10 +60,13 @@ def exchange_policies(
     learned: Mapping[str, Mapping[str, Iterable[str]]],
     *,
     announced: Mapping[str, Iterable[str]] | None = None,
-) -> dict[str, dict[str, frozenset[str]]]:
+) -> dict[str, dict[str, Any]]:
     """What each external session of ONE namespace accepts (``in``) and is announced (``out``), per owner.
 
-    Routes pass between sessions of the SAME owner only, never back to the session they were learned on.
+    Routes pass between sessions of the SAME owner only, never back to the session they were learned on. A session
+    with several owners (a shared cloud hub: one owner per attachment behind it) also gets ``out_by_owner``, what each
+    owner is announced: an owner is never announced another owner's space, the session's ``out`` is their union plus
+    what the session itself advertises.
     """
     frozen = {
         session: {owner: frozenset(prefixes) for owner, prefixes in by_owner.items()}
@@ -77,21 +80,27 @@ def exchange_policies(
         prefix for by_owner in registered.values() for prefixes in by_owner.values() for prefix in prefixes
     }
     local = {owner: frozenset(prefixes) - learned_anywhere for owner, prefixes in segments.items()}
-    policies: dict[str, dict[str, frozenset[str]]] = {}
+    policies: dict[str, dict[str, Any]] = {}
     for session, by_owner in registered.items():
         accepted = frozenset(prefix for prefixes in by_owner.values() for prefix in prefixes)
-        outgoing = {
-            prefix
-            for owner in by_owner
-            for prefix in (
-                *local.get(owner, ()),
-                *(p for other, theirs in registered.items() if other != session for p in theirs.get(owner, ())),
+        out_by_owner = {
+            owner: frozenset(
+                {
+                    *local.get(owner, ()),
+                    *(p for other, theirs in registered.items() if other != session for p in theirs.get(owner, ())),
+                }
             )
-        } | set((announced or {}).get(session, ()))
+            - accepted
+            for owner in by_owner
+        }
+        outgoing = {prefix for prefixes in out_by_owner.values() for prefix in prefixes} | set(
+            (announced or {}).get(session, ())
+        )
         policies[session] = {
             "owners": frozenset(by_owner),
             "in": accepted,
             "out": frozenset(outgoing) - accepted,
+            "out_by_owner": out_by_owner,
         }
     return policies
 

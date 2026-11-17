@@ -1,12 +1,10 @@
 ---
-# Office footprint for C015 (Novantis), the isolated-route-table counterpart to
-# c003/office/.
+# Office footprint for C015 (Novantis), the counterpart to c003/office/.
 #
-# C015's TGW attachment is associated with rt-hub-isolated, so its own traffic
-# reaches on-prem and AWS but no other tenant. It also propagates into
-# rt-hub-shared so on-prem can reach it, which lets C003 (vaultex) route to it
-# too: see ../../../08_interconnects/02_cloud_hub/05_attachments.yml for that
-# consequence and the second-hybrid-attachment follow-up.
+# C015's cloud footprint is transit: add_customer_deployment_cloud attaches its VPC to the hub on its own route table
+# (rt-<footprint>), so its traffic reaches on-prem and AWS but no other tenant; it also propagates into rt-hub-shared
+# (the hybrid attachment's table) so on-prem reaches it, and C003 has a table of its own, so neither routes to the
+# other (see ../../../08_interconnects/02_cloud_hub/05_attachments.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

@@ -4,10 +4,10 @@
 # its metro's two border gateways).
 #
 # The fibre is a pure carrier; this circuit is the DCI that rides it, unowned like the
-# fibre. Its capabilities are EXACTLY the fibre's two ports (checks/circuit_placement.py:
+# fibre. Its capabilities are EXACTLY the fibre's two ports (checks/connectivity/circuit_placement.py:
 # a single carrier's ends must be the circuit's ports) and its locations the fibre's two
 # facilities, the DC and the cage zone. Nothing else is authored: no prefix, no address,
-# no BGP peering. add_virtual_circuit (generators/topology/virtual_circuit.py), a member of
+# no BGP peering. add_virtual_circuit (generators/connectivity/virtual_circuit.py), a member of
 # `virtual_circuits` is what triggers it, builds the DCI session between the two border
 # gateways' overlay BGP processes once add_circuit has run for the fibre:
 #

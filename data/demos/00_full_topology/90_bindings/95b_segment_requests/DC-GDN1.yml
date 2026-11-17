@@ -3,7 +3,7 @@
 # (its interface `capabilities`), the intent (schemas/extensions/service/segment.yml). The segment reconcile
 # realizes a request as the port's membership of its switch's VLAN row; 00_full runs no generator, so it authors
 # the realization too (96_segment_ports), consistent with this file: per deployment, the ports listed here are
-# exactly the members of its rows (tests/unit/test_full_topology_segments.py). An upsert of the list replaces it, so
+# exactly the members of its rows. An upsert of the list replaces it, so
 # each deployment's whole list is here, once.
 apiVersion: infrahub.app/v1
 kind: Object

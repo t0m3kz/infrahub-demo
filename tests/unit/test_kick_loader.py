@@ -1,4 +1,4 @@
-"""Unit tests for the kick loader (tasks/kicks.py), tasks/kicks.yml and tests/integration/kicks/."""
+"""Unit tests for the kick loader (tests/integration/utils/kicks.py), tests/integration/demos/kicks.yml and tests/integration/kicks/."""
 
 from __future__ import annotations
 
@@ -6,13 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from tasks.kicks import (
+from tests.integration.utils.kicks import (
     ALL_DEMO_KICK,
     DEMO_DIR,
     ROOT,
     KickError,
     Stage,
-    load_kick,
     load_kicks,
     load_suite_kicks,
 )
@@ -107,11 +106,6 @@ def test_select_resumes_from_a_stage_and_refuses_an_unknown_one(tmp_path: Path) 
             "unknown key",
         ),
         ("kicks:\n  pb:\n    description: d\n    branch: main\n    stages: [{name: s, load: [a]}]\n", "main"),
-        (
-            "kicks:\n  pb:\n    description: d\n    stages:\n"
-            "      - {name: one, load: [a], merge: false}\n      - {name: two, load: [a]}\n",
-            "merges after the open stage",
-        ),
         ("kicks:\n  pb:\n    description: d\n    stages: [{name: s, load: [a]}]\n  pb:\n    x: 1\n", "duplicate"),
         ("kicks: {}\n", "must map"),
         ("stages: []\n", "unknown key"),
@@ -144,7 +138,7 @@ def _suite(folder: Path, files: dict[str, str]) -> tuple[dict, dict]:
     return load_suite_kicks(folder, demo_file=demo_file, registry=registry)
 
 
-SUITE_STAGE = "    stages: [{name: s, load: [tasks/kicks.yml], run: add_dc, expect: {removed: 0}}]\n"
+SUITE_STAGE = "    stages: [{name: s, load: [tests/integration/demos/kicks.yml], run: add_dc, expect: {removed: 0}}]\n"
 
 
 def test_a_suite_folder_loads_every_file_with_its_expect_set_aside(tmp_path: Path) -> None:
@@ -158,7 +152,7 @@ def test_a_suite_folder_loads_every_file_with_its_expect_set_aside(tmp_path: Pat
         },
     )
     assert list(kicks) == ["one", "two"]
-    assert kicks["one"].suite and kicks["one"].stages[0].paths == ["tasks/kicks.yml"]
+    assert kicks["one"].suite and kicks["one"].stages[0].paths == ["tests/integration/demos/kicks.yml"]
     assert expect == {("one", "s"): {"removed": 0}, ("two", "s"): {"removed": 0}}
 
 
@@ -177,14 +171,8 @@ def test_a_missing_suite_folder_is_refused(tmp_path: Path) -> None:
         load_kicks(tmp_path / "nope.yml")
 
 
-def test_load_kick_refuses_an_unknown_name() -> None:
-    """An unknown kick lists the known ones."""
-    with pytest.raises(KickError, match=ALL_DEMO_KICK):
-        load_kick("nope")
-
-
 # ---------------------------------------------------------------------------
-# tasks/kicks.yml
+# tests/integration/demos/kicks.yml
 # ---------------------------------------------------------------------------
 
 
@@ -217,7 +205,7 @@ def test_the_all_demo_kick_is_a_staged_load_of_30_all() -> None:
 
 
 def test_internet_access_edge_loads_in_foundation_before_boarding() -> None:
-    """add_sdwan_edge (boarding stage) needs the ISP and its access PE, so 04_internet is a foundation path."""
+    """The offices' internet access (authored in the interconnects) ends on the ISP's access PE, loaded with 04_internet."""
     stages = {stage.name: stage.load for stage in KICKS[ALL_DEMO_KICK].stages}
     assert "30_all/04_internet" in stages["foundation"]
     assert "30_all/04_internet" not in stages["interconnects"]

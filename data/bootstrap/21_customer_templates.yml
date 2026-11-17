@@ -6,13 +6,13 @@
 # In the DC kind S and M use the shared firewall/load balancer capacity, L and XL are dedicated.
 #
 # What reads a row:
-#   dedicated_firewall / dedicated_loadbalancer - generators/firewall_context.py (DC)
-#   max_segments  - checks/customer_quota.py, an ERROR when a footprint with this design has more network
+#   dedicated_firewall / dedicated_loadbalancer - generators/customers/firewall_context.py (DC)
+#   max_segments  - checks/customers/customer_quota.py, an ERROR when a footprint with this design has more network
 #     segments (naming the footprint in customer_deployments, or its cloud subnets) than the tier allows
-#   ports_<n>g    - checks/customer_quota.py (DC), host-facing leaf/access ports of that speed tagged with the
+#   ports_<n>g    - checks/customers/customer_quota.py (DC), host-facing leaf/access ports of that speed tagged with the
 #     footprint's segments (0 = none of that speed allowed)
-#   max_virtual_networks - checks/customer_quota.py (cloud), the virtual networks of the footprint's account
-#   address_prefix_length - DC and colocation: the IPv4 block generators/topology/segment_addressing.py carves from
+#   max_virtual_networks - checks/customers/customer_quota.py (cloud), the virtual networks of the footprint's account
+#   address_prefix_length - DC and colocation: the IPv4 block generators/segments/segment_addressing.py carves from
 #     the environment's tenant pool (Tenant-PROD-IPv4 / Tenant-NONPROD-IPv4) for the customer's own prefix pool when
 #     the footprint is boarded; the customer's segments are addressed from it.
 #     Cloud: the routed range of the footprint (one account in one cloud region), IPv4 only, carved at boarding
@@ -24,14 +24,16 @@
 #     the customer's IPv6 pool.
 #   ipv6_segment_prefix_length - DC and colocation: the prefix of an IPv6 segment (64 in every tier: anything else
 #     breaks SLAAC).
-#   checks/customer_quota.py requires the IPv4 block to hold max_segments segments of segment_prefix_length and
-#   the IPv6 block max_segments segments of ipv6_segment_prefix_length.
+#   checks/customers/customer_quota.py requires the IPv4 block to hold max_segments segments of segment_prefix_length
+#   and the IPv6 block max_segments segments of ipv6_segment_prefix_length.
 #
-# The DC numbers are the highest use in data/demos/30_all (S: 1 segment, 4 x 25G; M: 4 segments, 8 x 25G; L: 3
-# segments, 4 x 25G; XL: unused) with headroom: about 1.5x the tier's highest use, at least one segment more, rounded
-# to a clean number. Every column grows from tier to tier (L doubles M, XL doubles L, whatever the demo uses of them)
-# so a larger tier is never entitled to less. No footprint uses 100G host ports (the server NICs are 25G); the
-# dedicated tiers allow some. The colocation and cloud tiers share the segment quota of the DC ones.
+# The tiers are sized for an enterprise tenant, not for the demo data: S a small application (8 segments, a /21),
+# M a business unit (24, a /19), L a large platform with its own firewall and load balancer (64, a /18), XL a whole
+# line of business (128, a /17). Each IPv4 block holds its segments at /24 with room to spare, each IPv6 block is
+# 256 or more /64 per segment quota, and every column grows from tier to tier. The worst case of data/demos/30_all
+# (every footprint at its tier's full block) stays inside one /13 tenant supernet per environment
+# (tests/unit/generators/test_limits_consistency.py). A cloud tier allows one /29 routed slice per virtual network
+# (CLOUD_RANGE_PREFIX_LENGTH) in its routed range.
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -39,52 +41,52 @@ spec:
   kind: TopologyCustomerTemplateDC
   data:
     - name: "S"
-      description: "Shared firewall/LB. Up to 2 segments, 6 x 25G host ports, a /23 address block."
+      description: "Shared firewall/LB. Up to 8 segments, 16 x 25G ports, a /21 block."
       dedicated_firewall: false
       dedicated_loadbalancer: false
-      max_segments: 2
-      address_prefix_length: 23
-      segment_prefix_length: 24
-      ipv6_prefix_length: 60
-      ipv6_segment_prefix_length: 64
-      ports_25g: 6
-      ports_100g: 0
-
-    - name: "M"
-      description: "Shared firewall/LB. Up to 6 segments, 12 x 25G host ports, a /21 address block."
-      dedicated_firewall: false
-      dedicated_loadbalancer: false
-      max_segments: 6
+      max_segments: 8
       address_prefix_length: 21
-      segment_prefix_length: 24
-      ipv6_prefix_length: 58
-      ipv6_segment_prefix_length: 64
-      ports_25g: 12
-      ports_100g: 0
-
-    - name: "L"
-      description: "Dedicated firewall and LB. Up to 12 segments, 24 x 25G and 4 x 100G ports, a /20 address block."
-      dedicated_firewall: true
-      dedicated_loadbalancer: true
-      max_segments: 12
-      address_prefix_length: 20
       segment_prefix_length: 24
       ipv6_prefix_length: 56
       ipv6_segment_prefix_length: 64
-      ports_25g: 24
-      ports_100g: 4
+      ports_25g: 16
+      ports_100g: 0
 
-    - name: "XL"
-      description: "Dedicated firewall and LB. Up to 24 segments, 48 x 25G and 8 x 100G ports, a /19 address block."
-      dedicated_firewall: true
-      dedicated_loadbalancer: true
+    - name: "M"
+      description: "Shared firewall/LB. Up to 24 segments, 48 x 25G and 4 x 100G ports, a /19 block."
+      dedicated_firewall: false
+      dedicated_loadbalancer: false
       max_segments: 24
       address_prefix_length: 19
       segment_prefix_length: 24
       ipv6_prefix_length: 52
       ipv6_segment_prefix_length: 64
       ports_25g: 48
-      ports_100g: 8
+      ports_100g: 4
+
+    - name: "L"
+      description: "Dedicated firewall and LB. Up to 64 segments, 96 x 25G and 16 x 100G ports, a /18 block."
+      dedicated_firewall: true
+      dedicated_loadbalancer: true
+      max_segments: 64
+      address_prefix_length: 18
+      segment_prefix_length: 24
+      ipv6_prefix_length: 48
+      ipv6_segment_prefix_length: 64
+      ports_25g: 96
+      ports_100g: 16
+
+    - name: "XL"
+      description: "Dedicated firewall and LB. Up to 128 segments, 192 x 25G and 32 x 100G ports, a /17 block."
+      dedicated_firewall: true
+      dedicated_loadbalancer: true
+      max_segments: 128
+      address_prefix_length: 17
+      segment_prefix_length: 24
+      ipv6_prefix_length: 44
+      ipv6_segment_prefix_length: 64
+      ports_25g: 192
+      ports_100g: 32
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -92,35 +94,35 @@ spec:
   kind: TopologyCustomerTemplateColo
   data:
     - name: "S"
-      description: "Up to 2 segments, a /23 address block."
-      max_segments: 2
-      address_prefix_length: 23
-      segment_prefix_length: 24
-      ipv6_prefix_length: 60
-      ipv6_segment_prefix_length: 64
-
-    - name: "M"
-      description: "Up to 6 segments, a /21 address block."
-      max_segments: 6
+      description: "Up to 8 segments, a /21 block."
+      max_segments: 8
       address_prefix_length: 21
-      segment_prefix_length: 24
-      ipv6_prefix_length: 58
-      ipv6_segment_prefix_length: 64
-
-    - name: "L"
-      description: "Up to 12 segments, a /20 address block."
-      max_segments: 12
-      address_prefix_length: 20
       segment_prefix_length: 24
       ipv6_prefix_length: 56
       ipv6_segment_prefix_length: 64
 
-    - name: "XL"
-      description: "Up to 24 segments, a /19 address block."
+    - name: "M"
+      description: "Up to 24 segments, a /19 block."
       max_segments: 24
       address_prefix_length: 19
       segment_prefix_length: 24
       ipv6_prefix_length: 52
+      ipv6_segment_prefix_length: 64
+
+    - name: "L"
+      description: "Up to 64 segments, a /18 block."
+      max_segments: 64
+      address_prefix_length: 18
+      segment_prefix_length: 24
+      ipv6_prefix_length: 48
+      ipv6_segment_prefix_length: 64
+
+    - name: "XL"
+      description: "Up to 128 segments, a /17 block."
+      max_segments: 128
+      address_prefix_length: 17
+      segment_prefix_length: 24
+      ipv6_prefix_length: 44
       ipv6_segment_prefix_length: 64
 ---
 apiVersion: infrahub.app/v1
@@ -129,25 +131,25 @@ spec:
   kind: TopologyCustomerTemplateCloud
   data:
     - name: "S"
-      description: "Up to 2 segments in 1 virtual network, a /28 routed range."
-      max_segments: 2
-      max_virtual_networks: 1
+      description: "Up to 8 segments in 2 virtual networks, a /28 routed range."
+      max_segments: 8
+      max_virtual_networks: 2
       address_prefix_length: 28
 
     - name: "M"
-      description: "Up to 6 segments in 3 virtual networks, a /27 routed range."
-      max_segments: 6
-      max_virtual_networks: 3
-      address_prefix_length: 27
-
-    - name: "L"
-      description: "Up to 12 segments in 6 virtual networks, a /26 routed range."
-      max_segments: 12
-      max_virtual_networks: 6
+      description: "Up to 24 segments in 8 virtual networks, a /26 routed range."
+      max_segments: 24
+      max_virtual_networks: 8
       address_prefix_length: 26
 
-    - name: "XL"
-      description: "Up to 24 segments in 12 virtual networks, a /25 routed range."
-      max_segments: 24
-      max_virtual_networks: 12
+    - name: "L"
+      description: "Up to 64 segments in 16 virtual networks, a /25 routed range."
+      max_segments: 64
+      max_virtual_networks: 16
       address_prefix_length: 25
+
+    - name: "XL"
+      description: "Up to 128 segments in 32 virtual networks, a /24 routed range."
+      max_segments: 128
+      max_virtual_networks: 32
+      address_prefix_length: 24

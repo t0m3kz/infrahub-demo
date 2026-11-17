@@ -1,7 +1,7 @@
 ---
 # The rear ports of every panel of COLO-PAR, as add_patch_panel builds them from the panel_type (lc-24: 24 rear ports,
 # lc-upc). 00_full runs no generator, so the ports are data and
-# checks/patch_panel_pairing.py finds the panels complete. The jacks the cables use are also declared in
+# checks/connectivity/patch_panel_pairing.py finds the panels complete. The jacks the cables use are also declared in
 # 00_patch_panels.yml; both land on one port (upsert by panel and name).
 apiVersion: infrahub.app/v1
 kind: Object

@@ -23,7 +23,7 @@
 #
 # The former 30000/30001/40000/40001 values overlapped the dynamic L2 pools.
 # A segment drawing the same VNI as a routed VRF could bridge tenant traffic
-# into that VRF; checks/evpn_fabric.py catches that otherwise inconspicuous
+# into that VRF; checks/routing/evpn_fabric.py catches that otherwise inconspicuous
 # config defect. Staying under 65535 also keeps each VNI encodable in a
 # type-1 RD / type-2 RT.
 # On main from the start so branches boarding segments in parallel share one

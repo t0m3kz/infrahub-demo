@@ -11,7 +11,7 @@ This directory contains integration tests that validate the complete Infrahub wo
 - `test_04_kicks.py` - every suite kick of `kicks/`, one parametrized test each (`-k <kick>` picks one)
 
 The deployments are **suite kicks**: YAML in `kicks/`, one file per kick, in the format of the demo
-kicks of `tasks/kicks.yml` plus an `expect` block per stage. `test_04` runs each through `tasks.run_kick`
+kicks of `tests/integration/demos/kicks.yml` plus an `expect` block per stage. `test_04` runs each through `tests.integration.utils.kicks.run_kick`
 (the loop `uv run invoke kick` runs) with `kick_expect.StageChecker` as its `after_stage`:
 
 | Kick | File | What it proves |
@@ -35,7 +35,7 @@ kicks. A stage takes the demo keys (`name`, `load`, `generator`, `min_artifacts`
 - `run: <generator>` (also allowed in a demo kick): once the load's own triggers settled, the stage runs that
   generator definition on every member of its target group on the branch (`CoreGeneratorDefinitionRun`), as a
   person would by hand, then waits again
-- `expect:` the assertions (refused in `tasks/kicks.yml`; the loader hands them over raw, `tasks` never reads
+- `expect:` the assertions (refused in `tests/integration/demos/kicks.yml`; the loader hands them over raw, `tasks` never reads
   them):
 
 ```yaml
@@ -64,7 +64,7 @@ that every field named exists on its kind in `schemas/`.
 ### Shared Utilities
 
 - `kick_expect.py` - parses and evaluates `expect` (the only assertion code of the suite)
-- `workflow_helpers.py` - `object_loader()`, the load function `tasks.run_kick` runs against the test stack
+- `workflow_helpers.py` - `object_loader()`, the load function `tests.integration.utils.kicks.run_kick` runs against the test stack
 - `wait_helpers.py` - `wait_for_condition()`, a polling utility (repository sync)
 - `query_field_collisions.py` - the "Fields ... conflict" walker of the repository sync
 - `suite_constants.py` - repository sync and trigger activation timings
@@ -73,7 +73,7 @@ that every field named exists on its kind in `schemas/`.
 - `conftest.py` - pytest fixtures and the base test class (`execute_command`)
 
 The proposed change flow (`create_proposed_change()`, `update_diff()`, `wait_for_validations()`, `fetch_artifacts()`,
-`merge_proposed_change()`) lives in `tasks/proposed_change.py`, shared with `invoke kick`.
+`merge_proposed_change()`) lives in `tests/integration/utils/proposed_change.py`, shared with `invoke kick`.
 
 ## Test Data
 
@@ -97,13 +97,13 @@ the `30_all` customer organizations, so they cannot be loaded on their own.
 uv run invoke test-integration
 ```
 
-Run them through Invoke rather than calling `pytest` directly. `_run_integration_suite` in `tasks/__init__.py` sets two
+Run them through Invoke rather than calling `pytest` directly. `_run_integration_suite` in `tasks.py` sets two
 things bare `pytest` does not, and each one fails in a way that does not look like its cause:
 
 | Set by the task | What happens without it |
 | --- | --- |
 | `INFRAHUB_TESTING_ENABLE_INTEGRATION=1` | Every test is **silently skipped**. A run reporting `16 skipped` tested nothing, and exits 0. |
-| `--basetemp ~/.pytest-tmp/infrahub-demo` | On Docker Desktop the stack dies ~20s in, before collection. See below. |
+| `--basetemp ~/.pytest-tmp/temeria` | On Docker Desktop the stack dies ~20s in, before collection. See below. |
 
 A green run that tested nothing is the most dangerous kind of green.
 
@@ -139,7 +139,7 @@ The fast profile stops after setup, repository synchronization and the `full-top
 
 ### Not covered after the 30_all suite was removed
 
-The `30_all` demo loads with `uv run invoke load-all-demo`, but nothing asserts on the result any more:
+The `30_all` demo loads with `uv run invoke kick all-demo`, but nothing asserts on the result any more:
 
 - Re-run idempotency (was `test_65`)
 - Generator cleanup on removal (was `test_66`)
@@ -186,7 +186,7 @@ uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
 
 ### Test Failures
 
-- **Generated compose project**: `~/.pytest-tmp/infrahub-demo/` — the compose file, `haproxy.cfg` and the logs
+- **Generated compose project**: `~/.pytest-tmp/temeria/` — the compose file, `haproxy.cfg` and the logs
 - **Infrahub logs**: `docker compose ls -a` to find the live `infrahub-test-*` project, then
   `docker logs <project>-infrahub-server-1`
 - **Branch state**: the suite's own GraphQL UI is on the test port (8100 by default), not 8000
@@ -198,8 +198,8 @@ uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
 
 ### Timeout Adjustments
 
-The settle and artifact polls are constants of `tasks/__init__.py` (`SETTLE_*`, `ARTIFACT_*`,
-`GENERATOR_RUN_TIMEOUT`), the proposed change ones of `tasks/proposed_change.py`; a longer timeout fixes nothing, it
+The settle waits are policies of `utils/limits.py` (`QUEUE_SETTLE`, `QUEUE_QUIET_SECONDS`, `PARENT_GENERATOR_WAIT`), the
+artifact and post-merge ones constants of `tests/integration/utils/kicks.py` and `tests/integration/utils/proposed_change.py`; a longer timeout fixes nothing, it
 lets a stuck queue fail at a more leisurely pace.
 
 ## Quick Reference

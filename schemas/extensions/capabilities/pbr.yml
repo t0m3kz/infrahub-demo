@@ -7,7 +7,7 @@ version: "1.0"
 # A device that has a ManagedPBR steers its routed tenant SVIs to the firewall context serving each SVI's footprint in
 # its DC; one without steers none. Nothing else is stored: which SVIs, the next hop (the VIP of the context's leg), the
 # ACL and the bypass are derived when the device is rendered (utils/vrf_demand.py ``pbr_footprints_by_name``,
-# transforms/helpers/firewall_pbr.py), so there is no interface object and no binding to keep in sync. The individual
+# transforms/helpers/pbr.py), so there is no interface object and no binding to keep in sync. The individual
 # device edge (ManagedGenericDevice), like ManagedOSPF: it cascades with its device. On 30_all the VRF pass of the
 # device writes it (generators/helpers/vrf.py), on 00_full_topology it is authored next to the routing processes.
 # The PBR of the overlay ingress (the L3 VNI SVI of a border leaf) is derived from the contexts on its service ports and

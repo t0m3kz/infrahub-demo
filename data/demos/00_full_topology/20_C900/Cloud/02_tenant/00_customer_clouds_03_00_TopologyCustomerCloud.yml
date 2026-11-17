@@ -1,6 +1,6 @@
 ---
 # The footprint of C900 in the sandbox subscription: one footprint per account, of the account's owner and environment
-# (checks/customer_cloud_account.py CA1 to CA3).
+# (checks/customers/customer_cloud_account.py CA1 to CA3).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -12,3 +12,6 @@ spec:
       customer_name: "sandbox-azure"
       parent: "westeurope"
       design: "S"
+      # connection transit: the region's hub would be its way to us, but its VNet is attached to nothing (VNet
+      # peering to one spoke only): cloud_connection R12 warns that it is not reachable from us
+      connection: transit

@@ -125,8 +125,8 @@ def _name(value: Any) -> str:
     return str(value) if value else ""
 
 
-def _names(values: Any, key: str = "name") -> list[str]:
-    return sorted(str(v.get(key)) for v in values or [] if isinstance(v, Mapping) and v.get(key))
+def _names(values: Any) -> list[str]:
+    return sorted(str(v["name"]) for v in values or [] if isinstance(v, Mapping) and v.get("name"))
 
 
 def _order(status: str) -> int:

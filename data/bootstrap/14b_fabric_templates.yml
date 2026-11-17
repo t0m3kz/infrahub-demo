@@ -2,7 +2,7 @@
 # Fabric designs - the envelope of a pod and of a data center
 # Referenced by TopologyPod.design and TopologyDataCenter.design. Every pool
 # size, port stride and loopback/technical prefix is derived from these maxima
-# by generators/fabric_sizing.py, before any rack exists; the physical truth
+# by generators/mixins/fabric_sizing.py, before any rack exists; the physical truth
 # (suites, racks, devices) stays on LocationSuite/LocationRack.
 #
 # Pod designs ({SIZE}_{DEPLOYMENT}):
@@ -12,7 +12,7 @@
 #   (the deployment type is derived, never stored).
 #   The spine port budget of a design with ToRs is derived, not stored: every
 #   leaf, ToR and border-leaf takes one downlink port on every spine, in fixed
-#   blocks (generators/pod_config.py spine_downlink_layout): leafs, then the
+#   blocks (generators/mixins/pod_config.py spine_downlink_layout): leafs, then the
 #   border-leafs, then a ToR slot for every rack position of every row
 #   (compute + network racks: a mixed row numbers both); a tor pod puts its
 #   border-leafs after the ToRs. So ports = leafs + max_border_leafs_per_pod +

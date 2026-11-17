@@ -138,7 +138,7 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
             }
         }
     )
-    # The generated transit policies (generators/topology/transit_policy.py)
+    # The generated transit policies (generators/connectivity/transit_policy.py)
     from tests.smoke.fixture_builders.routing_policy import add_transit_policies  # noqa: PLC0415 - imports this module
 
     add_transit_policies(data, ["192.0.2.0/24"])
@@ -407,29 +407,31 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         """A footprint's gateway and owner, its lan_prefixes and (``hosted``) the segments it hosts itself."""
         return {
             "owner": owner,
-            "sdwan_gateway": _node(
-                {
-                    "name": _v(gateway),
-                    "interfaces": _edges(
-                        [
-                            {
-                                "name": _v("fixture-handoff"),
-                                "vrf": _node(routing_vrf("PROD")),
-                                "capabilities": _edges(
-                                    [
-                                        {
-                                            "__typename": "TopologySessionCircuit",
-                                            "circuit_type": _v("handoff"),
-                                            "vrf": _node(routing_vrf("PROD")),
-                                        }
-                                    ]
-                                ),
-                            }
-                        ]
-                    ),
-                }
+            "sdwan_gateways": _edges(
+                [
+                    {
+                        "name": _v(gateway),
+                        "interfaces": _edges(
+                            [
+                                {
+                                    "name": _v("fixture-handoff"),
+                                    "vrf": _node(routing_vrf("PROD")),
+                                    "capabilities": _edges(
+                                        [
+                                            {
+                                                "__typename": "TopologySessionCircuit",
+                                                "circuit_type": _v("handoff"),
+                                                "vrf": _node(routing_vrf("PROD")),
+                                            }
+                                        ]
+                                    ),
+                                }
+                            ]
+                        ),
+                    }
+                ]
                 if gateway
-                else None
+                else []
             ),
             "lan_prefixes": _cidr_blocks(*lans),
             "vrfs": _edges([routing_vrf(namespace) for namespace in sorted({namespace for _, namespace, _ in hosted})]),

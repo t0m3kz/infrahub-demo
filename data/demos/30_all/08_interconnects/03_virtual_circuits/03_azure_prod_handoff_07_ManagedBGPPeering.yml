@@ -1,0 +1,22 @@
+# The session, authored like the AWS one: our overlay process of the cage router and our sub-interface; the far end is
+# the peering interface that ends the same session circuit (its peer_ip and peer_asn).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "BGP-EG-PA401-AZURE-ER-PROD"
+      description: "eBGP eg-pa401 <-> Azure ExpressRoute private peering (AS12076), PROD"
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-pa401-bgp-overlay"
+      password: "eqx-pa4-azure-weu-key"
+      capabilities:
+        - ["eg-pa401", "Ethernet1/13.1100"]

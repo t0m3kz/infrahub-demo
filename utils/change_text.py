@@ -97,9 +97,9 @@ def _noun(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
-def section(items: Sequence[Any], cap: int = SECTION_MAX_ITEMS) -> Section:
-    """The first ``cap`` items (already in display order) grouped by status."""
-    shown = items[:cap]
+def section(items: Sequence[Any]) -> Section:
+    """The first ``SECTION_MAX_ITEMS`` items (already in display order) grouped by status."""
+    shown = items[:SECTION_MAX_ITEMS]
     groups = tuple(
         Group(STATUS_WORDS[status], tuple(i for i in shown if i.status == status))
         for status in STATUS_ORDER
@@ -108,9 +108,9 @@ def section(items: Sequence[Any], cap: int = SECTION_MAX_ITEMS) -> Section:
     return Section(total=len(items), groups=groups, more=len(items) - len(shown))
 
 
-def device_section(devices: Sequence[DeviceChange], cap: int = DEVICE_MAX_ITEMS) -> DeviceSection:
-    """The first ``cap`` devices (sorted by site, role, name) grouped by site then role."""
-    shown = devices[:cap]
+def device_section(devices: Sequence[DeviceChange]) -> DeviceSection:
+    """The first ``DEVICE_MAX_ITEMS`` devices (sorted by site, role, name) grouped by site then role."""
+    shown = devices[:DEVICE_MAX_ITEMS]
     by_site: dict[str, dict[str, list[DeviceChange]]] = defaultdict(lambda: defaultdict(list))
     for device in shown:
         by_site[device.site][device.role or "no role"].append(device)
@@ -159,7 +159,7 @@ def _others(inputs: ChangeInputs, counts: dict[str, int]) -> dict[str, int]:
 
 def build_context(inputs: ChangeInputs) -> dict[str, Any]:
     """Everything the templates read (StrictUndefined)."""
-    facts = build_facts(inputs.rows, inputs.artifacts, inputs.objects)
+    facts = build_facts(inputs.rows, inputs.device_artifacts, inputs.objects)
     counts = diff_counts(inputs)
     devices = {d.name: d for d in facts.devices}
     links = [link for link in facts.links if link.status != REMOVED]

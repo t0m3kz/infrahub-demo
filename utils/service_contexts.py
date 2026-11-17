@@ -62,7 +62,7 @@ def _served(context: dict[str, Any]) -> list[dict[str, Any]]:
 
 DEVICE_SERVICES_ROOT = "DeviceServices"
 """The query root of a switch's config query that carries the nested data its services are derived from
-(``DeviceServicesFields``, queries/fragments/device_services.gql): the same device with its cables and rows."""
+(``DeviceServicesFields``, written out in each config query): the same device with its cables and rows."""
 
 
 def attach_device_services(device: dict[str, Any], cleaned: dict[str, Any]) -> None:

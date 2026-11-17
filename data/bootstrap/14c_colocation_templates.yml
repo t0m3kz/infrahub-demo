@@ -2,8 +2,8 @@
 # Colocation designs - the envelope of a zone (or virtual colocation) and of a metro
 # Referenced by TopologyColocationZone.design / TopologyVirtualColocation.design and
 # TopologyColocationMetro.design. Every pool size is derived from these maxima by
-# generators/fabric_sizing.py before any device exists; the devices themselves are the
-# zone's fabric_templates (checks/colocation_placement.py rejects an entry beyond the
+# generators/mixins/fabric_sizing.py before any device exists; the devices themselves are the
+# zone's fabric_templates (checks/customers/colocation_placement.py rejects an entry beyond the
 # envelope).
 #
 # Zone designs, named for the kit they hold:

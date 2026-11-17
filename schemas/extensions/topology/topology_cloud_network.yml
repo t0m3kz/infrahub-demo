@@ -31,7 +31,7 @@ generics:
         optional: true
         identifier: "cloud_transport__region"
         order_weight: 650
-        description: "The cloud region it lands in; exactly one of region and saas_region (checks/cloud_connection.py)"
+        description: "The cloud region it lands in; one of region and saas_region (cloud_connection check)"
       - name: saas_region
         label: SaaS Region
         peer: TopologySaasRegion
@@ -125,31 +125,10 @@ nodes:
         identifier: "cloud_direct_connect__partner_account"
         order_weight: 700
         description: "A logical connection lives in the partner's account while its peerings are in `account`"
-      # A logical circuit (ExpressRoute, hosted connection) rides on the transport it is carried by. The members of a
-      # LAG are ports of ONE device (a LAG member on another device is refused).
-      - name: rides_on
-        label: Rides On
-        peer: CloudDirectConnect
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "cloud_direct_connect__rides_on"
-        direction: outbound
-        order_weight: 750
-        description: "The transport a logical circuit is carried by (the partner's, or our own)"
-      - name: riders
-        label: Riders
-        peer: CloudDirectConnect
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: "cloud_direct_connect__rides_on"
-        direction: inbound
-        order_weight: 760
-        description: "The logical circuits that ride on this transport"
+      # The members of a LAG are ports of ONE device (a LAG member on another device is refused).
 
   # The interface of the cloud: the L3 termination of one session, the same for every operator. A DcimInterface of
-  # its transport (`device`), riding on a port or LAG of it (its ManagedInterfaceEncapsulation `parent`), so a session
+  # its transport (`device`), riding on a port or LAG of it (its `parent`, DcimSubInterface), so a session
   # circuit ends on it through the shared interface edge like on any port. The provider side address and AS are the
   # TopologyConnectorRouting edges (peer_ip, peer_asn); OUR side is a sub-interface of ours and our BGP process. Where
   # it lands is the gateway. Account, region and owner are the transport's.
@@ -162,6 +141,7 @@ nodes:
     inherit_from:
       - DcimInterface
       - DcimHasIPAddress
+      - DcimSubInterface
       - TopologyConnectorRouting
     attributes:
       - name: cloud_id
@@ -245,9 +225,9 @@ nodes:
             description: "GRE tunnel, no encryption"
             color: "#95A5A6"
     relationships:
-      # What it rides on (a VIF on its LAG, a VLAN attachment on its port) is the `parent` of its
-      # ManagedInterfaceEncapsulation, the same object as a sub-interface of a managed device; the
-      # same-transport rule is checks/interface_parents.py.
+      # What it rides on (a VIF on its LAG, a VLAN attachment on its port) is its `parent`
+      # (and `vlan_id`), the same fields as a sub-interface of a managed device (DcimSubInterface); the
+      # same-transport rule is checks/devices/interface_parents.py.
       - name: gateway
         label: Gateway
         peer: CloudGateway
@@ -421,7 +401,7 @@ nodes:
         order_weight: 600
         description: "The gateway this attachment lands on (the one nearer the network)"
       # Exactly one of virtual_network and peer_gateway: the schema cannot say it (measured); see
-      # checks/cloud_connection.py R1.
+      # checks/connectivity/cloud_connection.py R1.
       - name: virtual_network
         label: "Virtual Network"
         peer: CloudVirtualNetwork

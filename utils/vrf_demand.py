@@ -1,6 +1,6 @@
 """The one derivation of the VRF instances (ManagedVRF) a device needs, and of the segment SVIs it carries.
 
-Demand-driven membership in the non-``default`` namespaces a device routes in; see AGENTS.md "VRF instances".
+Demand-driven membership in the non-``default`` namespaces a device routes in; see domain-model.md "VRF instances".
 """
 
 from __future__ import annotations
@@ -392,7 +392,7 @@ def device_vrf_facts(device: dict[str, Any]) -> DeviceVrfFacts:
         owner_kind=(device.get("owner") or {}).get("typename"),
         row_namespaces=frozenset(row.namespace for row in routed),
         svi_namespaces=frozenset(svi.vrf_namespace for svi in svis if svi.vrf_namespace),
-        # An interface in two VRFs is reported (checks/vrf_instances.py), not read.
+        # An interface in two VRFs is reported (checks/routing/vrf_instances.py), not read.
         address_namespaces=address_namespaces(iface for iface in interfaces if str(iface.get("name")) not in conflicts),
         leg_namespaces=leg_namespaces(border_contexts(device)),
     )

@@ -1,7 +1,7 @@
 # The tunnels of the C901 office (inventory only, no BGP): one per edge, to the DC edge. The office is the first
 # location
 # (its owner is the tunnel's, derived) and each end rides a live internet carrier circuit of its own
-# (checks/circuit_placement.py):
+# (checks/connectivity/circuit_placement.py):
 # edge 1 the access lis-office-ispa-48213-isp-a, edge 2 lis-office-ispb-77303-isp-b
 # (90_bindings/90_internet/02_circuits);
 # the DC edge both tunnels end on rides ktw1-ispa-48211-isp-a

@@ -29,7 +29,18 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
         }
         security_zone {
           node {
-            ...RoutingZoneFields
+            ... on SecurityZone {
+              id
+              name {
+                value
+              }
+              vrf_type {
+                value
+              }
+              l3_vni {
+                value
+              }
+            }
           }
         }
         shared_devices {
@@ -68,13 +79,117 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
         ... on DcimPhysicalDevice {
           deployment {
             node {
-              ...ServiceHostingFields
+              ... on TopologyDeployment {
+                __typename
+                id
+                name {
+                  value
+                }
+                ...vrf_instances__F1
+                ...vrf_instances__F2
+                ...vrf_instances__F3
+              }
             }
           }
           vlans {
             edges {
               node {
-                ...ServiceRowFields
+                ... on ManagedSegmentVlan {
+                  id
+                  vlan_id {
+                    value
+                  }
+                  segment_deployment {
+                    node {
+                      segment {
+                        node {
+                          __typename
+                          id
+                          security_zone {
+                            node {
+                              ... on SecurityZone {
+                                id
+                                name {
+                                  value
+                                }
+                                vrf_type {
+                                  value
+                                }
+                                l3_vni {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                          gateway {
+                            node {
+                              id
+                              address {
+                                value
+                              }
+                              ip_prefix {
+                                node {
+                                  ip_namespace {
+                                    node {
+                                      name {
+                                        value
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                          ... on ManagedVxlanSegment {
+                            name {
+                              value
+                            }
+                            firewall_gateway {
+                              value
+                            }
+                            stretch_scope {
+                              value
+                            }
+                            customer_deployments {
+                              edges {
+                                node {
+                                  id
+                                  name {
+                                    value
+                                  }
+                                  parent {
+                                    node {
+                                      __typename
+                                      id
+                                    }
+                                  }
+                                  ... on TopologyCustomerDC {
+                                    serving_firewall_contexts {
+                                      edges {
+                                        node {
+                                          id
+                                        }
+                                      }
+                                    }
+                                  }
+                                  ... on TopologyCustomerColocation {
+                                    serving_firewall_contexts {
+                                      edges {
+                                        node {
+                                          id
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -82,12 +197,20 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
         ... on CloudNetworkAppliance {
           deployment {
             node {
-              ...ServiceHostingFields
+              ... on TopologyDeployment {
+                __typename
+                id
+                name {
+                  value
+                }
+                ...vrf_instances__F4
+                ...vrf_instances__F5
+                ...vrf_instances__F6
+              }
             }
           }
         }
         ... on DcimDeviceManaged {
-          # The party marker of a device with no deployment (utils/vrf_demand.py PARTY_OWNER_KINDS).
           owner {
             node {
               __typename
@@ -97,11 +220,36 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
             edges {
               node {
                 __typename
-                ...VrfDemandInstanceFields
+                ... on ManagedVRF {
+                  id
+                  name {
+                    value
+                  }
+                  deployment {
+                    node {
+                      id
+                    }
+                  }
+                  security_zone {
+                    node {
+                      ... on SecurityZone {
+                        id
+                        name {
+                          value
+                        }
+                        vrf_type {
+                          value
+                        }
+                        l3_vni {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
-          # The individual capabilities: a ManagedPBR says the device steers (utils/vrf_demand.py pbr_ids).
           capabilities {
             edges {
               node {
@@ -111,7 +259,125 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
             }
           }
         }
-        ...ServiceBorderPortsFields
+        ... on DcimDevice {
+          service_ports: interfaces(role__values: ["firewall", "load-balancer"]) {
+            edges {
+              node {
+                __typename
+                id
+                name {
+                  value
+                }
+                role {
+                  value
+                }
+                ... on DcimPhysicalInterface {
+                  cable {
+                    node {
+                      id
+                      endpoints {
+                        edges {
+                          node {
+                            ... on DcimInterface {
+                              __typename
+                              id
+                              name {
+                                value
+                              }
+                              role {
+                                value
+                              }
+                              device {
+                                node {
+                                  ... on DcimDevice {
+                                    __typename
+                                    id
+                                    name {
+                                      value
+                                    }
+                                    ...vrf_instances__F7
+                                    interfaces {
+                                      edges {
+                                        node {
+                                          ... on DcimInterface {
+                                            __typename
+                                            id
+                                            name {
+                                              value
+                                            }
+                                            role {
+                                              value
+                                            }
+                                            ...vrf_instances__F8
+                                            ...vrf_instances__F9
+                                            ...vrf_instances__F10
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            ... on DcimPhysicalInterface {
+                              sub_interfaces {
+                                edges {
+                                  node {
+                                    __typename
+                                    ... on DcimVirtualInterface {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      role {
+                                        value
+                                      }
+                                      device {
+                                        node {
+                                          ... on DcimDevice {
+                                            __typename
+                                            id
+                                            name {
+                                              value
+                                            }
+                                            ...vrf_instances__F11
+                                            interfaces {
+                                              edges {
+                                                node {
+                                                  ... on DcimInterface {
+                                                    __typename
+                                                    id
+                                                    name {
+                                                      value
+                                                    }
+                                                    role {
+                                                      value
+                                                    }
+                                                    ...vrf_instances__F12
+                                                    ...vrf_instances__F13
+                                                    ...vrf_instances__F14
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         ... on DcimDevice {
           interfaces {
             edges {
@@ -124,7 +390,84 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                 role {
                   value
                 }
-                ...InterfaceRoutingZoneFields
+                ... on DcimInterface {
+                  zone_capabilities: capabilities {
+                    edges {
+                      node {
+                        __typename
+                        ... on ManagedVRF {
+                          id
+                          deployment {
+                            node {
+                              id
+                              name {
+                                value
+                              }
+                            }
+                          }
+                          security_zone {
+                            node {
+                              ... on SecurityZone {
+                                id
+                                name {
+                                  value
+                                }
+                                vrf_type {
+                                  value
+                                }
+                                l3_vni {
+                                  value
+                                }
+                              }
+                            }
+                          }
+                        }
+                        ... on TopologySessionCircuit {
+                          circuit_type {
+                            value
+                          }
+                          vrf {
+                            node {
+                              ... on ManagedVRF {
+                                id
+                                deployment {
+                                  node {
+                                    id
+                                    name {
+                                      value
+                                    }
+                                  }
+                                }
+                                security_zone {
+                                  node {
+                                    ... on SecurityZone {
+                                      id
+                                      name {
+                                        value
+                                      }
+                                      vrf_type {
+                                        value
+                                      }
+                                      l3_vni {
+                                        value
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                        ... on ManagedSegmentVlan {
+                          id
+                          vlan_id {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
                 ... on DcimPhysicalInterface {
                   ip_address {
                     node {
@@ -184,6 +527,438 @@ query vrf_instances($device_ids: [ID], $with_instances: Boolean = true) {
                 }
               }
             }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F1 on TopologyPod {
+  parent {
+    node {
+      __typename
+      id
+      name {
+        value
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F2 on TopologyColocationZone {
+  parent {
+    node {
+      __typename
+      id
+      name {
+        value
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F3 on TopologyVirtualColocation {
+  parent {
+    node {
+      __typename
+      id
+      name {
+        value
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F4 on TopologyPod {
+  parent {
+    node {
+      __typename
+      id
+      name {
+        value
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F5 on TopologyColocationZone {
+  parent {
+    node {
+      __typename
+      id
+      name {
+        value
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F6 on TopologyVirtualColocation {
+  parent {
+    node {
+      __typename
+      id
+      name {
+        value
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F7 on DcimDeviceManaged {
+  role {
+    value
+  }
+  shared_capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedSecurityContext {
+          id
+          ... on ManagedGeneric {
+            name {
+              value
+            }
+          }
+          vlan_id {
+            value
+          }
+          tenant {
+            node {
+              id
+              ... on TopologyEnvironmentScoped {
+                environment {
+                  value
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedFirewallContext {
+          fw_served: served_deployments {
+            edges {
+              node {
+                id
+                ... on TopologyEnvironmentScoped {
+                  environment {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedLoadbalancerContext {
+          lb_served: served_deployments {
+            edges {
+              node {
+                id
+                ... on TopologyEnvironmentScoped {
+                  environment {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F8 on DcimInterface {
+  zone_capabilities: capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedVRF {
+          id
+          deployment {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+          security_zone {
+            node {
+              ... on SecurityZone {
+                id
+                name {
+                  value
+                }
+                vrf_type {
+                  value
+                }
+                l3_vni {
+                  value
+                }
+              }
+            }
+          }
+        }
+        ... on TopologySessionCircuit {
+          circuit_type {
+            value
+          }
+          vrf {
+            node {
+              ... on ManagedVRF {
+                id
+                deployment {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+                security_zone {
+                  node {
+                    ... on SecurityZone {
+                      id
+                      name {
+                        value
+                      }
+                      vrf_type {
+                        value
+                      }
+                      l3_vni {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedSegmentVlan {
+          id
+          vlan_id {
+            value
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F9 on DcimInterface {
+  ... on DcimSubInterface {
+    vlan_id {
+      value
+    }
+    parent {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+        device {
+          node {
+            id
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F10 on DcimVirtualInterface {
+  ip_address {
+    node {
+      address {
+        value
+      }
+      ip_namespace {
+        node {
+          name {
+            value
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F11 on DcimDeviceManaged {
+  role {
+    value
+  }
+  shared_capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedSecurityContext {
+          id
+          ... on ManagedGeneric {
+            name {
+              value
+            }
+          }
+          vlan_id {
+            value
+          }
+          tenant {
+            node {
+              id
+              ... on TopologyEnvironmentScoped {
+                environment {
+                  value
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedFirewallContext {
+          fw_served: served_deployments {
+            edges {
+              node {
+                id
+                ... on TopologyEnvironmentScoped {
+                  environment {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedLoadbalancerContext {
+          lb_served: served_deployments {
+            edges {
+              node {
+                id
+                ... on TopologyEnvironmentScoped {
+                  environment {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F12 on DcimInterface {
+  zone_capabilities: capabilities {
+    edges {
+      node {
+        __typename
+        ... on ManagedVRF {
+          id
+          deployment {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+          security_zone {
+            node {
+              ... on SecurityZone {
+                id
+                name {
+                  value
+                }
+                vrf_type {
+                  value
+                }
+                l3_vni {
+                  value
+                }
+              }
+            }
+          }
+        }
+        ... on TopologySessionCircuit {
+          circuit_type {
+            value
+          }
+          vrf {
+            node {
+              ... on ManagedVRF {
+                id
+                deployment {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+                security_zone {
+                  node {
+                    ... on SecurityZone {
+                      id
+                      name {
+                        value
+                      }
+                      vrf_type {
+                        value
+                      }
+                      l3_vni {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on ManagedSegmentVlan {
+          id
+          vlan_id {
+            value
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F13 on DcimInterface {
+  ... on DcimSubInterface {
+    vlan_id {
+      value
+    }
+    parent {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+        device {
+          node {
+            id
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment vrf_instances__F14 on DcimVirtualInterface {
+  ip_address {
+    node {
+      address {
+        value
+      }
+      ip_namespace {
+        node {
+          name {
+            value
           }
         }
       }

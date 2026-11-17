@@ -1,0 +1,22 @@
+# The Paris SD-WAN gateway's own internet access (EQX-PA4-SDWAN-GW1, 02_colo/equinix/pa/04_sdwan_gateway.yml), the
+# twin of INET-LUMEN-EQXFR2-GW (01_circuit.yml): eth1 -> a customer port of Lumen's Paris provider edge. The ISP is
+# Lumen (EXT-LUMEN-PAR1) as in Frankfurt. Only the cage is listed: add_circuit derives the ISP end. Modelling
+# simplification as there: no addressing or BGP.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - circuit_id: "INET-LUMEN-EQXPA4-GW"
+      member_of_groups: [carrier_circuits]
+      name: "INET-LUMEN-EQXPA4-GW"
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      provider: "P014"
+      description: "Lumen internet access of the shared SD-WAN gateway in the Equinix PA4 cage, 1G"
+      locations:
+        - "PA4"
+      capabilities:
+        - ["EQX-PA4-SDWAN-GW1", "eth1"]
+        - ["EXT-LUMEN-PAR1", "et-0/0/1"]

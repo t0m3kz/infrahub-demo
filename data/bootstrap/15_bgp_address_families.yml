@@ -1,7 +1,7 @@
 ---
 # Global BGP address families every fabric references. They live in bootstrap,
 # on main, so that branches deploying fabrics in parallel all find the same
-# node: a branch that creates its own (generators/routing.py's
+# node: a branch that creates its own (generators/capabilities/bgp.py's
 # _ensure_evpn_af_node keeps that only as a fallback) collides with every
 # other such branch on merge (uniqueness [afi, safi]). Values mirror that
 # fallback. ipv4/unicast is the one the interconnect demos (30_all

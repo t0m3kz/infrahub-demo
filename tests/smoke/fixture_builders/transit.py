@@ -650,12 +650,8 @@ def build_virtual_firewall_data() -> dict:
             node["__typename"] = "DcimVirtualInterface"
             for physical_only in ("interface_type", "mtu", "cable", "lag"):
                 node.pop(physical_only, None)
-        for encapsulation in node.get("encapsulation_capabilities", {}).get("edges", []):
-            encapsulation = encapsulation["node"]
-            if parent := (encapsulation.get("parent") or {}).get("node"):
-                encapsulation["parent"] = _node(
-                    {"name": _v(rename(parent["name"]["value"])), "device": parent.get("device")}
-                )
+        if parent := (node.get("parent") or {}).get("node"):
+            node["parent"] = _node({"name": _v(rename(parent["name"]["value"])), "device": parent.get("device")})
         interfaces.append(edge)
     management = _make_interface(
         name="eth0",
@@ -699,7 +695,7 @@ def write_fixtures() -> tuple[int, int]:
     errors += e
 
     # PBR of the overlay ingress on the L3 VNI SVI of a border leaf (NX-OS renders it; the other platforms refuse it,
-    # tests/unit/test_overlay_pbr.py).
+    # tests/unit/generators/test_overlay_pbr.py).
     print("\nGenerating overlay PBR fixture (border-leaf):")
     g, e = _write_data_fixture(
         BorderLeaf,

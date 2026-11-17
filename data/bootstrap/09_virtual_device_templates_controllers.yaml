@@ -31,15 +31,6 @@ spec:
             name: eth1
             role: uplink
             interface_type: 1000base-t
-      # member_of_groups is deliberately NOT set here: sdwan_orchestrators is
-      # now targeted by checks/sdwan.py's CheckSdwanOrchestrator
-      # (validate_sdwan_orchestrator), which reads managed_devices/name off
-      # every member — fields this TEMPLATE itself doesn't have. Only real
-      # instances created from this template join the group, declared
-      # explicitly on each instance (see data/demos/30_all/02_colo/equinix/
-      # fr/05_sdwan_orchestrator.yml's EQX-FR2-SDWAN-VCO1), the same way
-      # EQX-FR2-SDWAN-GW1 explicitly joins sdwan_gateways rather than
-      # relying on VCG-VA_GATEWAY's own template membership.
 
     - template_name: CP-SMS_MANAGER
       device_type: CP-SMS
@@ -63,7 +54,7 @@ spec:
     # Firewall managers — one per firewall platform this repo provisions
     # virtual/physical firewalls for (see 09_virtual_device_templates_
     # {checkpoint,panos,junos}.yaml), matched by controller_type +
-    # platform at generator time (see generators/devices.py create_devices()).
+    # platform at generator time (see generators/dcim/device_plan.py create_devices()).
     - template_name: Panorama_MANAGER
       device_type: Panorama
       platform: paloalto_panos

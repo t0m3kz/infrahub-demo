@@ -3,6 +3,7 @@
 from typing import Any
 
 from tests.unit.encapsulation_helpers import cleaned_encapsulation
+from tests.unit.routing_helpers import in_vrf, make_vrf
 from transforms.helpers.firewall_contexts import get_firewall_contexts
 from utils.exchange_transit import FIREWALL_CONTEXT_KIND, TRANSIT_SLOT, transit_vlan
 from utils.interface_encapsulation import parent_of
@@ -92,3 +93,23 @@ def _make_pbr_activation(
         }
     }
     return {"vlan_id": vlan_id, "segment": seg}
+
+
+def _make_context_leg(
+    *, fw_ip: str = "10.65.0.5/29", tenant_id: str | None = None, served: list[str] | None = None
+) -> dict:
+    """A ManagedFirewallContext dict as returned by _flatten_deployment_firewall_contexts()."""
+    ctx: dict = {
+        "legs": [
+            {
+                **in_vrf(make_vrf({"name": "PROD"})),
+                "device": {"role": "internal-firewall"},
+                "ip_address": {"address": fw_ip, "ip_namespace": {"node": {"name": {"value": "default"}}}},
+            }
+        ],
+    }
+    if tenant_id:
+        ctx["tenant"] = {"id": tenant_id}
+    if served is not None:
+        ctx["served_deployments"] = [{"id": d} for d in served]
+    return ctx

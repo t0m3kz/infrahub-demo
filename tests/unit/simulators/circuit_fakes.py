@@ -1,4 +1,4 @@
-"""Fakes for the circuit generators (generators/topology/circuit.py, virtual_circuit.py)."""
+"""Fakes for the circuit generators (generators/connectivity/circuit.py, virtual_circuit.py)."""
 
 from __future__ import annotations
 
@@ -8,14 +8,23 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from infrahub_sdk.exceptions import GraphQLError
+from infrahub_sdk.exceptions import GraphQLError, NodeNotFoundError
 
-from generators.logger import GeneratorError
-from generators.topology.circuit import CarrierCircuitGenerator
-from generators.topology.virtual_circuit import VirtualCircuitSessionGenerator
+from generators.connectivity.circuit import CarrierCircuitGenerator
+from generators.connectivity.virtual_circuit import VirtualCircuitSessionGenerator
+from generators.model.errors import GeneratorError
 from tests.unit.encapsulation_helpers import raw_encapsulation
 
 CIRCUIT_ID = "circ-df10"
+_KNOWN_FAMILIES = {("ipv4", "unicast"), ("ipv6", "unicast"), ("l2vpn", "evpn")}
+
+
+def _family(afi: str, safi: str) -> MagicMock:
+    """A stored RoutingBGPAddressFamily."""
+    node = MagicMock(id=f"af-{afi}-{safi}")
+    node.afi = SimpleNamespace(value=afi)
+    node.safi = SimpleNamespace(value=safi)
+    return node
 
 
 def kind_name(kind: Any) -> str:
@@ -381,6 +390,13 @@ class _FakeInterface:
         self._ip_id = value
 
 
+def _named(name: str, node_id: str) -> MagicMock:
+    """A stored node whose ``name.value`` is ``name`` (what an HFID lookup reads)."""
+    node = MagicMock(id=node_id)
+    node.name = SimpleNamespace(value=name)
+    return node
+
+
 class _RecordingList(list):
     """group_context.related_node_ids that also logs each append as a write."""
 
@@ -399,6 +415,10 @@ class _RecordingList(list):
             self._writes.append(("track", item, {}))
         super().append(item)
 
+    def extend(self, items: Any) -> None:
+        for item in items:
+            self.append(item)
+
 
 class FakeClient:
     """In-memory stand-in for the SDK client the circuit generators use."""
@@ -412,7 +432,9 @@ class FakeClient:
         self.group_context.related_node_ids = _RecordingList(self.writes, self.targets, self.circuit_ids)
         # One real lock per resource_lock key, shared by every generator on this client: concurrent runs contend.
         self.locks: dict[str, asyncio.Lock] = {}
-        self.keys: dict[str, MagicMock] = {"VC-DCI-DC10-FR2-dci-key": MagicMock(id=DC_KEY_ID)} if key else {}
+        self.keys: dict[str, MagicMock] = (
+            {"VC-DCI-DC10-FR2-dci-key": _named("VC-DCI-DC10-FR2-dci-key", DC_KEY_ID)} if key else {}
+        )
         self.pools = (
             {name: SimpleNamespace(id=f"pool-{name}", pool_name=name) for name in POOL_NETWORKS} if pools else {}
         )
@@ -454,29 +476,32 @@ class FakeClient:
             self.interfaces[iface_id] = node
         return node
 
-    def circuit_node(self, circuit_id: str) -> MagicMock:
-        """A fetched carrier circuit whose add_relationships() is logged as a ("relate", id, kwargs) write."""
-        node = self._node(circuit_id)
-
-        async def _relate(**kwargs: Any) -> None:
-            self.writes.append(("relate", circuit_id, kwargs))
-
-        node.add_relationships = AsyncMock(side_effect=_relate)
-        return node
+    async def execute_graphql(self, query: str, variables: dict[str, Any], **_: Any) -> dict[str, Any]:
+        """The VRF pass's read of its devices (queries/validation/vrf_instances.gql: no VRF device in the world, so the
+        pass converges nothing), logged as a ("vrf", device ids, {}) write; else the RelationshipAdd of ``add_edges``,
+        logged as a ("relate", id, kwargs) write.
+        """
+        if "device_ids" in variables:
+            self.writes.append(("vrf", ",".join(sorted(variables["device_ids"])), {}))
+            return {"DcimDevice": {"edges": []}, "SecurityZone": {"edges": []}}
+        data = variables["data"]
+        kwargs = {"relation_to_update": data["name"], "related_nodes": [node["id"] for node in data["nodes"]]}
+        self.writes.append(("relate", data["id"], kwargs))
+        return {}
 
     def related(self) -> list[tuple[str, dict[str, Any]]]:
-        """(node id, kwargs) of every add_relationships() call, in order."""
+        """(node id, kwargs) of every relationship add, in order."""
         return [(label, kwargs) for action, label, kwargs in self.writes if action == "relate"]
 
     async def get(self, kind: Any, raise_when_missing: bool = True, **kwargs: Any) -> Any:
         name = kind_name(kind)
         self.get_calls.append((name, kwargs))
-        if name == "TopologyCarrierCircuit":
-            return self.circuit_node(kwargs["id"])
         if name == "RoutingPassword":
             return self.keys.get(kwargs["name__value"])
         if name == "CoreIPPrefixPool":
-            return self.pools.get(kwargs["name__value"])
+            if kwargs["name__value"] not in self.pools:
+                raise NodeNotFoundError(identifier={"name": [kwargs["name__value"]]}, node_type=name)
+            return self.pools[kwargs["name__value"]]
         if name == "IpamIPAddress":
             return self.addresses.get(kwargs["address__value"])
         raise AssertionError(f"unexpected get({name}, {kwargs})")
@@ -488,16 +513,23 @@ class FakeClient:
         if name == "RoutingBGPAddressFamily":
             if not self.address_families:
                 return []
-            return [MagicMock(id=f"af-{kwargs['afi__value']}-{kwargs['safi__value']}")]
+            families = [
+                (afi, safi)
+                for afi in kwargs["afi__values"]
+                for safi in kwargs["safi__values"]
+                if (afi, safi) in _KNOWN_FAMILIES
+            ]
+            return [_family(afi, safi) for afi, safi in families]
+        if name == "RoutingPassword":  # the HFID read of the per-circuit key (``create_only`` is sent only when absent)
+            return [self.keys[key] for key in kwargs["name__values"] if key in self.keys]
         if name == "ManagedVRF":
             # VRF provisioning is stubbed by make_generator; no native provider instance is invented here.
             return []
-        if name == "ManagedInterfaceEncapsulation":  # riding_interface_ids: the encapsulations on the carrier's ports
-            peers = [SimpleNamespace(id=iface_id) for iface_id in self.sub_interfaces]
-            return [SimpleNamespace(capabilities=SimpleNamespace(peers=peers))] if peers else []
+        if name == "DcimSubInterface":  # riding_interface_ids: the interfaces on the carrier's ports
+            return [SimpleNamespace(id=iface_id) for iface_id in self.sub_interfaces]
         if name in ("DcimPhysicalInterface", "DcimVirtualInterface"):
             return [self.interface_node(iface_id) for iface_id in kwargs["ids"]]
-        if name == "IpamIPAddress":  # CablingMixin._find_addresses: one read for the addresses of a prefix
+        if name == "IpamIPAddress":  # one read for the addresses of a prefix
             return [self.addresses[address] for address in kwargs["address__values"] if address in self.addresses]
         if name == "TopologySessionCircuit":
             wanted = kwargs.get("circuit_type__values")
@@ -513,12 +545,28 @@ class FakeClient:
             return matches
         raise AssertionError(f"unexpected filters({name}, {kwargs})")
 
-    async def create(self, kind: Any, data: dict[str, Any]) -> MagicMock:
+    async def create(self, kind: Any, data: dict[str, Any]) -> Any:
         name = kind_name(kind)
+        if name in ("DcimPhysicalInterface", "DcimVirtualInterface") and "id" in data:
+            return self._interface_update(data)
         label = f"{name}:{data.get('name') or data.get('address') or data.get('afi', '')}"
         node = self._node(label, data)
         self.created.append((name, data, node))
         return node
+
+    def _interface_update(self, data: dict[str, Any]) -> Any:
+        """The update of an existing interface by id (a ``NodeSpec`` with an ``id``): its save applies the fields."""
+        node = self.interface_node(data["id"])
+
+        async def _save(**kwargs: Any) -> None:
+            node.ip_address = data["ip_address"]
+            node.description.value = data["description"]
+            node.status.value = data["status"]
+            if "mtu" in data:
+                node.mtu.value = data["mtu"]
+            self.writes.append(("save", data["id"], kwargs))
+
+        return SimpleNamespace(id=data["id"], save=_save)
 
     async def allocate_next_ip_prefix(self, **kwargs: Any) -> MagicMock:
         self.allocations.append(kwargs)
@@ -576,6 +624,8 @@ class SdkTrackingGroup:
         """Mark where the next run's writes begin."""
         self._writes_at_start = len(self.client.writes)
         self._targets_at_start = len(self.client.targets)
+        # A run has its own tracking context: the target is added again
+        self.client.group_context.related_node_ids.clear()
 
     def finish_run(self) -> set[str]:
         """End the run: the ids the SDK would delete as unused (empty when it skips the cleanup)."""
@@ -588,7 +638,7 @@ class SdkTrackingGroup:
 
 
 def raising_logger() -> MagicMock:
-    """A logger whose error() raises, like generators/logger.py's FailOnErrorLogger."""
+    """A logger whose error() raises, like generators/base.py's FailOnErrorLogger."""
     logger = MagicMock()
 
     def _error(msg: object, *args: object, **kwargs: object) -> None:
@@ -611,22 +661,16 @@ def make_generator(cls: Any, client: FakeClient) -> Any:
         async with client.locks.setdefault(key, asyncio.Lock()):
             await asyncio.sleep(0)  # acquiring is a round trip: other runs may go on meanwhile
             gen.lock_keys.append(key)
+            if key.startswith("vrf-device-"):
+                client.writes.append(("vrf-lock", key, {}))
             yield
+            if key.startswith("vrf-device-"):
+                client.writes.append(("vrf-unlock", key, {}))
 
     gen.resource_lock = _lock
     gen.run_generator = AsyncMock()
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-    # The VRF pass (generators/helpers/vrf.py) is tested on its own: here it only records its calls.
-    gen.reconcile_vrfs = AsyncMock()
     gen._vrf_device_ids = set()  # __init__ is bypassed
-    gen.vrfs_held_calls = []
-
-    @asynccontextmanager
-    async def _held(needs: dict[str, set[str]]):  # noqa: ANN202
-        gen.vrfs_held_calls.append(needs)
-        yield
-
-    gen.vrfs_held = _held
     return gen
 
 

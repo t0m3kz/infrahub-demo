@@ -4,7 +4,7 @@
 # the netscaler load-balancer pair's platform) — created before
 # 02_topology.yml so the DC block can reference them inline by name, same
 # as fabric_templates' own template references. create_devices()
-# (generators/devices.py) routes DC11's firewall/load-balancer devices
+# (generators/dcim/device_plan.py) routes DC11's firewall/load-balancer devices
 # into these controllers' own managed_devices instead of the usual
 # firewalls/loadbalancers CoreStandardGroups, once matched by
 # controller_type + platform.

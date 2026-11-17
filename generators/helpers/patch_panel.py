@@ -33,7 +33,7 @@ class PanelType:
         return (front - 1) // self.fronts_per_rear + 1
 
 
-# Choices of DcimPatchPanel.panel_type (tests/unit/test_patch_panel_schema.py holds them equal).
+# Choices of DcimPatchPanel.panel_type (tests/unit/schemas/test_patch_panel_schema.py holds them equal).
 PANEL_TYPES: dict[str, PanelType] = {
     "lc-24": PanelType(24, "lc-upc", 1, "lc-upc"),
     "lc-48": PanelType(48, "lc-upc", 1, "lc-upc"),

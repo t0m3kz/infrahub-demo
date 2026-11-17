@@ -1,0 +1,55 @@
+version: "1.0"
+
+# What a network OS can do, held once per OS family and shared by its platforms. Read by
+# generators/helpers/interface_naming.py (config_dialect) and checks/routing/lisp_fabric.py (supports_lisp); a platform
+# without a profile falls back to its name.
+nodes:
+  - name: PlatformCapabilityProfile
+    namespace: Dcim
+    description: "Network OS control-plane and naming capabilities of a platform family"
+    label: "Platform Capability Profile"
+    icon: "mdi:chip"
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - ["name__value"]
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        order_weight: 100
+      - name: supports_lisp
+        kind: Boolean
+        default_value: false
+        order_weight: 200
+        description: "The platform renders the LISP overlay of an office fabric"
+      - name: config_dialect
+        kind: Dropdown
+        optional: true
+        order_weight: 300
+        description: "CLI dialect that names LAG and loopback interfaces"
+        choices:
+          - name: eos
+            label: Arista EOS
+          - name: nxos
+            label: Cisco NX-OS
+          - name: sonic
+            label: SONiC
+          - name: iosxe
+            label: Cisco IOS-XE
+
+extensions:
+  nodes:
+    - kind: DcimPlatform
+      relationships:
+        - name: os_capabilities
+          peer: DcimPlatformCapabilityProfile
+          label: OS Capabilities
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: platform__os_capabilities
+          order_weight: 1800

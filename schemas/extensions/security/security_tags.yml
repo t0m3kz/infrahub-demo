@@ -13,7 +13,7 @@
 #              - components: the component tag, named after the fqdn, from
 #                AppApplicationGenerator while the segment is microsegmented.
 #
-# Contracts are derived, never stored (transforms/helpers/group_policy.py):
+# Contracts are derived, never stored (transforms/helpers/group_policy/):
 # every permit SecurityPolicyRule between two tagged segments is a contract
 # between their tags, narrowed to the component tag a rule carries on a
 # microsegmented side (an intra-segment rule, or a component dependency into
@@ -70,7 +70,7 @@ nodes:
     relationships:
       # Reverse side of AppComponent.security_tag (same identifier). Many, so
       # a tag shared by two components or left without one is visible to
-      # checks/segment_security.py instead of being hidden by cardinality.
+      # checks/segments/segment_security.py instead of being hidden by cardinality.
       - name: components
         peer: AppComponent
         label: Components

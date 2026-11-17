@@ -11,12 +11,10 @@ version: "1.0"
 # subnets
 # A VM is always hosted on one of the physical nodes (DcimVirtualDevice.hosting_device), and a node is in a cluster
 # only by
-# the cluster's `hosts`, so the cluster of a VM is its host's and is never stated twice. checks/cluster.py holds what
-# the
-# schema cannot (a server is in one cluster, the hosts stand in the cluster's deployment, the node subnets of a
-# Kubernetes
-# cluster belong to its network and its pod and service ranges overlap nothing, a component's instances do not all stand
-# on one host).
+# the cluster's `hosts`, so the cluster of a VM is its host's and is never stated twice. checks/customers/cluster.py
+# holds what the schema cannot (a server is in one cluster, the hosts stand in the cluster's deployment, the node
+# subnets of a Kubernetes cluster belong to its network and its pod and service ranges overlap nothing, a component's
+# instances do not all stand on one host).
 generics:
   - name: Cluster
     namespace: Managed

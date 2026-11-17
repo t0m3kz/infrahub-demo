@@ -96,6 +96,10 @@ nodes:
             label: Distribution Switch
             description: "Campus aggregation switch — a LISP border and control-plane node in an office fabric."
             color: "#87b8e8"
+          - name: sdwan-edge
+            label: SD-WAN Edge
+            description: "The branch SD-WAN edge of an office, built by add_office_fabric (one per office)."
+            color: "#f5b97f"
     relationships:
       - name: template
         label: Device Template
@@ -417,7 +421,7 @@ nodes:
   # Fabric designs: the ENVELOPE (max_*) of a DC and of a pod, referenced by
   # TopologyDataCenter.design / TopologyPod.design. Pools and port offsets are
   # sized before any rack exists, so they are derived from these maxima by
-  # generators/fabric_sizing.py, never from the live device counts. The rows
+  # generators/mixins/fabric_sizing.py, never from the live device counts. The rows
   # live in data/bootstrap/14b_fabric_templates.yml.
   - name: TemplateDC
     namespace: Topology

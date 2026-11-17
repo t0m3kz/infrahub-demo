@@ -1,0 +1,8 @@
+# 2-byte private ASN, next to the Frankfurt gateway's 65028.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65029
+      description: "EQX-PA4-SDWAN-GW1 AS (PROD handoff)"

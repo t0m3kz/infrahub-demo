@@ -65,11 +65,18 @@ Nobody throws away a firewall chassis; it just gets a second job.
 
 The standard bootstrap tiers (S, M, L and XL, in each of the data center, colocation and cloud template kinds) are
 unchanged; every footprint states one as its required `design`, the smallest that holds its segments, its host-facing ports
-(the tagged 25G and 100G ports of its segments, `checks/customer_quota.py`) and, for a cloud footprint, the virtual
-networks of its account in its region. The leaf customer ports of the sample are 100G and the bootstrap shared tiers
-allow none, so `C900-P-DC-GDN1` (3 ports, 2 segments) names `S_100G` and `C900-P-DC-KTW1` (5 ports, 3 segments)
-`M_100G`, the S and M tiers with 100G ports (`00_common/00_global/05_customer_designs.yml`). A demo may define a valid custom template earlier in its own
+(the tagged 25G and 100G ports of its segments, `checks/customers/customer_quota.py`) and, for a cloud footprint, the virtual
+networks of its account in its region. The leaf customer ports of the sample are 100G; the bootstrap S tier allows
+none and M four, so `C900-P-DC-GDN1` (3 ports, 2 segments) names `S_100G` and `C900-P-DC-KTW1` (5 ports, 3 segments)
+`M_100G`, the S and M tiers with more 100G ports (`00_common/00_global/05_customer_designs.yml`). A demo may define a valid custom template earlier in its own
 numbered files (`00_common/00_global/05_customer_designs.yml` here); it cannot borrow one from an unrelated demo.
+
+Every cloud footprint also states its `connection` (`20_C900/Cloud/02_tenant/`): `C900-P-DEMO-AWS-EU-CENTRAL-1` and
+`C900-P-DEMO-AZURE-WESTEUROPE` are `dedicated` (their own Direct Connect `dx-c900-fra-lag`, whose VIFs ride on the LAG
+`lag1`, and ExpressRoute `er-c900-weu`; the hubs `tgw-c900-euc1` and `vwan-hub-c900-weu` live in those accounts), the
+spoke accounts' footprints are `transit` on the hub of their region (their attachments are authored here, no generator
+runs), and the sandbox is `transit` with its VNet attached to nothing: `checks/connectivity/cloud_connection.py` R12 warns
+that it is not reachable from us. No hub is invented: both hubs and their links were already in the sample.
 A data center or colocation template states four sizing numbers, all required: `address_prefix_length` (the IPv4 block of
 the customer's pool), `segment_prefix_length` (the IPv4 subnet of a segment with no `host_count`), `ipv6_prefix_length`
 (the IPv6 block) and `ipv6_segment_prefix_length` (the IPv6 subnet, /64); `M_INTERNAL` repeats the M tier's. No generator runs
@@ -153,9 +160,7 @@ the office in Barcelona (`bcn-office-edge-01`), the colocation cage in Paris (`p
 Connect, ExpressRoute and Webex end in the cage, as in reality.
 
 The connections between the topologies, without devices: an edge per pair of locations with the circuits between
-them (a solid line has a carrier, a dashed one only session circuits). It is drawn from the data and
-`tests/unit/test_full_topology_diagram.py` fails when it goes stale, so the diagram cannot go stale (`uv run python -m tests.unit.test_full_topology_diagram`
-prints it):
+them (a solid line has a carrier, a dashed one only session circuits). It is drawn from the data:
 
 <!-- topology-diagram:start -->
 ```mermaid
@@ -434,7 +439,7 @@ pairs of the first sample keep their chains.
 
 Each DC server hosts C900 VMs (`DcimVirtualDevice`, template `LINUX-SVC`, `hosting_device` the server): `ktw1-vm-01` and
 `ktw1-vm-02` in DC-KTW1, `waw1-vm-01`, `gdn1-vm-01`. A VM has no cable: its NIC `eth0` rides on the host port of its
-role (its encapsulation `parent`, the first uplink `eno1`, the rule of `generators/virtual_nics.py`), and its address is in the
+role (its encapsulation `parent`, the first uplink `eno1`, the rule of `generators/dcim/virtual_nics.py`), and its address is in the
 segment of its DC. The application `c900-web-shop-p` (`90_bindings/98_applications/C900/`) names the VMs as the instances of its
 components: frontend (`c900-web-p`, the KTW1 VMs), backend (`c900-app-p`, WAW1), database (`c900-db-p`, GDN1).
 
@@ -451,8 +456,8 @@ VLAN attachment, tunnel) appears only in object names, descriptions and in the t
 
 | Shared element | Kind | What it is |
 | -------------- | ---- | ---------- |
-| transport | `CloudDirectConnect` (`physical` / `logical`, `rides_on`), `CloudVPNConnection` (generic `CloudTransport` + `DcimDevice`) | a device that HOLDS INTERFACES: ports (`DcimPhysicalInterface`), a bundle (`DcimLAGInterface`) and peerings; `physical`: ports and bundle in the provider's region, `logical`: a circuit on a partner's or our own port, `CloudVPNConnection`: holds tunnels; the account, `region` or `saas_region`, `owner` (SaaS) are on the transport |
-| peering ("cloud interface") | `CloudPeeringInterface` (`DcimInterface` of the transport) | the L3/BGP termination on the cloud side: an interface of the transport riding on its port or bundle (its `ManagedInterfaceEncapsulation`: `parent` and `vlan_id`); a session circuit ends on it (`capabilities`); the provider's address and AS are `peer_ip`, `peer_asn` |
+| transport | `CloudDirectConnect` (`physical` / `logical`), `CloudVPNConnection` (generic `CloudTransport` + `DcimDevice`) | a device that HOLDS INTERFACES: ports (`DcimPhysicalInterface`), a bundle (`DcimLAGInterface`) and peerings; `physical`: ports and bundle in the provider's region, `logical`: a circuit on a partner's or our own port, `CloudVPNConnection`: holds tunnels; the account, `region` or `saas_region`, `owner` (SaaS) are on the transport |
+| peering ("cloud interface") | `CloudPeeringInterface` (`DcimInterface` of the transport) | the L3/BGP termination on the cloud side: an interface of the transport riding on its port or bundle (its `parent` and `vlan_id`); a session circuit ends on it (`capabilities`); the provider's address and AS are `peer_ip`, `peer_asn` |
 | gateway | `CloudGateway`, `gateway_type`: `hub` / `edge` / `customer` | `hub`: a routing node with attachments and tables; `edge`: where a peering or VPN lands before the network; `customer`: our side of the VPN (public address and AS), required on a VPN connection |
 | gateway attachment | `CloudGatewayAttachment` | one connection of a gateway (`gateway`) with EXACTLY one target: `virtual_network` or `peer_gateway` (check R1); `allowed_prefixes`: what it announces towards on-prem |
 | routing table | `CloudGatewayRouteTable` | the routing domain of a hub; an attachment has `associated_route_table` and `propagates_to_route_tables` |
@@ -465,9 +470,9 @@ Our side is always a sub-interface of a device and our BGP process; it is not in
 `DcimInterface`, so it has `device` (the transport), `name`, `mtu` (9000 by default) and `capabilities` like any port.
 Its own fields: `scope` (private, public, saas), `routing` (bgp, static), the tag (`vlan_id` of its encapsulation) or `tunnel_index`, `bfd`,
 `service_id`; a tunnel: `endpoint_ip`, `tunnel_mode` (ipsec, gre), `crypto_profile` (`SecurityIPsecProfile`),
-`tunnel_key` (`RoutingPassword`, the IPsec key; BGP uses `auth`); relationships: its `ManagedInterfaceEncapsulation` (`parent` a port or bundle of
-the SAME transport, the same object as a device sub-interface: the port and the bundle see the peering in
-`encapsulations`, and the peering has an `ip_address`), `gateway` (empty for a VPN
+`tunnel_key` (`RoutingPassword`, the IPsec key; BGP uses `auth`); relationships: its `parent` (a port or bundle of
+the SAME transport, the same field as a device sub-interface: the port and the bundle see the peering in
+`sub_interfaces`, and the peering has an `ip_address`), `gateway` (empty for a VPN
 tunnel: it lands through `transport.gateway`), `auth` (`RoutingPassword`), `advertised_prefixes`, and `peer_ip`,
 `peer_asn` from `TopologyConnectorRouting`. The account, region and `owner` belong to the transport, not to the peering.
 
@@ -488,7 +493,7 @@ it physically is (the cage for a cross-connect, the region for a Fabric connecti
 | AWS dedicated connection / ExpressRoute Direct port / Dedicated Interconnect / OCI cross-connect / IBM Dedicated / Alibaba physical connection | `CloudDirectConnect` `physical`: the port is the provider's own, a `TopologyProviderConnect` in the cage, cabled to ours |
 | AWS LAG / ExpressRoute Direct pair / OCI cross-connect group / Interconnect bundle | the ports (`DcimPhysicalInterface`) and the bundle (`DcimLAGInterface`, `member_interfaces`) are the provider's, on its `TopologyProviderConnect` in the cage, cabled to ours; ONE `CloudDirectConnect` `physical` holds the peerings, which ride on the bundle |
 | AWS hosted connection / ExpressRoute circuit (provider) / Partner Interconnect attachment / OCI VC (partner) / IBM Connect / Alibaba hosted | `CloudDirectConnect` `logical` + `partner_account`, `service_key` |
-| ExpressRoute circuit on Direct, OCI VC on its own CCG, Dedicated Interconnect attachment | `CloudDirectConnect` `logical` + `rides_on` the transport that holds the port or bundle; the ports (`msee-pri`, `msee-sec`) are the provider's own, on a `TopologyProviderConnect` of the region, the far ends of the Fabric connections |
+| ExpressRoute circuit on Direct, OCI VC on its own CCG, Dedicated Interconnect attachment | `CloudDirectConnect` `logical`, carried by its carrier circuit or cable to the port or bundle; the ports (`msee-pri`, `msee-sec`) are the provider's own, on a `TopologyProviderConnect` of the region, the far ends of the Fabric connections |
 | Dedicated Interconnect / OCI FastConnect: a routed port without a VLAN | `CloudDirectConnect` `physical` with a port; the peering WITHOUT a tag, its encapsulation `parent` = the port; our end is a PHYSICAL port with an address |
 | Equinix Fabric / Megaport VXC | a `virtual_connection` carrier; the end in the cloud = a `logical` transport + `partner_account`; MCR / Network Edge = `CloudNetworkAppliance` |
 | AWS VIF private / transit / public, ExpressRoute private / Microsoft peering, GCP VLAN attachment, OCI virtual circuit, IBM, Alibaba VBR | `CloudPeeringInterface` `scope` private or public (+ `vlan_id`, `peer_ip`, `peer_asn`, `auth`) |
@@ -516,7 +521,7 @@ it physically is (the cage for a cross-connect, the region for a Fabric connecti
 | ---- | ---- | ------- |
 | `TopologyCarrierCircuit` | physics: wire, cross-connect, virtual connection, internet; the ends are `capabilities` (our port and the transport's port) | `ktw1-df10007-par1`, `par1-eqx-7c1e9a2b-azure-90000000-0000-0000-0000-000000000002`, `ktw1-ispa-48211-isp-a` |
 | `TopologySessionCircuit` | virtual: handoff / vpn / tunnel; the ends are `capabilities` (our sub-interface or routed port and the transport's peering) | `par1-dxvif-fgt1a2b3-aws-900000000001`, `par1-ded1-gcp-c900-prod-project` |
-| `CloudDirectConnect` | transport-device: the peerings (the ports and the bundle are the provider's, on a `TopologyProviderConnect`); logical: `service_key`, `partner_account`, `rides_on` | `dx-c900-fra-lag`, `er-c900-weu`, `ic-c900-fra-1`, `ic-ded-c900-fra`, `webex-c900-fra-xc` |
+| `CloudDirectConnect` | transport-device: the peerings (the ports and the bundle are the provider's, on a `TopologyProviderConnect`); logical: `service_key`, `partner_account` | `dx-c900-fra-lag`, `er-c900-weu`, `ic-c900-fra-1`, `ic-ded-c900-fra`, `webex-c900-fra-xc` |
 | `DcimPhysicalInterface`, `DcimLAGInterface` | ports and bundle of a provider connect, never of a transport (`dxcon-1a`, `dxcon-1b`, `lag1`, `msee-pri`, `ic-dedicated-port`, `ic-port-1`) | `dxcon-1a`, `dxcon-1b`, `lag1`, `msee-pri`, `ic-dedicated-port` |
 | `SecurityIPsecProfile` | IKE/ESP parameters of a tunnel, one profile for many tunnels | `IPSEC-AES256-SHA256-DH14` |
 | `CloudVPNConnection` | a transport without ports: holds the tunnels (interfaces); SaaS: `saas_region` and `owner` | `vpn-c900-aws-euc1`, `zscaler-c900-muc` |
@@ -546,13 +551,12 @@ The BGP sessions of the cloud legs are hand-written (`90_bindings/50_connections
 sub-interface or routed port in `capabilities`, our process); no generator builds them, and `add_virtual_circuit` is not
 to build sessions for a circuit whose end is a cloud peering.
 
-The check `checks/cloud_connection.py` (`validate_cloud_connection`, query `cloud_connection`) holds what the schema
-cannot (the server accepts an attachment without a target, with two targets, a `rides_on` loop and a peering riding on
+The check `checks/connectivity/cloud_connection.py` (`validate_cloud_connection`, query `cloud_connection`) holds what the schema
+cannot (the server accepts an attachment without a target, with two targets and a peering riding on
 the port of another device): R1 an attachment has exactly one target, R2 a routing table belongs to the hub and to the
-attachment's gateway, R3 `rides_on` without a loop, physical only on physical, logical on our transport without
-`partner_account`, R4 the segments of a service endpoint are from its network and a tunnel key requires IPsec, R5 a
+attachment's gateway, R3 withdrawn (what carries a leg is its carrier circuit or cable and its peering's `parent`), R4 the segments of a service endpoint are from its network and a tunnel key requires IPsec, R5 a
 crypto profile only with IPsec, R6 a VPN tunnel has `endpoint_ip` and is an interface of a `CloudVPNConnection`, R7
-withdrawn (the server holds the bundle's members, `checks/interface_parents.py` holds the peering's encapsulation `parent`),
+withdrawn (the server holds the bundle's members, `checks/devices/interface_parents.py` holds the peering's encapsulation `parent`),
 R8 a peering with `vlan_id` rides on a port or bundle, the parent of a peering is a port or bundle, the VLANs of one
 parent are different (the same VLAN on two ports is allowed: ExpressRoute), R9 the place of a transport: exactly one of
 `region` and `saas_region`, with an account without `owner`, without an account with `saas_region` and `owner`; a
@@ -574,7 +578,7 @@ Full = in the model and in the data; partial = a field exists but simplified; no
 | Scenario | Coverage | Notes |
 | -------- | -------- | ----- |
 | AWS DX dedicated, transit VIF -> DX Gateway -> TGW -> VPC | full | `dx-c900-fra-lag`, `lag1.1000` (scope `private`), `dxgw-c900` (edge) -> `tgwa-c900-dxgw` (`allowed_prefixes` 10.200.0.0/16 and the spoke blocks) -> `tgw-c900-euc1` (hub) -> `tgwa-c900-vpc` |
-| AWS DX, private VIF -> VGW -> VPC | full | `lag1.1100`, `vgw-c900-euc1` -> `vgwa-c900-vpc` -> `vpc-c900-vgw` (a VPC of its own: a block reached by the transit VIF and the VGW would be registered behind two attachment points, `checks/routing_invariants.py` rule 8) |
+| AWS DX, private VIF -> VGW -> VPC | full | `lag1.1100`, `vgw-c900-euc1` -> `vgwa-c900-vpc` -> `vpc-c900-vgw` (a VPC of its own: a block reached by the transit VIF and the VGW would be registered behind two attachment points, `checks/routing/routing_invariants.py` rule 8) |
 | AWS DX hosted (partner account), LAG | full | `partner_account` (GCP Partner Interconnect); LAG: the ports `dxcon-1a/1b` and bundle `lag1` of `EXT-AWS-DX-PAR`, two cables `XC21450001/2` to the cage edge, one transport `dx-c900-fra-lag` whose VIFs ride on the bundle |
 | GCP Dedicated Interconnect: a routed port without a VLAN | full | `ic-ded-c900-fra`, port `ic-dedicated-port`, peering `gcp-c900-ded-1` without `vlan_id`; our end is the physical `Ethernet1/5` of the cage edge with an address, circuit `par1-ded1-gcp-c900-prod-project` |
 | AWS public VIF | partial | `scope: public` and `advertised_prefixes` (US -> cloud) are in the model, no example |
@@ -641,7 +645,7 @@ leaf-01 -> panel -> edge from the base sample. The leaves, spine and server are 
 and DC-GDN1 have the same pod without the old direct link: 4 L1 paths server
 -> edge, all through the spine, and both leaves peer only upwards (`leaves_to_edge` is empty).
 
-**DC hall** (suite `KTW1-SUITE-1`, 2 rows x 9 slots: the `S_MIDDLE` envelope, which `checks/suite_capacity.py` holds
+**DC hall** (suite `KTW1-SUITE-1`, 2 rows x 9 slots: the `S_MIDDLE` envelope, which `checks/customers/suite_capacity.py` holds
 for every pod that has racks; rows and slots are data, nothing generates them, the racks are not in the group
 `topologies_rack`). Every device stands in a rack (`rack`, `position` in U, `rack_face`), every rack in row 1:
 
@@ -689,7 +693,7 @@ label "Internet" (the label is a grouping place and INTERNET is the meeting poin
 object of their own: an ISP router has no `deployment` and its provider is its `owner`. It is a lean `DcimDevice` (only `name` and `interfaces`) and a `TopologyFacility`, so it is the
 location of a carrier circuit, but it has no role, platform, address, VRF or artifact and routes nothing: addresses and
 prefixes stay in the `INTERNET` space. It has ONE interface `bus` of its own kind `TopologyInternetInterface`, and the
-kind lets many carrier circuits end on the same interface (`checks/carrier_circuit_ports.py` exempts it from "a port is
+kind lets many carrier circuits end on the same interface (`checks/connectivity/carrier_circuit_ports.py` exempts it from "a port is
 the end of at most one carrier" by kind, not by name). Each attachment has its own carrier circuit (the graph says who is
 attached): the uplink of an ISP router (`isp-a-upl-48001-internet`, `isp-b-upl-77001-internet`) and the public side of a service
 (`webex-fra-pub-13445-internet`, `aws-euc1-pub-16509-internet`), and the public side is a port of the provider's `TopologyProviderConnect` of the region
@@ -709,11 +713,11 @@ no tunnel and no session circuit. Targets: `s3-public` (`192.0.2.0/24`) and `web
 `CloudServiceEndpoint` with `access: public` and the range in the `prefix` field (the `INTERNET` space).
 `virtual_network` is now an ordinary optional edge (a Parent cannot be optional), so a SaaS service endpoint has only
 `saas_region`, and `s3-public` stays in the network `vpc-c900-prod`. The rules (`utils/internet_object.py`, called from
-`checks/circuit_placement.py`): I1 one INTERNET with one interface of that kind, I2 an attachment is an `internet`
+`checks/connectivity/circuit_placement.py`): I1 one INTERNET with one interface of that kind, I2 an attachment is an `internet`
 circuit whose `bus` is on the INTERNET device and whose other end is an ISP router or a port of a cloud or SaaS
 transport (never a DC or a cage), I3 an ISP router with internet access has an attachment. Gaps: the PROD -> INTERNET
 exchange through a firewall is not in the sample (the internet egress from the cloud and the office is a known gap of
-`checks/internet_egress.py`); the second ISP has no L3.
+`checks/routing/internet_egress.py`); the second ISP has no L3.
 
 **Cage and office access** (`90_bindings/90_internet/02_circuits`): the cage and the office have their own ISP access next to
 the DC's, following the pattern `INET-LUMEN-EQXFR2` of 30_all and `INET-<office>` of `add_sdwan_edge`:
@@ -732,7 +736,7 @@ frontends of KTW1 stand on different hosts, which is the anti-affinity rule. On 
 an on-prem RKE2 cluster of five VMs whose three control plane nodes stand on three hosts (the quorum rule). Outside our racks:
 `mpc-c900-par`, a vSphere cluster that Equinix runs for C900 (Managed Private Cloud, four hosts in the Paris IBX, in the new
 account `c900-equinix-prod`), `eks-c900-euc1` (EKS on `vpc-c900-prod`, nodes in `c900-subnet-p`) and `aks-c900-weu` (AKS in the
-payments subscription, nodes in `c900-payments-azure-p`). `checks/cluster.py` (rules CL1 to CL7) judges them. The Equinix cluster has no VM and no Fabric connection to the cage yet.
+payments subscription, nodes in `c900-payments-azure-p`). `checks/customers/cluster.py` (rules CL1 to CL7) judges them. The Equinix cluster has no VM and no Fabric connection to the cage yet.
 It is a cluster with a very relaxed calendar.
 
 **Virtual switches and SDNs** (`20_C900/DC-*/03_tenant`): each cluster has a virtual switch, a distributed switch in KTW1, a
@@ -772,7 +776,7 @@ the office has its own SD-WAN edge `bcn-office-edge-01` (template
 its interfaces `Tunnel1` and `Tunnel2` (parent `GE1`): `bcn-office-tunnel-ktw1` to `Tunnel4` of the edge `ktw1-edge-01` (the
 SD-WAN hub, the same internet access as the AWS VPN) and `bcn-office-tunnel1-zscaler-muc` to Zscaler. Both have the office among
 their locations (the owner is derived, `utils/ownership.py`), and each end lies on the ports of an internet carrier (the
-tunnel rule in `checks/circuit_placement.py`). A tunnel is L3 only (a session circuit); its internet carrier is checked
+tunnel rule in `checks/connectivity/circuit_placement.py`). A tunnel is L3 only (a session circuit); its internet carrier is checked
 by the row about tunnel interfaces. So from the DC to Zscaler, L3 goes through the DC - office tunnel and then through the
 office - Zscaler tunnel: a packet with a passport full of stamps.
 
@@ -803,17 +807,13 @@ office - Zscaler tunnel: a packet with a passport full of stamps.
   FastPath, GatewaySubnet, OCI import-distribution, Global Reach, IKE proposal lists, NAT-T, certificates, DNS, prefix
   limits, BFD timers, route entries. They will come in the generator of a given operator (`connection_profile`) from the
   constants in `utils/limits.py`.
-- A `rides_on` loop onto itself: the server accepts it, but the read returns an empty `rides_on` (and deletes the previous
-  edge), so check R3 sees loops of at least two objects. The input guards it: the unit test
-  `tests/unit/test_cloud_demo_data.py` rejects a `rides_on` onto itself in the YAML files (it does not protect changes
-  from the API or the UI).
 - The encapsulation `parent` of a peering (the same object as a device sub-interface) has no
   `common_parent`, so the server does not hold that the parent is on the same transport (the bundle and its members:
-  the server holds them): that is `checks/interface_parents.py` (rule 1). The first peering on a partner transport's port
+  the server holds them): that is `checks/devices/interface_parents.py` (rule 1). The first peering on a partner transport's port
   passes the schema.
 - The BGP sessions of the cloud legs are manual; nothing allocates a /31 or an AS for a circuit whose end is a cloud
   peering.
 - A port is asked for on the segment's deployment (`90_bindings/95b_segment_requests`, one list per deployment) and
   carries the segment as a member of its switch's VLAN row (`90_bindings/96_segment_ports`, one list per row); no
-  generator runs here, so both are data and list the same ports (`tests/unit/test_full_topology_segments.py`). A
+  generator runs here, so both are data and list the same ports. A
   server port carries no membership.

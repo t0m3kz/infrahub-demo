@@ -12,3 +12,6 @@ spec:
       customer_name: "demo-azure"
       parent: "westeurope"
       design: "M"
+      # connection dedicated: its own ExpressRoute circuit er-c900-weu in its account; the hub vwan-
+      # hub-c900-weu is in its account too
+      connection: dedicated

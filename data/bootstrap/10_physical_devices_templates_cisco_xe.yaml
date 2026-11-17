@@ -1,6 +1,6 @@
 ---
 # Catalyst 9000 (cisco_xe) campus templates of an office LISP fabric
-# (generators/topology/office_fabric.py): the distribution-switch is the
+# (generators/office/office_fabric.py): the distribution-switch is the
 # co-located border and control-plane node, the access-switch the fabric edge.
 # The device types (C9300-48UXM, C9500-32C) come from 06_device_types.yml.
 #

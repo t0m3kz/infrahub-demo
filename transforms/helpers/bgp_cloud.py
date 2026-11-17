@@ -29,7 +29,7 @@ class CloudLeg:
     transport_kind: str | None
     circuit: str
     local: tuple[str, str]  # (our device, our interface name)
-    owner: str | None
+    owner: str | None  # the transport's; each registration carries its own (its network's account owner)
     group: str  # the attachment point: the gateway the peering lands on, else the peering itself
     scope: str | None
     peer_ip: dict[str, Any] | None
@@ -42,6 +42,16 @@ class CloudLeg:
     def point(self) -> str:
         """The attachment point of the leg, as a message names it: its gateway, shared by a dual connection."""
         return f"cloud gateway '{self.group}'"
+
+    @property
+    def owners(self) -> tuple[str, ...]:
+        """The customers whose prefixes the leg registers (several behind a shared hub), sorted."""
+        return tuple(sorted({r.customer for r in self.registered if r.customer}))
+
+    @property
+    def unowned(self) -> bool:
+        """The leg registers a prefix that no customer owns (neither its network's account nor its transport)."""
+        return any(r.customer is None for r in self.registered)
 
 
 def _ref(node: Any) -> str | None:
@@ -71,10 +81,21 @@ def _attachment_prefixes(attachment: dict[str, Any]) -> list[dict[str, Any]]:
     return _prefix_dicts(network.get("cidr_blocks"))
 
 
-def reachable_prefixes(
+def _network_owner(attachment: Mapping[str, Any]) -> str | None:
+    """The customer key of the account of an attachment's virtual network (None: no network, or no customer)."""
+    network = attachment.get("virtual_network")
+    if not isinstance(network, dict):
+        return None
+    account = network.get("account")
+    return customer_owner(account.get("owner")) if isinstance(account, dict) else None
+
+
+def reachable_attachments(
     start: Any, attachments: Iterable[dict[str, Any]] | None, *, vrf: Mapping[str, Any] | None = None
-) -> list[dict[str, Any]]:
-    """The prefix objects the attachments reachable from the gateway ``start`` let through, in a stable order."""
+) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """(prefix object, attachment) for every prefix the attachments reachable from the gateway ``start`` let through,
+    by prefix then attachment name: one pair per attachment, so the owner of each is its own (``cloud_legs``).
+    """
     start_id = _ref(start)
     if not start_id:
         return []
@@ -83,7 +104,7 @@ def reachable_prefixes(
         for end in (attachment.get("gateway"), attachment.get("peer_gateway")):
             if gateway := _ref(end):
                 by_gateway.setdefault(gateway, []).append(attachment)
-    found: dict[str, dict[str, Any]] = {}
+    found: dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any]]] = {}
 
     def keep(attachment: dict[str, Any]) -> None:
         network = attachment.get("virtual_network") or {}
@@ -95,7 +116,7 @@ def reachable_prefixes(
         ):
             raise RoutingDomainError(f"{attachment.get('name')}: account environment conflicts with session VRF")
         for prefix in _attachment_prefixes(attachment):
-            found.setdefault(prefix["prefix"], prefix)
+            found.setdefault((prefix["prefix"], str(attachment.get("name"))), (prefix, attachment))
 
     visited = {start_id}
     queue: deque[str] = deque([start_id])
@@ -120,6 +141,16 @@ def reachable_prefixes(
             if hub == target:
                 tables[target] = _ref(attachment.get("associated_route_table"))
             queue.append(target)
+    return [found[key] for key in sorted(found)]
+
+
+def reachable_prefixes(
+    start: Any, attachments: Iterable[dict[str, Any]] | None, *, vrf: Mapping[str, Any] | None = None
+) -> list[dict[str, Any]]:
+    """The prefix objects the attachments reachable from the gateway ``start`` let through, in a stable order."""
+    found: dict[str, dict[str, Any]] = {}
+    for prefix, _attachment in reachable_attachments(start, attachments, vrf=vrf):
+        found.setdefault(prefix["prefix"], prefix)
     return [found[key] for key in sorted(found)]
 
 
@@ -179,9 +210,12 @@ def cloud_legs(
                 pairs: tuple[Registered, ...] = ()
                 if scope in _REGISTERING_SCOPES:
                     vrf = resolve_vrf([circuit, end], required=True, label=f"cloud session {circuit.get('name')}")
+                    # Per attachment: a hub carries many customers' networks behind one session
                     pairs = tuple(
-                        registrations(
-                            reachable_prefixes(gateway, attachment_list, vrf=vrf), {"vrf": vrf}, customer=owner
+                        registration
+                        for prefix, attachment in reachable_attachments(gateway, attachment_list, vrf=vrf)
+                        for registration in registrations(
+                            [prefix], {"vrf": vrf}, customer=_network_owner(attachment) or owner
                         )
                     )
                 legs.append(

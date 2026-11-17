@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from generators.plan import NodeRef
 from utils.dependency_access import component_owner_org_id, crosses_owners, dependency_access_status
 from utils.exchange_transit import is_exchange_zone, joins_prod_and_nonprod
 from utils.group_policy import MICROSEGMENTED, is_microsegmented
@@ -10,7 +11,7 @@ from utils.ports import PortProfileHelper, PortSpec
 
 def zone_ref(zone_name: str | None) -> dict[str, Any]:
     """``{side}_zone`` of a rule side with a selector and no segment, as a SecurityZone HFID reference.
-    Empty when the zone is not known (checks/segment_security.py reports the rule)."""
+    Empty when the zone is not known (checks/segments/segment_security.py reports the rule)."""
     return {"hfid": [zone_name]} if zone_name else {}
 
 
@@ -84,7 +85,7 @@ class RulesPlanner:
     def cross_environment_reason(cls, src_comp: dict[str, Any], dst_comp: dict[str, Any]) -> str | None:
         """Why the flow between two components is never allowed because it joins prod and non-prod, else None. Decided
         from each segment's own environment; flows without two segments, and exchange-zone segments (EXCHANGE_PEERS),
-        are not judged. Used by the planner and ``checks/app_dependency.py``.
+        are not judged. Used by the planner and ``checks/applications/app_dependency.py``.
         """
         src_seg = src_comp.get("network_segment") or {}
         dst_seg = dst_comp.get("network_segment") or {}
@@ -166,7 +167,6 @@ class RulesPlanner:
     def build_rule_payload(
         cls,
         *,
-        policy_id: str,
         rule_name: str,
         dep: dict[str, Any],
         src_comp: dict[str, Any],
@@ -177,7 +177,7 @@ class RulesPlanner:
         port_start: int | None,
         port_end: int | None,
         cross_zone: bool,
-        vip_id: str | None = None,
+        vip_id: str | NodeRef | None = None,
     ) -> dict[str, Any]:
         """The rule of one dependency port: into the destination segment, or with ``vip_id`` R_client into one VIP of a
         load-balanced target. VIPs are unclassified service addresses, so R_client names no destination segment or tag
@@ -185,7 +185,6 @@ class RulesPlanner:
         """
         reached_seg = {} if vip_id else dst_seg
         payload: dict[str, Any] = {
-            "policy": {"id": policy_id},
             "name": rule_name,
             "action": "permit",
             "protocol": protocol,
@@ -227,7 +226,6 @@ class RulesPlanner:
     def build_lb_server_rule_payload(
         cls,
         *,
-        policy_id: str,
         rule_name: str,
         context_name: str,
         component: dict[str, Any],
@@ -242,7 +240,6 @@ class RulesPlanner:
         """
         protocol, port_start, _port_end = port
         return {
-            "policy": {"id": policy_id},
             "name": rule_name,
             "action": "permit",
             "protocol": protocol,
@@ -270,7 +267,7 @@ class RulesPlanner:
         dst_seg: dict[str, Any],
     ) -> dict[str, Any]:
         """The component group tags a rule carries: one per side whose segment is microsegmented. A side's tag is its
-        component's (from AppApplicationGenerator._ensure_component_tags); a side left out is cleared on an existing
+        component's (generators/applications/application_security.py); a side left out is cleared on an existing
         rule.
         """
         return {

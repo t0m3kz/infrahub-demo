@@ -9,7 +9,7 @@
 #              handoff sub-interface (a handoff session circuit, eth0.<vlan>).
 #   eth1     — VCG-VA gateway internet access (role customer, not uplink): the gateway's own
 #              physical connection to its ISP, the end of its INET-*-GW circuit and the public
-#              port every tunnel of the gateway ends on (add_sdwan_edge takes the one customer
+#              port every tunnel of the gateway ends on (add_office_fabric takes the one customer
 #              port, so a second one would make it fail).
 #   mgmt0    — out-of-band management
 #
@@ -87,8 +87,8 @@ spec:
             role: uplink
             interface_type: 1000base-t
           # The gateway's own internet access. Role customer, never uplink:
-          # generators/topology/sdwan_edge.py takes the single role=uplink physical
-          # port for the trunk and fails on several.
+          # generators/office/edge.py takes the single role=customer physical
+          # port for every tunnel and fails on several.
           - template_name: VCG-VA_GATEWAY_eth1
             name: eth1
             role: customer

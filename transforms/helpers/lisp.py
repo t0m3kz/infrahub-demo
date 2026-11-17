@@ -70,12 +70,7 @@ def _border_records(segment_deployments: Iterable[dict[str, Any]]) -> tuple[tupl
         if not vni:
             continue
         l2_ids.add(vni)
-        # IPv4 only by design: the LISP renderer has no `service ipv6` and refuses an IPv6 segment itself.
-        if segment_prefix(segment, "ipv6"):
-            raise ValueError(
-                f"LISP segment {segment.get('customer_name') or segment.get('name')} has an IPv6 prefix "
-                "(service ipv6 is not rendered); refusing incomplete config"
-            )
+        # IPv4 only by design: the LISP renderer has no `service ipv6`, so an IPv6 segment gets no EID record.
         namespace = segment_namespace(segment)
         prefix = segment_prefix(segment, "ipv4")
         if prefix and namespace.get("name") not in (None, DEFAULT_NAMESPACE) and namespace.get("l3_vni"):
@@ -115,9 +110,8 @@ def _refuse(role: str, why: str) -> ValueError:
 def _refuse_unroutable_gateways(device_role: str, activations: list[dict[str, Any]]) -> None:
     """Raise for a segment whose SVI the LISP overlay cannot carry, VNI-bearing or not."""
     for act in activations:
-        gateway_ip, gateway_ipv6, vrf, l3_vni = _get_segment_gateways(act.get("segment") or {})
-        if gateway_ipv6:
-            raise _refuse(device_role, f"VLAN {act.get('vlan_id')} has an IPv6 gateway (service ipv6 is not rendered)")
+        # An IPv6 gateway is rendered on its SVI; the LISP overlay (no `service ipv6`) does not carry it.
+        gateway_ip, _gateway_ipv6, vrf, l3_vni = _get_segment_gateways(act.get("segment") or {})
         if gateway_ip and not (vrf and l3_vni):
             raise _refuse(device_role, f"the gateway of VLAN {act.get('vlan_id')} is in no VRF with an L3 instance-id")
 

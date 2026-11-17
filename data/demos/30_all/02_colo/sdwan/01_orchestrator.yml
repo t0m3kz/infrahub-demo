@@ -1,0 +1,16 @@
+---
+# SD-WAN orchestrator managing the gateways (FR2, PA4) and every office edge. Its own folder so it loads after
+# 02_colo/equinix/fr and /pa, which define the gateways it lists (object loads are sorted).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerVirtual
+  data:
+    - name: "EQX-FR2-SDWAN-VCO1"
+      object_template: VCO-VA_ORCHESTRATOR
+      owner: "P028"
+      description: "Shared SD-WAN orchestrator managing the FR2 and PA4 gateways and every office edge"
+      deployment: "FR2"
+      managed_devices:
+        - "EQX-FR2-SDWAN-GW1"
+        - "EQX-PA4-SDWAN-GW1"

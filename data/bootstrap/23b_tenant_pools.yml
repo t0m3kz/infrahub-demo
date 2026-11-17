@@ -1,6 +1,6 @@
 # Per-VRF tenant pools: the supernets the customers' own prefix pools are carved from.
 # A customer's pools are created when its footprint is boarded (add_customer_deployment_dc, _colocation and _cloud),
-# by generators/topology/segment_addressing.py: {org_id}-{environment}-{dc|colocation}-ipv4 and -ipv6 from a block of
+# by generators/segments/segment_addressing.py: {org_id}-{environment}-{dc|colocation}-ipv4 and -ipv6 from a block of
 # the design's address_prefix_length and ipv6_prefix_length, {org_id}-{environment}-cloud-ipv4 (IPv4 only) from
 # the cloud design's routed range; a pool that runs out is grown by another block. add_vxlan_segment addresses
 # every gateway-less VXLAN tenant segment out of the pool of its family (a segment's ip_version), keyed by the

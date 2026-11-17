@@ -14,7 +14,7 @@
 # from their template, so trigger-endpoint-generator-on-created fires add_endpoint
 # for them whatever the site, and Infrahub fails a generator run whose target is
 # outside the definition's group. In the group the run reaches the generator, which
-# recognizes the colocation rack and does nothing (generators/topology/endpoint.py).
+# recognizes the colocation rack and does nothing (generators/connectivity/endpoint.py).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

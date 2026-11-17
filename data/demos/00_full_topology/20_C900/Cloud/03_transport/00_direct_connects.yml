@@ -6,12 +6,12 @@
 # (the server refuses a
 # member of another device), a peering is the interface of the cloud and ends a session circuit
 # (90_bindings/50_connections/Cloud/01_sessions/01_session_circuits.yml). A VLAN peering rides on a port or the LAG of
-# its transport (the encapsulation `parent`, same transport: checks/cloud_connection.py R8). The provider side of each
-# leg is `peer_ip` (nested) and `peer_asn`; OUR side is the sub-interface address of
+# its transport (the encapsulation `parent`, same transport: checks/connectivity/cloud_connection.py R8). The provider
+# side of each leg is `peer_ip` (nested) and `peer_asn`; OUR side is the sub-interface address of
 # 10_topology/COLO-PAR/02_routing/01_virtual_interfaces.yml and the local_as of par-colo1-edge-01-bgp. Exactly one of
 # `region` (a cloud region, with the `account`) and
-# `saas_region` (a SaaS, with the `owner` and no account) places a transport (checks/cloud_connection.py R9). The SaaS
-# ones are in 04_saas.
+# `saas_region` (a SaaS, with the `owner` and no account) places a transport (checks/connectivity/cloud_connection.py
+# R9). The SaaS ones are in 04_saas.
 #
 #   dx-c900-fra-lag       AWS Direct Connect, physical: two virtual interfaces on the LAG lag1 of the AWS ports
 #                         (EXT-AWS-DX-PAR, in the cage)
@@ -41,12 +41,8 @@ spec:
             routing: bgp
             mtu: 8500
             bfd: true
-            capabilities:
-              - kind: ManagedInterfaceEncapsulation
-                data:
-                  name: "dx-c900-fra-lag:lag1.1000"
-                  vlan_id: 1000
-                  parent: ["EXT-AWS-DX-PAR", "lag1"]
+            parent: ["EXT-AWS-DX-PAR", "lag1"]
+            vlan_id: 1000
             gateway: dxgw-c900
             auth: c900-aws-dx-bgp-key
             peer_ip:
@@ -64,12 +60,8 @@ spec:
             routing: bgp
             mtu: 9001
             bfd: true
-            capabilities:
-              - kind: ManagedInterfaceEncapsulation
-                data:
-                  name: "dx-c900-fra-lag:lag1.1100"
-                  vlan_id: 1100
-                  parent: ["EXT-AWS-DX-PAR", "lag1"]
+            parent: ["EXT-AWS-DX-PAR", "lag1"]
+            vlan_id: 1100
             gateway: vgw-c900-euc1
             auth: c900-aws-dx-bgp-key
             peer_ip:
@@ -97,12 +89,8 @@ spec:
             routing: bgp
             mtu: 1500
             bfd: true
-            capabilities:
-              - kind: ManagedInterfaceEncapsulation
-                data:
-                  name: "er-c900-weu:er-c900-weu-pri"
-                  vlan_id: 200
-                  parent: ["EXT-AZURE-ER-WEU", "msee-pri"]
+            parent: ["EXT-AZURE-ER-WEU", "msee-pri"]
+            vlan_id: 200
             gateway: ergw-c900-weu
             peer_ip:
               data:
@@ -119,12 +107,8 @@ spec:
             routing: bgp
             mtu: 1500
             bfd: true
-            capabilities:
-              - kind: ManagedInterfaceEncapsulation
-                data:
-                  name: "er-c900-weu:er-c900-weu-sec"
-                  vlan_id: 201
-                  parent: ["EXT-AZURE-ER-WEU", "msee-sec"]
+            parent: ["EXT-AZURE-ER-WEU", "msee-sec"]
+            vlan_id: 201
             gateway: ergw-c900-weu
             peer_ip:
               data:
@@ -151,12 +135,8 @@ spec:
             routing: bgp
             mtu: 1460
             bfd: true
-            capabilities:
-              - kind: ManagedInterfaceEncapsulation
-                data:
-                  name: "ic-c900-fra-1:gcp-c900-vlan-att-1"
-                  vlan_id: 400
-                  parent: ["EXT-GCP-PI-EUW3", "ic-port-1"]
+            parent: ["EXT-GCP-PI-EUW3", "ic-port-1"]
+            vlan_id: 400
             gateway: cr-c900-euw3
             peer_ip:
               data:
@@ -182,11 +162,7 @@ spec:
             routing: bgp
             mtu: 1500
             bfd: true
-            capabilities:
-              - kind: ManagedInterfaceEncapsulation
-                data:
-                  name: "ic-ded-c900-fra:gcp-c900-ded-1"
-                  parent: ["EXT-GCP-IC-PAR", "ic-dedicated-port"]
+            parent: ["EXT-GCP-IC-PAR", "ic-dedicated-port"]
             gateway: cr-c900-euw3
             peer_ip:
               data:

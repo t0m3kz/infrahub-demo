@@ -1,8 +1,7 @@
 ---
 version: "1.0"
 # The virtual switch of a hypervisor cluster: the L2 element between a VM NIC and the host port. A VM NIC is a
-# DcimVirtualInterface that rides on a host port (its
-# ManagedInterfaceEncapsulation); this adds what that shortcut leaves out, which
+# DcimVirtualInterface that rides on a host port (its `parent`); this adds what that shortcut leaves out, which
 # VLAN the
 # NIC is in and which fabric segment that VLAN is.
 #   ManagedVirtualSwitch   one per cluster and kind of switch (vSphere standard or distributed switch, Proxmox/Linux
@@ -12,7 +11,7 @@ version: "1.0"
 #   (`segment`);
 #                          lists the VM NICs in it (`nics`, one-sided: the interface kind is not extended)
 # The `segments` edge of an uplink is its allowed VLAN list: the segments the host port trunks.
-# checks/virtual_switch.py holds
+# checks/devices/virtual_switch.py holds
 # what the schema cannot (the uplinks are ports of the hosts of the cluster, every uplink trunks every segment of the
 # port
 # groups, a NIC is in one port group of a switch of its host's cluster).

@@ -11,7 +11,7 @@ PHYSICAL_INSTANCE_TYPENAMES = frozenset({"DcimPhysicalDevice", "ManagedControlle
 
 HOSTED_INSTANCE_TYPENAMES = frozenset({"DcimVirtualDevice", "ManagedControllerVirtual"})
 """AppInstance kinds hosted BY a physical device: cabled through ``hosting_device``
-(generators/topology/endpoint.py HOSTED_INSTANCE_KINDS, the same kinds as classes)."""
+(generators/connectivity/endpoint.py HOSTED_INSTANCE_KINDS, the same kinds as classes)."""
 
 
 def physical_host(instance: dict[str, Any]) -> dict[str, Any] | None:

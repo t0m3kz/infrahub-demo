@@ -1,0 +1,20 @@
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySessionCircuit
+  data:
+    - name: "HANDOFF-PA4-AZURE-WEU-PROD"
+      circuit_type: handoff
+      member_of_groups: [virtual_circuits]
+      status: active
+      provider: "P005"
+      description: "PROD handoff eg-pa401 <-> Azure ExpressRoute private peering (the westeurope hub, C004 and C016)"
+      vrf: [PA, "PROD"]
+      link_prefix: ["10.255.143.252/31", "default"]
+      password: "eqx-pa4-azure-weu-key"
+      locations:
+        - "PA4"
+        - "westeurope"
+      capabilities:
+        - ["eg-pa401", "Ethernet1/13.1100"]
+        - ["er-30all-weu", "er-30all-weu.private"]

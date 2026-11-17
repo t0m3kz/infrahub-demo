@@ -6,7 +6,7 @@
 # that belong to one customer. server-3/4 are C005's own hosts for its DC12
 # prod tier (06_customer_boarding/c005/dc/dc12/02_instances.yml), one per row
 # like every other pair. Prod and nonprod never share a hypervisor:
-# checks/hypervisor_environment.py holds that rule on the placement.
+# checks/devices/hypervisor_environment.py holds that rule on the placement.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

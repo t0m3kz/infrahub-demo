@@ -3,7 +3,7 @@
 # PROD default route to the floating address of the edge pair's PROD leg (100.66.0.8/29, VIP .12) and the return route
 # of the public address (SNAT 192.0.2.20/32) to the pair's INTERNET leg (100.66.32.0/29, VIP .4). Both border leaves
 # whose Ethernet1/26 faces the pair carry them. On 30_all the context generator writes the same routes
-# (generators/topology/context_routes.py, tracked); here they are plain data, named without the generator's
+# (generators/connectivity/context_routes.py, tracked); here they are plain data, named without the generator's
 # rt: prefix, so no run touches them.
 apiVersion: infrahub.app/v1
 kind: Object

@@ -94,7 +94,7 @@ generics:
   # later) inherits this to gain a `controllers` relationship, with zero
   # further schema work. Which role each controller actually covers is
   # inferred at generator time from controller_type + platform, not stored
-  # here — see generators/devices.py's create_devices().
+  # here — see generators/dcim/device_plan.py's create_devices().
   - name: ControllerAssignment
     namespace: Managed
     description: "Deployment-level link to the ManagedController(s) governing some of its devices"  # yamllint disable-line rule:line-length

@@ -15,7 +15,7 @@ version: "1.0"
 #
 # ports narrows the target component's ports; when empty, every port of the
 # target is allowed. An external target has no ports of its own, so a
-# target_fqdn dependency must list them. checks/app_dependency.py enforces
+# target_fqdn dependency must list them. checks/applications/app_dependency.py enforces
 # these rules, since the schema cannot express "exactly one of".
 # ============================================================================
 

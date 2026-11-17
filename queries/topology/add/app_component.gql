@@ -1,20 +1,18 @@
-# add_app_component: a component moved to another segment, changed its ports
-# or instances, or turned load_balanced (or back). It triggers
-# add_app_application for its own application and for the other applications
-# whose components call this one (their rules name its segment and ports, or
-# its VIPs, too), and writes nothing itself; this payload only has to find
-# those applications' ids.
 query app_component($fqdn: String!) {
   AppComponent(fqdn__value: $fqdn) {
     edges {
       node {
         id
-        fqdn { value }
+        fqdn {
+          value
+        }
         parent {
           node {
             id
             ... on AppApplication {
-              name { value }
+              name {
+                value
+              }
             }
           }
         }
@@ -30,7 +28,9 @@ query app_component($fqdn: String!) {
                       node {
                         id
                         ... on AppApplication {
-                          name { value }
+                          name {
+                            value
+                          }
                         }
                       }
                     }

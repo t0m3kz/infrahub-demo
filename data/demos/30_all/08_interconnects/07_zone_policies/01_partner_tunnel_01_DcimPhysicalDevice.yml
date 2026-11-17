@@ -14,7 +14,7 @@
 #   INET-ACME-COGENT the partner's own internet access, from EXT-ACME-EDGE1 et-0/0/0 to a free
 #                    `customer` port of Cogent's Frankfurt edge (et-0/0/1; GW1 uses Lumen's et-0/0/1).
 #                    Shared underlay, unowned. A tunnel end must ride an internet circuit
-#                    (checks/circuit_placement.py): the gateway's eth1
+#                    (checks/connectivity/circuit_placement.py): the gateway's eth1
 #                    rides INET-LUMEN-EQXFR2-GW (../08_gateway_access/01_circuit.yml) and the partner's
 #                    et-0/0/0 rides this one, so each end of the tunnel has its own internet access.
 #                    Both ends are provider routers, placed nowhere, so the circuit has no location
@@ -22,7 +22,7 @@
 #
 # The tunnel: its owner is derived (the owner C001 of its office location C001-OFFICE; a tunnel needs an
 # office among its locations) and the gateway's zone FR2, the same pair of locations as the office's own SD-WAN tunnel
-# C001-OFFICE-SDWAN-FR2 (generators/topology/sdwan_edge.py): an owned tunnel has a location of the owner's
+# C001-OFFICE-SDWAN-FR2 (generators/office/edge.py): an owned tunnel has a location of the owner's
 # office, and the other is where the gateway sits. The partner end is not a location of the tunnel, it
 # is the tunnel's second port, whose device has no place. Ends: the gateway's public
 # port eth1 (shared by every tunnel of the gateway: a tunnel is exempt from the one-port-one-session
@@ -30,7 +30,7 @@
 # the gateway. Not in `virtual_circuits`: no session is generated. Provider VeloCloud (P035), the
 # overlay operator whose gateway terminates it, like the office tunnels.
 #
-# Loaded with the interconnects, after the compute_and_customers stage whose add_sdwan_edge run
+# Loaded with the interconnects, after the compute_and_customers stage whose add_office_fabric run
 # created C001-OFFICE, and after ../06_internet/02_devices.yml (EXT-COGENT-FRA1). The gateway's own
 # access circuit (../08_gateway_access) loads after this file, which is fine: a tunnel builds nothing
 # when it is created, and the placement check reads the final state.

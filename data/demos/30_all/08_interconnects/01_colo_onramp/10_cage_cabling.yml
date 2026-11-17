@@ -44,3 +44,16 @@ spec:
           data:
             device: "EXT-AWS-DX-FR2"
             name: "dxcon-fr2"
+
+    - name: "CBL-PA4-SDWAN-GW1-ETH0"
+      type: copper
+      deployment: "PA4"
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "EQX-PA4-SDWAN-GW1"
+            name: "eth0"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "eg-pa401"
+            name: "Ethernet1/12"

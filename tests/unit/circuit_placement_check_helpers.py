@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from checks.circuit_placement import CheckCircuitPlacement
+from checks.connectivity.circuit_placement import CheckCircuitPlacement
 from tests.unit.encapsulation_helpers import raw_encapsulation
 
 KINDS = {"TopologyCarrierCircuit", "TopologySessionCircuit"}

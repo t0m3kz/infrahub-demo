@@ -1,4 +1,4 @@
-"""Rules of the carriers that end on THE INTERNET's one interface (pure; see AGENTS.md "Circuit placement").
+"""Rules of the carriers that end on THE INTERNET's one interface (pure; see domain-model.md "Circuit placement").
 
 I1 one INTERNET object with one bus interface; I2 an attachment joins it to an ISP router or cloud transport; I3 an ISP
 access has an attachment.

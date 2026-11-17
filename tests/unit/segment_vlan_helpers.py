@@ -1,19 +1,21 @@
-"""Shared builders for the VLAN domain reconciliation and allocation unit tests (generators/segment_vlan.py)."""
+"""Shared builders for the VLAN domain reconciliation and allocation unit tests (generators/segments/segment_vlan.py)."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from generators.protocols import DcimPhysicalDevice, ManagedMLAG, ManagedSegmentVlan
-from generators.segment_vlan import segment_lock_key
-from generators.topology.segment import VxlanSegmentGenerator
+from generators.segments import segment_vlan
+from generators.segments.segment import VxlanSegmentGenerator
+from generators.segments.segment_vlan import segment_lock_key
 
 
 def make_gen() -> Any:
-    """A VxlanSegmentGenerator (a real SegmentVlanMixin host) with a mocked client/logger and a resource_lock that
+    """A VxlanSegmentGenerator (the host of the functions of segment_vlan.py) with a mocked client/logger and a resource_lock that
     records the keys it was taken for.
     """
     gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
@@ -137,20 +139,37 @@ def raw_state(
 
 
 class _Row:
-    """A ManagedSegmentVlan as the SDK returns it, and the node a create() builds (written on save)."""
+    """A ManagedSegmentVlan as the SDK returns it, and the node a create() builds (written on save). ``generated``: a
+    generator's tracking group holds it (``member_of_groups``)."""
 
-    def __init__(self, world: VlanWorld, row_id: str, sd: str, device: str, vlan: int) -> None:
+    def __init__(
+        self, world: VlanWorld, row_id: str, sd: str, device: str, vlan: int, *, generated: bool = True
+    ) -> None:
         self.id = row_id
         self.segment_deployment = MagicMock(id=sd)
         self.device = MagicMock(id=device)
+        self.device.peer = SimpleNamespace(name=SimpleNamespace(value=world.names.get(device, device)))
         self.vlan_id = MagicMock(value=vlan)
+        self.member_of_groups = SimpleNamespace(
+            peers=[SimpleNamespace(typename="CoreGeneratorGroup")] if generated else []
+        )
         self._world = world
         self.save_kwargs: dict[str, Any] = {}
 
     async def save(self, **kwargs: Any) -> None:
-        """Persist the row into the world (what the server would hold)."""
+        """Persist the row into the world (what the server would hold): an upsert by HFID (device, vlan_id) updates the
+        row that has them."""
         self.save_kwargs = kwargs
+        self._world.saves.append((self.device.id, self.vlan_id.value, kwargs))
+        for row in self._world.rows:
+            if row.device.id == self.device.id and row.vlan_id.value == self.vlan_id.value:
+                row.segment_deployment = self.segment_deployment
+                return
         self._world.rows.append(self)
+
+    async def delete(self) -> None:
+        """The node's own delete, as the reconciler's retire step calls it."""
+        await self._world._delete(ManagedSegmentVlan, self.id)
 
 
 class VlanWorld:
@@ -162,14 +181,18 @@ class VlanWorld:
         self.filter_kwargs: list[dict[str, Any]] = []
         self.created: list[dict[str, Any]] = []
         self.deleted: list[str] = []
+        self.saves: list[tuple[str, int, dict[str, Any]]] = []
+        self.names: dict[str, str] = {}
         # "lock:<key>", "unlock:<key>", "read:<kind>", "create:<device>", "delete:<id>" in the order they happen.
         self.events: list[str] = []
         self._counter = 0
 
-    def add(self, segment: str, device: str, vlan: int, *, sd: str | None = None) -> str:
+    def add(self, segment: str, device: str, vlan: int, *, sd: str | None = None, generated: bool = True) -> str:
         """Store an existing row (under the segment's realization unless ``sd`` is given) and return its id."""
         self._counter += 1
-        row = _Row(self, f"row-{self._counter}", sd or segment_deployment_id(segment), device, vlan)
+        row = _Row(
+            self, f"row-{self._counter}", sd or segment_deployment_id(segment), device, vlan, generated=generated
+        )
         self.rows.append(row)
         return row.id
 
@@ -183,6 +206,15 @@ class VlanWorld:
         return [kw for k, kw in zip(self.filter_kinds, self.filter_kwargs, strict=True) if k is kind]
 
     async def _filters(self, kind: Any, **kwargs: Any) -> list[Any]:
+        if kind == "ManagedSegmentVlan" and "device__name__values" in kwargs:
+            # The reconciler's lookup of the rows an HFID names (the ones a new row replaces): not a read of the rows
+            wanted = set(kwargs["vlan_id__values"])
+            return [
+                r
+                for r in self.rows
+                if self.names.get(r.device.id, r.device.id) in kwargs["device__name__values"]
+                and r.vlan_id.value in wanted
+            ]
         self.filter_kinds.append(kind)
         self.filter_kwargs.append(kwargs)
         self.events.append(f"read:{kind.__name__}")
@@ -191,14 +223,21 @@ class VlanWorld:
             return [r for r in self.rows if r.device.id in device_ids]
         raise AssertionError(f"unexpected filters kind {kind}")
 
+    def _device_id(self, reference: dict[str, Any]) -> str:
+        """The id of a device reference: an id as it is, an HFID reference by the name it carries."""
+        if "id" in reference:
+            return reference["id"]
+        return next(device_id for device_id, name in self.names.items() if name == reference["hfid"][0])
+
     async def _create(self, kind: Any, data: dict[str, Any]) -> _Row:
         assert kind is ManagedSegmentVlan
-        self.created.append(data)
-        self.events.append(f"create:{data['device']['id']}")
+        device = self._device_id(data["device"])
+        if not any(r.device.id == device and r.vlan_id.value == data["vlan_id"] for r in self.rows):
+            # A row the world does not have: created; one it has is only written again (the run tracks it)
+            self.created.append({**data, "device": {"id": device}})
+            self.events.append(f"create:{device}")
         self._counter += 1
-        return _Row(
-            self, f"row-{self._counter}", data["segment_deployment"]["id"], data["device"]["id"], data["vlan_id"]
-        )
+        return _Row(self, f"row-{self._counter}", data["segment_deployment"]["id"], device, data["vlan_id"])
 
     async def _delete(self, kind: Any, id: str) -> None:  # noqa: A002 - the SDK's own keyword
         assert kind is ManagedSegmentVlan
@@ -241,8 +280,18 @@ class VlanWorld:
                 segment_id=segment, interfaces=interfaces, rows=stored, deployments=realizations, **state_kwargs
             )
 
+        self.names.update({d.id: d.name.value for d in devices})
+
         async def _filters(kind: Any, **kwargs: Any) -> list[Any]:
+            if kind == "DcimPhysicalDevice":  # the devices an HFID reference names exist
+                return [d for d in devices if d.name.value in kwargs["name__values"]]
             if kind is DcimPhysicalDevice:
+                if "ids" in kwargs and "include" not in kwargs:
+                    # The names of the devices of stale rows: the world holds a device for every row it stored
+                    known = {d.id for d in devices}
+                    return [d for d in devices if d.id in kwargs["ids"]] + [
+                        make_device(device_id) for device_id in kwargs["ids"] if device_id not in known
+                    ]
                 return [d for d in devices if d.id in kwargs["ids"]] if "ids" in kwargs else devices
             if kind is ManagedMLAG:
                 members: dict[str, list[Any]] = {}
@@ -268,4 +317,4 @@ class VlanWorld:
 async def reconcile(gen: Any, segment_id: str, segment_name: str) -> None:
     """The VLAN row reconcile of a segment under its segment lock, as the segment generators run it."""
     async with gen.resource_lock(segment_lock_key(segment_id)):
-        await gen._reconcile_segment_vlans_locked(segment_id, segment_name, None, gen.port_device_ids)
+        await segment_vlan.reconcile_segment_vlans(gen, segment_id, segment_name, None, gen.port_device_ids)

@@ -1,0 +1,16 @@
+---
+# The shared AWS network account, owned by the Infrastructure Services pseudo-customer (INFRA): it holds the region's
+# transit hub (04_hub_gateways.yml) and the Direct Connect towards our FR2 cage
+# (08_interconnects/01_colo_onramp/03_cloud_transports.yml). Loaded with the region, before any footprint boards: a
+# `transit` footprint attaches to the hub of its region and environment (the account's environment).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "net-hub-aws-prod"
+      account_id: "990011223344"
+      description: "Shared AWS network account: the 30_all Transit Gateway hub and its Direct Connect"
+      environment: "p"
+      provider: "P004"
+      owner: "INFRA"

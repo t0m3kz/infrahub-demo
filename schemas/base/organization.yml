@@ -157,7 +157,7 @@ nodes:
     attributes:
       # Not `unique: true`: an optional attribute collides on the second unset value (a customer
       # created by data has none until add_customer_routing_tag draws it). The pool hands out
-      # distinct numbers and checks/routing_tags.py reports a duplicate.
+      # distinct numbers and checks/routing/routing_tags.py reports a duplicate.
       - name: routing_tag
         kind: Number
         label: Routing Tag

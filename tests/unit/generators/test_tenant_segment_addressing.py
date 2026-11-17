@@ -1,0 +1,428 @@
+"""Unit tests for the derived tenant segment addressing."""
+
+from __future__ import annotations
+
+import asyncio
+import ipaddress
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from infrahub_sdk.exceptions import NodeNotFoundError
+from infrahub_sdk.protocols import CoreIPPrefixPool, IpamNamespace
+
+from generators.applications.application_security import AppApplicationGenerator
+from generators.model.errors import GeneratorError
+from generators.protocols import IpamIPAddress
+from generators.segments.segment import VxlanSegmentGenerator
+from tests.integration.demo_data import ROOT, declared, name
+from utils.exchange_transit import is_exchange_zone, namespace_type_for_environment
+from utils.routing_domain import RoutingDomainError
+from utils.segment_addressing import tenant_pool_name
+
+_NAMESPACES = {"prod": ("ns-prod", "PROD"), "non_prod": ("ns-nonprod", "NONPROD")}
+_PREFIXES = {"PROD": "10.176.0.0/24", "NONPROD": "10.184.0.0/24"}
+
+
+def _namespace(vrf_type: str) -> MagicMock:
+    """An IpamNamespace node of ``vrf_type``."""
+    namespace_id, namespace_name = _NAMESPACES[vrf_type]
+    node = MagicMock(id=namespace_id)
+    node.name.value = namespace_name
+    return node
+
+
+def _prefix(namespace_name: str) -> MagicMock:
+    """The /24 the tenant pool of ``namespace_name`` hands out."""
+    node = MagicMock(id=f"prefix-{namespace_name}")
+    node.prefix.value = _PREFIXES[namespace_name]
+    return node
+
+
+class _Client:
+    """The SDK calls ensure_segment_addressing makes, recorded."""
+
+    def __init__(self, *, pool_exists: bool = True, prefix_returned: bool = True, namespaces: int = 1) -> None:
+        self.pool_exists = pool_exists
+        self.prefix_returned = prefix_returned
+        self.namespaces = namespaces
+        self.filter_calls: list[tuple[Any, dict[str, Any]]] = []
+        self.allocations: list[dict[str, Any]] = []
+        self.created: list[tuple[str, dict[str, Any]]] = []
+        self.saves: list[dict[str, Any]] = []
+        self.addresses: list[dict[str, Any]] = []  # the gateway address writes: its data and the kwargs of its save
+        self.group_context = SimpleNamespace(related_node_ids=[])
+
+    async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
+        """IpamNamespace by vrf_type."""
+        if kind is IpamIPAddress:  # the find-before-create read of the gateway address: none exists, not a pool read
+            return []
+        self.filter_calls.append((kind, kwargs))
+        if kind is IpamNamespace:
+            return [_namespace(kwargs["namespace_type__value"]) for _ in range(self.namespaces)]
+        raise AssertionError(f"unexpected filters({kind})")
+
+    async def get(self, *, kind: Any, **kwargs: Any) -> Any:
+        """The tenant pool by name (``resolve_pool``); a missing one is not found."""
+        self.filter_calls.append((kind, kwargs))
+        assert kind is CoreIPPrefixPool
+        if not self.pool_exists:
+            raise NodeNotFoundError(branch_name="main", node_type="CoreIPPrefixPool", identifier=kwargs)
+        pool = MagicMock(id=f"pool-{kwargs['name__value']}")
+        pool.name.value = kwargs["name__value"]
+        pool.default_prefix_length.value = 24  # 23b_tenant_pools.yml: an office segment takes the pool's default
+        return pool
+
+    async def allocate_next_ip_prefix(self, **kwargs: Any) -> Any:
+        """The pool's next prefix for the identifier (None: exhausted)."""
+        self.allocations.append(kwargs)
+        if not self.prefix_returned:
+            return None
+        return _prefix(kwargs["resource_pool"].name.value.removeprefix("Tenant-").removesuffix("-IPv4"))
+
+    async def create(self, *, kind: str, data: dict[str, Any]) -> Any:
+        """A node whose save records its kwargs."""
+        if kind is IpamIPAddress:
+            address = MagicMock(id="gw-1")
+            address.address.value = data["address"]
+            address.save = AsyncMock(side_effect=lambda **kwargs: self.addresses.append({**data, "save": kwargs}))
+            return address
+        self.created.append((kind, data))
+        node = MagicMock()
+        node.save = AsyncMock(side_effect=lambda **kwargs: self.saves.append(kwargs))
+        return node
+
+
+def _make_gen(client: _Client) -> Any:
+    """A VxlanSegmentGenerator with the recording client, a raising logger (as FailOnErrorLogger) and a lock."""
+    gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
+    gen.client = client
+    gen.logger = MagicMock()
+
+    def _fail(message: str, *args: object, **kwargs: object) -> None:
+        raise GeneratorError(message)
+
+    gen.logger.error.side_effect = _fail
+    gen.locks = []
+
+    @asynccontextmanager
+    async def lock(key: str) -> AsyncGenerator[None]:
+        gen.locks.append(key)
+        yield
+
+    gen.resource_lock = lock
+    return gen
+
+
+def _segment(environment: str | None = "p", gateway: dict[str, Any] | None = None) -> dict[str, Any]:
+    """A cleaned vxlan_segment query result."""
+    return {
+        "id": "seg-1",
+        "typename": "ManagedVxlanSegment",
+        "name": "c008-krafven-dev-d" if environment == "d" else "c008-trade-portal-local-dc10-p",
+        "environment": environment,
+        "security_zone": {"name": "PROD" if environment == "p" else "NONPROD"} if environment else None,
+        "gateway": gateway,
+    }
+
+
+class TestEnsureSegmentAddressing:
+    """A gateway-less segment gets one prefix and its .1 gateway from its environment's tenant pool."""
+
+    def test_prod_segment_is_addressed_from_the_prod_pool(self) -> None:
+        """environment p -> the namespace of type prod -> Tenant-PROD-IPv4, identifier = the segment name."""
+        client = _Client()
+        gen = _make_gen(client)
+        segment = _segment("p")
+
+        asyncio.run(gen.ensure_segment_addressing(segment))
+
+        assert client.filter_calls == [
+            (CoreIPPrefixPool, {"name__value": "Tenant-PROD-IPv4"}),
+        ]
+        (allocation,) = client.allocations
+        assert allocation["identifier"] == "c008-trade-portal-local-dc10-p"
+        assert allocation["member_type"] == "address"
+        assert allocation["data"] == {"role": "customer", "status": "active", "description": segment["name"]}
+        # No host_count and no design (an office): the pool's own default_prefix_length, a /24.
+        assert allocation["prefix_length"] == 24
+        (gateway,) = client.addresses
+        assert gateway["address"] == "10.176.0.1/24" and gateway["description"] == f"{segment['name']} anycast gateway"
+        assert gateway["save"] == {"allow_upsert": True, "update_group_context": False}  # untracked
+
+    def test_non_prod_segment_is_addressed_from_the_non_prod_pool(self) -> None:
+        """Every environment but p is nonprod: Tenant-NONPROD-IPv4."""
+        client = _Client()
+        gen = _make_gen(client)
+
+        asyncio.run(gen.ensure_segment_addressing(_segment("d")))
+
+        assert client.filter_calls == [(CoreIPPrefixPool, {"name__value": "Tenant-NONPROD-IPv4"})]
+
+    def test_gateway_is_written_untracked_on_the_segment_and_into_the_run_dict(self) -> None:
+        """The segment (the run's own target) is saved with update_group_context=False; the zone and tag
+        helpers of the same run read the gateway's namespace type from the dict."""
+        client = _Client()
+        gen = _make_gen(client)
+        segment = _segment("p")
+
+        asyncio.run(gen.ensure_segment_addressing(segment))
+
+        assert client.created == [("ManagedVxlanSegment", {"id": "seg-1", "gateway": {"id": "gw-1"}})]
+        assert client.saves == [{"allow_upsert": True, "update_group_context": False}]
+        assert segment["gateway"] == {
+            "id": "gw-1",
+            "address": "10.176.0.1/24",
+            "ip_prefix": {
+                "id": "prefix-PROD",
+                "prefix": "10.176.0.0/24",
+                "ip_namespace": {"name": "default"},
+            },
+        }
+        assert gen.locks == ["segment-addressing-seg-1"]
+
+    def test_authored_gateway_is_never_overwritten(self) -> None:
+        """A segment with a gateway (hand-set or allocated earlier) is left alone: nothing is read or written."""
+        client = _Client()
+        gen = _make_gen(client)
+        authored = {"id": "gw-hand", "ip_prefix": {"prefix": "10.250.0.0/24"}}
+        segment = _segment("p", gateway=authored)
+
+        asyncio.run(gen.ensure_segment_addressing(segment))
+
+        assert client.filter_calls == client.allocations == client.created == []
+        assert segment["gateway"] is authored
+
+    def test_second_pass_allocates_nothing_new(self) -> None:
+        """Idempotency: the second run reads the gateway the first one wrote and skips."""
+        client = _Client()
+        gen = _make_gen(client)
+        segment = _segment("p")
+
+        asyncio.run(gen.ensure_segment_addressing(segment))
+        asyncio.run(gen.ensure_segment_addressing(segment))
+
+        assert len(client.allocations) == 1
+        assert len(client.created) == 1
+
+    def test_retried_allocation_uses_the_same_identifier(self) -> None:
+        """A run that failed after the allocation retries with the same identifier, so the pool returns the
+        same prefix: the identifier is the segment name (its HFID), never a run-specific value."""
+        first, second = _Client(), _Client()
+        asyncio.run(_make_gen(first).ensure_segment_addressing(_segment("p")))
+        asyncio.run(_make_gen(second).ensure_segment_addressing(_segment("p")))
+
+        assert first.allocations[0]["identifier"] == second.allocations[0]["identifier"]
+
+    @pytest.mark.parametrize(
+        ("client", "message"),
+        [
+            (_Client(pool_exists=False), "tenant pool Tenant-PROD-IPv4 not found"),
+            (_Client(prefix_returned=False), "returned no prefix"),
+        ],
+    )
+    def test_missing_or_exhausted_pool_fails_the_run(self, client: _Client, message: str) -> None:
+        """No pool, no namespace or an empty pool is an error, and no gateway is written."""
+        gen = _make_gen(client)
+        segment = _segment("p")
+
+        with pytest.raises(GeneratorError, match=message):
+            asyncio.run(gen.ensure_segment_addressing(segment))
+
+        assert client.created == []
+        assert segment["gateway"] is None
+
+    def test_missing_environment_is_not_defaulted_to_production(self) -> None:
+        """No environment, no pool: the PROD namespace is never guessed."""
+        client = _Client()
+        gen = _make_gen(client)
+
+        with pytest.raises(RoutingDomainError, match="missing security zone"):
+            asyncio.run(gen.ensure_segment_addressing(_segment(None)))
+
+        assert client.filter_calls == []
+
+
+class TestGenerateOrder:
+    """The addressing runs right after the id/name guard, before the zone and the tag."""
+
+    def test_tag_helper_sees_the_new_gateway(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """is_routed_tenant_segment reads gateway.ip_prefix.ip_namespace: written later, the first run
+        would leave the segment untagged."""
+        order: list[str] = []
+        seen: list[Any] = []
+
+        async def tag(generator: Any, *, segment: dict[str, Any]) -> None:
+            order.append("tag")
+            seen.append(segment.get("gateway"))
+
+        monkeypatch.setattr("generators.segments.segment.ensure_segment_tag", tag)
+        gen: Any = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
+        gen.client = AsyncMock()
+        gen.logger = MagicMock()
+
+        async def address(segment: dict[str, Any]) -> None:
+            order.append("address")
+            segment["gateway"] = {"id": "gw-1"}
+
+        gen.ensure_segment_addressing = address
+        gen._resolve_target_deployments = MagicMock(return_value=[])
+        data = {
+            "ManagedVxlanSegment": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": "seg-1",
+                            "__typename": "ManagedVxlanSegment",
+                            "name": {"value": "c008-krafven-dev-d"},
+                            "environment": {"value": "d"},
+                            "security_zone": {
+                                "node": {
+                                    "id": "zone-1",
+                                    "name": {"value": "NONPROD"},
+                                    "vrf_type": {"value": "non_prod"},
+                                }
+                            },
+                            "gateway": {"node": None},
+                        }
+                    }
+                ]
+            }
+        }
+
+        asyncio.run(gen.generate(data))
+
+        assert order == ["address", "tag"]
+        assert seen == [{"id": "gw-1"}]
+
+
+class TestTenantPoolData:
+    """The bootstrap pools the helper looks up by name exist, in the namespace they serve."""
+
+    @staticmethod
+    def _pools() -> dict[str, dict[str, Any]]:
+        """Bootstrap CoreIPPrefixPool name -> declaration."""
+        return {pool.item["name"]: pool.item for pool in declared("CoreIPPrefixPool", ROOT / "data" / "bootstrap")}
+
+    @pytest.mark.parametrize("environment", ["p", "d", "t"])
+    def test_every_environment_has_a_pool_in_its_own_namespace(self, environment: str) -> None:
+        """The pool of each environment's namespace allocates inside that namespace, a /24 by default."""
+        namespaces = {
+            namespace.item["vrf_type"]: namespace.item["name"]
+            for namespace in declared("SecurityZone", ROOT / "data" / "bootstrap")
+        }
+        namespace = namespaces[namespace_type_for_environment(environment)]
+        pool = self._pools()[tenant_pool_name(namespace)]
+
+        assert pool["ip_namespace"] == "default"
+        assert pool["default_prefix_length"] == 24
+        (resource,) = pool["resources"]["data"]
+        assert resource["ip_namespace"] == "default"
+        assert resource["is_pool"] is True
+
+    def test_tenant_supernets_are_disjoint(self) -> None:
+        """PROD and NONPROD tenant space never overlap, so a tenant prefix is unique across both VRFs."""
+        supernets = [
+            ipaddress.ip_network(self._pools()[tenant_pool_name(namespace)]["resources"]["data"][0]["prefix"])
+            for namespace in ("PROD", "NONPROD")
+        ]
+        assert [str(net) for net in supernets] == ["10.176.0.0/13", "10.184.0.0/13"]
+        assert not supernets[0].overlaps(supernets[1])
+
+    def test_no_demo_prefix_sits_in_the_tenant_space(self) -> None:
+        """A hand-typed prefix inside the tenant supernets would collide with an allocation."""
+        tenant = [ipaddress.ip_network("10.176.0.0/13"), ipaddress.ip_network("10.184.0.0/13")]
+        offenders = [
+            f"{obj.path.relative_to(ROOT)}: {obj.item['prefix']}"
+            for obj in declared("IpamPrefix", ROOT / "data" / "demos" / "30_all")
+            if any(ipaddress.ip_network(obj.item["prefix"], strict=False).overlaps(net) for net in tenant)
+        ]
+        assert not offenders
+
+
+class TestAppWaitsForSegmentAddressing:
+    """add_app_application waits for an in-flight add_vxlan_segment run of a gateway-less segment it uses."""
+
+    @staticmethod
+    def _gen(refetched: dict[str, Any] | None) -> Any:
+        """An AppApplicationGenerator whose wait finds a run in flight when ``refetched`` is given; collect_data returns it."""
+        gen: Any = AppApplicationGenerator.__new__(AppApplicationGenerator)
+        gen.client = AsyncMock()
+        gen.logger = MagicMock()
+        gen.wait_for_parent_generators = AsyncMock(return_value=refetched is not None)
+        gen.collect_data = AsyncMock(return_value=refetched)
+        return gen
+
+    @staticmethod
+    def _app(*segments: dict[str, Any], label: str = "first-read") -> dict[str, Any]:
+        """A cleaned application with one component per segment."""
+        return {
+            "id": "app-1",
+            "name": label,
+            "children": [{"id": f"comp-{i}", "network_segment": segment} for i, segment in enumerate(segments)],
+        }
+
+    def test_waits_only_for_gateway_less_vxlan_segments(self) -> None:
+        """An addressed VXLAN segment is not waited for, a gateway-less one once."""
+        gen = self._gen(None)
+        app = self._app(
+            {"id": "seg-new", "typename": "ManagedVxlanSegment", "gateway": None},
+            {"id": "seg-done", "typename": "ManagedVxlanSegment", "gateway": {"id": "gw"}},
+            {"id": "seg-new", "typename": "ManagedVxlanSegment", "gateway": None},
+        )
+
+        result = asyncio.run(gen._await_segment_addressing(app))
+
+        gen.wait_for_parent_generators.assert_awaited_once_with(("add_vxlan_segment",), "seg-new")
+        assert result is app
+
+    def test_edge_target_segments_are_waited_for(self) -> None:
+        """The target of a dependency is tagged in this run too, so its segment counts."""
+        gen = self._gen(None)
+        target = {"id": "comp-t", "network_segment": {"id": "seg-t", "typename": "ManagedVxlanSegment"}}
+        app = self._app({"id": "seg-own", "typename": "ManagedVxlanSegment", "gateway": {"id": "gw"}})
+        app["children"][0]["depends_on"] = [{"id": "dep-1", "target": target}]
+
+        asyncio.run(gen._await_segment_addressing(app))
+
+        gen.wait_for_parent_generators.assert_awaited_once_with(("add_vxlan_segment",), "seg-t")
+
+    def test_the_application_is_re_read_after_an_in_flight_run(self) -> None:
+        """The refetched query result replaces the stale application dict."""
+        refetched = {"AppApplication": {"edges": [{"node": {"id": "app-1", "name": {"value": "re-read"}}}]}}
+        gen = self._gen(refetched)
+
+        result = asyncio.run(
+            gen._await_segment_addressing(self._app({"id": "seg-new", "typename": "ManagedVxlanSegment"}))
+        )
+
+        assert result["name"] == "re-read"
+
+    def test_generate_reconciles_the_re_read_application(self) -> None:
+        """generate() hands _reconcile_application_rules the application after the wait."""
+        gen = self._gen(None)
+        gen._await_segment_addressing = AsyncMock(return_value={"id": "app-1", "name": "re-read"})
+        gen._reconcile_application_rules = AsyncMock()
+
+        asyncio.run(gen.generate({"AppApplication": {"edges": [{"node": {"id": "app-1"}}]}}))
+
+        gen._reconcile_application_rules.assert_awaited_once_with({"id": "app-1", "name": "re-read"})
+
+
+def test_all_demo_dc_tenant_segments_declare_no_addressing() -> None:
+    """Every 30_all VXLAN segment in a data center footprint has its gateway and prefix derived"""
+    demo = ROOT / "data" / "demos" / "30_all"
+    dc_footprints = {name(obj) for obj in declared("TopologyCustomerDC", demo)}
+    segments = declared("ManagedVxlanSegment", demo)
+    assert segments, "the scan found no VXLAN segment"
+    typed = [
+        f"{obj.path.relative_to(ROOT)}: {name(obj)}"
+        for obj in segments
+        if "gateway" in obj.item
+        and not is_exchange_zone(obj.item.get("security_zone"))
+        and dc_footprints & set(obj.item.get("customer_deployments") or [])
+    ]
+    assert not typed, "VXLAN segments in a DC footprint with a hand-typed gateway:\n" + "\n".join(typed)

@@ -7,6 +7,7 @@ spec:
   data:
     - name: "Amsterdam"
       shortname: "ams"
+      parent: "nl"
       children:
         kind: LocationFacility
         data:

@@ -1,32 +1,17 @@
-# Per-segment desired state for ManagedSegmentVlan reconciliation
-# (generators/segment_vlan.py, SegmentPortTagMixin.reconcile_vxlan_segment),
-# shared by add_vxlan_segment and add_app_component_segment. Read by id from
-# Python, not a generator definition's own query.
-#   - ManagedSegmentDeployment: the segment's realization in each DC or metro
-#     (deployment = the hosting parent, an office included) and, under it, the
-#     rows that exist today. A row is a child of the deployment its switch
-#     sits in, so a device is mapped to a deployment through its own
-#     `deployment` (the hosting parent or one of its children, see
-#     _device_deployment_ids).
-#   - capabilities: the ports assigned to each deployment, a person's request to carry the segment there (they need a
-#     row, like the ports the components derive).
-#   - the member switch ports are NOT read here: a port is a member of its switch's VLAN ROW (its interface
-#     `capabilities`), so they are read once the rows are known (generators/segment_vlan.py SEGMENT_PORTS_QUERY).
-#   - each row's device (the devices whose VRF instances and SVIs follow the rows).
-#   - stretch_scope + customer_deployments' hosting parents: a stretched
-#     segment's border gateways need it too (same shape as vxlan_segment.gql)
-#   - firewall_gateway + the DC footprint's serving_firewall_contexts and their members' uplinks with their cables: the
-#     border service ports (role firewall) those are cabled to face its HA pair (utils/service_contexts.py
-#     member_border_ports: a context has no interface edge) and carry the segment as a VLAN like a customer port does
-#     (SegmentPortTagMixin).
 query segment_vlans($segment_id: ID!) {
   ManagedVxlanSegment(ids: [$segment_id]) {
     edges {
       node {
         id
-        stretch_scope { value }
-        vlan_scope { value }
-        firewall_gateway { value }
+        stretch_scope {
+          value
+        }
+        vlan_scope {
+          value
+        }
+        firewall_gateway {
+          value
+        }
         customer_deployments {
           edges {
             node {
@@ -41,18 +26,99 @@ query segment_vlans($segment_id: ID!) {
                           node {
                             __typename
                             id
-                            name { value }
-                            role { value }
+                            name {
+                              value
+                            }
+                            role {
+                              value
+                            }
                             ... on DcimDevice {
                               interfaces(role__values: ["uplink"]) {
                                 edges {
                                   node {
                                     __typename
                                     id
-                                    name { value }
-                                    role { value }
-                                    ...ServiceMemberCableFields
-                                    ...InterfaceEncapsulationCableFields
+                                    name {
+                                      value
+                                    }
+                                    role {
+                                      value
+                                    }
+                                    ... on DcimPhysicalInterface {
+                                      cable {
+                                        node {
+                                          id
+                                          endpoints {
+                                            edges {
+                                              node {
+                                                __typename
+                                                ... on DcimPhysicalInterface {
+                                                  id
+                                                  role {
+                                                    value
+                                                  }
+                                                  device {
+                                                    node {
+                                                      id
+                                                      name {
+                                                        value
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                    ... on DcimSubInterface {
+                                      vlan_id {
+                                        value
+                                      }
+                                      parent {
+                                        node {
+                                          id
+                                          __typename
+                                          name {
+                                            value
+                                          }
+                                          device {
+                                            node {
+                                              id
+                                            }
+                                          }
+                                          ... on DcimPhysicalInterface {
+                                            cable {
+                                              node {
+                                                id
+                                                endpoints {
+                                                  edges {
+                                                    node {
+                                                      __typename
+                                                      ... on DcimPhysicalInterface {
+                                                        id
+                                                        role {
+                                                          value
+                                                        }
+                                                        device {
+                                                          node {
+                                                            id
+                                                            name {
+                                                              value
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
                                   }
                                 }
                               }
@@ -67,27 +133,36 @@ query segment_vlans($segment_id: ID!) {
                   node {
                     id
                     ... on TopologyDataCenter {
-                      children { edges { node { ... on TopologyPod { id } } } }
+                      children {
+                        edges {
+                          node {
+                            ... on TopologyPod {
+                              id
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
               }
               ... on TopologyCustomerColocation {
-                # id alone fails server-side ("Unable to identify the type of
-                # the instance"); select a field, as vxlan_segment.gql does.
-                # The edges are deployed into the metro's zones and virtual
-                # colocations, not the metro (generators/segment_vlan.py's
-                # _device_deployment_ids).
                 parent {
                   node {
                     id
-                    name { value }
+                    name {
+                      value
+                    }
                     ... on TopologyColocationMetro {
                       children {
                         edges {
                           node {
-                            ... on TopologyColocationZone { id }
-                            ... on TopologyVirtualColocation { id }
+                            ... on TopologyColocationZone {
+                              id
+                            }
+                            ... on TopologyVirtualColocation {
+                              id
+                            }
                           }
                         }
                       }
@@ -105,15 +180,34 @@ query segment_vlans($segment_id: ID!) {
     edges {
       node {
         id
-        vni { value }
-        deployment { node { id } }
-        capabilities { edges { node { id __typename } } }
+        vni {
+          value
+        }
+        deployment {
+          node {
+            id
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              id
+              __typename
+            }
+          }
+        }
         vlans {
           edges {
             node {
               id
-              vlan_id { value }
-              device { node { id } }
+              vlan_id {
+                value
+              }
+              device {
+                node {
+                  id
+                }
+              }
             }
           }
         }

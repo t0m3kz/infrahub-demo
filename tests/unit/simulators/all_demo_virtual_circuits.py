@@ -19,9 +19,9 @@ def all_demo(kind: str) -> list[Declared]:
     return distinct(declared(kind, ROOT / ALL_DEMO_DATA))
 
 
-# The offices that opt into add_sdwan_edge (generators/topology/sdwan_edge.py) by naming a gateway in sdwan_gateway.
+# The offices that name gateways in sdwan_gateways: add_office_fabric (generators/office/edge.py) builds their edge and tunnels.
 _SDWAN_OFFICES: list[Declared] = [
-    office for office in all_demo("TopologyCustomerOffice") if office.item.get("sdwan_gateway")
+    office for office in all_demo("TopologyCustomerOffice") if office.item.get("sdwan_gateways")
 ]
 
 
@@ -49,16 +49,18 @@ _DEVICE_DEPLOYMENTS: dict[str, str] = {
 #: The public port of the shared SD-WAN gateway every tunnel ends on (its one `customer` physical port).
 ALL_DEMO_SDWAN_GATEWAY_PUBLIC_PORT = "eth1"
 
-#: The circuit that carries the gateway's public port.
-ALL_DEMO_SDWAN_GATEWAY_ACCESS = "INET-LUMEN-EQXFR2-GW"
+#: The circuit that carries each gateway's public port.
+ALL_DEMO_SDWAN_GATEWAY_ACCESS = {
+    "EQX-FR2-SDWAN-GW1": "INET-LUMEN-EQXFR2-GW",
+    "EQX-PA4-SDWAN-GW1": "INET-LUMEN-EQXPA4-GW",
+}
 
 
-def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
-    """The tunnel add_sdwan_edge builds for one opted-in office, named as the generator names it."""
+def _sdwan_tunnel(office: Declared, gateway: str) -> tuple[str, VirtualCircuitExpectation]:
+    """The tunnel add_office_fabric builds for one opted-in office and one of its gateways, named as the generator names it."""
     office_name = name(office)
-    gateway = str(office.item["sdwan_gateway"])
     zone = _DEVICE_DEPLOYMENTS[gateway]
-    return f"{office_name}-SDWAN-{zone}", {
+    return f"{office_name}-SDWAN-{gateway}", {
         "circuit_type": TUNNEL_TYPE,
         "locations": tuple(sorted((office_name, zone))),
         "ends": tuple(
@@ -69,15 +71,17 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
                 )
             )
         ),
-        "carrier": (f"INET-{office_name}", ALL_DEMO_SDWAN_GATEWAY_ACCESS),
+        "carrier": (f"INET-{office_name}", ALL_DEMO_SDWAN_GATEWAY_ACCESS[gateway]),
         "security_zone": None,
     }
 
 
 # The virtual circuits the placement check must see
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
-    # One generated tunnel per SD-WAN office (_sdwan_tunnel).
-    **dict(_sdwan_tunnel(office) for office in _SDWAN_OFFICES),
+    # One generated tunnel per SD-WAN office and gateway (_sdwan_tunnel).
+    **dict(
+        _sdwan_tunnel(office, str(gateway)) for office in _SDWAN_OFFICES for gateway in office.item["sdwan_gateways"]
+    ),
     # C001's partner extranet (08_interconnects/07_zone_policies/01_partner_tunnel.yml)
     "C001-PARTNER-ACME-FR2": {
         "circuit_type": TUNNEL_TYPE,
@@ -142,12 +146,28 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "carrier": (),
         "security_zone": "PROD",
     },
+    # The Paris gateway's twin handoff (04_sdwan/07_vrf_handoff_pa.yml)
+    "HANDOFF-PA4-SDWAN-GW1-PROD": {
+        "circuit_type": HANDOFF_TYPE,
+        "locations": ("PA4",),
+        "ends": (("EQX-PA4-SDWAN-GW1", "eth0.1900"), ("eg-pa401", "Ethernet1/12.1900")),
+        "carrier": (),
+        "security_zone": "PROD",
+    },
     # C001's AWS handoff (08_interconnects/03_virtual_circuits/02_aws_prod_handoff.yml)
     "HANDOFF-FR2-AWS-EUC1-PROD": {
         "circuit_type": HANDOFF_TYPE,
         "locations": ("FR2", "eu-central-1"),
         "ends": (("dx-30all-euc1-fr2", "dxcon-fr2.1000"), ("eg-fr201", "Ethernet1/13.1000")),
         "carrier": (),
+        "security_zone": "PROD",
+    },
+    # The westeurope hub's link (08_interconnects/03_virtual_circuits/03_azure_prod_handoff.yml)
+    "HANDOFF-PA4-AZURE-WEU-PROD": {
+        "circuit_type": HANDOFF_TYPE,
+        "locations": ("PA4", "westeurope"),
+        "ends": (("er-30all-weu", "er-30all-weu.private"), ("eg-pa401", "Ethernet1/13.1100")),
+        "carrier": ("XC-EQXPA4-AZURE-WEU-PRI",),
         "security_zone": "PROD",
     },
 }

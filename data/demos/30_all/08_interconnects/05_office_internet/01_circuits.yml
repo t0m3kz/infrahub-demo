@@ -1,0 +1,69 @@
+---
+# The internet access of every SD-WAN office: one carrier per office from the WAN port (GE1) of its
+# edge to a customer port of Orange's access PE (../../04_internet/02_access_edge.yml). It is data, not
+# generated: add_office_fabric builds the edge and its tunnels (the tunnel's end port must ride an
+# internet carrier, checks/connectivity/circuit_placement.py), so this file loads in the last stage,
+# after the edges exist. Names follow `<office>-inet-<isp>` (Orange S.A is
+# `orange-s-a`); the circuit_id is `INET-<office>`.
+# Only the office is listed as a location: add_circuit derives nothing for the ISP's router, which has
+# no place. Ports of the access PE are taken in office order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCarrierCircuit
+  data:
+    - circuit_id: "INET-C001-OFFICE"
+      member_of_groups: [carrier_circuits]
+      name: "c001-office-inet-orange-s-a"
+      circuit_type: internet
+      status: active
+      provider: "P019"
+      description: "C001-OFFICE internet access (SD-WAN underlay)"
+      locations: ["C001-OFFICE"]
+      capabilities:
+        - ["C001-OFFICE-EDGE1", "GE1"]
+        - ["EXT-ORANGE", "xe-0/1/0"]
+    - circuit_id: "INET-C002-OFFICE"
+      member_of_groups: [carrier_circuits]
+      name: "c002-office-inet-orange-s-a"
+      circuit_type: internet
+      status: active
+      provider: "P019"
+      description: "C002-OFFICE internet access (SD-WAN underlay)"
+      locations: ["C002-OFFICE"]
+      capabilities:
+        - ["C002-OFFICE-EDGE1", "GE1"]
+        - ["EXT-ORANGE", "xe-0/1/1"]
+    - circuit_id: "INET-C003-OFFICE"
+      member_of_groups: [carrier_circuits]
+      name: "c003-office-inet-orange-s-a"
+      circuit_type: internet
+      status: active
+      provider: "P019"
+      description: "C003-OFFICE internet access (SD-WAN underlay)"
+      locations: ["C003-OFFICE"]
+      capabilities:
+        - ["C003-OFFICE-EDGE1", "GE1"]
+        - ["EXT-ORANGE", "xe-0/1/2"]
+    - circuit_id: "INET-C005-OFFICE"
+      member_of_groups: [carrier_circuits]
+      name: "c005-office-inet-orange-s-a"
+      circuit_type: internet
+      status: active
+      provider: "P019"
+      description: "C005-OFFICE internet access (SD-WAN underlay)"
+      locations: ["C005-OFFICE"]
+      capabilities:
+        - ["C005-OFFICE-EDGE1", "GE1"]
+        - ["EXT-ORANGE", "xe-0/1/3"]
+    - circuit_id: "INET-C015-OFFICE"
+      member_of_groups: [carrier_circuits]
+      name: "c015-office-inet-orange-s-a"
+      circuit_type: internet
+      status: active
+      provider: "P019"
+      description: "C015-OFFICE internet access (SD-WAN underlay)"
+      locations: ["C015-OFFICE"]
+      capabilities:
+        - ["C015-OFFICE-EDGE1", "GE1"]
+        - ["EXT-ORANGE", "xe-0/1/4"]

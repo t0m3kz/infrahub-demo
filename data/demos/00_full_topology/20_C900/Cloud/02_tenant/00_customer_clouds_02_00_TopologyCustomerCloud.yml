@@ -1,6 +1,6 @@
 # TopologyCustomerCloud declarations in recursive dependency order.
 # The footprints of C900 in the spoke accounts: one per account (a footprint has exactly one account), each holding the
-# segments of its own networks (checks/customer_cloud_account.py CA2).
+# segments of its own networks (checks/customers/customer_cloud_account.py CA2).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -12,33 +12,45 @@ spec:
       customer_name: "payments-aws"
       parent: "eu-central-1"
       design: "S"
+      # connection transit: attached to the hub tgw-c900-euc1 of its region (tgwa-c900-payments)
+      connection: transit
     - owner: "C900"
       environment: "p"
       account: "c900-aws-analytics"
       customer_name: "analytics-aws"
       parent: "eu-central-1"
       design: "S"
+      # connection transit: attached to the hub tgw-c900-euc1 of its region (tgwa-c900-analytics)
+      connection: transit
     - owner: "C900"
       environment: "p"
       account: "c900-aws-shared"
       customer_name: "shared-aws"
       parent: "eu-central-1"
       design: "S"
+      # connection transit: attached to the hub tgw-c900-euc1 of its region (tgwa-c900-shared)
+      connection: transit
     - owner: "C900"
       environment: "p"
       account: "c900-azure-payments"
       customer_name: "payments-azure"
       parent: "westeurope"
       design: "S"
+      # connection transit: attached to the hub vwan-hub-c900-weu of its region (vhuba-c900-payments)
+      connection: transit
     - owner: "C900"
       environment: "p"
       account: "c900-azure-analytics"
       customer_name: "analytics-azure"
       parent: "westeurope"
       design: "S"
+      # connection transit: attached to the hub vwan-hub-c900-weu of its region (vhuba-c900-analytics)
+      connection: transit
     - owner: "C900"
       environment: "p"
       account: "c900-azure-identity"
       customer_name: "identity-azure"
       parent: "westeurope"
       design: "S"
+      # connection transit: attached to the hub vwan-hub-c900-weu of its region (vhuba-c900-identity)
+      connection: transit

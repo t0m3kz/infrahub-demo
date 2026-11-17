@@ -17,7 +17,8 @@
 #   EXT-GCP-EUW3  pub-1 -- gcp-euw3-pub-22407-internet (object storage europe-west3, public side) -+
 #
 # INTERNET has ONE interface, `bus`, of its own kind (TopologyInternetInterface), and every attachment keeps a carrier
-# circuit of its own that ends on it: the kind is what lets many carriers share it (checks/carrier_circuit_ports.py).
+# circuit of its own that ends on it: the kind is what lets many carriers share it
+# (checks/connectivity/carrier_circuit_ports.py).
 # The carriers are `internet` circuits; the five ends that are not the bus are the ports of ISP routers and of the
 # transports that stand for the public sides.
 #

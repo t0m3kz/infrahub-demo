@@ -8,12 +8,8 @@ spec:
   data:
     - name: "ethernet1/1.3001"
       device: par-colo1-xfw-01
-      capabilities:
-        - kind: ManagedInterfaceEncapsulation
-          data:
-            name: "par-colo1-xfw-01:ethernet1/1.3001"
-            vlan_id: 3001
-            parent: ["par-colo1-xfw-01", "ethernet1/1"]
+      parent: ["par-colo1-xfw-01", "ethernet1/1"]
+      vlan_id: 3001
       role: service
       status: active
       ip_address:
@@ -22,12 +18,8 @@ spec:
           ip_namespace: "default"
     - name: "ethernet1/1.3001"
       device: par-colo1-xfw-02
-      capabilities:
-        - kind: ManagedInterfaceEncapsulation
-          data:
-            name: "par-colo1-xfw-02:ethernet1/1.3001"
-            vlan_id: 3001
-            parent: ["par-colo1-xfw-02", "ethernet1/1"]
+      parent: ["par-colo1-xfw-02", "ethernet1/1"]
+      vlan_id: 3001
       role: service
       status: active
       ip_address:
@@ -36,12 +28,8 @@ spec:
           ip_namespace: "default"
     - name: "ethernet1/1.3401"
       device: par-colo1-xfw-01
-      capabilities:
-        - kind: ManagedInterfaceEncapsulation
-          data:
-            name: "par-colo1-xfw-01:ethernet1/1.3401"
-            vlan_id: 3401
-            parent: ["par-colo1-xfw-01", "ethernet1/1"]
+      parent: ["par-colo1-xfw-01", "ethernet1/1"]
+      vlan_id: 3401
       role: service
       status: active
       ip_address:
@@ -50,12 +38,8 @@ spec:
           ip_namespace: "default"
     - name: "ethernet1/1.3401"
       device: par-colo1-xfw-02
-      capabilities:
-        - kind: ManagedInterfaceEncapsulation
-          data:
-            name: "par-colo1-xfw-02:ethernet1/1.3401"
-            vlan_id: 3401
-            parent: ["par-colo1-xfw-02", "ethernet1/1"]
+      parent: ["par-colo1-xfw-02", "ethernet1/1"]
+      vlan_id: 3401
       role: service
       status: active
       ip_address:

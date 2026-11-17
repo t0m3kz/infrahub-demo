@@ -16,19 +16,19 @@ from transforms.helpers.firewall import (
     get_leaf_firewall_transits,
 )
 from transforms.helpers.firewall_contexts import _flatten_deployment_firewall_contexts
-from transforms.helpers.firewall_pbr import (
-    get_customer_pbr_rules,
-    get_overlay_pbr_rules,
-    refuse_unresolvable_contexts,
-)
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.origination import get_origination
 from transforms.helpers.ospf import get_ospf, refuse_unrenderable_ospf_auth
 from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
+from transforms.helpers.pbr import (
+    get_customer_pbr_rules,
+    get_overlay_pbr_rules,
+    refuse_unresolvable_contexts,
+)
 from transforms.helpers.segments import get_vlans, interface_segments, routed_activations
-from transforms.helpers.static_routes import get_static_routes
+from transforms.helpers.static_route import get_static_routes
 from transforms.helpers.templates import load_template
 from transforms.helpers.vrf import VrfRealizationError, l3_vrf_names, svi_vrfs, unrealized_vrfs
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
@@ -37,7 +37,7 @@ from utils.data_cleaning import clean_data
 from utils.device_services import has_pbr, overlay_pbr_bindings, pbr_bindings
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.limits import UNDERLAY_MTU
-from utils.segment_addressing import l2_only_on, l2_only_view, refuse_ipv6_segment, segment_hosting_candidates
+from utils.segment_addressing import l2_only_on, l2_only_view, segment_hosting_candidates
 from utils.service_contexts import (
     DEVICE_SERVICES_ROOT,
     attach_device_services,
@@ -493,12 +493,6 @@ class BaseDeviceTransform(InfrahubTransform):
         steered_vlans = {vlan for name in bindings if (vlan := svi_vlan_id(name)) is not None}
         refuse_unresolvable_contexts(set(bindings.values()), firewall_contexts, device_name=data.get("name", ""))
         rules = get_customer_pbr_rules(routed, firewall_contexts, steered_vlans=steered_vlans)
-        # The next hop of a firewall context is its IPv4 leg and the PBR ACLs are IPv4: an IPv6 segment that gets a
-        # rule is refused, never left unsteered (PBR in IPv6 form needs the contexts' IPv6 legs, a later change).
-        pbr_vlans = {rule["vlan_id"] for rule in rules}
-        for act in routed:
-            if act.get("vlan_id") in pbr_vlans:
-                refuse_ipv6_segment(act.get("segment") or {}, f"the {self.device_role} PBR to a firewall context")
         if self.device_role not in self._LEAF_ROLES:
             return rules, []
         return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))

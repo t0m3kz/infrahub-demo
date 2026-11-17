@@ -15,11 +15,7 @@ spec:
             name: eth0
             role: uplink
             status: active
-            capabilities:
-              - kind: ManagedInterfaceEncapsulation
-                data:
-                  name: "ktw1-vm-fw-01:eth0"
-                  parent: ["ktw1-srv-02", "eno1"]
+            parent: ["ktw1-srv-02", "eno1"]
             ip_address:
               data:
                 address: "10.90.2.11/24"

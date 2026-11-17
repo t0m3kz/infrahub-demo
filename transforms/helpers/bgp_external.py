@@ -74,10 +74,38 @@ def _far_end_devices(device_capabilities: list[dict[str, Any]] | None, device_na
     return far
 
 
-def office_registered(office: dict[str, Any]) -> list[Registered]:
-    """The (owner, prefix) pairs one office footprint registers."""
+def _office_gateways(office: dict[str, Any]) -> list[dict[str, Any]]:
+    """The SD-WAN gateways of an office, by name; those with a name only."""
+    gateways = [gateway for gateway in office.get("sdwan_gateways") or [] if gateway.get("name")]
+    return sorted(gateways, key=lambda gateway: gateway["name"])
+
+
+def office_attachment_point(office: dict[str, Any]) -> str | None:
+    """The attachment point an office registers behind: its set of gateways, one point for redundant gateways."""
+    names = [gateway["name"] for gateway in _office_gateways(office)]
+    return "+".join(names) if names else None
+
+
+def office_registered(office: dict[str, Any], gateway: dict[str, Any] | None = None) -> list[Registered]:
+    """The (owner, prefix) pairs one office footprint registers behind ``gateway`` (default: behind each of its
+    gateways, the pairs of every gateway).
+    """
+    gateways = [gateway] if gateway is not None else _office_gateways(office)
+    found: dict[tuple[Any, ...], Registered] = {}
+    for each in gateways:
+        for registration in _office_registered_behind(office, each):
+            key = (
+                registration.prefix.get("id"),
+                registration.prefix.get("prefix"),
+                registration.vrf.get("id"),
+                registration.customer,
+            )
+            found.setdefault(key, registration)
+    return list(found.values())
+
+
+def _office_registered_behind(office: dict[str, Any], gateway: dict[str, Any]) -> list[Registered]:
     office_owner = customer_owner(office.get("owner"))
-    gateway = office.get("sdwan_gateway") or {}
     instances = [
         resolve_vrf([cap, iface], required=True, label=f"office {office.get('name')} gateway handoff")
         for iface in gateway.get("interfaces") or []
@@ -109,15 +137,8 @@ def office_registered(office: dict[str, Any]) -> list[Registered]:
     return registered
 
 
-def registered_by_gateway(
-    offices: list[dict[str, Any]] | None, tunnels: list[dict[str, Any]] | None
-) -> dict[str, list[Registered]]:
-    """SD-WAN gateway name -> the (owner, prefix) pairs registered behind it, by offices and by tunnels."""
-    registered_by: dict[str, list[Registered]] = {}
-    for office in offices or []:
-        gateway = (office.get("sdwan_gateway") or {}).get("name")
-        if gateway:
-            registered_by.setdefault(gateway, []).extend(office_registered(office))
+def _registered_by_tunnels(registered_by: dict[str, list[Registered]], tunnels: list[dict[str, Any]] | None) -> None:
+    """Add each tunnel's registered prefixes behind the gateway ends it has (only gateways already in the map)."""
     for tunnel in tunnels or []:
         try:
             tunnel_owner = session_circuit_owner(tunnel)
@@ -129,6 +150,19 @@ def registered_by_gateway(
             registered_by[gateway].extend(
                 registrations(tunnel.get("registered_prefixes"), tunnel, customer=tunnel_owner)
             )
+
+
+def registered_by_gateway(
+    offices: list[dict[str, Any]] | None, tunnels: list[dict[str, Any]] | None
+) -> dict[str, list[Registered]]:
+    """SD-WAN gateway name -> the (owner, prefix) pairs registered behind it, by offices and by tunnels: an office is
+    behind each of its gateways, and each gateway's session accepts its prefixes.
+    """
+    registered_by: dict[str, list[Registered]] = {}
+    for office in offices or []:
+        for gateway in _office_gateways(office):
+            registered_by.setdefault(gateway["name"], []).extend(office_registered(office, gateway))
+    _registered_by_tunnels(registered_by, tunnels)
     return registered_by
 
 
@@ -137,8 +171,19 @@ def registered_by_attachment(
     tunnels: list[dict[str, Any]] | None,
     legs: Iterable[CloudLeg] | None,
 ) -> dict[str, list[Registered]]:
-    """Attachment point -> the (owner, prefix) pairs registered behind it, as the edge reads them."""
-    points = dict(registered_by_gateway(offices, tunnels))
+    """Attachment point -> the (owner, prefix) pairs registered behind it, as the edge reads them. The gateways of one
+    office are ONE point (redundancy, not a second place to reach its LAN); a tunnel's prefixes sit behind the gateway
+    it ends on, a cloud leg is its own point.
+    """
+    points: dict[str, list[Registered]] = {}
+    for office in offices or []:
+        if point := office_attachment_point(office):
+            points.setdefault(point, []).extend(office_registered(office))
+    by_gateway = {gateway["name"]: [] for office in offices or [] for gateway in _office_gateways(office)}
+    _registered_by_tunnels(by_gateway, tunnels)
+    for gateway, registered in by_gateway.items():
+        if registered:
+            points.setdefault(gateway, []).extend(registered)
     for leg in legs or []:
         points.setdefault(leg.point, []).extend(leg.registered)
     return points
@@ -216,6 +261,9 @@ def get_external_session_policies(
                 "in": sorted_prefixes(policy["in"]),
                 "out": sorted_prefixes(policy["out"]),
             }
+            if name in legs and len(policy["owners"]) > 1:
+                # A cloud leg on a shared hub (one owner per attachment); other sessions keep one list
+                policies[name]["out_owners"] = _out_owners(policy["out_by_owner"], policy["out"])
             if routing_identity:
                 policies[name].update(identity=True, in_owners=_in_owners(learned[name], customer_tags or {}))
     return {name: policies[name] for name in peer_prefixes}
@@ -233,3 +281,18 @@ def _in_owners(by_owner: Mapping[str, list[str]], customer_tags: Mapping[str, in
         for owner, prefixes in sorted(by_owner.items())
         if prefixes
     ]
+
+
+def _out_owners(by_owner: Mapping[str, frozenset[str] | list[str]], out: Iterable[str]) -> list[dict[str, Any]]:
+    """The outbound entries of a session with several owners (a shared hub): each owner with what it is announced, its
+    own space only, then what the session itself advertises (``ADVERTISED``); entries with no prefix are left out.
+    """
+    entries: list[dict[str, Any]] = [
+        {"owner": owner, "name": list_name_part(owner), "prefixes": sorted_prefixes(prefixes)}
+        for owner, prefixes in sorted(by_owner.items())
+        if prefixes
+    ]
+    rest = set(out) - {prefix for prefixes in by_owner.values() for prefix in prefixes}
+    if rest:
+        entries.append({"owner": None, "name": "ADVERTISED", "prefixes": sorted_prefixes(rest)})
+    return entries

@@ -2176,20 +2176,11 @@
                   "role": {
                     "value": "uplink"
                   },
-                  "encapsulation_capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedInterfaceEncapsulation",
-                          "vlan_id": {
-                            "value": 1000
-                          },
-                          "parent": {
-                            "node": null
-                          }
-                        }
-                      }
-                    ]
+                  "vlan_id": {
+                    "value": 1000
+                  },
+                  "parent": {
+                    "node": null
                   },
                   "ip_address": {
                     "node": {
@@ -2257,20 +2248,11 @@
                   "role": {
                     "value": "uplink"
                   },
-                  "encapsulation_capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedInterfaceEncapsulation",
-                          "vlan_id": {
-                            "value": 1001
-                          },
-                          "parent": {
-                            "node": null
-                          }
-                        }
-                      }
-                    ]
+                  "vlan_id": {
+                    "value": 1001
+                  },
+                  "parent": {
+                    "node": null
                   },
                   "ip_address": {
                     "node": {
@@ -2338,20 +2320,11 @@
                   "role": {
                     "value": "uplink"
                   },
-                  "encapsulation_capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedInterfaceEncapsulation",
-                          "vlan_id": {
-                            "value": 1900
-                          },
-                          "parent": {
-                            "node": null
-                          }
-                        }
-                      }
-                    ]
+                  "vlan_id": {
+                    "value": 1900
+                  },
+                  "parent": {
+                    "node": null
                   },
                   "ip_address": {
                     "node": {
@@ -2419,20 +2392,11 @@
                   "role": {
                     "value": "uplink"
                   },
-                  "encapsulation_capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedInterfaceEncapsulation",
-                          "vlan_id": {
-                            "value": 1300
-                          },
-                          "parent": {
-                            "node": null
-                          }
-                        }
-                      }
-                    ]
+                  "vlan_id": {
+                    "value": 1300
+                  },
+                  "parent": {
+                    "node": null
                   },
                   "ip_address": {
                     "node": {
@@ -2500,20 +2464,11 @@
                   "role": {
                     "value": "uplink"
                   },
-                  "encapsulation_capabilities": {
-                    "edges": [
-                      {
-                        "node": {
-                          "__typename": "ManagedInterfaceEncapsulation",
-                          "vlan_id": {
-                            "value": 1200
-                          },
-                          "parent": {
-                            "node": null
-                          }
-                        }
-                      }
-                    ]
+                  "vlan_id": {
+                    "value": 1200
+                  },
+                  "parent": {
+                    "node": null
                   },
                   "ip_address": {
                     "node": {
@@ -3304,27 +3259,63 @@
               "display_label": "C005 Customer"
             }
           },
-          "sdwan_gateway": {
-            "node": {
-              "name": {
-                "value": "EQX-FR2-SDWAN-GW1"
-              },
-              "interfaces": {
-                "edges": [
-                  {
-                    "node": {
-                      "name": {
-                        "value": "fixture-handoff"
-                      },
-                      "capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "TopologySessionCircuit",
-                              "circuit_type": {
-                                "value": "handoff"
-                              },
-                              "vrf": {
+          "sdwan_gateways": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "EQX-FR2-SDWAN-GW1"
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "fixture-handoff"
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "TopologySessionCircuit",
+                                  "circuit_type": {
+                                    "value": "handoff"
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "zone_capabilities": {
+                            "edges": [
+                              {
                                 "node": {
                                   "__typename": "ManagedVRF",
                                   "id": "fixture-vrf-fixture-deployment-PROD",
@@ -3352,47 +3343,15 @@
                                   }
                                 }
                               }
-                            }
+                            ]
                           }
-                        ]
-                      },
-                      "zone_capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "ManagedVRF",
-                              "id": "fixture-vrf-fixture-deployment-PROD",
-                              "deployment": {
-                                "node": {
-                                  "id": "fixture-deployment",
-                                  "name": {
-                                    "value": "fixture-deployment"
-                                  }
-                                }
-                              },
-                              "security_zone": {
-                                "node": {
-                                  "id": "fixture-zone-PROD",
-                                  "name": {
-                                    "value": "PROD"
-                                  },
-                                  "vrf_type": {
-                                    "value": "prod"
-                                  },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        ]
+                        }
                       }
-                    }
+                    ]
                   }
-                ]
+                }
               }
-            }
+            ]
           },
           "lan_prefixes": {
             "edges": []
@@ -3495,27 +3454,63 @@
               "display_label": "C002 Customer"
             }
           },
-          "sdwan_gateway": {
-            "node": {
-              "name": {
-                "value": "EQX-FR2-SDWAN-GW1"
-              },
-              "interfaces": {
-                "edges": [
-                  {
-                    "node": {
-                      "name": {
-                        "value": "fixture-handoff"
-                      },
-                      "capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "TopologySessionCircuit",
-                              "circuit_type": {
-                                "value": "handoff"
-                              },
-                              "vrf": {
+          "sdwan_gateways": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "EQX-FR2-SDWAN-GW1"
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "fixture-handoff"
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "TopologySessionCircuit",
+                                  "circuit_type": {
+                                    "value": "handoff"
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "zone_capabilities": {
+                            "edges": [
+                              {
                                 "node": {
                                   "__typename": "ManagedVRF",
                                   "id": "fixture-vrf-fixture-deployment-PROD",
@@ -3543,47 +3538,15 @@
                                   }
                                 }
                               }
-                            }
+                            ]
                           }
-                        ]
-                      },
-                      "zone_capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "ManagedVRF",
-                              "id": "fixture-vrf-fixture-deployment-PROD",
-                              "deployment": {
-                                "node": {
-                                  "id": "fixture-deployment",
-                                  "name": {
-                                    "value": "fixture-deployment"
-                                  }
-                                }
-                              },
-                              "security_zone": {
-                                "node": {
-                                  "id": "fixture-zone-PROD",
-                                  "name": {
-                                    "value": "PROD"
-                                  },
-                                  "vrf_type": {
-                                    "value": "prod"
-                                  },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        ]
+                        }
                       }
-                    }
+                    ]
                   }
-                ]
+                }
               }
-            }
+            ]
           },
           "lan_prefixes": {
             "edges": [
@@ -3622,27 +3585,63 @@
               "display_label": "C003 Customer"
             }
           },
-          "sdwan_gateway": {
-            "node": {
-              "name": {
-                "value": "EQX-FR2-SDWAN-GW1"
-              },
-              "interfaces": {
-                "edges": [
-                  {
-                    "node": {
-                      "name": {
-                        "value": "fixture-handoff"
-                      },
-                      "capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "TopologySessionCircuit",
-                              "circuit_type": {
-                                "value": "handoff"
-                              },
-                              "vrf": {
+          "sdwan_gateways": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "EQX-FR2-SDWAN-GW1"
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "fixture-handoff"
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "TopologySessionCircuit",
+                                  "circuit_type": {
+                                    "value": "handoff"
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "zone_capabilities": {
+                            "edges": [
+                              {
                                 "node": {
                                   "__typename": "ManagedVRF",
                                   "id": "fixture-vrf-fixture-deployment-PROD",
@@ -3670,47 +3669,15 @@
                                   }
                                 }
                               }
-                            }
+                            ]
                           }
-                        ]
-                      },
-                      "zone_capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "ManagedVRF",
-                              "id": "fixture-vrf-fixture-deployment-PROD",
-                              "deployment": {
-                                "node": {
-                                  "id": "fixture-deployment",
-                                  "name": {
-                                    "value": "fixture-deployment"
-                                  }
-                                }
-                              },
-                              "security_zone": {
-                                "node": {
-                                  "id": "fixture-zone-PROD",
-                                  "name": {
-                                    "value": "PROD"
-                                  },
-                                  "vrf_type": {
-                                    "value": "prod"
-                                  },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        ]
+                        }
                       }
-                    }
+                    ]
                   }
-                ]
+                }
               }
-            }
+            ]
           },
           "lan_prefixes": {
             "edges": [
@@ -3749,27 +3716,63 @@
               "display_label": "C007 Customer"
             }
           },
-          "sdwan_gateway": {
-            "node": {
-              "name": {
-                "value": "EQX-FR2-SDWAN-GW1"
-              },
-              "interfaces": {
-                "edges": [
-                  {
-                    "node": {
-                      "name": {
-                        "value": "fixture-handoff"
-                      },
-                      "capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "TopologySessionCircuit",
-                              "circuit_type": {
-                                "value": "handoff"
-                              },
-                              "vrf": {
+          "sdwan_gateways": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "EQX-FR2-SDWAN-GW1"
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "fixture-handoff"
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "TopologySessionCircuit",
+                                  "circuit_type": {
+                                    "value": "handoff"
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "zone_capabilities": {
+                            "edges": [
+                              {
                                 "node": {
                                   "__typename": "ManagedVRF",
                                   "id": "fixture-vrf-fixture-deployment-PROD",
@@ -3797,47 +3800,15 @@
                                   }
                                 }
                               }
-                            }
+                            ]
                           }
-                        ]
-                      },
-                      "zone_capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "ManagedVRF",
-                              "id": "fixture-vrf-fixture-deployment-PROD",
-                              "deployment": {
-                                "node": {
-                                  "id": "fixture-deployment",
-                                  "name": {
-                                    "value": "fixture-deployment"
-                                  }
-                                }
-                              },
-                              "security_zone": {
-                                "node": {
-                                  "id": "fixture-zone-PROD",
-                                  "name": {
-                                    "value": "PROD"
-                                  },
-                                  "vrf_type": {
-                                    "value": "prod"
-                                  },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        ]
+                        }
                       }
-                    }
+                    ]
                   }
-                ]
+                }
               }
-            }
+            ]
           },
           "lan_prefixes": {
             "edges": []
@@ -3861,27 +3832,63 @@
               "display_label": "P027 Provider"
             }
           },
-          "sdwan_gateway": {
-            "node": {
-              "name": {
-                "value": "EQX-FR2-SDWAN-GW1"
-              },
-              "interfaces": {
-                "edges": [
-                  {
-                    "node": {
-                      "name": {
-                        "value": "fixture-handoff"
-                      },
-                      "capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "TopologySessionCircuit",
-                              "circuit_type": {
-                                "value": "handoff"
-                              },
-                              "vrf": {
+          "sdwan_gateways": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "EQX-FR2-SDWAN-GW1"
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "fixture-handoff"
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "TopologySessionCircuit",
+                                  "circuit_type": {
+                                    "value": "handoff"
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "zone_capabilities": {
+                            "edges": [
+                              {
                                 "node": {
                                   "__typename": "ManagedVRF",
                                   "id": "fixture-vrf-fixture-deployment-PROD",
@@ -3909,47 +3916,15 @@
                                   }
                                 }
                               }
-                            }
+                            ]
                           }
-                        ]
-                      },
-                      "zone_capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "ManagedVRF",
-                              "id": "fixture-vrf-fixture-deployment-PROD",
-                              "deployment": {
-                                "node": {
-                                  "id": "fixture-deployment",
-                                  "name": {
-                                    "value": "fixture-deployment"
-                                  }
-                                }
-                              },
-                              "security_zone": {
-                                "node": {
-                                  "id": "fixture-zone-PROD",
-                                  "name": {
-                                    "value": "PROD"
-                                  },
-                                  "vrf_type": {
-                                    "value": "prod"
-                                  },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        ]
+                        }
                       }
-                    }
+                    ]
                   }
-                ]
+                }
               }
-            }
+            ]
           },
           "lan_prefixes": {
             "edges": [
@@ -3988,27 +3963,63 @@
               "display_label": "C002 Customer"
             }
           },
-          "sdwan_gateway": {
-            "node": {
-              "name": {
-                "value": "EQX-AM5-SDWAN-GW1"
-              },
-              "interfaces": {
-                "edges": [
-                  {
-                    "node": {
-                      "name": {
-                        "value": "fixture-handoff"
-                      },
-                      "capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "TopologySessionCircuit",
-                              "circuit_type": {
-                                "value": "handoff"
-                              },
-                              "vrf": {
+          "sdwan_gateways": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "EQX-AM5-SDWAN-GW1"
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "fixture-handoff"
+                          },
+                          "capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "TopologySessionCircuit",
+                                  "circuit_type": {
+                                    "value": "handoff"
+                                  },
+                                  "vrf": {
+                                    "node": {
+                                      "__typename": "ManagedVRF",
+                                      "id": "fixture-vrf-fixture-deployment-PROD",
+                                      "deployment": {
+                                        "node": {
+                                          "id": "fixture-deployment",
+                                          "name": {
+                                            "value": "fixture-deployment"
+                                          }
+                                        }
+                                      },
+                                      "security_zone": {
+                                        "node": {
+                                          "id": "fixture-zone-PROD",
+                                          "name": {
+                                            "value": "PROD"
+                                          },
+                                          "vrf_type": {
+                                            "value": "prod"
+                                          },
+                                          "l3_vni": {
+                                            "value": 60000
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "zone_capabilities": {
+                            "edges": [
+                              {
                                 "node": {
                                   "__typename": "ManagedVRF",
                                   "id": "fixture-vrf-fixture-deployment-PROD",
@@ -4036,47 +4047,15 @@
                                   }
                                 }
                               }
-                            }
+                            ]
                           }
-                        ]
-                      },
-                      "zone_capabilities": {
-                        "edges": [
-                          {
-                            "node": {
-                              "__typename": "ManagedVRF",
-                              "id": "fixture-vrf-fixture-deployment-PROD",
-                              "deployment": {
-                                "node": {
-                                  "id": "fixture-deployment",
-                                  "name": {
-                                    "value": "fixture-deployment"
-                                  }
-                                }
-                              },
-                              "security_zone": {
-                                "node": {
-                                  "id": "fixture-zone-PROD",
-                                  "name": {
-                                    "value": "PROD"
-                                  },
-                                  "vrf_type": {
-                                    "value": "prod"
-                                  },
-                                  "l3_vni": {
-                                    "value": 60000
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        ]
+                        }
                       }
-                    }
+                    ]
                   }
-                ]
+                }
               }
-            }
+            ]
           },
           "lan_prefixes": {
             "edges": [
@@ -4115,8 +4094,8 @@
               "display_label": "C002 Customer"
             }
           },
-          "sdwan_gateway": {
-            "node": null
+          "sdwan_gateways": {
+            "edges": []
           },
           "lan_prefixes": {
             "edges": [

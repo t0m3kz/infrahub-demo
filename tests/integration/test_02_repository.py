@@ -50,7 +50,7 @@ class TestRepository(TestInfrahubDockerWithClient):
             ".DS_Store",
         )
 
-        with tempfile.TemporaryDirectory(prefix="infrahub-demo-src-") as tmpdir:
+        with tempfile.TemporaryDirectory(prefix="temeria-src-") as tmpdir:
             src_directory = Path(tmpdir) / "repo"
             shutil.copytree(PROJECT_DIRECTORY, src_directory, ignore=ignore_patterns)
 

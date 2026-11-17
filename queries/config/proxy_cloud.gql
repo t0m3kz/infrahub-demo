@@ -2,28 +2,60 @@ query proxy_cloud_config($instance: String!) {
   ManagedCloudProxy(name__value: $instance) {
     edges {
       node {
-        name { value }
-        provider { value }
-        service_type { value }
-        deployment_model { value }
+        name {
+          value
+        }
+        provider {
+          value
+        }
+        service_type {
+          value
+        }
+        deployment_model {
+          value
+        }
         shared_policies {
           edges {
             node {
-              name { value }
-              default_action { value }
-              enabled { value }
+              name {
+                value
+              }
+              default_action {
+                value
+              }
+              enabled {
+                value
+              }
               rules {
                 edges {
                   node {
-                    name { value }
-                    priority { value }
-                    action { value }
-                    destination_type { value }
-                    destination { value }
-                    ports { value }
-                    log { value }
-                    description { value }
-                    disabled { value }
+                    name {
+                      value
+                    }
+                    priority {
+                      value
+                    }
+                    action {
+                      value
+                    }
+                    destination_type {
+                      value
+                    }
+                    destination {
+                      value
+                    }
+                    ports {
+                      value
+                    }
+                    log {
+                      value
+                    }
+                    description {
+                      value
+                    }
+                    disabled {
+                      value
+                    }
                   }
                 }
               }
@@ -36,21 +68,45 @@ query proxy_cloud_config($instance: String!) {
               proxy_policies {
                 edges {
                   node {
-                    name { value }
-                    default_action { value }
-                    enabled { value }
+                    name {
+                      value
+                    }
+                    default_action {
+                      value
+                    }
+                    enabled {
+                      value
+                    }
                     rules {
                       edges {
                         node {
-                          name { value }
-                          priority { value }
-                          action { value }
-                          destination_type { value }
-                          destination { value }
-                          ports { value }
-                          log { value }
-                          description { value }
-                          disabled { value }
+                          name {
+                            value
+                          }
+                          priority {
+                            value
+                          }
+                          action {
+                            value
+                          }
+                          destination_type {
+                            value
+                          }
+                          destination {
+                            value
+                          }
+                          ports {
+                            value
+                          }
+                          log {
+                            value
+                          }
+                          description {
+                            value
+                          }
+                          disabled {
+                            value
+                          }
                         }
                       }
                     }
@@ -66,23 +122,45 @@ query proxy_cloud_config($instance: String!) {
               applications {
                 edges {
                   node {
-                    name { value }
+                    name {
+                      value
+                    }
                     children {
                       edges {
                         node {
                           ... on AppComponent {
-                            name { value }
-                            fqdn { value }
-                            ports { value }
+                            name {
+                              value
+                            }
+                            fqdn {
+                              value
+                            }
+                            ports {
+                              value
+                            }
                             dependents {
                               edges {
                                 node {
-                                  ports { value }
-                                  access_status { value }
+                                  ports {
+                                    value
+                                  }
+                                  access_status {
+                                    value
+                                  }
                                   source_profile {
                                     node {
-                                      name { value }
-                                      allowed_groups { edges { node { name { value } } } }
+                                      name {
+                                        value
+                                      }
+                                      allowed_groups {
+                                        edges {
+                                          node {
+                                            name {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
                                     }
                                   }
                                 }

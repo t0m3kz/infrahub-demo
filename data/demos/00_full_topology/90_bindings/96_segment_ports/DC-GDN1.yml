@@ -5,9 +5,9 @@
 # list is here, once, after every port and row it names is loaded (90_bindings loads last). This is the REALIZATION:
 # where a generator runs, the segment reconcile writes it from the deployment's assigned interfaces (the request,
 # 95b_segment_requests) and the component-derived ports; 00_full runs no generator, so both are data and a unit test
-# keeps them equal. A server port carries no membership (checks/virtual_switch.py reads the port groups); a border
-# leaf's Ethernet1/25 is the service port facing the firewall pair that terminates the segment. A routed row also lists
-# its SVI (a role-svi DcimVirtualInterface of the same switch), the one member that is no port.
+# keeps them equal. A server port carries no membership (checks/devices/virtual_switch.py reads the port groups); a
+# border leaf's Ethernet1/25 is the service port facing the firewall pair that terminates the segment. A routed row also
+# lists its SVI (a role-svi DcimVirtualInterface of the same switch), the one member that is no port.
 
 apiVersion: infrahub.app/v1
 kind: Object
